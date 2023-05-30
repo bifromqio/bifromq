@@ -1,0 +1,49 @@
+syntax = "proto3";
+import "commontype/QoS.proto";
+import "commontype/TopicMessage.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.retain.rpc.proto";
+option java_outer_classname = "RetainServiceProtos";
+
+package retainservice;
+
+service RetainService {
+  rpc retain (stream RetainRequest) returns (stream RetainReply);
+  rpc match (MatchRequest) returns (MatchReply);
+}
+
+message RetainRequest {
+  uint64 reqId = 1; // message id
+  commontype.QoS qos = 2;
+  string topic = 3;
+  uint64 timestamp = 4;
+  uint64 expireTimestamp = 5;
+  bytes payload = 6;
+}
+
+message RetainReply {
+  enum Result {
+    RETAINED = 0;
+    CLEARED = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message MatchRequest {
+  uint64 reqId = 1;
+  string topicFilter = 2;
+  uint32 limit = 3;
+}
+
+message MatchReply {
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+  repeated commontype.TopicMessage messages = 3;
+}

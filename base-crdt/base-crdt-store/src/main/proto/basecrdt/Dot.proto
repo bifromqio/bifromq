@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package basecrdt;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecrdt.proto";
+option optimize_for = SPEED;
+
+message SingleDot{
+  bytes replicaId = 1;
+  uint64 ver = 2;
+}
+
+message SingleValue{
+  bytes replicaId = 1;
+  uint64 ver = 2;
+  bytes value = 3;
+}
+
+message SingleMap{
+  bytes key = 1;
+  StateLattice val = 2;
+}
+
+message StateLattice{
+  oneof StateType{
+    SingleDot singleDot = 1;
+    SingleValue  singleValue = 2;
+    SingleMap singleMap = 3;
+  }
+}
+
+message Dot{
+  bytes replicaId = 1;
+  uint64 ver = 2;
+  optional StateLattice lattice = 3;
+}
+message Replacement{
+  repeated Dot dots = 1; // dots in replacing order
+}

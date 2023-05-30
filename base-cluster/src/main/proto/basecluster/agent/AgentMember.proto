@@ -1,0 +1,24 @@
+syntax = "proto3";
+import "basecluster/membership/HostMember.proto";
+
+package basecluster.agent;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecluster.agent.proto";
+option optimize_for = SPEED;
+
+message AgentMemberAddr {
+  string name = 1; // the name of the agent member, it's allowed to have same name registered in different hosts
+  basecluster.membership.HostEndpoint endpoint = 2;
+}
+
+message AgentMemberMetadata {
+  uint64 hlc = 1;
+  bytes value = 2; // the metadata binary associated
+}
+
+message AgentMember {
+  AgentMemberAddr addr = 1; // the address of the agent member
+  AgentMemberMetadata metadata = 2;
+}
+

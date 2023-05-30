@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package baserpc;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.baserpc.proto";
+option java_outer_classname = "TrafficDirectiveProtos";
+option optimize_for = SPEED;
+
+message LoadAssignment {
+  map<string, uint32> weightedGroup = 1;
+}
+
+message TrafficDirective {
+  map<string, LoadAssignment> assignment = 1; // key: trafficIdPrefix, value: LoadAssignment
+  uint64 announcedTS = 2;
+}

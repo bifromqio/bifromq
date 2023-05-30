@@ -1,0 +1,311 @@
+/*
+ * Copyright (c) 2023. Baidu, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.dist.worker;
+
+import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
+import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordTopicFilterPrefix;
+import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_CACHED_SUBS_PER_TRAFFIC;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
+import static com.google.common.hash.Hashing.murmur3_128;
+import static java.util.Collections.singleton;
+
+import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.proto.Range;
+import com.baidu.bifromq.basekv.store.api.IKVIterator;
+import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.dist.entity.GroupMatching;
+import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.entity.NormalMatching;
+import com.baidu.bifromq.dist.util.TopicFilterMatcher;
+import com.baidu.bifromq.dist.util.TopicTrie;
+import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.TopicMessage;
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.CacheLoader;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.RemovalListener;
+import com.github.benmanes.caffeine.cache.Scheduler;
+import com.github.benmanes.caffeine.cache.Weigher;
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.protobuf.ByteString;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import lombok.AllArgsConstructor;
+import org.checkerframework.checker.index.qual.NonNegative;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+public class SubscriptionCache {
+    // OuterCacheKey: <trafficId><escapedTopicFilter>
+    // InnerCacheKey: <orderKey>
+    private final LoadingCache<String, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
+    private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> trafficCache;
+    private final LoadingCache<String, AtomicLong> trafficVerCache;
+    private final ThreadLocal<IKVRangeReader> threadLocalReader;
+    private final ILoadEstimator loadEstimator;
+    private final Timer externalMatchTimer;
+    private final Timer internalMatchTimer;
+
+    SubscriptionCache(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, Executor matchExecutor,
+                      ILoadEstimator loadEstimator) {
+        int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
+        threadLocalReader = ThreadLocal.withInitial(rangeReaderProvider);
+        this.loadEstimator = loadEstimator;
+        orderedSharedMatching = Caffeine.newBuilder()
+            .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
+            .scheduler(Scheduler.systemScheduler())
+            .removalListener((RemovalListener<String, Cache<ClientInfo, NormalMatching>>)
+                (key, value, cause) -> {
+                    if (value != null) {
+                        value.invalidateAll();
+                    }
+                })
+            .build(k -> Caffeine.newBuilder()
+                .expireAfterAccess(expirySec, TimeUnit.MINUTES)
+                .build());
+        trafficCache = Caffeine.newBuilder()
+            .expireAfterAccess(expirySec * 3L, TimeUnit.SECONDS)
+            .scheduler(Scheduler.systemScheduler())
+            .executor(MoreExecutors.directExecutor())
+            .removalListener((RemovalListener<String, AsyncLoadingCache<ScopedTopic, MatchResult>>)
+                (key, value, cause) -> {
+                    if (value != null) {
+                        value.synchronous().invalidateAll();
+                    }
+                })
+            .build(k -> Caffeine.newBuilder()
+                .scheduler(Scheduler.systemScheduler())
+                .maximumWeight(DIST_MAX_CACHED_SUBS_PER_TRAFFIC.get())
+                .weigher(new Weigher<ScopedTopic, MatchResult>() {
+                    @Override
+                    public @NonNegative int weigh(ScopedTopic key, MatchResult value) {
+                        return value.routes.size();
+                    }
+                })
+                .expireAfterAccess(expirySec, TimeUnit.SECONDS)
+                .refreshAfterWrite(expirySec, TimeUnit.SECONDS)
+                .executor(matchExecutor)
+                .buildAsync(new CacheLoader<>() {
+                    @Override
+                    public @Nullable MatchResult load(ScopedTopic key) {
+                        return match(key.trafficId, singleton(key.topic), key.matchRecordRange).get(key);
+                    }
+
+                    @Override
+                    public Map<ScopedTopic, MatchResult> loadAll(Set<? extends ScopedTopic> keys) {
+                        Map<String, Set<String>> topicsByTrafficId = new HashMap<>();
+                        Map<String, Range> matchRecordRangeByTrafficId = new HashMap<>();
+                        for (ScopedTopic st : keys) {
+                            topicsByTrafficId.computeIfAbsent(st.trafficId, k -> new HashSet<>()).add(st.topic);
+                            matchRecordRangeByTrafficId.computeIfAbsent(st.trafficId, k -> st.matchRecordRange);
+                        }
+                        return topicsByTrafficId
+                            .entrySet()
+                            .stream()
+                            .flatMap(entry -> match(entry.getKey(), entry.getValue(),
+                                matchRecordRangeByTrafficId.get(entry.getKey())).entrySet().stream())
+                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    }
+
+                    @Override
+                    public @Nullable MatchResult reload(ScopedTopic key, MatchResult oldValue) {
+                        long trafficVer = trafficVerCache.get(key.trafficId).get();
+                        if (oldValue.trafficVer >= trafficVer) {
+                            return oldValue;
+                        }
+                        return match(key.trafficId, singleton(key.topic), key.matchRecordRange, trafficVer).get(
+                            key);
+                    }
+                }));
+        trafficVerCache = Caffeine.newBuilder()
+            .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
+            .scheduler(Scheduler.systemScheduler())
+            .build(k -> new AtomicLong(System.nanoTime()));
+
+        Tags tag = Tags.of("id", KVRangeIdUtil.toString(id));
+        externalMatchTimer = Timer.builder("dist.match.external")
+            .tags(tag)
+            .register(Metrics.globalRegistry);
+        internalMatchTimer = Timer.builder("dist.match.internal")
+            .tags(tag)
+            .register(Metrics.globalRegistry);
+    }
+
+    public CompletableFuture<Map<NormalMatching, Set<ClientInfo>>> get(ScopedTopic topic, Set<ClientInfo> senders) {
+        Timer.Sample sample = Timer.start();
+        return trafficCache.get(topic.trafficId).get(topic)
+            .thenApply(v -> {
+                sample.stop(externalMatchTimer);
+                Map<NormalMatching, Set<ClientInfo>> routesMap = new HashMap<>();
+                for (Matching matching : v.routes) {
+                    for (ClientInfo clientInfo : senders) {
+                        NormalMatching route = resolveMatching(matching, clientInfo, v.trafficVer);
+                        routesMap.computeIfAbsent(route, k -> new HashSet<>()).add(clientInfo);
+                    }
+                }
+                return routesMap;
+            });
+    }
+
+    // TODO: explore the possibility to invalidate all keys which matching a given wildcard topic filter
+    public void touch(String trafficId) {
+        trafficVerCache.get(trafficId).updateAndGet(v -> Math.max(v, System.nanoTime()));
+    }
+
+    public void invalidate(ScopedTopic topic) {
+        AsyncLoadingCache<ScopedTopic, MatchResult> routeCache = trafficCache.getIfPresent(topic.trafficId);
+        if (routeCache != null) {
+            routeCache.synchronous().invalidate(topic);
+        }
+    }
+
+    public void close() {
+        trafficCache.invalidateAll();
+        orderedSharedMatching.invalidateAll();
+        trafficVerCache.invalidateAll();
+        Metrics.globalRegistry.remove(externalMatchTimer);
+        Metrics.globalRegistry.remove(internalMatchTimer);
+    }
+
+    private Map<ScopedTopic, MatchResult> match(String trafficId, Set<String> topics, Range matchRecordRange) {
+        long trafficVer = trafficVerCache.get(trafficId).get();
+        return match(trafficId, topics, matchRecordRange, trafficVer);
+    }
+
+    private Map<ScopedTopic, MatchResult> match(String trafficId,
+                                                Set<String> topics,
+                                                Range matchRecordRange,
+                                                long trafficVer) {
+        Timer.Sample sample = Timer.start();
+        Map<ScopedTopic, MatchResult> routes = Maps.newHashMap();
+        topics.forEach(topic -> routes.put(ScopedTopic.builder()
+            .trafficId(trafficId)
+            .topic(topic)
+            .range(matchRecordRange)
+            .build(), new MatchResult(trafficVer)));
+        IKVRangeReader rangeReader = threadLocalReader.get();
+        rangeReader.refresh();
+
+        TopicTrie topicTrie = new TopicTrie();
+        topics.forEach(topic -> topicTrie.add(topic, singleton(TopicMessage.getDefaultInstance())));
+        // key: topicFilter, value: set of matched topics
+        Map<String, Set<String>> matched = Maps.newHashMap();
+        TopicFilterMatcher matcher = new TopicFilterMatcher(topicTrie);
+        int probe = 0;
+        IKVIterator itr = rangeReader.kvReader().iterator();
+
+        // track seek
+        loadEstimator.track(matchRecordRange.getStartKey(), LoadUnits.KEY_ITR_SEEK);
+        itr.seek(matchRecordRange.getStartKey());
+        while (itr.isValid() && compare(itr.key(), matchRecordRange.getEndKey()) < 0) {
+            // track itr.key()
+            loadEstimator.track(itr.key(), LoadUnits.KEY_ITR_GET);
+            Matching matching = parseMatchRecord(itr.key(), itr.value());
+            // key: topic
+            Set<String> matchedTopics = matched.get(matching.escapedTopicFilter);
+            if (matchedTopics == null) {
+                Optional<Map<String, Iterable<TopicMessage>>> clientMsgs = matcher.match(matching.escapedTopicFilter);
+                if (clientMsgs.isPresent()) {
+                    matchedTopics = clientMsgs.get().keySet();
+                    matched.put(matching.escapedTopicFilter, matchedTopics);
+                    itr.next();
+                    probe = 0;
+                } else {
+                    Optional<String> higherFilter = matcher.higher(matching.escapedTopicFilter);
+                    if (higherFilter.isPresent()) {
+                        // next() is much cheaper than seek(), we probe following 20 entries
+                        if (probe++ < 20) {
+                            // probe next
+                            itr.next();
+                        } else {
+                            // seek to match next topic filter
+                            ByteString nextMatch = matchRecordTopicFilterPrefix(trafficId, higherFilter.get());
+                            loadEstimator.track(nextMatch, LoadUnits.KEY_ITR_SEEK);
+                            itr.seek(nextMatch);
+                        }
+                        continue;
+                    } else {
+                        break; // no more topic filter to match, stop here
+                    }
+                }
+            } else {
+                itr.next();
+            }
+            matchedTopics.forEach(t -> routes.get(ScopedTopic.builder()
+                    .trafficId(trafficId)
+                    .topic(t)
+                    .range(matchRecordRange)
+                    .build())
+                .routes.add(matching));
+        }
+        sample.stop(internalMatchTimer);
+        return routes;
+    }
+
+    private NormalMatching resolveMatching(Matching matching, ClientInfo sender, long trafficVer) {
+        NormalMatching matchedInbox;
+        if (matching instanceof NormalMatching) {
+            matchedInbox = ((NormalMatching) matching);
+            // track load
+            loadEstimator.track(matchedInbox.key, LoadUnits.KEY_CACHE_HIT);
+        } else {
+            GroupMatching groupMatching = (GroupMatching) matching;
+            // track load
+            loadEstimator.track(groupMatching.key, LoadUnits.KEY_CACHE_HIT);
+            if (groupMatching.ordered) {
+                matchedInbox = orderedSharedMatching
+                    .get(groupMatching.trafficId + groupMatching.escapedTopicFilter + trafficVer)
+                    .get(sender, k -> {
+                        RendezvousHash<ClientInfo, NormalMatching> hash = new RendezvousHash<>(murmur3_128(),
+                            (from, into) -> into.putInt(from.hashCode()),
+                            (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
+                            Comparator.comparing(a -> a.scopedInboxId));
+                        groupMatching.inboxList.forEach(hash::add);
+                        return hash.get(k);
+                    });
+            } else {
+                matchedInbox = groupMatching.inboxList
+                    .get(ThreadLocalRandom.current().nextInt(groupMatching.inboxList.size()));
+            }
+        }
+        return matchedInbox;
+    }
+
+
+    @AllArgsConstructor
+    private static class MatchResult {
+        final List<Matching> routes = new ArrayList<>();
+        final long trafficVer;
+    }
+}

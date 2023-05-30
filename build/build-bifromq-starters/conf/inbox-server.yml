@@ -1,0 +1,31 @@
+port: 8601
+settingProviderFQN:
+settingProviderProvideBufferSize: 8192
+serverSSLCtxConfig:
+  type: server
+  enableSSL: false
+  clientAuth: NONE
+  certFile: inbox.service.crt
+  keyFile: inbox.service.pem
+  trustCertsFile: ca.crt
+
+agentHostConfig:
+  env: 111
+  port: 8602
+  seedEndpoints: 172.18.86.74:8881
+  enableSSL: false
+  certFile: inbox.service.crt
+  keyFile: inbox.service.pem
+  trustCertsFile: ca.crt
+
+inboxStoreClientConfig:
+  clusterName: inbox.store
+  execPipelinePerServer: 5
+  queryPipelinePerServer: 5
+  sslContextConfig:
+    type: client
+    enableSSL: false
+    certFile: inbox.service.crt
+    keyFile: inbox.service.pem
+    trustCertsFile: ca.crt
+

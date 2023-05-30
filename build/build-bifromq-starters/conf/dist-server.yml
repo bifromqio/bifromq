@@ -1,0 +1,32 @@
+port: 8701
+settingProviderFQN:
+settingProviderProvideBufferSize: 8192
+eventCollectorReportBufferSize: 2048
+serverSSLCtxConfig:
+  type: server
+  enableSSL: false
+  clientAuth: NONE
+  certFile: dist.service.crt
+  keyFile: dist.service.pem
+  trustCertsFile: ca.crt
+
+agentHostConfig:
+  env: 111
+  port: 8702
+  seedEndpoints: 172.18.86.74:8881
+  enableSSL: false
+  certFile: dist.service.crt
+  keyFile: dist.service.pem
+  trustCertsFile: ca.crt
+
+distWorkerStoreClientConfig:
+  clusterName: dist.worker
+  execPipelinePerServer: 5
+  queryPipelinePerServer: 5
+  sslContextConfig:
+    type: client
+    enableSSL: false
+    certFile: dist.service.crt
+    keyFile: dist.service.pem
+    trustCertsFile: ca.crt
+

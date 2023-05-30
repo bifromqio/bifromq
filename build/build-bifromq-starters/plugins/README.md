@@ -1,0 +1,1 @@
+# This folder contains 3rd-party pf4j-compatible plugin implementation

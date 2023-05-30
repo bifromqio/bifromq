@@ -1,0 +1,42 @@
+syntax = "proto3";
+import "commontype/QoS.proto";
+import "commontype/ClientInfo.proto";
+
+package commontype;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.type";
+option java_outer_classname = "TopicMessageProtos";
+
+message Message{
+  uint64 messageId = 1;
+  QoS pubQoS = 2;
+  bytes payload = 3; // user payload
+  uint64 timestamp = 4; // UTC ts
+  uint64 expireTimestamp = 5; // UTC ts
+}
+
+message TopicMessage {
+  string topic = 1;
+  Message message = 2;
+  ClientInfo sender = 3;
+}
+
+message TopicMessagePack {
+  message SenderMessagePack{
+    ClientInfo sender = 1;
+    repeated Message message = 2;
+  }
+  string topic = 1;
+  repeated SenderMessagePack message = 2;
+}
+
+
+message SenderMessagePack {
+  message TopicMessagePack {
+    string topic = 1;
+    repeated Message message = 2;
+  }
+  ClientInfo sender = 1;
+  repeated TopicMessagePack messagePack = 2;
+}

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package basecluster.transport;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecluster.transport.proto";
+option java_outer_classname = "PacketProtos";
+option optimize_for = SPEED;
+
+message Packet {
+  repeated bytes messages = 1;
+  string clusterEnv = 2;
+  uint64 hlc = 3;
+}

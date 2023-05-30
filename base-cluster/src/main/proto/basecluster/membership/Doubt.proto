@@ -1,0 +1,14 @@
+syntax = "proto3";
+import "basecluster/membership/HostMember.proto";
+
+package basecluster.membership;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecluster.membership.proto";
+option optimize_for = SPEED;
+
+message Doubt {
+  HostEndpoint endpoint = 1; // the endpoint under failure doubt
+  uint32 incarnation = 2;
+  HostEndpoint reporter = 3; // the reporting endpoint
+}

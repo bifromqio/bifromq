@@ -1,0 +1,148 @@
+syntax = "proto3";
+import "basekv/Type.proto";
+import "basekv/Command.proto";
+package basekv;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.store.proto";
+option optimize_for = SPEED;
+
+service BaseKVStoreService{
+  rpc bootstrap(BootstrapRequest) returns (BootstrapReply);
+  rpc recover(RecoverRequest) returns(RecoverReply);
+  rpc transferLeadership(TransferLeadershipRequest) returns (TransferLeadershipReply);
+  rpc changeReplicaConfig(ChangeReplicaConfigRequest) returns (ChangeReplicaConfigReply);
+  rpc split(KVRangeSplitRequest) returns (KVRangeSplitReply);
+  rpc merge(KVRangeMergeRequest) returns (KVRangeMergeReply);
+  rpc execute(stream KVRangeRWRequest)  returns (stream KVRangeRWReply);
+  rpc query(stream KVRangeRORequest)  returns (stream KVRangeROReply);
+  rpc linearizedQuery(stream KVRangeRORequest)  returns (stream KVRangeROReply);
+}
+
+message DescribeRequest{
+}
+
+message BootstrapRequest{
+  uint64 reqId = 1;
+}
+
+message BootstrapReply{
+  enum Result{
+    Ok = 0;
+    NotEmpty = 1;
+    NotRunning = 2;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message RecoverRequest{
+  uint64 reqId = 1;
+}
+
+message RecoverReply{
+  enum Result {
+    Ok = 0;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+enum ReplyCode{
+  Ok = 0;
+  BadVersion = 1;
+  TryLater = 2;
+  BadRequest = 3;
+  InternalError = 4;
+}
+
+message TransferLeadershipRequest{
+  uint64 reqId = 1;
+  uint64 ver = 2;
+  basekv.KVRangeId kvRangeId = 3;
+  string newLeaderStore = 4;
+}
+
+message TransferLeadershipReply{
+  uint64 reqId = 1;
+  ReplyCode code = 2;
+}
+
+message ChangeReplicaConfigRequest{
+  uint64 reqId = 1;
+  uint64 ver = 2;
+  basekv.KVRangeId kvRangeId = 3;
+  repeated string newVoters = 4;
+  repeated string newLearners = 5;
+}
+
+message ChangeReplicaConfigReply{
+  uint64 reqId = 1;
+  ReplyCode code = 2;
+}
+
+message KVRangeSplitRequest{
+  uint64 reqId = 1;
+  uint64 ver = 2;
+  basekv.KVRangeId kvRangeId = 3;
+  bytes splitKey = 4;
+}
+
+message KVRangeSplitReply{
+  uint64 reqId = 1;
+  ReplyCode code = 2;
+}
+
+message KVRangeMergeRequest{
+  uint64 reqId = 1;
+  uint64 ver = 2;
+  basekv.KVRangeId mergerId = 3;
+  basekv.KVRangeId mergeeId = 4;
+}
+
+message KVRangeMergeReply{
+  uint64 reqId = 1;
+  ReplyCode code = 2;
+}
+
+message KVRangeRWRequest{
+  uint64 reqId = 1;
+  uint64 ver = 2;
+  basekv.KVRangeId kvRangeId = 3;
+  oneof RequestType{
+    bytes delete = 4;
+    Put put = 5;
+    bytes rwCoProc = 6;
+  }
+}
+
+message KVRangeRWReply{
+  uint64 reqId = 1;
+  ReplyCode code = 2;
+  oneof ReplyType{// only available when Code == Ok
+    bytes deleteResult = 3;
+    bytes putResult = 4;
+    bytes rwCoProcResult = 5;
+  }
+}
+
+message KVRangeRORequest{
+  uint64 reqId = 1;
+  uint64 ver = 2;
+  basekv.KVRangeId kvRangeId = 3;
+  oneof Type{
+    bytes existKey = 4;
+    bytes getKey = 5;
+    bytes roCoProcInput = 6;
+  }
+}
+
+message KVRangeROReply{
+  uint64 reqId = 1;
+  ReplyCode code = 2;
+  oneof ReplyType{// only available when Code == Ok
+    bool existResult = 3;
+    NullableValue getResult = 4;
+    bytes roCoProcResult = 5;
+  }
+}

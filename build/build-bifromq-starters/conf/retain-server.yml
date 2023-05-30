@@ -1,0 +1,31 @@
+port: 8501
+settingProviderFQN:
+settingProviderProvideBufferSize: 8192
+serverSSLCtxConfig:
+  type: server
+  enableSSL: false
+  clientAuth: NONE
+  certFile: retain.service.crt
+  keyFile: retain.service.pem
+  trustCertsFile: ca.crt
+
+agentHostConfig:
+  env: 111
+  port: 8502
+  seedEndpoints: 172.18.86.74:8881
+  enableSSL: false
+  certFile: retain.service.crt
+  keyFile: retain.service.pem
+  trustCertsFile: ca.crt
+
+retainStoreClientConfig:
+  clusterName: retain.store
+  execPipelinePerServer: 5
+  queryPipelinePerServer: 5
+  sslContextConfig:
+    type: client
+    enableSSL: false
+    certFile: retain.service.crt
+    keyFile: retain.service.pem
+    trustCertsFile: ca.crt
+

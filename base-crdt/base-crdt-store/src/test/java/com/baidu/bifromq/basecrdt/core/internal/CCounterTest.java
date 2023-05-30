@@ -1,0 +1,156 @@
+/*
+ * Copyright (c) 2023. Baidu, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.basecrdt.core.internal;
+
+import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
+import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.aworset;
+import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.cctr;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
+import com.baidu.bifromq.basecrdt.core.api.ICCounter;
+import com.baidu.bifromq.basecrdt.proto.Replacement;
+import com.baidu.bifromq.basecrdt.proto.Replica;
+import com.google.protobuf.ByteString;
+import io.reactivex.rxjava3.observers.TestObserver;
+import java.time.Duration;
+import java.util.Optional;
+import org.junit.Test;
+
+public class CCounterTest extends CRDTTest {
+    private final Replica leftReplica = Replica.newBuilder()
+        .setUri(toURI(cctr, "ccounter"))
+        .setId(ByteString.copyFromUtf8("left-address"))
+        .build();
+    private final Replica rightReplica = Replica.newBuilder()
+        .setUri(toURI(aworset, "ccounter"))
+        .setId(ByteString.copyFromUtf8("right-address"))
+        .build();
+
+    @Test
+    public void testOperation() {
+        CCounterInflater cctrInflater = new CCounterInflater(0, leftReplica,
+            newStateLattice(leftReplica.getId(), 1000), executor, Duration.ofMillis(100));
+        ICCounter cctr = cctrInflater.getCRDT();
+        assertEquals(leftReplica, cctr.id());
+
+        assertEquals(0, cctr.read());
+
+        cctr.execute(CCounterOperation.add(10)).join();
+        assertEquals(10, cctr.read());
+        cctr.execute(CCounterOperation.add(10)).join();
+        assertEquals(20, cctr.read());
+
+        cctr.execute(CCounterOperation.preset(10)).join();
+        assertEquals(10, cctr.read());
+
+        cctr.execute(CCounterOperation.zeroOut()).join();
+        assertEquals(0, cctr.read());
+
+        // batch execute
+        cctr.execute(CCounterOperation.add(10));
+        cctr.execute(CCounterOperation.zeroOut());
+        cctr.execute(CCounterOperation.add(10)).join();
+        assertEquals(10, cctr.read());
+    }
+
+    @Test
+    public void testJoin() {
+        CCounterInflater leftInflater = new CCounterInflater(0, leftReplica,
+            newStateLattice(leftReplica.getId(), 100000), executor, Duration.ofMillis(100));
+        ICCounter left = leftInflater.getCRDT();
+
+        CCounterInflater rightInflater = new CCounterInflater(1, rightReplica,
+            newStateLattice(rightReplica.getId(), 100000), executor, Duration.ofMillis(100));
+        ICCounter right = rightInflater.getCRDT();
+
+        left.execute(CCounterOperation.add(10));
+        left.execute(CCounterOperation.add(10));
+        left.execute(CCounterOperation.add(10)).join();
+
+        sync(leftInflater, rightInflater);
+        assertEquals(30, right.read());
+
+        // following codes simulate OR history broadcast during anti-entropy
+        TestObserver<Long> inflationObserver = new TestObserver<>();
+        right.inflation().subscribe(inflationObserver);
+        right.execute(CCounterOperation.add(50));
+        right.execute(CCounterOperation.zeroOut()).join();
+        assertTrue(inflationObserver.values().isEmpty());
+        sync(leftInflater, rightInflater);
+        assertEquals(30, left.read());
+        assertEquals(30, right.read());
+    }
+
+    @Test
+    public void testZeroOut() {
+        CCounterInflater leftInflater = new CCounterInflater(0, leftReplica,
+            newStateLattice(leftReplica.getId(), 100000), executor, Duration.ofMillis(100));
+        ICCounter left = leftInflater.getCRDT();
+
+        CCounterInflater rightInflater = new CCounterInflater(1, rightReplica,
+            newStateLattice(rightReplica.getId(), 100000), executor, Duration.ofMillis(100));
+        ICCounter right = rightInflater.getCRDT();
+
+        left.execute(CCounterOperation.add(10));
+        left.execute(CCounterOperation.add(10));
+        left.execute(CCounterOperation.add(10)).join();
+
+        sync(leftInflater, rightInflater);
+        assertEquals(30, right.read());
+
+        // after partition left contribution is discarded locally but don't keep the removal history
+        right.execute(CCounterOperation.zeroOut(leftReplica.getId())).join();
+        assertEquals(0, right.read());
+
+        // sync again will recover left-contributed state in right replica
+        left.execute(CCounterOperation.add(10)).join();
+        assertEquals(40, left.read());
+        sync(leftInflater, rightInflater);
+        assertEquals(40, right.read());
+    }
+
+    @Test
+    public void testZeroOutInBatch() {
+        CCounterInflater leftInflater = new CCounterInflater(0, leftReplica,
+            newStateLattice(leftReplica.getId(), 100000), executor, Duration.ofMillis(100));
+        ICCounter left = leftInflater.getCRDT();
+
+        CCounterInflater rightInflater = new CCounterInflater(1, rightReplica,
+            newStateLattice(rightReplica.getId(), 100000), executor, Duration.ofMillis(100));
+        ICCounter right = rightInflater.getCRDT();
+
+        left.execute(CCounterOperation.add(10)).join();
+
+        sync(leftInflater, rightInflater);
+        assertEquals(10, right.read());
+
+        left.execute(CCounterOperation.add(10)).join();
+        Optional<Iterable<Replacement>> deltaProto =
+            leftInflater.delta(
+                rightInflater.latticeEvents(),
+                rightInflater.historyEvents(),
+                Integer.MAX_VALUE).join();
+        rightInflater.join(deltaProto.get()).join();
+        right.execute(CCounterOperation.zeroOut(leftReplica.getId())).join();
+
+        assertEquals(0, right.read());
+        // sync again will recover left-contributed state in right replica
+        left.execute(CCounterOperation.add(10)).join();
+        sync(leftInflater, rightInflater);
+        assertEquals(30, left.read());
+        assertEquals(30, right.read());
+    }
+}

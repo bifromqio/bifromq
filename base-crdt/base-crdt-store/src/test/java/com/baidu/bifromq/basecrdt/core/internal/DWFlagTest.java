@@ -1,0 +1,91 @@
+/*
+ * Copyright (c) 2023. Baidu, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.basecrdt.core.internal;
+
+import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
+import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.dwflag;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import com.baidu.bifromq.basecrdt.core.api.DWFlagOperation;
+import com.baidu.bifromq.basecrdt.core.api.IDWFlag;
+import com.baidu.bifromq.basecrdt.proto.Replica;
+import com.google.protobuf.ByteString;
+import java.time.Duration;
+import lombok.extern.slf4j.Slf4j;
+import org.junit.Test;
+
+@Slf4j
+public class DWFlagTest extends CRDTTest {
+    private final Replica leftReplica = Replica.newBuilder()
+        .setUri(toURI(dwflag, "dwflag"))
+        .setId(ByteString.copyFromUtf8("left-address"))
+        .build();
+    private final Replica rightReplica = Replica.newBuilder()
+        .setUri(toURI(dwflag, "dwflag"))
+        .setId(ByteString.copyFromUtf8("right-address"))
+        .build();
+
+    @Test
+    public void testOperation() {
+        DWFlagInflater dwFlagInflater = new DWFlagInflater(0, leftReplica,
+            newStateLattice(leftReplica.getId(), 1000), executor, Duration.ofMillis(100));
+        IDWFlag dwFlag = dwFlagInflater.getCRDT();
+        assertEquals(leftReplica, dwFlag.id());
+
+        assertTrue(dwFlag.read());
+        dwFlag.execute(DWFlagOperation.disable()).join();
+        assertFalse(dwFlag.read());
+
+        dwFlag.execute(DWFlagOperation.enable());
+        dwFlag.execute(DWFlagOperation.disable()).join();
+        assertFalse(dwFlag.read());
+
+        dwFlag.execute(DWFlagOperation.enable()).join();
+        assertTrue(dwFlag.read());
+    }
+
+    @Test
+    public void testJoin() {
+        DWFlagInflater leftInflater = new DWFlagInflater(0, leftReplica,
+            newStateLattice(leftReplica.getId(), 1000000),
+            executor, Duration.ofMillis(100));
+        IDWFlag left = leftInflater.getCRDT();
+
+        DWFlagInflater rightInflater = new DWFlagInflater(1, rightReplica,
+            newStateLattice(rightReplica.getId(), 1000000),
+            executor, Duration.ofMillis(100));
+        IDWFlag right = rightInflater.getCRDT();
+
+        left.execute(DWFlagOperation.disable()).join();
+        right.execute(DWFlagOperation.enable()).join();
+        // nothing to send from right to left
+        assertFalse(rightInflater
+            .delta(leftInflater.latticeEvents(), leftInflater.historyEvents(), 10).join().isPresent());
+        // something to send from left to right
+        rightInflater.join(leftInflater
+            .delta(rightInflater.latticeEvents(), rightInflater.historyEvents(), 10).join().get()).join();
+
+        assertFalse(left.read());
+        assertEquals(left.read(), right.read());
+
+        right.execute(DWFlagOperation.enable()).join();
+        assertTrue(right.read());
+
+        sync(leftInflater, rightInflater);
+        assertTrue(left.read());
+        assertEquals(left.read(), right.read());
+    }
+}

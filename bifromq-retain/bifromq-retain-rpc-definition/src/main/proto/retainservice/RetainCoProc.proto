@@ -1,0 +1,91 @@
+syntax = "proto3";
+import "commontype/QoS.proto";
+import "commontype/ClientInfo.proto";
+import "commontype/TopicMessage.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.retain.rpc.proto";
+option java_outer_classname = "RetainCoProcProtos";
+
+package retainservice;
+
+message RetainSetMetadata{
+  uint32 count = 1;
+  uint64 estExpire = 2;
+}
+
+message RetainCoProcRequest{
+  string trafficId = 1;
+  uint64 reqId = 2;
+  commontype.QoS qos = 3; // the qos the sender specified
+  string topic = 4;
+  bytes message = 5; // user payload
+  uint64 timestamp = 6; // UTC ts
+  uint64 expireTimestamp = 7; // UTC ts
+  commontype.ClientInfo sender = 8;
+  uint32 maxRetainedTopics = 9;
+  bytes trafficNS = 10;
+}
+
+message RetainCoProcReply {
+  enum Result {
+    RETAINED = 0;
+    CLEARED = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message MatchCoProcRequest{
+  uint64 reqId = 1;
+  bytes trafficNS = 2;
+  string topicFilter = 3;
+  uint32 limit = 4;
+}
+
+message MatchCoProcReply{
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+  repeated commontype.TopicMessage messages = 3;
+}
+
+message GCRequest {
+  uint64 reqId = 1;
+}
+
+message GCReply {
+  uint64 reqId = 1;
+}
+
+message RetainServiceRWCoProcInput{
+  oneof type{
+    RetainCoProcRequest retainRequest = 1;
+    GCRequest gcRequest = 2;
+  }
+}
+
+message RetainServiceRWCoProcOutput{
+  oneof type{
+    RetainCoProcReply retainReply = 1;
+    GCReply gcReply = 2;
+  }
+}
+
+message RetainServiceROCoProcInput{
+  oneof type{
+    MatchCoProcRequest matchRequest = 1;
+  }
+}
+
+message RetainServiceROCoProcOutput{
+  oneof type{
+    MatchCoProcReply matchReply = 1;
+  }
+}
+
+

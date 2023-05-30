@@ -1,0 +1,26 @@
+syntax = "proto3";
+import "inboxservice/InboxMessages.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.storage.proto";
+option java_outer_classname = "InboxFetchedProtos";
+
+package inboxservice;
+
+message Fetched {
+  enum Result {
+    OK = 0;
+    NO_INBOX = 1;
+    ERROR = 2;
+  }
+  Result result = 1;
+
+  repeated uint64 qos0Seq = 2;
+  repeated InboxMessage qos0Msg = 3;
+
+  repeated uint64 qos1Seq = 4;
+  repeated InboxMessage qos1Msg = 5;
+
+  repeated uint64 qos2Seq = 6;
+  repeated InboxMessage qos2Msg = 7;
+}

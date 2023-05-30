@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package basecluster.fd;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecluster.fd.proto";
+option java_outer_classname = "PingReqProtos";
+option optimize_for = SPEED;
+
+message PingReq {
+  uint32 seqNo = 1; // seqNo used to track ack
+
+  bytes id = 2; // id of the ping member indirectly
+  string addr = 3; // addr of the ping member indirectly
+  uint32 port = 4; // port of the ping member indirectly
+
+  bytes pingerId = 5; // id of the pinger member
+  string pingerAddr = 6; // addr of the original pinger member
+  uint32 pingerPort = 7; // port of the original pinger member
+}

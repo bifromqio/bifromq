@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package basecluster.membership;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecluster.membership.proto";
+option optimize_for = SPEED;
+
+message HostEndpoint{
+  bytes id = 1; // the id of the host member which is identical to the replica id of local HostMemberListCRDT
+  string address = 3; // the network address of the host
+  uint32 port = 4; // bind network port of the host
+}
+
+message HostMember {
+  HostEndpoint endpoint = 1;
+  uint32 incarnation = 2; // incarnation of the node, managed by the node itself
+  repeated string agentId = 3; // the list of agents reside on the host
+}

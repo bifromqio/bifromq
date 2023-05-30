@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+import "basekv/raft/LogEntry.proto";
+import "basekv/raft/Snapshot.proto";
+
+package basekv.raft;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.raft.proto";
+option optimize_for = SPEED;
+
+message AppendEntries {
+  string leaderId = 1; // leader's id
+  uint64 prevLogTerm = 2; // term of the index
+  uint64 prevLogIndex = 3; // index of log entry immediately proceeding new ones
+  uint64 commitIndex = 4; // leader's commitIndex
+  repeated LogEntry entries = 5;
+  uint64 readIndex = 6; // read index to confirm
+}
+message AppendEntriesReply {
+  message Accept {
+    uint64 lastIndex = 1; // last index of log entry in the follower
+  }
+  message Reject {
+    uint64 lastIndex = 1; // last index of log entry in the follower
+    uint64 term = 2; // the term of last index
+    uint64 rejectedIndex = 3; // the index of log entry rejected which is the prevLogIndex in the AppendEntries
+  }
+  oneof Result{
+    Accept accept = 1;
+    Reject reject = 2;
+  }
+  uint64 readIndex = 3; // read index to confirm
+}
+
+message InstallSnapshot {
+  string leaderId = 1;
+  Snapshot snapshot = 2;
+  uint64 readIndex = 3; // read index to confirm
+}
+
+message InstallSnapshotReply {
+  bool rejected = 1;
+  uint64 lastIndex = 2; // last entry index in snapshot
+  uint64 readIndex = 3; // read index to confirm
+}
+
+message RequestVote {
+  string candidateId = 1;
+  uint64 lastLogTerm = 2;
+  uint64 lastLogIndex = 3;
+  bool leaderTransfer = 4;
+}
+
+message RequestVoteReply {
+  bool voteGranted = 1;
+}
+
+message RequestPreVote {
+  string candidateId = 1;
+  uint64 lastLogTerm = 2;
+  uint64 lastLogIndex = 3;
+}
+
+message RequestPreVoteReply {
+  bool voteCouldGranted = 1;
+}
+
+message RequestReadIndex {
+  uint32 id = 1;
+}
+
+message RequestReadIndexReply {
+  uint32 id = 1;
+  uint64 readIndex = 2;
+}
+
+message Propose {
+  uint32 id = 1;
+  bytes command = 2;
+}
+
+message ProposeReply {
+  enum Code {
+    Success = 0;
+    DropByLeaderTransferring = 1;
+    DropByMaxUnappliedEntries = 2;
+  }
+  uint32 id = 1;
+  Code code = 2;
+}
+
+message TimeoutNow {
+}
+
+message RaftMessage {
+  uint64 term = 1; // sender's term
+  oneof MessageType {
+    AppendEntries appendEntries = 2;
+    AppendEntriesReply appendEntriesReply = 3;
+    InstallSnapshot installSnapshot = 4;
+    InstallSnapshotReply installSnapshotReply = 5;
+    RequestVote requestVote = 6;
+    RequestVoteReply requestVoteReply = 7;
+    RequestPreVote requestPreVote = 8;
+    RequestPreVoteReply requestPreVoteReply = 9;
+    RequestReadIndex requestReadIndex = 10;
+    RequestReadIndexReply requestReadIndexReply = 11;
+    Propose propose = 12;
+    ProposeReply proposeReply = 13;
+    TimeoutNow timeoutNow = 14;
+  };
+}

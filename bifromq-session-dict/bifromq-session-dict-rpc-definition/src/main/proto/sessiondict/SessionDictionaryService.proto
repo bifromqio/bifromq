@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+import "commontype/ClientInfo.proto";
+
+package sessiondict;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.sessiondict.rpc.proto";
+option java_outer_classname = "SessionDictionaryServiceProtos";
+option optimize_for = SPEED;
+
+service SessionDictionaryService {
+  rpc join (stream Ping) returns (stream Quit);
+  rpc kill (KillRequest) returns(KillReply);
+}
+
+message Ping {
+}
+
+message Quit {
+  uint64  reqId = 1;
+  commontype.ClientInfo killer = 2; // could be anything meaningful. e.g. kicker's address
+}
+
+message KillRequest {
+  uint64 reqId = 1;
+  string userId = 2;
+  string clientId = 3;
+  commontype.ClientInfo killer = 4;
+}
+
+message KillReply {
+  enum Result{
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}

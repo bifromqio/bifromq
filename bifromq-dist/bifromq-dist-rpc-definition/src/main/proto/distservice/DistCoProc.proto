@@ -1,0 +1,193 @@
+syntax = "proto3";
+import "commontype/QoS.proto";
+import "commontype/TopicMessage.proto";
+import "distservice/TopicFanout.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.dist.rpc.proto";
+option java_outer_classname = "DistCoProcProtos";
+
+package distservice;
+
+message InboxSubInfo {
+  map<string, commontype.QoS> topicFilters = 1; // key: Original TopicFilter
+}
+
+message AddTopicFilter{
+  map<string, InboxSubInfo> topicFilter = 2; // key: subInfoKeyUtf8
+}
+
+message AddTopicFilterReply{
+  enum Result{
+    OK = 0;
+    ExceedQuota = 1;
+  }
+  message Results{
+    map<string, Result> results = 1; // key: Original TopicFilter
+  }
+  map<string, Results> result = 2; // key: subInfoKeyUtf8
+}
+
+message TopicFilterList{
+  repeated string topicFilter = 1;
+}
+
+message RemoveTopicFilter{
+  map<string, TopicFilterList> topicFilter = 2; // key: subInfoKeyUtf8
+}
+
+message RemoveTopicFilterReply{
+  enum Result {
+    Exist = 0;
+    NonExist = 1;
+  }
+  message Results{
+    map<string, Result> result = 1; // key: Original TopicFilter
+  }
+  map<string, Results> result = 2; // key: subInfoKeyUtf8
+}
+
+message GroupMatchRecord {
+  map<string, commontype.QoS> entry = 1; // qualified inboxId to NormalMatchRecord
+}
+
+message MatchRecord {
+  oneof Record{
+    commontype.QoS normal = 1;
+    GroupMatchRecord group = 2;
+  }
+}
+
+message MatchRecords{
+  repeated MatchRecord record = 1;
+}
+
+message InsertMatchRecord {
+  map<string, commontype.QoS> record = 1; // key: normal matchRecordKey
+}
+
+message InsertMatchRecordReply {
+  // TODO: refine the result
+}
+
+message JoinMatchGroup {
+  map<string, GroupMatchRecord> record = 1; // key: group matchRecordKey
+}
+
+message JoinMatchGroupReply {
+  enum Result{
+    OK = 0;
+    ExceedLimit = 1;
+  }
+  message Results{
+    map<string, Result> result = 1;
+  }
+  map<string, Results> result = 1; // key: group matchRecordKey utf8
+}
+
+message DeleteMatchRecord {
+  repeated string matchRecordKey = 1; // normal matchRecordKey utf8
+}
+
+message DeleteMatchRecordReply {
+}
+
+message QInboxIdList{
+  repeated string qInboxId = 1;
+}
+
+message LeaveMatchGroup {
+  map<string, QInboxIdList> record = 1; // key: group matchRecordKey, value: list of member qualified InboxId
+}
+
+message LeaveMatchGroupReply {
+}
+
+message ClearSubInfo {
+  repeated bytes subInfoKey = 1;
+}
+
+message ClearSubInfoReply {
+  repeated InboxSubInfo subInfo = 2;
+}
+
+message UpdateRequest{
+  uint64 reqId = 1;
+  optional AddTopicFilter addTopicFilter = 2;
+  optional RemoveTopicFilter removeTopicFilter = 3;
+  optional InsertMatchRecord insertMatchRecord = 4;
+  optional JoinMatchGroup joinMatchGroup = 5;
+  optional DeleteMatchRecord deleteMatchRecord = 6;
+  optional LeaveMatchGroup leaveMatchGroup = 7;
+  optional ClearSubInfo clearSubInfo = 8;
+}
+
+message UpdateReply{
+  uint64 reqId = 1;
+  optional AddTopicFilterReply addTopicFilter = 2;
+  optional RemoveTopicFilterReply removeTopicFilter = 3;
+  optional InsertMatchRecordReply insertMatchRecord = 4;
+  optional JoinMatchGroupReply joinMatchGroup = 5;
+  optional DeleteMatchRecordReply deleteMatchRecord = 6;
+  optional LeaveMatchGroupReply leaveMatchGroup = 7;
+  optional ClearSubInfoReply clearSubInfo = 8;
+}
+
+message GCRequest {
+  uint64 reqId = 1;
+}
+
+message GCReply {
+  uint64 reqId = 1;
+}
+
+message DistPack{
+  string trafficId = 1;
+  repeated commontype.TopicMessagePack msgPack = 2; // topic messages packs shares same trafficId
+}
+
+message BatchDist {
+  uint64 reqId = 1;
+  repeated DistPack distPack = 2; // sorted by trafficId and topic
+  string orderKey = 3; // used for ordered share subscription
+}
+
+message BatchDistReply {
+  uint64 reqId = 1;
+  map<string, TopicFanout> result = 2;
+}
+
+message CollectMetricsRequest{
+  uint64 reqId = 1;
+}
+
+message CollectMetricsReply{
+  uint64 reqId = 1;
+  map<string, uint64> usedSpaces = 2;
+}
+
+message DistServiceRWCoProcInput{
+  UpdateRequest updateRequest = 1;
+}
+
+message DistServiceRWCoProcOutput{
+  UpdateReply updateReply = 1;
+}
+
+message DistServiceROCoProcInput{
+  oneof Input{
+    BatchDist dist = 1;
+    GCRequest gcRequest = 2;
+    CollectMetricsRequest collectMetricsRequest = 3;
+  }
+}
+
+message DistServiceROCoProcOutput{
+  oneof Output{
+    BatchDistReply distReply = 1;
+    GCReply gcReply = 2;
+    CollectMetricsReply collectMetricsReply = 3;
+  }
+}
+
+

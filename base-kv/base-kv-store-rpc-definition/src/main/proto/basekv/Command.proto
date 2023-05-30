@@ -1,0 +1,77 @@
+syntax = "proto3";
+import "basekv/Type.proto";
+import "basekv/raft/ClusterConfig.proto";
+
+package basekv;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.proto";
+option optimize_for = SPEED;
+
+message ChangeConfig {
+  repeated string voters = 1;
+  repeated string learners = 2;
+}
+
+message TransferLeadership{
+  string newLeader = 1;
+}
+
+message SplitRange {
+  bytes splitKey = 1;
+  basekv.KVRangeId newId = 2;
+}
+
+message PrepareMergeWith{
+  basekv.KVRangeId mergeeId = 1;
+}
+
+message CancelMerging{
+}
+
+message PrepareMergeTo{
+  basekv.KVRangeId mergerId = 1;
+  uint64 mergerVer = 2;
+  raft.ClusterConfig config = 3; // merger's config at the moment
+  basekv.Range range = 4; // merger's range at the moment
+}
+
+message Merge{
+  basekv.KVRangeId mergeeId = 1;
+  uint64 mergeeVer = 2;
+  basekv.Range range = 3;
+  string storeId = 4;
+}
+
+message MergeDone{
+  string storeId = 1;
+}
+
+message Delete{
+  bytes key = 1;
+}
+
+message Put{
+  bytes key = 1;
+  bytes value = 2;
+}
+
+message KVRangeCommand{
+  string taskId = 1;
+  uint64 ver = 2;
+  oneof CommandType{
+    ChangeConfig changeConfig = 4;
+    TransferLeadership transferLeadership = 5;
+    SplitRange splitRange = 6;
+
+    PrepareMergeWith prepareMergeWith = 7;
+    CancelMerging cancelMerging = 8;
+    PrepareMergeTo prepareMergeTo = 9;
+    Merge merge = 10;
+    MergeDone mergeDone = 11;
+
+    Delete delete = 12;
+    Put put = 13;
+    bytes rwCoProc = 14;
+  }
+}

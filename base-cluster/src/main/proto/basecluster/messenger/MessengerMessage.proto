@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package basecluster.messenger;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecluster.messenger.proto";
+option java_outer_classname = "MessengerMessageProtos";
+option optimize_for = SPEED;
+
+message DirectMessage {
+  bytes payload = 1;
+}
+
+message GossipMessage {
+  string messageId = 1;
+  bytes payload = 2;
+}
+
+message MessengerMessage {
+  oneof MessengerMessageType {
+    DirectMessage direct = 1;
+    GossipMessage gossip = 2;
+  }
+}
+

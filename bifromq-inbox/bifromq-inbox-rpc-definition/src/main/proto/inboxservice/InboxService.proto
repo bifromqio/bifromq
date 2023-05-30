@@ -1,0 +1,119 @@
+syntax = "proto3";
+import "commontype/QoS.proto";
+import "commontype/ClientInfo.proto";
+import "commontype/SubInfo.proto";
+import "commontype/TopicMessage.proto";
+import "inboxservice/InboxFetched.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.rpc.proto";
+option java_outer_classname = "InboxServiceProtos";
+
+package inboxservice;
+
+service InboxService {
+
+  // for admin
+  rpc hasInbox (HasInboxRequest) returns (HasInboxReply);
+  rpc createInbox (CreateInboxRequest) returns (CreateInboxReply);
+  rpc deleteInbox (DeleteInboxRequest) returns (DeleteInboxReply);
+
+  rpc receive (stream SendRequest) returns (stream SendReply);
+
+  rpc fetch(stream FetchHint) returns (stream Fetched);
+
+  rpc commit(CommitRequest) returns(CommitReply);
+}
+
+message CreateInboxRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  commontype.ClientInfo clientInfo = 3;
+}
+
+message CreateInboxReply {
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message DeleteInboxRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  commontype.ClientInfo clientInfo = 3;
+}
+
+message DeleteInboxReply {
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message HasInboxRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  commontype.ClientInfo clientInfo = 3;
+}
+
+message HasInboxReply {
+  enum Result {
+    YES = 0;
+    NO = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message InboxMessagePack{
+  commontype.TopicMessagePack messages = 1;
+  repeated commontype.SubInfo subInfo = 2;
+}
+
+message SendRequest {
+  uint64 reqId = 1;
+  repeated InboxMessagePack inboxMsgPack = 2;
+}
+
+message SendResult{
+  enum Result {
+    OK = 0;
+    NO_INBOX = 1;
+    ERROR = 2;
+  }
+  commontype.SubInfo subInfo = 1;
+  Result result = 2;
+}
+
+message SendReply {
+  uint64 reqId = 1;
+  repeated SendResult result = 2;
+}
+
+message FetchHint {
+  uint32 capacity = 1;
+}
+
+message CommitRequest {
+  uint64 reqId = 1;
+  commontype.QoS qos = 2;
+  uint64 upToSeq = 3;
+  string inboxId = 4;
+  commontype.ClientInfo clientInfo = 5;
+}
+
+message CommitReply {
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+

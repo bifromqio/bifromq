@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package basekv.raft;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.raft.proto";
+option optimize_for = SPEED;
+
+// ClusterConfig has following invariants depending on whether nextVoters is
+// empty(Non-Joint-Consensus) or not(Joint Consensus)
+//  * In Non-Joint-Consensus Mode:
+// ** voters is non empty
+// ** learners MUST not overlap with voters
+//  * In Joint-Consensus Mode:
+// ** nextVoters in non empty
+// ** learners MUST not overlap with nextVoters(if overlapped with voters, it will be treated as VOTER)
+message ClusterConfig {
+  string correlateId = 1; // the correlate id set by caller
+  repeated string voters = 2;
+  repeated string learners = 3;
+  repeated string nextVoters = 4;
+  repeated string nextLearners = 5;
+}

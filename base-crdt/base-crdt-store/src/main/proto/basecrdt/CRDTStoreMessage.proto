@@ -1,0 +1,37 @@
+syntax = "proto3";
+import "basecrdt/Dot.proto";
+
+package basecrdt;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecrdt.store.proto";
+option optimize_for = SPEED;
+message DeltaMessage{
+  uint64 seqNo = 1;
+  repeated Replacement replacement = 2;
+}
+
+message EventIndex{
+  bytes replicaId = 1;
+  map<uint64, uint64> ranges = 2;
+}
+
+message AckMessage{
+  uint64 seqNo = 1;
+  repeated EventIndex latticeEvents = 2; // the index of covered lattice events
+  repeated EventIndex historyEvents = 3; // the index of covered history events
+}
+
+message MessagePayload {
+  oneof MsgType{
+    DeltaMessage delta = 1;
+    AckMessage ack = 2;
+  }
+}
+
+message CRDTStoreMessage{
+  string uri = 1; // the CRDT URI
+  bytes sender = 2; // addr of sender replica
+  bytes receiver = 3; // addr of receiver replica
+  bytes payload = 4;
+}

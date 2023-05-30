@@ -1,0 +1,36 @@
+syntax = "proto3";
+import "basekv/Type.proto";
+
+package basekv;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.proto";
+option optimize_for = SPEED;
+
+message State{
+  enum StateType{
+    NoUse = 0;
+    Normal = 1;
+    ConfigChanging = 2;
+    PreparedMerging = 3;
+    WaitingForMerge = 4;
+    Merged = 5;
+    MergedQuiting = 6;
+    Removed = 7;
+    Purged = 8;
+  }
+  StateType type = 1;
+  optional string taskId = 2; // id of associated execution task
+  map<string, bool> waitingList = 3; // used in PreparedMerging/WaitingForMerge state for tracking merge progress
+}
+
+message KVRangeSnapshot{
+  uint64 ver = 1;
+  basekv.KVRangeId id = 2;
+  optional string checkpointId = 3;
+  uint64 lastAppliedIndex = 4;
+  basekv.Range range = 5;
+  State state = 6;
+}
+
+

@@ -1,0 +1,31 @@
+/*
+ * Copyright (c) 2023. Baidu, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.baserpc.loadbalancer;
+
+import io.grpc.MethodDescriptor;
+import java.util.Optional;
+
+public interface IUpdateListener {
+    interface IServerSelector {
+        boolean direct(String trafficId, String serverId, MethodDescriptor methodDescriptor);
+
+        Optional<String> hashing(String trafficId, String key, MethodDescriptor methodDescriptor);
+
+        Optional<String> roundRobin(String trafficId, MethodDescriptor methodDescriptor);
+
+        Optional<String> random(String trafficId, MethodDescriptor methodDescriptor);
+    }
+
+    void onUpdate(IServerSelector selector);
+}

@@ -1,0 +1,47 @@
+/*
+ * Copyright (c) 2023. Baidu, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.plugin.inboxbroker;
+
+import java.util.concurrent.CompletableFuture;
+import org.pf4j.ExtensionPoint;
+
+public interface IInboxBroker extends ExtensionPoint {
+    /**
+     * The id representing the message receiver(brokerId) in subscription
+     *
+     * @return
+     */
+    int id();
+
+    /**
+     * Open a writer of in the specified inbox group
+     *
+     * @param inboxGroupKey the key of the inbox group
+     * @return
+     */
+    IInboxWriter openInboxWriter(String inboxGroupKey);
+
+    /**
+     * Check the existence of particular inbox in given inbox group
+     *
+     * @param reqId
+     * @param trafficId
+     * @param inboxId
+     * @param inboxGroupKey the key of the inbox group
+     * @return
+     */
+    CompletableFuture<HasResult> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey);
+
+    void close();
+}

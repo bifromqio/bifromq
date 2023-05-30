@@ -1,0 +1,90 @@
+host: 0.0.0.0 # bind to all available network interfaces
+tcpPort: 1883
+tlsPort: 1884
+wsPort: 80
+wssPort: 443
+wsPath: mqtt
+tcpEnabled: true
+tlsEnabled: false
+wsEnabled: false
+wssEnabled: false
+connTimeoutSec: 20
+maxConnPerSec: 5000
+maxDisconnPerSec: 1000
+maxMsgByteSize: 262144 # 256KB
+maxResendTimes: 5
+maxConnBandwidth: 5120000 # 512bps
+defaultKeepAliveSec: 300
+qos2ConfirmWindowSec: 5
+mqttWorkerThreads: 10
+authProviderFQN:
+settingProviderFQN:
+settingProviderProvideBufferSize: 8192
+eventCollectorReportBufferSize: 2048
+brokerSSLCtxConfig:
+  type: server
+  enableSSL: true
+  clientAuth: NONE
+  certFile: mqtt-broker.crt
+  keyFile: mqtt-broker.key
+
+agentHostConfig:
+  env: 111
+  port: 8881
+  seedEndpoints: 172.18.86.74:8881
+  enableSSL: false
+  certFile: mqtt-rpc-server.crt
+  keyFile: mqtt-rpc-server.pem
+  trustCertsFile: ca.crt
+
+localSessionServerConfig:
+  port: 8882
+  sslContextConfig:
+    type: server
+    enableSSL: false
+    certFile: mqtt-rpc-server.crt
+    keyFile: mqtt-rpc-server.pem
+    trustCertsFile: ca.crt
+
+sessionDictServerConfig:
+  port: 8883
+  sslContextConfig:
+    type: server
+    enableSSL: false
+    certFile: mqtt-rpc-server.crt
+    keyFile: mqtt-rpc-server.pem
+    trustCertsFile: ca.crt
+
+
+sessionDictClientConfig:
+  sslContextConfig:
+    type: client
+    enableSSL: false
+    certFile: mqtt-rpc-server.crt
+    keyFile: mqtt-rpc-server.pem
+    trustCertsFile: ca.crt
+
+distClientConfig:
+  sslContextConfig:
+    type: client
+    enableSSL: false
+    certFile: mqtt-rpc-server.crt
+    keyFile: mqtt-rpc-server.pem
+    trustCertsFile: ca.crt
+
+inboxReaderClientConfig:
+  sslContextConfig:
+    type: client
+    enableSSL: false
+    certFile: mqtt-rpc-server.crt
+    keyFile: mqtt-rpc-server.pem
+    trustCertsFile: ca.crt
+
+retainServiceClientConfig:
+  sslContextConfig:
+    type: client
+    enableSSL: false
+    certFile: mqtt-rpc-server.crt
+    keyFile: mqtt-rpc-server.pem
+    trustCertsFile: ca.crt
+

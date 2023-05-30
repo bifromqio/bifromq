@@ -1,0 +1,455 @@
+/*
+ * Copyright (c) 2023. Baidu, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.mqtt.handler.v3;
+
+
+import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.INBOX_TRANSIENT_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DROPPED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_PUSHED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_CONFIRMED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DROPPED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_PUSHED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_PERMISSION_CHECK_ERROR;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
+import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
+import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
+import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
+import com.baidu.bifromq.inbox.storage.proto.Fetched;
+import com.baidu.bifromq.inbox.storage.proto.Fetched.Builder;
+import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
+import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
+import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
+import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
+import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MQTT3ClientInfo;
+import com.baidu.bifromq.type.Message;
+import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.TopicMessage;
+import com.google.common.collect.Lists;
+import com.google.protobuf.ByteString;
+import io.netty.handler.codec.mqtt.MqttMessage;
+import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
+import io.netty.handler.codec.mqtt.MqttPublishMessage;
+import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+
+@Slf4j
+@RunWith(MockitoJUnitRunner.class)
+public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
+
+
+    @Before
+    public void setup() {
+        super.setup();
+        connectAndVerify(false);
+    }
+
+    @After
+    public void clean() {
+        channel.close();
+    }
+
+    @Test
+    public void qoS0Pub() {
+        mockAuthCheck(Type.ALLOW);
+        inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < 5; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals(QoS.AT_MOST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+        }
+        verifyEvent(6, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
+        Assert.assertEquals(1, fetchHints.size());
+    }
+
+
+    @Test
+    public void qoS0PubAuthError() {
+        // by pass
+        mockAuthCheck(Type.ERROR);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, QoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+        }
+        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR,
+            QOS0_PUSHED,
+            QOS0_PUSHED, QOS0_PUSHED);
+    }
+
+    @Test
+    public void qoS0PubAuthError2() {
+        // not by pass
+        mockAuthCheck(Type.ERROR);
+        int messageCount = 3;
+        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
+            .thenReturn(false);
+        inboxFetchConsumer.accept(fetch(messageCount, 128, QoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertNull(message);
+        }
+        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR, ACCESS_CONTROL_ERROR,
+            ACCESS_CONTROL_ERROR);
+    }
+
+    @Test
+    public void qoS0PubAuthFailed() {
+        // not by pass
+        mockAuthCheck(Type.DISALLOW);
+        mockDistUnSub(true);
+        inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < 5; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertNull(message);
+        }
+        verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
+        verify(distClient, times(5)).unsub(
+            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+    }
+
+    @Test
+    public void qoS0PubAndHintChange() {
+        mockAuthCheck(Type.ALLOW);
+        int messageCount = 2;
+        inboxFetchConsumer.accept(fetch(messageCount, 64 * 1024, QoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals(QoS.AT_MOST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+        }
+        verifyEvent(3, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED);
+        Assert.assertEquals(2, fetchHints.size());
+    }
+
+    @Test
+    public void qoS1PubAndAck() {
+        mockAuthCheck(Type.ALLOW);
+        mockInboxCommit(AT_LEAST_ONCE);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
+        channel.runPendingTasks();
+        // s2c pub received and ack
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
+        }
+        verifyEvent(7, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
+            QOS1_CONFIRMED);
+        verify(inboxReader, times(1)).commit(anyLong(), eq(AT_LEAST_ONCE), anyLong());
+    }
+
+    @Test
+    public void qoS1PubAndNotAllAck() {
+        mockAuthCheck(Type.ALLOW);
+        mockInboxCommit(AT_LEAST_ONCE);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
+        channel.runPendingTasks();
+        // s2c pub received and ack
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            if (i != messageCount - 1) {
+                channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
+            }
+        }
+        verifyEvent(6, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED);
+        verify(inboxReader, times(0)).commit(anyLong(), eq(AT_LEAST_ONCE), anyLong());
+    }
+
+    @Test
+    public void qoS1PubAuthError() {
+        // by pass
+        mockAuthCheck(Type.ERROR);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
+
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+        }
+        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR,
+            QOS1_PUSHED,
+            QOS1_PUSHED, QOS1_PUSHED);
+    }
+
+    @Test
+    public void qoS1PubAuthError2() {
+        // not by pass
+        mockAuthCheck(Type.ERROR);
+        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
+            .thenReturn(false);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < 5; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertNull(message);
+        }
+        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR, ACCESS_CONTROL_ERROR,
+            ACCESS_CONTROL_ERROR);
+    }
+
+    @Test
+    public void qoS1PubAuthFailed() {
+        // not by pass
+        mockAuthCheck(Type.DISALLOW);
+        mockDistUnSub(true);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertNull(message);
+        }
+        verifyEvent(4, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
+        verify(distClient, times(messageCount)).unsub(
+            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+    }
+
+    @Test
+    public void qoS2PubAndRel() {
+        mockAuthCheck(Type.ALLOW);
+        mockInboxCommit(EXACTLY_ONCE);
+        int messageCount = 2;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
+        channel.runPendingTasks();
+        // s2c pub received and rec
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            channel.writeInbound(MQTTMessageUtils.publishRecMessage(message.variableHeader().packetId()));
+        }
+        // pubRel received and comp
+        for (int i = 0; i < messageCount; i++) {
+            MqttMessage message = channel.readOutbound();
+            Assert.assertEquals(PUBREL, message.fixedHeader().messageType());
+            channel.writeInbound(MQTTMessageUtils.publishCompMessage(
+                ((MqttMessageIdVariableHeader) message.variableHeader()).messageId()));
+        }
+        verifyEvent(7, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_RECEIVED, QOS2_RECEIVED, QOS2_CONFIRMED,
+            QOS2_CONFIRMED);
+        verify(inboxReader, times(1)).commit(anyLong(), eq(EXACTLY_ONCE), anyLong());
+    }
+
+    @Test
+    public void qoS2PubAuthError() {
+        // by pass
+        mockAuthCheck(Type.ERROR);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+        }
+        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR,
+            QOS2_PUSHED,
+            QOS2_PUSHED, QOS2_PUSHED);
+    }
+
+    @Test
+    public void qoS2PubAuthError2() {
+        // not by pass
+        mockAuthCheck(Type.ERROR);
+        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
+            .thenReturn(false);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertNull(message);
+        }
+        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR, ACCESS_CONTROL_ERROR,
+            ACCESS_CONTROL_ERROR);
+    }
+
+    @Test
+    public void qoS2PubAuthFailed() {
+        // not by pass
+        mockAuthCheck(Type.DISALLOW);
+        mockDistUnSub(true);
+        int messageCount = 3;
+        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
+        channel.runPendingTasks();
+        for (int i = 0; i < messageCount; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            Assert.assertNull(message);
+        }
+        verifyEvent(4, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
+        verify(distClient, times(messageCount)).unsub(
+            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+    }
+
+    @Test
+    public void qoS2PubWithSameSourcePacketId() {
+        mockAuthCheck(Type.ALLOW);
+        InboxMessage messagesFromClient1 = InboxMessage.newBuilder()
+            .setTopicFilter("#")
+            .setMsg(
+                TopicMessage.newBuilder()
+                    .setTopic("testTopic1")
+                    .setMessage(
+                        Message.newBuilder()
+                            .setMessageId(1)
+                            .setPayload(ByteString.copyFromUtf8("payload"))
+                            .setTimestamp(System.currentTimeMillis())
+                            .setPubQoS(EXACTLY_ONCE)
+                            .build()
+                    )
+                    .setSender(
+                        ClientInfo.newBuilder()
+                            .setTrafficId(trafficId)
+                            .setMqtt3ClientInfo(
+                                MQTT3ClientInfo.newBuilder()
+                                    .setClientId("client1")
+                                    .setChannelId("channel1")
+                                    .setClientAddress("127.0.0.1:11111")
+                                    .build()
+                            )
+                            .build()
+                    )
+                    .build()
+            ).build();
+        InboxMessage messagesFromClient3 = InboxMessage.newBuilder()
+            .setTopicFilter("#")
+            .setMsg(
+                TopicMessage.newBuilder()
+                    .setTopic("testTopic2")
+                    .setMessage(
+                        Message.newBuilder()
+                            .setMessageId(1)
+                            .setPayload(ByteString.copyFromUtf8("payload"))
+                            .setTimestamp(System.currentTimeMillis())
+                            .setPubQoS(QoS.EXACTLY_ONCE)
+                            .build()
+                    )
+                    .setSender(
+                        ClientInfo.newBuilder()
+                            .setTrafficId(trafficId)
+                            .setMqtt3ClientInfo(
+                                MQTT3ClientInfo.newBuilder()
+                                    .setClientId("client2")
+                                    .setChannelId("channel2")
+                                    .setClientAddress("127.0.0.1:22222")
+                                    .build()
+                            )
+                            .build()
+                    )
+                    .build()
+            ).build();
+        // four messages from two clients with same packetId
+        Fetched fetched = Fetched.newBuilder()
+            .addQos2Msg(messagesFromClient1)
+            .addQos2Msg(messagesFromClient1)
+            .addQos2Msg(messagesFromClient3)
+            .addQos2Msg(messagesFromClient3)
+            .addAllQos2Seq(Lists.newArrayList(1L, 2L, 3L, 4L))
+            .setResult(Result.OK)
+            .build();
+        inboxFetchConsumer.accept(fetched);
+        channel.runPendingTasks();
+        // should receive two messages from client1 and client2
+        MqttPublishMessage message = channel.readOutbound();
+        Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+        Assert.assertEquals("testTopic1", message.variableHeader().topicName());
+
+        message = channel.readOutbound();
+        Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+        Assert.assertEquals("testTopic2", message.variableHeader().topicName());
+
+        message = channel.readOutbound();
+        Assert.assertNull(message);
+
+        verifyEvent(3, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED);
+    }
+
+    @Test
+    public void fetchError() {
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
+        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        verifyEvent(2, CLIENT_CONNECTED, INBOX_TRANSIENT_ERROR);
+    }
+
+
+    private Fetched fetch(int count, int payloadSize, QoS qoS) {
+        Builder builder = Fetched.newBuilder();
+        byte[] bytes = new byte[payloadSize];
+        Arrays.fill(bytes, (byte) 1);
+        for (int i = 0; i < count; i++) {
+            InboxMessage inboxMessage = InboxMessage.newBuilder()
+                .setTopicFilter("testTopicFilter")
+                .setMsg(
+                    TopicMessage.newBuilder()
+                        .setTopic("testTopic")
+                        .setMessage(
+                            Message.newBuilder()
+                                .setMessageId(i)
+                                .setPayload(ByteString.copyFrom(bytes))
+                                .setTimestamp(System.currentTimeMillis())
+                                .setPubQoS(qoS)
+                                .build()
+                        )
+                        .setSender(
+                            ClientInfo.newBuilder().build()
+                        )
+                        .build()
+                ).build();
+            switch (qoS) {
+                case AT_MOST_ONCE -> builder.addQos0Msg(inboxMessage).addQos0Seq(i);
+                case AT_LEAST_ONCE -> builder.addQos1Msg(inboxMessage).addQos1Seq(i);
+                case EXACTLY_ONCE -> builder.addQos2Msg(inboxMessage).addQos2Seq(i);
+            }
+        }
+        return builder.build();
+    }
+}

@@ -1,0 +1,4 @@
+scheduleIntervalInMs: 1000
+balancers:
+  - com.baidu.bifromq.basekv.balance.TestRecoveryBalancerFactory
+  - com.baidu.bifromq.basekv.balance.TestReplicaCntBalancerFactory

@@ -1,0 +1,12 @@
+syntax = "proto3";
+package basekv.raft;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.raft.proto";
+option optimize_for = SPEED;
+
+
+message Voting {
+  uint64 term = 1; // voting term
+  string for = 2; // the voted peer
+}

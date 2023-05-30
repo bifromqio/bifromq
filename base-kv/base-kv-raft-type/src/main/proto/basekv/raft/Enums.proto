@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package basekv.raft;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.raft.proto";
+option optimize_for = SPEED;
+
+enum RaftNodeStatus {
+  Follower = 0;
+  Leader = 1;
+  Candidate = 2;
+}
+
+enum RaftNodeSyncState{
+  Probing = 0;
+  Replicating = 1;
+  SnapshotSyncing = 2;
+}

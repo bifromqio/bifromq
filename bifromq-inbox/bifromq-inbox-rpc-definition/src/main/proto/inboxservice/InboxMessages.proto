@@ -1,0 +1,17 @@
+syntax = "proto3";
+import "commontype/TopicMessage.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.storage.proto";
+option java_outer_classname = "InboxMessagesProtos";
+
+package inboxservice;
+
+message InboxMessage{
+  string topicFilter = 1;
+  commontype.TopicMessage msg = 2;
+}
+
+message InboxMessageList{
+  repeated InboxMessage message = 1;
+}

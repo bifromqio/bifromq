@@ -1,0 +1,165 @@
+syntax = "proto3";
+import "commontype/ClientInfo.proto";
+import "commontype/SubInfo.proto";
+import "commontype/TopicMessage.proto";
+import "inboxservice/InboxFetched.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.storage.proto";
+option java_outer_classname = "InboxCoProcProtos";
+
+package inboxservice;
+
+message InboxMetadata{
+  uint64 lastFetchTime = 1;
+  uint64 expireSeconds = 2;
+  uint32 limit = 3;
+  bool dropOldest = 4;
+
+  uint64 qos0LastFetchBeforeSeq = 5;
+  uint64 qos0NextSeq = 6;
+
+  uint64 qos1LastCommitBeforeSeq = 7;
+  uint64 qos1NextSeq = 8;
+
+  uint64 qos2LastCommitBeforeSeq = 9;
+  uint64 qos2NextSeq = 10;
+
+  commontype.ClientInfo client = 11; // the owner client
+}
+
+message HasRequest{
+  repeated bytes scopedInboxId = 1;
+}
+
+message HasReply{
+  map<string, bool> exists = 1; // key: scopedInboxIdUtf8
+}
+
+message CreateParams {
+  uint64 expireSeconds = 1;
+  uint32 limit = 2;
+  bool dropOldest = 3;
+  commontype.ClientInfo client = 4; // the owner client
+}
+
+message CreateRequest{
+  map<string, CreateParams> inboxes = 1;
+}
+
+message CreateReply{
+}
+
+message TouchRequest{
+  map<string, bool> scopedInboxId = 1; // key: scopedInboxIdUtf8, value: true for keep the inbox, false for drop the inbox immediately
+}
+
+message TouchReply{
+}
+
+message FetchParams{
+  uint32 maxFetch = 1;
+  optional uint64 qos0StartAfter = 2;
+  optional uint64 qos1StartAfter = 3;
+  optional uint64 qos2StartAfter = 4;
+}
+
+message InboxFetchRequest{
+  map<string, FetchParams> inboxFetch = 1; // key: scopedInboxIdUtf8
+}
+
+message InboxFetchReply{
+  map<string, Fetched> result = 1; // key: scopedInboxIdUtf8
+}
+
+message MessagePack{
+  commontype.SubInfo subInfo = 1;
+  repeated commontype.TopicMessagePack messages = 2;
+}
+
+message InboxInsertRequest{
+  repeated MessagePack subMsgPack = 1;
+}
+
+message InboxInsertResult{
+  enum Result{
+    OK = 0;
+    NO_INBOX = 1;
+    ERROR = 2;
+  }
+  commontype.SubInfo subInfo = 1;
+  Result result = 2;
+}
+message InboxInsertReply{
+  repeated InboxInsertResult results = 2;
+}
+
+message InboxCommit{
+  optional uint64 qos0UpToSeq = 1;
+  optional uint64 qos1UpToSeq = 2;
+  optional uint64 qos2UpToSeq = 3;
+}
+
+message InboxCommitRequest{
+  map<string, InboxCommit> inboxCommit = 1;
+}
+
+message InboxCommitReply{
+  map<string, bool> result = 1;
+}
+
+message GCRequest {
+}
+
+message GCReply {
+}
+
+message UpdateRequest{
+  uint64 reqId = 1;
+  oneof type{
+    InboxInsertRequest insert = 2;
+    InboxCommitRequest commit = 3;
+    CreateRequest createInbox = 4;
+    TouchRequest touch = 5;
+  }
+  optional GCRequest gc = 6;
+}
+
+message UpdateReply{
+  uint64 reqId = 1;
+  oneof type{
+    InboxInsertReply insert = 2;
+    InboxCommitReply commit = 3;
+    CreateReply createInbox = 4;
+    TouchReply touch = 5;
+  }
+  optional GCReply gc = 6;
+}
+
+message QueryRequest{
+  uint64 reqId = 1;
+  optional HasRequest has = 2;
+  optional InboxFetchRequest fetch = 3;
+}
+
+message QueryReply{
+  uint64 reqId = 1;
+  optional HasReply has = 2;
+  optional InboxFetchReply fetch = 3;
+}
+
+message InboxServiceRWCoProcInput{
+  UpdateRequest request = 1;
+}
+
+message InboxServiceRWCoProcOutput{
+  UpdateReply reply = 1;
+}
+
+message InboxServiceROCoProcInput{
+  QueryRequest request = 1;
+}
+
+message InboxServiceROCoProcOutput{
+  QueryReply reply = 1;
+}

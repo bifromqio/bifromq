@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package baserpc;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.baserpc.proto";
+option java_outer_classname = "RPCServerProtos";
+option optimize_for = SPEED;
+
+message RPCServer {
+  string id = 1; // the id of the server
+  string host = 2;
+  uint32 port = 3;
+  repeated string group = 4; // the set of groups that the server belongs to
+  map<string, string> attrs = 5;
+  bytes announcerId = 6;
+  uint64 announcedTS = 7;
+}

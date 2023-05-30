@@ -1,0 +1,18 @@
+syntax = "proto3";
+import "basekv/Type.proto";
+import "basekv/raft/ClusterConfig.proto";
+import "basekv/raft/Enums.proto";
+package basekv;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.proto";
+option optimize_for = SPEED;
+
+message KVRangeSettings {
+  uint64 ver = 1;
+  basekv.KVRangeId id = 2;
+  Range range = 3;
+  string leader = 4; // the store hosting the leader replica among the working replicas
+  raft.ClusterConfig config = 5;
+  map<string, raft.RaftNodeSyncState> repStatus = 6;
+}

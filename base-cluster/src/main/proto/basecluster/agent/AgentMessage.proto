@@ -1,0 +1,19 @@
+syntax = "proto3";
+import "basecluster/agent/AgentMember.proto";
+
+package basecluster.agent;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basecluster.agent.proto";
+option java_outer_classname = "AgentMessageProtos";
+option optimize_for = SPEED;
+
+message AgentMessage {
+  AgentMemberAddr sender = 1;
+  bytes payload = 2;
+}
+message AgentMessageEnvelope{
+  string agentId = 1;
+  AgentMemberAddr receiver = 2;
+  AgentMessage message = 3;
+}

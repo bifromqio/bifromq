@@ -1,0 +1,14 @@
+syntax = "proto3";
+import "basekv/raft/ClusterConfig.proto";
+package basekv.raft;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.raft.proto";
+option optimize_for = SPEED;
+
+message Snapshot {
+  ClusterConfig clusterConfig = 1;
+  uint64 term = 2;
+  uint64 index = 3;
+  bytes data = 4;
+}

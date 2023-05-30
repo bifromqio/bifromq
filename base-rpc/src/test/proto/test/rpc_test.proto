@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.baserpc.test";
+option java_outer_classname = "RPCTestProto";
+
+package test;
+
+// Interface exported by the server.
+service RPCTest {
+  rpc unary (Request) returns (Response) {
+  }
+
+  rpc pipelineReq (stream Request) returns (stream Response) {
+  }
+
+  rpc msgStream (stream Ack) returns (stream Message) {
+    // demostrating the usage of IMessagePipeline
+  }
+}
+
+message Message{
+  uint32 id = 1;
+  string value = 2;
+}
+
+message Ack{
+  uint32 id = 1;
+}
+
+message Request {
+  uint32 id = 1;
+  string value = 2;
+  bytes bin = 3;
+}
+
+message Response {
+  uint32 id = 1;
+  string value = 2;
+  bytes bin = 3;
+}

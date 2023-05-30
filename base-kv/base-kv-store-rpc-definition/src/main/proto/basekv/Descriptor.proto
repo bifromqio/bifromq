@@ -1,0 +1,35 @@
+syntax = "proto3";
+import "basekv/Type.proto";
+import "basekv/Snapshot.proto";
+import "basekv/raft/ClusterConfig.proto";
+import "basekv/raft/Enums.proto";
+package basekv;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.proto";
+option optimize_for = SPEED;
+
+message LoadHint{
+  double load = 1;
+  optional bytes splitKey = 2;
+}
+
+message KVRangeDescriptor {
+  basekv.KVRangeId id = 1;
+  uint64 ver = 2;
+  Range range = 3;
+  basekv.State.StateType state = 4;
+  raft.RaftNodeStatus role = 5;
+  raft.ClusterConfig config = 6;
+  map<string, raft.RaftNodeSyncState> syncState = 7;
+  map<string, double> statistics = 8;
+  LoadHint loadHint = 9;
+  uint64 hlc = 10;
+}
+
+message KVRangeStoreDescriptor {
+  string id = 1;
+  map<string, double> statistics = 2;
+  repeated KVRangeDescriptor ranges = 3;
+  uint64 hlc = 4;
+}

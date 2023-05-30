@@ -1,0 +1,87 @@
+syntax = "proto3";
+import "commontype/ClientInfo.proto";
+import "commontype/QoS.proto";
+import "commontype/TopicMessage.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.dist.rpc.proto";
+option java_outer_classname = "DistServiceProtos";
+
+package distservice;
+
+service DistService {
+  rpc sub (SubRequest) returns (SubReply);
+  rpc unsub (UnsubRequest) returns (UnsubReply);
+  rpc clear(ClearRequest) returns (ClearReply);
+  rpc dist (stream DistRequest) returns (stream DistReply);
+}
+
+message SubRequest {
+  uint64 reqId = 1;
+  string inboxId = 2; // the inbox id defined in calling sub broker service identified by CN field of client cert
+  string topicFilter = 3;
+  commontype.QoS subQoS = 4;
+  uint32 broker = 5;
+  string inboxGroupKey = 6;
+  commontype.ClientInfo client = 7;
+}
+
+message SubReply {
+  enum SubResult {
+    OK_QoS0 = 0x00; // max qos0 granted
+    OK_QoS1 = 0x01; // max qos1 granted
+    OK_QoS2 = 0x02; // max qos2 granted
+    Failure = 0x80;
+  }
+  uint64 reqId = 1;
+  SubResult result = 2;
+}
+
+message UnsubRequest {
+  uint64 reqId = 1;
+  string inboxId = 2; // the inbox id defined in calling sub broker service identified by CN field of client cert
+  string topicFilter = 3;
+  uint32 broker = 4;
+  string inboxGroupKey = 5;
+  commontype.ClientInfo client = 6;
+}
+
+message UnsubReply {
+  enum Result{
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message ClearRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  uint32 broker = 3;
+  string inboxGroupKey = 4;
+  commontype.ClientInfo client = 5;
+}
+
+message ClearReply {
+  enum Result{
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message DistRequest {
+  uint64 reqId = 1;
+  repeated commontype.SenderMessagePack messages = 2;
+}
+
+message DistReply {
+  enum Result {
+    SUCCEED = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
