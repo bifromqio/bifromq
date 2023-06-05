@@ -1,12 +1,13 @@
 # BifroMQ
 
-BifroMQ is a high-performance distributed MQTT broker implementation that integrates native multi-tenancy support. It
-is designed to support building large-scale IoT device connections and messaging systems, and now it's the underlying
-technology of [Baidu IoTCore](https://cloud.baidu.com/product/iot.html), a public serverless cloud service.
+BifroMQ is a high-performance, distributed MQTT broker implementation that seamlessly integrates native multi-tenancy
+support. It is designed to support building large-scale IoT device connections and messaging systems, Currently, it
+serves as the foundational technology for [Baidu IoTCore](https://cloud.baidu.com/product/iot.html), a public serverless
+cloud service.
 
 # Features
 
-* 100% Supports MQTT 3.1, 3.1.1 (MQTT5 will be coming soon) features over TCP, TLS, WS, WSS
+* Full support for MQTT 3.1, 3.1.1 (MQTT5 support coming soon) features over TCP, TLS, WS, WSS
 * Native support for multi-tenancy resource sharing and workload isolation
 * Innovative Subscription Trie distribution scheme and efficient parallel topic matching algorithm
 * Built-in distributed sharded persistent storage engine optimized for message performance, reliability and scalability
@@ -26,14 +27,14 @@ technology of [Baidu IoTCore](https://cloud.baidu.com/product/iot.html), a publi
 
 ### Build from source
 
-Clone the repository to local workspace
+Clone the repository to your local workspace:
 
 ```
 cd <YOUR_WORKSPACE>
 git clone https://github.com/baidu/bifromq bifromq
 ```
 
-Change directory to project root folder and execute following commands to build the whole project
+Navigate to the project root folder and execute the following commands to build the entire project:
 
 ```
 cd bifromq
@@ -41,14 +42,15 @@ mvn wrapper:wrapper
 ./mvnw -U clean package
 ```
 
-The build output are two tar.gz files under `/build/build-bifromq-starters/target/`
+The build output consists of two tar.gz files located under `/build/build-bifromq-starters/target/`
 
 * bifromq-xxx-all.tar.gz
 * bifromq-xxx-standalone.tar.gz
 
 ## Running the tests
 
-Run following command under project root folder to run all test cases including unit tests and integration tests.
+Execute the following command in the project root folder to run all test cases, including unit tests and integration
+tests.
 Note: The tests may take some time to finish
 
 ```
@@ -61,8 +63,8 @@ BifroMQ has three deployment modes: `Standalone`, `Standard Cluster`, `Independe
 
 ### Standalone
 
-The standalone deployment mode is suitable for the development stage or the production environment that does not require
-second-level recovery from downtime.
+The standalone deployment mode is ideal for the development stage or production environments that do not require
+immediate recovery from downtime.
 
 To start a standalone bifromq server, extract bifromq-xxx-standalone.tar.gz into a directory. The directories
 are like:
@@ -74,7 +76,7 @@ are like:
 |-plugins
 ```
 
-execute following command in bin directory:
+Execute the following command in the bin directory:
 
 start server:
 
@@ -88,23 +90,22 @@ stop server:
 ./standalone.sh stop
 ```
 
-The configuration file named 'standalone.yml' is located in conf directory. Many of the settings are self-described via
+The configuration file, 'standalone.yml', is located in the conf directory. Many of the settings are self-described via
 name. By default, the standalone server will save persistent data in `data` directory.
 
 ### Standard Cluster(Will be available publicly soon)
 
-The standard cluster deployment mode is suitable for the small or middle sized production environment that requires
-reliability and scalability. It's composed of several full functional nodes working together as a logical mqtt broker
-instance and achieving high availability. You can also scale up the concurrent mqtt connection workload by adding more
-nodes,
-while some types of messaging related workload are not horizontal scalable in this mode.
+The standard cluster deployment mode is suitable for small to medium-sized production environments that require
+reliability and scalability. It comprises several fully functional nodes working together as a logical MQTT broker
+instance, ensuring high availability. You can also scale up the concurrent mqtt connection workload by adding more
+nodes, while some types of messaging related workload are not horizontal scalable in this mode.
 
 ## Independent Workload Cluster
 
-The Independent Workload Cluster deployment mode is suitable for building large scale multi-tenant serverless cluster.
-In this mode, the cluster is composed of several specialized sub-clusters, each sub-cluster itself is focusing on a
-particular 'independent type' of workload, and they work together coherently to form a logical mqtt broker instance.
-It is the most complex deployment mode and requires additional NON open-sourced building blocks. Feel free to
-contact us for commercial support.
+The Independent Workload Cluster deployment mode is designed for building large-scale, multi-tenant serverless clusters.
+In this mode, the cluster consists of several specialized sub-clusters, each focusing on a particular 'independent type'
+of workload. These sub-clusters work together coherently to form a logical MQTT broker instance. This is the most
+complex deployment mode and requires additional non-open-sourced building blocks. Feel free to contact us for commercial
+support.
 
 ## Discussion
