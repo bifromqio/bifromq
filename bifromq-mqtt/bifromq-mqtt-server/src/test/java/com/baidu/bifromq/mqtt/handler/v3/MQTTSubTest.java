@@ -211,7 +211,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         connectAndVerify(true);
         MqttSubscribeMessage subMessage = MQTTMessageUtils.badQoS0MqttSubMessageWithoutTopic();
         channel.writeInbound(subMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
     }
@@ -223,7 +223,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         Arrays.fill(qos, 1);
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
         channel.writeInbound(subMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, TOO_LARGE_SUBSCRIPTION);
     }
@@ -233,7 +233,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         connectAndVerify(true);
         MqttSubscribeMessage subMessage = MQTTMessageUtils.badTopicMqttSubMessages();
         channel.writeInbound(subMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
     }

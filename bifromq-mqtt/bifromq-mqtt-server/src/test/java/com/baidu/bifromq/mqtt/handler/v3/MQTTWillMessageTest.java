@@ -61,7 +61,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(Type.ALLOW);
         mockDistDist(true);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DISTED);
@@ -123,7 +123,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(Type.ERROR);
         mockDistDist(true);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, ACCESS_CONTROL_ERROR, WILL_DISTED);
@@ -138,7 +138,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
             .thenReturn(false);
         mockAuthCheck(Type.ERROR);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, ACCESS_CONTROL_ERROR);
@@ -150,7 +150,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
     public void willAuthCheckFailed() {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(Type.DISALLOW);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, PUB_ACTION_DISALLOW);
@@ -163,7 +163,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(Type.ALLOW);
         mockDistDist(false);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
@@ -174,7 +174,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(Type.ALLOW);
         mockDistDrop();
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
@@ -187,7 +187,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockAuthCheck(Type.ALLOW);
         mockDistDist(true);
         mockRetainPipeline(RETAINED);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED);
@@ -200,22 +200,21 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockAuthCheck(Type.ALLOW);
         mockDistDist(true);
         mockRetainPipeline(CLEARED);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, RETAIN_MSG_CLEARED);
     }
 
     @Test
-    public void willAndRetainErroe() {
+    public void willAndRetainError() {
         connectAndVerify(true, false, 30, true, true);
         mockAuthCheck(Type.ALLOW);
         mockDistDist(true);
         mockRetainPipeline(ERROR);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED_ERROR);
     }
-
 }

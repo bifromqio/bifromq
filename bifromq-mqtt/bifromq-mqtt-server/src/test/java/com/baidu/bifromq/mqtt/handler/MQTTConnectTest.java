@@ -75,7 +75,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
             );
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
@@ -93,7 +93,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockDistClear(false);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
@@ -119,7 +119,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
         Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         verifyEvent(2, EventType.CLIENT_CONNECTED, EventType.SESSION_CREATE_ERROR);
     }
@@ -138,7 +138,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         // verifications
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertEquals(CONNECTION_REFUSED_SERVER_UNAVAILABLE, ackMessage.variableHeader().connectReturnCode());
@@ -156,7 +156,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuth(Type.BANNED);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
@@ -170,7 +170,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         // verifications
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertEquals(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD, ackMessage.variableHeader().connectReturnCode());
@@ -182,7 +182,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuth(Type.ERROR);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
@@ -197,7 +197,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuth(Type.BAD_AUTH_METHOD);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
@@ -228,6 +228,4 @@ public class MQTTConnectTest extends BaseMQTTTest {
         Assert.assertEquals(MqttMessage.PINGRESP, pingResp);
         verifyEvent(2, EventType.CLIENT_CONNECTED, PING_REQ);
     }
-
-
 }

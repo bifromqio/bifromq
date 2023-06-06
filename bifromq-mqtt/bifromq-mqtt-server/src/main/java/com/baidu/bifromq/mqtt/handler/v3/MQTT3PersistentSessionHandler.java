@@ -283,9 +283,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                             // fallthrough
                         }
                         case ALLOW: {
-                            if (sendQoS0TopicMessage(topic, message,
-                                message.getPayload().asReadOnlyByteBuffer(),
-                                false, flush, timestamp)) {
+                            if (sendQoS0TopicMessage(topic, message, false, flush, timestamp)) {
                                 if (debugMode) {
                                     eventCollector.report(getLocal(EventType.QOS0_PUSHED, QoS0Pushed.class)
                                         .reqId(message.getMessageId())
@@ -355,7 +353,6 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         }
                         case ALLOW: {
                             int messageId = sendQoS1TopicMessage(seq, topicFilter, topic, message, topicMsg.getSender(),
-                                message.getPayload().asReadOnlyByteBuffer(),
                                 false, flush, timestamp);
                             if (messageId < 0) {
                                 log.error("MessageId exhausted");
@@ -412,7 +409,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         }
                         case ALLOW: {
                             int messageId = sendQoS2TopicMessage(seq, topicFilter, topic, message, topicMsg.getSender(),
-                                message.getPayload().asReadOnlyByteBuffer(), false, flush, timestamp);
+                                false, flush, timestamp);
                             if (messageId < 0) {
                                 log.error("MessageId exhausted");
                             }

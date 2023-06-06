@@ -46,7 +46,6 @@ import org.mockito.stubbing.Answer;
 
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
-@Ignore
 public class MQTTRetainTest extends MQTTTest {
     @Test
     public void retainAndSubscribe() {

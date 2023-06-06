@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
@@ -56,7 +57,6 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.mqtt.utils.TestTimer;
 import com.baidu.bifromq.plugin.authprovider.AuthData;
 import com.baidu.bifromq.plugin.authprovider.AuthResult;
 import com.baidu.bifromq.plugin.authprovider.AuthResult.Type;
@@ -130,7 +130,6 @@ public abstract class BaseMQTTTest {
     protected String remoteIp = "127.0.0.1";
     protected int remotePort = 8888;
     protected PublishSubject<Quit> kickSubject = PublishSubject.create();
-    protected TestTimer timer = new TestTimer();
     protected long disconnectDelay = 5000;
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
@@ -151,9 +150,9 @@ public abstract class BaseMQTTTest {
             .resendDelayMillis(100)
             .defaultKeepAliveTimeSeconds(300)
             .qos2ConfirmWindowSeconds(300)
-            .timer(timer)
             .build();
         channel = new EmbeddedChannel(true, true, channelInitializer());
+        channel.freezeTime();
         // common mocks
         mockSettings();
     }

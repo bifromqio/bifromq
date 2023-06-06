@@ -54,7 +54,7 @@ public class MQTTDisConnectTest extends BaseMQTTTest {
     @Test
     public void idle() {
         connectAndVerify(true, false, 30);
-        timer.advanceBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, IDLE);
@@ -64,7 +64,7 @@ public class MQTTDisConnectTest extends BaseMQTTTest {
     public void idle2() {
         // keepalive = 0
         connectAndVerify(true, false, 0);
-        timer.advanceBy(sessionContext.defaultKeepAliveTimeSeconds * 2, TimeUnit.SECONDS);
+        channel.advanceTimeBy(sessionContext.defaultKeepAliveTimeSeconds * 2, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, IDLE);
@@ -74,7 +74,7 @@ public class MQTTDisConnectTest extends BaseMQTTTest {
     public void idle3() {
         // keepalive too short, least is 5s
         connectAndVerify(true, false, 1);
-        timer.advanceBy(10, TimeUnit.SECONDS);
+        channel.advanceTimeBy(10, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, IDLE);
@@ -84,7 +84,7 @@ public class MQTTDisConnectTest extends BaseMQTTTest {
     public void idle4() {
         // keepalive too long, max is 7200s
         connectAndVerify(true, false, 100000);
-        timer.advanceBy((int) (7200 * 1.5) + 1, TimeUnit.SECONDS);
+        channel.advanceTimeBy((int) (7200 * 1.5) + 1, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, IDLE);
@@ -95,7 +95,7 @@ public class MQTTDisConnectTest extends BaseMQTTTest {
         connectAndVerify(true, false);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true, clientId, 0);
         channel.writeInbound(connectMessage);
-        timer.advanceBy(5, TimeUnit.SECONDS);
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
@@ -115,11 +115,9 @@ public class MQTTDisConnectTest extends BaseMQTTTest {
         connectAndVerify(true, false);
         MqttMessage mqttMessage = MQTTMessageUtils.failedToDecodeMessage();
         channel.writeInbound(mqttMessage);
-        timer.advanceBy(5, TimeUnit.SECONDS);
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, BAD_PACKET);
     }
-
-
 }

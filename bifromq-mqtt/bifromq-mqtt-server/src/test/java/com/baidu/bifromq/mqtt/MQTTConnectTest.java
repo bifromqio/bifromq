@@ -46,7 +46,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
-@Ignore
 public class MQTTConnectTest extends MQTTTest {
     private MqttTestClient mqttClient;
 

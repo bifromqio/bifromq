@@ -28,18 +28,23 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_PERMISSION_CHECK_ERROR;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
+import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Confirmed;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Confirmed;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -62,6 +67,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -271,7 +277,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         }
         // resent once
         Thread.sleep(100);
-        timer.advanceBy(100, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -281,7 +287,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         }
         // resent twice
         Thread.sleep(100);
-        timer.advanceBy(100, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -291,7 +297,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         }
         // resent three times and remove
         Thread.sleep(100);
-        timer.advanceBy(100, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -305,6 +311,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS1PubAndPacketIdOverflow() {
+        channel.freezeTime();
         mockAuthCheck(Type.ALLOW);
         int messageCount = 65535;
         int overFlowCount = 10;
@@ -324,6 +331,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             }
         }
         Assert.assertNotEquals(messageCount + overFlowCount, packetIds.size());
+        Assert.assertNotEquals(messageCount + overFlowCount, packetIds.size());
+
         EventType[] eventTypes = new EventType[1 + messageCount + overFlowCount];
         eventTypes[0] = CLIENT_CONNECTED;
         for (int i = 1; i < 1 + messageCount; i++) {
@@ -431,6 +440,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS2PubAndNoRec() throws InterruptedException {
+        channel.unfreezeTime();
         mockAuthCheck(Type.ALLOW);
         int messageCount = 1;
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
@@ -445,9 +455,10 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             packetIds.add(message.variableHeader().packetId());
         }
         // resent once
-        Thread.sleep(100);
-        timer.advanceBy(100, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
+        Thread.sleep(100);
+        channel.flushOutbound();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
             Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
@@ -455,9 +466,10 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             Assert.assertEquals((int) packetIds.get(i), message.variableHeader().packetId());
         }
         // resent twice
-        Thread.sleep(100);
-        timer.advanceBy(100, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
+        Thread.sleep(100);
+        channel.flushOutbound();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
             Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
@@ -465,9 +477,10 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             Assert.assertEquals((int) packetIds.get(i), message.variableHeader().packetId());
         }
         // resent three times and remove
-        Thread.sleep(100);
-        timer.advanceBy(100, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
+        Thread.sleep(100);
+        channel.flushOutbound();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
             Assert.assertNull(message);
@@ -477,6 +490,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS2PubAndPacketIdOverflow() {
+        channel.freezeTime();
         mockAuthCheck(Type.ALLOW);
         int messageCount = 65535;
         int overFlowCount = 10;

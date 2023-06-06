@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.mqtt.session;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
@@ -37,17 +35,15 @@ import com.github.benmanes.caffeine.cache.Scheduler;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.util.HashedWheelTimer;
-import io.netty.util.Timeout;
 import io.netty.util.Timer;
+import lombok.Builder;
+import lombok.extern.slf4j.Slf4j;
+
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import lombok.Builder;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class MQTTSessionContext {
@@ -65,9 +61,6 @@ public final class MQTTSessionContext {
     public final int defaultKeepAliveTimeSeconds;
     // track under confirming id count per trafficId
     private final InUseQoS2MessageIds unreleasedQoS2MessageIds;
-
-    private final Timer timer;
-    private final boolean timerOwner;
     // cache for client dist pipeline
     private final LoadingCache<ClientInfo, IRetainServiceClient.IClientPipeline> clientRetainPipelines;
     private final FutureTracker bgTaskTracker;
@@ -85,8 +78,7 @@ public final class MQTTSessionContext {
                        int defaultKeepAliveTimeSeconds,
                        int qos2ConfirmWindowSeconds,
                        IEventCollector eventCollector,
-                       ISettingProvider settingProvider,
-                       Timer timer) {
+                       ISettingProvider settingProvider) {
         this.localSessionRegistry = brokerServer;
         this.serverId = brokerServer.id();
         this.authProvider = authProvider;
@@ -101,21 +93,18 @@ public final class MQTTSessionContext {
         this.resendDelayMillis = resendDelayMillis;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
         this.clientRetainPipelines = Caffeine.newBuilder()
-            .scheduler(Scheduler.systemScheduler())
-            .expireAfterAccess(Duration.ofSeconds(30))
-            .removalListener((RemovalListener<ClientInfo, IRetainServiceClient.IClientPipeline>)
-                (key, value, cause) -> {
-                    if (value != null) {
-                        log.trace("Close client retain pipeline: clientInfo={}, cause={}", key, cause);
-                        value.close();
-                    }
-                })
-            .build(clientInfo -> retainClient.open(clientInfo));
+                .scheduler(Scheduler.systemScheduler())
+                .expireAfterAccess(Duration.ofSeconds(30))
+                .removalListener((RemovalListener<ClientInfo, IRetainServiceClient.IClientPipeline>)
+                        (key, value, cause) -> {
+                            if (value != null) {
+                                log.trace("Close client retain pipeline: clientInfo={}, cause={}", key, cause);
+                                value.close();
+                            }
+                        })
+                .build(clientInfo -> retainClient.open(clientInfo));
         retainPplnNumGauge = Gauge.builder("mqtt.server.ppln.retain.gauge", clientRetainPipelines::estimatedSize)
-            .register(Metrics.globalRegistry);
-        this.timer = timer == null ?
-            new HashedWheelTimer(threadFactory("netty-timer"), 100, TimeUnit.MILLISECONDS, 2048) : timer;
-        this.timerOwner = timer == null;
+                .register(Metrics.globalRegistry);
         this.bgTaskTracker = new FutureTracker();
     }
 
@@ -123,7 +112,7 @@ public final class MQTTSessionContext {
         // a wrapper to ensure async fifo semantic for check call
         return new IAuthProvider() {
             private final LinkedHashMap<CompletableFuture<? extends CheckResult>,
-                CompletableFuture<? extends CheckResult>> checkTaskQueue = new LinkedHashMap<>();
+                    CompletableFuture<? extends CheckResult>> checkTaskQueue = new LinkedHashMap<>();
 
             @Override
             public <T extends AuthData, R extends AuthResult> CompletableFuture<R> auth(T authData) {
@@ -136,7 +125,7 @@ public final class MQTTSessionContext {
                 CompletableFuture<R> onDone = new CompletableFuture<>();
                 ctx.channel().eventLoop().execute(() -> {
                     CompletableFuture<R> task = (CompletableFuture<R>) authProvider.check(clientInfo, actionInfo)
-                        .thenApply(v -> v); // in case authProvider returns same future object
+                            .thenApply(v -> v); // in case authProvider returns same future object
                     // add it to queue for fifo semantic
                     checkTaskQueue.put(task, onDone);
                     task.whenCompleteAsync((_v, _e) -> {
@@ -189,13 +178,6 @@ public final class MQTTSessionContext {
     }
 
     public void awaitBgTaskDone() {
-        if (timerOwner) {
-            timer.stop();
-        }
         bgTaskTracker.whenComplete((v, e) -> log.debug("All bg tasks done")).join();
-    }
-
-    public Timeout schedule(Runnable task, long delay, TimeUnit unit) {
-        return timer.newTimeout(timeout -> task.run(), delay, unit);
     }
 }

@@ -50,7 +50,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
-@Ignore
 public class MQTTPubSubTest extends MQTTTest {
     private String trafficId = "ashdsha";
     private String deviceKey = "testDevice";

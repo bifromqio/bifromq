@@ -83,7 +83,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         connectAndVerify(true);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0DupMessage("testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
@@ -130,7 +130,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockAuthCheck(Type.ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_PERMISSION_CHECK_ERROR);
@@ -143,7 +143,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockAuthCheck(Type.DISALLOW);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
@@ -220,7 +220,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockAuthCheck(Type.ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_PERMISSION_CHECK_ERROR);
@@ -233,7 +233,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockAuthCheck(Type.DISALLOW);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
@@ -349,7 +349,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockAuthCheck(Type.ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_PERMISSION_CHECK_ERROR);
@@ -363,7 +363,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockAuthCheck(Type.DISALLOW);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
@@ -375,7 +375,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         connectAndVerify(true);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("$share/g/testTopic", 123);
         channel.writeInbound(publishMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, INVALID_TOPIC);

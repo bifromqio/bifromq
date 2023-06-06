@@ -92,7 +92,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         connectAndVerify(true);
         MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.badMqttUnSubMessageWithoutTopic();
         channel.writeInbound(unSubMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
     }
@@ -102,7 +102,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         connectAndVerify(true);
         MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.qoSMqttUnSubMessages(100);
         channel.writeInbound(unSubMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, TOO_LARGE_UNSUBSCRIPTION);
     }
@@ -112,7 +112,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         connectAndVerify(true);
         MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.invalidTopicMqttUnSubMessage();
         channel.writeInbound(unSubMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
     }

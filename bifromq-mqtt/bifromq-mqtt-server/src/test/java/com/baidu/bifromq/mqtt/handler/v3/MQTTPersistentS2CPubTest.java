@@ -415,7 +415,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     @Test
     public void fetchError() {
         inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, INBOX_TRANSIENT_ERROR);
     }

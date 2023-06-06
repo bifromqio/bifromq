@@ -40,7 +40,6 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
@@ -156,15 +155,13 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                             List<Message> messages = senderMsgPack.getMessageList();
                             for (int j = 0; j < messages.size(); j++) {
                                 Message message = messages.get(j);
-                                ByteBuffer payload = message.getPayload().asReadOnlyByteBuffer();
                                 QoS finalQoS =
                                     QoS.forNumber(Math.min(message.getPubQoS().getNumber(), subQoS.getNumber()));
                                 boolean flush = i + 1 == senderMsgPacks.size() && j + 1 == messages.size();
                                 switch (finalQoS) {
                                     case AT_MOST_ONCE:
                                         if (bufferCapacityHinter.hasCapacity()) {
-                                            if (sendQoS0TopicMessage(topic, message, payload, false, flush,
-                                                timestamp)) {
+                                            if (sendQoS0TopicMessage(topic, message, false, flush, timestamp)) {
                                                 if (debugMode) {
                                                     eventCollector.report(
                                                         getLocal(EventType.QOS0_PUSHED, QoS0Pushed.class)
@@ -204,7 +201,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                     case AT_LEAST_ONCE:
                                         if (bufferCapacityHinter.hasCapacity()) {
                                             int messageId = sendQoS1TopicMessage(seqNum.incrementAndGet(),
-                                                topicFilter, topic, message, sender, payload, false, flush, timestamp);
+                                                topicFilter, topic, message, sender, false, flush, timestamp);
                                             if (messageId < 0) {
                                                 log.error("MessageId exhausted");
                                             }
@@ -224,7 +221,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                     case EXACTLY_ONCE:
                                         if (bufferCapacityHinter.hasCapacity()) {
                                             int messageId = sendQoS2TopicMessage(seqNum.incrementAndGet(),
-                                                topicFilter, topic, message, sender, payload, false, flush, timestamp);
+                                                topicFilter, topic, message, sender, false, flush, timestamp);
                                             if (messageId < 0) {
                                                 log.error("MessageId exhausted");
                                             }
@@ -249,7 +246,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                     default: {
                         for (TopicMessagePack.SenderMessagePack senderMsgPack : senderMsgPacks) {
                             for (Message message : senderMsgPack.getMessageList()) {
-                                PushEvent dropEvent;
+                                PushEvent<?> dropEvent;
                                 switch (message.getPubQoS()) {
                                     case AT_LEAST_ONCE ->
                                         dropEvent = getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)

@@ -26,14 +26,15 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.mqtt.MqttMessage;
-import io.netty.util.Timeout;
 import io.netty.util.concurrent.Future;
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
@@ -42,7 +43,7 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
     private final FutureTracker cancelOnInactiveTasks = new FutureTracker();
     private final FutureTracker tearDownTasks = new FutureTracker();
     private final Runnable flushTask;
-    private Timeout scheduledClose;
+    private ScheduledFuture<?> scheduledClose;
     private Event closeReason;
     private int flushPendingCount;
     private Future<?> nextScheduledFlush;
@@ -154,14 +155,14 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
         sessionCtx.addBgTask(bgTaskSupplier);
     }
 
-    protected void cancelIfUndone(Timeout task) {
-        if (task != null && !task.isExpired() && !task.isCancelled()) {
-            task.cancel();
+    protected void cancelIfUndone(ScheduledFuture<?> task) {
+        if (task != null && !task.isDone() && !task.isCancelled()) {
+            task.cancel(true);
         }
     }
 
-    protected boolean closeHasScheduled() {
-        return scheduledClose != null;
+    protected boolean closeNotScheduled() {
+        return scheduledClose == null;
     }
 
     protected void closeConnectionWithSomeDelay(@NonNull Event reason) {
@@ -171,14 +172,14 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
     protected void closeConnectionWithSomeDelay(MqttMessage farewell, @NonNull Event reason) {
         // must be called in event loop
         assert ctx.channel().eventLoop().inEventLoop();
-        if (!closeHasScheduled() && ctx.channel().isActive()) {
+        if (closeNotScheduled() && ctx.channel().isActive()) {
             // stop reading messages
             ctx.channel().config().setAutoRead(false);
             closeReason = reason;
             eventCollector.report(reason);
             ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(reason));
-            scheduledClose = sessionCtx.schedule(() -> ctx.channel().eventLoop().execute(() ->
-                farewellAndClose(farewell)), randomDelay(), TimeUnit.MILLISECONDS);
+            scheduledClose = ctx.channel().eventLoop().schedule(() ->
+                    farewellAndClose(farewell), randomDelay(), TimeUnit.MILLISECONDS);
         }
     }
 

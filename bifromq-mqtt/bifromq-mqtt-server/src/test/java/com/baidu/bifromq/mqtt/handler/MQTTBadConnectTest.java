@@ -42,7 +42,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
     public void unacceptableProtocolVersion() {
         MqttMessage connectMessage = MQTTMessageUtils.connectMessageWithMqttUnacceptableProtocolVersion();
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertEquals(CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION, ackMessage.variableHeader().connectReturnCode());
@@ -53,7 +53,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
     public void mqttIdentifierRejected() {
         MqttMessage connectMessage = MQTTMessageUtils.connectMessageWithMqttIdentifierRejected();
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertEquals(CONNECTION_REFUSED_IDENTIFIER_REJECTED, ackMessage.variableHeader().connectReturnCode());
@@ -64,7 +64,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
     public void badMqttPacket() {
         MqttMessage connectMessage = MQTTMessageUtils.failedToDecodeMessage();
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertNull(ackMessage);
@@ -75,7 +75,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
     public void persistentSessionWithoutClientId() {
         MqttMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false, null, 10);
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertEquals(CONNECTION_REFUSED_IDENTIFIER_REJECTED, ackMessage.variableHeader().connectReturnCode());
@@ -86,7 +86,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
     public void illegalClientId() {
         MqttMessage connectMessage = MQTTMessageUtils.connectMessageWithBadClientId();
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertEquals(CONNECTION_REFUSED_IDENTIFIER_REJECTED, ackMessage.variableHeader().connectReturnCode());
@@ -97,7 +97,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
     public void firstPacketNotConnect() {
         MqttMessage connectMessage = MQTTMessageUtils.subscribeMessageWithWildCard();
         channel.writeInbound(connectMessage);
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertNull(ackMessage);
@@ -106,7 +106,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
 
     @Test
     public void connectTimeout() {
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         ArgumentCaptor<Event> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
@@ -120,13 +120,10 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
         MqttConnectMessage connectMessage = MQTTMessageUtils.badWillTopicMqttConnectMessage();
         channel.writeInbound(connectMessage);
         // verifications
-        timer.advanceBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertNull(ackMessage);
         verifyEvent(1, EventType.INVALID_WILL_TOPIC);
     }
-
-
-
 }

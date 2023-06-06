@@ -30,8 +30,8 @@ import io.netty.handler.codec.mqtt.MqttIdentifierRejectedException;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttUnacceptableProtocolVersionException;
-import io.netty.util.Timeout;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,7 +40,7 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
     public static final String NAME = "MqttConnectMessageHandler";
     private final long timeoutInSec;
     private InetSocketAddress remoteAddr;
-    private Timeout timeoutCloseTask;
+    private ScheduledFuture<?> timeoutCloseTask;
 
     public MQTTConnectHandler(int timeoutInSec) {
         this.timeoutInSec = timeoutInSec;
@@ -49,9 +49,9 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
         remoteAddr = ChannelAttrs.socketAddress(ctx.channel());
-        timeoutCloseTask = sessionCtx.schedule(() -> ctx.channel().eventLoop().execute(() ->
+        timeoutCloseTask = ctx.channel().eventLoop().schedule(() ->
             closeConnectionNow(getLocal(EventType.CONNECT_TIMEOUT, ConnectTimeout.class)
-                .peerAddress(remoteAddr))), timeoutInSec, TimeUnit.SECONDS);
+                .peerAddress(remoteAddr)), timeoutInSec, TimeUnit.SECONDS);
         ctx.fireChannelActive();
     }
 
@@ -67,7 +67,7 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
         // stop reading next message and resume reading once finish processing current one
         ctx.channel().config().setAutoRead(false);
         // cancel the scheduled connect timeout task
-        timeoutCloseTask.cancel();
+        timeoutCloseTask.cancel(true);
         MqttMessage message = (MqttMessage) msg;
         if (!message.decoderResult().isSuccess()) {
             // decoded with known protocol violation
@@ -128,7 +128,7 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // simple strategy: shutdown the channel directly
         log.warn("ctx: {}, cause:", ctx, cause);
-        if (ctx.channel().isActive() && !closeHasScheduled()) {
+        if (ctx.channel().isActive() && closeNotScheduled()) {
             // if disconnection is caused purely by channel error
             closeConnectionNow(getLocal(EventType.CHANNEL_ERROR, ChannelError.class)
                 .peerAddress(remoteAddr)

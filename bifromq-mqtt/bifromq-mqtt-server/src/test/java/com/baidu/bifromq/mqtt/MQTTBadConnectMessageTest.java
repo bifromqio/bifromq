@@ -30,7 +30,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
-@Ignore
 public class MQTTBadConnectMessageTest extends MQTTTest {
     @Test
     public void testCleanSessionFalseAndEmptyClientIdentifier() {
