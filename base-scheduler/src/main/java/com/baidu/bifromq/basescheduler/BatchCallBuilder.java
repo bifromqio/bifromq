@@ -25,16 +25,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.StampedLock;
 import lombok.SneakyThrows;
 import org.jctools.queues.MpscArrayQueue;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
 public abstract class BatchCallBuilder<Req, Resp> {
     private static final int PREFLIGHT_BATCHES = 1024;
-    private final ReadWriteLock rwLock = new ReentrantReadWriteLock(true);
+    private final StampedLock rwLock = new StampedLock();
     private final Gradient2Limit inflightLimiter;
     private final AtomicInteger inflightCalls = new AtomicInteger();
     private final AtomicBoolean calling = new AtomicBoolean();
@@ -56,17 +54,15 @@ public abstract class BatchCallBuilder<Req, Resp> {
 
     @SneakyThrows
     CompletableFuture<Resp> submit(Req request) {
-        Lock lock = rwLock.readLock();
+        long stamp = rwLock.readLock();
         try {
-            lock.lock();
             return currentBatchRef.add(request);
         } finally {
-            lock.unlock();
+            rwLock.unlockRead(stamp);
             if (currentBatchRef.isEnough()) {
                 boolean offered = false;
-                lock = rwLock.writeLock();
+                stamp = rwLock.writeLock();
                 try {
-                    lock.lock();
                     if (currentBatchRef.isEnough()) {
                         offered = preflightBatches.offer(currentBatchRef);
                         assert offered;
@@ -79,7 +75,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                         currentBatchRef = newCall;
                     }
                 } finally {
-                    lock.unlock();
+                    rwLock.unlockWrite(stamp);
                     if (offered) {
                         meter.queueDepthSummary.record(preflightBatches.size());
                     }
@@ -97,7 +93,9 @@ public abstract class BatchCallBuilder<Req, Resp> {
                 if (batchCall != null) {
                     inflightCalls.incrementAndGet();
                     meter.queueDepthSummary.record(preflightBatches.size());
-                    CompletableFuture<Void> task = meter.batchInitTimer.record(batchCall::execute);
+                    Timer.Sample initTimeSample = Timer.start();
+                    CompletableFuture<Void> task = batchCall.execute();
+                    initTimeSample.stop(meter.batchInitTimer);
                     long start = System.nanoTime();
                     task.whenComplete((v, e) -> {
                         long processingTime = System.nanoTime() - start;
@@ -115,9 +113,8 @@ public abstract class BatchCallBuilder<Req, Resp> {
                 } else if (!currentBatchRef.isEmpty()) {
                     // steal current batch and fire it right away
                     boolean offered = false;
-                    Lock lock = rwLock.writeLock();
+                    long stamp = rwLock.writeLock();
                     try {
-                        lock.lock();
                         if (!currentBatchRef.isEmpty()) {
                             offered = preflightBatches.offer(currentBatchRef);
                             assert offered;
@@ -130,7 +127,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                             currentBatchRef = newCall;
                         }
                     } finally {
-                        lock.unlock();
+                        rwLock.unlockWrite(stamp);
                         if (offered) {
                             meter.queueDepthSummary.record(preflightBatches.size());
                         }
@@ -138,9 +135,8 @@ public abstract class BatchCallBuilder<Req, Resp> {
                 }
             } else if (currentBatchRef.isEnough()) {
                 boolean offered = false;
-                Lock lock = rwLock.writeLock();
+                long stamp = rwLock.writeLock();
                 try {
-                    lock.lock();
                     if (currentBatchRef.isEnough()) {
                         offered = preflightBatches.offer(currentBatchRef);
                         assert offered;
@@ -153,7 +149,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                         currentBatchRef = newCall;
                     }
                 } finally {
-                    lock.unlock();
+                    rwLock.unlockWrite(stamp);
                     if (offered) {
                         meter.queueDepthSummary.record(preflightBatches.size());
                     }
