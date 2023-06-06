@@ -13,10 +13,10 @@
   -->
 
 <assembly>
-    <id>standalone</id>
+    <id>windows-standalone</id>
     <formats>
         <!--        <format>dir</format>-->
-        <format>tar.gz</format>
+        <format>zip</format>
     </formats>
     <files>
         <file>
@@ -26,7 +26,7 @@
     </files>
     <fileSets>
         <fileSet>
-            <lineEnding>unix</lineEnding>
+            <lineEnding>windows</lineEnding>
             <fileMode>0755</fileMode>
             <includes>
                 <include>bin/bifromq*</include>
@@ -36,7 +36,7 @@
             </includes>
         </fileSet>
         <fileSet>
-            <lineEnding>unix</lineEnding>
+            <lineEnding>windows</lineEnding>
             <includes>
                 <include>conf/logback.xml</include>
                 <include>conf/standalone.yml</include>
