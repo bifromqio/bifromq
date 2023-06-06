@@ -28,8 +28,6 @@ public class InboxServerConfig implements StarterConfig {
 
     private String settingProviderFQN = null;
 
-    private int settingProviderProvideBufferSize = 2048;
-
     private ServerSSLContextConfig serverSSLCtxConfig;
 
     private AgentHostConfig agentHostConfig;

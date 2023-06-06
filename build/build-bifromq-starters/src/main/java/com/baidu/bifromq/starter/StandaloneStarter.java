@@ -131,8 +131,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         eventCollectorMgr = new EventCollectorManager(config.getEventCollectorReportBufferSize(), pluginMgr);
 
-        settingProviderMgr = new SettingProviderManager(config.getSettingProviderProvideBufferSize(),
-            config.getSettingProviderFQN(), pluginMgr);
+        settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
 
         AgentHostOptions agentHostOpts = AgentHostOptions.builder().addr("127.0.0.1").port(freePort()).build();
         agentHost = IAgentHost.newInstance(agentHostOpts);

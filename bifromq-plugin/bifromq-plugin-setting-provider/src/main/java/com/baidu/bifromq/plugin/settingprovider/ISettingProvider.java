@@ -14,18 +14,20 @@
 package com.baidu.bifromq.plugin.settingprovider;
 
 import com.baidu.bifromq.type.ClientInfo;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.pf4j.ExtensionPoint;
 
 public interface ISettingProvider extends ExtensionPoint {
     /**
-     * Provide a value of the setting for given client
+     * Provide a value of the setting for given client. The method will be called in the same thread of delivering message,
+     * so it's expected to be performant and non-blocking otherwise the messaging performance will be greatly impacted.
+     * It's allowed to return null to reuse the current setting value, in case the value could not be determined in timely manner.
      *
-     * @param setting
-     * @param clientInfo
-     * @param <R>
-     * @return
+     * @param setting    the setting for the client
+     * @param clientInfo the client
+     * @return the setting value for the client or null
      */
-    <R> R provide(Setting setting, ClientInfo clientInfo);
+    @Nullable <R> R provide(Setting setting, ClientInfo clientInfo);
 
     /**
      * This method will be called during broker shutdown

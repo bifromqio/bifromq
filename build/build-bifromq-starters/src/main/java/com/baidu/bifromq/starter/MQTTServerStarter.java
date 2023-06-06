@@ -72,8 +72,7 @@ public class MQTTServerStarter extends BaseStarter<MQTTServerConfig> {
 
         authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(), pluginMgr);
         eventCollectorMgr = new EventCollectorManager(config.getEventCollectorReportBufferSize(), pluginMgr);
-        settingProviderMgr = new SettingProviderManager(config.getSettingProviderProvideBufferSize(),
-            config.getSettingProviderFQN(), pluginMgr);
+        settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
 
         agentHost = initAgentHost(config.getAgentHostConfig());
         log.info("Agent host started");

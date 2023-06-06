@@ -56,8 +56,6 @@ public class StandaloneConfig implements StarterConfig {
     private int tickerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
     private int bgWorkerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
     private int eventCollectorReportBufferSize = 8192;
-    private int settingProviderProvideBufferSize = 2048;
-
     public static StandaloneConfig build(File confFile) {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         try {

@@ -15,6 +15,9 @@ package com.baidu.bifromq.plugin.settingprovider;
 
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.base.Preconditions;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -25,21 +28,10 @@ import org.pf4j.PluginManager;
 public class SettingProviderManager implements ISettingProvider {
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final ISettingProvider provider;
-    private final ProvideCallHelper callHelper;
+    private final Timer provideCallTimer;
+    private final Counter provideCallErrorCounter;
 
     public SettingProviderManager(String settingProviderFQN, PluginManager pluginMgr) {
-        this(1024, Math.max(2, Runtime.getRuntime().availableProcessors() / 4), settingProviderFQN, pluginMgr);
-    }
-
-    public SettingProviderManager(int bufferSize, String settingProviderFQN, PluginManager pluginMgr) {
-        this(bufferSize, Math.max(2, Runtime.getRuntime().availableProcessors() / 4), settingProviderFQN, pluginMgr);
-    }
-
-    public SettingProviderManager(int bufferSize,
-                                  int workerThreads,
-                                  String settingProviderFQN,
-                                  PluginManager pluginMgr) {
-        assert bufferSize > 0 && ((bufferSize & (bufferSize - 1)) == 0);
         Map<String, ISettingProvider> availSettingProviders = pluginMgr.getExtensions(ISettingProvider.class).stream()
             .collect(Collectors.toMap(e -> e.getClass().getName(), e -> e));
         if (availSettingProviders.isEmpty()) {
@@ -56,12 +48,36 @@ public class SettingProviderManager implements ISettingProvider {
                 provider = availSettingProviders.get(settingProviderFQN);
             }
         }
-        callHelper = new ProvideCallHelper(bufferSize, workerThreads, provider);
+        provideCallTimer = Timer.builder("call.exec.timer")
+            .tag("method", "SettingProvider/provide")
+            .tag("type", provider.getClass().getName())
+            .register(Metrics.globalRegistry);
+        provideCallErrorCounter = Counter.builder("call.exec.fail.count")
+            .tag("method", "SettingProvider/provide")
+            .tag("type", provider.getClass().getName())
+            .register(Metrics.globalRegistry);
     }
 
     public <R> R provide(Setting setting, ClientInfo clientInfo) {
         assert !stopped.get();
-        return callHelper.provide(setting, clientInfo);
+        R current = setting.current(clientInfo);
+        try {
+            Timer.Sample sample = Timer.start();
+            R newVal = provider.provide(setting, clientInfo);
+            sample.stop(provideCallTimer);
+            if (setting.isValid(newVal)) {
+                // update the value
+                setting.current(clientInfo, newVal);
+            } else {
+                log.warn("Invalid setting value: setting={}, value={}", setting.name(), newVal);
+            }
+        } catch (Throwable e) {
+            log.error("Setting provider throws exception: setting={}", setting.name(), e);
+            // keep current value in case provider throws
+            setting.current(clientInfo, current);
+            provideCallErrorCounter.increment();
+        }
+        return current;
     }
 
     public ISettingProvider get() {
@@ -72,7 +88,9 @@ public class SettingProviderManager implements ISettingProvider {
     public void close() {
         if (stopped.compareAndSet(false, true)) {
             log.info("Closing setting provider manager");
-            callHelper.close();
+            provider.close();
+            Metrics.globalRegistry.remove(provideCallTimer);
+            Metrics.globalRegistry.remove(provideCallErrorCounter);
             log.info("Setting provider manager closed");
         }
     }

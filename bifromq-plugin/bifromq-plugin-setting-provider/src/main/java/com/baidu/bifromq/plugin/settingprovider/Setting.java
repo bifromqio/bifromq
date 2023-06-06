@@ -47,7 +47,7 @@ public enum Setting {
         0xFFFFFFFFL),
     DistLimitUnitInterval(Long.class, val -> (long) val >= 0 && (long) val <= 0xFFFFFFFFL, 0L);
 
-    public final Class valueType;
+    public final Class<?> valueType;
 
     final Predicate<Object> validator;
 
@@ -57,7 +57,7 @@ public enum Setting {
 
     volatile ClientClassifier classifier = clientInfo -> ""; // no classification for all client
 
-    Setting(Class valueType, Predicate<Object> validator, Object initial) {
+    Setting(Class<?> valueType, Predicate<Object> validator, Object initial) {
         this.valueType = valueType;
         this.validator = validator;
         initial = resolve(initial);
@@ -86,7 +86,7 @@ public enum Setting {
      * @param val
      * @return
      */
-    public boolean isValid(Object val) {
+    public <R> boolean isValid(R val) {
         if (!valueType.isInstance(val)) {
             return false;
         }
@@ -95,11 +95,11 @@ public enum Setting {
 
     /**
      * Update the setting's client classifier. The classifier is used to classify client so same setting value could be
-     * reused within same-class client.
+     * reused within same-class client. By default, all clients are of the same default class.
      * <p/>
-     * Note: It's implementor's responsibility to ensure the customized classifier is non-blocking and efficient
+     * Note: It's implementor's responsibility to ensure the customized classifier is non-blocking and performant
      *
-     * @param classifier
+     * @param classifier the client classifier
      */
     public void setClientClassifier(@NonNull ClientClassifier classifier) {
         this.classifier = classifier;

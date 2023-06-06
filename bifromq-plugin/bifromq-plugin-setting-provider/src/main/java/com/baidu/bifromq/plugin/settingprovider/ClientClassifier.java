@@ -19,10 +19,10 @@ public interface ClientClassifier {
     /**
      * Return a string representing the class of the provided class.
      * <p/>
-     * Note: implementor should make sure the method is performant, otherwise it will hurt overall performance.
+     * Note: implementor should make sure the method is performant, otherwise it will slow down message delivery.
      *
-     * @param clientInfo
-     * @return
+     * @param clientInfo the client info
+     * @return a string represent the class of the given client
      */
     String classify(ClientInfo clientInfo);
 }

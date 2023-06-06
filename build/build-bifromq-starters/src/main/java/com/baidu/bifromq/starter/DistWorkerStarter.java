@@ -87,8 +87,7 @@ public class DistWorkerStarter extends BaseEngineStarter<DistWorkerConfig> {
         pluginMgr.loadPlugins();
         pluginMgr.startPlugins();
 
-        settingProviderMgr = new SettingProviderManager(config.getSettingProviderProvideBufferSize(),
-            config.getSettingProviderFQN(), pluginMgr);
+        settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
 
         eventCollectorMgr = new EventCollectorManager(config.getEventCollectorReportBufferSize(), pluginMgr);
 

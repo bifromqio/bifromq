@@ -49,8 +49,7 @@ public class InboxServerStarter extends BaseStarter<InboxServerConfig> {
         pluginMgr.loadPlugins();
         pluginMgr.startPlugins();
 
-        settingProviderMgr = new SettingProviderManager(config.getSettingProviderProvideBufferSize(),
-            config.getSettingProviderFQN(), pluginMgr);
+        settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
 
         agentHost = initAgentHost(config.getAgentHostConfig());
         log.info("Agent host started");

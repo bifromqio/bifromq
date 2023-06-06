@@ -30,8 +30,6 @@ public class DistServerConfig implements StarterConfig {
 
     private int eventCollectorReportBufferSize = 8192;
 
-    private int settingProviderProvideBufferSize = 2048;
-
     private ServerSSLContextConfig serverSSLCtxConfig;
 
     private AgentHostConfig agentHostConfig;
