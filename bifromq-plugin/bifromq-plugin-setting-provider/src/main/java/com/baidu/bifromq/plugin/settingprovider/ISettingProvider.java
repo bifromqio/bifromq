@@ -27,7 +27,7 @@ public interface ISettingProvider extends ExtensionPoint {
      * @param clientInfo the client
      * @return the setting value for the client or null
      */
-    @Nullable <R> R provide(Setting setting, ClientInfo clientInfo);
+    <R> R provide(Setting setting, ClientInfo clientInfo);
 
     /**
      * This method will be called during broker shutdown

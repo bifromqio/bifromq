@@ -21,24 +21,21 @@ public interface IAuthProvider extends ExtensionPoint {
     /**
      * Implement this method to hook authentication logic.
      * <p/>
-     * Note: To reduce memory pressure, the passed authData object is shared in the calling thread, and will be reused
-     * afterwards. Make a clone if implementation's logic needs to pass it to another thread for processing.
+     * Note: The authData will be reused by calling thread, make a clone if needed.
      *
      * @param authData the authentication data
      */
-    <T extends AuthData, R extends AuthResult> CompletableFuture<R> auth(T authData);
+    <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData);
 
     /**
      * Implement this method to hook action permission check logic.
      * <p/>
-     * Note: The clientInfo object is immutable. To reduce memory pressure, the passed actionInfo object is shared in
-     * the calling thread, and will be reused afterwards. Make a clone if implementation's logic needs to pass it to
-     * another thread for processing.
+     * Note: The actionInfo will be reused by calling thread, make a clone if needed.
      *
-     * @param clientInfo the authentication data
-     * @param actionInfo
+     * @param clientInfo the client info
+     * @param actionInfo the action to authorize
      */
-    <A extends ActionInfo, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo, A actionInfo);
+    <A extends ActionInfo<?>, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo, A actionInfo);
 
     /**
      * This method will be called during broker shutdown

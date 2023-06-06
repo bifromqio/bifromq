@@ -26,7 +26,7 @@ import lombok.experimental.Accessors;
 @Getter
 @Setter
 @Accessors(fluent = true, chain = true)
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = true)
 @ToString
 public final class MQTTBasicAuth extends AuthData<MQTTBasicAuth> {
     private MQTTVer protocol;

@@ -54,7 +54,7 @@ public class AuthProviderManager implements IAuthProvider {
     private final Gradient2Limit checkCallLimit = Gradient2Limit.newBuilder().build();
     private final AtomicInteger checkCalls = new AtomicInteger();
     private ExecutorService executor;
-    private AsyncLoadingCache<AuthData, ? extends AuthResult> authCache;
+    private AsyncLoadingCache<AuthData<?>, ? extends AuthResult> authCache;
     private AsyncLoadingCache<CheckCacheKey, ? extends CheckResult> checkCache;
     private MetricManager metricMgr;
 
@@ -90,10 +90,8 @@ public class AuthProviderManager implements IAuthProvider {
 
         authCache = Caffeine.newBuilder()
             .maximumSize(AUTH_AUTH_RESULT_CACHE_LIMIT.get())
-            .expireAfterAccess(
-                Duration.ofSeconds(AUTH_AUTH_RESULT_EXPIRY_SECONDS.get()))
-            .refreshAfterWrite(
-                Duration.ofSeconds(AUTH_AUTH_RESULT_EXPIRY_SECONDS.get()))
+            .expireAfterAccess(Duration.ofSeconds(AUTH_AUTH_RESULT_EXPIRY_SECONDS.get()))
+            .refreshAfterWrite(Duration.ofSeconds(AUTH_AUTH_RESULT_EXPIRY_SECONDS.get()))
             .scheduler(Scheduler.systemScheduler())
             .executor(executor)
             .buildAsync((authData, executor) -> {
@@ -104,10 +102,8 @@ public class AuthProviderManager implements IAuthProvider {
 
         checkCache = Caffeine.newBuilder()
             .maximumSize(AUTH_CHECK_RESULT_CACHE_LIMIT.get())
-            .expireAfterAccess(
-                Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
-            .refreshAfterWrite(
-                Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
+            .expireAfterAccess(Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
+            .refreshAfterWrite(Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
             .scheduler(Scheduler.systemScheduler())
             .executor(executor)
             .buildAsync((key, executor) -> {
@@ -119,14 +115,14 @@ public class AuthProviderManager implements IAuthProvider {
     }
 
     @Override
-    public <T extends AuthData, R extends AuthResult> CompletableFuture<R> auth(T authData) {
+    public <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData) {
         checkState();
         return (CompletableFuture<R>) authCache.get(authData);
     }
 
     @Override
-    public <A extends ActionInfo, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo,
-                                                                                    A actionInfo) {
+    public <A extends ActionInfo<?>, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo,
+                                                                                       A actionInfo) {
         checkState();
         return (CompletableFuture<R>) checkCache.get(new CheckCacheKey(clientInfo, actionInfo));
     }
@@ -135,7 +131,7 @@ public class AuthProviderManager implements IAuthProvider {
         return provider;
     }
 
-    private void doAuth(AuthData authData, CompletableFuture<AuthResult> onDone) {
+    private void doAuth(AuthData<?> authData, CompletableFuture<AuthResult> onDone) {
         if (authCallLimit.getLimit() < authCalls.get()) {
             onDone.complete(AuthResult.error(new ThrottledException("Auth request throttled")));
             return;
@@ -169,7 +165,7 @@ public class AuthProviderManager implements IAuthProvider {
         }
     }
 
-    private void doCheck(ClientInfo clientInfo, ActionInfo actionInfo, CompletableFuture<CheckResult> onDone) {
+    private void doCheck(ClientInfo clientInfo, ActionInfo<?> actionInfo, CompletableFuture<CheckResult> onDone) {
         if (checkCallLimit.getLimit() < checkCalls.get()) {
             log.debug("Check throttled: limit={}, current={}", checkCallLimit.getLimit(), checkCalls.get());
             onDone.complete(CheckResult.error(new ThrottledException("Check request throttled")));
@@ -224,7 +220,7 @@ public class AuthProviderManager implements IAuthProvider {
     @AllArgsConstructor
     private static class CheckCacheKey {
         final ClientInfo clientInfo;
-        final ActionInfo actionInfo;
+        final ActionInfo<?> actionInfo;
     }
 
     private class MetricManager {

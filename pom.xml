@@ -67,7 +67,6 @@
         <netty.version>4.1.89.Final</netty.version>
         <netty.tcnative.version>2.0.59.Final</netty.tcnative.version>
         <micrometer.version>1.10.5</micrometer.version>
-        <disruptor.version>3.4.4</disruptor.version>
         <jctools.version>4.0.1</jctools.version>
 
         <slf4j.version>1.7.30</slf4j.version>
@@ -458,11 +457,6 @@
                 <groupId>org.projectlombok</groupId>
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.lmax</groupId>
-                <artifactId>disruptor</artifactId>
-                <version>${disruptor.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.jctools</groupId>

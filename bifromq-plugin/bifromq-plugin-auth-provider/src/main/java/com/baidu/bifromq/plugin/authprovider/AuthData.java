@@ -16,7 +16,7 @@ package com.baidu.bifromq.plugin.authprovider;
 
 import lombok.SneakyThrows;
 
-public abstract class AuthData<T extends AuthData> implements Cloneable {
+public abstract class AuthData<T extends AuthData<?>> implements Cloneable {
     public enum AuthDataType {
         MQTT3BasicAuth
     }

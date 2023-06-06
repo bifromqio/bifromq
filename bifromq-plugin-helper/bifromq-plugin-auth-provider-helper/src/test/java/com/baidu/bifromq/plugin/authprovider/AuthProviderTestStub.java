@@ -26,13 +26,13 @@ public class AuthProviderTestStub implements IAuthProvider {
         = CompletableFuture.completedFuture(CheckResult.DISALLOW);
 
     @Override
-    public <T extends AuthData, R extends AuthResult> CompletableFuture<R> auth(T authData) {
+    public <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData) {
         return (CompletableFuture<R>) nextAuthResult;
     }
 
     @Override
-    public <A extends ActionInfo, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo,
-                                                                                    A actionInfo) {
+    public <A extends ActionInfo<?>, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo,
+                                                                                       A actionInfo) {
         return (CompletableFuture<R>) nextCheckResult;
     }
 }
