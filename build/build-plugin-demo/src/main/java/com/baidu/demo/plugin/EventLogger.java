@@ -24,7 +24,7 @@ public final class EventLogger implements IEventCollector {
     private static final Logger LOG = LoggerFactory.getLogger("IoTBrokerEventLogger");
 
     @Override
-    public <T extends Event> void report(T event) {
+    public <T extends Event<?>> void report(T event) {
         if (LOG.isInfoEnabled()) {
             switch (event.type()) {
                 case OVERFLOWED:

@@ -28,8 +28,6 @@ public class DistServerConfig implements StarterConfig {
 
     private String settingProviderFQN = null;
 
-    private int eventCollectorReportBufferSize = 8192;
-
     private ServerSSLContextConfig serverSSLCtxConfig;
 
     private AgentHostConfig agentHostConfig;

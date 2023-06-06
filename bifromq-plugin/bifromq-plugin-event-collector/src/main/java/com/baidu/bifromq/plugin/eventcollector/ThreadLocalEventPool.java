@@ -22,10 +22,10 @@ import java.util.Set;
 import lombok.SneakyThrows;
 import org.reflections.Reflections;
 
-public final class ThreadLocalEventPool extends HashMap<Class<? extends Event>, Event> {
+public final class ThreadLocalEventPool extends HashMap<Class<? extends Event<?>>, Event<?>> {
     private static final Set<Class<?>> EVENT_TYPES;
 
-    private static final ThreadLocal<Event[]> THREAD_LOCAL_EVENTS;
+    private static final ThreadLocal<Event<?>[]> THREAD_LOCAL_EVENTS;
 
     static {
         Reflections reflections = new Reflections(Event.class.getPackageName());
@@ -35,19 +35,19 @@ public final class ThreadLocalEventPool extends HashMap<Class<? extends Event>, 
         THREAD_LOCAL_EVENTS = withInitial(ThreadLocalEventPool::init);
     }
 
-    private static Event[] init() {
-        Event[] events = new Event[EVENT_TYPES.size()];
-        EVENT_TYPES.forEach(t -> add((Class<? extends Event>) t, events));
+    private static Event<?>[] init() {
+        Event<?>[] events = new Event[EVENT_TYPES.size()];
+        EVENT_TYPES.forEach(t -> add((Class<? extends Event<?>>) t, events));
         return events;
     }
 
-    public static <T extends Event> T getLocal(EventType eventType, Class<T> typeClass) {
+    public static <T extends Event<?>> T getLocal(EventType eventType, Class<T> typeClass) {
         return (T) THREAD_LOCAL_EVENTS.get()[eventType.ordinal()];
     }
 
     @SneakyThrows
-    private static void add(Class<? extends Event> eventClass, Event[] events) {
-        Event event = eventClass.getConstructor().newInstance();
+    private static void add(Class<? extends Event<?>> eventClass, Event<?>[] events) {
+        Event<?> event = eventClass.getConstructor().newInstance();
         events[event.type().ordinal()] = event;
     }
 }

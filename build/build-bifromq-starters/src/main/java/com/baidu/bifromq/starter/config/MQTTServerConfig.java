@@ -66,8 +66,6 @@ public class MQTTServerConfig implements StarterConfig {
 
     private int mqttWorkerThreads = Runtime.getRuntime().availableProcessors();
 
-    private int eventCollectorReportBufferSize = 8192;
-
     private ServerSSLContextConfig brokerSSLCtxConfig;
 
     private AgentHostConfig agentHostConfig;

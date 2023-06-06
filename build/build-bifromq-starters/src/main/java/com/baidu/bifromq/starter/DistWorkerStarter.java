@@ -89,7 +89,7 @@ public class DistWorkerStarter extends BaseEngineStarter<DistWorkerConfig> {
 
         settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
 
-        eventCollectorMgr = new EventCollectorManager(config.getEventCollectorReportBufferSize(), pluginMgr);
+        eventCollectorMgr = new EventCollectorManager(pluginMgr);
 
         agentHost = initAgentHost(config.getAgentHostConfig());
         log.info("Agent host started");

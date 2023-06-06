@@ -21,10 +21,10 @@ import org.pf4j.Extension;
 @Slf4j
 @Extension
 public class EventCollectorTestStub implements IEventCollector {
-    public final List<Event> events = new ArrayList<>();
+    public final List<Event<?>> events = new ArrayList<>();
 
     @Override
-    public <T extends Event> void report(T event) {
+    public <T extends Event<?>> void report(T event) {
         log.info("Test sub: {}", event);
         events.add(event);
     }

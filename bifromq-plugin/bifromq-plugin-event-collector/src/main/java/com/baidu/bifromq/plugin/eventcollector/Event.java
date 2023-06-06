@@ -17,7 +17,7 @@ import lombok.SneakyThrows;
 import lombok.ToString;
 
 @ToString
-public abstract class Event<T extends Event> implements Cloneable {
+public abstract class Event<T extends Event<?>> implements Cloneable {
     private long hlc;
 
     public abstract EventType type();
@@ -25,7 +25,7 @@ public abstract class Event<T extends Event> implements Cloneable {
     /**
      * The UTC timestamp of the event in milliseconds
      *
-     * @return
+     * @return the timestamp
      */
     public long utc() {
         return hlc >>> 16;
@@ -34,7 +34,7 @@ public abstract class Event<T extends Event> implements Cloneable {
     /**
      * The timestamp from Hybrid Logical Clock, which is usually used for causal reasoning
      *
-     * @return
+     * @return the hlc timestamp
      */
     public long hlc() {
         return hlc;
@@ -51,6 +51,6 @@ public abstract class Event<T extends Event> implements Cloneable {
     }
 
     public void clone(T orig) {
-        this.hlc = ((Event) orig).hlc;
+        this.hlc = ((Event<?>) orig).hlc;
     }
 }

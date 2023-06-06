@@ -67,7 +67,7 @@ public class DistWorkerState {
     private ISettingProvider settingProvider = Setting::current;
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
-        public <T extends Event> void report(T event) {
+        public <T extends Event<?>> void report(T event) {
 
         }
     };
@@ -160,7 +160,8 @@ public class DistWorkerState {
                                                  String serverId) {
         try {
             long reqId = seqNo.incrementAndGet();
-            ByteString subInfoKey = EntityUtil.subInfoKey(trafficId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, serverId));
+            ByteString subInfoKey =
+                EntityUtil.subInfoKey(trafficId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, serverId));
             KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
             DistServiceRWCoProcInput input = MessageUtil.buildClearSubInfoRequest(reqId, subInfoKey);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()

@@ -63,7 +63,7 @@ public class InboxStoreStarter extends BaseEngineStarter<InboxStoreConfig> {
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
                 threadFactory("bg-job-executor-%d")), "bgTaskExecutor");
-        eventCollectorMgr = new EventCollectorManager(config.getEventCollectorReportBufferSize(), pluginMgr);
+        eventCollectorMgr = new EventCollectorManager(pluginMgr);
 
 
         agentHost = initAgentHost(config.getAgentHostConfig());

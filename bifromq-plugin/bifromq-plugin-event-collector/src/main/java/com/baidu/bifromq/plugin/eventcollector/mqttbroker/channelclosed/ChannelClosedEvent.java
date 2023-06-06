@@ -22,7 +22,7 @@ import lombok.ToString;
  * Examine the reason enum and downcast to corresponding subclass for concrete details
  */
 @ToString(callSuper = true)
-public abstract class ChannelClosedEvent<T extends ChannelClosedEvent> extends Event<T> {
+public abstract class ChannelClosedEvent<T extends ChannelClosedEvent<?>> extends Event<T> {
     protected InetSocketAddress peerAddress;
 
     @Override

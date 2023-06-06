@@ -37,8 +37,6 @@ public class DistWorkerConfig implements StarterConfig {
 
     private String settingProviderFQN = null;
 
-    private int eventCollectorReportBufferSize = 8192;
-
     private int pushIOThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
 
     private int bgWorkerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 4);

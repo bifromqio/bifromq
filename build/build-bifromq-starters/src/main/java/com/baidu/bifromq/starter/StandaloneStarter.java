@@ -129,7 +129,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(), pluginMgr);
 
-        eventCollectorMgr = new EventCollectorManager(config.getEventCollectorReportBufferSize(), pluginMgr);
+        eventCollectorMgr = new EventCollectorManager(pluginMgr);
 
         settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
 

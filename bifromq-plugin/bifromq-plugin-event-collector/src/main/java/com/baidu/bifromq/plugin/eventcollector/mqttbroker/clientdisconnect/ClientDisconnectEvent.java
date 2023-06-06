@@ -21,5 +21,5 @@ import lombok.ToString;
  * corresponding subclass for concrete details.
  */
 @ToString(callSuper = true)
-public abstract class ClientDisconnectEvent<T extends ClientDisconnectEvent> extends ClientEvent<T> {
+public abstract class ClientDisconnectEvent<T extends ClientDisconnectEvent<?>> extends ClientEvent<T> {
 }

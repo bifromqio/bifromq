@@ -61,7 +61,7 @@ public abstract class InboxServiceTest {
 
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
-        public <T extends Event> void report(T event) {
+        public <T extends Event<?>> void report(T event) {
 
         }
     };

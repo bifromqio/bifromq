@@ -29,8 +29,6 @@ public class InboxStoreConfig implements StarterConfig {
 
     private int bgWorkerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
 
-    private int eventCollectorReportBufferSize = 8192;
-
     private boolean bootstrap;
 
     private String overrideIdentity;

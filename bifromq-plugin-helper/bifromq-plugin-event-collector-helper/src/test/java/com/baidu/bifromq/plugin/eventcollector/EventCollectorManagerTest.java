@@ -15,8 +15,6 @@ package com.baidu.bifromq.plugin.eventcollector;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.baidu.bifromq.type.ClientInfo;
@@ -43,47 +41,12 @@ public class EventCollectorManagerTest {
     }
 
     @Test
-    public void StartAndStop() {
-        EventCollectorManager manager = new EventCollectorManager(8, pluginManager);
-        assertTrue(manager.allEventCollectors().size() >= 1);
-        assertTrue(manager.allEventCollectors().contains(EventCollectorTestStub.class.getName()));
-        manager.close();
-    }
-
-    @Test
     public void ReportEvent() {
-        EventCollectorManager manager = new EventCollectorManager(8, pluginManager);
+        EventCollectorManager manager = new EventCollectorManager(pluginManager);
         EventCollectorTestStub collector = (EventCollectorTestStub) manager.get(EventCollectorTestStub.class.getName());
         assertEquals(0, collector.events.size());
         manager.report(ThreadLocalEventPool.getLocal(EventType.PING_REQ, PingReq.class)
             .clientInfo(ClientInfo.getDefaultInstance()));
         await().until(() -> collector.events.size() == 1);
-    }
-
-    @Test
-    public void PauseAndResumeCollector() {
-        EventCollectorManager manager = new EventCollectorManager(8, pluginManager);
-        EventCollectorTestStub collector = (EventCollectorTestStub) manager.get(EventCollectorTestStub.class.getName());
-        assertEquals(0, collector.events.size());
-        manager.report(ThreadLocalEventPool.getLocal(EventType.PING_REQ, PingReq.class)
-            .clientInfo(ClientInfo.getDefaultInstance()));
-        await().until(() -> collector.events.size() == 1);
-
-        assertFalse(manager.isPaused(EventCollectorTestStub.class.getName()));
-        manager.pause(EventCollectorTestStub.class.getName());
-        assertTrue(manager.isPaused(EventCollectorTestStub.class.getName()));
-
-        manager.report(ThreadLocalEventPool.getLocal(EventType.PING_REQ, PingReq.class)
-            .clientInfo(ClientInfo.getDefaultInstance()));
-        await().until(() -> collector.events.size() == 1);
-
-        manager.resume(EventCollectorTestStub.class.getName());
-        assertFalse(manager.isPaused(EventCollectorTestStub.class.getName()));
-
-        await().until(() -> {
-            manager.report(ThreadLocalEventPool.getLocal(EventType.PING_REQ, PingReq.class)
-                .clientInfo(ClientInfo.getDefaultInstance()));
-            return collector.events.size() == 2;
-        });
     }
 }

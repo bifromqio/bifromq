@@ -18,7 +18,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import lombok.ToString;
 
 @ToString(callSuper = true)
-public abstract class PushEvent<T extends PushEvent> extends ClientEvent<T> {
+public abstract class PushEvent<T extends PushEvent<?>> extends ClientEvent<T> {
     private long reqId;
 
     private boolean isRetain;

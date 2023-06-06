@@ -24,9 +24,9 @@ import org.reflections.Reflections;
 
 class EventPool {
     private static final Set<Class<?>> EVENT_TYPES;
-    private final Map<Class<? extends Event>, Event> pool = new HashMap<>();
+    private final Map<Class<? extends Event<?>>, Event<?>> pool = new HashMap<>();
 
-    private final Event[] events;
+    private final Event<?>[] events;
 
     static {
         Reflections reflections = new Reflections(Event.class.getPackageName());
@@ -38,17 +38,17 @@ class EventPool {
 
     EventPool() {
         events = new Event[EVENT_TYPES.size()];
-        EVENT_TYPES.forEach(t -> this.add((Class<? extends Event>) t));
+        EVENT_TYPES.forEach(t -> this.add((Class<? extends Event<?>>) t));
     }
 
-    <T extends Event> T get(EventType eventType) {
+    <T extends Event<?>> T get(EventType eventType) {
         return (T) events[eventType.ordinal()];
     }
 
     @SneakyThrows
-    private void add(Class<? extends Event> eventClass) {
+    private void add(Class<? extends Event<?>> eventClass) {
         pool.put(eventClass, eventClass.getConstructor().newInstance());
-        Event event = eventClass.getConstructor().newInstance();
+        Event<?> event = eventClass.getConstructor().newInstance();
         events[event.type().ordinal()] = event;
     }
 }

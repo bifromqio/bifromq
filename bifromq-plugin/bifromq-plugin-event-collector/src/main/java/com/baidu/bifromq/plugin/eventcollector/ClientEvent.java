@@ -17,7 +17,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import lombok.ToString;
 
 @ToString
-public abstract class ClientEvent<T extends ClientEvent> extends Event<T> {
+public abstract class ClientEvent<T extends ClientEvent<?>> extends Event<T> {
     protected ClientInfo clientInfo;
 
     public final ClientInfo clientInfo() {
