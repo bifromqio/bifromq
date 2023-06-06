@@ -1,12 +1,15 @@
-[**English**](./README.md) | [**中文简体**](./README.zh_Hans.md)
-
 # BifroMQ
+
+[English](./README.md) | 中文简体
+
+---
+
 
 BifroMQ 是一个高性能的分布式 MQTT Broker 消息中间件实现，无缝集成了原生的多租户支持。它旨在支持构建大规模的物联网设备连接和消息系统。
 
 目前，它来源与百度物联网团队多年技术积累，并作为百度智能云[物联网核心套件 IoT Core](https://cloud.baidu.com/product/iot.html)的基础技术，这是一个公共的 Serverless 云服务。
 
-# 特性
+## 特性
 
 * 完全支持 MQTT 3.1/3.1.1的特性，包括 TCP, TLS, WS, WSS，即将支持 MQTT 5
 * 原生支持多租户资源共享和工作负载隔离
@@ -104,3 +107,7 @@ BifroMQ 有三种部署模式：`单机模式(Standalone)`，`标准集群(Stand
 独立工作负载集群部署模式旨在构建大规模的，多租户的 Serverless 集群。在这种模式下，集群由几个专门的子集群组成，每个子集群都专注于一个特定的'独立类型'的工作负载。这些子集群共同协作形成一个逻辑的 MQTT Broker 实例。这是最复杂的部署模式，需要额外的非开源协作组件。如需商业支持，请随时与我们联系。
 
 ## 讨论
+
+如果你对我们的项目感兴趣，你可以微信扫描二维码添加小助手，邀请入群。
+
+<img decoding="async" src="https://bifromq.io/img/qrcode.png" width="30%">

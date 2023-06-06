@@ -1,13 +1,15 @@
-[**English**](./README.md) | [**中文简体**](./README.zh_Hans.md)
-
 # BifroMQ
+
+English | [中文简体](./README.zh_Hans.md)
+
+---
 
 BifroMQ is a high-performance, distributed MQTT broker implementation that seamlessly integrates native multi-tenancy
 support. It is designed to support building large-scale IoT device connections and messaging systems, Currently, it
 serves as the foundational technology for [Baidu IoTCore](https://cloud.baidu.com/product/iot.html), a public serverless
 cloud service.
 
-# Features
+## Features
 
 * Full support for MQTT 3.1, 3.1.1 (MQTT5 support coming soon) features over TCP, TLS, WS, WSS
 * Native support for multi-tenancy resource sharing and workload isolation
@@ -110,3 +112,5 @@ complex deployment mode and requires additional non-open-sourced building blocks
 support.
 
 ## Discussion
+
+<a href="https://discord.gg/Pfs3QRadRB"><img src="https://img.shields.io/discord/1115542029531885599?logo=discord&logoColor=white" alt="BifroMQ Discord server" /></a>
