@@ -42,9 +42,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
-import org.jctools.maps.NonBlockingHashMap;
 
 @Slf4j
 public class InboxWriteScheduler
@@ -77,7 +77,7 @@ public class InboxWriteScheduler
     private class InboxWriteCallBuilder extends BatchCallBuilder<InboxWriteRequest, Void> {
         private class BatchInboxWriteCall implements IBatchCall<InboxWriteRequest, Void> {
             private final AtomicInteger msgCount = new AtomicInteger();
-            private final Map<TopicMessagePack, List<SubInfo>> batch = new NonBlockingHashMap<>();
+            private final Map<TopicMessagePack, List<SubInfo>> batch = new ConcurrentHashMap<>();
             private CompletableFuture<Void> onDone = new CompletableFuture<>();
 
             @Override

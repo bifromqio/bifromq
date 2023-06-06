@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,7 +62,7 @@ public final class LoadEstimator implements ILoadEstimator {
         trackedKeySlots.headMap(slot - 1).clear();
         Map<ByteString, AtomicInteger> keySlot = trackedKeySlots.computeIfAbsent(slot,
             k -> {
-                ConcurrentMap<ByteString, AtomicInteger> value = new NonBlockingHashMap<>();
+                ConcurrentMap<ByteString, AtomicInteger> value = new ConcurrentHashMap<>();
                 value.put(ByteString.EMPTY, new AtomicInteger());
                 return value;
             });
