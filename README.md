@@ -1,3 +1,5 @@
+[**English**](./README.md) | [**中文简体**](./README.zh_Hans.md)
+
 # BifroMQ
 
 BifroMQ is a high-performance, distributed MQTT broker implementation that seamlessly integrates native multi-tenancy
@@ -9,8 +11,7 @@ cloud service.
 
 * Full support for MQTT 3.1, 3.1.1 (MQTT5 support coming soon) features over TCP, TLS, WS, WSS
 * Native support for multi-tenancy resource sharing and workload isolation
-* Innovative Subscription Trie distribution scheme and efficient parallel topic matching algorithm
-* Built-in distributed sharded persistent storage engine optimized for message performance, reliability and scalability
+* Built-in storage engine. Optimized for critical load targeting, no third-party middleware dependencies
 * Extension mechanism for supporting:
     * Authentication/Authorization
     * Runtime Setting
