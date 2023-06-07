@@ -129,8 +129,7 @@ public class RPCClientBuilder {
                     serverListSubject = BehaviorSubject.createDefault(singleton(serviceUniqueName));
                     serverSelectorSubject.onNext(new IUpdateListener.IServerSelector() {
                         @Override
-                        public boolean direct(String trafficId, String serverId,
-                                              MethodDescriptor methodDescriptor) {
+                        public boolean direct(String trafficId, String serverId, MethodDescriptor methodDescriptor) {
                             return true;
                         }
 
@@ -156,7 +155,7 @@ public class RPCClientBuilder {
                         .build();
                 } else {
                     inProc = false;
-                    InterProcChannelBuilder ncBuilder = (InterProcChannelBuilder) channelBuilder;
+                    InterProcChannelBuilder<?> ncBuilder = (InterProcChannelBuilder<?>) channelBuilder;
                     lbProvider = new TrafficDirectiveLoadBalancerProvider(bluePrint, serverSelectorSubject::onNext);
                     IRPCServiceTrafficDirector trafficDirector = IRPCServiceTrafficDirector
                         .newInstance(serviceUniqueName, ncBuilder.crdtService);
@@ -271,7 +270,7 @@ public class RPCClientBuilder {
         return new RPCClient(serviceUniqueName, bluePrint, channelHolder);
     }
 
-    private abstract class ChannelBuilder<T extends ChannelBuilder> {
+    private abstract static class ChannelBuilder {
         protected final RPCClientBuilder parentBuilder;
 
         ChannelBuilder(RPCClientBuilder builder) {
@@ -283,13 +282,14 @@ public class RPCClientBuilder {
         }
     }
 
-    public class InProcChannelBuilder extends ChannelBuilder<InProcChannelBuilder> {
+    public static class InProcChannelBuilder extends ChannelBuilder {
         InProcChannelBuilder(RPCClientBuilder builder) {
             super(builder);
         }
     }
 
-    public abstract class InterProcChannelBuilder<T extends InterProcChannelBuilder> extends ChannelBuilder<T> {
+    public abstract static class InterProcChannelBuilder<T extends InterProcChannelBuilder<?>>
+        extends ChannelBuilder {
         private ICRDTService crdtService;
         private EventLoopGroup eventLoopGroup;
         private long keepAliveInSec;
@@ -321,13 +321,13 @@ public class RPCClientBuilder {
 
     }
 
-    public class NonSSLChannelBuilder extends InterProcChannelBuilder<NonSSLChannelBuilder> {
+    public static class NonSSLChannelBuilder extends InterProcChannelBuilder<NonSSLChannelBuilder> {
         NonSSLChannelBuilder(RPCClientBuilder builder) {
             super(builder);
         }
     }
 
-    public class SSLChannelBuilder extends InterProcChannelBuilder<SSLChannelBuilder> {
+    public static class SSLChannelBuilder extends InterProcChannelBuilder<SSLChannelBuilder> {
         private File serviceIdentityCertFile;
         private File privateKeyFile;
         private File trustCertsFile;

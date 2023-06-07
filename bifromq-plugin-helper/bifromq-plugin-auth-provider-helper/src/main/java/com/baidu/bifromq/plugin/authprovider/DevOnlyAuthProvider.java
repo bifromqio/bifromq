@@ -19,29 +19,28 @@ import java.util.concurrent.CompletableFuture;
 
 class DevOnlyAuthProvider implements IAuthProvider {
     @Override
-    public <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData) {
+    public <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData) {
         MQTTBasicAuth data = (MQTTBasicAuth) authData;
         if (data.username().isPresent()) {
             String[] username = data.username().get().split("/");
             if (username.length == 2) {
-                return (CompletableFuture<R>) CompletableFuture.completedFuture(AuthResult
+                return CompletableFuture.completedFuture(AuthResult
                     .pass()
                     .trafficId(username[0])
                     .userId(username[1])
                     .build());
             } else {
-                return (CompletableFuture<R>) CompletableFuture.completedFuture(AuthResult.pass()
+                return CompletableFuture.completedFuture(AuthResult.pass()
                     .trafficId("DevOnly").userId("DevUser_" + System.nanoTime()).build());
             }
         } else {
-            return (CompletableFuture<R>) CompletableFuture.completedFuture(AuthResult.pass()
+            return CompletableFuture.completedFuture(AuthResult.pass()
                 .trafficId("DevOnly").userId("DevUser_" + System.nanoTime()).build());
         }
     }
 
     @Override
-    public <A extends ActionInfo<?>, R extends CheckResult> CompletableFuture<R>
-    check(ClientInfo clientInfo, A actionInfo) {
-        return (CompletableFuture<R>) CompletableFuture.completedFuture(CheckResult.ALLOW);
+    public <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo) {
+        return CompletableFuture.completedFuture(CheckResult.ALLOW);
     }
 }

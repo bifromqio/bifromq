@@ -179,6 +179,7 @@ import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -197,7 +198,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
     private final ClientInfo clientInfo;
     private final int keepAliveTimeSeconds;
-    private final long idleTimeoutMS;
+    private final long idleTimeoutNanos;
     private final boolean cleanSession;
     private final boolean sessionPresent;
     private final WillMessage willMessage;
@@ -207,7 +208,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     // key: message's original clientInfo and messageId and des topicFilter(for retain messages)
     private final LinkedMap<QoS2MessageKey, UnconfirmedQoS2Message> unconfirmedQoS2Messages = new LinkedMap<>();
     private final TrafficMeter trafficMeter;
-
     protected boolean debugMode;
     protected SendBufferCapacityHinter bufferCapacityHinter;
     private ScheduledFuture<?> idleTimeoutTask;
@@ -216,12 +216,13 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     private IRPCClient.IMessageStream<Quit, Ping> sessionDictEntry;
     private Disposable sessionKickDisposable;
     private int publishPacketId = 0;
+    private long lastActiveAtNanos;
 
     protected MQTT3SessionHandler(ClientInfo clientInfo, int keepAliveTimeSeconds, boolean cleanSession,
                                   boolean sessionPresent, WillMessage willMessage) {
         this.clientInfo = clientInfo;
         this.keepAliveTimeSeconds = keepAliveTimeSeconds;
-        this.idleTimeoutMS = keepAliveTimeSeconds * 1500L; // x1.5
+        this.idleTimeoutNanos = Duration.ofMillis(keepAliveTimeSeconds * 1500L).toNanos(); // x1.5
         this.cleanSession = cleanSession;
         this.willMessage = willMessage;
         this.sessionPresent = sessionPresent;
@@ -246,7 +247,9 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     .kicker(quit.getKiller()).clientInfo(clientInfo));
             });
         trafficMeter.recordCount(MqttConnectCount);
-        scheduleIdleTimer(ctx);
+        lastActiveAtNanos = sessionCtx.nanoTime();
+        idleTimeoutTask = ctx.channel().eventLoop()
+            .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
 
         // report client connected event
         eventCollector.report(getLocal(CLIENT_CONNECTED, ClientConnected.class).clientInfo(clientInfo)
@@ -276,7 +279,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         assert msg instanceof MqttMessage;
         MqttMessage mqttMessage = (MqttMessage) msg;
         if (mqttMessage.decoderResult().isSuccess()) {
-            scheduleIdleTimer(ctx);
+            lastActiveAtNanos = sessionCtx.nanoTime();
             log.trace("Received mqtt message:{}", mqttMessage);
             switch (mqttMessage.fixedHeader().messageType()) {
                 case CONNECT: {
@@ -346,7 +349,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
         if (evt instanceof ConnectionWillClose) {
-            if (idleTimeoutTask != null && !idleTimeoutTask.isDone() && !idleTimeoutTask.isCancelled()) {
+            if (idleTimeoutTask != null) {
                 idleTimeoutTask.cancel(true);
             }
             if (resendUnconfirmedTask != null) {
@@ -1078,14 +1081,14 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             }
             return messageId;
         }
-        UnconfirmedQoS1Message msg =
-            new UnconfirmedQoS1Message(seq, messageId, topicFilter, topic, message, isRetain, sender);
+        UnconfirmedQoS1Message msg = new UnconfirmedQoS1Message(seq, messageId, topicFilter,
+            topic, message, isRetain, sender, sessionCtx.nanoTime());
         unconfirmedQoS1Messages.put(messageId, msg);
         trafficMeter.timer(MqttQoS1InternalLatency)
             .record(timestamp - message.getTimestamp(), TimeUnit.MILLISECONDS);
         if (ctx.channel().isActive()) {
             Timer.Sample start = Timer.start();
-            ctx.write(msg.toMQTTMessage())
+            ctx.write(msg.buildMQTTMessage(sessionCtx.nanoTime()))
                 .addListener(f -> {
                     if (f.isSuccess()) {
                         start.stop(trafficMeter.timer(MqttChannelLatency));
@@ -1158,15 +1161,15 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             }
             return messageId;
         }
-        UnconfirmedQoS2Message msg =
-            new UnconfirmedQoS2Message(seq, messageId, topicFilter, topic, message, isRetain, sender);
+        UnconfirmedQoS2Message msg = new UnconfirmedQoS2Message(seq, messageId, topicFilter, topic,
+            message, isRetain, sender, sessionCtx.nanoTime());
         unconfirmedQoS2Indexes.put(messageId, messageKey);
         unconfirmedQoS2Messages.put(messageKey, msg);
         trafficMeter.timer(MqttQoS2InternalLatency)
             .record(timestamp - message.getTimestamp(), TimeUnit.MILLISECONDS);
         if (ctx.channel().isActive()) {
             Timer.Sample start = Timer.start();
-            ctx.write(msg.toMQTTMessage())
+            ctx.write(msg.buildMQTTMessage(sessionCtx.nanoTime()))
                 .addListener(f -> {
                     if (f.isSuccess()) {
                         start.stop(trafficMeter.timer(MqttChannelLatency));
@@ -1203,7 +1206,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             return;
         }
 
-        long now = System.nanoTime();
+        long now = sessionCtx.nanoTime();
         long delay = TimeUnit.NANOSECONDS.convert(sessionCtx.resendDelayMillis, TimeUnit.MILLISECONDS);
         // resend qos1
         MapIterator<Integer, UnconfirmedQoS1Message> qos1MsgItr = unconfirmedQoS1Messages.mapIterator();
@@ -1230,7 +1233,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 }
             } else if (now - unconfirmed.lastPubNanos >= delay) {
                 if (ctx.channel().isActive()) {
-                    writeAndFlush(unconfirmed.toMQTTMessage());
+                    writeAndFlush(unconfirmed.buildMQTTMessage(now));
                     if (debugMode) {
                         eventCollector.report(getLocal(QOS1_PUSHED, QoS1Pushed.class)
                             .reqId(unconfirmed.message.getMessageId())
@@ -1280,7 +1283,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             } else if (now - unconfirmed.lastSendNanos >= delay) {
                 if (ctx.channel().isActive()) {
                     if (header.messageType() == MqttMessageType.PUBLISH) {
-                        writeAndFlush(unconfirmed.toMQTTMessage());
+                        writeAndFlush(unconfirmed.buildMQTTMessage(now));
                         if (debugMode) {
                             eventCollector.report(getLocal(QOS2_PUSHED, QoS2Pushed.class)
                                 .reqId(unconfirmed.message.getMessageId())
@@ -1613,14 +1616,13 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         return publishPacketId;
     }
 
-    private void scheduleIdleTimer(ChannelHandlerContext ctx) {
-        // cancel previously scheduled and reschedule
-        if (idleTimeoutTask != null && !idleTimeoutTask.isDone() && !idleTimeoutTask.isCancelled()) {
+    private void checkIdle() {
+        if (sessionCtx.nanoTime() - lastActiveAtNanos > idleTimeoutNanos) {
             idleTimeoutTask.cancel(true);
+            closeConnectionNow(getLocal(IDLE, Idle.class)
+                .keepAliveTimeSeconds(keepAliveTimeSeconds)
+                .clientInfo(clientInfo));
         }
-        idleTimeoutTask = ctx.channel().eventLoop().schedule(() -> closeConnectionNow(getLocal(IDLE, Idle.class)
-                .keepAliveTimeSeconds(keepAliveTimeSeconds).clientInfo(clientInfo)), idleTimeoutMS,
-            TimeUnit.MILLISECONDS);
     }
 
     private boolean isSelfKick(Kicked kicked) {
@@ -1658,8 +1660,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         final boolean isRetain;
         final Message message;
         final ClientInfo sender;
-        long lastPubNanos = System.nanoTime();
-
+        long lastPubNanos;
         MqttPublishMessage pubMsg;
         int resendTimes;
 
@@ -1668,7 +1669,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                String topic,
                                Message message,
                                boolean isRetain,
-                               ClientInfo sender) {
+                               ClientInfo sender,
+                               long nanoTime) {
             this.seq = seq;
             this.messageId = messageId;
             this.topic = topic;
@@ -1677,16 +1679,17 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             this.payload = message.getPayload().asReadOnlyByteBuffer();
             this.isRetain = isRetain;
             this.sender = sender;
+            this.lastPubNanos = nanoTime;
             resendTimes = 0;
         }
 
-        MqttPublishMessage toMQTTMessage() {
+        MqttPublishMessage buildMQTTMessage(long nanoTime) {
             pubMsg = new MqttPublishMessage(
                 new MqttFixedHeader(MqttMessageType.PUBLISH, resendTimes > 0, MqttQoS.AT_LEAST_ONCE, isRetain, 0),
                 new MqttPublishVariableHeader(topic, messageId),
                 Unpooled.wrappedBuffer(payload));
             resendTimes++;
-            lastPubNanos = System.nanoTime();
+            lastPubNanos = nanoTime;
             return pubMsg;
         }
     }
@@ -1701,11 +1704,12 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         final ByteBuffer payload;
         final boolean isRetain;
         MqttMessage mqttMessage;
-        long lastSendNanos = System.nanoTime();
+        long lastSendNanos;
         int resendTimes;
 
         UnconfirmedQoS2Message(long seq, int messageId, String topicFilter,
-                               String topic, Message message, boolean isRetain, ClientInfo sender) {
+                               String topic, Message message, boolean isRetain,
+                               ClientInfo sender, long nanoTime) {
             this.seq = seq;
             this.messageId = messageId;
             this.topicFilter = topicFilter;
@@ -1714,13 +1718,13 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             this.payload = message.getPayload().asReadOnlyByteBuffer();
             this.isRetain = isRetain;
             this.sender = sender;
-
+            this.lastSendNanos = nanoTime;
             mqttMessage = new MqttPublishMessage(
                 new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.EXACTLY_ONCE, isRetain, 0),
                 new MqttPublishVariableHeader(topic, messageId), Unpooled.wrappedBuffer(payload));
         }
 
-        MqttMessage toMQTTMessage() {
+        MqttMessage buildMQTTMessage(long nanoTime) {
             MqttMessage pubMsg;
             if (resendTimes == 0 || mqttMessage.fixedHeader().messageType() != MqttMessageType.PUBLISH) {
                 pubMsg = mqttMessage;
@@ -1735,7 +1739,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     Unpooled.wrappedBuffer(payload));
             }
             resendTimes++;
-            lastSendNanos = System.nanoTime();
+            lastSendNanos = nanoTime;
             return pubMsg;
         }
 

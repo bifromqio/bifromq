@@ -56,22 +56,11 @@ abstract class MQTTBroker implements IMQTTBroker {
     private final MQTTBrokerOptions options;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
-
-    private final IAuthProvider authProvider;
-    private final IEventCollector eventCollector;
-    private final ISettingProvider settingProvider;
-
-    private final IDistClient distClient;
-    private final IInboxReaderClient inboxClient;
-    private final IRetainServiceClient retainClient;
-    private final ISessionDictionaryClient sessionDictClient;
-
     // fields of the returned anonymous MQTTBroker instance
     private final ConnectionRateLimitHandler connRateLimitHandler;
     private final ClientAddrHandler remoteAddrHandler;
     private final MQTTSessionContext sessionContext;
     private final ILocalSessionBrokerServer subBroker;
-
     private final Optional<ChannelFuture> tcpChannelF;
     private final Optional<ChannelFuture> tlsChannelF;
     private final Optional<ChannelFuture> wsChannelF;
@@ -81,7 +70,6 @@ abstract class MQTTBroker implements IMQTTBroker {
                       EventLoopGroup bossGroup,
                       EventLoopGroup workerGroup,
                       MQTTBrokerOptions options,
-                      Executor bgTaskExecutor,
                       IAuthProvider authProvider,
                       IEventCollector eventCollector,
                       ISettingProvider settingProvider,
@@ -97,13 +85,6 @@ abstract class MQTTBroker implements IMQTTBroker {
         this.options = options.toBuilder().build();
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
-        this.authProvider = authProvider;
-        this.eventCollector = eventCollector;
-        this.settingProvider = settingProvider;
-        this.distClient = distClient;
-        this.inboxClient = inboxClient;
-        this.retainClient = retainClient;
-        this.sessionDictClient = sessionDictClient;
         connRateLimitHandler = new ConnectionRateLimitHandler(options.connectRateLimit());
         remoteAddrHandler = new ClientAddrHandler();
         subBroker = buildLocalSessionBroker();
@@ -275,7 +256,7 @@ abstract class MQTTBroker implements IMQTTBroker {
         });
     }
 
-    private ChannelFuture buildChannel(ConnListenerBuilder builder, final ChannelInitializer channelInitializer) {
+    private ChannelFuture buildChannel(ConnListenerBuilder<?> builder, final ChannelInitializer<?> channelInitializer) {
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
             .channel(NettyUtil.determineServerSocketChannelClass(bossGroup))

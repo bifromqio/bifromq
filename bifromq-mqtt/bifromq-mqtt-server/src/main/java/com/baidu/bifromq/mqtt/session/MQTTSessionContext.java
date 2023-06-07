@@ -32,6 +32,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import com.google.common.base.Ticker;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.netty.channel.ChannelHandlerContext;
@@ -54,6 +55,7 @@ public final class MQTTSessionContext {
     public final IRetainServiceClient retainClient;
     public final ISessionDictionaryClient sessionDictClient;
     public final String serverId;
+
     public final int maxResendTimes;
     public final int resendDelayMillis;
     public final int defaultKeepAliveTimeSeconds;
@@ -62,6 +64,7 @@ public final class MQTTSessionContext {
     // cache for client dist pipeline
     private final LoadingCache<ClientInfo, IRetainServiceClient.IClientPipeline> clientRetainPipelines;
     private final FutureTracker bgTaskTracker;
+    private final Ticker ticker;
     private final Gauge retainPplnNumGauge;
 
     @Builder
@@ -76,7 +79,8 @@ public final class MQTTSessionContext {
                        int defaultKeepAliveTimeSeconds,
                        int qos2ConfirmWindowSeconds,
                        IEventCollector eventCollector,
-                       ISettingProvider settingProvider) {
+                       ISettingProvider settingProvider,
+                       Ticker ticker) {
         this.localSessionRegistry = brokerServer;
         this.serverId = brokerServer.id();
         this.authProvider = authProvider;
@@ -104,47 +108,54 @@ public final class MQTTSessionContext {
         retainPplnNumGauge = Gauge.builder("mqtt.server.ppln.retain.gauge", clientRetainPipelines::estimatedSize)
             .register(Metrics.globalRegistry);
         this.bgTaskTracker = new FutureTracker();
+        this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
+    }
+
+    public long nanoTime() {
+        return ticker.read();
     }
 
     public IAuthProvider authProvider(ChannelHandlerContext ctx) {
         // a wrapper to ensure async fifo semantic for check call
         return new IAuthProvider() {
-            private final LinkedHashMap<CompletableFuture<? extends CheckResult>,
-                CompletableFuture<? extends CheckResult>> checkTaskQueue = new LinkedHashMap<>();
+            private final LinkedHashMap<CompletableFuture<CheckResult>, CompletableFuture<CheckResult>> checkTaskQueue =
+                new LinkedHashMap<>();
 
             @Override
-            public <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData) {
+            public <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData) {
                 return authProvider.auth(authData);
             }
 
             @Override
-            public <A extends ActionInfo<?>, R extends CheckResult>
-            CompletableFuture<R> check(ClientInfo clientInfo, A actionInfo) {
-                CompletableFuture<R> onDone = new CompletableFuture<>();
-                CompletableFuture<R> task = (CompletableFuture<R>) authProvider.check(clientInfo, actionInfo)
-                    .thenApply(v -> v); // in case authProvider returns same future object
-                // add it to queue for fifo semantic
-                checkTaskQueue.put(task, onDone);
-                task.whenCompleteAsync((_v, _e) -> {
-                    Iterator<CompletableFuture<? extends CheckResult>> itr = checkTaskQueue.keySet().iterator();
-                    while (itr.hasNext()) {
-                        CompletableFuture<? extends CheckResult> k = itr.next();
-                        if (k.isDone()) {
-                            CompletableFuture r = checkTaskQueue.get(k);
-                            k.whenComplete((v, e) -> {
-                                if (e != null) {
+            public <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo) {
+                CompletableFuture<CheckResult> task = authProvider.check(clientInfo, actionInfo);
+                if (task.isDone()) {
+                    return task;
+                } else {
+                    // queue it for fifo semantic
+                    CompletableFuture<CheckResult> onDone = new CompletableFuture<>();
+                    // in case authProvider returns same future object;
+                    task = task.thenApply(v -> v);
+                    checkTaskQueue.put(task, onDone);
+                    task.whenCompleteAsync((_v, _e) -> {
+                        Iterator<CompletableFuture<CheckResult>> itr = checkTaskQueue.keySet().iterator();
+                        while (itr.hasNext()) {
+                            CompletableFuture<CheckResult> k = itr.next();
+                            if (k.isDone()) {
+                                CompletableFuture<CheckResult> r = checkTaskQueue.get(k);
+                                try {
+                                    r.complete(k.join());
+                                } catch (Throwable e) {
                                     r.completeExceptionally(e);
-                                } else {
-                                    r.complete(v);
                                 }
-                            });
-                            itr.remove();
-                        } else {
-                            break;
+                                itr.remove();
+                            } else {
+                                break;
+                            }
                         }
-                    }
-                }, ctx.channel().eventLoop());
-                return onDone;
+                    }, ctx.channel().eventLoop());
+                    return onDone;
+                }
             }
         };
     }

@@ -21,7 +21,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 public final class FutureTracker {
-    private final Set<CompletableFuture> track = ConcurrentHashMap.newKeySet();
+    private final Set<CompletableFuture<?>> track = ConcurrentHashMap.newKeySet();
 
     public <T> CompletableFuture<T> track(CompletableFuture<T> trackedFuture) {
         track.add(trackedFuture);
@@ -34,7 +34,7 @@ public final class FutureTracker {
     }
 
     public void stop() {
-        for (CompletableFuture tracked : track) {
+        for (CompletableFuture<?> tracked : track) {
             tracked.cancel(true);
         }
     }

@@ -15,7 +15,7 @@ package com.baidu.bifromq.plugin.authprovider;
 
 import lombok.SneakyThrows;
 
-public abstract class ActionInfo<T extends ActionInfo> implements Cloneable {
+public abstract class ActionInfo<T extends ActionInfo<?>> implements Cloneable {
     public enum ActionType {
         Pub, Sub, Unsub
     }

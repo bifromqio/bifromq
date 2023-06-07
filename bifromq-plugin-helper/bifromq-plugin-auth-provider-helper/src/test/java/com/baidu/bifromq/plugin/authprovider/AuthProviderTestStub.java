@@ -19,20 +19,19 @@ import org.pf4j.Extension;
 
 @Extension
 public class AuthProviderTestStub implements IAuthProvider {
-    public volatile CompletableFuture<AuthResult> nextAuthResult
-        = CompletableFuture.completedFuture(AuthResult.NO_PASS);
+    public volatile CompletableFuture<AuthResult> nextAuthResult =
+        CompletableFuture.completedFuture(AuthResult.NO_PASS);
 
-    public volatile CompletableFuture<CheckResult> nextCheckResult
-        = CompletableFuture.completedFuture(CheckResult.DISALLOW);
+    public volatile CompletableFuture<CheckResult> nextCheckResult =
+        CompletableFuture.completedFuture(CheckResult.DISALLOW);
 
     @Override
-    public <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData) {
-        return (CompletableFuture<R>) nextAuthResult;
+    public <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData) {
+        return nextAuthResult;
     }
 
     @Override
-    public <A extends ActionInfo<?>, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo,
-                                                                                       A actionInfo) {
-        return (CompletableFuture<R>) nextCheckResult;
+    public <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo) {
+        return nextCheckResult;
     }
 }

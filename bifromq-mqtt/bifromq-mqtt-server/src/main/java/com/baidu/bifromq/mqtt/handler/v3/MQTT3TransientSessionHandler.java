@@ -267,11 +267,10 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                             }
                         }
                         // just do unsub once
-                        submitBgTask(
-                            () -> doUnsubscribe(0, topicFilter)
-                                .thenAccept(
-                                    v -> {
-                                    })
+                        submitBgTask(() -> doUnsubscribe(0, topicFilter)
+                            .thenAccept(
+                                v -> {
+                                })
                         );
                         break;
                     }

@@ -19,6 +19,8 @@ import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.ServerSocketChannel;
+import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +41,7 @@ public class NettyUtil {
         return new NioEventLoopGroup(nThreads);
     }
 
-    public static Class getSocketChannelClass() {
+    public static Class<? extends SocketChannel> getSocketChannelClass() {
         if (Epoll.isAvailable()) {
             log.debug("Epoll is available on this platform");
             return EpollSocketChannel.class;
@@ -48,21 +50,7 @@ public class NettyUtil {
         return NioSocketChannel.class;
     }
 
-    public static Class determineSocketChannelClass(EventLoopGroup eventLoopGroup) {
-        if (eventLoopGroup instanceof EpollEventLoopGroup) {
-            return EpollSocketChannel.class;
-        }
-        return NioSocketChannel.class;
-    }
-
-    public static Class determineServerSocketChannelClass(EventLoopGroup eventLoopGroup) {
-        if (eventLoopGroup instanceof EpollEventLoopGroup) {
-            return EpollServerSocketChannel.class;
-        }
-        return NioServerSocketChannel.class;
-    }
-
-    public static Class getServerSocketChannelClass() {
+    public static Class<? extends ServerSocketChannel> getServerSocketChannelClass() {
         if (Epoll.isAvailable()) {
             log.debug("Epoll is available on this platform");
             return EpollServerSocketChannel.class;
@@ -71,4 +59,18 @@ public class NettyUtil {
         return NioServerSocketChannel.class;
     }
 
+    public static Class<? extends SocketChannel> determineSocketChannelClass(EventLoopGroup eventLoopGroup) {
+        if (eventLoopGroup instanceof EpollEventLoopGroup) {
+            return EpollSocketChannel.class;
+        }
+        return NioSocketChannel.class;
+    }
+
+    public static Class<? extends ServerSocketChannel> determineServerSocketChannelClass(
+        EventLoopGroup eventLoopGroup) {
+        if (eventLoopGroup instanceof EpollEventLoopGroup) {
+            return EpollServerSocketChannel.class;
+        }
+        return NioServerSocketChannel.class;
+    }
 }

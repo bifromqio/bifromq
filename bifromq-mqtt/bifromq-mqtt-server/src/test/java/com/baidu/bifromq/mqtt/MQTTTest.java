@@ -281,7 +281,6 @@ abstract class MQTTTest {
             .bossGroup(NettyUtil.createEventLoopGroup(1))
             .workerGroup(NettyUtil.createEventLoopGroup())
             .ioExecutor(MoreExecutors.directExecutor())
-            .bgTaskExecutor(bgTaskExecutor)
             .authProvider(authProvider)
             .eventCollector(eventCollector)
             .settingProvider(settingProvider)

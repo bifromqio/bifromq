@@ -61,7 +61,8 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(Type.ALLOW);
         mockDistDist(true);
-        channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(100, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DISTED);
@@ -124,6 +125,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockAuthCheck(Type.ERROR);
         mockDistDist(true);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, ACCESS_CONTROL_ERROR, WILL_DISTED);
@@ -139,6 +141,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
             .thenReturn(false);
         mockAuthCheck(Type.ERROR);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, ACCESS_CONTROL_ERROR);
@@ -151,6 +154,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(Type.DISALLOW);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, PUB_ACTION_DISALLOW);
@@ -164,6 +168,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockAuthCheck(Type.ALLOW);
         mockDistDist(false);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
@@ -175,6 +180,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockAuthCheck(Type.ALLOW);
         mockDistDrop();
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
@@ -188,6 +194,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockDistDist(true);
         mockRetainPipeline(RETAINED);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED);
@@ -201,6 +208,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockDistDist(true);
         mockRetainPipeline(CLEARED);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, RETAIN_MSG_CLEARED);
@@ -213,6 +221,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         mockDistDist(true);
         mockRetainPipeline(ERROR);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED_ERROR);

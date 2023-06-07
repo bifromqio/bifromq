@@ -27,14 +27,13 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.util.concurrent.Future;
-import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
@@ -179,11 +178,11 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
             eventCollector.report(reason);
             ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(reason));
             scheduledClose = ctx.channel().eventLoop().schedule(() ->
-                    farewellAndClose(farewell), randomDelay(), TimeUnit.MILLISECONDS);
+                farewellAndClose(farewell), randomDelay(), TimeUnit.MILLISECONDS);
         }
     }
 
-    protected void closeConnectionNow(MqttMessage farewell, @NonNull Event reason) {
+    protected void closeConnectionNow(MqttMessage farewell, @NonNull Event<?> reason) {
         assert ctx.channel().eventLoop().inEventLoop();
         if (ctx.channel().isActive()) {
             // stop reading messages
@@ -199,7 +198,7 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
         }
     }
 
-    protected void closeConnectionNow(@NonNull Event reason) {
+    protected void closeConnectionNow(@NonNull Event<?> reason) {
         closeConnectionNow(null, reason);
     }
 

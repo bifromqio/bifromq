@@ -160,7 +160,6 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
 
     @Override
     protected CompletableFuture<UnsubResult> doUnsubscribe(long reqId, String topicFilter) {
-        String trafficId = clientInfo().getTrafficId();
         String inboxId = userSessionId(clientInfo());
         return sessionCtx.distClient.unsub(reqId, topicFilter, inboxId, sessionCtx.inboxClient.getInboxGroupKey(
             inboxId, clientInfo()), 1, clientInfo());

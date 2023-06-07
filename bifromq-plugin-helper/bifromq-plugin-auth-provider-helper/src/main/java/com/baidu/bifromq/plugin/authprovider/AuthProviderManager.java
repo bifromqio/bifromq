@@ -54,8 +54,8 @@ public class AuthProviderManager implements IAuthProvider {
     private final Gradient2Limit checkCallLimit = Gradient2Limit.newBuilder().build();
     private final AtomicInteger checkCalls = new AtomicInteger();
     private ExecutorService executor;
-    private AsyncLoadingCache<AuthData<?>, ? extends AuthResult> authCache;
-    private AsyncLoadingCache<CheckCacheKey, ? extends CheckResult> checkCache;
+    private AsyncLoadingCache<AuthData<?>, AuthResult> authCache;
+    private AsyncLoadingCache<CheckCacheKey, CheckResult> checkCache;
     private MetricManager metricMgr;
 
     public AuthProviderManager(String authProviderFQN, PluginManager pluginMgr) {
@@ -94,11 +94,7 @@ public class AuthProviderManager implements IAuthProvider {
             .refreshAfterWrite(Duration.ofSeconds(AUTH_AUTH_RESULT_EXPIRY_SECONDS.get()))
             .scheduler(Scheduler.systemScheduler())
             .executor(executor)
-            .buildAsync((authData, executor) -> {
-                CompletableFuture<AuthResult> onDone = new CompletableFuture<>();
-                executor.execute(() -> doAuth(authData, onDone));
-                return onDone;
-            });
+            .buildAsync((authData, executor) -> doAuth(authData));
 
         checkCache = Caffeine.newBuilder()
             .maximumSize(AUTH_CHECK_RESULT_CACHE_LIMIT.get())
@@ -106,35 +102,30 @@ public class AuthProviderManager implements IAuthProvider {
             .refreshAfterWrite(Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
             .scheduler(Scheduler.systemScheduler())
             .executor(executor)
-            .buildAsync((key, executor) -> {
-                CompletableFuture<CheckResult> onDone = new CompletableFuture<>();
-                executor.execute(() -> doCheck(key.clientInfo, key.actionInfo, onDone));
-                return onDone;
-            });
+            .buildAsync((key, executor) -> doCheck(key.clientInfo, key.actionInfo));
         metricMgr = new MetricManager(provider.getClass().getName());
     }
 
     @Override
-    public <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData) {
+    public <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData) {
         checkState();
-        return (CompletableFuture<R>) authCache.get(authData);
+        return authCache.get(authData);
     }
 
     @Override
-    public <A extends ActionInfo<?>, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo,
-                                                                                       A actionInfo) {
+    public <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo) {
         checkState();
-        return (CompletableFuture<R>) checkCache.get(new CheckCacheKey(clientInfo, actionInfo));
+        return checkCache.get(new CheckCacheKey(clientInfo, actionInfo));
     }
 
     public IAuthProvider get() {
         return provider;
     }
 
-    private void doAuth(AuthData<?> authData, CompletableFuture<AuthResult> onDone) {
+    private CompletableFuture<AuthResult> doAuth(AuthData<?> authData) {
         if (authCallLimit.getLimit() < authCalls.get()) {
-            onDone.complete(AuthResult.error(new ThrottledException("Auth request throttled")));
-            return;
+            return CompletableFuture.completedFuture(
+                AuthResult.error(new ThrottledException("Auth request throttled")));
         }
         long start = System.nanoTime();
         try {
@@ -144,32 +135,32 @@ public class AuthProviderManager implements IAuthProvider {
             }
             authCalls.incrementAndGet();
             timeout = Math.max(2000, timeout);
-            provider.auth(authData)
+            return provider.auth(authData)
                 .orTimeout(timeout, TimeUnit.MILLISECONDS)
                 .exceptionally(AuthResult::error)
-                .whenComplete((v, e) -> {
+                .handle((v, e) -> {
                     authCalls.decrementAndGet();
                     if (e != null) {
-                        onDone.complete(AuthResult.error(e));
+                        return AuthResult.error(e);
                     } else {
                         long latency = System.nanoTime() - start;
                         metricMgr.authCallTimer.record(latency, TimeUnit.NANOSECONDS);
                         authCallLimit.onSample(start, latency, authCalls.get(), false);
-                        onDone.complete(v);
+                        return v;
                     }
                 });
         } catch (Throwable e) {
             metricMgr.authCallErrorCounter.increment();
             authCalls.decrementAndGet();
-            onDone.complete(AuthResult.error(e));
+            return CompletableFuture.completedFuture(AuthResult.error(e));
         }
     }
 
-    private void doCheck(ClientInfo clientInfo, ActionInfo<?> actionInfo, CompletableFuture<CheckResult> onDone) {
+    private CompletableFuture<CheckResult> doCheck(ClientInfo clientInfo, ActionInfo<?> actionInfo) {
         if (checkCallLimit.getLimit() < checkCalls.get()) {
             log.debug("Check throttled: limit={}, current={}", checkCallLimit.getLimit(), checkCalls.get());
-            onDone.complete(CheckResult.error(new ThrottledException("Check request throttled")));
-            return;
+            return CompletableFuture.completedFuture(
+                CheckResult.error(new ThrottledException("Check request throttled")));
         }
         long start = System.nanoTime();
         long timeout = 2 * checkCallLimit.getRttNoLoad(TimeUnit.MILLISECONDS);
@@ -179,24 +170,24 @@ public class AuthProviderManager implements IAuthProvider {
         timeout = Math.max(2000, timeout);
         try {
             checkCalls.incrementAndGet();
-            provider.check(clientInfo, actionInfo)
+            return provider.check(clientInfo, actionInfo)
                 .orTimeout(timeout, TimeUnit.MILLISECONDS)
                 .exceptionally(CheckResult::error)
-                .whenComplete((v, e) -> {
+                .handle((v, e) -> {
                     checkCalls.decrementAndGet();
                     if (e != null) {
-                        onDone.complete(CheckResult.error(e));
+                        return CheckResult.error(e);
                     } else {
                         long latency = System.nanoTime() - start;
                         metricMgr.checkCallTimer.record(latency, TimeUnit.NANOSECONDS);
                         checkCallLimit.onSample(start, latency, checkCalls.get(), false);
-                        onDone.complete(v);
+                        return v;
                     }
                 });
         } catch (Throwable e) {
             checkCalls.decrementAndGet();
             metricMgr.checkCallErrorCounter.increment();
-            onDone.complete(CheckResult.error(e));
+            return CompletableFuture.completedFuture(CheckResult.error(e));
         }
     }
 

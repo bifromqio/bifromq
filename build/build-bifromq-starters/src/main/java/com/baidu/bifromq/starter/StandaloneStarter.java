@@ -277,7 +277,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bossGroup(NettyUtil.createEventLoopGroup(1))
             .workerGroup(NettyUtil.createEventLoopGroup(config.getMqttWorkerThreads()))
             .ioExecutor(ioServerExecutor)
-            .bgTaskExecutor(bgTaskExecutor)
             .authProvider(authProviderMgr)
             .eventCollector(eventCollectorMgr)
             .settingProvider(settingProviderMgr)

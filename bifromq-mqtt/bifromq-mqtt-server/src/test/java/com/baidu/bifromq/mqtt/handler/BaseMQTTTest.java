@@ -57,6 +57,7 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.mqtt.utils.TestTicker;
 import com.baidu.bifromq.plugin.authprovider.AuthData;
 import com.baidu.bifromq.plugin.authprovider.AuthResult;
 import com.baidu.bifromq.plugin.authprovider.AuthResult.Type;
@@ -119,7 +120,7 @@ public abstract class BaseMQTTTest {
     protected IInboxReader inboxReader;
     @Mock
     protected IClientPipeline retainPipeline;
-
+    protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
     protected ILocalSessionBrokerServer sessionBrokerServer;
     protected EmbeddedChannel channel;
@@ -137,6 +138,7 @@ public abstract class BaseMQTTTest {
     @Before
     public void setup() {
         sessionBrokerServer = ILocalSessionBrokerServer.inProcBrokerBuilder().build();
+        testTicker = new TestTicker();
         sessionContext = MQTTSessionContext.builder()
             .authProvider(authProvider)
             .eventCollector(eventCollector)
@@ -150,6 +152,7 @@ public abstract class BaseMQTTTest {
             .resendDelayMillis(100)
             .defaultKeepAliveTimeSeconds(300)
             .qos2ConfirmWindowSeconds(300)
+            .ticker(testTicker)
             .build();
         channel = new EmbeddedChannel(true, true, channelInitializer());
         channel.freezeTime();

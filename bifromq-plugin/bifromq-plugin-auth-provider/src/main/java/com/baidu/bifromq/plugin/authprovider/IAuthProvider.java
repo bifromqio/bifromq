@@ -25,7 +25,7 @@ public interface IAuthProvider extends ExtensionPoint {
      *
      * @param authData the authentication data
      */
-    <T extends AuthData<?>, R extends AuthResult> CompletableFuture<R> auth(T authData);
+    <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData);
 
     /**
      * Implement this method to hook action permission check logic.
@@ -35,7 +35,7 @@ public interface IAuthProvider extends ExtensionPoint {
      * @param clientInfo the client info
      * @param actionInfo the action to authorize
      */
-    <A extends ActionInfo<?>, R extends CheckResult> CompletableFuture<R> check(ClientInfo clientInfo, A actionInfo);
+    <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo);
 
     /**
      * This method will be called during broker shutdown
