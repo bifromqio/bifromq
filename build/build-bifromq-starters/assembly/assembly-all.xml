@@ -15,7 +15,6 @@
 <assembly>
     <id>all</id>
     <formats>
-        <!--        <format>dir</format>-->
         <format>tar.gz</format>
     </formats>
     <fileSets>

@@ -15,7 +15,6 @@
 <assembly>
     <id>standalone</id>
     <formats>
-        <!--        <format>dir</format>-->
         <format>tar.gz</format>
     </formats>
     <files>
@@ -29,10 +28,9 @@
             <lineEnding>unix</lineEnding>
             <fileMode>0755</fileMode>
             <includes>
-                <include>bin/bifromq*</include>
+                <include>bin/bifromq-start.sh</include>
+                <include>bin/bifromq-stop.sh</include>
                 <include>bin/standalone.sh</include>
-                <include>bin/standalone.bat</include>
-                <include>bin/pid.bat</include>
             </includes>
         </fileSet>
         <fileSet>

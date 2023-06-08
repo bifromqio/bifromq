@@ -15,7 +15,6 @@
 <assembly>
     <id>windows-standalone</id>
     <formats>
-        <!--        <format>dir</format>-->
         <format>zip</format>
     </formats>
     <files>
@@ -29,8 +28,8 @@
             <lineEnding>windows</lineEnding>
             <fileMode>0755</fileMode>
             <includes>
-                <include>bin/bifromq*</include>
-                <include>bin/standalone.sh</include>
+                <include>bin/bifromq-start.bat</include>
+                <include>bin/bifromq-stop.bat</include>
                 <include>bin/standalone.bat</include>
                 <include>bin/pid.bat</include>
             </includes>
