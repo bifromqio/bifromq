@@ -165,13 +165,42 @@ public class SubscriptionCache {
     public CompletableFuture<Map<NormalMatching, Set<ClientInfo>>> get(ScopedTopic topic, Set<ClientInfo> senders) {
         Timer.Sample sample = Timer.start();
         return trafficCache.get(topic.trafficId).get(topic)
-            .thenApply(v -> {
+            .thenApply(matchResult -> {
                 sample.stop(externalMatchTimer);
                 Map<NormalMatching, Set<ClientInfo>> routesMap = new HashMap<>();
-                for (Matching matching : v.routes) {
-                    for (ClientInfo clientInfo : senders) {
-                        NormalMatching route = resolveMatching(matching, clientInfo, v.trafficVer);
-                        routesMap.computeIfAbsent(route, k -> new HashSet<>()).add(clientInfo);
+                for (Matching matching : matchResult.routes) {
+                    NormalMatching matchedInbox;
+                    if (matching instanceof NormalMatching) {
+                        matchedInbox = (NormalMatching) matching;
+                        // track load
+                        loadEstimator.track(matchedInbox.key, LoadUnits.KEY_CACHE_HIT);
+                        routesMap.put(matchedInbox, senders);
+                    } else {
+                        GroupMatching groupMatching = (GroupMatching) matching;
+                        // track load
+                        loadEstimator.track(groupMatching.key, LoadUnits.KEY_CACHE_HIT);
+                        if (groupMatching.ordered) {
+                            for (ClientInfo sender : senders) {
+                                matchedInbox = orderedSharedMatching
+                                    .get(groupMatching.trafficId +
+                                        groupMatching.escapedTopicFilter +
+                                        matchResult.trafficVer)
+                                    .get(sender, k -> {
+                                        RendezvousHash<ClientInfo, NormalMatching> hash =
+                                            new RendezvousHash<>(murmur3_128(),
+                                                (from, into) -> into.putInt(from.hashCode()),
+                                                (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
+                                                Comparator.comparing(a -> a.scopedInboxId));
+                                        groupMatching.inboxList.forEach(hash::add);
+                                        return hash.get(k);
+                                    });
+                                routesMap.computeIfAbsent(matchedInbox, k -> new HashSet<>()).add(sender);
+                            }
+                        } else {
+                            matchedInbox = groupMatching.inboxList.get(ThreadLocalRandom.current()
+                                .nextInt(groupMatching.inboxList.size()));
+                            routesMap.put(matchedInbox, senders);
+                        }
                     }
                 }
                 return routesMap;
@@ -272,36 +301,6 @@ public class SubscriptionCache {
         sample.stop(internalMatchTimer);
         return routes;
     }
-
-    private NormalMatching resolveMatching(Matching matching, ClientInfo sender, long trafficVer) {
-        NormalMatching matchedInbox;
-        if (matching instanceof NormalMatching) {
-            matchedInbox = ((NormalMatching) matching);
-            // track load
-            loadEstimator.track(matchedInbox.key, LoadUnits.KEY_CACHE_HIT);
-        } else {
-            GroupMatching groupMatching = (GroupMatching) matching;
-            // track load
-            loadEstimator.track(groupMatching.key, LoadUnits.KEY_CACHE_HIT);
-            if (groupMatching.ordered) {
-                matchedInbox = orderedSharedMatching
-                    .get(groupMatching.trafficId + groupMatching.escapedTopicFilter + trafficVer)
-                    .get(sender, k -> {
-                        RendezvousHash<ClientInfo, NormalMatching> hash = new RendezvousHash<>(murmur3_128(),
-                            (from, into) -> into.putInt(from.hashCode()),
-                            (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
-                            Comparator.comparing(a -> a.scopedInboxId));
-                        groupMatching.inboxList.forEach(hash::add);
-                        return hash.get(k);
-                    });
-            } else {
-                matchedInbox = groupMatching.inboxList
-                    .get(ThreadLocalRandom.current().nextInt(groupMatching.inboxList.size()));
-            }
-        }
-        return matchedInbox;
-    }
-
 
     @AllArgsConstructor
     private static class MatchResult {
