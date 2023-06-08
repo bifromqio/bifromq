@@ -3,7 +3,7 @@ tcpPort: 1883
 tlsPort: 1884
 wsPort: 80
 wssPort: 443
-wsPath: mqtt
+wsPath: /mqtt
 tcpEnabled: true
 tlsEnabled: false
 wsEnabled: false
