@@ -50,7 +50,7 @@ public class MQTTServerConfig implements StarterConfig {
 
     private int wssPort = 443;
 
-    private String wsPath = "mqtt";
+    private String wsPath = "/mqtt";
 
     private boolean tcpEnabled = true;
 

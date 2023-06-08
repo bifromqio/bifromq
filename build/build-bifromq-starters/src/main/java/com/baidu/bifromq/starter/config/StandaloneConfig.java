@@ -37,7 +37,7 @@ public class StandaloneConfig implements StarterConfig {
     private int tlsPort = 1884;
     private int wsPort = 80;
     private int wssPort = 443;
-    private String wsPath = "mqtt";
+    private String wsPath = "/mqtt";
     private boolean tcpEnabled = true;
     private boolean tlsEnabled = false;
     private boolean wsEnabled = true;

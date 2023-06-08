@@ -311,10 +311,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .port(config.getWsPort())
                 .buildListener();
         }
-        if (config.isWsEnabled()) {
+        if (config.isWssEnabled()) {
             brokerBuilder.buildWSSConnListener()
                 .path(config.getWsPath())
-                .port(config.getWsPort())
+                .port(config.getWssPort())
                 .sslContext(buildServerSslContext(config.getBrokerSSLCtxConfig()))
                 .buildListener();
         }
