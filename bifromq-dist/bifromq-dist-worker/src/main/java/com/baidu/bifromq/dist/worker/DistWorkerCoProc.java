@@ -15,7 +15,6 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.isEmptyRange;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.baidu.bifromq.dist.entity.EntityUtil.isSubInfoKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseInbox;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
@@ -27,7 +26,6 @@ import static com.baidu.bifromq.dist.util.TopicUtil.isWildcardTopicFilter;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_FAN_OUT_PARALLELISM;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_LOAD_TRACKING_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_RANGE_LOAD;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_PARALLEL_FAN_OUT_SIZE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SPLIT_KEY_EST_THRESHOLD;
 import static java.util.Collections.singletonMap;
 import static java.util.concurrent.CompletableFuture.allOf;
@@ -41,14 +39,12 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Inbox;
 import com.baidu.bifromq.dist.entity.Matching;
-import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilter;
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDist;
@@ -79,12 +75,12 @@ import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.rpc.proto.UpdateRequest;
-import com.baidu.bifromq.dist.worker.scheduler.InboxWriteRequest;
+import com.baidu.bifromq.dist.worker.scheduler.InboxWriteScheduler;
+import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
 import com.baidu.bifromq.plugin.inboxbroker.HasResult;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.SysClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Maps;
@@ -94,19 +90,15 @@ import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
@@ -114,21 +106,20 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class DistWorkerCoProc implements IKVRangeCoProc {
-    private static final int SEND_BATCH_SIZE = Math.max(1, DIST_PARALLEL_FAN_OUT_SIZE.get());
     private final KVRangeId id;
     private final IDistClient distClient;
     private final IInboxBrokerManager inboxBrokerManager;
-    private final IBatchCallScheduler<InboxWriteRequest, Void> scheduler;
+    private final InboxWriteScheduler scheduler;
     private final SubscriptionCache routeCache;
     private final LoadEstimator loadEstimator;
     private final Gauge loadGauge;
-    private final ExecutorService fanoutExecutor;
+    private final FanoutExecutorGroup fanoutExecutorGroup;
 
     public DistWorkerCoProc(KVRangeId id,
                             Supplier<IKVRangeReader> readClientProvider,
                             IDistClient distClient,
                             IInboxBrokerManager messageReceiverManager,
-                            IBatchCallScheduler<InboxWriteRequest, Void> scheduler,
+                            InboxWriteScheduler scheduler,
                             Executor matchExecutor) {
         this.id = id;
         this.distClient = distClient;
@@ -140,13 +131,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         loadGauge = Gauge.builder("dist.worker.load", () -> loadEstimator.estimate().getLoad())
             .tags("id", KVRangeIdUtil.toString(id))
             .register(Metrics.globalRegistry);
-        fanoutExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(DIST_FAN_OUT_PARALLELISM.get(),
-                DIST_FAN_OUT_PARALLELISM.get(), 0L,
-                TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(1000),
-                threadFactory("fanout-executor-%d")),
-            "fanout-executor");
+        fanoutExecutorGroup = new FanoutExecutorGroup(inboxBrokerManager, scheduler, DIST_FAN_OUT_PARALLELISM.get());
     }
 
     @Override
@@ -213,7 +198,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
     public void close() {
         routeCache.close();
-        fanoutExecutor.shutdown();
+        fanoutExecutorGroup.shutdown();
         Metrics.globalRegistry.remove(loadGauge);
     }
 
@@ -532,28 +517,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     .topic(topic)
                     .range(reader.range())
                     .build();
-                Map<ClientInfo, TopicMessagePack.SenderMessagePack> senderMsgPackMap =
-                    topicMsgPack.getMessageList().stream().collect(Collectors.toMap(
-                        TopicMessagePack.SenderMessagePack::getSender, e -> e));
+                Map<ClientInfo, TopicMessagePack.SenderMessagePack> senderMsgPackMap = topicMsgPack.getMessageList()
+                    .stream().collect(Collectors.toMap(TopicMessagePack.SenderMessagePack::getSender, e -> e));
                 distFanOutFutures.add(routeCache.get(scopedTopic, senderMsgPackMap.keySet())
-                    .thenApply(v -> {
-                        if (v.size() > SEND_BATCH_SIZE) {
-                            List<Map<NormalMatching, Set<ClientInfo>>> subRoutesList = new ArrayList<>();
-                            Map<NormalMatching, Set<ClientInfo>> subRoutesMap = new HashMap<>();
-                            for (Map.Entry<NormalMatching, Set<ClientInfo>> entry : v.entrySet()) {
-                                subRoutesMap.put(entry.getKey(), entry.getValue());
-                                if (subRoutesMap.size() == SEND_BATCH_SIZE) {
-                                    subRoutesList.add(subRoutesMap);
-                                    subRoutesMap = new HashMap<>();
-                                }
-                            }
-                            subRoutesList.add(subRoutesMap);
-                            subRoutesList.forEach(subRoutes -> CompletableFuture.runAsync(
-                                () -> send(subRoutes, topicMsgPack, senderMsgPackMap), fanoutExecutor));
-                        } else {
-                            send(v, topicMsgPack, senderMsgPackMap);
-                        }
-                        return singletonMap(trafficId, singletonMap(topic, v.size()));
+                    .thenApply(routeMap -> {
+                        fanoutExecutorGroup.submit(Objects.hash(trafficId, topic, request.getOrderKey()), routeMap,
+                            MessagePackWrapper.wrap(topicMsgPack), senderMsgPackMap);
+                        return singletonMap(trafficId, singletonMap(topic, routeMap.size()));
                     }));
             }
         }
@@ -570,36 +540,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         f -> TopicFanout.newBuilder().putAllFanout(f).build()))
                     .build();
             });
-    }
-
-    private void send(Map<NormalMatching, Set<ClientInfo>> routes,
-                      TopicMessagePack topicMsgPack,
-                      Map<ClientInfo, TopicMessagePack.SenderMessagePack> senderMsgPackMap) {
-        routes.forEach((route, senders) -> {
-            if (senders.size() == senderMsgPackMap.size()) {
-                send(topicMsgPack, route);
-            } else {
-                // ordered share sub
-                TopicMessagePack subMsgPack = TopicMessagePack.newBuilder()
-                    .setTopic(topicMsgPack.getTopic())
-                    .addAllMessage(Maps.filterKeys(senderMsgPackMap, senders::contains).values())
-                    .build();
-                send(subMsgPack, route);
-            }
-        });
-    }
-
-    private void send(TopicMessagePack msgPack, NormalMatching matched) {
-        SubInfo sub = matched.subInfo;
-        if (!inboxBrokerManager.hasBroker(matched.brokerId)) {
-            log.error("Invalid inbox broker[{}] for sub[inboxId={}, qos={}, topicFilter={}]",
-                matched.brokerId,
-                sub.getInboxId(),
-                sub.getSubQoS(),
-                sub.getTopicFilter());
-            return;
-        }
-        scheduler.schedule(new InboxWriteRequest(matched, msgPack));
     }
 
     private CompletableFuture<GCReply> gc(GCRequest request, IKVReader reader) {

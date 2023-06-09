@@ -21,28 +21,27 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
@@ -75,11 +74,15 @@ public class DistQoS1Test extends DistWorkerTest {
         when(receiverManager.openWriter("server1", MqttBroker)).thenReturn(writer1);
         when(writer1.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s,
-                        s -> ThreadLocalRandom.current().nextDouble() <= 0.5 ? WriteResult.error(
-                            new RuntimeException()) : WriteResult.OK)));
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, ThreadLocalRandom.current().nextDouble() <= 0.5 ? WriteResult.error(
+                            new RuntimeException()) : WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
             });
 
         insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
@@ -89,11 +92,11 @@ public class DistQoS1Test extends DistWorkerTest {
             assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
-        ArgumentCaptor<Map<TopicMessagePack, List<SubInfo>>> messageListCap = ArgumentCaptor.forClass(
-            Map.class);
-        verify(writer1, atMost(10)).write(messageListCap.capture());
+        ArgumentCaptor<Iterable<InboxPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, after(100).atMost(10)).write(messageListCap.capture());
 
-        for (TopicMessagePack msgs : messageListCap.getValue().keySet()) {
+        for (InboxPack inboxPack : messageListCap.getValue()) {
+            TopicMessagePack msgs = inboxPack.messagePack;
             assertEquals("/a/b/c", msgs.getTopic());
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {
@@ -112,13 +115,17 @@ public class DistQoS1Test extends DistWorkerTest {
         // expected behavior: pub failed
 
         when(receiverManager.openWriter("server1", MqttBroker)).thenReturn(writer1);
-        when(writer1.write(anyMap()))
+        when(writer1.write(any()))
             .thenAnswer(
                 (Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                    Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                    return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                        .collect(Collectors.toMap(s -> s,
-                            s -> WriteResult.error(new RuntimeException("mocked error")))));
+                    Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                    Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                    for (InboxPack inboxWrite : inboxPacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, WriteResult.error(new RuntimeException("mocked error")));
+                        }
+                    }
+                    return CompletableFuture.completedFuture(resultMap);
                 });
 
         insertMatchRecord("trafficA", "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
@@ -128,13 +135,14 @@ public class DistQoS1Test extends DistWorkerTest {
             assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
-        ArgumentCaptor<Map<TopicMessagePack, List<SubInfo>>> messageListCap = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Iterable<InboxPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
 
-        verify(writer1, atMost(10)).write(messageListCap.capture());
+        verify(writer1, after(100).atMost(10)).write(messageListCap.capture());
 
-        verify(eventCollector, atMost(10)).report(argThat(e -> e.type() == EventType.DELIVER_ERROR));
+        verify(eventCollector, after(100).atMost(10)).report(argThat(e -> e.type() == EventType.DELIVER_ERROR));
 
-        for (TopicMessagePack msgs : messageListCap.getValue().keySet()) {
+        for (InboxPack inboxPack : messageListCap.getValue()) {
+            TopicMessagePack msgs = inboxPack.messagePack;
             assertEquals("/a/b/c", msgs.getTopic());
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {
@@ -145,7 +153,7 @@ public class DistQoS1Test extends DistWorkerTest {
     }
 
     @Test
-    public void testDistCase9() {
+    public void testDistCase9() throws InterruptedException {
         // pub: qos1
         // topic: "/a/b/c"
         // sub: inbox1 -> [(/a/b/c, qos1)]
@@ -155,9 +163,14 @@ public class DistQoS1Test extends DistWorkerTest {
         when(receiverManager.openWriter("server1", MqttBroker)).thenReturn(writer1);
         when(writer1.write(any())).thenAnswer(
             (Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.NO_INBOX)));
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.NO_INBOX);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
             });
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class))).thenReturn(
@@ -170,12 +183,12 @@ public class DistQoS1Test extends DistWorkerTest {
             assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
-        ArgumentCaptor<Map<TopicMessagePack, List<SubInfo>>> messageListCap = ArgumentCaptor.forClass(
-            Map.class);
-        verify(writer1, atLeastOnce()).write(messageListCap.capture());
+        ArgumentCaptor<Iterable<InboxPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, timeout(100).atLeastOnce()).write(messageListCap.capture());
 
-        for (Map<TopicMessagePack, List<SubInfo>> subMsgPack : messageListCap.getAllValues()) {
-            for (TopicMessagePack msgs : subMsgPack.keySet()) {
+        for (Iterable<InboxPack> packs : messageListCap.getAllValues()) {
+            for (InboxPack pack : packs) {
+                TopicMessagePack msgs = pack.messagePack;
                 assertEquals("/a/b/c", msgs.getTopic());
                 for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                     for (Message msg : senderMsgPack.getMessageList()) {
@@ -185,7 +198,8 @@ public class DistQoS1Test extends DistWorkerTest {
             }
         }
 
-        verify(distClient, atLeastOnce()).clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+        verify(distClient, timeout(100).atLeastOnce()).clear(anyLong(), anyString(), anyString(), anyInt(),
+            any(ClientInfo.class));
     }
 
     @SneakyThrows
@@ -200,9 +214,14 @@ public class DistQoS1Test extends DistWorkerTest {
         when(receiverManager.openWriter("server1", MqttBroker)).thenReturn(writer1);
         when(writer1.write(any())).thenAnswer(
             (Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.NO_INBOX)));
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.NO_INBOX);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
             });
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class))).thenReturn(
@@ -215,12 +234,13 @@ public class DistQoS1Test extends DistWorkerTest {
             assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
-        ArgumentCaptor<Map<TopicMessagePack, List<SubInfo>>> messageListCap = ArgumentCaptor.forClass(
-            Map.class);
-        verify(writer1, atLeastOnce()).write(messageListCap.capture());
 
-        for (Map<TopicMessagePack, List<SubInfo>> subMsgPack : messageListCap.getAllValues()) {
-            for (TopicMessagePack msgs : subMsgPack.keySet()) {
+        ArgumentCaptor<Iterable<InboxPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, timeout(100).atLeastOnce()).write(messageListCap.capture());
+
+        for (Iterable<InboxPack> packs : messageListCap.getAllValues()) {
+            for (InboxPack pack : packs) {
+                TopicMessagePack msgs = pack.messagePack;
                 assertEquals("/a/b/c", msgs.getTopic());
                 for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                     for (Message msg : senderMsgPack.getMessageList()) {
@@ -230,10 +250,10 @@ public class DistQoS1Test extends DistWorkerTest {
             }
         }
 
-        Thread.sleep(1000);
 
-        verify(distClient, atLeastOnce()).clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+        verify(distClient, timeout(100).atLeastOnce()).clear(anyLong(), anyString(), anyString(), anyInt(),
+            any(ClientInfo.class));
 
-        verify(eventCollector, atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
+        verify(eventCollector, timeout(100).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
     }
 }

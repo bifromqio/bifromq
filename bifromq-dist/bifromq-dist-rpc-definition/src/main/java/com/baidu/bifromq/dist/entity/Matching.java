@@ -20,9 +20,12 @@ import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode
 public abstract class Matching {
+    @EqualsAndHashCode.Exclude
     public final ByteString key;
-    public final String trafficId;
+    @EqualsAndHashCode.Exclude
     public final String escapedTopicFilter;
+
+    public final String trafficId;
 
     protected Matching(ByteString matchRecordKey) {
         this.key = matchRecordKey;

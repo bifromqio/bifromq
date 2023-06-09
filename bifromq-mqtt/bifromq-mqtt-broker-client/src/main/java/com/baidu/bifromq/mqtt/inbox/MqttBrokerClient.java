@@ -24,12 +24,12 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.util.InboxGroupKeyUtil;
 import com.baidu.bifromq.plugin.inboxbroker.HasResult;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -91,14 +91,14 @@ class MqttBrokerClient implements IMqttBrokerClient {
         }
 
         @Override
-        public CompletableFuture<Map<SubInfo, WriteResult>> write(Map<TopicMessagePack, List<SubInfo>> messages) {
+        public CompletableFuture<Map<SubInfo, WriteResult>> write(Iterable<InboxPack> messagePacks) {
             Preconditions.checkState(!hasStopped.get());
             long reqId = System.nanoTime();
             return ppln.invoke(WriteRequest.newBuilder()
                     .setReqId(reqId)
-                    .addAllDeliveryPack(Iterables.transform(messages.entrySet(), e -> DeliveryPack.newBuilder()
-                        .setMessagePack(e.getKey())
-                        .addAllSubscriber(e.getValue())
+                    .addAllDeliveryPack(Iterables.transform(messagePacks, e -> DeliveryPack.newBuilder()
+                        .setMessagePack(e.messagePack)
+                        .addAllSubscriber(e.inboxes)
                         .build()))
                     .build())
                 .thenApply(writeReply -> writeReply.getResultList().stream()
@@ -115,8 +115,13 @@ class MqttBrokerClient implements IMqttBrokerClient {
                     })))
                 .exceptionally(e -> {
                     WriteResult error = WriteResult.error(e);
-                    return messages.values().stream().flatMap(l -> l.stream())
-                        .collect(Collectors.toMap(s -> s, s -> error));
+                    Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                    for (InboxPack inboxWrite : messagePacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, error);
+                        }
+                    }
+                    return resultMap;
                 });
         }
 

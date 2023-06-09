@@ -47,7 +47,7 @@ class InboxBrokerClient implements IInboxBrokerClient {
                         return HasResult.error(new RuntimeException("Inbox service internal error"));
                 }
             })
-            .exceptionally(e -> HasResult.error(e));
+            .exceptionally(HasResult::error);
     }
 
 

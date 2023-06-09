@@ -40,7 +40,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final IInboxBrokerManager inboxBrokerManager;
-    private final IBatchCallScheduler<InboxWriteRequest, Void> scheduler;
+    private final InboxWriteScheduler scheduler;
     private final ExecutorService matchExecutor;
 
     public DistWorkerCoProcFactory(IDistClient distClient,

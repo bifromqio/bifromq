@@ -20,13 +20,14 @@ import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -64,8 +65,8 @@ public class InboxInsertTest extends InboxServiceTest {
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)
             .build();
-        Map<TopicMessagePack, List<SubInfo>> msgPack = new HashMap<>();
-        msgPack.put(pack, singletonList(subInfo));
+        List<InboxPack> msgPack = new LinkedList<>();
+        msgPack.add(new InboxPack(pack, singletonList(subInfo)));
         Map<SubInfo, WriteResult> result = writer.write(msgPack).join();
         assertEquals(WriteResult.OK, result.get(subInfo));
 
@@ -119,10 +120,10 @@ public class InboxInsertTest extends InboxServiceTest {
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)
             .build();
-        Map<TopicMessagePack, List<SubInfo>> msgPack1 = new HashMap<>();
-        msgPack1.put(pack1, singletonList(subInfo));
-        Map<TopicMessagePack, List<SubInfo>> msgPack2 = new HashMap<>();
-        msgPack2.put(pack2, singletonList(subInfo));
+        List<InboxPack> msgPack1 = new LinkedList<>();
+        msgPack1.add(new InboxPack(pack1, singletonList(subInfo)));
+        List<InboxPack> msgPack2 = new LinkedList<>();
+        msgPack2.add(new InboxPack(pack2, singletonList(subInfo)));
         CompletableFuture<Map<SubInfo, WriteResult>> writeFuture1 = writer.write(msgPack1);
         CompletableFuture<Map<SubInfo, WriteResult>> writeFuture2 = writer.write(msgPack2);
         CompletableFuture<Map<SubInfo, WriteResult>> writeFuture3 = writer.write(msgPack2);

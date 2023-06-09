@@ -20,22 +20,22 @@ import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -68,15 +68,25 @@ public class DistQoS2Test extends DistWorkerTest {
             .thenReturn(writer2);
         when(writer1.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.OK)));
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
             });
         when(writer2.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.OK)));
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
             });
 
         insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
@@ -90,11 +100,12 @@ public class DistQoS2Test extends DistWorkerTest {
         assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
 
 
-        ArgumentCaptor<Map<TopicMessagePack, List<SubInfo>>> msgCap = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Iterable<InboxPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);
 
-        verify(writer1, atLeastOnce()).write(msgCap.capture());
-        for (TopicMessagePack msgs : msgCap.getValue().keySet()) {
-            List<SubInfo> subInfos = msgCap.getValue().get(msgs);
+        verify(writer1, timeout(100).atLeastOnce()).write(msgCap.capture());
+        for (InboxPack pack : msgCap.getValue()) {
+            TopicMessagePack msgs = pack.messagePack;
+            Iterable<SubInfo> subInfos = pack.inboxes;
             assertEquals("/a/b/c", msgs.getTopic());
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {
@@ -110,11 +121,12 @@ public class DistQoS2Test extends DistWorkerTest {
 //        assertEquals(AT_LEAST_ONCE, inbox1Msgs.get(0).getSubQoS());
 //        assertEquals(AT_MOST_ONCE, inbox1Msgs.get(1).getSubQoS());
 
-        msgCap = ArgumentCaptor.forClass(Map.class);
-        verify(writer2, atLeastOnce()).write(msgCap.capture());
+        msgCap = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer2, timeout(100).atLeastOnce()).write(msgCap.capture());
 
         assertEquals(1, msgCap.getAllValues().size());
-        for (TopicMessagePack inbox2Msgs : msgCap.getValue().keySet()) {
+        for (InboxPack pack : msgCap.getValue()) {
+            TopicMessagePack inbox2Msgs = pack.messagePack;
             assertEquals("/a/b/c", inbox2Msgs.getTopic());
             TopicMessagePack.SenderMessagePack senderMsgPack = inbox2Msgs.getMessageList().iterator().next();
             Message msg = senderMsgPack.getMessage(0);
@@ -135,10 +147,15 @@ public class DistQoS2Test extends DistWorkerTest {
             .thenReturn(writer1);
         when(writer1.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> ThreadLocalRandom.current().nextDouble() <= 0.5 ?
-                        WriteResult.error(new RuntimeException()) : WriteResult.OK)));
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, ThreadLocalRandom.current().nextDouble() <= 0.5 ? WriteResult.error(
+                            new RuntimeException()) : WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
             });
         insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox1", "server1");
@@ -149,12 +166,12 @@ public class DistQoS2Test extends DistWorkerTest {
             assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
-        ArgumentCaptor<Map<TopicMessagePack, List<SubInfo>>> messageListCap =
-            ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Iterable<InboxPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
 
-        verify(writer1, atLeastOnce()).write(messageListCap.capture());
-        verify(writer1, atMost(10)).write(messageListCap.capture());
-        for (TopicMessagePack msgs : messageListCap.getValue().keySet()) {
+        verify(writer1, timeout(100).atLeastOnce()).write(messageListCap.capture());
+        verify(writer1, after(100).atMost(10)).write(messageListCap.capture());
+        for (InboxPack pack : messageListCap.getValue()) {
+            TopicMessagePack msgs = pack.messagePack;
             assertEquals("/a/b/c", msgs.getTopic());
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {

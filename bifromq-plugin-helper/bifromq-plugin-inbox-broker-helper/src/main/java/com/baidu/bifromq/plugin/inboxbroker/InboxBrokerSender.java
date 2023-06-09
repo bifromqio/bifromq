@@ -14,11 +14,9 @@
 package com.baidu.bifromq.plugin.inboxbroker;
 
 import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.base.Preconditions;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -88,10 +86,10 @@ final class InboxBrokerSender implements IInboxBroker {
         }
 
         @Override
-        public CompletableFuture<Map<SubInfo, WriteResult>> write(Map<TopicMessagePack, List<SubInfo>> messages) {
+        public CompletableFuture<Map<SubInfo, WriteResult>> write(Iterable<InboxPack> inboxPacks) {
             try {
                 Timer.Sample start = Timer.start();
-                return inboxWriter.write(messages).whenComplete((v, e) -> start.stop(writeCallTimer));
+                return inboxWriter.write(inboxPacks).whenComplete((v, e) -> start.stop(writeCallTimer));
             } catch (Throwable e) {
                 return CompletableFuture.failedFuture(e);
             }

@@ -28,17 +28,21 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class NormalMatching extends Matching {
     public final String scopedInboxId;
-
-    public final SubInfo subInfo;
-
-    public final String inboxGroupKey;
-    public final int brokerId;
     private final String originalTopicFilter;
+    public final QoS subQoS;
+
+    @EqualsAndHashCode.Exclude
+    public final String inboxGroupKey;
+    @EqualsAndHashCode.Exclude
+    public final int brokerId;
+    @EqualsAndHashCode.Exclude
+    public final SubInfo subInfo;
 
     NormalMatching(ByteString key, String scopedInboxId, QoS subQoS) {
         super(key);
-        this.originalTopicFilter = unescape(escapedTopicFilter);
         this.scopedInboxId = scopedInboxId;
+        this.subQoS = subQoS;
+        this.originalTopicFilter = unescape(escapedTopicFilter);
 
         scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);
         String[] parts = scopedInboxId.split(NUL);
@@ -50,12 +54,12 @@ public class NormalMatching extends Matching {
             .setSubQoS(subQoS)
             .setTopicFilter(originalTopicFilter)
             .build();
-
     }
 
     NormalMatching(ByteString key, String originalTopicFilter, String scopedInboxId, QoS subQoS) {
         super(key);
         this.scopedInboxId = scopedInboxId;
+        this.subQoS = subQoS;
         this.originalTopicFilter = originalTopicFilter;
 
         scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);

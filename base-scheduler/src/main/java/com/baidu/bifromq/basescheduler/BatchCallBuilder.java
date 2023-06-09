@@ -38,7 +38,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
     private final AtomicBoolean calling = new AtomicBoolean();
     private final MetricsMeter meter;
     private final Queue<MonitoredBatchCall> preflightBatches = new ArrayDeque<>(PREFLIGHT_BATCHES);
-    private final Queue<MonitoredBatchCall> reusableBatches = new MpscArrayQueue<>(64);
+    private final Queue<MonitoredBatchCall> reusableBatches = new MpscArrayQueue<>(PREFLIGHT_BATCHES / 2);
     private volatile MonitoredBatchCall currentBatchRef;
 
     protected BatchCallBuilder(String name, int maxInflights) {
@@ -67,9 +67,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                         offered = preflightBatches.offer(currentBatchRef);
                         assert offered;
                         MonitoredBatchCall newCall = reusableBatches.poll();
-                        if (newCall != null) {
-                            newCall.reset();
-                        } else {
+                        if (newCall == null) {
                             newCall = new MonitoredBatchCall();
                         }
                         currentBatchRef = newCall;
@@ -104,6 +102,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                         inflightLimiter.onSample(0, processingTime, inflightCalls.get(), false);
                         meter.batchExecTimer.record(processingTime, TimeUnit.NANOSECONDS);
                         // try to reuse
+                        batchCall.reset();
                         boolean reused = reusableBatches.offer(batchCall);
                         if (!reused) {
                             meter.throwAwayCounter.increment(1);
@@ -119,9 +118,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                             offered = preflightBatches.offer(currentBatchRef);
                             assert offered;
                             MonitoredBatchCall newCall = reusableBatches.poll();
-                            if (newCall != null) {
-                                newCall.reset();
-                            } else {
+                            if (newCall == null) {
                                 newCall = new MonitoredBatchCall();
                             }
                             currentBatchRef = newCall;
@@ -141,9 +138,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                         offered = preflightBatches.offer(currentBatchRef);
                         assert offered;
                         MonitoredBatchCall newCall = reusableBatches.poll();
-                        if (newCall != null) {
-                            newCall.reset();
-                        } else {
+                        if (newCall == null) {
                             newCall = new MonitoredBatchCall();
                         }
                         currentBatchRef = newCall;

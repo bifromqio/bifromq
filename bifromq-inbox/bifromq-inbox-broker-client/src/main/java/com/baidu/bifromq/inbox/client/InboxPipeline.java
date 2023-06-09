@@ -7,12 +7,13 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxMessagePack;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SendResult;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Iterables;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -26,17 +27,18 @@ class InboxPipeline implements IInboxWriter {
     }
 
     @Override
-    public CompletableFuture<Map<SubInfo, WriteResult>> write(Map<TopicMessagePack, List<SubInfo>> messages) {
+    public CompletableFuture<Map<SubInfo, WriteResult>> write(Iterable<InboxPack> messagePacks) {
         long reqId = System.nanoTime();
         return ppln.invoke(SendRequest.newBuilder()
                 .setReqId(reqId)
-                .addAllInboxMsgPack(Iterables.transform(messages.entrySet(), e -> InboxMessagePack.newBuilder()
-                    .setMessages(e.getKey())
-                    .addAllSubInfo(e.getValue())
-                    .build()))
+                .addAllInboxMsgPack(Iterables.transform(messagePacks,
+                    e -> InboxMessagePack.newBuilder()
+                        .setMessages(e.messagePack)
+                        .addAllSubInfo(e.inboxes)
+                        .build()))
                 .build())
             .thenApply(sendReply -> sendReply.getResultList().stream()
-                .collect(Collectors.toMap(e -> e.getSubInfo(), e -> {
+                .collect(Collectors.toMap(SendResult::getSubInfo, e -> {
                     switch (e.getResult()) {
                         case OK:
                             return WriteResult.OK;
@@ -48,9 +50,14 @@ class InboxPipeline implements IInboxWriter {
                     }
                 })))
             .exceptionally(e -> {
-                WriteResult result = WriteResult.error(e);
-                return messages.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> result));
+                WriteResult error = WriteResult.error(e);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : messagePacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, error);
+                    }
+                }
+                return resultMap;
             });
     }
 

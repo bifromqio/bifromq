@@ -27,10 +27,15 @@ import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode(callSuper = true)
 public class GroupMatching extends Matching {
+    @EqualsAndHashCode.Exclude
     public final String group;
+    @EqualsAndHashCode.Exclude
     public final boolean ordered;
+    @EqualsAndHashCode.Exclude
     public final List<NormalMatching> inboxList;
+
     public final Map<String, QoS> inboxMap;
+
     private final String origTopicFilter;
 
     GroupMatching(ByteString key, String group, boolean ordered, Map<String, QoS> inboxes) {

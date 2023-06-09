@@ -14,16 +14,15 @@
 package com.baidu.bifromq.dist.worker.scheduler;
 
 import com.baidu.bifromq.dist.entity.NormalMatching;
-import com.baidu.bifromq.type.TopicMessagePack;
 
 public class InboxWriteRequest {
     public final NormalMatching matching;
-    public final TopicMessagePack msgPack;
+    public final MessagePackWrapper msgPackWrapper;
     public final InboxWriterKey writerKey;
 
-    public InboxWriteRequest(NormalMatching matching, TopicMessagePack msgPack) {
+    public InboxWriteRequest(NormalMatching matching, MessagePackWrapper msgPackWrapper) {
         this.matching = matching;
-        this.msgPack = msgPack;
+        this.msgPackWrapper = msgPackWrapper;
         writerKey = new InboxWriterKey(matching.brokerId, matching.inboxGroupKey);
     }
 

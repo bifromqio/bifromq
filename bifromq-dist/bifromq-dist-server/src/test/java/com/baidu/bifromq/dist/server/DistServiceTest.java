@@ -14,7 +14,7 @@
 package com.baidu.bifromq.dist.server;
 
 import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
@@ -34,15 +34,15 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.inboxbroker.HasResult;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -51,7 +51,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
 import org.junit.Before;
@@ -180,12 +179,6 @@ public abstract class DistServiceTest {
         workerClient.join();
         distClient.connState().filter(s -> s == IRPCClient.ConnState.READY).blockingFirst();
         log.info("Setup finished, and start testing");
-        when(inboxWriter.write(anyMap()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.OK)));
-            });
     }
 
     @After

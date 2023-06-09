@@ -14,32 +14,34 @@
 package com.baidu.bifromq.dist.server;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.SubResult;
 import com.baidu.bifromq.dist.client.SubResult.Type;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
@@ -49,6 +51,17 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test
     public void distWithNoSub() {
+        Mockito.lenient().when(inboxWriter.write(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
+            });
         long reqId = System.nanoTime();
         ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
         ClientInfo clientInfo;
@@ -71,6 +84,17 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test
     public void distWithSub() {
+        Mockito.lenient().when(inboxWriter.write(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
+            });
         long reqId = System.nanoTime();
         ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
         ClientInfo clientInfo;
@@ -98,6 +122,17 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test
     public void distWithSharedSub() {
+        Mockito.lenient().when(inboxWriter.write(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
+            });
         long reqId = System.nanoTime();
         ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
         ClientInfo clientInfo;
@@ -127,14 +162,19 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test
     public void distWithFanOutSub() {
-        List<Map<TopicMessagePack, List<SubInfo>>> capturedArguments = new ArrayList<>();
-        when(inboxWriter.write(anyMap()))
+        List<Iterable<InboxPack>> capturedArguments = new CopyOnWriteArrayList<>();
+        when(inboxWriter.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
+                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
                 // the argument object will be reused, so make a clone
-                Map<TopicMessagePack, List<SubInfo>> msgPack = new HashMap<>(invocation.getArgument(0));
-                capturedArguments.add(msgPack);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.OK)));
+                capturedArguments.add(inboxPacks);
+                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
+                for (InboxPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, WriteResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
             });
 
         long reqId = System.nanoTime();
@@ -153,13 +193,16 @@ public class DistTest extends DistServiceTest {
             distClient().dist(reqId, "/sport/tennis", QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, pubClient).join();
         }
 
+        Thread.sleep(100);
 
         Set<SubInfo> subInfos = new HashSet<>();
         int msgCount = 0;
-        for (Map<TopicMessagePack, List<SubInfo>> writeReq : capturedArguments) {
-            for (TopicMessagePack msgs : writeReq.keySet()) {
-                subInfos.addAll(writeReq.get(msgs));
-                msgCount += msgs.getMessageCount() * writeReq.get(msgs).size();
+        for (Iterable<InboxPack> writeReq : capturedArguments) {
+            for (InboxPack pack : writeReq) {
+                TopicMessagePack msgs = pack.messagePack;
+                Set<SubInfo> inboxes = Sets.newHashSet(pack.inboxes);
+                subInfos.addAll(inboxes);
+                msgCount += msgs.getMessageCount() * inboxes.size();
             }
         }
         assertEquals(totalInbox, subInfos.size());

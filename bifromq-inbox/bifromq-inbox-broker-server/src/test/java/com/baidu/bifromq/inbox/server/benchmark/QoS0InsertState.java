@@ -14,10 +14,11 @@
 package com.baidu.bifromq.inbox.server.benchmark;
 
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -65,11 +66,11 @@ public class QoS0InsertState extends InboxServiceState {
     }
 
     public Map<SubInfo, WriteResult> insert() {
-        return inboxWriter.write(singletonMap(msg, singletonList(SubInfo.newBuilder()
+        return inboxWriter.write(singleton(new InboxPack(msg, singletonList(SubInfo.newBuilder()
             .setTrafficId(trafficId)
             .setInboxId(ThreadLocalRandom.current().nextInt(0, 100) + "")
             .setTopicFilter("greeting")
             .setSubQoS(AT_MOST_ONCE)
-            .build()))).join();
+            .build())))).join();
     }
 }

@@ -14,8 +14,6 @@
 package com.baidu.bifromq.plugin.inboxbroker;
 
 import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,10 +21,10 @@ public interface IInboxWriter {
     /**
      * Write a pack of messages to subscribers.
      *
-     * @param msgPack
-     * @return
+     * @param inboxPacks a pack of messages to be written to subscribed inbox
+     * @return a future of result
      */
-    CompletableFuture<Map<SubInfo, WriteResult>> write(Map<TopicMessagePack, List<SubInfo>> msgPack);
+    CompletableFuture<Map<SubInfo, WriteResult>> write(Iterable<InboxPack> inboxPacks);
 
     void close();
 }

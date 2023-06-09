@@ -149,7 +149,7 @@ message DistPack{
 message BatchDist {
   uint64 reqId = 1;
   repeated DistPack distPack = 2; // sorted by trafficId and topic
-  string orderKey = 3; // used for ordered share subscription
+  string orderKey = 3;
 }
 
 message BatchDistReply {
