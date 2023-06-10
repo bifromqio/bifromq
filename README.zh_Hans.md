@@ -7,7 +7,7 @@
 
 BifroMQ 是一个高性能的分布式 MQTT Broker 消息中间件实现，无缝集成了原生的多租户支持。它旨在支持构建大规模的物联网设备连接和消息系统。
 
-目前，它来源与百度物联网团队多年技术积累，并作为百度智能云[物联网核心套件 IoT Core](https://cloud.baidu.com/product/iot.html)的基础技术，这是一个公共的 Serverless 云服务。
+它来源与百度物联网团队多年技术积累，并作为百度智能云[物联网核心套件 IoT Core](https://cloud.baidu.com/product/iot.html)的基础技术，这是一个公有云的 Serverless MQTT 服务。
 
 ## 特性
 
