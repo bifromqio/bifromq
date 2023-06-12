@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=centos:7
-FROM --platform=$BUILDPLATFORM ${BASE_IMAGE} AS builder
+FROM --platform=$TARGETPLATFORM ${BASE_IMAGE} AS builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
@@ -13,21 +13,17 @@ RUN if [[ "$TARGETPLATFORM" == *amd* ]]; then \
     && tar -zxvf openjdk-17.0.2_linux-${JDK_ARCH}_bin.tar.gz \
     && rm -rf openjdk-17.0.2_linux-${JDK_ARCH}_bin.tar.gz
 
-
-FROM ${BASE_IMAGE}
+FROM --platform=$TARGETPLATFORM ${BASE_IMAGE}
 
 RUN groupadd -r -g 1000 bifromq  \
     && useradd -r -m -u 1000 -g bifromq bifromq \
     && mkdir /usr/share/bifromq
 
 COPY --chown=bifromq:bifromq --from=builder /jdk-17.0.2 /usr/share/bifromq/jdk-17.0.2
-COPY --chown=bifromq:bifromq target/bifromq-1.0.0-SNAPSHOT-standalone.tar.gz /usr/share/bifromq/
+COPY --chown=bifromq:bifromq bifromq-*-standalone.tar.gz /usr/share/bifromq/
 
-RUN cd /usr/share/bifromq \
-    && tar -zxvf bifromq-*.tar.gz --strip-components 1 \
-    && rm -rf bifromq-*.tar.gz \
-    && chown -Rf bifromq:bifromq /usr/share/bifromq
-
+RUN tar -zxvf /usr/share/bifromq/bifromq-*-standalone.tar.gz --strip-components 1 -C /usr/share/bifromq \
+    && rm -rf /usr/share/bifromq/bifromq-*-standalone.tar.gz
 
 ENV JAVA_HOME /usr/share/bifromq/jdk-17.0.2
 ENV PATH /usr/share/bifromq/jdk-17.0.2/bin:$PATH
