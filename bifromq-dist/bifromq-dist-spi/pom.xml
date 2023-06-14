@@ -23,11 +23,12 @@
     </parent>
 
     <artifactId>bifromq-dist-spi</artifactId>
-    <properties>
-        <maven.deploy.skip>false</maven.deploy.skip>
-    </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-crdt-service</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-scheduler</artifactId>

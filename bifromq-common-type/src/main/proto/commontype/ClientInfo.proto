@@ -10,8 +10,9 @@ option optimize_for = SPEED;
 message MQTT3ClientInfo{
   bool isMQIsdp = 1; // MQIsdp is MQTT 3.1
   string clientId = 2;
-  string clientAddress = 3;
-  string channelId = 4;
+  string ip = 3;
+  uint32 port = 4;
+  string channelId = 5;
 }
 
 message SysClientInfo{

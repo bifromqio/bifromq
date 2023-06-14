@@ -24,15 +24,10 @@
 
     <artifactId>base-kv-store-balance-spi</artifactId>
 
-    <properties>
-        <maven.deploy.skip>false</maven.deploy.skip>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-kv-store-rpc-definition</artifactId>
         </dependency>
     </dependencies>
-
 </project>

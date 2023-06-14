@@ -42,10 +42,10 @@ import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.InvalidWillTopic;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCheckError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCleanupError;
 import com.baidu.bifromq.type.ClientInfo;
@@ -169,14 +169,16 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                     }
                     case OK -> {
                         Ok ok = authResult.getOk();
+                        Optional<InetSocketAddress> clientAddr =
+                            Optional.ofNullable(ChannelAttrs.socketAddress(ctx.channel()));
                         clientInfo = ClientInfo.newBuilder()
                             .setTrafficId(ok.getTrafficId())
                             .setUserId(ok.getUserId())
                             .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
                                 .setIsMQIsdp(connMsg.variableHeader().version() == 3)
                                 .setClientId(mqttClientId)
-                                .setClientAddress(Optional.ofNullable(ChannelAttrs.socketAddress(ctx.channel()))
-                                    .map(InetSocketAddress::toString).orElse(null))
+                                .setIp(clientAddr.map(a -> a.getAddress().getHostAddress()).orElse(""))
+                                .setPort(clientAddr.map(InetSocketAddress::getPort).orElse(0))
                                 .setChannelId(ctx.channel().id().asLongText())
                                 .build())
                             .build();

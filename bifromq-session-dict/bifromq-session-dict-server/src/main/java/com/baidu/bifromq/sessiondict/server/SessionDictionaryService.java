@@ -89,9 +89,9 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
             super(responseObserver);
             clientInfo = PipelineUtil.decode(metadata.get(PipelineUtil.CLIENT_INFO));
             assert clientInfo.hasMqtt3ClientInfo();
-            log.trace("Receive session registering, trafficId={}, userId={}, clientId={}, addr={}",
+            log.trace("Receive session registering, trafficId={}, userId={}, clientId={}, addr={}:{}",
                 trafficId, clientInfo.getUserId(), clientInfo.getMqtt3ClientInfo().getClientId(),
-                clientInfo.getMqtt3ClientInfo().getClientAddress());
+                clientInfo.getMqtt3ClientInfo().getIp(), clientInfo.getMqtt3ClientInfo().getPort());
             regKey = toRegKey(clientInfo.getUserId(), clientInfo.getMqtt3ClientInfo().getClientId());
             registry.compute(trafficId, (t, m) -> {
                 if (m == null) {
@@ -115,10 +115,11 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
         public void quit(ClientInfo killer) {
             long reqId = System.nanoTime();
             if (log.isTraceEnabled()) {
-                log.trace("Quit pipeline: reqId={}, trafficId={}, userId={}, clientId={}, address={}",
+                log.trace("Quit pipeline: reqId={}, trafficId={}, userId={}, clientId={}, address={}:{}",
                     reqId, trafficId, clientInfo.getUserId(),
                     clientInfo.getMqtt3ClientInfo().getClientId(),
-                    clientInfo.getMqtt3ClientInfo().getClientAddress());
+                    clientInfo.getMqtt3ClientInfo().getIp(),
+                    clientInfo.getMqtt3ClientInfo().getPort());
             }
             send(Quit.newBuilder().setKiller(killer).build());
         }

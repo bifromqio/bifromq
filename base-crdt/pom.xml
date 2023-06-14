@@ -24,6 +24,9 @@
     <packaging>pom</packaging>
 
     <artifactId>base-crdt</artifactId>
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
 
     <modules>
         <module>base-crdt-store</module>

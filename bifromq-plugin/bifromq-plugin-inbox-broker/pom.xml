@@ -23,6 +23,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>bifromq-plugin-inbox-broker</artifactId>
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

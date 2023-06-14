@@ -17,11 +17,11 @@ import static com.baidu.bifromq.baseutils.ThreadUtil.forkJoinThreadFactory;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_AUTH_RESULT_CACHE_LIMIT;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_AUTH_RESULT_EXPIRY_SECONDS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_CACHED_AUTH_RESULTS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_RESULT_EXPIRY_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_CALL_PARALLELISM;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_CHECK_RESULT_CACHE_LIMIT;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_CHECK_RESULT_EXPIRY_SECONDS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_CACHED_CHECK_RESULTS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CHECK_RESULT_EXPIRY_SECONDS;
 
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
@@ -101,17 +101,17 @@ public class AuthProviderManager implements IAuthProvider {
                 new ForkJoinPool(AUTH_CALL_PARALLELISM.get(), forkJoinThreadFactory("auth-%d"), null, true), "auth");
 
         authCache = Caffeine.newBuilder()
-            .maximumSize(AUTH_AUTH_RESULT_CACHE_LIMIT.get())
-            .expireAfterAccess(Duration.ofSeconds(AUTH_AUTH_RESULT_EXPIRY_SECONDS.get()))
-            .refreshAfterWrite(Duration.ofSeconds(AUTH_AUTH_RESULT_EXPIRY_SECONDS.get()))
+            .maximumSize(MAX_CACHED_AUTH_RESULTS.get())
+            .expireAfterAccess(Duration.ofSeconds(AUTH_RESULT_EXPIRY_SECONDS.get()))
+            .refreshAfterWrite(Duration.ofSeconds(AUTH_RESULT_EXPIRY_SECONDS.get()))
             .scheduler(Scheduler.systemScheduler())
             .executor(executor)
             .buildAsync((authData, executor) -> doAuth(authData));
 
         checkCache = Caffeine.newBuilder()
-            .maximumSize(AUTH_CHECK_RESULT_CACHE_LIMIT.get())
-            .expireAfterAccess(Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
-            .refreshAfterWrite(Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
+            .maximumSize(MAX_CACHED_CHECK_RESULTS.get())
+            .expireAfterAccess(Duration.ofSeconds(CHECK_RESULT_EXPIRY_SECONDS.get()))
+            .refreshAfterWrite(Duration.ofSeconds(CHECK_RESULT_EXPIRY_SECONDS.get()))
             .scheduler(Scheduler.systemScheduler())
             .executor(executor)
             .buildAsync((key, executor) -> doCheck(key.client, key.action));
@@ -199,12 +199,9 @@ public class AuthProviderManager implements IAuthProvider {
             return delegate.check(client, action)
                 .orTimeout(timeout, TimeUnit.MILLISECONDS)
                 .exceptionally(e -> {
-                    boolean byPass = settingProvider.provide(ByPassPermCheckError, client);
-                    if (!byPass) {
-                        eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
-                            .clientInfo(client).cause(e));
-                    }
-                    return byPass;
+                    eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
+                        .clientInfo(client).cause(e));
+                    return settingProvider.provide(ByPassPermCheckError, client);
                 })
                 .thenApply(v -> {
                     checkCalls.decrementAndGet();

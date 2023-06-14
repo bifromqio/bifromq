@@ -22,6 +22,7 @@ import com.baidu.bifromq.plugin.authprovider.type.PubAction;
 import com.baidu.bifromq.plugin.authprovider.type.SubAction;
 import com.baidu.bifromq.plugin.authprovider.type.UnsubAction;
 import com.baidu.bifromq.type.QoS;
+import com.google.common.base.Strings;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import java.net.InetAddress;
@@ -42,11 +43,14 @@ public class AuthUtil {
         if (cert != null) {
             authData.setCert(unsafeWrap(Base64.getEncoder().encode(cert.getEncoded())));
         }
-        if (msg.payload().userName() != null) {
+        if (msg.variableHeader().hasUserName()) {
             authData.setUsername(msg.payload().userName());
         }
         if (msg.variableHeader().hasPassword()) {
             authData.setPassword(unsafeWrap(msg.payload().passwordInBytes()));
+        }
+        if (!Strings.isNullOrEmpty(msg.payload().clientIdentifier())) {
+            authData.setClientId(msg.payload().clientIdentifier());
         }
         InetSocketAddress remoteAddr = ChannelAttrs.socketAddress(channel);
         if (remoteAddr != null) {
