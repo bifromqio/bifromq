@@ -37,12 +37,13 @@ import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.mqtt.utils.ClientIdUtil;
 import com.baidu.bifromq.mqtt.utils.TopicUtil;
-import com.baidu.bifromq.plugin.authprovider.AuthResult;
-import com.baidu.bifromq.plugin.authprovider.authdata.MQTTBasicAuth;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.Ok;
+import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthFailedClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.BannedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.InvalidWillTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCheckError;
@@ -57,6 +58,7 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectReturnCode;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import java.net.InetSocketAddress;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
@@ -121,43 +123,60 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
         }
         String mqttClientId = clientIdentifier;
         long reqId = System.nanoTime();
-        MQTTBasicAuth basicAuth = AuthUtil.buildMQTTBasicAuth(ctx.channel(), connMsg);
-        cancelOnInactive(authProvider.auth(basicAuth))
+        MQTT3AuthData authData = AuthUtil.buildMQTT3AuthData(ctx.channel(), connMsg);
+        cancelOnInactive(authProvider.auth(authData))
             // this stage has to be run in eventloop, since there is a race condition between
             // registry.remove in onChannelInActive and registry.replace here
             .thenComposeAsync(authResult -> {
                 if (!ctx.channel().isActive()) {
                     return DONE;
                 }
-                switch (authResult.type()) {
-                    case BANNED: {
-                        closeConnectionWithSomeDelay(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
-                                .build(),
-                            getLocal(EventType.BANNED_CLIENT, BannedClient.class)
-                                .peerAddress(clientAddress));
-                        return DONE;
+                switch (authResult.getTypeCase()) {
+                    case REJECT -> {
+                        Reject reject = authResult.getReject();
+                        switch (reject.getCode()) {
+                            case NotAuthorized -> {
+                                closeConnectionWithSomeDelay(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
+                                        .build(),
+                                    getLocal(EventType.NOT_AUTHORIZED_CLIENT, NotAuthorizedClient.class)
+                                        .peerAddress(clientAddress));
+                                return DONE;
+                            }
+                            case BadPass -> {
+                                closeConnectionWithSomeDelay(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD)
+                                        .build(),
+                                    getLocal(EventType.UNAUTHENTICATED_CLIENT, UnauthenticatedClient.class)
+                                        .peerAddress(clientAddress));
+                                return DONE;
+                            }
+                            // fallthrough
+                            default -> {
+                                log.error("Unexpected error from auth provider:{}", authResult.getReject().getReason());
+                                closeConnectionWithSomeDelay(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                                        .build(),
+                                    getLocal(EventType.AUTH_ERROR, AuthError.class)
+                                        .cause(reject.getReason())
+                                        .peerAddress(clientAddress));
+                                return DONE;
+                            }
+                        }
                     }
-                    case NO_PASS: {
-                        closeConnectionWithSomeDelay(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD)
-                                .build(),
-                            getLocal(EventType.AUTH_FAILED_CLIENT, AuthFailedClient.class)
-                                .peerAddress(clientAddress));
-                        return DONE;
-                    }
-                    case PASS: {
-                        AuthResult.Pass pass = (AuthResult.Pass) authResult;
+                    case OK -> {
+                        Ok ok = authResult.getOk();
                         clientInfo = ClientInfo.newBuilder()
-                            .setTrafficId(pass.trafficId)
-                            .setUserId(pass.userId)
+                            .setTrafficId(ok.getTrafficId())
+                            .setUserId(ok.getUserId())
                             .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                                .setVer(connMsg.variableHeader().version() == 3 ?
-                                    MQTT3ClientInfo.SubVer.v3_1 : MQTT3ClientInfo.SubVer.v3_1_1)
+                                .setIsMQIsdp(connMsg.variableHeader().version() == 3)
                                 .setClientId(mqttClientId)
-                                .setClientAddress(ChannelAttrs.socketAddress(ctx.channel()).toString())
+                                .setClientAddress(Optional.ofNullable(ChannelAttrs.socketAddress(ctx.channel()))
+                                    .map(InetSocketAddress::toString).orElse(null))
                                 .setChannelId(ctx.channel().id().asLongText())
                                 .build())
                             .build();
@@ -208,31 +227,16 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                             return establishPersistentSession(reqId, connMsg);
                         }
                     }
-                    case ERROR: {
-                        log.error("Unexpected error from auth provider", ((AuthResult.Error) authResult).cause);
-                        closeConnectionWithSomeDelay(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-                                .build(),
-                            getLocal(EventType.AUTH_ERROR, AuthError.class)
-                                .cause(((AuthResult.Error) authResult).cause)
-                                .peerAddress(clientAddress));
-                        return DONE;
-                    }
-                    case AUTH_CONTINUE:
-                        // fallthrough
-                    case BAD_AUTH_METHOD:
-                        // fallthrough
-                    default:
+                    default -> {
                         closeConnectionWithSomeDelay(MqttMessageBuilders
                                 .connAck()
                                 .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                 .build(),
                             getLocal(EventType.AUTH_ERROR, AuthError.class)
                                 .peerAddress(clientAddress)
-                                .cause(new UnsupportedOperationException("Unexpected auth result:" +
-                                    authResult.type())));
+                                .cause("Unknown auth result"));
                         return DONE;
+                    }
                 }
             }, ctx.channel().eventLoop());
     }

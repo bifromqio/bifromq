@@ -17,9 +17,9 @@ import com.baidu.bifromq.plugin.eventcollector.EventType;
 import lombok.ToString;
 
 @ToString(callSuper = true)
-public final class AuthFailedClient extends ChannelClosedEvent<AuthFailedClient> {
+public final class UnauthenticatedClient extends ChannelClosedEvent<UnauthenticatedClient> {
     @Override
     public EventType type() {
-        return EventType.AUTH_FAILED_CLIENT;
+        return EventType.UNAUTHENTICATED_CLIENT;
     }
 }

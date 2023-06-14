@@ -84,7 +84,7 @@ Execute the following command in the bin directory:
 start server:
 
 ```
-./standalone.sh start [-d] // -d for daemon
+./standalone.sh start // the server process will start in background
 ```
 
 stop server:

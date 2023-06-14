@@ -127,7 +127,6 @@ public class BatchDistTest extends DistWorkerTest {
                 .setTrafficId(trafficId)
                 .setUserId("testUser")
                 .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                    .setVer(MQTT3ClientInfo.SubVer.v3_1_1)
                     .setClientId("testClientId")
                     .setClientAddress("127.0.0.1:8080")
                     .build())

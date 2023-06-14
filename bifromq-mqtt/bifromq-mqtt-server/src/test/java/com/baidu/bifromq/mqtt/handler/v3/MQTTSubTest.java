@@ -34,7 +34,6 @@ import static org.mockito.Mockito.when;
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
@@ -72,7 +71,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void transientQoS0Sub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         mockRetainMatch();
         int[] qos = {0, 0, 0};
@@ -87,7 +86,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void transientQoS1Sub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch();
         int[] qos = {1, 1, 1};
@@ -102,7 +101,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void transientQoS2Sub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
         int[] qos = {2, 2, 2};
@@ -117,7 +116,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void transientMixedSub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         mockDistSub(QoS.AT_LEAST_ONCE, true);
         mockDistSub(QoS.EXACTLY_ONCE, true);
@@ -134,7 +133,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void transientMixedSubWithDistSubFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         mockDistSub(QoS.AT_LEAST_ONCE, true);
         mockDistSub(QoS.EXACTLY_ONCE, false);
@@ -143,7 +142,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
-        verifySubAck(subAckMessage, new int[]{0, 1, 128});
+        verifySubAck(subAckMessage, new int[] {0, 1, 128});
         verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
@@ -151,7 +150,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void persistentQoS0Sub() {
         connectAndVerify(false);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         mockRetainMatch();
         int[] qos = {0, 0, 0};
@@ -165,7 +164,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void persistentQoS1Sub() {
         connectAndVerify(false);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch();
         int[] qos = {1, 1, 1};
@@ -179,7 +178,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void persistentQoS2Sub() {
         connectAndVerify(false);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
         int[] qos = {2, 2, 2};
@@ -193,7 +192,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void persistentMixedSub() {
         connectAndVerify(false);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         mockDistSub(QoS.AT_LEAST_ONCE, true);
         mockDistSub(QoS.EXACTLY_ONCE, true);
@@ -241,44 +240,13 @@ public class MQTTSubTest extends BaseMQTTTest {
     @Test
     public void subWithAuthFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         int[] qos = {1, 1, 1};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
-        verifySubAck(subAckMessage, new int[]{128, 128, 128});
+        verifySubAck(subAckMessage, new int[] {128, 128, 128});
         verifyEvent(5, CLIENT_CONNECTED, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACKED);
-    }
-
-    @Test
-    public void subWithAuthError() {
-        // auth error bypass
-        connectAndVerify(true);
-        mockAuthCheck(Type.ERROR);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
-        mockRetainMatch();
-        int[] qos = {1, 1, 1};
-        MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
-        channel.writeInbound(subMessage);
-        MqttSubAckMessage subAckMessage = channel.readOutbound();
-        verifySubAck(subAckMessage, new int[]{1, 1, 1});
-        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, SUB_ACKED);
-        shouldCleanSubs = true;
-    }
-
-    @Test
-    public void subWithAuthError2() {
-        // auth error not bypass
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        connectAndVerify(true);
-        mockAuthCheck(Type.ERROR);
-        int[] qos = {1, 1, 1};
-        MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
-        channel.writeInbound(subMessage);
-        MqttSubAckMessage subAckMessage = channel.readOutbound();
-        verifySubAck(subAckMessage, new int[]{128, 128, 128});
-        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, SUB_ACKED);
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {

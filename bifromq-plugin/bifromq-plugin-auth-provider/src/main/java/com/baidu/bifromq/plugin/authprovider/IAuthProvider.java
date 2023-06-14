@@ -13,29 +13,28 @@
 
 package com.baidu.bifromq.plugin.authprovider;
 
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.concurrent.CompletableFuture;
 import org.pf4j.ExtensionPoint;
 
 public interface IAuthProvider extends ExtensionPoint {
     /**
-     * Implement this method to hook authentication logic.
-     * <p/>
-     * Note: The authData will be reused by calling thread, make a clone if needed.
+     * Implement this method to hook authentication logic of mqtt3 client into BifroMQ.
      *
      * @param authData the authentication data
      */
-    <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData);
+    CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData);
 
     /**
      * Implement this method to hook action permission check logic.
-     * <p/>
-     * Note: The actionInfo will be reused by calling thread, make a clone if needed.
      *
-     * @param clientInfo the client info
-     * @param actionInfo the action to authorize
+     * @param client the client to check permission
+     * @param action the action
      */
-    <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo);
+    CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action);
 
     /**
      * This method will be called during broker shutdown

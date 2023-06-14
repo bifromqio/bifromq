@@ -107,8 +107,7 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
         switch (connectMessage.variableHeader().version()) {
             case 3:
             case 4:
-                ctx.pipeline().addAfter(MQTTConnectHandler.NAME, MQTT3ConnectHandler.NAME,
-                    new MQTT3ConnectHandler());
+                ctx.pipeline().addAfter(MQTTConnectHandler.NAME, MQTT3ConnectHandler.NAME, new MQTT3ConnectHandler());
                 // delegate to MQTT 3 handler
                 ctx.fireChannelRead(connectMessage);
                 ctx.pipeline().remove(this);

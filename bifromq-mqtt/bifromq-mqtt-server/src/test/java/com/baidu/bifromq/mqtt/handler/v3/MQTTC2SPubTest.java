@@ -14,7 +14,6 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
@@ -23,13 +22,11 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATI
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACK_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACTION_DISALLOW;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_PERMISSION_CHECK_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_RECED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_REC_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -43,7 +40,6 @@ import static org.mockito.Mockito.when;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -58,7 +54,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
@@ -68,7 +63,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS0Pub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -92,7 +87,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS0PubDistFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -102,7 +97,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qos0PubDistDrop() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDrop();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -110,37 +105,10 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS0PubAuthError() {
-        connectAndVerify(true);
-        mockAuthCheck(Type.ERROR);
-        mockDistDist(true);
-        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
-        channel.writeInbound(publishMessage);
-        verifyEvent(2, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR);
-        verify(distClient, times(1)).dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
-            any(ClientInfo.class));
-    }
-
-    @Test
-    public void qoS0PubAuthError2() {
-        // not by pass
-        connectAndVerify(true);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        mockAuthCheck(Type.ERROR);
-        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
-        channel.writeInbound(publishMessage);
-        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
-        channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_PERMISSION_CHECK_ERROR);
-    }
-
-    @Test
     public void qoS0PubAuthFailed() {
         // not by pass
         connectAndVerify(true);
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
@@ -152,7 +120,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS1Pub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -164,7 +132,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubDistFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -174,7 +142,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qos1PubDistDrop() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDrop();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -185,7 +153,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubAckWithUnWritable() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         CompletableFuture<DistResult> distResult = new CompletableFuture<>();
         when(distClient.dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
@@ -200,37 +168,10 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS1PubAuthError() {
-        connectAndVerify(true);
-        mockAuthCheck(Type.ERROR);
-        mockDistDist(true);
-        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
-        channel.writeInbound(publishMessage);
-        MqttPubAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(123, ackMessage.variableHeader().messageId());
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_ACKED);
-    }
-
-    @Test
-    public void qoS1PubAuthError2() {
-        // not by pass
-        connectAndVerify(true);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        mockAuthCheck(Type.ERROR);
-        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
-        channel.writeInbound(publishMessage);
-        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
-        channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_PERMISSION_CHECK_ERROR);
-    }
-
-    @Test
     public void qoS1PubAuthFailed() {
         // not by pass
         connectAndVerify(true);
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
@@ -242,7 +183,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS2Pub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         // publish
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
@@ -262,7 +203,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubDistFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -273,7 +214,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubDistDrop() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDrop();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -285,7 +226,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubAckWithUnWritable() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         CompletableFuture<DistResult> distResult = new CompletableFuture<>();
         when(distClient.dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
@@ -322,45 +263,10 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS2PubAuthError() {
-        connectAndVerify(true);
-        mockAuthCheck(Type.ERROR);
-        mockDistDist(true);
-        channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
-        MqttMessage mqttMessage = channel.readOutbound();
-        Assert.assertEquals(MqttMessageType.PUBREC, mqttMessage.fixedHeader().messageType());
-        Assert.assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
-        Assert.assertTrue(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
-        // publish release
-        channel.writeInbound(MQTTMessageUtils.publishRelMessage(123));
-        mqttMessage = channel.readOutbound();
-        Assert.assertEquals(MqttMessageType.PUBCOMP, mqttMessage.fixedHeader().messageType());
-        Assert.assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_RECED);
-        Assert.assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
-    }
-
-    @Test
-    public void qoS2PubAuthError2() {
-        // not by pass
-        connectAndVerify(true);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        mockAuthCheck(Type.ERROR);
-        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
-        channel.writeInbound(publishMessage);
-        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
-        channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, PUB_PERMISSION_CHECK_ERROR);
-        Assert.assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
-    }
-
-    @Test
     public void qoS2PubAuthFailed() {
         // not by pass
         connectAndVerify(true);
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
@@ -385,7 +291,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     public void pubTooFast() {
         when(settingProvider.provide(eq(MsgPubPerSec), any(ClientInfo.class))).thenReturn(1);
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 1);
         MqttPublishMessage publishMessage2 = MQTTMessageUtils.publishQoS1Message("testTopic", 2);

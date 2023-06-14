@@ -32,7 +32,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
@@ -58,11 +57,11 @@ import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.mqtt.utils.TestTicker;
-import com.baidu.bifromq.plugin.authprovider.AuthData;
-import com.baidu.bifromq.plugin.authprovider.AuthResult;
-import com.baidu.bifromq.plugin.authprovider.AuthResult.Type;
-import com.baidu.bifromq.plugin.authprovider.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.Ok;
+import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -203,30 +202,34 @@ public abstract class BaseMQTTTest {
             .thenReturn(10);
     }
 
-    protected void mockAuth(AuthResult.Type type) {
-        AuthResult authResult = switch (type) {
-            case PASS -> AuthResult.pass()
-                .trafficId(trafficId)
-                .userId(userId)
-                .build();
-            case BANNED -> AuthResult.BANNED;
-            case NO_PASS -> AuthResult.NO_PASS;
-            case BAD_AUTH_METHOD -> AuthResult.BAD_AUTH_METHOD;
-            default -> AuthResult.error(
-                new RuntimeException("InternalError"));
-        };
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(authResult));
+    protected void mockAuthPass() {
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId(trafficId)
+                    .setUserId(userId)
+                    .build())
+                .build()));
     }
 
-    protected void mockAuthCheck(CheckResult.Type type) {
-        CheckResult checkResult = switch (type) {
-            case ALLOW -> CheckResult.ALLOW;
-            case DISALLOW -> CheckResult.DISALLOW;
-            default -> CheckResult.error(new RuntimeException("InternalError"));
-        };
+    protected void mockAuthReject(Reject.Code code, String reason) {
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setReject(Reject.newBuilder()
+                    .setCode(code)
+                    .setReason(reason)
+                    .build())
+                .build()));
+    }
+
+    protected void mockAuthCheck(boolean allow) {
         when(authProvider.check(any(ClientInfo.class), any()))
-            .thenReturn(CompletableFuture.completedFuture(checkResult));
+            .thenReturn(CompletableFuture.completedFuture(allow));
+    }
+
+    protected void mockCheckError(String message) {
+        when(authProvider.check(any(ClientInfo.class), any()))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException(message)));
     }
 
     protected void mockInboxHas(boolean success) {
@@ -382,7 +385,7 @@ public abstract class BaseMQTTTest {
                                                   int keepAliveInSec,
                                                   boolean willMessage,
                                                   boolean willRetain) {
-        mockAuth(Type.PASS);
+        mockAuthPass();
         mockSessionReg();
         mockInboxHas(hasInbox);
         if (cleanSession && hasInbox) {

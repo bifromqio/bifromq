@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply.Builder;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply.Result;
@@ -65,7 +64,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     @Test
     public void qoS0Match() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
         int[] qos = {0, 0, 0};
@@ -84,7 +83,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     @Test
     public void qoS1Match() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
         int[] qos = {1, 1, 1};
@@ -103,7 +102,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     @Test
     public void qoS2Match() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.EXACTLY_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
         int[] qos = {2, 2, 2};
@@ -122,7 +121,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     @Test
     public void mixedMatch() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         mockDistSub(QoS.AT_LEAST_ONCE, true);
         mockDistSub(QoS.EXACTLY_ONCE, true);
@@ -143,7 +142,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     @Test
     public void qoS0MatchFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
         when(retainClient.match(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(

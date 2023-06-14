@@ -77,7 +77,7 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
         sessionCtx = ChannelAttrs.mqttSessionContext(ctx);
         authProvider = sessionCtx.authProvider(ctx);
         eventCollector = sessionCtx.eventCollector;
-        settingProvider = sessionCtx.settingsProvider;
+        settingProvider = sessionCtx.settingProvider;
     }
 
     @Override

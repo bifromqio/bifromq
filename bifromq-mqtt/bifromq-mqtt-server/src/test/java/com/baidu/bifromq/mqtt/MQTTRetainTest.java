@@ -24,10 +24,10 @@ import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.client.MqttMsg;
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
-import com.baidu.bifromq.plugin.authprovider.ActionInfo;
-import com.baidu.bifromq.plugin.authprovider.AuthData;
-import com.baidu.bifromq.plugin.authprovider.AuthResult;
-import com.baidu.bifromq.plugin.authprovider.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
@@ -38,7 +38,6 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -68,14 +67,16 @@ public class MQTTRetainTest extends MQTTTest {
         String clientId = "testClient1";
         String topic = "retainTopic" + pubQoS + subQoS;
         ByteString payload = ByteString.copyFromUtf8("hello");
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId(trafficId)
-                .userId(deviceKey)
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId(trafficId)
+                    .setUserId(deviceKey)
+                    .build())
                 .build()));
-        when(authProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenAnswer((Answer<CompletableFuture<CheckResult>>) invocation ->
-                CompletableFuture.completedFuture(CheckResult.ALLOW));
+        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
+                CompletableFuture.completedFuture(true));
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -122,14 +123,16 @@ public class MQTTRetainTest extends MQTTTest {
         String clientId = "testClient1";
         String topic = "retainTopic";
         ByteString payload = ByteString.copyFromUtf8("hello");
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId(trafficId)
-                .userId(deviceKey)
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId(trafficId)
+                    .setUserId(deviceKey)
+                    .build())
                 .build()));
-        when(authProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenAnswer((Answer<CompletableFuture<CheckResult>>) invocation ->
-                CompletableFuture.completedFuture(CheckResult.ALLOW));
+        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
+                CompletableFuture.completedFuture(true));
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -189,14 +192,16 @@ public class MQTTRetainTest extends MQTTTest {
         String clientId = "testClient1";
         String topic = "retainTopic" + pubRetainQoS + pubClearQoS;
         ByteString payload = ByteString.copyFromUtf8("hello");
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId(trafficId)
-                .userId(deviceKey)
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId(trafficId)
+                    .setUserId(deviceKey)
+                    .build())
                 .build()));
-        when(authProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenAnswer((Answer<CompletableFuture<CheckResult>>) invocation ->
-                CompletableFuture.completedFuture(CheckResult.ALLOW));
+        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
+                CompletableFuture.completedFuture(true));
 
         lenient().doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -249,13 +254,15 @@ public class MQTTRetainTest extends MQTTTest {
         String deviceKey = "testDevice";
         String clientId = "testClient1";
         ByteString payload = ByteString.copyFromUtf8("hello");
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId(trafficId)
-                .userId(deviceKey)
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId(trafficId)
+                    .setUserId(deviceKey)
+                    .build())
                 .build()));
-        when(authProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.ALLOW));
+        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(CompletableFuture.completedFuture(true));
         when(settingProvider.provide(any(), any(ClientInfo.class)))
             .thenAnswer(invocationOnMock -> {
                 Setting setting = invocationOnMock.getArgument(0);

@@ -20,7 +20,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.AuthResult.Type;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
@@ -45,7 +44,8 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION, ackMessage.variableHeader().connectReturnCode());
+        Assert.assertEquals(CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION,
+            ackMessage.variableHeader().connectReturnCode());
         verifyEvent(1, EventType.UNACCEPTED_PROTOCOL_VER);
     }
 
@@ -116,7 +116,7 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
 
     @Test
     public void invalidWillTopic() {
-        mockAuth(Type.PASS);
+        mockAuthPass();
         MqttConnectMessage connectMessage = MQTTMessageUtils.badWillTopicMqttConnectMessage();
         channel.writeInbound(connectMessage);
         // verifications

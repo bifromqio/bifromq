@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package authtypes;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.plugin.authprovider.type";
+option java_outer_classname = "MQTT3AuthTypesProto";
+option optimize_for = SPEED;
+
+message MQTT3AuthData{
+  bool isMQIsdp = 1; // MQIsdp is MQTT 3.1
+  string username = 2;
+  bytes password = 3;
+  bytes cert = 4;
+  string remoteAddr = 5;
+  uint32 remotePort = 6;
+  string channelId = 7;
+}
+
+message Reject{
+  enum Code {
+    BadPass = 0;
+    NotAuthorized = 1;
+    Error = 2;
+  }
+  Code code = 1;
+  optional string reason = 2; // optional description
+}
+
+message Ok{
+  string trafficId = 1;
+  string userId = 2;
+  optional string token = 3;
+}
+
+message MQTT3AuthResult {
+  oneof Type{
+    Ok ok = 1;
+    Reject reject = 2;
+  }
+}

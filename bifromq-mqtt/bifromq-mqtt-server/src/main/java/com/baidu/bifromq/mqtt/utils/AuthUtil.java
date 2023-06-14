@@ -13,59 +13,78 @@
 
 package com.baidu.bifromq.mqtt.utils;
 
-import static java.nio.ByteBuffer.wrap;
+import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
-import com.baidu.bifromq.plugin.authprovider.action.PubAction;
-import com.baidu.bifromq.plugin.authprovider.action.SubAction;
-import com.baidu.bifromq.plugin.authprovider.action.UnsubAction;
-import com.baidu.bifromq.plugin.authprovider.authdata.MQTTBasicAuth;
-import com.baidu.bifromq.plugin.authprovider.authdata.MQTTVer;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.authprovider.type.PubAction;
+import com.baidu.bifromq.plugin.authprovider.type.SubAction;
+import com.baidu.bifromq.plugin.authprovider.type.UnsubAction;
 import com.baidu.bifromq.type.QoS;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import lombok.SneakyThrows;
 
 public class AuthUtil {
     @SneakyThrows
-    public static MQTTBasicAuth buildMQTTBasicAuth(Channel channel, MqttConnectMessage msg) {
-        MQTTBasicAuth authData = new MQTTBasicAuth();
-        switch (msg.variableHeader().version()) {
-            case 3:
-                authData.protocol(MQTTVer.MQTT3_1);
-                break;
-            case 4:
-                authData.protocol(MQTTVer.MQTT3_1_1);
-                break;
-            default:
-                authData.protocol(MQTTVer.MQTT5);
-                break;
+    public static MQTT3AuthData buildMQTT3AuthData(Channel channel, MqttConnectMessage msg) {
+        assert msg.variableHeader().version() != 5;
+        MQTT3AuthData.Builder authData = MQTT3AuthData.newBuilder();
+        if (msg.variableHeader().version() == 3) {
+            authData.setIsMQIsdp(true);
         }
         X509Certificate cert = ChannelAttrs.clientCertificate(channel);
         if (cert != null) {
-            authData.cert(wrap(Base64.getEncoder().encode(cert.getEncoded())).asReadOnlyBuffer());
+            authData.setCert(unsafeWrap(Base64.getEncoder().encode(cert.getEncoded())));
         }
-
-        authData.username(msg.payload().userName())
-            .password(msg.variableHeader().hasPassword() ?
-                wrap(msg.payload().passwordInBytes()).asReadOnlyBuffer() : null)
-            .remoteAddr(ChannelAttrs.socketAddress(channel))
-            .channelId(channel.id().asLongText());
-        return authData;
+        if (msg.payload().userName() != null) {
+            authData.setUsername(msg.payload().userName());
+        }
+        if (msg.variableHeader().hasPassword()) {
+            authData.setPassword(unsafeWrap(msg.payload().passwordInBytes()));
+        }
+        InetSocketAddress remoteAddr = ChannelAttrs.socketAddress(channel);
+        if (remoteAddr != null) {
+            authData.setRemotePort(remoteAddr.getPort())
+                .setChannelId(channel.id().asLongText());
+            InetAddress ip = remoteAddr.getAddress();
+            if (remoteAddr.getAddress() != null) {
+                authData.setRemoteAddr(ip.getHostAddress());
+            }
+        }
+        return authData.build();
     }
 
 
-    public static PubAction buildPubAction(String topic, QoS qos, boolean retained) {
-        return new PubAction().qos(qos).topic(topic).isRetained(retained);
+    public static MQTTAction buildPubAction(String topic, QoS qos, boolean retained) {
+        return MQTTAction.newBuilder()
+            .setPub(PubAction.newBuilder()
+                .setTopic(topic)
+                .setQos(qos)
+                .setIsRetained(retained)
+                .build())
+            .build();
     }
 
-    public static SubAction buildSubAction(String topicFilter, QoS qos) {
-        return new SubAction().qos(qos).topicFilter(topicFilter);
+    public static MQTTAction buildSubAction(String topicFilter, QoS qos) {
+        return MQTTAction.newBuilder()
+            .setSub(SubAction.newBuilder()
+                .setTopicFilter(topicFilter)
+                .setQos(qos)
+                .build())
+            .build();
     }
 
-    public static UnsubAction buildUnsubAction(String topicFilter) {
-        return new UnsubAction().topicFilter(topicFilter);
+    public static MQTTAction buildUnsubAction(String topicFilter) {
+        return MQTTAction.newBuilder()
+            .setUnsub(UnsubAction.newBuilder()
+                .setTopicFilter(topicFilter)
+                .build())
+            .build();
     }
 }

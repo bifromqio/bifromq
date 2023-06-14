@@ -13,34 +13,45 @@
 
 package com.baidu.bifromq.plugin.authprovider;
 
-import com.baidu.bifromq.plugin.authprovider.authdata.MQTTBasicAuth;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.type.ClientInfo;
+import com.google.common.base.Strings;
 import java.util.concurrent.CompletableFuture;
 
 class DevOnlyAuthProvider implements IAuthProvider {
     @Override
-    public <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData) {
-        MQTTBasicAuth data = (MQTTBasicAuth) authData;
-        if (data.username().isPresent()) {
-            String[] username = data.username().get().split("/");
+    public CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData) {
+        if (!Strings.isNullOrEmpty(authData.getUsername())) {
+            String[] username = authData.getUsername().split("/");
             if (username.length == 2) {
-                return CompletableFuture.completedFuture(AuthResult
-                    .pass()
-                    .trafficId(username[0])
-                    .userId(username[1])
+                return CompletableFuture.completedFuture(MQTT3AuthResult
+                    .newBuilder()
+                    .setOk(Ok.newBuilder()
+                        .setTrafficId(username[0])
+                        .setUserId(username[1])
+                        .build())
                     .build());
             } else {
-                return CompletableFuture.completedFuture(AuthResult.pass()
-                    .trafficId("DevOnly").userId("DevUser_" + System.nanoTime()).build());
+                return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                    .setOk(Ok.newBuilder()
+                        .setTrafficId("DevOnly")
+                        .setUserId("DevUser_" + System.nanoTime()).build())
+                    .build());
             }
         } else {
-            return CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId("DevOnly").userId("DevUser_" + System.nanoTime()).build());
+            return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId("DevOnly")
+                    .setUserId("DevUser_" + System.nanoTime()).build())
+                .build());
         }
     }
 
     @Override
-    public <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo) {
-        return CompletableFuture.completedFuture(CheckResult.ALLOW);
+    public CompletableFuture<Boolean> check(ClientInfo clientInfo, MQTTAction action) {
+        return CompletableFuture.completedFuture(true);
     }
 }

@@ -14,12 +14,22 @@
 package com.baidu.bifromq.plugin.authprovider;
 
 import static com.baidu.bifromq.baseutils.ThreadUtil.forkJoinThreadFactory;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_AUTH_RESULT_CACHE_LIMIT;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_AUTH_RESULT_EXPIRY_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_CALL_PARALLELISM;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_CHECK_RESULT_CACHE_LIMIT;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_CHECK_RESULT_EXPIRY_SECONDS;
 
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.authprovider.type.Reject;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessControlError;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -48,38 +58,40 @@ import org.pf4j.PluginManager;
 @Slf4j
 public class AuthProviderManager implements IAuthProvider {
     private final AtomicBoolean stopped = new AtomicBoolean();
-    private final IAuthProvider provider;
+    private final IAuthProvider delegate;
+    private final ISettingProvider settingProvider;
+    private final IEventCollector eventCollector;
     private final Gradient2Limit authCallLimit = Gradient2Limit.newBuilder().build();
     private final AtomicInteger authCalls = new AtomicInteger();
     private final Gradient2Limit checkCallLimit = Gradient2Limit.newBuilder().build();
     private final AtomicInteger checkCalls = new AtomicInteger();
     private ExecutorService executor;
-    private AsyncLoadingCache<AuthData<?>, AuthResult> authCache;
-    private AsyncLoadingCache<CheckCacheKey, CheckResult> checkCache;
+    private AsyncLoadingCache<MQTT3AuthData, MQTT3AuthResult> authCache;
+    private AsyncLoadingCache<CheckCacheKey, Boolean> checkCache;
     private MetricManager metricMgr;
 
-    public AuthProviderManager(String authProviderFQN, PluginManager pluginMgr) {
-        Map<String, IAuthProvider> availAuthProviders = pluginMgr.getExtensions(IAuthProvider.class).stream()
-            .collect(Collectors.toMap(e -> e.getClass().getName(), e -> e));
+    public AuthProviderManager(String authProviderFQN,
+                               PluginManager pluginMgr,
+                               ISettingProvider settingProvider,
+                               IEventCollector eventCollector) {
+        this.settingProvider = settingProvider;
+        this.eventCollector = eventCollector;
+        Map<String, IAuthProvider> availAuthProviders = pluginMgr.getExtensions(IAuthProvider.class)
+            .stream().collect(Collectors.toMap(e -> e.getClass().getName(), e -> e));
         if (availAuthProviders.isEmpty()) {
             log.warn("No auth provider plugin available, use DEV ONLY one instead");
-            provider = new DevOnlyAuthProvider();
+            delegate = new DevOnlyAuthProvider();
         } else {
             if (authProviderFQN == null) {
                 log.warn("Auth provider plugin type are not specified, use DEV ONLY one instead");
-                provider = new DevOnlyAuthProvider();
+                delegate = new DevOnlyAuthProvider();
             } else {
                 Preconditions.checkArgument(availAuthProviders.containsKey(authProviderFQN),
                     String.format("Auth Provider Plugin '%s' not found", authProviderFQN));
                 log.debug("Auth provider plugin type: {}", authProviderFQN);
-                provider = availAuthProviders.get(authProviderFQN);
+                delegate = availAuthProviders.get(authProviderFQN);
             }
         }
-        init();
-    }
-
-    public AuthProviderManager(IAuthProvider provider) {
-        this.provider = provider;
         init();
     }
 
@@ -102,30 +114,30 @@ public class AuthProviderManager implements IAuthProvider {
             .refreshAfterWrite(Duration.ofSeconds(AUTH_CHECK_RESULT_EXPIRY_SECONDS.get()))
             .scheduler(Scheduler.systemScheduler())
             .executor(executor)
-            .buildAsync((key, executor) -> doCheck(key.clientInfo, key.actionInfo));
-        metricMgr = new MetricManager(provider.getClass().getName());
+            .buildAsync((key, executor) -> doCheck(key.client, key.action));
+        metricMgr = new MetricManager(delegate.getClass().getName());
     }
 
     @Override
-    public <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData) {
+    public CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData) {
         checkState();
         return authCache.get(authData);
     }
 
     @Override
-    public <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo) {
+    public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
         checkState();
-        return checkCache.get(new CheckCacheKey(clientInfo, actionInfo));
+        return checkCache.get(new CheckCacheKey(client, action));
     }
 
-    public IAuthProvider get() {
-        return provider;
-    }
-
-    private CompletableFuture<AuthResult> doAuth(AuthData<?> authData) {
+    private CompletableFuture<MQTT3AuthResult> doAuth(MQTT3AuthData authData) {
         if (authCallLimit.getLimit() < authCalls.get()) {
-            return CompletableFuture.completedFuture(
-                AuthResult.error(new ThrottledException("Auth request throttled")));
+            return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setReject(Reject.newBuilder()
+                    .setCode(Reject.Code.Error)
+                    .setReason("Auth request throttled")
+                    .build())
+                .build());
         }
         long start = System.nanoTime();
         try {
@@ -135,13 +147,17 @@ public class AuthProviderManager implements IAuthProvider {
             }
             authCalls.incrementAndGet();
             timeout = Math.max(2000, timeout);
-            return provider.auth(authData)
+            return delegate.auth(authData)
                 .orTimeout(timeout, TimeUnit.MILLISECONDS)
-                .exceptionally(AuthResult::error)
                 .handle((v, e) -> {
                     authCalls.decrementAndGet();
                     if (e != null) {
-                        return AuthResult.error(e);
+                        return MQTT3AuthResult.newBuilder()
+                            .setReject(Reject.newBuilder()
+                                .setCode(Reject.Code.Error)
+                                .setReason(e.getMessage() != null ? e.getMessage() : e.toString())
+                                .build())
+                            .build();
                     } else {
                         long latency = System.nanoTime() - start;
                         metricMgr.authCallTimer.record(latency, TimeUnit.NANOSECONDS);
@@ -152,15 +168,25 @@ public class AuthProviderManager implements IAuthProvider {
         } catch (Throwable e) {
             metricMgr.authCallErrorCounter.increment();
             authCalls.decrementAndGet();
-            return CompletableFuture.completedFuture(AuthResult.error(e));
+            log.warn("Unexpected error", e);
+            Reject.Builder rb = Reject.newBuilder().setCode(Reject.Code.Error);
+            if (e.getMessage() != null) {
+                rb.setReason(e.getMessage());
+            }
+            return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setReject(Reject.newBuilder()
+                    .setCode(Reject.Code.Error)
+                    .setReason(e.getMessage() != null ? e.getMessage() : e.toString())
+                    .build())
+
+                .build());
         }
     }
 
-    private CompletableFuture<CheckResult> doCheck(ClientInfo clientInfo, ActionInfo<?> actionInfo) {
+    private CompletableFuture<Boolean> doCheck(ClientInfo client, MQTTAction action) {
         if (checkCallLimit.getLimit() < checkCalls.get()) {
             log.debug("Check throttled: limit={}, current={}", checkCallLimit.getLimit(), checkCalls.get());
-            return CompletableFuture.completedFuture(
-                CheckResult.error(new ThrottledException("Check request throttled")));
+            return CompletableFuture.completedFuture(false);
         }
         long start = System.nanoTime();
         long timeout = 2 * checkCallLimit.getRttNoLoad(TimeUnit.MILLISECONDS);
@@ -170,24 +196,27 @@ public class AuthProviderManager implements IAuthProvider {
         timeout = Math.max(2000, timeout);
         try {
             checkCalls.incrementAndGet();
-            return provider.check(clientInfo, actionInfo)
+            return delegate.check(client, action)
                 .orTimeout(timeout, TimeUnit.MILLISECONDS)
-                .exceptionally(CheckResult::error)
-                .handle((v, e) -> {
-                    checkCalls.decrementAndGet();
-                    if (e != null) {
-                        return CheckResult.error(e);
-                    } else {
-                        long latency = System.nanoTime() - start;
-                        metricMgr.checkCallTimer.record(latency, TimeUnit.NANOSECONDS);
-                        checkCallLimit.onSample(start, latency, checkCalls.get(), false);
-                        return v;
+                .exceptionally(e -> {
+                    boolean byPass = settingProvider.provide(ByPassPermCheckError, client);
+                    if (!byPass) {
+                        eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
+                            .clientInfo(client).cause(e));
                     }
+                    return byPass;
+                })
+                .thenApply(v -> {
+                    checkCalls.decrementAndGet();
+                    long latency = System.nanoTime() - start;
+                    metricMgr.checkCallTimer.record(latency, TimeUnit.NANOSECONDS);
+                    checkCallLimit.onSample(start, latency, checkCalls.get(), false);
+                    return v;
                 });
         } catch (Throwable e) {
             checkCalls.decrementAndGet();
             metricMgr.checkCallErrorCounter.increment();
-            return CompletableFuture.completedFuture(CheckResult.error(e));
+            return CompletableFuture.failedFuture(e);
         }
     }
 
@@ -197,7 +226,7 @@ public class AuthProviderManager implements IAuthProvider {
             authCache.synchronous().invalidateAll();
             checkCache.synchronous().invalidateAll();
             executor.shutdown();
-            provider.close();
+            delegate.close();
             metricMgr.close();
             log.info("Auth provider manager stopped");
         }
@@ -210,8 +239,8 @@ public class AuthProviderManager implements IAuthProvider {
     @EqualsAndHashCode
     @AllArgsConstructor
     private static class CheckCacheKey {
-        final ClientInfo clientInfo;
-        final ActionInfo<?> actionInfo;
+        final ClientInfo client;
+        final MQTTAction action;
     }
 
     private class MetricManager {

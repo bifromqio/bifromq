@@ -14,7 +14,6 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_PUSHED;
@@ -25,20 +24,16 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_PERMISSION_CHECK_ERROR;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
@@ -62,7 +57,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
@@ -85,7 +79,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS0Pub() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
@@ -98,40 +92,9 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS0PubAuthError() {
-        // by pass
-        mockAuthCheck(Type.ERROR);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
-            s2cMessages("testTopic", 5, QoS.AT_MOST_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < 5; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
-        }
-        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED,
-            QOS0_PUSHED, QOS0_PUSHED);
-    }
-
-    @Test
-    public void qoS0PubAuthError2() {
-        // not by pass
-        mockAuthCheck(Type.ERROR);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
-            s2cMessages("testTopic", 5, QoS.AT_MOST_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < 5; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
-        }
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR);
-    }
-
-    @Test
     public void qoS0PubAuthFailed() {
         // not by pass
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         mockDistUnSub(true);
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_MOST_ONCE));
@@ -147,7 +110,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS0PubExceedBufferCapacity() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         List<ByteBuffer> payloads = s2cMessagesPayload(10, 32 * 1024);
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
             s2cMessages("testTopic", payloads, QoS.AT_MOST_ONCE));
@@ -168,7 +131,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS1PubAndAck() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 3;
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", messageCount, QoS.AT_LEAST_ONCE));
@@ -185,41 +148,9 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS1PubAuthError() {
-        // by pass
-        mockAuthCheck(Type.ERROR);
-        int messageCount = 5;
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
-            s2cMessages("testTopic", messageCount, QoS.AT_LEAST_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < messageCount; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
-        }
-        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED,
-            QOS1_PUSHED, QOS1_PUSHED);
-    }
-
-    @Test
-    public void qoS1PubAuthError2() {
-        // not by pass
-        mockAuthCheck(Type.ERROR);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
-            s2cMessages("testTopic", 5, QoS.AT_LEAST_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < 5; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
-        }
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR);
-    }
-
-    @Test
     public void qoS1PubAuthFailed() {
         // not by pass
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         mockDistUnSub(true);
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_LEAST_ONCE));
@@ -235,7 +166,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS1PubExceedBufferCapacity() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         List<ByteBuffer> payloads = s2cMessagesPayload(10, 32 * 1024);
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", payloads, QoS.AT_LEAST_ONCE));
@@ -256,7 +187,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS1PubAndNoAck() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 3;
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", messageCount, QoS.AT_LEAST_ONCE));
@@ -306,7 +237,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubAndPacketIdOverflow() {
         channel.freezeTime();
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 65535;
         int overFlowCount = 10;
         for (int i = 0; i < messageCount + overFlowCount; i++) {
@@ -340,7 +271,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS2PubAndRel() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 1;
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", messageCount, QoS.EXACTLY_ONCE));
@@ -363,41 +294,9 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS2PubAuthError() {
-        // by pass
-        mockAuthCheck(Type.ERROR);
-        int messageCount = 3;
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
-            s2cMessages("testTopic", messageCount, QoS.EXACTLY_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < messageCount; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
-        }
-        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED);
-    }
-
-    @Test
-    public void qoS2PubAuthError2() {
-        // not by pass
-        mockAuthCheck(Type.ERROR);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
-            s2cMessages("testTopic", 5, QoS.EXACTLY_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < 5; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
-        }
-        verifyEvent(3, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR);
-    }
-
-    @Test
     public void qoS2PubAuthFailed() {
         // not by pass
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         mockDistUnSub(true);
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", 5, QoS.EXACTLY_ONCE));
@@ -413,7 +312,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS2PubExceedBufferCapacity() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         List<ByteBuffer> payloads = s2cMessagesPayload(10, 32 * 1024);
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", payloads, QoS.EXACTLY_ONCE));
@@ -435,7 +334,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubAndNoRec() throws InterruptedException {
         channel.unfreezeTime();
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 1;
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", messageCount, QoS.EXACTLY_ONCE));
@@ -486,7 +385,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubAndPacketIdOverflow() {
         channel.freezeTime();
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 65535;
         int overFlowCount = 10;
         List<TopicMessagePack> messages = s2cMessageList("testTopic", messageCount + overFlowCount, QoS.EXACTLY_ONCE);
@@ -522,7 +421,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS2PubWithSameSourcePacketId() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 2;
         List<ByteBuffer> payloads = s2cMessagesPayload(messageCount, 1);
         List<TopicMessagePack.SenderMessagePack> messagesFromClient1 = Lists.newArrayList();

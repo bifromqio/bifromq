@@ -14,21 +14,15 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBSCRIPTION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
-import com.baidu.bifromq.type.ClientInfo;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +30,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
@@ -46,9 +39,9 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     @Test
     public void transientUnSub() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistUnSub(true);
-        channel.writeInbound( MQTTMessageUtils.qoSMqttUnSubMessages(3));
+        channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
         verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
@@ -57,9 +50,9 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     @Test
     public void transientMixedUnSubWithDistUnSubFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistUnSub(true, false, true);
-        channel.writeInbound( MQTTMessageUtils.qoSMqttUnSubMessages(3));
+        channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNull(unsubAckMessage);
         verifyEvent(1, CLIENT_CONNECTED);
@@ -68,9 +61,9 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     @Test
     public void persistentUnSub() {
         connectAndVerify(false);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistUnSub(true);
-        channel.writeInbound( MQTTMessageUtils.qoSMqttUnSubMessages(3));
+        channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
         verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
@@ -79,9 +72,9 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     @Test
     public void persistentMixedSubWithDistUnSubFailed() {
         connectAndVerify(false);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistUnSub(true, false, true);
-        channel.writeInbound( MQTTMessageUtils.qoSMqttUnSubMessages(3));
+        channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNull(unsubAckMessage);
         verifyEvent(1, CLIENT_CONNECTED);
@@ -120,37 +113,10 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     @Test
     public void unSubWithAuthFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.DISALLOW);
-        channel.writeInbound( MQTTMessageUtils.qoSMqttUnSubMessages(3));
+        mockAuthCheck(false);
+        channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNull(unsubAckMessage);
         verifyEvent(4, CLIENT_CONNECTED, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW);
     }
-
-    @Test
-    public void unSubWithAuthError() {
-        // auth error bypass
-        connectAndVerify(true);
-        mockAuthCheck(Type.ERROR);
-        mockDistUnSub(true);
-        channel.writeInbound( MQTTMessageUtils.qoSMqttUnSubMessages(3));
-        MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
-        Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, UNSUB_ACKED);
-    }
-
-    @Test
-    public void unSubWithAuthError2() {
-        // auth error not bypass
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        connectAndVerify(true);
-        mockAuthCheck(Type.ERROR);
-        channel.writeInbound( MQTTMessageUtils.qoSMqttUnSubMessages(3));
-        MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
-        Assert.assertNull(unsubAckMessage);
-        verifyEvent(4, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR);
-    }
-
-
 }

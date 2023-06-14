@@ -46,6 +46,14 @@
             <artifactId>bifromq-plugin-auth-provider</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-setting-provider</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-event-collector</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.reflections</groupId>
             <artifactId>reflections</artifactId>
         </dependency>

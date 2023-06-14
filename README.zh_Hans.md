@@ -81,7 +81,7 @@ BifroMQ 有三种部署模式：`单机模式(Standalone)`，`标准集群(Stand
 启动服务器：
 
 ```
-./standalone.sh start [-d] // -d 为守护进程模式，可选
+./standalone.sh start // 服务进程会在后台运行
 ```
 
 停止服务器：

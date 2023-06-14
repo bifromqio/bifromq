@@ -13,90 +13,103 @@
 
 package com.baidu.bifromq.plugin.authprovider;
 
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.plugin.authprovider.action.PubAction;
-import com.baidu.bifromq.plugin.authprovider.action.SubAction;
-import com.baidu.bifromq.plugin.authprovider.authdata.MQTTBasicAuth;
-import com.baidu.bifromq.plugin.authprovider.authdata.MQTTVer;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.authprovider.type.PubAction;
+import com.baidu.bifromq.plugin.authprovider.type.Reject;
+import com.baidu.bifromq.plugin.authprovider.type.SubAction;
+import com.baidu.bifromq.plugin.eventcollector.Event;
+import com.baidu.bifromq.plugin.eventcollector.EventType;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessControlError;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
-import org.pf4j.DefaultPluginManager;
 import org.pf4j.PluginManager;
 
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
 public class AuthProviderManagerTest {
     @Mock
+    PluginManager pluginManager;
+    @Mock
     private IAuthProvider mockProvider;
-
+    @Mock
+    private ISettingProvider settingProvider;
+    @Mock
+    private IEventCollector eventCollector;
     private ClientInfo clientInfo = ClientInfo.getDefaultInstance();
-    private AuthData mockAuthData = new MQTTBasicAuth().protocol(MQTTVer.MQTT3_1_1);
-    private AuthData authData = new MQTTBasicAuth().protocol(MQTTVer.MQTT3_1_1);
-
-    private PubAction mockActionInfo = new PubAction();
+    private MQTT3AuthData mockAuthData = MQTT3AuthData.newBuilder().build();
+    private MQTT3AuthData authData = MQTT3AuthData.newBuilder().build();
+    private MQTTAction mockActionInfo = MQTTAction.newBuilder().setPub(PubAction.getDefaultInstance()).build();
     private AuthProviderManager manager;
-    private PluginManager pluginManager;
 
     @Before
     public void setup() {
-        pluginManager = new DefaultPluginManager();
-        pluginManager.loadPlugins();
-        pluginManager.startPlugins();
-    }
-
-    @After
-    public void teardown() {
-        pluginManager.stopPlugins();
-        pluginManager.unloadPlugins();
+        when(pluginManager.getExtensions(IAuthProvider.class)).thenReturn(
+            Collections.singletonList(mockProvider));
     }
 
     @Test
     public void devOnlyMode() {
-        manager = new AuthProviderManager(null, pluginManager);
-        AuthResult result = manager.auth(authData).join();
-        assertEquals(AuthResult.Type.PASS, result.type());
-        assertEquals("DevOnly", ((AuthResult.Pass) result).trafficId);
+        when(pluginManager.getExtensions(IAuthProvider.class)).thenReturn(Collections.emptyList());
+        manager = new AuthProviderManager(null, pluginManager, settingProvider, eventCollector);
+        MQTT3AuthResult result = manager.auth(authData).join();
+        assertEquals(MQTT3AuthResult.TypeCase.OK, result.getTypeCase());
+        assertEquals("DevOnly", result.getOk().getTrafficId());
 
-        CheckResult checkResult = manager.check(ClientInfo.getDefaultInstance(), new SubAction()).join();
-        assertEquals(CheckResult.Type.ALLOW, checkResult.type());
-        checkResult = manager.check(ClientInfo.getDefaultInstance(), new SubAction()).join();
-        assertEquals(CheckResult.Type.ALLOW, checkResult.type());
+        boolean allow = manager.check(ClientInfo.getDefaultInstance(), MQTTAction.newBuilder()
+            .setSub(SubAction.getDefaultInstance()).build()).join();
+        assertTrue(allow);
+        allow = manager.check(ClientInfo.getDefaultInstance(), MQTTAction.newBuilder()
+            .setSub(SubAction.getDefaultInstance()).build()).join();
+        assertTrue(allow);
         manager.close();
     }
 
     @Test
     public void authPluginSpecified() {
-        manager = new AuthProviderManager(AuthProviderTestStub.class.getName(), pluginManager);
-        AuthProviderTestStub stub = (AuthProviderTestStub) manager.get();
-        stub.nextAuthResult = CompletableFuture.completedFuture(AuthResult.NO_PASS);
-        AuthResult result = manager.auth(authData).join();
-        assertEquals(AuthResult.Type.NO_PASS, result.type());
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.auth(authData)).thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+            .setReject(Reject.newBuilder()
+                .setCode(Reject.Code.BadPass)
+                .build()).build()));
+        MQTT3AuthResult result = manager.auth(authData).join();
+        assertEquals(MQTT3AuthResult.TypeCase.REJECT, result.getTypeCase());
+        assertEquals(Reject.Code.BadPass, result.getReject().getCode());
         manager.close();
     }
 
     @Test
     public void authPluginNotFound() {
         try {
-            manager = new AuthProviderManager("Fake", pluginManager);
+            manager = new AuthProviderManager("Fake", pluginManager, settingProvider, eventCollector);
             fail();
         } catch (Throwable e) {
             assertTrue(e instanceof IllegalArgumentException);
@@ -105,143 +118,197 @@ public class AuthProviderManagerTest {
 
     @Test
     public void authDelayedOK() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.auth(any(AuthData.class)))
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.supplyAsync(() -> {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                return AuthResult.NO_PASS;
+                return MQTT3AuthResult.newBuilder()
+                    .setReject(Reject.newBuilder()
+                        .setCode(Reject.Code.BadPass)
+                        .build())
+                    .build();
             }));
-        AuthResult result = manager.auth(mockAuthData).join();
-        assertEquals(AuthResult.Type.NO_PASS, result.type());
+        MQTT3AuthResult result = manager.auth(mockAuthData).join();
+        assertEquals(MQTT3AuthResult.TypeCase.REJECT, result.getTypeCase());
+        assertEquals(Reject.Code.BadPass, result.getReject().getCode());
         manager.close();
     }
 
     @Test
     public void authReturnError() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.auth(any(AuthData.class)))
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Intend Error")));
-        AuthResult result = manager.auth(mockAuthData).join();
-        assertEquals(AuthResult.Type.ERROR, result.type());
-        assertTrue(((AuthResult.Error) result).cause.getMessage().equals("Intend Error"));
+        MQTT3AuthResult result = manager.auth(mockAuthData).join();
+        assertEquals(MQTT3AuthResult.TypeCase.REJECT, result.getTypeCase());
+        assertEquals(Reject.Code.Error, result.getReject().getCode());
+        assertEquals("Intend Error", result.getReject().getReason());
         manager.close();
     }
 
     @Test
     public void authTimeout() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.auth(any(AuthData.class))).thenReturn(new CompletableFuture<>());
-        AuthResult result = manager.auth(mockAuthData).join();
-        assertEquals(AuthResult.Type.ERROR, result.type());
-        assertTrue(((AuthResult.Error) result).cause instanceof TimeoutException);
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.auth(any(MQTT3AuthData.class))).thenReturn(new CompletableFuture<>());
+        MQTT3AuthResult result = manager.auth(mockAuthData).join();
+        assertEquals(MQTT3AuthResult.TypeCase.REJECT, result.getTypeCase());
+        assertEquals(Reject.Code.Error, result.getReject().getCode());
+        assertEquals("java.util.concurrent.TimeoutException", result.getReject().getReason());
         manager.close();
     }
 
 
     @Test
     public void authThrottled() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.auth(any(AuthData.class))).thenReturn(new CompletableFuture<>());
-        List<CompletableFuture<AuthResult>> results = new ArrayList<>();
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.auth(any(MQTT3AuthData.class))).thenReturn(new CompletableFuture<>());
+        List<CompletableFuture<MQTT3AuthResult>> results = new ArrayList<>();
         await().pollDelay(Duration.ofMillis(5)).until(() -> {
-            results.add(manager.auth(new MQTTBasicAuth().protocol(MQTTVer.MQTT3_1_1).username("User_" +
-                ThreadLocalRandom.current().nextInt())));
-            return results.stream().anyMatch(result -> result.isDone() && AuthResult.Type.ERROR == result.join().type()
-                && ((AuthResult.Error) result.join()).cause instanceof ThrottledException);
+            results.add(manager.auth(
+                MQTT3AuthData.newBuilder().setUsername("User_" + ThreadLocalRandom.current().nextInt()).build()));
+            return results.stream()
+                .anyMatch(result -> result.isDone() && MQTT3AuthResult.TypeCase.REJECT == result.join().getTypeCase()
+                    && result.join().getReject().getReason().contains("throttled"));
         });
         manager.close();
     }
 
     @Test
     public void checkReturnOk() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.ALLOW));
-        CheckResult result = manager.check(clientInfo, mockActionInfo).join();
-        assertEquals(CheckResult.Type.ALLOW, result.type());
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(CompletableFuture.completedFuture(true));
+        boolean result = manager.check(clientInfo, mockActionInfo).join();
+        assertTrue(result);
         manager.close();
     }
 
     @Test
     public void checkReturnDelayedOk() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
             .thenReturn(CompletableFuture.supplyAsync(() -> {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                return CheckResult.ALLOW;
+                return true;
             }));
 
-        CheckResult result = manager.check(clientInfo, mockActionInfo).join();
-        assertEquals(CheckResult.Type.ALLOW, result.type());
+        boolean result = manager.check(clientInfo, mockActionInfo).join();
+        assertTrue(result);
         manager.close();
     }
 
 
     @Test
     public void checkReturnDelayedOkTest() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenAnswer((Answer<CompletableFuture<CheckResult>>) invocationOnMock ->
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenAnswer((Answer<CompletableFuture<Boolean>>) invocationOnMock ->
                 CompletableFuture.supplyAsync(() -> {
                     log.info("Checking");
-                    return CheckResult.ALLOW;
+                    return true;
                 }));
         int i = 0;
         while (i++ < 100) {
-            CheckResult result =
-                manager.check(ClientInfo.newBuilder().setUserId("abc" + i).build(), new PubAction()).join();
-            assertEquals(CheckResult.Type.ALLOW, result.type());
+            boolean result =
+                manager.check(ClientInfo.newBuilder().setUserId("abc" + i).build(), MQTTAction.newBuilder()
+                    .setPub(PubAction.getDefaultInstance())
+                    .build()).join();
+            assertTrue(result);
         }
         manager.close();
     }
 
 
     @Test
-    public void checkReturnError() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.error(new RuntimeException("Intend Error"))));
-        CheckResult result = manager.check(clientInfo, mockActionInfo).join();
-        assertEquals(CheckResult.Type.ERROR, result.type());
-        assertTrue(((CheckResult.Error) result).cause.getMessage().equals("Intend Error"));
-        manager.close();
+    public void checkReturnErrorAndNoPass() {
+        when(settingProvider.provide(ByPassPermCheckError, clientInfo)).thenReturn(false);
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Intend Error")));
+        assertFalse(manager.check(clientInfo, mockActionInfo).join());
+        ArgumentCaptor<Event<?>> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
+        verify(eventCollector).report(eventArgumentCaptor.capture());
+        assertEquals(EventType.ACCESS_CONTROL_ERROR, eventArgumentCaptor.getValue().type());
+        assertTrue(((AccessControlError) eventArgumentCaptor.getValue()).cause().getMessage().contains("Intend Error"));
     }
 
     @Test
-    public void checkTimeout() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.check(any(ClientInfo.class), any(ActionInfo.class))).thenReturn(new CompletableFuture<>());
-        CheckResult result = manager.check(clientInfo, mockActionInfo).join();
-        assertEquals(CheckResult.Type.ERROR, result.type());
-        assertTrue(((CheckResult.Error) result).cause instanceof TimeoutException);
-        manager.close();
+    public void checkReturnErrorAndPass() {
+        when(settingProvider.provide(ByPassPermCheckError, clientInfo)).thenReturn(true);
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Intend Error")));
+        assertTrue(manager.check(clientInfo, mockActionInfo).join());
+        ArgumentCaptor<Event<?>> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
+        verify(eventCollector).report(eventArgumentCaptor.capture());
+        assertEquals(EventType.ACCESS_CONTROL_ERROR, eventArgumentCaptor.getValue().type());
+    }
+
+    @Test
+    public void checkTimeoutAndPass() {
+        when(settingProvider.provide(ByPassPermCheckError, clientInfo)).thenReturn(true);
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(new CompletableFuture<>());
+        assertTrue(manager.check(clientInfo, mockActionInfo).join());
+        ArgumentCaptor<Event<?>> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
+    }
+
+    @Test
+    public void checkTimeoutAndNoPass() {
+        when(settingProvider.provide(ByPassPermCheckError, clientInfo)).thenReturn(false);
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(new CompletableFuture<>());
+        assertFalse(manager.check(clientInfo, mockActionInfo).join());
+
+        ArgumentCaptor<Event<?>> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
+        verify(eventCollector).report(eventArgumentCaptor.capture());
+        assertEquals(EventType.ACCESS_CONTROL_ERROR, eventArgumentCaptor.getValue().type());
+        assertTrue(((AccessControlError) eventArgumentCaptor.getValue()).cause() instanceof TimeoutException);
     }
 
     @Test
     public void checkThrottled() {
-        manager = new AuthProviderManager(mockProvider);
-        when(mockProvider.check(any(ClientInfo.class), any(ActionInfo.class))).thenReturn(new CompletableFuture<>());
-        List<CompletableFuture<CheckResult>> results = new ArrayList<>();
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class))).thenReturn(new CompletableFuture<>());
+        List<CompletableFuture<Boolean>> results = new ArrayList<>();
         await().pollDelay(Duration.ofMillis(5)).until(() -> {
             results.add(
-                manager.check(clientInfo, new PubAction().topic("Topic_" + ThreadLocalRandom.current().nextInt())));
-            return results.stream().anyMatch(result -> result.isDone() && CheckResult.Type.ERROR == result.join().type()
-                && ((CheckResult.Error) result.join()).cause instanceof ThrottledException);
+                manager.check(clientInfo, MQTTAction.newBuilder()
+                    .setPub(PubAction.newBuilder()
+                        .setTopic("Topic_" + ThreadLocalRandom.current().nextInt())
+                        .build())
+                    .build()));
+            return results.stream().anyMatch(CompletableFuture::isCompletedExceptionally);
         });
         manager.close();
     }
 
     @Test
     public void stop() {
-        manager = new AuthProviderManager(AuthProviderTestStub.class.getName(), pluginManager);
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
         manager.close();
         try {
             manager.auth(authData);
@@ -249,5 +316,8 @@ public class AuthProviderManagerTest {
         } catch (Throwable e) {
             assertTrue(e instanceof IllegalStateException);
         }
+    }
+
+    protected void verifyEvent(int count, EventType... types) {
     }
 }

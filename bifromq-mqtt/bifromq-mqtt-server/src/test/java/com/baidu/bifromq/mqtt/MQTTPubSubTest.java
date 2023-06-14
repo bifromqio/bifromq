@@ -25,10 +25,10 @@ import com.baidu.bifromq.mqtt.client.MqttMsg;
 import com.baidu.bifromq.mqtt.client.MqttResponse;
 import com.baidu.bifromq.mqtt.client.MqttTestAsyncClient;
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
-import com.baidu.bifromq.plugin.authprovider.ActionInfo;
-import com.baidu.bifromq.plugin.authprovider.AuthData;
-import com.baidu.bifromq.plugin.authprovider.AuthResult;
-import com.baidu.bifromq.plugin.authprovider.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
@@ -43,7 +43,6 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -58,13 +57,15 @@ public class MQTTPubSubTest extends MQTTTest {
     public void setup() {
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         super.setup();
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId(trafficId)
-                .userId(deviceKey)
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId(trafficId)
+                    .setUserId(deviceKey)
+                    .build())
                 .build()));
-        when(authProvider.check(any(ClientInfo.class), any(ActionInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.ALLOW));
+        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(CompletableFuture.completedFuture(true));
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -173,13 +174,13 @@ public class MQTTPubSubTest extends MQTTTest {
         Observable<MqttMsg> topicSub = subClient.subscribe(topic, 1);
 
         // publish qos0 and quick disconnect
-        CompletableFuture<CheckResult> checkFuture = new CompletableFuture<>();
-        when(authProvider.check(any(ClientInfo.class), any(ActionInfo.class))).thenReturn(checkFuture);
+        CompletableFuture<Boolean> checkFuture = new CompletableFuture<>();
+        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class))).thenReturn(checkFuture);
         pubClient.publish(topic, 0, ByteString.copyFromUtf8("hello"), false);
         pubClient.disconnect().join();
         pubClient.close();
         Thread.sleep(100); // delay a little bit
-        checkFuture.complete(CheckResult.ALLOW);
+        checkFuture.complete(true);
 
 
         MqttMsg msg = topicSub.blockingFirst();

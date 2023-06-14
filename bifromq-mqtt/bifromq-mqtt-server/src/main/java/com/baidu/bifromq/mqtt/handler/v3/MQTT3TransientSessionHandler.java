@@ -16,16 +16,12 @@ package com.baidu.bifromq.mqtt.handler.v3;
 import static com.baidu.bifromq.mqtt.inbox.util.InboxGroupKeyUtil.toInboxGroupKey;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.SubResult;
 import com.baidu.bifromq.dist.client.UnsubResult;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
-import com.baidu.bifromq.plugin.authprovider.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessControlError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SubPermissionCheckError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.PushEvent;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
@@ -130,53 +126,25 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
         String topicFilter = subInfo.getTopicFilter();
         QoS subQoS = subInfo.getSubQoS();
         cancelOnInactive(authProvider.check(clientInfo(), buildSubAction(topicFilter, subQoS)))
-            .thenAcceptAsync(checkResult -> {
-                switch (checkResult.type()) {
-                    case ERROR:
-                        eventCollector.report(getLocal(EventType.ACCESS_CONTROL_ERROR, AccessControlError.class)
-                            .clientInfo(clientInfo())
-                            .cause(((CheckResult.Error) checkResult).cause));
-                        boolean byPass = settingProvider.provide(ByPassPermCheckError, clientInfo());
-                        if (!byPass) {
-                            closeConnectionWithSomeDelay(
-                                getLocal(EventType.SUB_PERMISSION_CHECK_ERROR, SubPermissionCheckError.class)
-                                    .cause(((CheckResult.Error) checkResult).cause)
-                                    .topicFilter(topicFilter)
-                                    .subQoS(QoS.AT_MOST_ONCE)
-                                    .clientInfo(clientInfo()));
-                            break;
-                        }
-                        // fallthrough
-                    case ALLOW:
-                        long timestamp = HLC.INST.getPhysical();
-                        for (int i = 0; i < senderMsgPacks.size(); i++) {
-                            TopicMessagePack.SenderMessagePack senderMsgPack = senderMsgPacks.get(i);
-                            ClientInfo sender = senderMsgPack.getSender();
-                            List<Message> messages = senderMsgPack.getMessageList();
-                            for (int j = 0; j < messages.size(); j++) {
-                                Message message = messages.get(j);
-                                QoS finalQoS =
-                                    QoS.forNumber(Math.min(message.getPubQoS().getNumber(), subQoS.getNumber()));
-                                boolean flush = i + 1 == senderMsgPacks.size() && j + 1 == messages.size();
-                                switch (finalQoS) {
-                                    case AT_MOST_ONCE:
-                                        if (bufferCapacityHinter.hasCapacity()) {
-                                            if (sendQoS0TopicMessage(topic, message, false, flush, timestamp)) {
-                                                if (debugMode) {
-                                                    eventCollector.report(
-                                                        getLocal(EventType.QOS0_PUSHED, QoS0Pushed.class)
-                                                            .reqId(message.getMessageId())
-                                                            .isRetain(false)
-                                                            .sender(sender)
-                                                            .topic(topic)
-                                                            .matchedFilter(topicFilter)
-                                                            .size(message.getPayload().size())
-                                                            .clientInfo(clientInfo()));
-                                                }
-                                            } else {
+            .thenAcceptAsync(allow -> {
+                if (allow) {
+                    long timestamp = HLC.INST.getPhysical();
+                    for (int i = 0; i < senderMsgPacks.size(); i++) {
+                        TopicMessagePack.SenderMessagePack senderMsgPack = senderMsgPacks.get(i);
+                        ClientInfo sender = senderMsgPack.getSender();
+                        List<Message> messages = senderMsgPack.getMessageList();
+                        for (int j = 0; j < messages.size(); j++) {
+                            Message message = messages.get(j);
+                            QoS finalQoS =
+                                QoS.forNumber(Math.min(message.getPubQoS().getNumber(), subQoS.getNumber()));
+                            boolean flush = i + 1 == senderMsgPacks.size() && j + 1 == messages.size();
+                            switch (finalQoS) {
+                                case AT_MOST_ONCE:
+                                    if (bufferCapacityHinter.hasCapacity()) {
+                                        if (sendQoS0TopicMessage(topic, message, false, flush, timestamp)) {
+                                            if (debugMode) {
                                                 eventCollector.report(
-                                                    getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
-                                                        .reason(DropReason.ChannelClosed)
+                                                    getLocal(EventType.QOS0_PUSHED, QoS0Pushed.class)
                                                         .reqId(message.getMessageId())
                                                         .isRetain(false)
                                                         .sender(sender)
@@ -186,94 +154,100 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                                         .clientInfo(clientInfo()));
                                             }
                                         } else {
-                                            flush(true);
-                                            eventCollector.report(getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
-                                                .reason(DropReason.Overflow)
-                                                .reqId(message.getMessageId())
-                                                .isRetain(false)
-                                                .sender(sender)
-                                                .topic(topic)
-                                                .matchedFilter(topicFilter)
-                                                .size(message.getPayload().size())
-                                                .clientInfo(clientInfo()));
+                                            eventCollector.report(
+                                                getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                                                    .reason(DropReason.ChannelClosed)
+                                                    .reqId(message.getMessageId())
+                                                    .isRetain(false)
+                                                    .sender(sender)
+                                                    .topic(topic)
+                                                    .matchedFilter(topicFilter)
+                                                    .size(message.getPayload().size())
+                                                    .clientInfo(clientInfo()));
                                         }
-                                        break;
-                                    case AT_LEAST_ONCE:
-                                        if (bufferCapacityHinter.hasCapacity()) {
-                                            int messageId = sendQoS1TopicMessage(seqNum.incrementAndGet(),
-                                                topicFilter, topic, message, sender, false, flush, timestamp);
-                                            if (messageId < 0) {
-                                                log.error("MessageId exhausted");
-                                            }
-                                        } else {
-                                            flush(true);
-                                            eventCollector.report(getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)
-                                                .reason(DropReason.Overflow)
-                                                .reqId(message.getMessageId())
-                                                .isRetain(false)
-                                                .sender(sender)
-                                                .topic(topic)
-                                                .matchedFilter(topicFilter)
-                                                .size(message.getPayload().size())
-                                                .clientInfo(clientInfo()));
+                                    } else {
+                                        flush(true);
+                                        eventCollector.report(getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                                            .reason(DropReason.Overflow)
+                                            .reqId(message.getMessageId())
+                                            .isRetain(false)
+                                            .sender(sender)
+                                            .topic(topic)
+                                            .matchedFilter(topicFilter)
+                                            .size(message.getPayload().size())
+                                            .clientInfo(clientInfo()));
+                                    }
+                                    break;
+                                case AT_LEAST_ONCE:
+                                    if (bufferCapacityHinter.hasCapacity()) {
+                                        int messageId = sendQoS1TopicMessage(seqNum.incrementAndGet(),
+                                            topicFilter, topic, message, sender, false, flush, timestamp);
+                                        if (messageId < 0) {
+                                            log.error("MessageId exhausted");
                                         }
-                                        break;
-                                    case EXACTLY_ONCE:
-                                        if (bufferCapacityHinter.hasCapacity()) {
-                                            int messageId = sendQoS2TopicMessage(seqNum.incrementAndGet(),
-                                                topicFilter, topic, message, sender, false, flush, timestamp);
-                                            if (messageId < 0) {
-                                                log.error("MessageId exhausted");
-                                            }
-                                        } else {
-                                            flush(true);
-                                            eventCollector.report(getLocal(EventType.QOS2_DROPPED, QoS2Dropped.class)
-                                                .reason(DropReason.Overflow)
-                                                .reqId(message.getMessageId())
-                                                .isRetain(false)
-                                                .sender(sender)
-                                                .topic(topic)
-                                                .matchedFilter(topicFilter)
-                                                .size(message.getPayload().size())
-                                                .clientInfo(clientInfo()));
+                                    } else {
+                                        flush(true);
+                                        eventCollector.report(getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)
+                                            .reason(DropReason.Overflow)
+                                            .reqId(message.getMessageId())
+                                            .isRetain(false)
+                                            .sender(sender)
+                                            .topic(topic)
+                                            .matchedFilter(topicFilter)
+                                            .size(message.getPayload().size())
+                                            .clientInfo(clientInfo()));
+                                    }
+                                    break;
+                                case EXACTLY_ONCE:
+                                    if (bufferCapacityHinter.hasCapacity()) {
+                                        int messageId = sendQoS2TopicMessage(seqNum.incrementAndGet(),
+                                            topicFilter, topic, message, sender, false, flush, timestamp);
+                                        if (messageId < 0) {
+                                            log.error("MessageId exhausted");
                                         }
-                                        break;
-                                }
+                                    } else {
+                                        flush(true);
+                                        eventCollector.report(getLocal(EventType.QOS2_DROPPED, QoS2Dropped.class)
+                                            .reason(DropReason.Overflow)
+                                            .reqId(message.getMessageId())
+                                            .isRetain(false)
+                                            .sender(sender)
+                                            .topic(topic)
+                                            .matchedFilter(topicFilter)
+                                            .size(message.getPayload().size())
+                                            .clientInfo(clientInfo()));
+                                    }
+                                    break;
                             }
                         }
-                        break;
-                    case DISALLOW:
-                    default: {
-                        for (TopicMessagePack.SenderMessagePack senderMsgPack : senderMsgPacks) {
-                            for (Message message : senderMsgPack.getMessageList()) {
-                                PushEvent<?> dropEvent;
-                                switch (message.getPubQoS()) {
-                                    case AT_LEAST_ONCE ->
-                                        dropEvent = getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)
-                                            .reason(DropReason.NoSubPermission);
-                                    case EXACTLY_ONCE -> dropEvent = getLocal(EventType.QOS2_DROPPED, QoS2Dropped.class)
-                                        .reason(DropReason.NoSubPermission);
-                                    default -> dropEvent = getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
-                                        .reason(DropReason.NoSubPermission);
-                                }
-                                eventCollector.report(dropEvent
-                                    .reqId(message.getMessageId())
-                                    .isRetain(false)
-                                    .sender(senderMsgPack.getSender())
-                                    .topic(topic)
-                                    .matchedFilter(topicFilter)
-                                    .size(message.getPayload().size())
-                                    .clientInfo(clientInfo()));
-                            }
-                        }
-                        // just do unsub once
-                        submitBgTask(() -> doUnsubscribe(0, topicFilter)
-                            .thenAccept(
-                                v -> {
-                                })
-                        );
-                        break;
                     }
+                } else {
+                    for (TopicMessagePack.SenderMessagePack senderMsgPack : senderMsgPacks) {
+                        for (Message message : senderMsgPack.getMessageList()) {
+                            PushEvent<?> dropEvent;
+                            switch (message.getPubQoS()) {
+                                case AT_LEAST_ONCE -> dropEvent = getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)
+                                    .reason(DropReason.NoSubPermission);
+                                case EXACTLY_ONCE -> dropEvent = getLocal(EventType.QOS2_DROPPED, QoS2Dropped.class)
+                                    .reason(DropReason.NoSubPermission);
+                                default -> dropEvent = getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                                    .reason(DropReason.NoSubPermission);
+                            }
+                            eventCollector.report(dropEvent
+                                .reqId(message.getMessageId())
+                                .isRetain(false)
+                                .sender(senderMsgPack.getSender())
+                                .topic(topic)
+                                .matchedFilter(topicFilter)
+                                .size(message.getPayload().size())
+                                .clientInfo(clientInfo()));
+                        }
+                    }
+                    // just do unsub once
+                    submitBgTask(() -> doUnsubscribe(0, topicFilter).thenAccept(
+                        v -> {
+                        })
+                    );
                 }
             }, ctx.channel().eventLoop());
     }

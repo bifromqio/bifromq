@@ -25,7 +25,6 @@ import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
 
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
@@ -39,7 +38,7 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubRetain() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(RETAINED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
@@ -50,7 +49,7 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubRetainClear() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(CLEARED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
@@ -61,7 +60,7 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubRetainFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
@@ -72,13 +71,11 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubRetainFailed() {
         connectAndVerify(true);
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         verifyEvent(2, CLIENT_CONNECTED, MSG_RETAINED_ERROR);
     }
-
-
 }

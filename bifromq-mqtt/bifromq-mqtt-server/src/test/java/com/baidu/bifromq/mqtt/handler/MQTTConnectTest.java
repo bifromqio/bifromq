@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply.Result;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.AuthResult.Type;
+import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.ClientInfo;
@@ -65,7 +65,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
     @Test
     public void transientSessionWithInbox2() {
         // clear failed
-        mockAuth(Type.PASS);
+        mockAuthPass();
         mockSessionReg();
         when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
             .thenReturn(
@@ -86,7 +86,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
     @Test
     public void transientSessionClearSubError() {
         // clear failed
-        mockAuth(Type.PASS);
+        mockAuthPass();
         mockSessionReg();
         mockInboxDelete(true);
         mockInboxHas(true);
@@ -110,7 +110,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
     @Test
     public void persistentSessionCreateInboxError() {
         // create inbox failed
-        mockAuth(Type.PASS);
+        mockAuthPass();
         mockSessionReg();
         mockInboxHas(false);
         mockInboxCreate(false);
@@ -127,7 +127,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
     @Test
     public void persistentSessionCheckInboxError() {
         // create inbox failed
-        mockAuth(Type.PASS);
+        mockAuthPass();
         mockSessionReg();
         when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
             .thenReturn(
@@ -153,7 +153,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
 
     @Test
     public void authBanned() {
-        mockAuth(Type.BANNED);
+        mockAuthReject(Reject.Code.NotAuthorized, "");
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
@@ -161,40 +161,26 @@ public class MQTTConnectTest extends BaseMQTTTest {
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
         Assert.assertEquals(CONNECTION_REFUSED_NOT_AUTHORIZED, ackMessage.variableHeader().connectReturnCode());
-        verifyEvent(1, EventType.BANNED_CLIENT);
+        verifyEvent(1, EventType.NOT_AUTHORIZED_CLIENT);
     }
 
     @Test
     public void authNotPass() {
-        mockAuth(Type.NO_PASS);
+        mockAuthReject(Reject.Code.BadPass, "");
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         // verifications
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD, ackMessage.variableHeader().connectReturnCode());
-        verifyEvent(1, EventType.AUTH_FAILED_CLIENT);
+        Assert.assertEquals(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD,
+            ackMessage.variableHeader().connectReturnCode());
+        verifyEvent(1, EventType.UNAUTHENTICATED_CLIENT);
     }
 
     @Test
     public void authError() {
-        mockAuth(Type.ERROR);
-        MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
-        channel.writeInbound(connectMessage);
-        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
-        channel.runPendingTasks();
-        MqttConnAckMessage ackMessage = channel.readOutbound();
-        // verifications
-        Assert.assertEquals(CONNECTION_REFUSED_SERVER_UNAVAILABLE, ackMessage.variableHeader().connectReturnCode());
-        ArgumentCaptor<Event> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
-        verify(eventCollector, times(1)).report(eventArgumentCaptor.capture());
-        verifyEvent(1, EventType.AUTH_ERROR);
-    }
-
-    @Test
-    public void badAuthMethod() {
-        mockAuth(Type.BAD_AUTH_METHOD);
+        mockAuthReject(Reject.Code.Error, "");
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
@@ -209,7 +195,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
 
     @Test
     public void validWillTopic() {
-        mockAuth(Type.PASS);
+        mockAuthPass();
         mockSessionReg();
         mockInboxHas(false);
         MqttConnectMessage connectMessage = MQTTMessageUtils.qoSWillMqttConnectMessage(1, true);

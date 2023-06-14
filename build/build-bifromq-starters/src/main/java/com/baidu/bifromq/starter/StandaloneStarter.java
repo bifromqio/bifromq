@@ -127,11 +127,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
                 threadFactory("bg-task-executor-%d")), "bg-task-executor");
 
-        authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(), pluginMgr);
-
         eventCollectorMgr = new EventCollectorManager(pluginMgr);
 
         settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
+
+        authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(),
+            pluginMgr, settingProviderMgr, eventCollectorMgr);
 
         AgentHostOptions agentHostOpts = AgentHostOptions.builder().addr("127.0.0.1").port(freePort()).build();
         agentHost = IAgentHost.newInstance(agentHostOpts);

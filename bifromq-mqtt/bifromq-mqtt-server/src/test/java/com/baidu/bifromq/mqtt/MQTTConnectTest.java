@@ -26,11 +26,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
-import com.baidu.bifromq.plugin.authprovider.AuthData;
-import com.baidu.bifromq.plugin.authprovider.AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.Ok;
+import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthFailedClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.BannedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.InvalidWillTopic;
 import java.io.EOFException;
 import java.util.concurrent.CompletableFuture;
@@ -39,7 +41,6 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -64,11 +65,12 @@ public class MQTTConnectTest extends MQTTTest {
 
     @Test
     public void connectWithCleanSessionTrue() {
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId("testTraffic")
-                .userId("testUser")
-                .build()));
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId("testTraffic")
+                    .setUserId("testUser")
+                    .build()).build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
@@ -82,11 +84,12 @@ public class MQTTConnectTest extends MQTTTest {
 
     @Test
     public void connectWithCleanSessionFalse() {
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId("testTraffic")
-                .userId("testUser")
-                .build()));
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId("testTraffic")
+                    .setUserId("testUser")
+                    .build()).build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(false);
@@ -100,11 +103,12 @@ public class MQTTConnectTest extends MQTTTest {
 
     @Test
     public void testBadWillTopic() {
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId("testTraffic")
-                .userId("testUser")
-                .build()));
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId("testTraffic")
+                    .setUserId("testUser")
+                    .build()).build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setWill("$share/badwilltopic", new byte[] {}, 0, false);
@@ -123,8 +127,12 @@ public class MQTTConnectTest extends MQTTTest {
 
     @Test
     public void testUnauthenticated() {
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.NO_PASS));
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setReject(Reject.newBuilder()
+                    .setCode(Reject.Code.BadPass)
+                    .build())
+                .build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setMqttVersion(4);
@@ -133,13 +141,17 @@ public class MQTTConnectTest extends MQTTTest {
         MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
         assertEquals(REASON_CODE_FAILED_AUTHENTICATION, e.getReasonCode());
 
-        verify(eventCollector).report(argThat(event -> event instanceof AuthFailedClient));
+        verify(eventCollector).report(argThat(event -> event instanceof UnauthenticatedClient));
     }
 
     @Test
     public void testBanned() {
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.BANNED));
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setReject(Reject.newBuilder()
+                    .setCode(Reject.Code.NotAuthorized)
+                    .build())
+                .build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setMqttVersion(4);
@@ -148,14 +160,18 @@ public class MQTTConnectTest extends MQTTTest {
         MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
         assertEquals(REASON_CODE_NOT_AUTHORIZED, e.getReasonCode());
 
-        verify(eventCollector).report(argThat(event -> event instanceof BannedClient));
+        verify(eventCollector).report(argThat(event -> event instanceof NotAuthorizedClient));
     }
 
     @Test
     public void testAuthError() {
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture
-                .completedFuture(AuthResult.error(new RuntimeException("mocked auth error"))));
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setReject(Reject.newBuilder()
+                    .setCode(Reject.Code.Error)
+                    .setReason("mocked auth error")
+                    .build())
+                .build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setMqttVersion(4);

@@ -18,14 +18,14 @@ import lombok.ToString;
 
 @ToString(callSuper = true)
 public final class AuthError extends ChannelClosedEvent<AuthError> {
-    private Throwable cause;
+    private String reason;
 
-    public Throwable cause() {
-        return cause;
+    public String cause() {
+        return reason;
     }
 
-    public AuthError cause(Throwable cause) {
-        this.cause = cause;
+    public AuthError cause(String cause) {
+        this.reason = cause;
         return this;
     }
 
@@ -37,6 +37,6 @@ public final class AuthError extends ChannelClosedEvent<AuthError> {
     @Override
     public void clone(AuthError orig) {
         super.clone(orig);
-        this.cause = orig.cause;
+        this.reason = orig.reason;
     }
 }

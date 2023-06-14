@@ -69,10 +69,12 @@ public class MQTTServerStarter extends BaseStarter<MQTTServerConfig> {
         pluginMgr = new BifroMQPluginManager();
         pluginMgr.loadPlugins();
         pluginMgr.startPlugins();
-
-        authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(), pluginMgr);
         eventCollectorMgr = new EventCollectorManager(pluginMgr);
+
         settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
+
+        authProviderMgr =
+            new AuthProviderManager(config.getAuthProviderFQN(), pluginMgr, settingProviderMgr, eventCollectorMgr);
 
         agentHost = initAgentHost(config.getAgentHostConfig());
         log.info("Agent host started");

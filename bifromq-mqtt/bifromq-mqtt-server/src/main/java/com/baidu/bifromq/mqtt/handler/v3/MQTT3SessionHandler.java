@@ -37,7 +37,6 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildPubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildUnsubAction;
 import static com.baidu.bifromq.mqtt.utils.TopicUtil.parseTopicFilter;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.BAD_PACKET;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_CLIENT;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_SERVER;
@@ -57,7 +56,6 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATI
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACK_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACTION_DISALLOW;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_PERMISSION_CHECK_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_RECED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_REC_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
@@ -82,7 +80,6 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DIS
 import static com.baidu.bifromq.plugin.eventcollector.EventType.WILL_DISTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.WILL_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
@@ -107,9 +104,7 @@ import com.baidu.bifromq.mqtt.handler.event.ConnectionWillClose;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3Session;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
 import com.baidu.bifromq.mqtt.utils.TopicUtil;
-import com.baidu.bifromq.plugin.authprovider.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessControlError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.PubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.SubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.UnsubActionDisallow;
@@ -124,7 +119,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Inval
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Kicked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.PubPermissionCheckError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeUnsubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.Discard;
@@ -181,6 +175,7 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
@@ -419,51 +414,30 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 log.trace("Checking authorization of pub qos0 action: reqId={}, sessionId={}, topic={}", reqId,
                     userSessionId(clientInfo), topic);
                 authProvider.check(clientInfo(), buildPubAction(topic, QoS.AT_MOST_ONCE, isRetain))
-                    .thenComposeAsync(checkResult -> {
-                        log.trace("Checked authorization of pub qos0 action: reqId={}, sessionId={}, topic={}\n{}",
-                            reqId,
-                            userSessionId(clientInfo), topic, checkResult);
-                        switch (checkResult.type()) {
-                            case ERROR:
-                                eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
-                                    .clientInfo(clientInfo)
-                                    .cause(((CheckResult.Error) checkResult).cause));
-                                boolean byPass = settingProvider.provide(ByPassPermCheckError, clientInfo);
-                                if (!byPass) {
-                                    closeConnectionWithSomeDelay(getLocal(PUB_PERMISSION_CHECK_ERROR,
-                                        PubPermissionCheckError.class)
-                                        .cause(((CheckResult.Error) checkResult).cause)
-                                        .topic(topic)
-                                        .qos(QoS.AT_MOST_ONCE)
-                                        .retain(isRetain)
-                                        .clientInfo(clientInfo));
-                                    return DONE;
-                                }
-                                // fallthrough
-                                // treat error as allowed
-                            case ALLOW:
-                                return distQos0Message(reqId, topic, payload, isRetain);
-                            case DISALLOW:
-                            default: {
-                                log.trace("Unauthorized qos0 topic: reqId={}, sessionId={}, topic={}", reqId,
-                                    userSessionId(clientInfo), topic);
-                                eventCollector.report(getLocal(PUB_ACTION_DISALLOW, PubActionDisallow.class)
-                                    .isLastWill(false)
-                                    .topic(topic)
-                                    .qos(AT_MOST_ONCE)
-                                    .isRetain(isRetain)
-                                    .clientInfo(clientInfo));
-                                // either make a positive acknowledgement, according to the normal QoS rules,
-                                // or close the Network Connection[MQTT-3.3.5-2]
-                                // TODO: we choose close connection for now,
-                                // or introduce a setting to control the behavior?
-                                closeConnectionWithSomeDelay(getLocal(NO_PUB_PERMISSION, NoPubPermission.class)
-                                    .topic(topic)
-                                    .qos(QoS.AT_MOST_ONCE)
-                                    .retain(isRetain)
-                                    .clientInfo(clientInfo));
-                                return DONE;
-                            }
+                    .thenComposeAsync(allow -> {
+                        log.trace("Checked authorization of pub qos0 action: reqId={}, sessionId={}, topic={}:{}",
+                            reqId, userSessionId(clientInfo), topic, allow);
+                        if (allow) {
+                            return distQos0Message(reqId, topic, payload, isRetain);
+                        } else {
+                            log.trace("Unauthorized qos0 topic: reqId={}, sessionId={}, topic={}", reqId,
+                                userSessionId(clientInfo), topic);
+                            eventCollector.report(getLocal(PUB_ACTION_DISALLOW, PubActionDisallow.class)
+                                .isLastWill(false)
+                                .topic(topic)
+                                .qos(AT_MOST_ONCE)
+                                .isRetain(isRetain)
+                                .clientInfo(clientInfo));
+                            // either make a positive acknowledgement, according to the normal QoS rules,
+                            // or close the Network Connection[MQTT-3.3.5-2]
+                            // TODO: we choose close connection for now,
+                            // or introduce a setting to control the behavior?
+                            closeConnectionWithSomeDelay(getLocal(NO_PUB_PERMISSION, NoPubPermission.class)
+                                .topic(topic)
+                                .qos(QoS.AT_MOST_ONCE)
+                                .retain(isRetain)
+                                .clientInfo(clientInfo));
+                            return DONE;
                         }
                     }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release());
                 return;
@@ -471,26 +445,9 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 log.trace("Checking authorization of pub qos1 action: reqId={}, sessionId={}, topic={}", reqId,
                     userSessionId(clientInfo), topic);
                 cancelOnInactive(authProvider.check(clientInfo(),
-                    buildPubAction(topic, AT_LEAST_ONCE, isRetain))).thenComposeAsync(checkResult -> {
-                    switch (checkResult.type()) {
-                        case ERROR:
-                            eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
-                                .clientInfo(clientInfo)
-                                .cause(((CheckResult.Error) checkResult).cause));
-                            boolean byPass = settingProvider.provide(ByPassPermCheckError, clientInfo);
-                            if (!byPass) {
-                                closeConnectionWithSomeDelay(
-                                    getLocal(PUB_PERMISSION_CHECK_ERROR, PubPermissionCheckError.class)
-                                        .cause(
-                                            ((CheckResult.Error) checkResult).cause)
-                                        .topic(topic)
-                                        .qos(AT_LEAST_ONCE)
-                                        .retain(isRetain)
-                                        .clientInfo(clientInfo));
-                                return DONE;
-                            }
-                            // fallthrough
-                        case ALLOW: {
+                    buildPubAction(topic, AT_LEAST_ONCE, isRetain)))
+                    .thenComposeAsync(allow -> {
+                        if (allow) {
                             return distQos1Message(reqId, topic, payload, isRetain,
                                 mqttMessage.fixedHeader().isDup()).thenAcceptAsync(ok -> {
                                 if (!ok) {
@@ -522,9 +479,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                         .clientInfo(clientInfo));
                                 }
                             }, ctx.channel().eventLoop());
-                        }
-                        case DISALLOW:
-                        default: {
+                        } else {
                             log.trace("Unauthorized qos1 topic: reqId={}, sessionId={}, topic={}", reqId,
                                 userSessionId(clientInfo), topic);
                             eventCollector.report(getLocal(PUB_ACTION_DISALLOW, PubActionDisallow.class)
@@ -542,8 +497,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                 .clientInfo(clientInfo));
                             return DONE;
                         }
-                    }
-                }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release());
+                    }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release());
                 return;
             case EXACTLY_ONCE:
             default:
@@ -556,27 +510,9 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     mqttMessage.release();
                     return;
                 }
-                cancelOnInactive(authProvider.check(clientInfo(),
-                    buildPubAction(topic, QoS.EXACTLY_ONCE, isRetain))).thenComposeAsync(checkResult -> {
-                    switch (checkResult.type()) {
-                        case ERROR:
-                            eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
-                                .clientInfo(clientInfo)
-                                .cause(((CheckResult.Error) checkResult).cause));
-                            boolean byPass = settingProvider.provide(ByPassPermCheckError, clientInfo);
-                            if (!byPass) {
-                                closeConnectionWithSomeDelay(
-                                    getLocal(PUB_PERMISSION_CHECK_ERROR, PubPermissionCheckError.class)
-                                        .cause(
-                                            ((CheckResult.Error) checkResult).cause)
-                                        .topic(topic)
-                                        .qos(EXACTLY_ONCE)
-                                        .retain(isRetain)
-                                        .clientInfo(clientInfo));
-                                return DONE;
-                            }
-                            // fallthrough
-                        case ALLOW:
+                cancelOnInactive(authProvider.check(clientInfo(), buildPubAction(topic, QoS.EXACTLY_ONCE, isRetain)))
+                    .thenComposeAsync(allow -> {
+                        if (allow) {
                             return distQoS2Message(reqId, topic, payload, isRetain,
                                 mqttMessage.fixedHeader().isDup()).thenAcceptAsync(ok -> {
                                 if (!ok) {
@@ -608,8 +544,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                         .clientInfo(clientInfo));
                                 }
                             }, ctx.channel().eventLoop());
-                        case DISALLOW:
-                        default: {
+
+                        } else {
                             log.trace("Unauthorized qos2 topic: reqId={}, sessionId={}, topic={}", reqId,
                                 userSessionId(clientInfo), topic);
                             eventCollector.report(getLocal(PUB_ACTION_DISALLOW, PubActionDisallow.class)
@@ -629,8 +565,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                 .clientInfo(clientInfo));
                             return DONE;
                         }
-                    }
-                }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release());
+                    }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release());
         }
     }
 
@@ -645,7 +580,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 .clientInfo(clientInfo));
             return;
         }
-        int maxSubs = sessionCtx.settingsProvider.provide(MaxTopicFiltersPerSub, clientInfo);
+        int maxSubs = sessionCtx.settingProvider.provide(MaxTopicFiltersPerSub, clientInfo);
         if (topicSubscriptions.size() > maxSubs) {
             closeConnectionWithSomeDelay(getLocal(TOO_LARGE_SUBSCRIPTION, TooLargeSubscription.class)
                 .actual(topicSubscriptions.size())
@@ -697,7 +632,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     .clientInfo(clientInfo));
             return;
         }
-        int maxUnsubs = sessionCtx.settingsProvider.provide(MaxTopicFiltersPerSub, clientInfo);
+        int maxUnsubs = sessionCtx.settingProvider.provide(MaxTopicFiltersPerSub, clientInfo);
         if (topicFilters.size() > maxUnsubs) {
             closeConnectionWithSomeDelay(getLocal(TOO_LARGE_UNSUBSCRIPTION, TooLargeUnsubscription.class)
                 .max(maxUnsubs)
@@ -840,38 +775,25 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         return subs.stream()
             .map(topicSubscription -> cancelOnInactive(authProvider.check(clientInfo(),
                 buildSubAction(topicSubscription.topicName(),
-                    QoS.forNumber(topicSubscription.qualityOfService().value())))).thenComposeAsync(
-                checkResult -> {
-                    switch (checkResult.type()) {
-                        case ERROR:
-                            eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
-                                .clientInfo(clientInfo)
-                                .cause(((CheckResult.Error) checkResult).cause));
-                            boolean byPass = settingProvider.provide(ByPassPermCheckError, clientInfo);
-                            if (!byPass) {
+                    QoS.forNumber(topicSubscription.qualityOfService().value()))))
+                .thenComposeAsync(allow -> {
+                    if (allow) {
+                        return cancelOnInactive(doSubscribe(reqId, topicSubscription).thenCompose(qos -> {
+                            String topicFilter = parseTopicFilter(topicSubscription.topicName());
+                            if (Objects.requireNonNull(qos) == MqttQoS.FAILURE) {
                                 return CompletableFuture.completedFuture(MqttQoS.FAILURE);
                             }
-                            // fallthrough
-                        case ALLOW:
-                            return cancelOnInactive(doSubscribe(reqId, topicSubscription).thenCompose(qos -> {
-                                String topicFilter = parseTopicFilter(topicSubscription.topicName());
-                                switch (qos) {
-                                    case FAILURE:
-                                        return CompletableFuture.completedFuture(MqttQoS.FAILURE);
-                                    default:
-                                        return matchRetainMessages(reqId, topicFilter,
-                                            QoS.values()[qos.ordinal()]).thenApply(
-                                            ok -> ok ? qos : MqttQoS.FAILURE);
-                                }
-                            }));
-                        case DISALLOW:
-                        default: {
-                            eventCollector.report(getLocal(SUB_ACTION_DISALLOW, SubActionDisallow.class)
-                                .topicFilter(topicSubscription.topicName())
-                                .qos(QoS.forNumber(topicSubscription.qualityOfService().value()))
-                                .clientInfo(clientInfo));
-                            return CompletableFuture.completedFuture(MqttQoS.FAILURE);
-                        }
+                            return matchRetainMessages(reqId, topicFilter,
+                                QoS.values()[qos.ordinal()]).thenApply(
+                                ok -> ok ? qos : MqttQoS.FAILURE);
+                        }));
+
+                    } else {
+                        eventCollector.report(getLocal(SUB_ACTION_DISALLOW, SubActionDisallow.class)
+                            .topicFilter(topicSubscription.topicName())
+                            .qos(QoS.forNumber(topicSubscription.qualityOfService().value()))
+                            .clientInfo(clientInfo));
+                        return CompletableFuture.completedFuture(MqttQoS.FAILURE);
                     }
                 }, ctx.channel().eventLoop()))
             .collect(Collectors.toList());
@@ -881,31 +803,18 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
 
     private List<CompletableFuture<UnsubResult>> doUnsubscribe(long reqId, List<String> unsubs) {
         return unsubs.stream()
-            .map(unsub -> cancelOnInactive(
-                authProvider.check(clientInfo(), buildUnsubAction(unsub))).thenComposeAsync(checkResult -> {
-                switch (checkResult.type()) {
-                    case ERROR:
-                        log.warn("Check unsub permission error:{}",
-                            ((CheckResult.Error) checkResult).cause.getMessage());
-                        eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
-                            .clientInfo(clientInfo)
-                            .cause(((CheckResult.Error) checkResult).cause));
-                        boolean byPass = settingProvider.provide(ByPassPermCheckError, clientInfo);
-                        if (!byPass) {
-                            return CompletableFuture.completedFuture(UnsubResult.InternalError);
-                        }
-                        // fallthrough
-                    case ALLOW:
+            .map(unsub -> cancelOnInactive(authProvider.check(clientInfo(), buildUnsubAction(unsub)))
+                .thenComposeAsync(allow -> {
+                    if (allow) {
                         return cancelOnInactive(doUnsubscribe(reqId, unsub));
-                    case DISALLOW:
-                    default: {
+                    } else {
                         eventCollector.report(getLocal(UNSUB_ACTION_DISALLOW, UnsubActionDisallow.class)
                             .clientInfo(clientInfo)
                             .topicFilter(unsub));
                         return CompletableFuture.completedFuture(UnsubResult.InternalError);
+
                     }
-                }
-            }, ctx.channel().eventLoop()))
+                }, ctx.channel().eventLoop()))
             .collect(Collectors.toList());
     }
 
@@ -1447,29 +1356,18 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
 
     private CompletableFuture<Void> distWillMessage(WillMessage willMessage) {
         return authProvider.check(clientInfo(), buildPubAction(willMessage.topic, willMessage.qos, willMessage.retain))
-            .thenComposeAsync(checkResult -> {
-                switch (checkResult.type()) {
-                    case ERROR:
-                        eventCollector.report(getLocal(ACCESS_CONTROL_ERROR, AccessControlError.class)
-                            .clientInfo(clientInfo)
-                            .cause(((CheckResult.Error) checkResult).cause));
-                        boolean byPass = settingProvider.provide(ByPassPermCheckError, clientInfo);
-                        if (!byPass) {
-                            return DONE;
-                        }
-                        // fallthrough
-                    case ALLOW:
-                        long reqId = System.nanoTime();
-                        return allOf(distWillMessage(reqId, willMessage), retainWillMessage(reqId, willMessage));
-                    case DISALLOW:
-                    default:
-                        eventCollector.report(getLocal(PUB_ACTION_DISALLOW, PubActionDisallow.class)
-                            .isLastWill(true)
-                            .topic(willMessage.topic)
-                            .qos(willMessage.qos)
-                            .isRetain(willMessage.retain)
-                            .clientInfo(clientInfo));
-                        return DONE;
+            .thenComposeAsync(allow -> {
+                if (allow) {
+                    long reqId = System.nanoTime();
+                    return allOf(distWillMessage(reqId, willMessage), retainWillMessage(reqId, willMessage));
+                } else {
+                    eventCollector.report(getLocal(PUB_ACTION_DISALLOW, PubActionDisallow.class)
+                        .isLastWill(true)
+                        .topic(willMessage.topic)
+                        .qos(willMessage.qos)
+                        .isRetain(willMessage.retain)
+                        .clientInfo(clientInfo));
+                    return DONE;
                 }
             }, ctx.channel().eventLoop());
     }

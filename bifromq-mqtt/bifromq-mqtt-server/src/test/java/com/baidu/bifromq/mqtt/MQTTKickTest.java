@@ -21,12 +21,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
-import com.baidu.bifromq.plugin.authprovider.AuthData;
-import com.baidu.bifromq.plugin.authprovider.AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Kicked;
 import java.util.concurrent.CompletableFuture;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -39,10 +39,12 @@ public class MQTTKickTest extends MQTTTest {
         String deviceKey = "testDevice";
         String clientId = "testClient1";
 
-        when(authProvider.auth(any(AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(AuthResult.pass()
-                .trafficId(trafficId)
-                .userId(deviceKey)
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTrafficId(trafficId)
+                    .setUserId(deviceKey)
+                    .build())
                 .build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();

@@ -17,9 +17,9 @@ import com.baidu.bifromq.plugin.eventcollector.EventType;
 import lombok.ToString;
 
 @ToString(callSuper = true)
-public final class BannedClient extends ChannelClosedEvent<BannedClient> {
+public final class NotAuthorizedClient extends ChannelClosedEvent<NotAuthorizedClient> {
     @Override
     public EventType type() {
-        return EventType.BANNED_CLIENT;
+        return EventType.NOT_AUTHORIZED_CLIENT;
     }
 }

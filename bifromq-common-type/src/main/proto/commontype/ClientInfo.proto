@@ -8,11 +8,7 @@ option java_outer_classname = "ClientInfoProto";
 option optimize_for = SPEED;
 
 message MQTT3ClientInfo{
-  enum SubVer{
-    v3_1 = 0;
-    v3_1_1 = 1;
-  }
-  SubVer ver = 1;
+  bool isMQIsdp = 1; // MQIsdp is MQTT 3.1
   string clientId = 2;
   string clientAddress = 3;
   string channelId = 4;

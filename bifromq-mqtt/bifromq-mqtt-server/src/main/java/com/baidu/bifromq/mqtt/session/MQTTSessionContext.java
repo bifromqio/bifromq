@@ -18,11 +18,10 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
-import com.baidu.bifromq.plugin.authprovider.ActionInfo;
-import com.baidu.bifromq.plugin.authprovider.AuthData;
-import com.baidu.bifromq.plugin.authprovider.AuthResult;
-import com.baidu.bifromq.plugin.authprovider.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
@@ -49,7 +48,7 @@ public final class MQTTSessionContext {
     private final IAuthProvider authProvider;
     public final ILocalSessionRegistry localSessionRegistry;
     public final IEventCollector eventCollector;
-    public final ISettingProvider settingsProvider;
+    public final ISettingProvider settingProvider;
     public final IDistClient distClient;
     public final IInboxReaderClient inboxClient;
     public final IRetainServiceClient retainClient;
@@ -85,7 +84,7 @@ public final class MQTTSessionContext {
         this.serverId = brokerServer.id();
         this.authProvider = authProvider;
         this.eventCollector = eventCollector;
-        this.settingsProvider = settingProvider;
+        this.settingProvider = settingProvider;
         this.distClient = distClient;
         this.inboxClient = inboxClient;
         this.retainClient = retainClient;
@@ -104,7 +103,7 @@ public final class MQTTSessionContext {
                         value.close();
                     }
                 })
-            .build(clientInfo -> retainClient.open(clientInfo));
+            .build(retainClient::open);
         retainPplnNumGauge = Gauge.builder("mqtt.server.ppln.retain.gauge", clientRetainPipelines::estimatedSize)
             .register(Metrics.globalRegistry);
         this.bgTaskTracker = new FutureTracker();
@@ -118,31 +117,31 @@ public final class MQTTSessionContext {
     public IAuthProvider authProvider(ChannelHandlerContext ctx) {
         // a wrapper to ensure async fifo semantic for check call
         return new IAuthProvider() {
-            private final LinkedHashMap<CompletableFuture<CheckResult>, CompletableFuture<CheckResult>> checkTaskQueue =
+            private final LinkedHashMap<CompletableFuture<Boolean>, CompletableFuture<Boolean>> checkTaskQueue =
                 new LinkedHashMap<>();
 
             @Override
-            public <T extends AuthData<?>> CompletableFuture<AuthResult> auth(T authData) {
+            public CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData) {
                 return authProvider.auth(authData);
             }
 
             @Override
-            public <A extends ActionInfo<?>> CompletableFuture<CheckResult> check(ClientInfo clientInfo, A actionInfo) {
-                CompletableFuture<CheckResult> task = authProvider.check(clientInfo, actionInfo);
+            public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
+                CompletableFuture<Boolean> task = authProvider.check(client, action);
                 if (task.isDone()) {
                     return task;
                 } else {
                     // queue it for fifo semantic
-                    CompletableFuture<CheckResult> onDone = new CompletableFuture<>();
+                    CompletableFuture<Boolean> onDone = new CompletableFuture<>();
                     // in case authProvider returns same future object;
                     task = task.thenApply(v -> v);
                     checkTaskQueue.put(task, onDone);
                     task.whenCompleteAsync((_v, _e) -> {
-                        Iterator<CompletableFuture<CheckResult>> itr = checkTaskQueue.keySet().iterator();
+                        Iterator<CompletableFuture<Boolean>> itr = checkTaskQueue.keySet().iterator();
                         while (itr.hasNext()) {
-                            CompletableFuture<CheckResult> k = itr.next();
+                            CompletableFuture<Boolean> k = itr.next();
                             if (k.isDone()) {
-                                CompletableFuture<CheckResult> r = checkTaskQueue.get(k);
+                                CompletableFuture<Boolean> r = checkTaskQueue.get(k);
                                 try {
                                     r.complete(k.join());
                                 } catch (Throwable e) {

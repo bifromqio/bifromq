@@ -14,7 +14,6 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INBOX_TRANSIENT_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DROPPED;
@@ -26,8 +25,6 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_PERMISSION_CHECK_ERROR;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
@@ -45,7 +42,6 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.authprovider.CheckResult.Type;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -64,7 +60,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
@@ -85,7 +80,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS0Pub() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
@@ -97,44 +92,10 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         Assert.assertEquals(1, fetchHints.size());
     }
 
-
-    @Test
-    public void qoS0PubAuthError() {
-        // by pass
-        mockAuthCheck(Type.ERROR);
-        int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, QoS.AT_MOST_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < messageCount; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
-        }
-        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR,
-            QOS0_PUSHED,
-            QOS0_PUSHED, QOS0_PUSHED);
-    }
-
-    @Test
-    public void qoS0PubAuthError2() {
-        // not by pass
-        mockAuthCheck(Type.ERROR);
-        int messageCount = 3;
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        inboxFetchConsumer.accept(fetch(messageCount, 128, QoS.AT_MOST_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < messageCount; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
-        }
-        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR, ACCESS_CONTROL_ERROR,
-            ACCESS_CONTROL_ERROR);
-    }
-
     @Test
     public void qoS0PubAuthFailed() {
         // not by pass
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         mockDistUnSub(true);
         inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
@@ -149,7 +110,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS0PubAndHintChange() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         int messageCount = 2;
         inboxFetchConsumer.accept(fetch(messageCount, 64 * 1024, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
@@ -164,7 +125,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS1PubAndAck() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockInboxCommit(AT_LEAST_ONCE);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
@@ -183,7 +144,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS1PubAndNotAllAck() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockInboxCommit(AT_LEAST_ONCE);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
@@ -202,43 +163,9 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS1PubAuthError() {
-        // by pass
-        mockAuthCheck(Type.ERROR);
-        int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
-
-        channel.runPendingTasks();
-        for (int i = 0; i < messageCount; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
-        }
-        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR,
-            QOS1_PUSHED,
-            QOS1_PUSHED, QOS1_PUSHED);
-    }
-
-    @Test
-    public void qoS1PubAuthError2() {
-        // not by pass
-        mockAuthCheck(Type.ERROR);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < 5; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
-        }
-        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR, ACCESS_CONTROL_ERROR,
-            ACCESS_CONTROL_ERROR);
-    }
-
-    @Test
     public void qoS1PubAuthFailed() {
         // not by pass
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         mockDistUnSub(true);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
@@ -254,7 +181,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS2PubAndRel() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         mockInboxCommit(EXACTLY_ONCE);
         int messageCount = 2;
         inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
@@ -279,43 +206,9 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS2PubAuthError() {
-        // by pass
-        mockAuthCheck(Type.ERROR);
-        int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < messageCount; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
-        }
-        verifyEvent(7, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR, ACCESS_CONTROL_ERROR,
-            QOS2_PUSHED,
-            QOS2_PUSHED, QOS2_PUSHED);
-    }
-
-    @Test
-    public void qoS2PubAuthError2() {
-        // not by pass
-        mockAuthCheck(Type.ERROR);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(false);
-        int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
-        channel.runPendingTasks();
-        for (int i = 0; i < messageCount; i++) {
-            MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
-        }
-        verifyEvent(5, CLIENT_CONNECTED, ACCESS_CONTROL_ERROR, SUB_PERMISSION_CHECK_ERROR, ACCESS_CONTROL_ERROR,
-            ACCESS_CONTROL_ERROR);
-    }
-
-    @Test
     public void qoS2PubAuthFailed() {
         // not by pass
-        mockAuthCheck(Type.DISALLOW);
+        mockAuthCheck(false);
         mockDistUnSub(true);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
@@ -331,7 +224,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS2PubWithSameSourcePacketId() {
-        mockAuthCheck(Type.ALLOW);
+        mockAuthCheck(true);
         InboxMessage messagesFromClient1 = InboxMessage.newBuilder()
             .setTopicFilter("#")
             .setMsg(
