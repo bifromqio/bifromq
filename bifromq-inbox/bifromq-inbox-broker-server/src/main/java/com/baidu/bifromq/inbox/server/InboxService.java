@@ -14,8 +14,6 @@
 package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-import static com.baidu.bifromq.baseutils.FutureUtil.awaitDone;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -45,6 +43,7 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -55,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -86,7 +86,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final InboxCreateScheduler createScheduler;
     private final RateLimiter fetcherCreationLimiter;
     private final Duration touchIdle = Duration.ofMinutes(5);
-    private ScheduledFuture touchTask;
+    private ScheduledFuture<?> touchTask;
 
     InboxService(ISettingProvider settingProvider,
                  IBaseKVStoreClient kvStoreClient,
@@ -102,7 +102,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.bgTaskExecutorOwner = bgTaskExecutor == null;
         if (bgTaskExecutorOwner) {
             this.bgTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ScheduledThreadPoolExecutor(1, threadFactory("inboxservice-default-bg-executor")),
+                new ScheduledThreadPoolExecutor(1,
+                    new ThreadFactoryBuilder().setNameFormat("inboxservice-default-bg-executor").build()),
                 "inboxservice-default-bg-executor");
         } else {
             this.bgTaskExecutor = bgTaskExecutor;
@@ -186,7 +187,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             if (touchTask != null) {
                 touchTask.cancel(true);
-                awaitDone(touchTask);
+                try {
+                    if (!touchTask.isCancelled()) {
+                        touchTask.get();
+                    }
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Failed to stop touch task");
+                }
             }
             for (IInboxQueueFetcher fetcher : registry) {
                 fetcher.close();

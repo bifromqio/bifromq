@@ -237,7 +237,7 @@ public class MQTTServerStarter extends BaseStarter<MQTTServerConfig> {
         if (config.getLocalSessionServerConfig().getSslContextConfig().isEnableSSL()) {
             brokerBuilder = IMQTTBroker.sslBrokerBuilder()
                 .serverId(UUID.randomUUID().toString())
-                .rpcHost(config.getLocalSessionServerConfig().getHost())
+                .rpcBindAddr(config.getLocalSessionServerConfig().getHost())
                 .port(config.getLocalSessionServerConfig().getPort())
                 .crdtService(crdtService)
                 .trustCertsFile(loadFromConfDir(config.getLocalSessionServerConfig().getSslContextConfig()
@@ -249,7 +249,7 @@ public class MQTTServerStarter extends BaseStarter<MQTTServerConfig> {
         } else {
             brokerBuilder = IMQTTBroker.nonSSLBrokerBuilder()
                 .serverId(UUID.randomUUID().toString())
-                .rpcHost(config.getLocalSessionServerConfig().getHost())
+                .rpcBindAddr(config.getLocalSessionServerConfig().getHost())
                 .port(config.getLocalSessionServerConfig().getPort())
                 .crdtService(crdtService);
         }

@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,7 +37,6 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
@@ -70,6 +68,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
@@ -155,17 +154,20 @@ public abstract class DistWorkerTest {
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
 
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("query-executor-%d"));
+            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+            new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
         mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("mutation-executor-%d"));
-        tickTaskExecutor = new ScheduledThreadPoolExecutor(2, threadFactory("tick-task-executor-%d"));
-        bgTaskExecutor = new ScheduledThreadPoolExecutor(1, threadFactory("bg-task-executor-%d"));
+            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+            new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
+        tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
+            new ThreadFactoryBuilder().setNameFormat("tick-task-executor-%d").build());
+        bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
+            new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
 
         Metrics.globalRegistry.add(meterRegistry);
 
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(PortUtil.freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))

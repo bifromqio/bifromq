@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 
@@ -33,6 +32,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -76,13 +76,15 @@ public class KVRangeStoreTestCluster {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final KVRangeStoreOptions optionsTpl;
     private final ExecutorService queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("query-executor-%d"));
+        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+        new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
     private final ExecutorService mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("mutation-executor-%d"));
+        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+        new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
     private final ScheduledExecutorService tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-        threadFactory("tick-task-executor"));
+        new ThreadFactoryBuilder().setNameFormat("tick-task-executor").build());
     private final ScheduledExecutorService bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-        threadFactory("bg-task-executor-%d"));
+        new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
 
     private TemporaryFolder dbRootDir = new TemporaryFolder();
 

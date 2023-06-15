@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static com.baidu.bifromq.baseutils.FutureUtil.awaitDone;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
 
@@ -39,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Predicate;
 import lombok.AllArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -60,7 +60,7 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
     private final LongAdder writtenBytes = new LongAdder();
     private final Duration checkpointAge;
     private ScheduledExecutorService gcExecutor;
-    private volatile ScheduledFuture gcFuture;
+    private volatile ScheduledFuture<?> gcFuture;
 
     public InMemoryKVEngine(String overrideIdentity,
                             List<String> namespaces,
@@ -81,9 +81,7 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
             throw new IllegalArgumentException("Namespaces mustn't be empty");
         }
         Set<String> nsList = new HashSet<>(namespaces);
-        if (!nsList.contains(DEFAULT_NS)) {
-            nsList.add(DEFAULT_NS);
-        }
+        nsList.add(DEFAULT_NS);
         nsList.forEach(namespace -> {
             nsData.put(namespace, new ConcurrentSkipListMap<>(comparator));
             averageKVSizeMap.put(namespace, 0L);
@@ -103,12 +101,19 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
         log.debug("InMemoryKVEngine[{}] initialized", id());
     }
 
+    @SneakyThrows
     @Override
     protected void doStop() {
         log.debug("Stopping InMemoryKVEngine");
         if (gcFuture != null) {
             gcFuture.cancel(true);
-            awaitDone(gcFuture);
+            if (!gcFuture.isCancelled()) {
+                try {
+                    gcFuture.get();
+                } catch (Throwable e) {
+                    log.error("Error during stop gc task", e);
+                }
+            }
         }
     }
 

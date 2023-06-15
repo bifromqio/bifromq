@@ -13,8 +13,7 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -25,7 +24,7 @@ class SharedInflationExecutor {
         if (instance == null) {
             instance = new ScheduledThreadPoolExecutor(
                 Math.max(2, Runtime.getRuntime().availableProcessors() / 10),
-                threadFactory("shared-crdt-inflater-%d", true));
+                new ThreadFactoryBuilder().setNameFormat("shared-crdt-inflater-%d").setDaemon(true).build());
         }
         return instance;
     }

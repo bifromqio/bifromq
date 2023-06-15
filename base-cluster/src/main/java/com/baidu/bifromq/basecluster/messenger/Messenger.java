@@ -33,7 +33,6 @@ import io.reactivex.rxjava3.subjects.Subject;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -49,22 +48,16 @@ public class Messenger implements IMessenger {
     }
 
     private State state = State.INIT;
-
     // threshold for determine which transport to use
     private final MessengerTransport transport;
-
     private final CompositeDisposable disposables = new CompositeDisposable();
-
     private final InetSocketAddress localAddress;
-
     private final Gossiper gossiper;
-
     private final Subject<Timed<MessageEnvelope>> publisher =
         PublishSubject.<Timed<MessageEnvelope>>create().toSerialized();
 
     private final Scheduler scheduler;
     private final MessengerOptions opts;
-
     private final MetricManager metricManager;
 
     @Builder
@@ -75,13 +68,7 @@ public class Messenger implements IMessenger {
                       Scheduler scheduler,
                       MessengerOptions opts) {
         this.opts = opts.toBuilder().build();
-        this.localAddress = bindAddr;
         this.scheduler = scheduler;
-        this.gossiper = new Gossiper(localAddress.toString(),
-            opts.retransmitMultiplier(),
-            opts.spreadPeriod(),
-            this.scheduler);
-
         this.transport = new MessengerTransport(Transport.builder()
             .bindAddr(bindAddr)
             .serverSslContext(serverSslContext)
@@ -89,7 +76,17 @@ public class Messenger implements IMessenger {
             .sharedToken(clusterEnv)
             .options(opts.transporterOptions())
             .build());
+        this.localAddress = transport.bindAddress();
+        this.gossiper = new Gossiper(transport.bindAddress().toString(),
+            opts.retransmitMultiplier(),
+            opts.spreadPeriod(),
+            this.scheduler);
         this.metricManager = new MetricManager();
+    }
+
+    @Override
+    public InetSocketAddress bindAddress() {
+        return transport.bindAddress();
     }
 
     @Override
@@ -98,7 +95,7 @@ public class Messenger implements IMessenger {
         metricManager.msgSendCounters.get(message.getClusterMessageTypeCase()).increment();
         DirectMessage directMessage = DirectMessage.newBuilder().setPayload(message.toByteString()).build();
         MessengerMessage messengerMessage = MessengerMessage.newBuilder().setDirect(directMessage).build();
-        return transport.send(Arrays.asList(messengerMessage), recipient, reliable);
+        return transport.send(List.of(messengerMessage), recipient, reliable);
     }
 
     @Override
@@ -215,7 +212,7 @@ public class Messenger implements IMessenger {
                     log.trace("Received message: sender={}, message={}",
                         messengerMessageEnvelope.sender, clusterMessage);
                     metricManager.msgRecvCounters.get(clusterMessage.getClusterMessageTypeCase()).increment();
-                    publisher.onNext(new Timed(MessageEnvelope.builder()
+                    publisher.onNext(new Timed<>(MessageEnvelope.builder()
                         .message(clusterMessage)
                         .recipient(messengerMessageEnvelope.recipient)
                         .sender(messengerMessageEnvelope.sender)
@@ -237,7 +234,7 @@ public class Messenger implements IMessenger {
             ClusterMessage clusterMessage = ClusterMessage.parseFrom(confirmedGossip.value().getPayload());
             log.trace("Heard gossip: id={}, message={}", confirmedGossip.value().getMessageId(), clusterMessage);
             metricManager.gossipHeardCounters.get(clusterMessage.getClusterMessageTypeCase()).increment();
-            publisher.onNext(new Timed(MessageEnvelope.builder()
+            publisher.onNext(new Timed<>(MessageEnvelope.builder()
                 .message(clusterMessage)
                 .recipient(localAddress)
                 .build(),
@@ -252,7 +249,7 @@ public class Messenger implements IMessenger {
         log.error("Received unexpected error:", throwable);
     }
 
-    private class MetricManager {
+    private static class MetricManager {
         final Map<ClusterMessage.ClusterMessageTypeCase, Counter> msgSendCounters = Maps.newHashMap();
         final Map<ClusterMessage.ClusterMessageTypeCase, Counter> msgRecvCounters = Maps.newHashMap();
         final Map<ClusterMessage.ClusterMessageTypeCase, Counter> gossipGenCounters = Maps.newHashMap();

@@ -19,7 +19,6 @@ import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.combine;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
@@ -48,6 +47,7 @@ import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
@@ -82,13 +82,15 @@ public class KVRangeStoreTest {
     private IStoreMessenger messenger;
     private PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
     private ExecutorService queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("query-executor-%d"));
+        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+        new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
     private ExecutorService mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("mutation-executor-%d"));
+        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+        new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
     private ScheduledExecutorService tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-        threadFactory("tick-task-executor"));
+        new ThreadFactoryBuilder().setNameFormat("tick-task-executor").build());
     private ScheduledExecutorService bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-        threadFactory("bg-task-executor-%d"));
+        new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
 
     @Rule
     public TemporaryFolder dbRootDir = new TemporaryFolder();

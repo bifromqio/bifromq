@@ -37,6 +37,10 @@ final class MessengerTransport {
         this.transport = transport;
     }
 
+    InetSocketAddress bindAddress() {
+        return transport.bindAddress();
+    }
+
     CompletableFuture<Void> send(List<MessengerMessage> messengerMessages,
                                  InetSocketAddress recipient,
                                  boolean forceTCP) {

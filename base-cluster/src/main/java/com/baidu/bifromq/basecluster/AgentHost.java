@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basecluster;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.github.benmanes.caffeine.cache.Scheduler.systemScheduler;
 
 import com.baidu.bifromq.basecluster.fd.FailureDetector;
@@ -37,6 +36,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
@@ -61,7 +61,7 @@ final class AgentHost implements IAgentHost {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final AgentHostOptions options;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(
-        threadFactory("agent-host-scheduler", true));
+        new ThreadFactoryBuilder().setNameFormat("agent-host-scheduler").setDaemon(true).build());
     private final Scheduler scheduler = Schedulers.from(executor);
     private final ICRDTStore store;
     private final IMessenger messenger;
@@ -75,6 +75,7 @@ final class AgentHost implements IAgentHost {
     private final LoadingCache<HostEndpoint, InetSocketAddress> hostAddressCache;
 
     AgentHost(AgentHostOptions options) {
+        Preconditions.checkArgument(!"0.0.0.0".equals(options.addr()), "Invalid bind address");
         this.options = options.toBuilder().build();
         this.store = ICRDTStore.newInstance(options.crdtStoreOptions());
         MessengerOptions messengerOptions = new MessengerOptions();
@@ -104,8 +105,8 @@ final class AgentHost implements IAgentHost {
         this.store.start(messenger.receive()
             .filter(m -> m.value().message.hasCrdtStoreMessage())
             .map(m -> m.value().message.getCrdtStoreMessage()));
-        this.memberList = new HostMemberList(options.addr(), options.port(), messenger, scheduler, store,
-            hostAddressCache::get);
+        this.memberList = new HostMemberList(options.addr(), messenger.bindAddress().getPort(),
+            messenger, scheduler, store, hostAddressCache::get);
         this.failureDetector = FailureDetector.builder()
             .local(new IProbingTarget() {
                 @Override

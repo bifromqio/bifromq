@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
@@ -29,6 +28,7 @@ import com.baidu.bifromq.baserpc.proto.LoadAssignment;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
 import com.baidu.bifromq.baserpc.proto.TrafficDirective;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.reactivex.rxjava3.core.Observable;
@@ -47,7 +47,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 abstract class RPCServiceAnnouncer {
     private static final Scheduler RPC_SHARED_SCHEDULER =
-        Schedulers.from(newSingleThreadExecutor(threadFactory("RPC-Service-Cluster-CRDT")));
+        Schedulers.from(
+            newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("RPC-Service-Cluster-CRDT").build()));
     private static final ByteString SERVER_LIST_KEY = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString TRAFFIC_DIRECTIVE_KEY = ByteString.copyFrom(new byte[] {0x01});
 

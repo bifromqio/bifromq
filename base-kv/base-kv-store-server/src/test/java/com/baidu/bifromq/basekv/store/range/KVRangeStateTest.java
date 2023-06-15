@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.store.range;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
@@ -36,6 +35,7 @@ import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -61,7 +61,8 @@ public class KVRangeStateTest {
 
     @Before
     public void setup() {
-        bgMgmtTaskExecutor = newSingleThreadScheduledExecutor(threadFactory("Checkpoint GC"));
+        bgMgmtTaskExecutor =
+            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
         if (!isDevEnv()) {
             configurator = new InMemoryKVEngineConfigurator();
         } else {

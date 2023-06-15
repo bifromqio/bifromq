@@ -19,7 +19,6 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.google.common.base.Preconditions;
 import io.netty.channel.EventLoopGroup;
@@ -166,10 +165,10 @@ public abstract class InboxStoreBuilder<T extends InboxStoreBuilder> {
         }
     }
 
-    abstract static class InterProcInboxStoreBuilder<T extends InterProcInboxStoreBuilder>
+    abstract static class InterProcInboxStoreBuilder<T extends InterProcInboxStoreBuilder<?>>
         extends InboxStoreBuilder<T> {
         protected String bindAddr;
-        protected int bindPort = PortUtil.freePort();
+        protected int bindPort;
         protected EventLoopGroup bossEventLoopGroup;
         protected EventLoopGroup workerEventLoopGroup;
 

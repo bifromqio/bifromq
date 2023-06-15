@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
@@ -25,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import java.nio.ByteBuffer;
@@ -53,7 +53,8 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
 
     @Before
     public void setup() {
-        bgTaskExecutor = newSingleThreadScheduledExecutor(threadFactory("Checkpoint GC"));
+        bgTaskExecutor =
+            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
         start();
     }
 

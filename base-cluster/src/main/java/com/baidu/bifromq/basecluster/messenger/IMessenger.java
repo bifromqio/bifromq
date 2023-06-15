@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface IMessenger {
+    InetSocketAddress bindAddress();
     CompletableFuture<Void> send(ClusterMessage message, InetSocketAddress recipient, boolean reliable);
 
     /**

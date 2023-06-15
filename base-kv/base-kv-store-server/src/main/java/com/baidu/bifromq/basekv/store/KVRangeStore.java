@@ -19,7 +19,6 @@ import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.RANGE_NOT_FOUND;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
-import static com.baidu.bifromq.baseutils.FutureUtil.awaitDone;
 import static java.util.Collections.emptyList;
 
 import com.baidu.bifromq.basehlc.HLC;
@@ -98,7 +97,7 @@ public class KVRangeStore implements IKVRangeStore {
     private final Executor queryExecutor;
     private final Executor mutationExecutor;
     private final ScheduledExecutorService tickExecutor;
-    private volatile ScheduledFuture tickFuture;
+    private volatile ScheduledFuture<?> tickFuture;
     private final ScheduledExecutorService bgTaskExecutor;
     private final AsyncRunner rangeMgmtTaskRunner;
     private final KVRangeStoreOptions opts;
@@ -179,8 +178,7 @@ public class KVRangeStore implements IKVRangeStore {
                 log.debug("Stop KVRange store[{}]", id);
                 CompletableFuture.allOf(kvRangeMap.values().stream()
                         .map(IKVRange::close)
-                        .collect(Collectors.toList())
-                        .toArray(new CompletableFuture[0]))
+                        .toArray(CompletableFuture[]::new))
                     .join();
                 disposable.dispose();
                 storeStatsCollector.stop().toCompletableFuture().join();
@@ -192,11 +190,11 @@ public class KVRangeStore implements IKVRangeStore {
                 descriptorListSubject.onComplete();
                 status.set(Status.CLOSED);
                 status.set(Status.TERMINATING);
-                awaitDone(tickFuture);
-                messenger.close();
+                tickFuture.get();
             } catch (Throwable e) {
                 log.error("Error occurred during stopping range store", e);
             } finally {
+                messenger.close();
                 status.set(Status.TERMINATED);
             }
         }

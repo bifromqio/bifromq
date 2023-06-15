@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.starter;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -47,6 +45,7 @@ import com.baidu.bifromq.sessiondict.server.ISessionDictionaryServer;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.io.IOException;
@@ -106,26 +105,30 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         ioClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getIoClientParallelism(), config.getIoClientParallelism(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("io-client-executor-%d")),
+                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("io-client-executor-%d").build()),
             "io-client-executor");
         ioServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getIoServerParallelism(), config.getIoServerParallelism(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("io-server-executor-%d")),
+                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("io-server-executor-%d").build()),
             "io-server-executor");
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getQueryThreads(), config.getQueryThreads(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("query-executor-%d")),
+                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build()),
             "query-executor");
         mutationExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getMutationThreads(), config.getMutationThreads(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("mutation-executor-%d")),
+                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build()),
             "mutation-executor");
         tickTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getTickerThreads(),
-                threadFactory("tick-task-executor-%d")), "tick-task-executor");
+                new ThreadFactoryBuilder().setNameFormat("tick-task-executor-%d").build()), "tick-task-executor");
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
-                threadFactory("bg-task-executor-%d")), "bg-task-executor");
+                new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build()), "bg-task-executor");
 
         eventCollectorMgr = new EventCollectorManager(pluginMgr);
 

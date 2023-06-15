@@ -20,7 +20,6 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
@@ -33,7 +32,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.NonNull;
 
-public abstract class DistWorkerBuilder<T extends DistWorkerBuilder> {
+public abstract class DistWorkerBuilder<T extends DistWorkerBuilder<?>> {
     protected IAgentHost agentHost;
     protected ICRDTService crdtService;
     protected IEventCollector eventCollector;
@@ -43,7 +42,7 @@ public abstract class DistWorkerBuilder<T extends DistWorkerBuilder> {
     protected ISettingProvider settingProvider;
     protected IInboxBrokerManager inboxBrokerManager;
     protected KVRangeStoreOptions kvRangeStoreOptions;
-    protected KVRangeBalanceControllerOptions balanceControllerOptions;
+    protected KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     protected Duration statsInterval = Duration.ofSeconds(30);
     protected Duration gcInterval = Duration.ofMinutes(5);
     protected Executor ioExecutor;
@@ -185,10 +184,10 @@ public abstract class DistWorkerBuilder<T extends DistWorkerBuilder> {
         }
     }
 
-    abstract static class InterProcDistWorkerBuilder<T extends InterProcDistWorkerBuilder>
+    abstract static class InterProcDistWorkerBuilder<T extends InterProcDistWorkerBuilder<?>>
         extends DistWorkerBuilder<T> {
         protected String bindAddr;
-        protected int bindPort = PortUtil.freePort();
+        protected int bindPort;
         protected EventLoopGroup bossEventLoopGroup;
         protected EventLoopGroup workerEventLoopGroup;
 

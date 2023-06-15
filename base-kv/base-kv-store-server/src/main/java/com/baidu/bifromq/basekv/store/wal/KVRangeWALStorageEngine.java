@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
@@ -30,6 +29,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -79,7 +79,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
         flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(), threadFactory("wal-flusher")),
+                new LinkedBlockingQueue<>(), new ThreadFactoryBuilder().setNameFormat("wal-flusher").build()),
             "basekv[" + kvEngine.id() + "]-wal-flusher");
         metricMgr = new MetricManager(kvEngine.id());
     }

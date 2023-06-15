@@ -27,7 +27,6 @@ import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.rpc.proto.ClearSubInfoReply;
@@ -107,7 +106,6 @@ public class DistWorkerState {
     public DistWorkerState() {
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(PortUtil.freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))

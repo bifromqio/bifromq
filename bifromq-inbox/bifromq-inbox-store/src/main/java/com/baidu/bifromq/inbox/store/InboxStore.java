@@ -14,7 +14,6 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
@@ -28,6 +27,7 @@ import com.baidu.bifromq.inbox.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Clock;
@@ -95,7 +95,7 @@ abstract class InboxStore implements IInboxStore {
             jobExecutor = ExecutorServiceMetrics
                 .monitor(Metrics.globalRegistry,
                     new ScheduledThreadPoolExecutor(1,
-                        threadFactory("inbox-store-job-executor-%d")),
+                        new ThreadFactoryBuilder().setNameFormat("inbox-store-job-executor-%d").build()),
                     CLUSTER_NAME + "-job-executor");
         } else {
             jobExecutor = bgTaskExecutor;

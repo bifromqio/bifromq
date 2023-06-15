@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.starter;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.forkJoinThreadFactory;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
@@ -35,13 +32,16 @@ import com.baidu.bifromq.starter.config.DistWorkerConfig;
 import com.baidu.bifromq.starter.config.model.RPCClientConfig;
 import com.baidu.bifromq.starter.config.model.StoreClientConfig;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
 
@@ -75,14 +75,23 @@ public class DistWorkerStarter extends BaseEngineStarter<DistWorkerConfig> {
     @Override
     protected void init(DistWorkerConfig config) {
         bootstrap = config.isBootstrap();
+
         pushExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry,
-                new ForkJoinPool(config.getPushIOThreads(),
-                    forkJoinThreadFactory("push-io-executor-%d"),
-                    null, true), "push-io-executor");
+                new ForkJoinPool(config.getPushIOThreads(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {
+                    final AtomicInteger index = new AtomicInteger(0);
+
+                    @Override
+                    public ForkJoinWorkerThread newThread(ForkJoinPool pool) {
+                        ForkJoinWorkerThread worker = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
+                        worker.setName(String.format("push-io-executor-%d", index.incrementAndGet()));
+                        worker.setDaemon(false);
+                        return worker;
+                    }
+                }, null, true), "push-io-executor");
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
-                threadFactory("bg-job-executor-%d")), "bgTaskExecutor");
+                new ThreadFactoryBuilder().setNameFormat("bg-job-executor-%d").build()), "bgTaskExecutor");
         pluginMgr = new BifroMQPluginManager();
         pluginMgr.loadPlugins();
         pluginMgr.startPlugins();

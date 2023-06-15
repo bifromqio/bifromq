@@ -142,21 +142,23 @@ public final class TCPTransport extends AbstractTransport {
     private final AtomicInteger nextChannelKey = new AtomicInteger(0);
     private final Bootstrap clientBootstrap;
     private final ChannelFuture tcpListeningChannel;
+    private final InetSocketAddress localAddress;
 
     @Builder
     TCPTransport(String sharedToken, InetSocketAddress bindAddr, SslContext serverSslContext,
                  SslContext clientSslContext, TCPTransportOptions opts) {
-        super(sharedToken, bindAddr);
+        super(sharedToken);
         try {
             Preconditions.checkArgument(opts.connTimeoutInMS > 0, "connTimeoutInMS must be a positive number");
             Preconditions.checkArgument(opts.maxBufferSizeInBytes > 0,
                 "maxBufferSizeInBytes must be a positive number");
             Preconditions.checkArgument(opts.maxChannelsPerHost > 0, "maxChannelsPerHost must be a positive number");
-            log.debug("Creating tcp transport: bindAddr={}", bindAddr);
             this.opts = opts.toBuilder().build();
             elg = NettyUtil.getEventLoopGroup(4, "TCP-Transport-ELG");
             clientBootstrap = setupTcpClient(clientSslContext);
             tcpListeningChannel = setupTcpServer(bindAddr, serverSslContext);
+            localAddress = (InetSocketAddress) tcpListeningChannel.channel().localAddress();
+            log.debug("Creating tcp transport: bindAddr={}", localAddress);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize tcp transport", e);
         }
@@ -214,6 +216,11 @@ public final class TCPTransport extends AbstractTransport {
             })
             .bind()
             .sync();
+    }
+
+    @Override
+    public InetSocketAddress bindAddress() {
+        return (InetSocketAddress) tcpListeningChannel.channel().localAddress();
     }
 
     @Override

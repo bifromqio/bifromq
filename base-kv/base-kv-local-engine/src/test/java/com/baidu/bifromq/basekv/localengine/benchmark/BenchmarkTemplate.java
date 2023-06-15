@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.localengine.benchmark;
 
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.lang.Math.max;
 import static java.lang.Runtime.getRuntime;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
@@ -23,6 +22,7 @@ import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -73,7 +73,8 @@ public abstract class BenchmarkTemplate {
         String DB_NAME = "testDB";
         String DB_CHECKPOINT_DIR = "testDB_cp";
         String uuid = UUID.randomUUID().toString();
-        bgTaskExecutor = newSingleThreadScheduledExecutor(threadFactory("Checkpoint GC"));
+        bgTaskExecutor =
+            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
         RocksDBKVEngineConfigurator configurator = new RocksDBKVEngineConfigurator(new RocksDBKVEngineConfigurator
             .DBOptionsConfigurator() {
             @Override

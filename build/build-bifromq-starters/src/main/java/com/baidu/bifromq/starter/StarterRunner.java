@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter;
 
+import com.baidu.bifromq.starter.config.StarterConfig;
 import java.io.File;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.cli.CommandLine;
@@ -24,8 +25,12 @@ import org.apache.commons.cli.Options;
 
 @Slf4j
 public class StarterRunner {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler(
+            (t, e) -> log.error("Caught an exception in thread[{}]", t.getName(), e));
+    }
 
-    public static void run(Class<? extends BaseStarter> starterClazz, String[] args) {
+    public static <T extends StarterConfig, S extends BaseStarter<T>> void run(Class<S> starterClazz, String[] args) {
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         try {
@@ -34,7 +39,7 @@ public class StarterRunner {
             if (!confFile.exists()) {
                 throw new RuntimeException("Conf file does not exist: " + cmd.getOptionValue("c"));
             }
-            BaseStarter starter = starterClazz.getDeclaredConstructor().newInstance();
+            BaseStarter<T> starter = starterClazz.getDeclaredConstructor().newInstance();
             starter.init(starter.buildConfig(confFile));
             starter.start();
             Thread shutdownThread = new Thread(starter::stop);

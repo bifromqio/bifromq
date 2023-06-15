@@ -50,7 +50,7 @@ public class AgentHostOptions {
     /**
      * The advertised port
      */
-    private int port;
+    private int port = 0;
 
     /**
      * The sslContext to build TLS transport

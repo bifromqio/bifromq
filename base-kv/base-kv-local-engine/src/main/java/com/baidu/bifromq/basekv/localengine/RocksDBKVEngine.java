@@ -15,8 +15,6 @@ package com.baidu.bifromq.basekv.localengine;
 
 import static com.baidu.bifromq.basekv.localengine.RangeUtil.compare;
 import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
-import static com.baidu.bifromq.baseutils.FutureUtil.awaitDone;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFrom;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
@@ -34,6 +32,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -107,7 +106,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     private final File dbRootDir;
     private final File dbCheckPointRootDir;
     private Checkpoint checkpoint;
-    private ScheduledFuture gcTask;
+    private ScheduledFuture<?> gcTask;
     private ScheduledExecutorService bgTaskExecutor;
 
     RocksDBKVEngine(String overrideIdentity,
@@ -394,7 +393,13 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         openedCheckpoints.invalidateAll();
         if (gcTask != null) {
             gcTask.cancel(true);
-            awaitDone(gcTask);
+            try {
+                if (!gcTask.isCancelled()) {
+                    gcTask.get();
+                }
+            } catch (Throwable e) {
+                log.error("Failed to stop gc task");
+            }
         }
         log.debug("Waiting for compaction task[{}] finish", compactionTasks.size());
         CompletableFuture.allOf(compactionTasks.values().toArray(new CompletableFuture[0]))
@@ -463,7 +468,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             try {
                 bgTaskExecutor.execute(compact);
             } catch (RejectedExecutionException ree) {
-                ExecutorService fallbackExecutor = newSingleThreadExecutor(threadFactory("fallback-executor"));
+                ExecutorService fallbackExecutor =
+                    newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("fallback-executor").build());
                 fallbackExecutor.execute(() -> {
                     compact.run();
                     fallbackExecutor.shutdown();

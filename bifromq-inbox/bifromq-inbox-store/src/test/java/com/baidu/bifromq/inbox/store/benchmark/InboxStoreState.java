@@ -34,7 +34,6 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateReply;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
@@ -101,7 +100,6 @@ abstract class InboxStoreState {
         String uuid = UUID.randomUUID().toString();
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(PortUtil.freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))

@@ -223,7 +223,6 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
 
     static class InterProcRPCServer extends RPCServer {
         private final String id;
-        private final InetSocketAddress hostAddr;
         private final Server server;
         private final IRPCServiceServerRegister serverRegister;
 
@@ -243,9 +242,8 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
             super(serviceUniqueName, bindServices, bluePrint, executorSupplier, executor, false);
             try {
                 this.id = id;
-                this.hostAddr = new InetSocketAddress(host, port);
                 NettyServerBuilder nettyServerBuilder = NettyServerBuilder
-                    .forAddress(hostAddr)
+                    .forAddress(new InetSocketAddress(host, port))
                     .permitKeepAliveWithoutCalls(true)
                     .executor(defaultExecutor);
                 if (this.executorSupplier != null) {
@@ -286,7 +284,7 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
 
         @Override
         protected void afterStart() {
-            serverRegister.start(id, hostAddr, emptySet(), emptyMap());
+            serverRegister.start(id, (InetSocketAddress) server.getListenSockets().get(0), emptySet(), emptyMap());
         }
 
         @Override
@@ -337,10 +335,11 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
         }
     }
 
-    public abstract static class InterProcServerBuilder<T extends InterProcServerBuilder> extends RPCServerBuilder<T> {
+    public abstract static class InterProcServerBuilder<T extends InterProcServerBuilder<?>>
+        extends RPCServerBuilder<T> {
         protected String id;
         protected String host;
-        protected Integer port;
+        protected int port = 0;
         protected ICRDTService crdtService;
         protected EventLoopGroup bossEventLoopGroup;
         protected EventLoopGroup workerEventLoopGroup;

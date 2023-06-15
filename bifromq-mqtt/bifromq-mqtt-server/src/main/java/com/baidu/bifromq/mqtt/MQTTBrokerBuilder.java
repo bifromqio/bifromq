@@ -32,7 +32,7 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder> {
+public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder<?>> {
     protected String host;
     protected MQTTBrokerOptions options = new MQTTBrokerOptions();
     protected EventLoopGroup bossGroup;
@@ -219,9 +219,9 @@ public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder> {
         }
     }
 
-    abstract static class InterProcBrokerBuilder<T extends InterProcBrokerBuilder> extends MQTTBrokerBuilder<T> {
+    abstract static class InterProcBrokerBuilder<T extends InterProcBrokerBuilder<?>> extends MQTTBrokerBuilder<T> {
         protected String serverId;
-        protected String rpcHost;
+        protected String rpcBindAddr;
         protected Integer port;
         protected ICRDTService crdtService;
         protected EventLoopGroup rpcWorkerGroup;
@@ -237,8 +237,8 @@ public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder> {
             return (T) this;
         }
 
-        public T rpcHost(String host) {
-            this.rpcHost = host;
+        public T rpcBindAddr(String rpcBindAddr) {
+            this.rpcBindAddr = rpcBindAddr;
             return (T) this;
         }
 
@@ -281,7 +281,7 @@ public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder> {
                 protected ILocalSessionBrokerServer buildLocalSessionBroker() {
                     return ILocalSessionBrokerServer.nonSSLBrokerBuilder()
                         .serverId(serverId)
-                        .host(rpcHost)
+                        .host(rpcBindAddr)
                         .port(port)
                         .executor(ioExecutor)
                         .bossEventLoopGroup(bossGroup)
@@ -337,7 +337,7 @@ public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder> {
                 protected ILocalSessionBrokerServer buildLocalSessionBroker() {
                     return ILocalSessionBrokerServer.sslBrokerBuilder()
                         .serverId(serverId)
-                        .host(rpcHost)
+                        .host(rpcBindAddr)
                         .port(port)
                         .executor(ioExecutor)
                         .bossEventLoopGroup(bossGroup)

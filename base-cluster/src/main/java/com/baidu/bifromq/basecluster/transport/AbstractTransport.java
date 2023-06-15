@@ -31,14 +31,11 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor
 public abstract class AbstractTransport implements ITransport {
     private final String sharedToken;
-    private final InetSocketAddress bindAddr;
     private final Subject<PacketEnvelope> publisher = PublishSubject.<PacketEnvelope>create();
     private final AtomicBoolean hasStopped = new AtomicBoolean();
 
     @Override
-    public InetSocketAddress bindAddress() {
-        return bindAddr;
-    }
+    public abstract InetSocketAddress bindAddress();
 
     @Override
     public final CompletableFuture<Void> send(List<ByteString> data, InetSocketAddress recipient) {

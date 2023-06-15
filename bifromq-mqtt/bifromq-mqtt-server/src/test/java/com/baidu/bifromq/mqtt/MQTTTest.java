@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -50,6 +49,7 @@ import com.baidu.bifromq.sessiondict.server.ISessionDictionaryServer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.reactivex.rxjava3.core.Observable;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -139,17 +139,17 @@ abstract class MQTTTest {
         } catch (IOException e) {
         }
         pluginMgr = new DefaultPluginManager();
-        ioExecutor = newCachedThreadPool(threadFactory("MQTTTestExecutor-%d"));
+        ioExecutor = newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("MQTTTestExecutor-%d").build());
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-            threadFactory("bg-task-executor"));
+            new ThreadFactoryBuilder().setNameFormat("bg-task-executor").build());
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            threadFactory("tick-task-executor"));
+            new ThreadFactoryBuilder().setNameFormat("tick-task-executor").build());
         queryExecutor = new ThreadPoolExecutor(2, 2, 10, TimeUnit.SECONDS,
             new LinkedBlockingDeque<>(20_000),
-            threadFactory("query-executor"));
+            new ThreadFactoryBuilder().setNameFormat("query-executor").build());
         mutationExecutor = new ThreadPoolExecutor(2, 2, 10, TimeUnit.SECONDS,
             new LinkedBlockingDeque<>(20_000),
-            threadFactory("mutation-executor"));
+            new ThreadFactoryBuilder().setNameFormat("mutation-executor").build());
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .port(freePort())

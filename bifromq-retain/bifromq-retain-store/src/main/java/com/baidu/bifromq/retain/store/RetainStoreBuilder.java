@@ -20,7 +20,6 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.google.common.base.Preconditions;
 import io.netty.channel.EventLoopGroup;
 import java.io.File;
@@ -33,7 +32,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.NonNull;
 
-public abstract class RetainStoreBuilder<T extends RetainStoreBuilder> {
+public abstract class RetainStoreBuilder<T extends RetainStoreBuilder<?>> {
     protected IAgentHost agentHost;
     protected ICRDTService crdtService;
     protected IBaseKVStoreClient storeClient;
@@ -170,10 +169,10 @@ public abstract class RetainStoreBuilder<T extends RetainStoreBuilder> {
         }
     }
 
-    abstract static class InterProcRetainStoreBuilder<T extends InterProcRetainStoreBuilder>
+    abstract static class InterProcRetainStoreBuilder<T extends InterProcRetainStoreBuilder<?>>
         extends RetainStoreBuilder<T> {
         protected String bindAddr;
-        protected int bindPort = PortUtil.freePort();
+        protected int bindPort;
         protected EventLoopGroup bossEventLoopGroup;
         protected EventLoopGroup workerEventLoopGroup;
 

@@ -1,7 +1,5 @@
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-
 import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.dist.worker.scheduler.InboxWriteRequest;
 import com.baidu.bifromq.dist.worker.scheduler.InboxWriteScheduler;
@@ -10,6 +8,7 @@ import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -36,9 +35,11 @@ class FanoutExecutorGroup {
         phaseTwoExecutorGroup = new ExecutorService[groupSize];
         for (int i = 0; i < groupSize; i++) {
             phaseOneExecutorGroup[i] = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new MpscBlockingConsumerArrayQueue<>(2000), threadFactory("fanout-p1-executor" + i));
+                new MpscBlockingConsumerArrayQueue<>(2000),
+                new ThreadFactoryBuilder().setNameFormat("fanout-p1-executor" + i).build());
             phaseTwoExecutorGroup[i] = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new MpscBlockingConsumerArrayQueue<>(2000), threadFactory("fanout-p2-executor" + i));
+                new MpscBlockingConsumerArrayQueue<>(2000),
+                new ThreadFactoryBuilder().setNameFormat("fanout-p2-executor" + i).build());
         }
     }
 

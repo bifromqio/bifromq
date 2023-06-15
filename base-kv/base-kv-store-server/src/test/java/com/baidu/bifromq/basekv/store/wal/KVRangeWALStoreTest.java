@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 import com.baidu.bifromq.basekv.TestUtil;
@@ -26,6 +25,7 @@ import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.nio.file.Paths;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -45,8 +45,9 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
 
     @Before
     public void setup() {
-        bgMgmtTaskExecutor = newSingleThreadScheduledExecutor(threadFactory("bg-executor"));
-        KVEngineConfigurator walConfigurator;
+        bgMgmtTaskExecutor =
+            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("bg-executor").build());
+        KVEngineConfigurator<?> walConfigurator;
         if (isDevEnv()) {
             walConfigurator = new InMemoryKVEngineConfigurator();
         } else {

@@ -31,9 +31,9 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class MessengerOptions {
     private Transport.TransportOptions transporterOptions = new Transport.TransportOptions();
-    private int maxFanout;
-    private int maxFanoutGossips;
-    private int maxHealthScore;
-    private int retransmitMultiplier;
-    private Duration spreadPeriod;
+    private int maxFanout = 4;
+    private int maxFanoutGossips = 60;
+    private int maxHealthScore = 4;
+    private int retransmitMultiplier = 4;
+    private Duration spreadPeriod = Duration.ofMillis(500);
 }

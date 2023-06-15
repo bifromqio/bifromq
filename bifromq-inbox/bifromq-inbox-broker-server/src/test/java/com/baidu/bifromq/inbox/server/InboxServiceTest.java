@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -23,7 +21,6 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.baidu.bifromq.inbox.client.IInboxBrokerClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.store.IInboxStore;
@@ -31,6 +28,7 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
@@ -84,7 +82,6 @@ public abstract class InboxServiceTest {
         }
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(PortUtil.freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
@@ -116,11 +113,15 @@ public abstract class InboxServiceTest {
 //                        .toString())
 //                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("query-executor-%d"));
+            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+            new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
         mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(), threadFactory("mutation-executor-%d"));
-        tickTaskExecutor = new ScheduledThreadPoolExecutor(2, threadFactory("tick-task-executor-%d"));
-        bgTaskExecutor = new ScheduledThreadPoolExecutor(1, threadFactory("bg-task-executor-%d"));
+            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+            new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
+        tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
+            new ThreadFactoryBuilder().setNameFormat("tick-task-executor-%d").build());
+        bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
+            new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
 
         inboxStoreClient = IBaseKVStoreClient
             .inProcClientBuilder()

@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.util.Collections.EMPTY_MAP;
 import static org.slf4j.LoggerFactory.getLogger;
 
@@ -38,6 +37,7 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
@@ -78,7 +78,9 @@ public class KVRangeWAL implements IKVRangeWAL {
         this.localId = stateStoreEngine.id();
         raftNode = new RaftNode(raftConfig, stateStoreEngine.get(rangeId),
             getLogger("raft.logger"),
-            threadFactory("wal-raft-executor-" + KVRangeIdUtil.toShortString(rangeId)),
+            new ThreadFactoryBuilder()
+                .setNameFormat("wal-raft-executor-" + KVRangeIdUtil.toShortString(rangeId))
+                .build(),
             "storeId", localId,
             "rangeId", KVRangeIdUtil.toString(rangeId));
     }

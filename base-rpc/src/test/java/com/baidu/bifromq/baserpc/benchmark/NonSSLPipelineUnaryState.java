@@ -25,7 +25,6 @@ import com.baidu.bifromq.baserpc.test.RPCTestGrpc;
 import com.baidu.bifromq.baserpc.test.Request;
 import com.baidu.bifromq.baserpc.test.Response;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
@@ -62,7 +61,6 @@ public class NonSSLPipelineUnaryState {
     public NonSSLPipelineUnaryState() {
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(PortUtil.freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
@@ -75,7 +73,6 @@ public class NonSSLPipelineUnaryState {
         this.server = IRPCServer.nonSSLServerBuilder()
             .id("NonSSLServer1")
             .host("127.0.0.1")
-            .port(PortUtil.freePort())
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
             .serviceUniqueName("PipelineUnaryBenchmark")

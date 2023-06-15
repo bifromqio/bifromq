@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.starter;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
-
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
@@ -26,6 +24,7 @@ import com.baidu.bifromq.retain.store.RetainStoreBuilder;
 import com.baidu.bifromq.starter.config.RetainStoreConfig;
 import com.baidu.bifromq.starter.config.model.StoreClientConfig;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.ScheduledExecutorService;
@@ -59,7 +58,7 @@ public class RetainStoreStarter extends BaseEngineStarter<RetainStoreConfig> {
 
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
-                threadFactory("bg-job-executor-%d")), "bgTaskExecutor");
+                new ThreadFactoryBuilder().setNameFormat("bg-job-executor-%d").build()), "bgTaskExecutor");
 
         agentHost = initAgentHost(config.getAgentHostConfig());
         log.info("Agent host started");

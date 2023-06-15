@@ -17,10 +17,10 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baseutils.PortUtil;
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
@@ -36,6 +36,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SysClientInfo;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Level;
@@ -105,7 +106,6 @@ public class DistServiceState {
     public DistServiceState() {
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(PortUtil.freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
@@ -133,6 +133,11 @@ public class DistServiceState {
             .eventCollector(eventCollector)
             .distClient(distClient)
             .storeClient(storeClient)
+            .queryExecutor(Executors.newWorkStealingPool())
+            .mutationExecutor(Executors.newWorkStealingPool())
+            .bgTaskExecutor(Executors.newSingleThreadScheduledExecutor())
+            .tickTaskExecutor(Executors.newSingleThreadScheduledExecutor())
+            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .kvRangeStoreOptions(kvRangeStoreOptions)
             .inboxBrokerManager(receiverManager)
             .build();

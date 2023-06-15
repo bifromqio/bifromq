@@ -69,13 +69,13 @@ public final class UDPTransport extends AbstractTransport {
     private final Channel channel;
 
     private final Bridger bridger;
+    private final InetSocketAddress localAddress;
 
 
     @Builder
     UDPTransport(String sharedToken, InetSocketAddress bindAddr) {
-        super(sharedToken, bindAddr);
+        super(sharedToken);
         try {
-            log.debug("Creating udp transport: bindAddr={}", bindAddr);
             bridger = new Bridger();
             elg = getEventLoopGroup(4, "UDP-Transport-ELG");
             Bootstrap bootstrap = new Bootstrap();
@@ -88,11 +88,6 @@ public final class UDPTransport extends AbstractTransport {
                         channel.pipeline()
                             .addLast("compressor", new FastLzFrameDecoder())
                             .addLast("decompressor", new FastLzFrameEncoder())
-                            // DatagramPacketDecoder will lost remote address
-                            //                                    .addLast("udpDecoder", new
-                            //                                    DatagramPacketDecoder(
-                            //                                            new ProtobufDecoder(Messages
-                            //                                            .getDefaultInstance())))
                             .addLast("udpEncoder", new DatagramPacketEncoder<>(new ProtobufEncoder()))
                             .addLast("Bridger", bridger);
                     }
@@ -100,9 +95,16 @@ public final class UDPTransport extends AbstractTransport {
                 .bind()
                 .sync()
                 .channel();
+            localAddress = (InetSocketAddress) channel.localAddress();
+            log.debug("Creating udp transport: bindAddr={}", localAddress);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize udp transport", e);
         }
+    }
+
+    @Override
+    public InetSocketAddress bindAddress() {
+        return localAddress;
     }
 
     @Override
@@ -112,7 +114,7 @@ public final class UDPTransport extends AbstractTransport {
             packet.getSerializedSize(), packet.hashCode(), recipient);
         sendBytes.increment(packet.getSerializedSize());
         CompletableFuture<Void> ret = new CompletableFuture<>();
-        channel.writeAndFlush(new DefaultAddressedEnvelope(packet, recipient)).addListener(future -> {
+        channel.writeAndFlush(new DefaultAddressedEnvelope<>(packet, recipient)).addListener(future -> {
             if (!future.isSuccess()) {
                 log.warn("failed to send packet via udp, recipient={}", recipient, future.cause());
             }

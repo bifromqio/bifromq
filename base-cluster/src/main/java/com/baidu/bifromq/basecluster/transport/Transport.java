@@ -47,16 +47,16 @@ public final class Transport implements ITransport {
 
     private final Observable<PacketEnvelope> sink;
 
-    private final InetSocketAddress bindAddr;
-
     @Builder
     Transport(InetSocketAddress bindAddr,
               SslContext serverSslContext,
               SslContext clientSslContext,
               String sharedToken,
               TransportOptions options) {
-        this.bindAddr = bindAddr;
         this.options = options == null ? new TransportOptions() : options.toBuilder().build();
+        if (bindAddr == null) {
+            bindAddr = new InetSocketAddress(0);
+        }
         tcpTransport = TCPTransport.builder()
             .bindAddr(bindAddr)
             .sharedToken(sharedToken)
@@ -64,14 +64,17 @@ public final class Transport implements ITransport {
             .clientSslContext(clientSslContext)
             .opts(this.options.tcpTransportOptions)
             .build();
-        udpTransport = UDPTransport.builder().sharedToken(sharedToken).bindAddr(bindAddr).build();
+        // bind to same address
+        udpTransport = UDPTransport.builder().sharedToken(sharedToken)
+            .bindAddr(tcpTransport.bindAddress())
+            .build();
 
         sink = Observable.merge(tcpTransport.receive(), udpTransport.receive());
     }
 
     @Override
     public InetSocketAddress bindAddress() {
-        return bindAddr;
+        return tcpTransport.bindAddress();
     }
 
     public CompletableFuture<Void> send(List<ByteString> data, InetSocketAddress recipient) {

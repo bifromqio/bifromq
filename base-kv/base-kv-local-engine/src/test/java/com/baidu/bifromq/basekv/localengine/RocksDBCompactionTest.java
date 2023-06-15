@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.lang.Math.max;
 import static java.lang.Runtime.getRuntime;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static org.junit.Assert.fail;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import java.nio.ByteBuffer;
@@ -66,7 +66,7 @@ public class RocksDBCompactionTest {
     public void setup() {
         dataDir = Paths.get(System.getProperty("user.dir"), "data");
         dataDir.toFile().mkdirs();
-        bgTaskExecutor = newScheduledThreadPool(4, threadFactory("bg-executor-%d"));
+        bgTaskExecutor = newScheduledThreadPool(4, new ThreadFactoryBuilder().setNameFormat("bg-executor-%d").build());
         start();
     }
 

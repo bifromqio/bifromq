@@ -14,7 +14,6 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildCollectMetricsRequest;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildGCRequest;
 import static com.baidu.bifromq.metrics.TrafficMeter.gauging;
@@ -39,6 +38,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -74,8 +74,8 @@ abstract class DistWorker implements IDistWorker {
     private final boolean jobExecutorOwner;
     private final Duration statsInterval;
     private final Duration gcInterval;
-    private volatile ScheduledFuture gcJob;
-    private volatile ScheduledFuture statsJob;
+    private volatile ScheduledFuture<?> gcJob;
+    private volatile ScheduledFuture<?> statsJob;
     private final Map<String, Long> trafficSubInfoSize = new ConcurrentHashMap<>();
 
     public DistWorker(IAgentHost agentHost,
@@ -113,7 +113,8 @@ abstract class DistWorker implements IDistWorker {
         jobExecutorOwner = bgTaskExecutor == null;
         if (jobExecutorOwner) {
             jobScheduler = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(1,
-                threadFactory("dist-worker-job-executor-%d")), CLUSTER_NAME + "-job-executor");
+                    new ThreadFactoryBuilder().setNameFormat("dist-worker-job-executor-%d").build()),
+                CLUSTER_NAME + "-job-executor");
         } else {
             jobScheduler = bgTaskExecutor;
         }
@@ -153,11 +154,11 @@ abstract class DistWorker implements IDistWorker {
             log.info("Stopping dist worker");
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.cancel(true);
-                await(gcJob);
+                awaitIfNotCancelled(gcJob);
             }
             if (statsJob != null && !statsJob.isDone()) {
                 statsJob.cancel(true);
-                await(statsJob);
+                awaitIfNotCancelled(statsJob);
             }
             jobRunner.awaitDone();
             log.debug("Stopping KVStore server");
@@ -290,11 +291,13 @@ abstract class DistWorker implements IDistWorker {
             });
     }
 
-    private <T> T await(ScheduledFuture<T> sf) {
+    private <T> void awaitIfNotCancelled(ScheduledFuture<T> sf) {
         try {
-            return sf.get();
+            if (!sf.isCancelled()) {
+                sf.get();
+            }
         } catch (Throwable e) {
-            return null;
+            log.error("Error during awaiting", e);
         }
     }
 }

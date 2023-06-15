@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.threadFactory;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
@@ -43,7 +43,8 @@ public class OverrideIdentityTest {
 
     @Before
     public void setup() {
-        bgTaskExecutor = newSingleThreadScheduledExecutor(threadFactory("Checkpoint GC"));
+        bgTaskExecutor =
+            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
     }
 
     @After

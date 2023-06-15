@@ -13,15 +13,14 @@
 
 package com.baidu.bifromq.plugin.authprovider;
 
-import static com.baidu.bifromq.baseutils.ThreadUtil.forkJoinThreadFactory;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_CACHED_AUTH_RESULTS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_RESULT_EXPIRY_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_CALL_PARALLELISM;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_CACHED_CHECK_RESULTS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.AUTH_RESULT_EXPIRY_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.CHECK_RESULT_EXPIRY_SECONDS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_CACHED_AUTH_RESULTS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_CACHED_CHECK_RESULTS;
 
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
@@ -46,6 +45,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -96,9 +96,19 @@ public class AuthProviderManager implements IAuthProvider {
     }
 
     private void init() {
-        executor = ExecutorServiceMetrics
-            .monitor(Metrics.globalRegistry,
-                new ForkJoinPool(AUTH_CALL_PARALLELISM.get(), forkJoinThreadFactory("auth-%d"), null, true), "auth");
+
+        executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ForkJoinPool(AUTH_CALL_PARALLELISM.get(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {
+                final AtomicInteger index = new AtomicInteger(0);
+
+                @Override
+                public ForkJoinWorkerThread newThread(ForkJoinPool pool) {
+                    ForkJoinWorkerThread worker = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
+                    worker.setName(String.format("auth-%d", index.incrementAndGet()));
+                    worker.setDaemon(false);
+                    return worker;
+                }
+            }, null, true), "auth");
 
         authCache = Caffeine.newBuilder()
             .maximumSize(MAX_CACHED_AUTH_RESULTS.get())

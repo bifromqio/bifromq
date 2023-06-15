@@ -27,10 +27,6 @@
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-utils</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-setting-provider</artifactId>
         </dependency>
         <dependency>

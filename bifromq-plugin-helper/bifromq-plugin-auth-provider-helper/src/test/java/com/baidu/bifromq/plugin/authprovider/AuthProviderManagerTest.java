@@ -292,15 +292,13 @@ public class AuthProviderManagerTest {
         manager =
             new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
         when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class))).thenReturn(new CompletableFuture<>());
-        List<CompletableFuture<Boolean>> results = new ArrayList<>();
         await().pollDelay(Duration.ofMillis(5)).until(() -> {
-            results.add(
-                manager.check(clientInfo, MQTTAction.newBuilder()
-                    .setPub(PubAction.newBuilder()
-                        .setTopic("Topic_" + ThreadLocalRandom.current().nextInt())
-                        .build())
-                    .build()));
-            return results.stream().anyMatch(CompletableFuture::isCompletedExceptionally);
+            CompletableFuture<Boolean> checkResult = manager.check(clientInfo, MQTTAction.newBuilder()
+                .setPub(PubAction.newBuilder()
+                    .setTopic("Topic_" + ThreadLocalRandom.current().nextInt())
+                    .build())
+                .build());
+            return checkResult.isDone() && !checkResult.join();
         });
         manager.close();
     }
