@@ -64,7 +64,7 @@ public abstract class DistServiceTest {
 
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
-        public <T extends Event<?>> void report(T event) {
+        public void report(Event<?> event) {
             log.debug("event {}", event);
         }
     };

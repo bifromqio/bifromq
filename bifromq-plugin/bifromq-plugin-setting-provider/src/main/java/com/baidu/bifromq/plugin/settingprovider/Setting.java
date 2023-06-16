@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 public enum Setting {
     DebugModeEnabled(Boolean.class, val -> true, false),
     BoostModeEnabled(Boolean.class, val -> true, false),
-    MaxTopicLevelNameLength(Integer.class, val -> (int) val > 0, 40),
+    MaxTopicLevelLength(Integer.class, val -> (int) val > 0, 40),
     MaxTopicLevels(Integer.class, val -> (int) val > 0, 16),
     MaxTopicLength(Integer.class, val -> (int) val > 0 && (int) val < 65536, 255),
     MsgPubPerSec(Integer.class, val -> (int) val >= 0 && (int) val <= 1000, 200),

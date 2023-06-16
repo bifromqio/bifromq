@@ -25,7 +25,6 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3PersistentSession;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCreateError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
@@ -78,8 +77,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         break;
                     case ERROR:
                     default:
-                        closeConnectionWithSomeDelay(getLocal(EventType.SESSION_CREATE_ERROR, SessionCreateError.class)
-                            .clientInfo(clientInfo()));
+                        closeConnectionWithSomeDelay(getLocal(SessionCreateError.class).clientInfo(clientInfo()));
                 }
             }, ctx.channel().eventLoop());
         }
@@ -247,8 +245,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                 case ERROR:
                     // fall through
                 default:
-                    closeConnectionWithSomeDelay(getLocal(EventType.INBOX_TRANSIENT_ERROR, InboxTransientError.class)
-                        .clientInfo(clientInfo()));
+                    closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
                     break;
             }
         });
@@ -262,7 +259,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                 if (allow) {
                     if (sendQoS0TopicMessage(topic, message, false, flush, timestamp)) {
                         if (debugMode) {
-                            eventCollector.report(getLocal(EventType.QOS0_PUSHED, QoS0Pushed.class)
+                            eventCollector.report(getLocal(QoS0Pushed.class)
                                 .reqId(message.getMessageId())
                                 .isRetain(false)
                                 .sender(topicMsg.getSender())
@@ -272,7 +269,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                                 .clientInfo(clientInfo()));
                         }
                     } else {
-                        eventCollector.report(getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                        eventCollector.report(getLocal(QoS0Dropped.class)
                             .reason(DropReason.ChannelClosed)
                             .reqId(message.getMessageId())
                             .isRetain(false)
@@ -283,7 +280,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                             .clientInfo(clientInfo()));
                     }
                 } else {
-                    eventCollector.report(getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                    eventCollector.report(getLocal(QoS0Dropped.class)
                         .reason(DropReason.NoSubPermission)
                         .reqId(message.getMessageId())
                         .isRetain(false)
@@ -312,7 +309,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         log.error("MessageId exhausted");
                     }
                 } else {
-                    eventCollector.report(getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)
+                    eventCollector.report(getLocal(QoS1Dropped.class)
                         .reason(DropReason.NoSubPermission)
                         .reqId(message.getMessageId())
                         .isRetain(false)
@@ -344,7 +341,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         log.error("MessageId exhausted");
                     }
                 } else {
-                    eventCollector.report(getLocal(EventType.QOS2_DROPPED, QoS2Dropped.class)
+                    eventCollector.report(getLocal(QoS2Dropped.class)
                         .reason(DropReason.NoSubPermission)
                         .reqId(message.getMessageId())
                         .isRetain(false)

@@ -60,7 +60,7 @@
         <concurrency.limits.version>0.4.0</concurrency.limits.version>
         <grpc.version>1.53.0</grpc.version>
         <protoc.version>3.21.12</protoc.version>
-        <guava.version>31.1-jre</guava.version>
+        <guava.version>32.0.1-jre</guava.version>
         <rxjava3.version>3.1.5</rxjava3.version>
         <rocksdb.version>7.10.2</rocksdb.version>
         <netty.version>4.1.89.Final</netty.version>

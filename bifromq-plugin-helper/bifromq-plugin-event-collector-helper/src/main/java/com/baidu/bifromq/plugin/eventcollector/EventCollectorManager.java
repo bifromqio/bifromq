@@ -47,7 +47,7 @@ public class EventCollectorManager implements IEventCollector {
     }
 
     @Override
-    public <T extends Event<?>> void report(T event) {
+    public void report(Event<?> event) {
         callInvokeCounter.increment();
         event.hlc(HLC.INST.get());
         for (Map.Entry<String, IEventCollector> entry : eventCollectors.entrySet()) {

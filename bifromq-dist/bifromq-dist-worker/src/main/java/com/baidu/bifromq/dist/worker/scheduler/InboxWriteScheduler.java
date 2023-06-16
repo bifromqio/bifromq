@@ -21,7 +21,6 @@ import com.baidu.bifromq.basescheduler.BatchCallBuilder;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
@@ -152,19 +151,19 @@ public class InboxWriteScheduler
                                 }
                             }
                             if (!okMap.isEmpty()) {
-                                eventCollector.report(getLocal(EventType.DELIVERED, Delivered.class)
+                                eventCollector.report(getLocal(Delivered.class)
                                     .brokerId(brokerId)
                                     .inboxGroupKey(inboxGroupKey)
                                     .messages(okMap));
                             }
                             if (!noInboxMap.isEmpty()) {
-                                eventCollector.report(getLocal(EventType.DELIVER_NO_INBOX, DeliverNoInbox.class)
+                                eventCollector.report(getLocal(DeliverNoInbox.class)
                                     .brokerId(brokerId)
                                     .inboxGroupKey(inboxGroupKey)
                                     .messages(noInboxMap));
                             }
                             if (!errorMap.isEmpty()) {
-                                eventCollector.report(getLocal(EventType.DELIVER_ERROR, DeliverError.class)
+                                eventCollector.report(getLocal(DeliverError.class)
                                     .brokerId(brokerId)
                                     .inboxGroupKey(inboxGroupKey)
                                     .messages(errorMap)

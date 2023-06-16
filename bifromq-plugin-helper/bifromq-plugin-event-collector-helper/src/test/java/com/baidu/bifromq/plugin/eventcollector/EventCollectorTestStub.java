@@ -24,7 +24,7 @@ public class EventCollectorTestStub implements IEventCollector {
     public final List<Event<?>> events = new ArrayList<>();
 
     @Override
-    public <T extends Event<?>> void report(T event) {
+    public void report(Event<?> event) {
         log.info("Test sub: {}", event);
         events.add(event);
     }

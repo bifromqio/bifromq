@@ -50,7 +50,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-setting-provider</artifactId>
+            <artifactId>bifromq-plugin-setting-provider-helper</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -58,7 +58,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-event-collector</artifactId>
+            <artifactId>bifromq-plugin-event-collector-helper</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

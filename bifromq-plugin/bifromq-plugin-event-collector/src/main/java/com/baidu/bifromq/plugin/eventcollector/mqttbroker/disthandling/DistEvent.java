@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
 import lombok.ToString;
 
 @ToString(callSuper = true)
-public abstract class DistEvent<T extends DistEvent<?>> extends ClientEvent<T> {
+public abstract class DistEvent<T extends DistEvent<T>> extends ClientEvent<T> {
     private long reqId;
 
     private String topic;

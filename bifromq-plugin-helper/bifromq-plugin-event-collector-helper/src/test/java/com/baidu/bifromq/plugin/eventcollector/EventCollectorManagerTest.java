@@ -45,8 +45,7 @@ public class EventCollectorManagerTest {
         EventCollectorManager manager = new EventCollectorManager(pluginManager);
         EventCollectorTestStub collector = (EventCollectorTestStub) manager.get(EventCollectorTestStub.class.getName());
         assertEquals(0, collector.events.size());
-        manager.report(ThreadLocalEventPool.getLocal(EventType.PING_REQ, PingReq.class)
-            .clientInfo(ClientInfo.getDefaultInstance()));
+        manager.report(ThreadLocalEventPool.getLocal(PingReq.class).clientInfo(ClientInfo.getDefaultInstance()));
         await().until(() -> collector.events.size() == 1);
     }
 }

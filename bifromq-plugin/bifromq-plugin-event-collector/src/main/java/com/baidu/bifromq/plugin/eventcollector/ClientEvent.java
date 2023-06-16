@@ -17,8 +17,8 @@ import com.baidu.bifromq.type.ClientInfo;
 import lombok.ToString;
 
 @ToString
-public abstract class ClientEvent<T extends ClientEvent<?>> extends Event<T> {
-    protected ClientInfo clientInfo;
+public abstract class ClientEvent<T extends ClientEvent<T>> extends Event<T> {
+    private ClientInfo clientInfo;
 
     public final ClientInfo clientInfo() {
         return this.clientInfo;
@@ -32,6 +32,6 @@ public abstract class ClientEvent<T extends ClientEvent<?>> extends Event<T> {
     @Override
     public void clone(T orig) {
         super.clone(orig);
-        this.clientInfo = orig.clientInfo;
+        this.clientInfo = orig.clientInfo();
     }
 }

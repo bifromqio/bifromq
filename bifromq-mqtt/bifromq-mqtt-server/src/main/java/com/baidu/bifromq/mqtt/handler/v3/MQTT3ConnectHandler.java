@@ -18,7 +18,7 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelNameLength;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
@@ -40,7 +40,6 @@ import com.baidu.bifromq.mqtt.utils.TopicUtil;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.InvalidWillTopic;
@@ -107,8 +106,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                         .connAck()
                         .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
                         .build(),
-                    getLocal(EventType.IDENTIFIER_REJECTED, IdentifierRejected.class)
-                        .peerAddress(clientAddress));
+                    getLocal(IdentifierRejected.class).peerAddress(clientAddress));
                 return;
             }
         }
@@ -117,8 +115,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                     .connAck()
                     .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
                     .build(),
-                getLocal(EventType.IDENTIFIER_REJECTED, IdentifierRejected.class)
-                    .peerAddress(clientAddress));
+                getLocal(IdentifierRejected.class).peerAddress(clientAddress));
             return;
         }
         String mqttClientId = clientIdentifier;
@@ -140,8 +137,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
                                         .build(),
-                                    getLocal(EventType.NOT_AUTHORIZED_CLIENT, NotAuthorizedClient.class)
-                                        .peerAddress(clientAddress));
+                                    getLocal(NotAuthorizedClient.class).peerAddress(clientAddress));
                                 return DONE;
                             }
                             case BadPass -> {
@@ -149,8 +145,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD)
                                         .build(),
-                                    getLocal(EventType.UNAUTHENTICATED_CLIENT, UnauthenticatedClient.class)
-                                        .peerAddress(clientAddress));
+                                    getLocal(UnauthenticatedClient.class).peerAddress(clientAddress));
                                 return DONE;
                             }
                             // fallthrough
@@ -160,9 +155,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                         .build(),
-                                    getLocal(EventType.AUTH_ERROR, AuthError.class)
-                                        .cause(reject.getReason())
-                                        .peerAddress(clientAddress));
+                                    getLocal(AuthError.class).cause(reject.getReason()).peerAddress(clientAddress));
                                 return DONE;
                             }
                         }
@@ -203,14 +196,12 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
 
                         if (connMsg.variableHeader().isWillFlag()) {
                             if (!TopicUtil.isValidTopic(connMsg.payload().willTopic(),
-                                settingProvider.provide(MaxTopicLevelNameLength, clientInfo),
+                                settingProvider.provide(MaxTopicLevelLength, clientInfo),
                                 settingProvider.provide(MaxTopicLevels, clientInfo),
                                 settingProvider.provide(MaxTopicLength, clientInfo))) {
-                                getLocal(EventType.INVALID_WILL_TOPIC, InvalidWillTopic.class)
-                                    .peerAddress(clientAddress);
+                                getLocal(InvalidWillTopic.class).peerAddress(clientAddress);
                                 closeConnectionWithSomeDelay(
-                                    getLocal(EventType.INVALID_WILL_TOPIC, InvalidWillTopic.class)
-                                        .peerAddress(clientAddress));
+                                    getLocal(InvalidWillTopic.class).peerAddress(clientAddress));
                                 return DONE;
                             }
                             // don't do access control check here
@@ -234,9 +225,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                 .connAck()
                                 .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                 .build(),
-                            getLocal(EventType.AUTH_ERROR, AuthError.class)
-                                .peerAddress(clientAddress)
-                                .cause("Unknown auth result"));
+                            getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result"));
                         return DONE;
                     }
                 }
@@ -278,9 +267,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                             .connAck()
                                             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                             .build(),
-                                        getLocal(EventType.SESSION_CLEANUP_ERROR, SessionCleanupError.class)
-                                            .clientInfo(
-                                                clientInfo));
+                                        getLocal(SessionCleanupError.class).clientInfo(clientInfo));
                                 }
                             }, ctx.channel().eventLoop());
                     case NO:
@@ -292,7 +279,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                 .connAck()
                                 .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                 .build(),
-                            getLocal(EventType.SESSION_CHECK_ERROR, SessionCheckError.class).clientInfo(clientInfo));
+                            getLocal(SessionCheckError.class).clientInfo(clientInfo));
                         return DONE;
                 }
             }, ctx.channel().eventLoop());
@@ -324,7 +311,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                 .connAck()
                                 .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                 .build(),
-                            getLocal(EventType.SESSION_CHECK_ERROR, SessionCheckError.class).clientInfo(clientInfo));
+                            getLocal(SessionCheckError.class).clientInfo(clientInfo));
                     default:
                 }
             }, ctx.channel().eventLoop());

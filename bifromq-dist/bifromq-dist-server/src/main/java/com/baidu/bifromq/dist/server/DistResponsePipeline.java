@@ -22,7 +22,6 @@ import com.baidu.bifromq.basescheduler.exception.DropException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistCall;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
@@ -59,11 +58,11 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
             .handle((v, e) -> {
                 if (e != null) {
                     if (e.getCause() == DropException.EXCEED_LIMIT) {
-                        eventCollector.report(getLocal(EventType.DROP_EXCEED_LIMIT, DropExceedLimit.class)
+                        eventCollector.report(getLocal(DropExceedLimit.class)
                             .trafficId(trafficId));
                     } else {
                         log.error("Failed to exec DistRequest, trafficId={}, req={}", trafficId, request, e);
-                        eventCollector.report(getLocal(EventType.DIST_ERROR, DistError.class)
+                        eventCollector.report(getLocal(DistError.class)
                             .reqId(request.getReqId())
                             .messages(request.getMessagesList()));
                     }
@@ -73,7 +72,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                         .build();
                 } else {
                     trafficFanouts.get(trafficId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
-                    eventCollector.report(getLocal(EventType.DISTED, Disted.class)
+                    eventCollector.report(getLocal(Disted.class)
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())
                         .fanout(v.values().stream().reduce(0, Integer::sum)));

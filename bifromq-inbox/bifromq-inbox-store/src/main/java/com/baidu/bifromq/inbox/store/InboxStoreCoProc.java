@@ -70,7 +70,6 @@ import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.UpdateReply;
 import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 import com.baidu.bifromq.inbox.util.KeyUtil;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.Message;
@@ -621,12 +620,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             }
         }
         if (actualDropped > 0) {
-            eventCollector.report(
-                getLocal(EventType.OVERFLOWED, Overflowed.class)
-                    .oldest(metadata.getDropOldest())
-                    .qos(QoS.AT_MOST_ONCE)
-                    .clientInfo(metadata.getClient())
-                    .dropCount(actualDropped));
+            eventCollector.report(getLocal(Overflowed.class)
+                .oldest(metadata.getDropOldest())
+                .qos(QoS.AT_MOST_ONCE)
+                .clientInfo(metadata.getClient())
+                .dropCount(actualDropped));
         }
         return metadata.toBuilder().setQos0NextSeq(nextSeq).build();
     }
@@ -705,12 +703,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             }
         }
         if (actualDropped > 0) {
-            eventCollector.report(
-                getLocal(EventType.OVERFLOWED, Overflowed.class)
-                    .oldest(metadata.getDropOldest())
-                    .qos(QoS.AT_LEAST_ONCE)
-                    .clientInfo(metadata.getClient())
-                    .dropCount(actualDropped));
+            eventCollector.report(getLocal(Overflowed.class)
+                .oldest(metadata.getDropOldest())
+                .qos(QoS.AT_LEAST_ONCE)
+                .clientInfo(metadata.getClient())
+                .dropCount(actualDropped));
         }
         return metadata.toBuilder().setQos1NextSeq(nextSeq).build();
     }
@@ -808,12 +805,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             }
         }
         if (dropCount > 0) {
-            eventCollector.report(
-                getLocal(EventType.OVERFLOWED, Overflowed.class)
-                    .oldest(metadata.getDropOldest())
-                    .qos(QoS.EXACTLY_ONCE)
-                    .clientInfo(metadata.getClient())
-                    .dropCount(dropCount));
+            eventCollector.report(getLocal(Overflowed.class)
+                .oldest(metadata.getDropOldest())
+                .qos(QoS.EXACTLY_ONCE)
+                .clientInfo(metadata.getClient())
+                .dropCount(dropCount));
         }
         return metadata.toBuilder().setQos2NextSeq(nextSeq).build();
     }

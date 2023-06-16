@@ -14,40 +14,43 @@
 package com.baidu.bifromq.plugin.eventcollector;
 
 import static java.lang.ThreadLocal.withInitial;
-import static org.reflections.scanners.Scanners.SubTypes;
 
 import java.lang.reflect.Modifier;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Set;
 import lombok.SneakyThrows;
 import org.reflections.Reflections;
 
-public final class ThreadLocalEventPool extends HashMap<Class<? extends Event<?>>, Event<?>> {
-    private static final Set<Class<?>> EVENT_TYPES;
+public final class ThreadLocalEventPool {
+    private static final Set<Class<? extends Event<?>>> EVENT_TYPES = new HashSet<>();
 
-    private static final ThreadLocal<Event<?>[]> THREAD_LOCAL_EVENTS;
+    private static final ThreadLocal<IdentityHashMap<Class<? extends Event<?>>, Event<?>>> THREAD_LOCAL_EVENTS;
 
     static {
         Reflections reflections = new Reflections(Event.class.getPackageName());
-        EVENT_TYPES = reflections.get(SubTypes.of(Event.class)
-            .asClass()
-            .filter(c -> !Modifier.isAbstract(c.getModifiers())));
+        for (Class<?> eventClass : reflections.getSubTypesOf(Event.class)) {
+            if (!Modifier.isAbstract(eventClass.getModifiers())) {
+                EVENT_TYPES.add((Class<? extends Event<?>>) eventClass);
+            }
+        }
         THREAD_LOCAL_EVENTS = withInitial(ThreadLocalEventPool::init);
     }
 
-    private static Event<?>[] init() {
-        Event<?>[] events = new Event[EVENT_TYPES.size()];
-        EVENT_TYPES.forEach(t -> add((Class<? extends Event<?>>) t, events));
+    private static IdentityHashMap<Class<? extends Event<?>>, Event<?>> init() {
+        IdentityHashMap<Class<? extends Event<?>>, Event<?>> events = new IdentityHashMap<>(EVENT_TYPES.size());
+        EVENT_TYPES.forEach(t -> add(t, events));
         return events;
     }
 
-    public static <T extends Event<?>> T getLocal(EventType eventType, Class<T> typeClass) {
-        return (T) THREAD_LOCAL_EVENTS.get()[eventType.ordinal()];
+    @SneakyThrows
+    private static void add(Class<? extends Event<?>> eventClass,
+                            IdentityHashMap<Class<? extends Event<?>>, Event<?>> eventMap) {
+        Event<?> event = eventClass.getConstructor().newInstance();
+        eventMap.put(eventClass, event);
     }
 
-    @SneakyThrows
-    private static void add(Class<? extends Event<?>> eventClass, Event<?>[] events) {
-        Event<?> event = eventClass.getConstructor().newInstance();
-        events[event.type().ordinal()] = event;
+    public static <T extends Event<T>> T getLocal(Class<T> eventClass) {
+        return (T) THREAD_LOCAL_EVENTS.get().get(eventClass);
     }
 }

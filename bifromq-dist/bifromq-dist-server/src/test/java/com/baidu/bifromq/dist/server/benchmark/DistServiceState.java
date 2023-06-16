@@ -65,7 +65,7 @@ public class DistServiceState {
 
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
-        public <T extends Event<?>> void report(T event) {
+        public void report(Event<?> event) {
 
         }
     };

@@ -24,13 +24,13 @@ public final class EventLogger implements IEventCollector {
     private static final Logger LOG = LoggerFactory.getLogger("IoTBrokerEventLogger");
 
     @Override
-    public <T extends Event<?>> void report(T event) {
-        if (LOG.isInfoEnabled()) {
+    public void report(Event<?> event) {
+        if (LOG.isWarnEnabled()) {
             switch (event.type()) {
                 case OVERFLOWED:
                 case QOS1_DROPPED:
                 case DELIVER_ERROR:
-//                    LOG.info("{}", event);
+                    LOG.warn("{}", event);
             }
         }
     }

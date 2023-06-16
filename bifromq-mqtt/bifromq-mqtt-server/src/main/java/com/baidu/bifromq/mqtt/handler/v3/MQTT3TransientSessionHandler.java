@@ -21,7 +21,6 @@ import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.SubResult;
 import com.baidu.bifromq.dist.client.UnsubResult;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.PushEvent;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
@@ -144,7 +143,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                         if (sendQoS0TopicMessage(topic, message, false, flush, timestamp)) {
                                             if (debugMode) {
                                                 eventCollector.report(
-                                                    getLocal(EventType.QOS0_PUSHED, QoS0Pushed.class)
+                                                    getLocal(QoS0Pushed.class)
                                                         .reqId(message.getMessageId())
                                                         .isRetain(false)
                                                         .sender(sender)
@@ -155,7 +154,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                             }
                                         } else {
                                             eventCollector.report(
-                                                getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                                                getLocal(QoS0Dropped.class)
                                                     .reason(DropReason.ChannelClosed)
                                                     .reqId(message.getMessageId())
                                                     .isRetain(false)
@@ -167,7 +166,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                         }
                                     } else {
                                         flush(true);
-                                        eventCollector.report(getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                                        eventCollector.report(getLocal(QoS0Dropped.class)
                                             .reason(DropReason.Overflow)
                                             .reqId(message.getMessageId())
                                             .isRetain(false)
@@ -187,7 +186,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                         }
                                     } else {
                                         flush(true);
-                                        eventCollector.report(getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)
+                                        eventCollector.report(getLocal(QoS1Dropped.class)
                                             .reason(DropReason.Overflow)
                                             .reqId(message.getMessageId())
                                             .isRetain(false)
@@ -207,7 +206,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                         }
                                     } else {
                                         flush(true);
-                                        eventCollector.report(getLocal(EventType.QOS2_DROPPED, QoS2Dropped.class)
+                                        eventCollector.report(getLocal(QoS2Dropped.class)
                                             .reason(DropReason.Overflow)
                                             .reqId(message.getMessageId())
                                             .isRetain(false)
@@ -226,11 +225,11 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                         for (Message message : senderMsgPack.getMessageList()) {
                             PushEvent<?> dropEvent;
                             switch (message.getPubQoS()) {
-                                case AT_LEAST_ONCE -> dropEvent = getLocal(EventType.QOS1_DROPPED, QoS1Dropped.class)
+                                case AT_LEAST_ONCE -> dropEvent = getLocal(QoS1Dropped.class)
                                     .reason(DropReason.NoSubPermission);
-                                case EXACTLY_ONCE -> dropEvent = getLocal(EventType.QOS2_DROPPED, QoS2Dropped.class)
+                                case EXACTLY_ONCE -> dropEvent = getLocal(QoS2Dropped.class)
                                     .reason(DropReason.NoSubPermission);
-                                default -> dropEvent = getLocal(EventType.QOS0_DROPPED, QoS0Dropped.class)
+                                default -> dropEvent = getLocal(QoS0Dropped.class)
                                     .reason(DropReason.NoSubPermission);
                             }
                             eventCollector.report(dropEvent

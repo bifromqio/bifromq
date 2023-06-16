@@ -19,7 +19,7 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelNameLength;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
@@ -187,7 +187,7 @@ public abstract class BaseMQTTTest {
         Mockito.lenient().when(settingProvider.provide(eq(ForceTransient), any(ClientInfo.class))).thenReturn(false);
         Mockito.lenient().when(settingProvider.provide(eq(MaxUserPayloadBytes), any(ClientInfo.class)))
             .thenReturn(256 * 1024);
-        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLevelNameLength), any(ClientInfo.class)))
+        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLevelLength), any(ClientInfo.class)))
             .thenReturn(40);
         Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLevels), any(ClientInfo.class))).thenReturn(16);
         Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLength), any(ClientInfo.class))).thenReturn(255);

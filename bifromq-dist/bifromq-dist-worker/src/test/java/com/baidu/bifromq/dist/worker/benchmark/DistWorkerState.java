@@ -66,7 +66,7 @@ public class DistWorkerState {
     private ISettingProvider settingProvider = Setting::current;
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
-        public <T extends Event<?>> void report(T event) {
+        public void report(Event<?> event) {
 
         }
     };

@@ -17,7 +17,7 @@ import com.baidu.bifromq.plugin.eventcollector.ClientEvent;
 import lombok.ToString;
 
 @ToString(callSuper = true)
-public abstract class RetainEvent<T extends RetainEvent<?>> extends ClientEvent<T> {
+public abstract class RetainEvent<T extends RetainEvent<T>> extends ClientEvent<T> {
     private long reqId;
 
     public final long reqId() {

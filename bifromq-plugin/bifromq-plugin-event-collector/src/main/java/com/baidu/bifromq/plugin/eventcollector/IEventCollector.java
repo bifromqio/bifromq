@@ -19,12 +19,12 @@ public interface IEventCollector extends ExtensionPoint {
     /**
      * Implement this method to receive various events at runtime.
      * <p/>
-     * Note: To reduce memory pressure, the passed event object is shared and will be reused after the call,
-     * so the ownership is not transferred. Make a clone during the call if needed.
+     * Note: To reduce memory pressure, the argument event object will be reused in later call,
+     * so the ownership is not transferred to the method implementation. Make a clone if needed.
      *
      * @param event the event reported
      */
-    <T extends Event<?>> void report(T event);
+    void report(Event<?> event);
 
     /**
      * This method will be called during broker shutdown

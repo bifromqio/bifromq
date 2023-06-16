@@ -13,41 +13,36 @@
 
 package com.baidu.bifromq.plugin.eventcollector;
 
-import static org.reflections.scanners.Scanners.SubTypes;
-
 import java.lang.reflect.Modifier;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
 import lombok.SneakyThrows;
 import org.reflections.Reflections;
 
 class EventPool {
-    private static final Set<Class<?>> EVENT_TYPES;
-    private final Map<Class<? extends Event<?>>, Event<?>> pool = new HashMap<>();
-
+    private static final Set<Class<Event<?>>> EVENT_TYPES = new HashSet<>();
     private final Event<?>[] events;
 
     static {
         Reflections reflections = new Reflections(Event.class.getPackageName());
-
-        EVENT_TYPES = reflections.get(SubTypes.of(Event.class)
-            .asClass()
-            .filter(c -> !Modifier.isAbstract(c.getModifiers())));
+        for (Class<?> eventClass : reflections.getSubTypesOf(Event.class)) {
+            if (!Modifier.isAbstract(eventClass.getModifiers())) {
+                EVENT_TYPES.add((Class<Event<?>>) eventClass);
+            }
+        }
     }
 
     EventPool() {
         events = new Event[EVENT_TYPES.size()];
-        EVENT_TYPES.forEach(t -> this.add((Class<? extends Event<?>>) t));
+        EVENT_TYPES.forEach(this::add);
     }
 
-    <T extends Event<?>> T get(EventType eventType) {
+    <T extends Event<T>> T get(EventType eventType) {
         return (T) events[eventType.ordinal()];
     }
 
     @SneakyThrows
-    private void add(Class<? extends Event<?>> eventClass) {
-        pool.put(eventClass, eventClass.getConstructor().newInstance());
+    private void add(Class<Event<?>> eventClass) {
         Event<?> event = eventClass.getConstructor().newInstance();
         events[event.type().ordinal()] = event;
     }
