@@ -134,7 +134,6 @@
                 <configuration>
                     <finalName>bifromq-${project.parent.version}</finalName>
                     <descriptors>
-                        <descriptor>assembly/assembly-all.xml</descriptor>
                         <descriptor>assembly/assembly-standalone.xml</descriptor>
                         <descriptor>assembly/assembly-standalone-windows.xml</descriptor>
                     </descriptors>

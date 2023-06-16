@@ -28,10 +28,7 @@
             <lineEnding>windows</lineEnding>
             <fileMode>0755</fileMode>
             <includes>
-                <include>bin/bifromq-start.bat</include>
-                <include>bin/bifromq-stop.bat</include>
-                <include>bin/standalone.bat</include>
-                <include>bin/pid.bat</include>
+                <include>bin/*</include>
             </includes>
         </fileSet>
         <fileSet>
