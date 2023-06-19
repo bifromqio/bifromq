@@ -15,9 +15,9 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,15 +30,14 @@ import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+
+import java.io.IOException;
 import java.time.Clock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class QoS0InboxTest extends InboxStoreTest {
     private String trafficId = "trafficId";
     private String inboxId = "inboxId";
@@ -52,8 +51,8 @@ public class QoS0InboxTest extends InboxStoreTest {
     @Mock
     private Clock clock;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
         super.setup();
         when(clock.millis()).thenReturn(0L);
     }
@@ -63,7 +62,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         return clock;
     }
 
-    @Test
+    @Test(groups = "integration")
     public void implicitCleanExpiredInboxDuringCreate() {
         String topic = "greeting";
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
@@ -86,7 +85,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertToExpiredInbox() {
         requestCreate(trafficId, inboxId, 10, 1, false);
         when(clock.millis()).thenReturn(1100L);
@@ -94,7 +93,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertEquals(InboxInsertResult.Result.NO_INBOX, reply.getResults(0).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertToNonExistInbox() {
         InboxInsertReply reply = requestInsert(subInfo, "greeting", message(AT_MOST_ONCE, "hello"));
         assertEquals(InboxInsertResult.Result.NO_INBOX, reply.getResults(0).getResult());
@@ -126,7 +125,7 @@ public class QoS0InboxTest extends InboxStoreTest {
             reply1.getResultMap().get(scopedInboxIdUtf8).getQos0MsgList());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void fetchWithMaxLimit() {
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
         String topic = "greeting";
@@ -151,7 +150,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void fetchWithStartAfter() {
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -199,7 +198,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void commit() {
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
         String topic = "greeting";
@@ -236,7 +235,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void commitAll() {
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
         String topic = "greeting";
@@ -255,7 +254,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void touch() {
         requestCreate(trafficId, inboxId, 10, 1, false);
         when(clock.millis()).thenReturn(900L);
@@ -265,7 +264,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertTrue(requestHas(trafficId, inboxId).getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertDropOldest() {
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
         String topic = "greeting";
@@ -311,7 +310,7 @@ public class QoS0InboxTest extends InboxStoreTest {
             reply.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(1).getMsg().getMessage());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertDropYoungest() {
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
         String topic = "greeting";
@@ -355,7 +354,7 @@ public class QoS0InboxTest extends InboxStoreTest {
             reply.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(1).getMsg().getMessage());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insert() {
         String topic = "greeting";
         TopicMessagePack.SenderMessagePack msg0 = message(AT_MOST_ONCE, "hello");

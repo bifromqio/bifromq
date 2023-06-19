@@ -22,18 +22,18 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import org.junit.After;
-import org.junit.Before;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 public abstract class CRDTTest {
     protected ScheduledExecutorService executor;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         executor = Executors.newSingleThreadScheduledExecutor();
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
     }

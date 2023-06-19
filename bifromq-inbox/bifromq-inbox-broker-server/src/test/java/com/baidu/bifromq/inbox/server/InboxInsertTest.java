@@ -14,7 +14,7 @@
 package com.baidu.bifromq.inbox.server;
 
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -33,10 +33,10 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class InboxInsertTest extends InboxServiceTest {
-    @Test
+    @Test(groups = "integration")
     public void insert() throws InterruptedException {
         String trafficId = "trafficA";
         String inboxId = "inbox1";
@@ -87,7 +87,7 @@ public class InboxInsertTest extends InboxServiceTest {
         writer.close();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertMultiMsgPackWithSameInbox() throws InterruptedException {
         String trafficId = "trafficA";
         String inboxId = "inbox1";

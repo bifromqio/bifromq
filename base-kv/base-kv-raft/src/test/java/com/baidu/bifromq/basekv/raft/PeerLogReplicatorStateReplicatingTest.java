@@ -13,22 +13,22 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import java.util.Optional;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class PeerLogReplicatorStateReplicatingTest {
     PeerLogReplicatorStateReplicating stateReplicating;
     RaftConfig config = new RaftConfig().setElectionTimeoutTick(6).setHeartbeatTimeoutTick(5).setMaxInflightAppends(3);
@@ -37,10 +37,16 @@ public class PeerLogReplicatorStateReplicatingTest {
     IRaftStateStore stateStorage;
     @Mock
     IRaftNodeLogger logger;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         stateReplicating = new PeerLogReplicatorStateReplicating("V1", config, stateStorage, 1, 2, logger);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

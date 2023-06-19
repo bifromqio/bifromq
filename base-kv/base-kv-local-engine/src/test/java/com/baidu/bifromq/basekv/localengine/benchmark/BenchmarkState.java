@@ -34,7 +34,6 @@ import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.rules.TemporaryFolder;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
@@ -57,13 +56,14 @@ import org.rocksdb.util.SizeUnit;
 @Slf4j
 abstract class BenchmarkState {
     protected IKVEngine kvEngine;
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
+    private Path dbRootDir;
     private ScheduledExecutorService bgTaskExecutor;
 
     BenchmarkState() {
         try {
-            dbRootDir.create();
+            dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
+            log.error("Failed to create temp dir", e);
         }
         String DB_NAME = "testDB";
         String DB_CHECKPOINT_DIR = "testDB_cp";
@@ -181,8 +181,8 @@ abstract class BenchmarkState {
                         .setMaxWriteBufferNumber(4)
                         .setMinWriteBufferNumberToMerge(3);
                 }
-            }).setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), uuid, DB_CHECKPOINT_DIR).toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), uuid, DB_NAME).toString());
+            }).setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), uuid, DB_CHECKPOINT_DIR).toString())
+                .setDbRootDir(Paths.get(dbRootDir.toString(), uuid, DB_NAME).toString());
         kvEngine = KVEngineFactory.create(null, List.of(DEFAULT_NS),
             cpId -> true, configurator);
     }
@@ -202,10 +202,11 @@ abstract class BenchmarkState {
         kvEngine.stop();
         MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
         try {
-            Files.walk(Paths.get(dbRootDir.getRoot().toString()))
+            Files.walk(dbRootDir)
                 .sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
                 .forEach(File::delete);
+            Files.delete(dbRootDir);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }

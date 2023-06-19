@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.inbox.storage.proto.InboxFetchReply;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
@@ -21,12 +21,12 @@ import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 public class BatchInsertTest extends InboxStoreTest {
 
-    @Test
+    @Test(groups = "integration")
     public void insertQoS012() {
         String trafficId = "trafficId";
         String inboxId = "inboxId";
@@ -102,7 +102,7 @@ public class BatchInsertTest extends InboxStoreTest {
             reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testInsertSameQoS2MultipleTimes() {
         String trafficId = "trafficId";
         String inboxId = "inboxId";

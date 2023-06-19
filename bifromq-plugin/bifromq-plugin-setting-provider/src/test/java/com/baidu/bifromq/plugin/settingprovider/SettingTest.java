@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import com.baidu.bifromq.type.ClientInfo;
-import org.junit.Test;
+import org.testng.annotations.Test;
+
+import static org.testng.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
 
 public class SettingTest {
     @Test

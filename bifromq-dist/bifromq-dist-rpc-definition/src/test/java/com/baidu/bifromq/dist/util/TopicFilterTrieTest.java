@@ -14,15 +14,15 @@
 package com.baidu.bifromq.dist.util;
 
 import static com.baidu.bifromq.dist.util.TestUtil.randomTopic;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
 
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.common.collect.Lists;
 import java.util.Collections;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class TopicFilterTrieTest {

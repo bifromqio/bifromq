@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -23,12 +23,14 @@ import com.baidu.bifromq.basekv.proto.Range;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplate {
 
-    @Test
+    @Test(groups = "integration")
     public void splitFromLeaderStore() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeSetting genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
@@ -59,7 +61,7 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void splitFromNonLeaderStore() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeSetting genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);

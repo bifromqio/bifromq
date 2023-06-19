@@ -20,14 +20,13 @@ import com.baidu.bifromq.basecrdt.store.CRDTStoreOptions;
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
 import io.micrometer.core.instrument.logging.LoggingRegistryConfig;
+
+import java.lang.reflect.Method;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class AgentTestTemplate {
@@ -36,39 +35,31 @@ public abstract class AgentTestTemplate {
     AgentTestTemplate() {
     }
 
-    @Rule
-    public final TestRule rule = new TestWatcher() {
-
-        @Override
-        protected void starting(Description description) {
-            super.starting(description);
-            storeMgr = new AgentTestCluster();
-            StoreCfgs storeCfgs = description.getAnnotation(StoreCfgs.class);
-            StoreCfg storeCfg = description.getAnnotation(StoreCfg.class);
-            String seedStoreId = null;
-            if (storeMgr != null) {
-                if (storeCfgs != null) {
-                    for (StoreCfg cfg : storeCfgs.stores()) {
-                        storeMgr.newHost(cfg.id(), build(cfg));
-                        if (cfg.isSeed()) {
-                            seedStoreId = cfg.id();
-                        }
-                    }
-                }
-                if (storeCfg != null) {
-                    storeMgr.newHost(storeCfg.id(), build(storeCfg));
-                }
-                if (seedStoreId != null && storeCfgs != null) {
-                    for (StoreCfg cfg : storeCfgs.stores()) {
-                        if (!cfg.id().equals(seedStoreId)) {
-                            storeMgr.join(cfg.id(), seedStoreId);
-                        }
+    public void createClusterByAnnotation(Method testMethod) {
+        StoreCfgs storeCfgs = testMethod.getAnnotation(StoreCfgs.class);
+        StoreCfg storeCfg = testMethod.getAnnotation(StoreCfg.class);
+        String seedStoreId = null;
+        if (storeMgr != null) {
+            if (storeCfgs != null) {
+                for (StoreCfg cfg : storeCfgs.stores()) {
+                    storeMgr.newHost(cfg.id(), build(cfg));
+                    if (cfg.isSeed()) {
+                        seedStoreId = cfg.id();
                     }
                 }
             }
-            log.info("Starting test: " + description.getMethodName());
+            if (storeCfg != null) {
+                storeMgr.newHost(storeCfg.id(), build(storeCfg));
+            }
+            if (seedStoreId != null && storeCfgs != null) {
+                for (StoreCfg cfg : storeCfgs.stores()) {
+                    if (!cfg.id().equals(seedStoreId)) {
+                        storeMgr.join(cfg.id(), seedStoreId);
+                    }
+                }
+            }
         }
-    };
+    }
 
     @BeforeClass
     public static void setupOnce() {
@@ -87,7 +78,12 @@ public abstract class AgentTestTemplate {
 //        Metrics.addRegistry(meterRegistry);
     }
 
-    @After
+    @BeforeMethod
+    public void setup() {
+        storeMgr = new AgentTestCluster();
+    }
+
+    @AfterMethod
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");

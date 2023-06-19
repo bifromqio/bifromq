@@ -21,14 +21,14 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 abstract class RPCServiceAnnouncerTest {
     private IAgentHost agentHost;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
@@ -42,7 +42,7 @@ abstract class RPCServiceAnnouncerTest {
         log.info("Agent host started");
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         agentHost.shutdown();
     }

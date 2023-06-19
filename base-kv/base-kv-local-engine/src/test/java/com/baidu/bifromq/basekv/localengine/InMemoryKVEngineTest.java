@@ -22,14 +22,14 @@ import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public class InMemoryKVEngineTest extends AbstractKVEngineTest {
     private ScheduledExecutorService maintenanceTaskExecutor;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         maintenanceTaskExecutor =
             newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
@@ -39,7 +39,7 @@ public class InMemoryKVEngineTest extends AbstractKVEngineTest {
         kvEngine.start(maintenanceTaskExecutor);
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         kvEngine.stop();
         MoreExecutors.shutdownAndAwaitTermination(maintenanceTaskExecutor, 5, TimeUnit.SECONDS);

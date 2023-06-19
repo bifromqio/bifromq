@@ -13,17 +13,17 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.type.ClientInfo;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class InboxCreateTest extends InboxServiceTest {
 
-    @Test
+    @Test(groups = "integration")
     public void create() {
         String trafficId = "trafficA";
         String inboxId = "inbox1";
@@ -42,7 +42,7 @@ public class InboxCreateTest extends InboxServiceTest {
         assertEquals(HasInboxReply.Result.YES, hasInboxReply.getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void delete() {
         String trafficId = "trafficA";
         String inboxId = "inbox1";

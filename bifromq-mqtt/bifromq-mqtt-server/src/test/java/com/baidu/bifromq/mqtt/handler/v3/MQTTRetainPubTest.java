@@ -27,12 +27,9 @@ import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTRetainPubTest extends BaseMQTTTest {
 
     @Test

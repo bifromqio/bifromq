@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertSame;
 
 import com.baidu.bifromq.basekv.raft.proto.AppendEntries;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -40,16 +40,26 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@RunWith(MockitoJUnitRunner.class)
 public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
     private final Logger log = LoggerFactory.getLogger("RaftNodeStateCandidateTest");
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        closeable = MockitoAnnotations.openMocks(this);
+    }
 
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
     @Test
     public void testStartUp() {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()

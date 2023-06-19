@@ -62,37 +62,26 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.mockito.MockitoAnnotations;
+import org.testng.ITestListener;
+import org.testng.ITestNGMethod;
+import org.testng.ITestResult;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.mockito.Mock;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.PluginManager;
+import org.testng.annotations.Test;
 
 @Slf4j
-@Ignore
-abstract class MQTTTest {
-
-    private static final String DB_NAME = "testDB";
-    private static final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
-
-    private static final String DB_WAL_NAME = "testWAL";
-    private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-
+abstract class MQTTTest implements ITestListener {
     protected static final String brokerURI = "tcp://127.0.0.1:1883";
-    @Rule
-    public TestRule watcher = new TestWatcher() {
-        protected void starting(Description description) {
-            log.info("Starting test: " + description.getMethodName());
-        }
-    };
-
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
+//    @Rule
+//    public TestRule watcher = new TestWatcher() {
+//        protected void starting(Description description) {
+//            log.info("Starting test: " + description.getMethodName());
+//        }
+//    };
 
     @Mock
     protected IAuthProvider authProvider;
@@ -131,13 +120,24 @@ abstract class MQTTTest {
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
+    private AutoCloseable closeable;
 
-    @Before
-    public void setup() {
-        try {
-            dbRootDir.create();
-        } catch (IOException e) {
+    @Override
+    public void onTestStart(ITestResult result) {
+        ITestNGMethod method = result.getMethod();
+        Test testAn = method.getConstructorOrMethod().getMethod().getAnnotation(Test.class);
+        if (testAn != null) {
+            String[] groups = testAn.groups();
+            if (groups.length > 0) {
+                System.out.println("yes");
+            }
         }
+        System.out.println(method.getDescription());
+    }
+
+    @BeforeMethod
+    public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         pluginMgr = new DefaultPluginManager();
         ioExecutor = newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("MQTTTestExecutor-%d").build());
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
@@ -335,8 +335,8 @@ abstract class MQTTTest {
         });
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         log.info("Start to tearing down");
         mqttBroker.shutdown();
         log.info("Mqtt broker shut down");
@@ -385,7 +385,7 @@ abstract class MQTTTest {
         tickTaskExecutor.shutdownNow();
         log.info("Shutdown bg task executor");
         bgTaskExecutor.shutdownNow();
-        dbRootDir.delete();
+        closeable.close();
     }
 
     private int freePort() {

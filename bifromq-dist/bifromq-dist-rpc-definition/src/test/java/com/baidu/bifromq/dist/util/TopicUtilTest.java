@@ -17,10 +17,10 @@ package com.baidu.bifromq.dist.util;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.dist.util.TopicUtil.isWildcardTopicFilter;
 import static com.baidu.bifromq.dist.util.TopicUtil.parse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.AssertJUnit.fail;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.NavigableSet;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class TopicUtilTest {

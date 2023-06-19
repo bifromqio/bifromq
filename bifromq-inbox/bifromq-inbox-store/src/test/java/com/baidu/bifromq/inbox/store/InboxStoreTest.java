@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -62,6 +62,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Duration;
@@ -76,14 +78,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.mockito.MockitoAnnotations;
+import org.pf4j.util.FileUtils;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.mockito.Mock;
 
 @Slf4j
@@ -93,12 +91,12 @@ abstract class InboxStoreTest {
 
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-    @Rule
-    public TestRule watcher = new TestWatcher() {
-        protected void starting(Description description) {
-            log.info("Starting test: " + description.getMethodName());
-        }
-    };
+//    @Rule
+//    public TestRule watcher = new TestWatcher() {
+//        protected void starting(Description description) {
+//            log.info("Starting test: " + description.getMethodName());
+//        }
+//    };
 
     @Mock
     protected IEventCollector eventCollector;
@@ -109,17 +107,16 @@ abstract class InboxStoreTest {
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
+    public Path dbRootDir;
 
     protected IBaseKVStoreClient storeClient;
     protected InboxStore testStore;
 
-    @Before
-    public void setup() {
-        try {
-            dbRootDir.create();
-        } catch (IOException e) {
-        }
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void setup() throws IOException {
+        closeable = MockitoAnnotations.openMocks(this);
+        dbRootDir = Files.createTempDirectory("");
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -142,13 +139,13 @@ abstract class InboxStoreTest {
             options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
         } else {
             ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
             ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         }
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -186,19 +183,20 @@ abstract class InboxStoreTest {
         log.info("Setup finished, and start testing");
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();
         testStore.stop();
         clientCrdtService.stop();
         serverCrdtService.stop();
         agentHost.shutdown();
-        dbRootDir.delete();
+        FileUtils.delete(dbRootDir);
         queryExecutor.shutdown();
         mutationExecutor.shutdown();
         tickTaskExecutor.shutdown();
         bgTaskExecutor.shutdown();
+        closeable.close();
     }
 
     protected Clock getClock() {
@@ -234,7 +232,7 @@ abstract class InboxStoreTest {
             assertEquals(ReplyCode.Ok, reply.getCode());
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasCreateInbox());
-            Assert.assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(reqId, output.getReply().getReqId());
             return output.getReply().getCreateInbox();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -284,7 +282,7 @@ abstract class InboxStoreTest {
             assertEquals(ReplyCode.Ok, reply.getCode());
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasTouch());
-            Assert.assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(reqId, output.getReply().getReqId());
             return output.getReply().getTouch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -321,7 +319,7 @@ abstract class InboxStoreTest {
             assertEquals(ReplyCode.Ok, reply.getCode());
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasInsert());
-            Assert.assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(reqId, output.getReply().getReqId());
             return output.getReply().getInsert();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -458,7 +456,7 @@ abstract class InboxStoreTest {
             assertEquals(ReplyCode.Ok, reply.getCode());
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasTouch());
-            Assert.assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(reqId, output.getReply().getReqId());
             return output.getReply().getTouch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -487,7 +485,7 @@ abstract class InboxStoreTest {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply
                 .getRwCoProcResult());
             assertTrue(output.getReply().hasCommit());
-            Assert.assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(reqId, output.getReply().getReqId());
             assertTrue(output.getReply().getCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
             return output.getReply().getCommit();
         } catch (InvalidProtocolBufferException e) {
@@ -516,7 +514,7 @@ abstract class InboxStoreTest {
             assertEquals(ReplyCode.Ok, reply.getCode());
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasCommit());
-            Assert.assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(reqId, output.getReply().getReqId());
             assertTrue(output.getReply().getCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
             return output.getReply().getCommit();
         } catch (InvalidProtocolBufferException e) {
@@ -544,7 +542,7 @@ abstract class InboxStoreTest {
             assertEquals(ReplyCode.Ok, reply.getCode());
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasCommit());
-            Assert.assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(reqId, output.getReply().getReqId());
             assertTrue(output.getReply().getCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
             return output.getReply().getCommit();
         } catch (InvalidProtocolBufferException e) {

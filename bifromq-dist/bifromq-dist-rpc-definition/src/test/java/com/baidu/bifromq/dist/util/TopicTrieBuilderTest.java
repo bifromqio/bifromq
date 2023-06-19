@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.util;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.type.TopicMessage;
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class TopicTrieBuilderTest {

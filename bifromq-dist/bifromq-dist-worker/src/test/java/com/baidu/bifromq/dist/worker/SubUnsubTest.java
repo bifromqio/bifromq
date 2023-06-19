@@ -19,8 +19,8 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.ClearSubInfoReply;
@@ -30,14 +30,11 @@ import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilterReply;
 import com.baidu.bifromq.type.QoS;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class SubUnsubTest extends DistWorkerTest {
-    @Test
+    @Test(groups = "integration")
     public void testAddTopicFilter() {
         String subInfoKeyUtf8 = subInfoKey("trafficA",
             toQualifiedInboxId(MqttBroker, "inbox1", "server1")).toStringUtf8();
@@ -59,7 +56,7 @@ public class SubUnsubTest extends DistWorkerTest {
             reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRemoveTopicFilter() {
         String subInfoKeyUtf8_1 = subInfoKey("trafficA",
             toQualifiedInboxId(MqttBroker, "inbox1", "server1")).toStringUtf8();
@@ -114,7 +111,7 @@ public class SubUnsubTest extends DistWorkerTest {
             reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testInsertMatchRecord() {
         InsertMatchRecordReply reply = insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker,
             "inbox1", "server1");
@@ -124,7 +121,7 @@ public class SubUnsubTest extends DistWorkerTest {
         reply = insertMatchRecord("trafficA", "/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server1");
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testJoinMatchGroup() {
         String trafficId = "trafficA";
         String topicFilter = "$share/group/a/b/c";
@@ -152,7 +149,7 @@ public class SubUnsubTest extends DistWorkerTest {
             reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDeleteNormalMatchRecord() {
         deleteMatchRecord("trafficId", "/a/b/c", MqttBroker, "inbox1", "server1");
         insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
@@ -165,7 +162,7 @@ public class SubUnsubTest extends DistWorkerTest {
         deleteMatchRecord("trafficId", "/a/b/c", MqttBroker, "inbox1", "server3");
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaveMatchGroup() {
         leaveMatchGroup("trafficId", "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
         joinMatchGroup("trafficA", "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
@@ -178,7 +175,7 @@ public class SubUnsubTest extends DistWorkerTest {
         leaveMatchGroup("trafficId", "$share/group/a/b/c", MqttBroker, "inbox1", "server3");
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testClearSubInfo() {
         ClearSubInfoReply reply = clearSubInfo("trafficA", MqttBroker, "inbox1", "server1");
         assertTrue(reply.getSubInfo(0).getTopicFiltersMap().isEmpty());

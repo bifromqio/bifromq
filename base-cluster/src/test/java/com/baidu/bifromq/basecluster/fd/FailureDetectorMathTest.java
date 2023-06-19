@@ -14,10 +14,10 @@
 package com.baidu.bifromq.basecluster.fd;
 
 import static com.baidu.bifromq.basecluster.fd.FailureDetectorMath.scale;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import java.time.Duration;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class FailureDetectorMathTest {
     @Test

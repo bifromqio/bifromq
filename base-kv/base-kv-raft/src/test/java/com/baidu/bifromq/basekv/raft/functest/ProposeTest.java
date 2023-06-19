@@ -18,15 +18,16 @@ import static com.baidu.bifromq.basekv.raft.exception.DropProposalException.THRO
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertSame;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.raft.exception.CompactionException;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
+import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.google.protobuf.ByteString;
@@ -34,29 +35,31 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(RaftGroupTestListener.class)
 public class ProposeTest extends SharedRaftConfigTestTemplate {
-    @Test
+    @Test(groups = "integration")
     public void testProposalOverridden1() {
         testProposalOverridden(true);
     }
 
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testProposalOverridden2() {
         testProposalOverridden(true);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testProposalOverridden3() {
         testProposalOverridden(false);
     }
 
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testProposalOverridden4() {
         testProposalOverridden(false);
     }
@@ -82,7 +85,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         String newLeader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(newLeader, 5));
         log.info("New leader {} elected", newLeader);
-        assertNotEquals(leader, newLeader);
+        assertNotEquals(newLeader, leader);
         // propose two more entries via new leader and wait for committed
         group.propose(newLeader, copyFromUtf8("appCommandA"));
         group.propose(newLeader, copyFromUtf8("appCommandB"));
@@ -113,7 +116,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
     }
 
     @Cluster(v = "V1")
-    @Test
+    @Test(groups = "integration")
     public void testSingleNodePropose() {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(leader, 1));
@@ -134,7 +137,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         assertEquals(copyFromUtf8("appCommand3"), entries.get(2).getData());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testProposeFromLeader() {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(leader, 1));
@@ -158,7 +161,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testProposeFromFollower() {
         assertTrue(group.awaitIndexCommitted("V1", 1));
         assertTrue(group.awaitIndexCommitted("V2", 1));
@@ -192,7 +195,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testProposeThrottled() {
         assertTrue(group.awaitIndexCommitted("V1", 1));
         assertTrue(group.awaitIndexCommitted("V2", 1));
@@ -210,7 +213,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testCompaction() {
         assertTrue(group.awaitIndexCommitted("V1", 1));
         assertTrue(group.awaitIndexCommitted("V2", 1));

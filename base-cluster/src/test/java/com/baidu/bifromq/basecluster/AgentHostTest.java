@@ -31,15 +31,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(AgentHostTestListener.class)
 public class AgentHostTest extends AgentTestTemplate {
-
-
     @StoreCfgs(stores = {@StoreCfg(id = "s1", bindPort = 11111)})
-    @Test
+    @Test(groups = "integration")
     public void testRegister() {
         IAgent agent = storeMgr.host("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
@@ -57,7 +57,7 @@ public class AgentHostTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {@StoreCfg(id = "s1", bindPort = 11111)})
-    @Test
+    @Test(groups = "integration")
     public void testUnregister() {
         IAgent agent = storeMgr.host("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
@@ -85,7 +85,7 @@ public class AgentHostTest extends AgentTestTemplate {
         @StoreCfg(id = "s4", bindPort = 11114),
         @StoreCfg(id = "s5", bindPort = 11115),
     })
-    @Test
+    @Test(groups = "integration")
     public void testMultipleAgentHosts() {
         await().until(() -> storeMgr.membership("s1").size() == 5);
         await().until(() -> storeMgr.membership("s2").size() == 5);
@@ -98,7 +98,7 @@ public class AgentHostTest extends AgentTestTemplate {
         @StoreCfg(id = "s1", bindPort = 11111, isSeed = true),
         @StoreCfg(id = "s2", bindPort = 22222),
     })
-    @Test
+    @Test(groups = "integration")
     public void testAgentNodesInTwoStores() {
         await().until(() -> storeMgr.membership("s1").size() == 2);
         await().until(() -> storeMgr.membership("s2").size() == 2);
@@ -132,7 +132,7 @@ public class AgentHostTest extends AgentTestTemplate {
         @StoreCfg(id = "s2", bindPort = 22222),
         @StoreCfg(id = "s3", bindPort = 33333),
     })
-    @Test
+    @Test(groups = "integration")
     public void testAgentNodesInThreeStores() {
         await().until(() -> {
             Set<HostEndpoint> hosts_s1 = Sets.newHashSet(storeMgr.getHost("s1").membership().blockingFirst());
@@ -205,7 +205,7 @@ public class AgentHostTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {@StoreCfg(id = "s1", bindPort = 11111, isSeed = true)})
-    @Test
+    @Test(groups = "integration")
     public void testRefreshRoute() {
         IAgent agent = storeMgr.host("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
@@ -234,7 +234,7 @@ public class AgentHostTest extends AgentTestTemplate {
         @StoreCfg(id = "s1", bindPort = 11111, isSeed = true),
         @StoreCfg(id = "s2", bindPort = 22222),
     })
-    @Test
+    @Test(groups = "integration")
     public void testMulticast() {
         String sender = "sender";
         String receiverGroup = "receiverGroup";

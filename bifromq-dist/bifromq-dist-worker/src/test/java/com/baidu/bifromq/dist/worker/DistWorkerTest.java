@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -74,6 +74,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
@@ -87,13 +89,10 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.mockito.MockitoAnnotations;
+import org.pf4j.util.FileUtils;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.mockito.Mock;
 
 @Slf4j
@@ -105,12 +104,7 @@ public abstract class DistWorkerTest {
 
     protected static final int MqttBroker = 0;
     protected static final int InboxService = 1;
-    @Rule
-    public TestRule watcher = new TestWatcher() {
-        protected void starting(Description description) {
-            log.info("Starting test: " + description.getMethodName());
-        }
-    };
+
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
@@ -133,17 +127,19 @@ public abstract class DistWorkerTest {
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
+    private Path dbRootDir;
 
     private static boolean runOnMac() {
         String osName = System.getProperty("os.name");
         return osName != null && osName.startsWith("Mac");
     }
 
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         try {
-            dbRootDir.create();
+            dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
         lenient().when(receiverManager.hasBroker(MqttBroker)).thenReturn(true);
@@ -187,13 +183,13 @@ public abstract class DistWorkerTest {
             options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
         } else {
             ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
             ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         }
 
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
@@ -235,19 +231,24 @@ public abstract class DistWorkerTest {
         log.info("Setup finished, and start testing");
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();
         testWorker.stop();
         clientCrdtService.stop();
         serverCrdtService.stop();
         agentHost.shutdown();
-        dbRootDir.delete();
+        try {
+            FileUtils.delete(dbRootDir);
+        } catch(IOException e) {
+            e.printStackTrace();
+        }
         queryExecutor.shutdown();
         mutationExecutor.shutdown();
         tickTaskExecutor.shutdown();
         bgTaskExecutor.shutdown();
+        closeable.close();
     }
 
     protected AddTopicFilterReply addTopicFilter(String trafficId, String topicFilter, QoS subQoS,

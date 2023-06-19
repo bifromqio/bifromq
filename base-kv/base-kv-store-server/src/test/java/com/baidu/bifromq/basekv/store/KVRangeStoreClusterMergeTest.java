@@ -28,11 +28,13 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplate {
-    @Test
+    @Test(groups = "integration")
     public void mergeFromLeaderStore() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeSetting genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
@@ -104,7 +106,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
 
     }
 
-    @Test
+    @Test(groups = "integration")
     public void mergeUnderOnlyQuorumAvailable() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeSetting genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
@@ -172,7 +174,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
     }
 
     @Cluster(installSnapshotTimeoutTick = 10)
-    @Test
+    @Test(groups = "integration")
     public void mergeWithOneMemberIsolated() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeSetting genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);

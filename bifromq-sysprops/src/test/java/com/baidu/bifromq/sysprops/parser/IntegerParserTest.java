@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.sysprops.parser;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class IntegerParserTest {
     @Test
@@ -24,7 +24,7 @@ public class IntegerParserTest {
         assertTrue(parser.parse("1") == 1);
     }
 
-    @Test(expected = SysPropParseException.class)
+    @Test(expectedExceptions = SysPropParseException.class)
     public void parseException() {
         IntegerParser.POSITIVE.parse("0");
     }

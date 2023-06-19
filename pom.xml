@@ -77,6 +77,7 @@
         <paho.mqtt.version>1.2.5</paho.mqtt.version>
         <mockito.version>4.6.0</mockito.version>
         <junit.version>4.13.2</junit.version>
+        <testng.version>7.7.1</testng.version>
         <jmh.version>1.36</jmh.version>
 
         <!-- maven.plugin.version-->
@@ -500,6 +501,12 @@
                 <groupId>junit</groupId>
                 <artifactId>junit</artifactId>
                 <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <version>${testng.version}</version>
                 <scope>test</scope>
             </dependency>
             <dependency>

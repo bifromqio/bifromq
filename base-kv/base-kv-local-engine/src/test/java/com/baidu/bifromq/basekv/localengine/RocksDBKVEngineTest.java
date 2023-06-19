@@ -16,30 +16,32 @@ package com.baidu.bifromq.basekv.localengine;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
+import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
+
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -47,30 +49,30 @@ import org.rocksdb.RocksIterator;
 
 @Slf4j
 public class RocksDBKVEngineTest extends AbstractKVEngineTest {
-    @Rule
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
+    public Path dbRootDir;
     private ScheduledExecutorService bgTaskExecutor;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
+        dbRootDir = Files.createTempDirectory("");
         bgTaskExecutor =
-            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
+                newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
         start();
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         stop();
         MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
-        TestUtil.deleteDir(dbRootDir.getRoot().toString());
+        TestUtil.deleteDir(dbRootDir.toString());
     }
 
     private void start() {
         String DB_NAME = "testDB";
         String DB_CHECKPOINT_DIR = "testDB_cp";
         RocksDBKVEngineConfigurator configurator = new RocksDBKVEngineConfigurator()
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString())
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString());
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
         kvEngine = new RocksDBKVEngine(null, List.of(IKVEngine.DEFAULT_NS, NS),
             this::isUsed, configurator, Duration.ofSeconds(-1));
         kvEngine.start(bgTaskExecutor);
@@ -108,7 +110,7 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
 
     @Test
     public void testReusedIteratorWithDeleteRange2() throws RocksDBException {
-        String dbPath = dbRootDir.getRoot().getAbsolutePath();
+        String dbPath = dbRootDir.toString();
         try (Options options = new Options()
             .setCreateIfMissing(true)
             .setCreateMissingColumnFamilies(true);
@@ -268,7 +270,7 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
 
         long size = kvEngine.size(IKVEngine.DEFAULT_NS);
         log.info("Size = {} bytes", size);
-        assertNotEquals(0, size);
+        assertNotEquals(size, 0);
 
         kvEngine.clearRange(IKVEngine.DEFAULT_NS);
     }

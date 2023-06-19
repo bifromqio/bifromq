@@ -15,8 +15,8 @@ package com.baidu.bifromq.basecrdt.store;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
@@ -26,8 +26,8 @@ import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class PartialMeshTest {

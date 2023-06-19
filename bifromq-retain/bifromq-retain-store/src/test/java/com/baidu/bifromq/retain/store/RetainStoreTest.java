@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -48,6 +48,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Duration;
@@ -60,13 +62,10 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.mockito.MockitoAnnotations;
+import org.pf4j.util.FileUtils;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public class RetainStoreTest {
@@ -75,12 +74,12 @@ public class RetainStoreTest {
 
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-    @Rule
-    public TestRule watcher = new TestWatcher() {
-        protected void starting(Description description) {
-            log.info("Starting test: " + description.getMethodName());
-        }
-    };
+//    @Rule
+//    public TestRule watcher = new TestWatcher() {
+//        protected void starting(Description description) {
+//            log.info("Starting test: " + description.getMethodName());
+//        }
+//    };
 
     private IAgentHost agentHost;
 
@@ -94,14 +93,12 @@ public class RetainStoreTest {
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
-
-    @Before
-    public void setup() {
-        try {
-            dbRootDir.create();
-        } catch (IOException e) {
-        }
+    private Path dbRootDir;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void setup() throws IOException {
+        closeable = MockitoAnnotations.openMocks(this);
+        dbRootDir = Files.createTempDirectory("");
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -123,13 +120,13 @@ public class RetainStoreTest {
             options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
         } else {
             ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
             ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         }
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -165,19 +162,24 @@ public class RetainStoreTest {
         log.info("Setup finished, and start testing");
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();
         testStore.stop();
         clientCrdtService.stop();
         serverCrdtService.stop();
         agentHost.shutdown();
-        dbRootDir.delete();
+        try {
+            FileUtils.delete(dbRootDir);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         queryExecutor.shutdown();
         mutationExecutor.shutdown();
         tickTaskExecutor.shutdown();
         bgTaskExecutor.shutdown();
+        closeable.close();
     }
 
     protected Clock getClock() {

@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
@@ -42,20 +43,16 @@ import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.Test;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTSubTest extends BaseMQTTTest {
 
     private boolean shouldCleanSubs = false;
 
-    @After
+    @AfterMethod
     public void clean() {
         if (shouldCleanSubs) {
             when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
@@ -66,6 +63,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         } else {
             channel.close();
         }
+        shouldCleanSubs = false;
     }
 
     @Test
@@ -250,9 +248,9 @@ public class MQTTSubTest extends BaseMQTTTest {
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {
-        Assert.assertEquals(expectedQos.length, subAckMessage.payload().grantedQoSLevels().size());
+        assertEquals(expectedQos.length, subAckMessage.payload().grantedQoSLevels().size());
         for (int i = 0; i < expectedQos.length; i++) {
-            Assert.assertEquals((int) subAckMessage.payload().grantedQoSLevels().get(i), expectedQos[i]);
+            assertEquals((int) subAckMessage.payload().grantedQoSLevels().get(i), expectedQos[i]);
         }
     }
 

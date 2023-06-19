@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.sysprops;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class BifroMQSysPropTest {
-    @Test
+    @Test(groups = "fast")
     public void defaultValue() {
         for (BifroMQSysProp prop : BifroMQSysProp.values()) {
             assertTrue(prop.get().equals(prop.defVal()));

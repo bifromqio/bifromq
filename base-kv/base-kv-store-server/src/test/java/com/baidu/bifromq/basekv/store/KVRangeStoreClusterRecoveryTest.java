@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus.Candidate;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
@@ -23,13 +23,15 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import java.time.Duration;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemplate {
 
     @Cluster(initNodes = 2)
-    @Test
+    @Test(groups = "integration")
     public void recoveryFromTwoToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
@@ -51,7 +53,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
     }
 
     @Cluster(initNodes = 3)
-    @Test
+    @Test(groups = "integration")
     public void recoveryFromThreeToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeSetting setting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);

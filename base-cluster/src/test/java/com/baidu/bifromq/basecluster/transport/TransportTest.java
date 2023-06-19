@@ -1,10 +1,11 @@
 package com.baidu.bifromq.basecluster.transport;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import org.testng.annotations.Test;
 
 import java.net.InetSocketAddress;
-import org.junit.Test;
+
+import static org.testng.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
 
 public class TransportTest {
     @Test

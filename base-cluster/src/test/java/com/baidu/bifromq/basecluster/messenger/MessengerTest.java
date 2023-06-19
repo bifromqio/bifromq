@@ -1,13 +1,13 @@
 package com.baidu.bifromq.basecluster.messenger;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Collections;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class MessengerTest {
     @Test

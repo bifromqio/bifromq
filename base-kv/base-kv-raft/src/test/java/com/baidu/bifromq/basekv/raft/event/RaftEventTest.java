@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.basekv.raft.event;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import java.util.Collections;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class RaftEventTest {
     @Test

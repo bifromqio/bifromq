@@ -21,10 +21,12 @@ import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfg;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfgs;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(CRDTServiceTestListener.class)
 public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
 
     @ServiceCfgs(services =
@@ -32,7 +34,7 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
             @ServiceCfg(id = "s1", bindPort = 11111, isSeed = true),
             @ServiceCfg(id = "s2", bindPort = 22222)
         })
-    @Test
+    @Test(groups = "integration")
     public void testConvergence() {
         ICRDTService service1 = testCluster.getService("s1");
         ICRDTService service2 = testCluster.getService("s2");
@@ -58,7 +60,7 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
             @ServiceCfg(id = "s1", bindPort = 11111, isSeed = true),
             @ServiceCfg(id = "s2", bindPort = 22222)
         })
-    @Test
+    @Test(groups = "integration")
     public void testPartition() {
         ICRDTService service1 = testCluster.getService("s1");
         ICRDTService service2 = testCluster.getService("s2");

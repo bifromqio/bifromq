@@ -16,7 +16,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
 import static java.util.Collections.emptyIterator;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basecrdt.core.api.IMVReg;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
@@ -25,7 +25,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class MVRegTest extends CRDTTest {
     private final Replica leftReplica = Replica.newBuilder()

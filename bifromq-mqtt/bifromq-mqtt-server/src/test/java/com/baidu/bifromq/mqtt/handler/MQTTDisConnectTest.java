@@ -26,13 +26,10 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTDisConnectTest extends BaseMQTTTest {
 
     @Test

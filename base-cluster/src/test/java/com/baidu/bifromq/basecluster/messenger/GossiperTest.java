@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecluster.messenger;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.messenger.proto.GossipMessage;
 import com.google.protobuf.ByteString;
@@ -26,9 +26,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 /**
  * Created by mafei01 in 2020-04-24 10:24
@@ -48,7 +48,7 @@ public class GossiperTest {
     private int retransmitMultiplier = 1;
     private Duration period = Duration.ofMillis(10);
 
-    @Before
+    @BeforeMethod
     public void init() {
         gossiper = new Gossiper(local.toString(), retransmitMultiplier, period, Schedulers.single());
     }

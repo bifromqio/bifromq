@@ -31,14 +31,11 @@ import io.micrometer.core.instrument.Meter;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class GCAndStatsTest extends DistWorkerTest {
-    @Test
+    @Test(groups = "integration")
     public void gc() {
         when(receiverManager.hasInbox(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(HasResult.NO));
@@ -64,7 +61,7 @@ public class GCAndStatsTest extends DistWorkerTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void reportRangeMetrics() {
         addTopicFilter("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
         insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");

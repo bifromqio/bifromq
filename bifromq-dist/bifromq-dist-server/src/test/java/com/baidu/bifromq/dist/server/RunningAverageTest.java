@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.dist.server;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class RunningAverageTest {
     @Test

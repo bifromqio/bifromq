@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.membership.proto.HostMember;
@@ -25,7 +25,7 @@ import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class AgentHostProviderTest {
     private String agentId1 = "agentA";

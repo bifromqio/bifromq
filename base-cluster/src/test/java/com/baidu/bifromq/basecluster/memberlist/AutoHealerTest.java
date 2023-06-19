@@ -22,8 +22,8 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.endorseMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.failMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.joinMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.quitMsg;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.timeout;
@@ -44,14 +44,14 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class AutoHealerTest {
     @Mock
     private IMessenger messenger;
@@ -64,13 +64,19 @@ public class AutoHealerTest {
     private Scheduler scheduler = Schedulers.from(Executors.newSingleThreadScheduledExecutor());
     private Duration healingTimeout = Duration.ofSeconds(1);
     private Duration healingInterval = Duration.ofMillis(100);
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         when(addressResolver.resolve(REMOTE_HOST_1_ENDPOINT)).thenReturn(REMOTE_ADDR_1);
         when(memberList.local()).thenReturn(LOCAL);
         when(messenger.receive()).thenReturn(messageSubject);
         when(memberList.members()).thenReturn(membersSubject);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

@@ -20,10 +20,13 @@ import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.pf4j.util.FileUtils;
+import org.testng.annotations.Ignore;
+import org.testng.annotations.Test;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.runner.Runner;
@@ -34,18 +37,11 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @Slf4j
 public abstract class CRDTBenchmarkTemplate {
     protected ICRDTEngine engine;
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
 
     @Setup
-    public void setup() {
-        try {
-            dbRootDir.create();
-        } catch (IOException e) {
-        }
-
+    public void setup() throws IOException {
         engine = ICRDTEngine.newInstance(new CRDTEngineOptions());
         engine.start();
-        dbRootDir = new TemporaryFolder();
         doSetup();
     }
 
@@ -53,7 +49,6 @@ public abstract class CRDTBenchmarkTemplate {
     public void tearDown() {
         log.info("Stop engine");
         engine.stop();
-        dbRootDir.delete();
     }
 
     protected abstract void doSetup();

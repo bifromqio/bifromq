@@ -16,8 +16,8 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.aworset;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.cctr;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICCounter;
@@ -27,7 +27,7 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.time.Duration;
 import java.util.Optional;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class CCounterTest extends CRDTTest {
     private final Replica leftReplica = Replica.newBuilder()

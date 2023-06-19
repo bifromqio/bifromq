@@ -14,17 +14,17 @@
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import java.net.InetSocketAddress;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
-    @Test
+    @Test(groups = "integration")
     public void startAndStop() {
         ICRDTService crdtService = newCRDTService();
         IRPCServiceServerRegister serverRegister = IRPCServiceServerRegister
@@ -33,7 +33,7 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         serverRegister.stop();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void localServerDiscovery() {
         String service = "service";
         String server = "server";
@@ -59,7 +59,7 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         crdtService.stop();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void remoteServerDiscovery() {
         String service = "service";
         String server = "server";

@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.basecluster.messenger;
 
-import static org.junit.Assert.assertTrue;
-
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.membership.proto.Quit;
 import com.baidu.bifromq.basecluster.proto.ClusterMessage;
@@ -30,9 +28,11 @@ import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import static org.testng.Assert.assertTrue;
 
 @Slf4j
 public class MessengerFuncTest {
@@ -53,7 +53,7 @@ public class MessengerFuncTest {
     private Scheduler scheduler = Schedulers.single();
     private ClusterMessage quit;
 
-    @Before
+    @BeforeMethod
     public void init() {
         MessengerOptions opts = new MessengerOptions();
         opts.maxFanout(maxFanout)
@@ -115,14 +115,14 @@ public class MessengerFuncTest {
             .build();
     }
 
-    @After
+    @AfterMethod
     public void close() {
         localMessenger.shutdown().join();
         remoteMessenger.shutdown().join();
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void testGossipHeardFromSelf() {
         localMessenger.receive().subscribe(localObserver::onNext);
         localMessenger.start(localRecipientSelector);
@@ -134,7 +134,7 @@ public class MessengerFuncTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void testSpreadFromRemote() {
         localMessenger.receive().subscribe(localObserver::onNext);
         localMessenger.start(localRecipientSelector);
@@ -150,7 +150,7 @@ public class MessengerFuncTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void testDirectMessageFromRemote() {
         localMessenger.receive().subscribe(localObserver::onNext);
         localMessenger.start(localRecipientSelector);
@@ -161,7 +161,7 @@ public class MessengerFuncTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void testSendPiggybackedGossips() {
         localMessenger.receive().subscribe(localObserver::onNext);
         localMessenger.start(localRecipientSelector);

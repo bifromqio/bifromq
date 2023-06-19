@@ -37,6 +37,9 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.exception.DropException;
@@ -89,9 +92,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
+
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -134,8 +138,10 @@ public abstract class BaseMQTTTest {
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
 
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         sessionBrokerServer = ILocalSessionBrokerServer.inProcBrokerBuilder().build();
         testTicker = new TestTicker();
         sessionContext = MQTTSessionContext.builder()
@@ -159,9 +165,11 @@ public abstract class BaseMQTTTest {
         mockSettings();
     }
 
-    @After
-    public void clean() {
+    @AfterMethod
+    public void clean() throws Exception {
+        fetchHints.clear();
         channel.close();
+        closeable.close();
     }
 
     protected ChannelInitializer<EmbeddedChannel> channelInitializer() {
@@ -356,7 +364,7 @@ public abstract class BaseMQTTTest {
     protected void verifyEvent(int count, EventType... types) {
         ArgumentCaptor<Event> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector, times(count)).report(eventArgumentCaptor.capture());
-        Assert.assertArrayEquals(types, eventArgumentCaptor.getAllValues().stream().map(Event::type).toArray());
+        assertArrayEquals(types, eventArgumentCaptor.getAllValues().stream().map(Event::type).toArray());
     }
 
     protected MqttConnAckMessage connectAndVerify(boolean cleanSession) {
@@ -411,9 +419,9 @@ public abstract class BaseMQTTTest {
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
+        assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
         if (!cleanSession && hasInbox) {
-            Assert.assertTrue(ackMessage.variableHeader().isSessionPresent());
+            assertTrue(ackMessage.variableHeader().isSessionPresent());
         }
         return ackMessage;
     }

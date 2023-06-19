@@ -14,19 +14,21 @@
 package com.baidu.bifromq.basekv.store;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestTemplate {
 
-    @Test
+    @Test(groups = "integration")
     public void testRequestTransferLeadershipFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
@@ -47,7 +49,7 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToFakeLeader() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSetting = cluster.kvRangeSetting(rangeId);
@@ -61,7 +63,7 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRequestTransferLeadershipFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
@@ -83,7 +85,7 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToSelf() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
@@ -99,7 +101,7 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipConcurrently() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {

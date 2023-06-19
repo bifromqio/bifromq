@@ -14,15 +14,15 @@
 package com.baidu.bifromq.basecluster.utils;
 
 import static java.util.Collections.emptyList;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.util.RandomUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.IntStream;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 public class RandomUtilTest {
     @Test

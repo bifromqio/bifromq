@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.starter.config;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertNotNull;
 
 import java.io.File;
 import java.nio.file.Paths;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class StandaloneConfigTest {

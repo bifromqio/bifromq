@@ -17,10 +17,10 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.atLeast;
@@ -47,15 +47,14 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import lombok.SneakyThrows;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class AutoSeederTest {
     @Mock
     private IMessenger messenger;
@@ -68,12 +67,18 @@ public class AutoSeederTest {
     private PublishSubject<Timed<MessageEnvelope>> messageSubject = PublishSubject.create();
     private Duration joinTimeout = Duration.ofSeconds(1);
     private Duration joinInterval = Duration.ofMillis(100);
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         when(addressResolver.resolve(REMOTE_HOST_1_ENDPOINT)).thenReturn(REMOTE_ADDR_1);
         when(memberList.local()).thenReturn(LOCAL);
         when(memberList.members()).thenReturn(membersSubject);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

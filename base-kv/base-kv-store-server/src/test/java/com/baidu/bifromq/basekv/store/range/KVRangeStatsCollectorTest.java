@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
@@ -25,12 +25,13 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.time.Duration;
 import java.util.Map;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class KVRangeStatsCollectorTest {
     @Mock
     private IKVRangeWAL rangeWAL;
@@ -40,6 +41,16 @@ public class KVRangeStatsCollectorTest {
     private IKVRangeReader rangeReader;
     @Mock
     private IKVReader kvReader;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        closeable = MockitoAnnotations.openMocks(this);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
 
     @Test
     public void testScrap() {

@@ -14,9 +14,9 @@
 package com.baidu.bifromq.basekv.raft;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
@@ -25,14 +25,13 @@ import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class RaftNodeTest {
     @Mock
     private IRaftNode.IRaftMessageSender messageSender;
@@ -41,9 +40,10 @@ public class RaftNodeTest {
     @Mock
     private IRaftNode.ISnapshotInstaller snapshotInstaller;
     private RaftNode testNode;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         Snapshot snapshot = Snapshot.newBuilder()
             .setIndex(0)
             .setTerm(0)
@@ -54,27 +54,32 @@ public class RaftNodeTest {
         testNode = new RaftNode(new RaftConfig(), stateStorage, log);
     }
 
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
+
     @Test
     public void id() {
         assertEquals("V1", testNode.id());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expectedExceptions = IllegalStateException.class)
     public void currentStateBeforeStart() {
         testNode.status();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expectedExceptions = IllegalStateException.class)
     public void latestConfigBeforeStart() {
         testNode.latestClusterConfig();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expectedExceptions = IllegalStateException.class)
     public void latestSnapshotBeforeStart() {
         testNode.latestSnapshot();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expectedExceptions = IllegalStateException.class)
     public void stepDownBeforeStart() {
         testNode.stepDown();
     }

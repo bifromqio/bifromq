@@ -14,15 +14,15 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.google.common.collect.Sets.newHashSet;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.type.TopicMessage;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class MatchTest extends RetainStoreTest {
 
-    @Test
+    @Test(groups = "integration")
     public void wildcardTopicFilter() {
         String trafficId = "trafficId";
         TopicMessage message1 = message("/a/b/c", "hello");
@@ -52,7 +52,7 @@ public class MatchTest extends RetainStoreTest {
         assertEquals(newHashSet(message1, message2), newHashSet(matchReply.getMessagesList()));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void matchLimit() {
         String trafficId = "trafficId";
         TopicMessage message1 = message("/a/b/c", "hello");

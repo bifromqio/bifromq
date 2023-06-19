@@ -41,14 +41,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class KVRangeBalanceControllerTest {
 
     private static final String LOCAL_STORE_ID = "localStoreId";
@@ -59,9 +58,10 @@ public class KVRangeBalanceControllerTest {
     private final PublishSubject<Set<KVRangeStoreDescriptor>> storeDescSubject = PublishSubject.create();
 
     private KVRangeBalanceController KVRangeBalanceController;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() throws IOException {
+        closeable = MockitoAnnotations.openMocks(this);
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         File optFile =
@@ -76,9 +76,10 @@ public class KVRangeBalanceControllerTest {
         when(storeClient.describe()).thenReturn(storeDescSubject);
     }
 
-    @After
-    public void clear() {
+    @AfterMethod
+    public void clear() throws Exception {
         KVRangeBalanceController.stop();
+        closeable.close();
     }
 
     @Test

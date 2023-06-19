@@ -13,26 +13,25 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
 import com.baidu.bifromq.type.TopicMessage;
-import java.time.Clock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import java.io.IOException;
+import java.time.Clock;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class GCTest extends RetainStoreTest {
     @Mock
     private Clock clock;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
         super.setup();
         when(clock.millis()).thenReturn(0L);
     }
@@ -43,7 +42,7 @@ public class GCTest extends RetainStoreTest {
     }
 
 
-    @Test
+    @Test(groups = "integration")
     public void retainAlreadyExpired() {
         String trafficId = "trafficId";
         String topic = "/a";
@@ -54,7 +53,7 @@ public class GCTest extends RetainStoreTest {
         assertEquals(RetainCoProcReply.Result.ERROR, requestRetain(trafficId, 1, message).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void inlineGCDuringRetain() {
         String trafficId = "trafficId";
         String topic1 = "/a";
@@ -80,7 +79,7 @@ public class GCTest extends RetainStoreTest {
         assertEquals(message2, matchReply.getMessages(0));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void inlineGCDuringDelete() {
         String trafficId = "trafficId";
         String topic = "/a";
@@ -94,7 +93,7 @@ public class GCTest extends RetainStoreTest {
         assertEquals(0, requestMatch(trafficId, topic, 10).getMessagesCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void inlineGCDuringReplace() {
         String trafficId = "trafficId";
         String topic1 = "/a";
@@ -123,7 +122,7 @@ public class GCTest extends RetainStoreTest {
             requestRetain(trafficId, 2, message("/d", "abc")).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void estExpiryTimeUpdateByRetainNew() {
         String trafficId = "trafficId";
         String topic1 = "/a";
@@ -150,7 +149,7 @@ public class GCTest extends RetainStoreTest {
             message("/d", "abc")).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void estExpiryTimeUpdatedByReplaceNew() {
         String trafficId = "trafficId";
         String topic = "/a";
@@ -169,7 +168,7 @@ public class GCTest extends RetainStoreTest {
         assertEquals(0, requestMatch(trafficId, topic, 10).getMessagesCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void gc() {
         String trafficId = "trafficId";
         String topic = "/a";

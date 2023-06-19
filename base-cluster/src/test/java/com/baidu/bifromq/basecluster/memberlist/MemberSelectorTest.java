@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basecluster.memberlist;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
@@ -26,13 +26,13 @@ import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class MemberSelectorTest {
     @Mock
     private IHostMemberList memberList;
@@ -40,12 +40,18 @@ public class MemberSelectorTest {
     private IHostAddressResolver addressResolver;
     private PublishSubject<Map<HostEndpoint, Integer>> membersSubject = PublishSubject.create();
     private Scheduler scheduler = Schedulers.from(MoreExecutors.directExecutor());
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         when(memberList.members()).thenReturn(membersSubject);
         when(addressResolver.resolve(Fixtures.LOCAL_ENDPOINT)).thenReturn(Fixtures.LOCAL_ADDR);
         when(addressResolver.resolve(Fixtures.REMOTE_HOST_1_ENDPOINT)).thenReturn(Fixtures.REMOTE_ADDR_1);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

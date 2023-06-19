@@ -13,11 +13,12 @@
 
 package com.baidu.bifromq.basekv.raft.functest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
+import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.google.protobuf.ByteString;
@@ -25,11 +26,14 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.junit.Test;
 
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
+
+@Listeners(RaftGroupTestListener.class)
 public class SnapshotRestoreTest extends SharedRaftConfigTestTemplate {
     @Cluster(v = "V1")
-    @Test
+    @Test(groups = "integration")
     public void snapshotRestoredEventAfterSnapshotInstalled() {
         String leader = group.currentLeader().get();
         group.compact("V1", ByteString.EMPTY, 1).join();

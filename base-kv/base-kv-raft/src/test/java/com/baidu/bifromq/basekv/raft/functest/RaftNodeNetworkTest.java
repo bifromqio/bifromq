@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.raft.functest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
@@ -31,13 +31,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class RaftNodeNetworkTest {
     @Mock
     private IRaftNode raftNode1;
@@ -46,15 +47,25 @@ public class RaftNodeNetworkTest {
     @Mock
     private IRaftNode raftNode3;
 
-    private RaftNodeNetwork raftNodeNetwork = new RaftNodeNetwork();
+    private RaftNodeNetwork raftNodeNetwork;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        raftNodeNetwork = new RaftNodeNetwork();
+        closeable = MockitoAnnotations.openMocks(this);
+    }
 
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
     @Test
     public void testConnect() {
         when(raftNode1.id()).thenReturn("V1");
         when(raftNode2.id()).thenReturn("V2");
         IRaftNode.IRaftMessageSender raftMessageListenerV1 = raftNodeNetwork.connect(raftNode1);
         assertEquals(raftMessageListenerV1, raftNodeNetwork.connect(raftNode1));
-        assertNotEquals(raftMessageListenerV1, raftNodeNetwork.connect(raftNode2));
+        assertNotEquals(raftNodeNetwork.connect(raftNode2), raftMessageListenerV1);
     }
 
     @Test
@@ -219,7 +230,7 @@ public class RaftNodeNetworkTest {
         ArgumentCaptor<RaftMessage> receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode2, atLeastOnce()).receive(fromPeers.capture(), receivedMessages.capture());
         assertEquals(sendMessages.size(), receivedMessages.getAllValues().size());
-        assertNotEquals(sendMessages, receivedMessages.getAllValues());
+        assertNotEquals(receivedMessages.getAllValues(), sendMessages);
     }
 
     @Test

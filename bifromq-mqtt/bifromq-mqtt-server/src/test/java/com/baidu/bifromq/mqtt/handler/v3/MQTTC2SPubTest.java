@@ -36,6 +36,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertTrue;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
@@ -51,13 +54,10 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
+import org.mockito.Mockito;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTC2SPubTest extends BaseMQTTTest {
 
     @Test
@@ -80,7 +80,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
     }
 
@@ -113,7 +113,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
     }
 
@@ -125,7 +125,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         MqttPubAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(123, ackMessage.variableHeader().messageId());
+        assertEquals(123, ackMessage.variableHeader().messageId());
         verifyEvent(2, CLIENT_CONNECTED, PUB_ACKED);
     }
 
@@ -161,7 +161,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         // make channel unWritable
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
-        Assert.assertFalse(channel.isWritable());
+        assertFalse(channel.isWritable());
         distResult.complete(DistResult.Succeed);
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, PUB_ACK_DROPPED);
@@ -176,7 +176,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
     }
 
@@ -188,16 +188,16 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         // publish
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
         MqttMessage mqttMessage = channel.readOutbound();
-        Assert.assertEquals(MqttMessageType.PUBREC, mqttMessage.fixedHeader().messageType());
-        Assert.assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
-        Assert.assertTrue(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
+        assertEquals(MqttMessageType.PUBREC, mqttMessage.fixedHeader().messageType());
+        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertTrue(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
         // publish release
         channel.writeInbound(MQTTMessageUtils.publishRelMessage(123));
         mqttMessage = channel.readOutbound();
-        Assert.assertEquals(MqttMessageType.PUBCOMP, mqttMessage.fixedHeader().messageType());
-        Assert.assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertEquals(MqttMessageType.PUBCOMP, mqttMessage.fixedHeader().messageType());
+        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
         verifyEvent(2, CLIENT_CONNECTED, PUB_RECED);
-        Assert.assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
+        assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
     }
 
     @Test
@@ -208,7 +208,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         verifyEvent(2, CLIENT_CONNECTED, QOS2_DIST_ERROR);
-        Assert.assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
+        assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
     }
 
     @Test
@@ -219,7 +219,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         verifyEvent(2, CLIENT_CONNECTED, QOS2_DIST_ERROR);
-        Assert.assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
+        assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
     }
 
 
@@ -234,32 +234,32 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
 
         // make channel unWritable and drop PubRec
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
-        Assert.assertFalse(channel.isWritable());
+        assertFalse(channel.isWritable());
         distResult.complete(DistResult.Succeed);
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, PUB_REC_DROPPED);
-        Assert.assertTrue(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
+        assertTrue(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
 
         // flush channel
         channel.flush();
         channel.readOutbound();
-        Assert.assertTrue(channel.isWritable());
+        assertTrue(channel.isWritable());
 
         // client did not receive PubRec, resend pub and receive PubRec
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, PUB_REC_DROPPED);
         MqttMessage mqttMessage = channel.readOutbound();
-        Assert.assertEquals(MqttMessageType.PUBREC, mqttMessage.fixedHeader().messageType());
-        Assert.assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertEquals(MqttMessageType.PUBREC, mqttMessage.fixedHeader().messageType());
+        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
 
         // continue to publish PubRel
         channel.writeInbound(MQTTMessageUtils.publishRelMessage(123));
         mqttMessage = channel.readOutbound();
-        Assert.assertEquals(MqttMessageType.PUBCOMP, mqttMessage.fixedHeader().messageType());
-        Assert.assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertEquals(MqttMessageType.PUBCOMP, mqttMessage.fixedHeader().messageType());
+        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
         verifyEvent(2, CLIENT_CONNECTED, PUB_REC_DROPPED);
-        Assert.assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
+        assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
     }
 
     @Test
@@ -271,9 +271,9 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
-        Assert.assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
+        assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
     }
 
     @Test
@@ -283,7 +283,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, INVALID_TOPIC);
     }
 
@@ -298,7 +298,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         channel.writeInbound(publishMessage2);
         MqttPubAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(1, ackMessage.variableHeader().messageId());
+        assertEquals(1, ackMessage.variableHeader().messageId());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACKED, DISCARD);
     }
 

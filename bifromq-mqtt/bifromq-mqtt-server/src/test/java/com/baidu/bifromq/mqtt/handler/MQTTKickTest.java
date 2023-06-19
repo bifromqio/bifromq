@@ -21,15 +21,12 @@ import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTKickTest extends BaseMQTTTest {
 
-    @Test
+    @Test(groups = "integration")
     public void testKick() {
         mockAuthPass();
         mockSessionReg();

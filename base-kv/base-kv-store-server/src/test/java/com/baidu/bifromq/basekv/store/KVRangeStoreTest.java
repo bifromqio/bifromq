@@ -22,10 +22,10 @@ import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.combine;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basekv.TestCoProcFactory;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -51,6 +51,10 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
@@ -62,16 +66,13 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.MockitoAnnotations;
+import org.pf4j.util.FileUtils;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class KVRangeStoreTest {
     private String DB_NAME = "testDB";
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
@@ -81,35 +82,42 @@ public class KVRangeStoreTest {
     private IKVRangeStore rangeStore;
     private IStoreMessenger messenger;
     private PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
-    private ExecutorService queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-        new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
-    private ExecutorService mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-        new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
-    private ScheduledExecutorService tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-        new ThreadFactoryBuilder().setNameFormat("tick-task-executor").build());
-    private ScheduledExecutorService bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-        new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
+    private ExecutorService queryExecutor;
+    private ExecutorService mutationExecutor;
+    private ScheduledExecutorService tickTaskExecutor;
+    private ScheduledExecutorService bgTaskExecutor;
 
-    @Rule
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
-
-    @Before
-    public void setup() {
+    public Path dbRootDir;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void setup() throws IOException {
+        closeable = MockitoAnnotations.openMocks(this);
         options.getKvRangeOptions().getWalRaftConfig().setAsyncAppend(false);
         options.getKvRangeOptions().getWalRaftConfig().setInstallSnapshotTimeoutTick(10);
+
+        queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
+                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
+        mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
+                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
+        tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
+                new ThreadFactoryBuilder().setNameFormat("tick-task-executor").build());
+        bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
+                new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
+
         if (isDevEnv()) {
             options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
             options.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
         } else {
+            dbRootDir = Files.createTempDirectory("");
             (((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator()))
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
             ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR).toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME).toString());
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR).toString())
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME).toString());
         }
 
         rangeStore =
@@ -147,17 +155,26 @@ public class KVRangeStoreTest {
         assertTrue(rangeStore.bootstrap());
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         rangeStore.stop();
         queryExecutor.shutdownNow();
         mutationExecutor.shutdownNow();
         tickTaskExecutor.shutdownNow();
         bgTaskExecutor.shutdownNow();
+        if (dbRootDir != null) {
+            try {
+                FileUtils.delete(dbRootDir);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            dbRootDir = null;
+        }
+        closeable.close();
         log.info("Shutdown read task executor");
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testBootStrap() {
         KVRangeDescriptor descriptor = firstRangeDescriptor();
         KVRangeId id = descriptor.getId();
@@ -173,7 +190,7 @@ public class KVRangeStoreTest {
             .build(), descriptor.toBuilder().clearStatistics().setHlc(0).build());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testKeyExist() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -208,7 +225,7 @@ public class KVRangeStoreTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testPutKey() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -246,7 +263,7 @@ public class KVRangeStoreTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testGetKey() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -283,7 +300,7 @@ public class KVRangeStoreTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDeleteKey() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -323,7 +340,7 @@ public class KVRangeStoreTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testExecROCoProc() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -360,7 +377,7 @@ public class KVRangeStoreTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testExecRWCoProc() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -396,7 +413,7 @@ public class KVRangeStoreTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testSplit() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -431,7 +448,7 @@ public class KVRangeStoreTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testMerge() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();
@@ -470,7 +487,7 @@ public class KVRangeStoreTest {
         log.info("Store Descriptor: {}", storeDescriptor);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRangeEnsure() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();
         KVRangeId id = rangeDescriptor.getId();

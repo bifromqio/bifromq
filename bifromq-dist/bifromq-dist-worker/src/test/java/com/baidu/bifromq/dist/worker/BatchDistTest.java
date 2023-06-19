@@ -16,8 +16,8 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -36,15 +36,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 import org.mockito.stubbing.Answer;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class BatchDistTest extends DistWorkerTest {
-    @Test
+    @Test(groups = "integration")
     public void batchDistWithNoSub() {
         String trafficId = "trafficA";
         String topic = "/a/b/c";
@@ -66,7 +63,7 @@ public class BatchDistTest extends DistWorkerTest {
         assertTrue(reply.getResultMap().get(trafficId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void batchDist() {
         when(receiverManager.openWriter("batch1", MqttBroker))
             .thenReturn(writer1);

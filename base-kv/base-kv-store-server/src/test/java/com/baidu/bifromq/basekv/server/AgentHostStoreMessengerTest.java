@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basekv.server;
 
 import static com.baidu.bifromq.basekv.server.AgentHostStoreMessenger.agentId;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,14 +31,13 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.observers.TestObserver;
 import io.reactivex.rxjava3.subjects.PublishSubject;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class AgentHostStoreMessengerTest {
     @Mock
     private IAgentHost agentHost;
@@ -56,9 +55,10 @@ public class AgentHostStoreMessengerTest {
     @Mock
     private IAgentMember tgtStoreAgentMember;
     private KVRangeId targetRange;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         tgtStoreMessageSubject = PublishSubject.create();
         srcRange = KVRangeIdUtil.generate();
         targetRange = KVRangeIdUtil.generate();
@@ -66,6 +66,11 @@ public class AgentHostStoreMessengerTest {
         when(agent.register(srcStore)).thenReturn(srcStoreAgentMember);
         when(agent.register(targetStore)).thenReturn(tgtStoreAgentMember);
         when(tgtStoreAgentMember.receive()).thenReturn(tgtStoreMessageSubject);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

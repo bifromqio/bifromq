@@ -35,6 +35,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertNull;
 
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Builder;
@@ -55,27 +57,24 @@ import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mockito;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
 
-    @Before
+    @BeforeMethod
     public void setup() {
         super.setup();
         connectAndVerify(false);
     }
 
-    @After
-    public void clean() {
-        channel.close();
+    @AfterMethod
+    public void clean() throws Exception {
+        super.clean();
     }
 
     @Test
@@ -85,11 +84,11 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals(QoS.AT_MOST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(QoS.AT_MOST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            assertEquals("testTopic", message.variableHeader().topicName());
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
-        Assert.assertEquals(1, fetchHints.size());
+        assertEquals(1, fetchHints.size());
     }
 
     @Test
@@ -101,7 +100,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
+            assertNull(message);
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
         verify(distClient, times(5)).unsub(
@@ -116,11 +115,11 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals(QoS.AT_MOST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(QoS.AT_MOST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            assertEquals("testTopic", message.variableHeader().topicName());
         }
         verifyEvent(3, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED);
-        Assert.assertEquals(2, fetchHints.size());
+        assertEquals(2, fetchHints.size());
     }
 
     @Test
@@ -133,8 +132,8 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         // s2c pub received and ack
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            assertEquals("testTopic", message.variableHeader().topicName());
             channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
         }
         verifyEvent(7, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
@@ -152,8 +151,8 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         // s2c pub received and ack
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            assertEquals("testTopic", message.variableHeader().topicName());
             if (i != messageCount - 1) {
                 channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
             }
@@ -172,7 +171,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
+            assertNull(message);
         }
         verifyEvent(4, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
         verify(distClient, times(messageCount)).unsub(
@@ -189,14 +188,14 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         // s2c pub received and rec
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            Assert.assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+            assertEquals("testTopic", message.variableHeader().topicName());
             channel.writeInbound(MQTTMessageUtils.publishRecMessage(message.variableHeader().packetId()));
         }
         // pubRel received and comp
         for (int i = 0; i < messageCount; i++) {
             MqttMessage message = channel.readOutbound();
-            Assert.assertEquals(PUBREL, message.fixedHeader().messageType());
+            assertEquals(PUBREL, message.fixedHeader().messageType());
             channel.writeInbound(MQTTMessageUtils.publishCompMessage(
                 ((MqttMessageIdVariableHeader) message.variableHeader()).messageId()));
         }
@@ -215,7 +214,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            Assert.assertNull(message);
+            assertNull(message);
         }
         verifyEvent(4, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
         verify(distClient, times(messageCount)).unsub(
@@ -294,15 +293,15 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         // should receive two messages from client1 and client2
         MqttPublishMessage message = channel.readOutbound();
-        Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-        Assert.assertEquals("testTopic1", message.variableHeader().topicName());
+        assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+        assertEquals("testTopic1", message.variableHeader().topicName());
 
         message = channel.readOutbound();
-        Assert.assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-        Assert.assertEquals("testTopic2", message.variableHeader().topicName());
+        assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
+        assertEquals("testTopic2", message.variableHeader().topicName());
 
         message = channel.readOutbound();
-        Assert.assertNull(message);
+        assertNull(message);
 
         verifyEvent(3, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED);
     }

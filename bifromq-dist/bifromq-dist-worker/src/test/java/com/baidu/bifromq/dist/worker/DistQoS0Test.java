@@ -17,8 +17,8 @@ import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -44,17 +44,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class DistQoS0Test extends DistWorkerTest {
 
-    @Test
+    @Test(groups = "integration")
     public void succeedWithNoSub() {
         String trafficId = "trafficA";
         String topic = "/a/b/c";
@@ -64,7 +61,7 @@ public class DistQoS0Test extends DistWorkerTest {
         assertTrue(reply.getResultMap().get(trafficId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase2() {
         // pub: qos0
         // topic: "/a/b/c"
@@ -132,7 +129,7 @@ public class DistQoS0Test extends DistWorkerTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase3() throws InterruptedException {
         // pub: qos0
         // topic: "/a/b/c"
@@ -172,7 +169,7 @@ public class DistQoS0Test extends DistWorkerTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase4() {
         // pub: qos0
         // topic: "/a/b/c"
@@ -244,7 +241,7 @@ public class DistQoS0Test extends DistWorkerTest {
         assertEquals(10, list1.getAllValues().size() + list2.getAllValues().size());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase5() {
         // pub: qos0
         // topic: "/a/b/c"
@@ -312,7 +309,7 @@ public class DistQoS0Test extends DistWorkerTest {
         assertTrue(list1.getAllValues().isEmpty() || list2.getAllValues().isEmpty());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase6() {
         // pub: qos0
         // topic: "/a/b/c"

@@ -18,15 +18,15 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class EntityUtilTest {
     private static final int MqttBroker = 0;

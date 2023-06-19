@@ -13,16 +13,16 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
 import com.baidu.bifromq.type.TopicMessage;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class ReplaceBehaviorTest extends RetainStoreTest {
 
-    @Test
+    @Test(groups = "integration")
     public void replaceWithinLimit() {
         String trafficId = "trafficId";
         String topic = "/a";
@@ -40,7 +40,7 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
 
     }
 
-    @Test
+    @Test(groups = "integration")
     public void replaceButExceedLimit() {
         String trafficId = "trafficId";
         assertEquals(RetainCoProcReply.Result.RETAINED,

@@ -13,16 +13,16 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
 import com.baidu.bifromq.type.TopicMessage;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class RetainBehaviorTest extends RetainStoreTest {
 
-    @Test
+    @Test(groups = "integration")
     public void retainFirstMessage() {
         String trafficId = "trafficId";
         String topic = "/a/b/c";
@@ -35,7 +35,7 @@ public class RetainBehaviorTest extends RetainStoreTest {
         assertEquals(message, matchReply.getMessages(0));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void retainFirstMessageWithZeroMaxRetainedTopics() {
         String trafficId = "trafficId";
         String topic = "/a/b/c";
@@ -46,7 +46,7 @@ public class RetainBehaviorTest extends RetainStoreTest {
         assertEquals(0, matchReply.getMessagesCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void retainNewExceedLimit() {
         String trafficId = "trafficId";
         assertEquals(RetainCoProcReply.Result.RETAINED,

@@ -18,9 +18,9 @@ import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
@@ -37,6 +37,10 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
@@ -44,44 +48,43 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 public class KVRangeStateTest {
-    @Rule
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
+    public Path dbRootDir;
     private String DB_NAME = "testDB";
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private ScheduledExecutorService bgMgmtTaskExecutor;
     private KVEngineConfigurator configurator = null;
     private IKVEngine kvEngine;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
         bgMgmtTaskExecutor =
-            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
+                newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
         if (!isDevEnv()) {
             configurator = new InMemoryKVEngineConfigurator();
         } else {
+            dbRootDir = Files.createTempDirectory("");
             configurator = new RocksDBKVEngineConfigurator()
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
         }
 
         kvEngine = KVEngineFactory.create(null, List.of(DEFAULT_NS), cpId -> false, configurator);
         kvEngine.start(bgMgmtTaskExecutor);
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         kvEngine.stop();
         MoreExecutors.shutdownAndAwaitTermination(bgMgmtTaskExecutor, 5, TimeUnit.SECONDS);
         if (configurator instanceof RocksDBKVEngineConfigurator) {
-            TestUtil.deleteDir(dbRootDir.getRoot().toString());
+            TestUtil.deleteDir(dbRootDir.toString());
+            dbRootDir.toFile().delete();
         }
     }
 

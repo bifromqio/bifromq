@@ -13,31 +13,37 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import java.util.concurrent.CompletableFuture;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class ReadProgressTrackerTest {
     ReadProgressTracker readProgressTracker;
     @Mock
     IRaftStateStore stateStorage;
     @Mock
     IRaftNodeLogger logger;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         readProgressTracker = new ReadProgressTracker(stateStorage, logger);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

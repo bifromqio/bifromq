@@ -16,8 +16,8 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -44,16 +44,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class DistQoS1Test extends DistWorkerTest {
-    @Test
+    @Test(groups = "integration")
     public void succeedWithNoSub() {
         String trafficId = "trafficA";
         String topic = "/a/b/c";
@@ -63,7 +60,7 @@ public class DistQoS1Test extends DistWorkerTest {
         assertTrue(reply.getResultMap().get(trafficId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase7() {
         // pub: qos1
         // topic: "/a/b/c"
@@ -106,7 +103,7 @@ public class DistQoS1Test extends DistWorkerTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase8() {
         // pub: qos1
         // topic: "/a/b/c"
@@ -152,7 +149,7 @@ public class DistQoS1Test extends DistWorkerTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDistCase9() throws InterruptedException {
         // pub: qos1
         // topic: "/a/b/c"
@@ -203,7 +200,7 @@ public class DistQoS1Test extends DistWorkerTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void testDistCase10() {
         // pub: qos1
         // topic: "/a/b/c"

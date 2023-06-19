@@ -16,16 +16,16 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.diff;
 import static com.baidu.bifromq.basecrdt.core.util.LatticeIndexUtil.remember;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.NavigableMap;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class EventHistoryUtilTest {

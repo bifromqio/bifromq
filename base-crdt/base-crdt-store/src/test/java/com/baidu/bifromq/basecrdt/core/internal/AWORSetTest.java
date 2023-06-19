@@ -15,9 +15,9 @@ package com.baidu.bifromq.basecrdt.core.internal;
 
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.aworset;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.core.api.AWORSetOperation;
 import com.baidu.bifromq.basecrdt.core.api.IAWORSet;
@@ -25,7 +25,7 @@ import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class AWORSetTest extends CRDTTest {
     private final Replica leftReplica = Replica.newBuilder()

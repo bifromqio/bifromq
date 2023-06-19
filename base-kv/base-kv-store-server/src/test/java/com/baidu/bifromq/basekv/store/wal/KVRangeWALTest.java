@@ -14,9 +14,9 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
@@ -44,15 +44,13 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class KVRangeWALTest {
 
     private KVRangeId id = KVRangeIdUtil.generate();
@@ -69,9 +67,10 @@ public class KVRangeWALTest {
     private ScheduledExecutorService ticker;
     @Mock
     private IKVRangeWALStoreEngine walStorageEngine;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         raftStateStorage = new InMemoryStateStore(replicaId, Snapshot.newBuilder()
             .setClusterConfig(ClusterConfig.newBuilder()
                 .addVoters(replicaId)
@@ -80,10 +79,11 @@ public class KVRangeWALTest {
         ticker = new ScheduledThreadPoolExecutor(1);
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         MoreExecutors.shutdownAndAwaitTermination(ticker, 5, TimeUnit.SECONDS);
         raftStateStorage.stop();
+        closeable.close();
     }
 
 

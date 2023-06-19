@@ -13,64 +13,60 @@
 
 package com.baidu.bifromq.basecrdt.service;
 
-import static org.junit.Assert.fail;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfg;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfgs;
+
+import java.lang.reflect.Method;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public class CRDTServiceTestTemplate {
     protected CRDTServiceTestCluster testCluster;
 
-    @Rule
-    public final TestRule rule = new TestWatcher() {
-
-        @Override
-        protected void starting(Description description) {
-            super.starting(description);
-            testCluster = new CRDTServiceTestCluster();
-            ServiceCfgs serviceCfgs = description.getAnnotation(ServiceCfgs.class);
-            ServiceCfg serviceCfg = description.getAnnotation(ServiceCfg.class);
-            String seedStoreId = null;
-            if (testCluster != null) {
-                if (serviceCfgs != null) {
-                    for (ServiceCfg cfg : serviceCfgs.services()) {
-                        testCluster.newService(cfg.id(), buildHostOptions(cfg), buildCrdtServiceOptions(cfg));
-                        if (cfg.isSeed()) {
-                            seedStoreId = cfg.id();
-                        }
+    public void createClusterByAnnotation(Method testMethod) {
+        ServiceCfgs serviceCfgs = testMethod.getAnnotation(ServiceCfgs.class);
+        ServiceCfg serviceCfg = testMethod.getAnnotation(ServiceCfg.class);
+        String seedStoreId = null;
+        if (testCluster != null) {
+            if (serviceCfgs != null) {
+                for (ServiceCfg cfg : serviceCfgs.services()) {
+                    testCluster.newService(cfg.id(), buildHostOptions(cfg), buildCrdtServiceOptions(cfg));
+                    if (cfg.isSeed()) {
+                        seedStoreId = cfg.id();
                     }
                 }
-                if (serviceCfg != null) {
-                    testCluster.newService(serviceCfg.id(),
+            }
+            if (serviceCfg != null) {
+                testCluster.newService(serviceCfg.id(),
                         buildHostOptions(serviceCfg),
                         buildCrdtServiceOptions(serviceCfg));
-                }
-                if (seedStoreId != null && serviceCfgs != null) {
-                    for (ServiceCfg cfg : serviceCfgs.services()) {
-                        if (!cfg.id().equals(seedStoreId)) {
-                            try {
-                                testCluster.join(cfg.id(), seedStoreId);
-                            } catch (Exception e) {
-                                log.error("Join failed", e);
-                            }
+            }
+            if (seedStoreId != null && serviceCfgs != null) {
+                for (ServiceCfg cfg : serviceCfgs.services()) {
+                    if (!cfg.id().equals(seedStoreId)) {
+                        try {
+                            testCluster.join(cfg.id(), seedStoreId);
+                        } catch (Exception e) {
+                            log.error("Join failed", e);
                         }
                     }
                 }
             }
-            log.info("Starting test: " + description.getMethodName());
         }
-    };
+    }
 
-    @After
+    @BeforeMethod
+    public void setup() {
+        testCluster = new CRDTServiceTestCluster();
+    }
+
+    @AfterMethod
     public void teardown() {
         if (testCluster != null) {
             log.info("Shutting down test cluster");

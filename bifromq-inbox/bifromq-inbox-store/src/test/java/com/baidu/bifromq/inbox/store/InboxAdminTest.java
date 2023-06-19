@@ -14,8 +14,8 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
@@ -25,20 +25,19 @@ import com.baidu.bifromq.inbox.storage.proto.HasReply;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.time.Clock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import java.io.IOException;
+import java.time.Clock;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class InboxAdminTest extends InboxStoreTest {
     @Mock
     private Clock clock;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
         super.setup();
         when(clock.millis()).thenReturn(0L);
     }
@@ -48,7 +47,7 @@ public class InboxAdminTest extends InboxStoreTest {
         return clock;
     }
 
-    @Test
+    @Test(groups = "integration")
     public void createAndHasCheck() {
         String trafficId = "trafficId";
         String inboxId = "inboxId";
@@ -59,7 +58,7 @@ public class InboxAdminTest extends InboxStoreTest {
         assertTrue(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void expireAndHasCheck() {
         String trafficId = "trafficId";
         String inboxId = "inboxId";
@@ -73,7 +72,7 @@ public class InboxAdminTest extends InboxStoreTest {
         assertFalse(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void createAndDelete() {
         String trafficId = "trafficId";
         String inboxId1 = "inboxId1";
@@ -90,7 +89,7 @@ public class InboxAdminTest extends InboxStoreTest {
             .get(scopedInboxId(trafficId, inboxId2).toStringUtf8()));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void deleteNonExist() {
         String trafficId = "trafficId";
         String inboxId = "inboxId";
@@ -99,7 +98,7 @@ public class InboxAdminTest extends InboxStoreTest {
         assertFalse(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testGC() {
         String trafficId = "trafficId";
         String inboxId = "inboxId";

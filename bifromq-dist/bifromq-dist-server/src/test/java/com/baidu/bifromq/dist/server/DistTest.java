@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.dist.server;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.SubResult;
@@ -39,17 +39,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 import org.mockito.stubbing.Answer;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class DistTest extends DistServiceTest {
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void distWithNoSub() {
         Mockito.lenient().when(inboxWriter.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
@@ -82,7 +79,7 @@ public class DistTest extends DistServiceTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void distWithSub() {
         Mockito.lenient().when(inboxWriter.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
@@ -120,7 +117,7 @@ public class DistTest extends DistServiceTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void distWithSharedSub() {
         Mockito.lenient().when(inboxWriter.write(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
@@ -160,7 +157,7 @@ public class DistTest extends DistServiceTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(groups = "integration")
     public void distWithFanOutSub() {
         List<Iterable<InboxPack>> capturedArguments = new CopyOnWriteArrayList<>();
         when(inboxWriter.write(any()))

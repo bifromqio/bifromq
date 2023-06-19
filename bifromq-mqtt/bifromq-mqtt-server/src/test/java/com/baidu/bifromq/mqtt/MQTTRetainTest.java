@@ -14,9 +14,9 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -38,15 +38,12 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 import org.mockito.stubbing.Answer;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTRetainTest extends MQTTTest {
-    @Test
+    @Test(groups = "integration")
     public void retainAndSubscribe() {
 //        retainAndSubscribe(0, 0);
 //        retainAndSubscribe(0, 1);
@@ -115,7 +112,7 @@ public class MQTTRetainTest extends MQTTTest {
         client.close();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void subMultipleTimes() {
         // test for [MQTT-3.8.4-3]
         String trafficId = "ashdsha";
@@ -170,7 +167,7 @@ public class MQTTRetainTest extends MQTTTest {
         client.close();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void clearRetained() {
         clearRetained(0, 0);
         clearRetained(0, 1);
@@ -248,7 +245,7 @@ public class MQTTRetainTest extends MQTTTest {
         client.close();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void retainMatchLimit() {
         String trafficId = "ashdsha";
         String deviceKey = "testDevice";

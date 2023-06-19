@@ -1,11 +1,12 @@
 package com.baidu.bifromq.plugin.eventcollector;
 
-import static org.junit.Assert.assertNotSame;
-
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.google.common.util.concurrent.Uninterruptibles;
+import org.testng.annotations.Test;
+
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.Test;
+
+import static org.testng.AssertJUnit.assertNotSame;
 
 public class ThreadLocalEventPoolTest {
     @Test

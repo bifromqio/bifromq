@@ -15,17 +15,18 @@ package com.baidu.bifromq.basekv.raft.functest.template;
 
 import static com.baidu.bifromq.basekv.raft.functest.RaftNodeGroup.RaftNodeTickMagnitude;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.RaftConfig;
 import com.baidu.bifromq.basekv.raft.functest.RaftNodeGroup;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Ticker;
+
+import java.lang.reflect.Method;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.runner.Description;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class SharedRaftConfigTestTemplate extends RaftGroupTestTemplate {
@@ -36,17 +37,20 @@ public abstract class SharedRaftConfigTestTemplate extends RaftGroupTestTemplate
     private int tickInMS = 10;
 
     @Override
-    protected void startingTest(Description description) {
-        Config config = description.getAnnotation(Config.class);
-        Ticker ticker = description.getAnnotation(Ticker.class);
+    protected void startingTest(Method testMethod) {
+        Config config = testMethod.getAnnotation(Config.class);
+        Ticker ticker = testMethod.getAnnotation(Ticker.class);
         raftConfigInUse = config == null ? defaultRaftConfig : build(config);
         if (ticker != null) {
             tickInMS = ticker.unitInMS();
             disableTick = ticker.disable();
+        } else {
+            tickInMS = 10;
+            disableTick = false;
         }
+        setup();
     }
 
-    @Before
     public final void setup() {
         log.info("Setup a test raft group: v={}, l={}, nv={}, nl={}",
             clusterConfig().getVotersList(),
@@ -63,7 +67,7 @@ public abstract class SharedRaftConfigTestTemplate extends RaftGroupTestTemplate
         }
     }
 
-    @After
+    @AfterMethod
     public final void teardown() {
         log.info("Stop the test raft group");
         group.shutdown();

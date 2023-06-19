@@ -16,13 +16,14 @@ package com.baidu.bifromq.basekv.raft.functest;
 import static com.baidu.bifromq.basekv.raft.exception.ReadIndexException.COMMIT_INDEX_NOT_CONFIRMED;
 import static com.baidu.bifromq.basekv.raft.exception.ReadIndexException.LEADER_STEP_DOWN;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertSame;
 
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Ticker;
+import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.google.protobuf.ByteString;
@@ -30,12 +31,14 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(RaftGroupTestListener.class)
 public class ReadIndexTest extends SharedRaftConfigTestTemplate {
 
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexWithLeaderLease() {
         String leader = group.currentLeader().get();
 
@@ -54,7 +57,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexFromFollower() {
         String leader = group.currentLeader().get();
 
@@ -74,7 +77,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
     }
 
     @Cluster(v = "V1")
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexInSingleNodeCluster() {
         String leader = group.currentLeader().get();
 
@@ -100,7 +103,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
     }
 
     @Ticker(disable = true)
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexWithoutCommitIndexConfirmed() {
         group.run(10, TimeUnit.MILLISECONDS);
         await().until(() -> group.currentLeader().isPresent());
@@ -118,7 +121,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
     }
 
     @Config(readOnlyLeaderLeaseMode = false)
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexWithoutLeaderLease() {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(leader, 1));
@@ -156,7 +159,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
     }
 
     @Config(readOnlyLeaderLeaseMode = false)
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexWithoutLeaderLeaseByRejectedAppendReplies() {
         String leader = group.currentLeader().get();
         await().until(() -> {
@@ -189,7 +192,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
     }
 
     @Config(readOnlyLeaderLeaseMode = false)
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexWhenLeaderLostQuorum() {
         String leader = group.currentLeader().get();
         await().until(() -> {
@@ -212,7 +215,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
             }).join();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testReadIndexWhenTransferLeadershipInLeaseMode() {
         String leader = group.currentLeader().get();
         String follower = group.currentFollowers().get(0);

@@ -20,13 +20,15 @@ import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTemplate {
 
     @Cluster(initNodes = 1)
-    @Test
+    @Test(groups = "integration")
     public void testBootstrap1StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
@@ -39,7 +41,7 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
     }
 
     @Cluster(initNodes = 2)
-    @Test
+    @Test(groups = "integration")
     public void testBootstrap2StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
@@ -53,7 +55,7 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testBootstrap3StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {

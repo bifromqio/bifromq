@@ -15,15 +15,13 @@ package com.baidu.bifromq.basekv.raft.functest.template;
 
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
+
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.testng.annotations.AfterMethod;
 
 @Slf4j
 public abstract class RaftGroupTestTemplate {
@@ -31,22 +29,16 @@ public abstract class RaftGroupTestTemplate {
         ClusterConfig.newBuilder().addVoters("V1").addVoters("V2").addVoters("V3").build();
     private ClusterConfig clusterConfigInUse;
 
-    @Rule
-    public final TestRule rule = new TestWatcher() {
-        @Override
-        protected void starting(Description description) {
-            super.starting(description);
-            log.info("Starting test: " + description.getMethodName());
-            Cluster cluster = description.getAnnotation(Cluster.class);
-            clusterConfigInUse = cluster == null ? defaultClusterConfig : build(cluster);
-            startingTest(description);
-        }
-    };
-
-    protected void startingTest(Description description) {
+    public void createClusterByAnnotation(Method testMethod) {
+        Cluster cluster = testMethod.getAnnotation(Cluster.class);
+        clusterConfigInUse = cluster == null ? defaultClusterConfig : build(cluster);
+        startingTest(testMethod);
     }
 
-    @After
+    protected void startingTest(Method testMethod) {
+    }
+
+    @AfterMethod
     public void teardown() {
         clusterConfigInUse = null;
     }
