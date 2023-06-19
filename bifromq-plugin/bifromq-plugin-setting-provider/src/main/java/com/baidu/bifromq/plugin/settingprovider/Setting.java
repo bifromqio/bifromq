@@ -42,19 +42,12 @@ public enum Setting {
     RetainedTopicLimit(Integer.class, val -> (int) val >= 0, 10),
     RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10),
     RetainEnabled(Boolean.class, val -> true, true),
-    DistReservedUnitInterval(Long.class,
-        val -> (long) val > 0 && (long) val <= 0xFFFFFFFFL,
-        0xFFFFFFFFL),
+    DistReservedUnitInterval(Long.class, val -> (long) val > 0 && (long) val <= 0xFFFFFFFFL, 0xFFFFFFFFL),
     DistLimitUnitInterval(Long.class, val -> (long) val >= 0 && (long) val <= 0xFFFFFFFFL, 0L);
-
     public final Class<?> valueType;
-
     final Predicate<Object> validator;
-
     final Object initial;
-
     final Cache<String, Object> currentVals;
-
     volatile ClientClassifier classifier = clientInfo -> ""; // no classification for all client
 
     Setting(Class<?> valueType, Predicate<Object> validator, Object initial) {
@@ -72,9 +65,8 @@ public enum Setting {
     /**
      * The current effective setting's value used by the client
      *
-     * @param clientInfo
-     * @param <R>
-     * @return
+     * @param clientInfo the client
+     * @return The effective value of the setting for the client
      */
     public <R> R current(ClientInfo clientInfo) {
         return (R) currentVals.asMap().getOrDefault(classifier.classify(clientInfo), initial);
@@ -83,8 +75,8 @@ public enum Setting {
     /**
      * Validate if provided value is a valid for the setting
      *
-     * @param val
-     * @return
+     * @param val the setting value to be verified
+     * @return true if the value is valid
      */
     public <R> boolean isValid(R val) {
         if (!valueType.isInstance(val)) {
