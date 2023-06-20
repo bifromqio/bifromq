@@ -57,6 +57,8 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,6 +66,7 @@ import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -71,7 +74,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
-import org.pf4j.util.FileUtils;
 
 @Slf4j
 abstract class InboxStoreState {
@@ -159,9 +161,12 @@ abstract class InboxStoreState {
         crdtService.stop();
         agentHost.shutdown();
         try {
-            FileUtils.delete(dbRootDir);
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed to delete db root dir", e);
         }
     }
 

@@ -29,10 +29,13 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -40,7 +43,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.pf4j.util.FileUtils;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
@@ -165,9 +167,12 @@ public abstract class InboxServiceTest {
         serverCrdtService.stop();
         agentHost.shutdown();
         try {
-            FileUtils.delete(dbRootDir);
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed to delete db root dir", e);
         }
         queryExecutor.shutdown();
         mutationExecutor.shutdown();

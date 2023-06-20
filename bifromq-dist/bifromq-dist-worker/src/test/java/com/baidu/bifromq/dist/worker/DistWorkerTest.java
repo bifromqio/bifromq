@@ -73,11 +73,14 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -90,7 +93,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.MockitoAnnotations;
-import org.pf4j.util.FileUtils;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.mockito.Mock;
@@ -240,9 +242,12 @@ public abstract class DistWorkerTest {
         serverCrdtService.stop();
         agentHost.shutdown();
         try {
-            FileUtils.delete(dbRootDir);
-        } catch(IOException e) {
-            e.printStackTrace();
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+        } catch (IOException e) {
+            log.error("Failed to delete db root dir", e);
         }
         queryExecutor.shutdown();
         mutationExecutor.shutdown();

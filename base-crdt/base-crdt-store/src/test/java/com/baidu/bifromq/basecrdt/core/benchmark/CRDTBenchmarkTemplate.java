@@ -20,11 +20,8 @@ import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import lombok.extern.slf4j.Slf4j;
-import org.pf4j.util.FileUtils;
 import org.testng.annotations.Ignore;
 import org.testng.annotations.Test;
 import org.openjdk.jmh.annotations.Setup;

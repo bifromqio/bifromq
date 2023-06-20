@@ -18,7 +18,7 @@ import static org.testng.Assert.assertTrue;
 import org.testng.annotations.Test;
 
 public class BifroMQSysPropTest {
-    @Test(groups = "fast")
+    @Test
     public void defaultValue() {
         for (BifroMQSysProp prop : BifroMQSysProp.values()) {
             assertTrue(prop.get().equals(prop.defVal()));

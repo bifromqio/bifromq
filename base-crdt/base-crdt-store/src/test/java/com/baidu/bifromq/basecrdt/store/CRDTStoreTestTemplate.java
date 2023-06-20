@@ -21,14 +21,16 @@ import com.baidu.bifromq.basecrdt.store.annotation.StoreCfgs;
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
 import io.micrometer.core.instrument.logging.LoggingRegistryConfig;
+
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
-import org.pf4j.util.FileUtils;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
@@ -67,9 +69,12 @@ public abstract class CRDTStoreTestTemplate {
             log.info("Shutting down test cluster");
             storeMgr.shutdown();
             try {
-                FileUtils.delete(dbRootDir);
+                Files.walk(dbRootDir)
+                        .sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
             } catch (IOException e) {
-                e.printStackTrace();
+                log.error("Failed to delete db root dir", e);
             }
         }
     }

@@ -28,11 +28,14 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Level;
@@ -40,7 +43,6 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
-import org.pf4j.util.FileUtils;
 
 @Slf4j
 @State(Scope.Benchmark)
@@ -159,9 +161,12 @@ abstract class InboxServiceState {
         log.debug("agent host stopping");
         agentHost.shutdown();
         try {
-            FileUtils.delete(dbRootDir);
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed to delete db root dir", e);
         }
     }
 

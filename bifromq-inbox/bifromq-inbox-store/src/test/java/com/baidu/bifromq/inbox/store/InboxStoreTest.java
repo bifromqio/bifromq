@@ -61,6 +61,8 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,6 +70,7 @@ import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
@@ -79,7 +82,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.MockitoAnnotations;
-import org.pf4j.util.FileUtils;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.mockito.Mock;
@@ -191,7 +193,14 @@ abstract class InboxStoreTest {
         clientCrdtService.stop();
         serverCrdtService.stop();
         agentHost.shutdown();
-        FileUtils.delete(dbRootDir);
+        try {
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+        } catch (IOException e) {
+            log.error("Failed to delete db root dir", e);
+        }
         queryExecutor.shutdown();
         mutationExecutor.shutdown();
         tickTaskExecutor.shutdown();
