@@ -25,20 +25,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class BatchCallSchedulerTest {
-    private final ExecutorService executor = Executors.newFixedThreadPool(2);
+    private ExecutorService executor;
 
-    @Before
+    @BeforeMethod
     public void setup() {
+        executor = Executors.newFixedThreadPool(2);
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         executor.shutdown();
     }

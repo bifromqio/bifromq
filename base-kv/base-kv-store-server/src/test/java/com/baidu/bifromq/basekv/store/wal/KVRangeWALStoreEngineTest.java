@@ -14,10 +14,10 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -30,16 +30,17 @@ import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class KVRangeWALStoreEngineTest {
@@ -50,28 +51,31 @@ public class KVRangeWALStoreEngineTest {
 
     private KVEngineConfigurator engineConfigurator;
 
-    @Rule
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
+    public Path dbRootDir;
 
     private ScheduledExecutorService bgMgmtTaskExecutor;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
         bgMgmtTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         if (isDevEnv()) {
             engineConfigurator = InMemoryKVEngineConfigurator.builder().build();
         } else {
-            dbPath = Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString();
+            dbRootDir = Files.createTempDirectory("");
+            dbPath = Paths.get(dbRootDir.toString(), DB_NAME).toString();
             engineConfigurator = new RocksDBKVEngineConfigurator()
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString())
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
                 .setDbRootDir(dbPath);
         }
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         MoreExecutors.shutdownAndAwaitTermination(bgMgmtTaskExecutor, 5, TimeUnit.SECONDS);
-        TestUtil.deleteDir(dbRootDir.getRoot().toString());
+        if (dbRootDir != null) {
+            TestUtil.deleteDir(dbRootDir.toString());
+            dbRootDir.toFile().delete();
+        }
     }
 
     @Test

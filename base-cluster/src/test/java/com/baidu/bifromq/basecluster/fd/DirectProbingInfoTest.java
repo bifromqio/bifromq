@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.basecluster.fd;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import java.util.Optional;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class DirectProbingInfoTest {
     @Test

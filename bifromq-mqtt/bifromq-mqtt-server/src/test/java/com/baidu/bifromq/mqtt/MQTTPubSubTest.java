@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.AssertJUnit.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -42,18 +42,15 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTPubSubTest extends MQTTTest {
     private String trafficId = "ashdsha";
     private String deviceKey = "testDevice";
 
-    @Before
+    @BeforeMethod
     public void setup() {
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         super.setup();
@@ -74,7 +71,7 @@ public class MQTTPubSubTest extends MQTTTest {
         }).when(eventCollector).report(any(Event.class));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void multiTopicPubSubCleanSessionFalseQoS1Basic() {
         String[] topics = new String[] {"/QoS1/1", "/QoS1/2", "/QoS1/3", "/QoS1/4"};
         String[] topicFilters = new String[] {"#"};
@@ -88,7 +85,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSubMulti(topics, topicFilters, mqttMessages, false);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void multiTopicPubSubCleanSessionFalseQoS2Basic() {
         String[] topics = new String[] {"/QoS2/1", "/QoS2/2", "/QoS2/3", "/QoS2/4"};
         String[] topicFilters = new String[] {"#"};
@@ -102,7 +99,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSubMulti(topics, topicFilters, mqttMessages, false);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void multiTopicPubSubCleanSessionTrueQoS1Basic() {
         String[] topics = new String[] {"/QoS1/1", "/QoS1/2", "/QoS1/3", "/QoS1/4"};
         String[] topicFilters = new String[] {"#"};
@@ -116,7 +113,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSubMulti(topics, topicFilters, mqttMessages, true);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void multiTopicPubSubCleanSessionTrueQoS2Basic() {
         String[] topics = new String[] {"/QoS2/1", "/QoS2/2", "/QoS2/3", "/QoS2/4"};
         String[] topicFilters = new String[] {"#"};
@@ -130,7 +127,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSubMulti(topics, topicFilters, mqttMessages, true);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void multiTopicPubSubCleanSessionTrueMixQoSBasic() {
         String[] topics = new String[] {"/MixQoS/1", "/MixQoS/2", "/MixQoS/3", "/MixQoS/4"};
         String[] topicFilters = new String[] {"#"};
@@ -144,7 +141,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSubMulti(topics, topicFilters, mqttMessages, true);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void singleTopicPubSubCleanSessionTrueMixQoSBasic() {
         String[] topics = new String[] {"/MixQoS/1", "/MixQoS/1", "/MixQoS/1", "/MixQoS/1"};
         String[] topicFilters = new String[] {"#"};
@@ -158,7 +155,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSubMulti(topics, topicFilters, mqttMessages, true);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void pubQoS0AndDisconnectQuickly() throws InterruptedException {
 
         String topic = "greeting";
@@ -194,7 +191,7 @@ public class MQTTPubSubTest extends MQTTTest {
         subClient.close();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void pubSubCleanSessionTrue() {
         pubSub("/topic/0/0", 0, "/topic/0/0", 0);
         pubSub("/topic/0/1", 0, "/topic/0/1", 1);
@@ -216,7 +213,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSub("/topic1/2/2", 2, "#", 2);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void pubSubCleanSessionFalse() {
         pubSub("/topic/0/0", 0, "/topic/0/0", 0, false);
         pubSub("/topic/0/1", 0, "/topic/0/1", 1, false);
@@ -238,7 +235,7 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSub("/topic1/2/2", 2, "#", 2, false);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void receiveOfflineMessage() {
         receiveOfflineMessage(1, 1);
         receiveOfflineMessage(2, 1);

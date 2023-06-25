@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,17 +27,28 @@ import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class KVRangeMessengerTest {
     @Mock
     private IStoreMessenger storeMessenger;
-    private PublishSubject<StoreMessage> incomingStoreMsg = PublishSubject.create();
+    private PublishSubject<StoreMessage> incomingStoreMsg;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
+        incomingStoreMsg = PublishSubject.create();
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
 
     @Test
     public void send() {

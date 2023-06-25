@@ -18,14 +18,14 @@ import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.singleDot;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.singleMap;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.singleValue;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class DotMapTest {
     private final ByteString replicaA = copyFromUtf8("A");

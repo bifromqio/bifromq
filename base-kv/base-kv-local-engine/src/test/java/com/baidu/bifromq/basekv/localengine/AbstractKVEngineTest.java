@@ -17,20 +17,22 @@ import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.google.protobuf.ByteString;
+
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
 public abstract class AbstractKVEngineTest {
@@ -44,10 +46,10 @@ public abstract class AbstractKVEngineTest {
         return buffer.getLong();
     }
 
-    @Before
-    public abstract void setup();
+    @BeforeMethod
+    public abstract void setup() throws IOException;
 
-    @After
+    @AfterMethod
     public abstract void teardown();
 
     @Test

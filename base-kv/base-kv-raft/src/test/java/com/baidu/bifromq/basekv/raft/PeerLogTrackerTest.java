@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -26,14 +26,14 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import java.util.HashMap;
 import java.util.HashSet;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class PeerLogTrackerTest {
     PeerLogTracker logTracker;
     RaftConfig config;
@@ -44,9 +44,10 @@ public class PeerLogTrackerTest {
     IRaftNode.IRaftEventListener statusListener;
     @Mock
     IRaftNodeLogger logger;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         config = new RaftConfig();
         stateStorage = new InMemoryStateStore("V1", Snapshot.newBuilder()
             .setIndex(0)
@@ -54,6 +55,11 @@ public class PeerLogTrackerTest {
             .setClusterConfig(ClusterConfig.newBuilder().addVoters("V1").addVoters("V2").addVoters("V3").build())
             .build());
         logTracker = new PeerLogTracker(stateStorage.local(), config, stateStorage, statusListener, logger);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

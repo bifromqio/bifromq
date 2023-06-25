@@ -19,16 +19,18 @@ import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
 import com.baidu.bifromq.basecrdt.core.api.ICCounter;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfg;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfgs;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
+@Listeners(CRDTServiceTestListener.class)
 public class CCounterTest extends CRDTServiceTestTemplate {
     @ServiceCfgs(services =
         {
             @ServiceCfg(id = "s1", bindPort = 11111, isSeed = true),
             @ServiceCfg(id = "s2", bindPort = 22222)
         })
-    @Test
+    @Test(groups = "integration")
     public void testZeroOut() {
         ICRDTService service1 = testCluster.getService("s1");
         ICRDTService service2 = testCluster.getService("s2");

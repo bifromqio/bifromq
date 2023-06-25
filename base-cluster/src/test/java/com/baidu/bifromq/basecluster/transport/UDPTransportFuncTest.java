@@ -18,12 +18,9 @@ import com.google.protobuf.ByteString;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class UDPTransportFuncTest {
 
     InetSocketAddress address = new InetSocketAddress("127.0.0.1", 12345);

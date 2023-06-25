@@ -22,10 +22,10 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.stateKey;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.verKey;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteString;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteStringNativeOrder;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -40,18 +40,29 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Optional;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class KVRangeMetadataAccessorTest {
     @Mock
     IKVEngine engine;
 
     @Mock
     IKVEngineIterator itr;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        closeable = MockitoAnnotations.openMocks(this);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
 
     @Test
     public void initWithNoData() {
@@ -168,7 +179,7 @@ public class KVRangeMetadataAccessorTest {
         assertEquals(newRange, metadata.range());
         assertEquals(lastAppliedIndex, metadata.lastAppliedIndex());
         assertEquals(newKeyRangeId, metadata.dataBoundId());
-        assertNotEquals(meta, newMeta);
+        assertNotEquals(newMeta, meta);
     }
 
     @Test
@@ -206,7 +217,7 @@ public class KVRangeMetadataAccessorTest {
         assertEquals(newState, metadata.state());
         assertEquals(keyRangeId, metadata.dataBoundId());
 
-        assertNotEquals(meta, newMeta);
+        assertNotEquals(newMeta, meta);
     }
 
     @Test
@@ -250,7 +261,7 @@ public class KVRangeMetadataAccessorTest {
         assertEquals(newRange, metadata.range());
         assertEquals(KVRangeKeys.dataBound(newRange), newBound);
         assertEquals(newKeyRangeId, metadata.dataBoundId());
-        assertNotEquals(meta, newMeta);
+        assertNotEquals(newMeta, meta);
     }
 
     @Test

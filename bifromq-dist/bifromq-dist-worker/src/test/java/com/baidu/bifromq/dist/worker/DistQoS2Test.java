@@ -17,8 +17,8 @@ import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.timeout;
@@ -37,16 +37,13 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class DistQoS2Test extends DistWorkerTest {
-    @Test
+    @Test(groups = "integration")
     public void succeedWithNoSub() {
         String trafficId = "trafficA";
         String topic = "/a/b/c";
@@ -56,7 +53,7 @@ public class DistQoS2Test extends DistWorkerTest {
         assertTrue(reply.getResultMap().get(trafficId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void distQoS2ToVariousSubQoS() {
         // pub: qos2
         // topic: "/a/b/c"
@@ -135,7 +132,7 @@ public class DistQoS2Test extends DistWorkerTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void distQoS2ToErrorInbox() {
         // pub: qos2
         // topic: "/a/b/c"

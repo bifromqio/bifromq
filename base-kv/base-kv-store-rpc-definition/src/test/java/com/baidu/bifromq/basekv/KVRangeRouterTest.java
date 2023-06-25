@@ -15,9 +15,9 @@ package com.baidu.bifromq.basekv;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -28,7 +28,7 @@ import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class KVRangeRouterTest {
     private KVRangeStoreDescriptor bucket_full_range = KVRangeStoreDescriptor.newBuilder()

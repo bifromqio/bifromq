@@ -13,24 +13,36 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.function.Supplier;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class LoadEstimatorTest {
     @Mock
     private Supplier<Long> nanoSource;
+
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        closeable = MockitoAnnotations.openMocks(this);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
 
     @Test
     public void noLoad() {

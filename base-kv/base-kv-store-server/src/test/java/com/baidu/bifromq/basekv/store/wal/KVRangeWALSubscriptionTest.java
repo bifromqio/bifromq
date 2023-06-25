@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
@@ -38,17 +38,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class KVRangeWALSubscriptionTest {
     private long maxSize = 1024;
     @Mock
@@ -59,16 +57,18 @@ public class KVRangeWALSubscriptionTest {
     private IKVRangeWALSubscriber subscriber;
 
     private ExecutorService executor;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         executor = Executors.newSingleThreadScheduledExecutor();
         when(wal.snapshotInstallTask()).thenReturn(snapshotSource);
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         MoreExecutors.shutdownAndAwaitTermination(executor, Duration.ofSeconds(5));
+        closeable.close();
     }
 
     @SneakyThrows

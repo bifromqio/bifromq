@@ -29,8 +29,13 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -38,9 +43,8 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.rules.TemporaryFolder;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class InboxServiceTest {
@@ -72,12 +76,12 @@ public abstract class InboxServiceTest {
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
+    private Path dbRootDir;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         try {
-            dbRootDir.create();
+            dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
@@ -103,15 +107,15 @@ public abstract class InboxServiceTest {
 //        kvRangeStoreOptions.setDataEngineConfigurator(new RocksDBKVEngineConfigurator());
 //        String uuid = UUID.randomUUID().toString();
 //        ((RocksDBKVEngineConfigurator) kvRangeStoreOptions.getDataEngineConfigurator())
-//                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+//                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
 //                        .toString())
-//                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+//                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
 //        kvRangeStoreOptions.setWalEngineConfigurator(new RocksDBKVEngineConfigurator());
 //        ((RocksDBKVEngineConfigurator) kvRangeStoreOptions
 //                .getWalEngineConfigurator())
-//                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+//                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
 //                        .toString())
-//                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+//                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
@@ -151,7 +155,7 @@ public abstract class InboxServiceTest {
         log.info("Setup finished, and start testing");
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         log.info("Finish testing, and tearing down");
         inboxBrokerClient.close();
@@ -162,7 +166,14 @@ public abstract class InboxServiceTest {
         clientCrdtService.stop();
         serverCrdtService.stop();
         agentHost.shutdown();
-        dbRootDir.delete();
+        try {
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+        } catch (IOException e) {
+            log.error("Failed to delete db root dir", e);
+        }
         queryExecutor.shutdown();
         mutationExecutor.shutdown();
         tickTaskExecutor.shutdown();

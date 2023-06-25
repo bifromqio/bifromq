@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.times;
@@ -35,13 +35,13 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.time.Duration;
 import lombok.SneakyThrows;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class KVRangeDumpSessionTest {
     @Mock
     private IKVRangeState rangeAccessor;
@@ -52,6 +52,16 @@ public class KVRangeDumpSessionTest {
 
     @Mock
     private KVRangeDumpSession.DumpBytesRecorder dumpBytesRecorder;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        closeable = MockitoAnnotations.openMocks(this);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
 
     @Test
     public void dumpEmptySnapshot() {

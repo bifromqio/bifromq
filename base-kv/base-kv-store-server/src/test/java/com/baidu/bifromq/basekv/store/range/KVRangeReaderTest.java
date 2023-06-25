@@ -21,7 +21,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.stateKey;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.verKey;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteString;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteStringNativeOrder;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
@@ -36,18 +36,29 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class KVRangeReaderTest {
     @Mock
     private IKVEngine engine;
     @Mock
     private IKVEngineIterator engineIterator;
     private KVRangeStateAccessor accessor = new KVRangeStateAccessor();
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        closeable = MockitoAnnotations.openMocks(this);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
 
     @Test
     public void init() {

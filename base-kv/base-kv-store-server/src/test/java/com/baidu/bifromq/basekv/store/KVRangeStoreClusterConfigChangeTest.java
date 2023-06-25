@@ -26,11 +26,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTestTemplate {
-    @Test
+    @Test(groups = "integration")
     public void removeNonLeaderReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting setting = await().until(() -> cluster.kvRangeSetting(rangeId), Objects::nonNull);
@@ -49,7 +51,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void removeNonLeaderReplicaFromHostingStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting setting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
@@ -76,7 +78,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void removeLeaderReplicaFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = await().until(() -> cluster.kvRangeSetting(rangeId), Objects::nonNull);
@@ -96,7 +98,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void removeFailedReplica() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = cluster.kvRangeSetting(rangeId);
@@ -120,7 +122,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void removeNonLeaderReplicaFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
@@ -143,7 +145,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void removeLeaderReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = cluster.kvRangeSetting(rangeId);
@@ -167,7 +169,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     }
 
     @Cluster(initNodes = 1)
-    @Test
+    @Test(groups = "integration")
     public void addReplicaFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         String newStore = cluster.addStore();
@@ -186,7 +188,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     }
 
     @Cluster(initNodes = 2)
-    @Test
+    @Test(groups = "integration")
     public void addReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
@@ -206,7 +208,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void jointChangeReplicasFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
@@ -226,7 +228,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void jointChangeReplicasFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);

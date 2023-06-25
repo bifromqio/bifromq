@@ -14,9 +14,9 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,15 +30,14 @@ import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+
+import java.io.IOException;
 import java.time.Clock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class QoS2InboxTest extends InboxStoreTest {
     private String trafficId = "trafficId";
 
@@ -54,8 +53,8 @@ public class QoS2InboxTest extends InboxStoreTest {
     @Mock
     private Clock clock;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
         super.setup();
         when(clock.millis()).thenReturn(0L);
     }
@@ -66,7 +65,7 @@ public class QoS2InboxTest extends InboxStoreTest {
     }
 
 
-    @Test
+    @Test(groups = "integration")
     public void implicitCleanExpiredInboxDuringCreate() {
 
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
@@ -90,7 +89,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertToExpiredInbox() {
         String trafficId = "trafficId";
         String inboxId = "inboxId";
@@ -108,14 +107,14 @@ public class QoS2InboxTest extends InboxStoreTest {
         assertEquals(InboxInsertResult.Result.NO_INBOX, reply.getResults(0).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertToNonExistInbox() {
         InboxInsertReply reply = requestInsert(subInfo, "greeting",
             message(EXACTLY_ONCE, "hello"));
         assertEquals(InboxInsertResult.Result.NO_INBOX, reply.getResults(0).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void fetchWithoutStartAfter() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -141,7 +140,7 @@ public class QoS2InboxTest extends InboxStoreTest {
             reply1.getResultMap().get(scopedInboxIdUtf8).getQos2MsgList());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void fetchWithMaxLimit() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -166,7 +165,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void fetchWithStartAfter() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -200,7 +199,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void commit() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -237,7 +236,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         assertEquals(0, reply.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertDuplicated() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -262,7 +261,7 @@ public class QoS2InboxTest extends InboxStoreTest {
             reply.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(2).getMsg().getMessage());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertSameMessageIdFromDifferentClients() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -289,7 +288,7 @@ public class QoS2InboxTest extends InboxStoreTest {
     }
 
 
-    @Test
+    @Test(groups = "integration")
     public void insertDropOldest() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -337,7 +336,7 @@ public class QoS2InboxTest extends InboxStoreTest {
             reply.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(1).getMsg().getMessage());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insertDropYoungest() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 
@@ -386,7 +385,7 @@ public class QoS2InboxTest extends InboxStoreTest {
             reply.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(1).getMsg().getMessage());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void insert() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
 

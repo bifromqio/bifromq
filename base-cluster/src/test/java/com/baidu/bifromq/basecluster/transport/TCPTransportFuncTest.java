@@ -14,9 +14,10 @@
 package com.baidu.bifromq.basecluster.transport;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.google.protobuf.ByteString;
 import io.netty.channel.Channel;
@@ -33,9 +34,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.Test;
 
 /**
  * Created by mafei01 in 2020-04-22 16:53
@@ -50,7 +50,7 @@ public class TCPTransportFuncTest {
     TCPTransport transport1;
     TCPTransport transport2;
 
-    @After
+    @AfterMethod
     public void shutdown() {
         if (transport1 != null) {
             transport1.shutdown();
@@ -60,25 +60,25 @@ public class TCPTransportFuncTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testSendAndReceive() {
         transport1 = TCPTransport.builder()
             .bindAddr(address1)
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
-        transport1.receive().subscribe(t -> Assert.assertEquals(t.data, data));
+        transport1.receive().subscribe(t -> assertEquals(t.data, data));
         transport1.send(data, address1).join();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testConnectFail() {
         transport1 = TCPTransport.builder()
             .bindAddr(address1)
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
-        transport1.receive().subscribe(t -> Assert.assertEquals(t.data, data));
+        transport1.receive().subscribe(t -> assertEquals(t.data, data));
         try {
             transport1.send(data, fakeAddr).join();
             fail();
@@ -87,7 +87,7 @@ public class TCPTransportFuncTest {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testConnectionInActive() {
         transport1 = TCPTransport.builder()
             .bindAddr(address1)
@@ -114,7 +114,7 @@ public class TCPTransportFuncTest {
         transport2.shutdown().join();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testSendAndReceiveViaTls() {
         transport1 = TCPTransport.builder()
             .bindAddr(address1)
@@ -123,11 +123,11 @@ public class TCPTransportFuncTest {
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
-        transport1.receive().subscribe(t -> Assert.assertEquals(t.data, data));
+        transport1.receive().subscribe(t -> assertEquals(t.data, data));
         transport1.send(data, address1).join();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testGetChannel() throws ExecutionException, InterruptedException {
         transport1 = TCPTransport.builder()
             .bindAddr(address1)
@@ -140,10 +140,10 @@ public class TCPTransportFuncTest {
 
         CompletableFuture<Channel> cf2 = Executors.newSingleThreadScheduledExecutor()
             .schedule(() -> transport1.getChannel(address1), 0, TimeUnit.MILLISECONDS).get();
-        assertNotEquals(cf1.get(), cf2.get());
+        assertNotEquals(cf2.get(), cf1.get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testSharedToken() {
         transport1 = TCPTransport.builder()
             .bindAddr(address1)
@@ -170,7 +170,7 @@ public class TCPTransportFuncTest {
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
 
         transport1.send(data, address2);
-        Assert.assertEquals(transport2.receive().blockingFirst().data, data);
+        assertEquals(transport2.receive().blockingFirst().data, data);
 
         TestObserver<PacketEnvelope> result = TestObserver.create();
         transport2.receive().subscribeWith(result);

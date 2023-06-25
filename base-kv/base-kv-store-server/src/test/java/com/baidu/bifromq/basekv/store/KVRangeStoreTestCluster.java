@@ -18,6 +18,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.TestCoProcFactory;
+import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -39,6 +40,8 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
@@ -56,7 +59,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.rules.TemporaryFolder;
 
 @Slf4j
 public class KVRangeStoreTestCluster {
@@ -86,12 +88,12 @@ public class KVRangeStoreTestCluster {
     private final ScheduledExecutorService bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
         new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
 
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
+    private Path dbRootDir;
 
     public KVRangeStoreTestCluster(KVRangeStoreOptions options) {
         this.optionsTpl = options.toBuilder().build();
         try {
-            dbRootDir.create();
+            dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
         bootstrapStore = buildStore(true);
@@ -378,7 +380,8 @@ public class KVRangeStoreTestCluster {
     public void shutdown() {
         disposables.dispose();
         rangeStoreMap.values().forEach(IKVRangeStore::stop);
-        dbRootDir.delete();
+        TestUtil.deleteDir(dbRootDir.toString());
+        dbRootDir.toFile().delete();
     }
 
     private String buildStore(boolean isBootstrap) {
@@ -386,16 +389,16 @@ public class KVRangeStoreTestCluster {
         KVRangeStoreOptions options = optionsTpl.toBuilder().build();
         if (options.getDataEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
             ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
         }
         if (options.getWalEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
             ((RocksDBKVEngineConfigurator) options
                 .getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         }
         KVRangeStore store = initStore(options);
         if (isBootstrap) {
@@ -413,13 +416,13 @@ public class KVRangeStoreTestCluster {
         }
         if (options.getDataEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
             ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
             ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         }
         initStore(options);
     }

@@ -13,22 +13,25 @@
 
 package com.baidu.bifromq.basekv.raft.functest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
+import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.google.protobuf.ByteString;
 import java.util.Arrays;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(RaftGroupTestListener.class)
 public class LogReplicationTest extends SharedRaftConfigTestTemplate {
-    @Test
+    @Test(groups = "integration")
     public void testLogReplicationNormally() {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted("V1", 1));
@@ -49,7 +52,7 @@ public class LogReplicationTest extends SharedRaftConfigTestTemplate {
     }
 
     @Cluster(l = "L1,L2")
-    @Test
+    @Test(groups = "integration")
     public void testLearnerLogReplication() {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted("V1", 1));
@@ -68,7 +71,7 @@ public class LogReplicationTest extends SharedRaftConfigTestTemplate {
         assertTrue(group.awaitIndexCommitted("L2", 3));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testSlowLogReplication() {
         String leader = group.currentLeader().get();
 
@@ -86,7 +89,7 @@ public class LogReplicationTest extends SharedRaftConfigTestTemplate {
         assertTrue(group.awaitIndexCommitted(slowFollower, 4));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testSlowLogReplicationAfterCompact() throws InterruptedException {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted("V1", 1));

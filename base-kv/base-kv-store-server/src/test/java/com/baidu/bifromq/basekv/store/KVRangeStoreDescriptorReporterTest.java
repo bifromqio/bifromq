@@ -38,14 +38,13 @@ import io.reactivex.rxjava3.subjects.Subject;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.mockito.Mock;
+
 public class KVRangeStoreDescriptorReporterTest {
 
     @Mock
@@ -63,9 +62,10 @@ public class KVRangeStoreDescriptorReporterTest {
     private String remoteStoreId = "remoteStoreId";
     private KVRangeStoreDescriptor storeDescriptor;
     private KVRangeStoreDescriptor remoteStoreDescriptor;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void init() {
+        closeable = MockitoAnnotations.openMocks(this);
         String uri = storeDescriptorMapCRDTURI("testCluster");
         when(crdtService.get(uri)).thenReturn(Optional.of(storeDescriptorMap));
         storeDescriptorReporter = new KVRangeStoreDescriptorReporter("testCluster", crdtService, 200L);
@@ -81,11 +81,12 @@ public class KVRangeStoreDescriptorReporterTest {
         storeDescriptorReporter.start();
     }
 
-    @After
-    public void close() {
+    @AfterMethod
+    public void close() throws Exception {
         when(storeDescriptorMap.execute(any(ORMapOperation.class))).thenReturn(CompletableFuture.completedFuture(null));
         when(crdtService.stopHosting(anyString())).thenReturn(CompletableFuture.completedFuture(null));
         storeDescriptorReporter.stop();
+        closeable.close();
     }
 
     @Test

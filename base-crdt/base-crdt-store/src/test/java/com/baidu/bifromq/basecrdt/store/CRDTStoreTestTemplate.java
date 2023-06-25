@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecrdt.store;
 
-import static org.junit.Assert.fail;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.store.annotation.StoreCfg;
@@ -21,52 +21,24 @@ import com.baidu.bifromq.basecrdt.store.annotation.StoreCfgs;
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
 import io.micrometer.core.instrument.logging.LoggingRegistryConfig;
+
+import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class CRDTStoreTestTemplate {
-    private final TemporaryFolder dbRootDir = new TemporaryFolder();
+    private Path dbRootDir;
     protected CRDTStoreTestCluster storeMgr;
-
-    CRDTStoreTestTemplate() {
-        try {
-            dbRootDir.create();
-        } catch (IOException e) {
-        }
-    }
-
-    @Rule
-    public final TestRule rule = new TestWatcher() {
-
-        @Override
-        protected void starting(Description description) {
-            super.starting(description);
-            storeMgr = new CRDTStoreTestCluster(dbRootDir.getRoot().getAbsolutePath());
-            StoreCfgs storeCfgs = description.getAnnotation(StoreCfgs.class);
-            StoreCfg storeCfg = description.getAnnotation(StoreCfg.class);
-            if (storeMgr != null) {
-                if (storeCfgs != null) {
-                    for (StoreCfg cfg : storeCfgs.stores()) {
-                        storeMgr.newStore(cfg.id(), build(cfg));
-                    }
-                }
-                if (storeCfg != null) {
-                    storeMgr.newStore(storeCfg.id(), build(storeCfg));
-                }
-            }
-            log.info("Starting test: " + description.getMethodName());
-        }
-    };
 
     @BeforeClass
     public static void setupOnce() {
@@ -85,12 +57,38 @@ public abstract class CRDTStoreTestTemplate {
 //        Metrics.addRegistry(meterRegistry);
     }
 
-    @After
+    @BeforeMethod
+    public void setup() throws IOException {
+        dbRootDir = Files.createTempDirectory("");
+        storeMgr = new CRDTStoreTestCluster(dbRootDir.toString());
+    }
+
+    @AfterMethod
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");
             storeMgr.shutdown();
-            dbRootDir.delete();
+            try {
+                Files.walk(dbRootDir)
+                        .sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+            } catch (IOException e) {
+                log.error("Failed to delete db root dir", e);
+            }
+        }
+    }
+
+    public void createClusterByAnnotation(Method testMethod) {
+        StoreCfgs storeCfgs = testMethod.getAnnotation(StoreCfgs.class);
+        StoreCfg storeCfg = testMethod.getAnnotation(StoreCfg.class);
+        if (storeCfgs != null) {
+            for (StoreCfg cfg : storeCfgs.stores()) {
+                storeMgr.newStore(cfg.id(), build(cfg));
+            }
+        }
+        if (storeCfg != null) {
+            storeMgr.newStore(storeCfg.id(), build(storeCfg));
         }
     }
 

@@ -26,6 +26,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
@@ -43,17 +45,13 @@ import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTRetainMatchTest extends BaseMQTTTest {
 
-    @After
+    @AfterMethod
     public void clean() {
         when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
@@ -72,8 +70,8 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         for (int i = 0; i < qos.length; i++) {
             MqttPublishMessage publishMessage = channel.readOutbound();
-            Assert.assertEquals("testTopic", publishMessage.variableHeader().topicName());
-            Assert.assertTrue(publishMessage.fixedHeader().isRetain());
+            assertEquals("testTopic", publishMessage.variableHeader().topicName());
+            assertTrue(publishMessage.fixedHeader().isRetain());
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
@@ -91,8 +89,8 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         for (int i = 0; i < qos.length; i++) {
             MqttPublishMessage publishMessage = channel.readOutbound();
-            Assert.assertEquals("testTopic", publishMessage.variableHeader().topicName());
-            Assert.assertTrue(publishMessage.fixedHeader().isRetain());
+            assertEquals("testTopic", publishMessage.variableHeader().topicName());
+            assertTrue(publishMessage.fixedHeader().isRetain());
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
@@ -110,8 +108,8 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         for (int i = 0; i < qos.length; i++) {
             MqttPublishMessage publishMessage = channel.readOutbound();
-            Assert.assertEquals("testTopic", publishMessage.variableHeader().topicName());
-            Assert.assertTrue(publishMessage.fixedHeader().isRetain());
+            assertEquals("testTopic", publishMessage.variableHeader().topicName());
+            assertTrue(publishMessage.fixedHeader().isRetain());
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
@@ -131,8 +129,8 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         for (int i = 0; i < qos.length; i++) {
             MqttPublishMessage publishMessage = channel.readOutbound();
-            Assert.assertEquals("testTopic", publishMessage.variableHeader().topicName());
-            Assert.assertTrue(publishMessage.fixedHeader().isRetain());
+            assertEquals("testTopic", publishMessage.variableHeader().topicName());
+            assertTrue(publishMessage.fixedHeader().isRetain());
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
@@ -157,9 +155,9 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {
-        Assert.assertEquals(expectedQos.length, subAckMessage.payload().grantedQoSLevels().size());
+        assertEquals(expectedQos.length, subAckMessage.payload().grantedQoSLevels().size());
         for (int i = 0; i < expectedQos.length; i++) {
-            Assert.assertEquals((int) subAckMessage.payload().grantedQoSLevels().get(i), expectedQos[i]);
+            assertEquals((int) subAckMessage.payload().grantedQoSLevels().get(i), expectedQos[i]);
         }
     }
 

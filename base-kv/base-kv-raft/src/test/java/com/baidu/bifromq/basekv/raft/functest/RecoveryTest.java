@@ -14,13 +14,15 @@
 package com.baidu.bifromq.basekv.raft.functest;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.raft.exception.RecoveryException;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
+import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.google.protobuf.ByteString;
@@ -30,14 +32,15 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(RaftGroupTestListener.class)
 public class RecoveryTest extends SharedRaftConfigTestTemplate {
 
 
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied0() {
         // in 3 node cluster, member becomes candidate due to only partitioned from leader
         // the recovery task will be canceled after election timeout
@@ -57,7 +60,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
     }
 
     @Cluster(v = "V1,V2,V3,V4")
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied1() {
         // in 4 node cluster, member becomes candidate due to only partitioned from leader only
         // the recovery task will be canceled when enough votes reply received
@@ -65,7 +68,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
     }
 
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied2() {
         // in 3 node cluster with pre-vote disabled, member becomes candidate due to only partitioned from leader only
         // the recovery task will be canceled during election timeout
@@ -74,14 +77,14 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
 
     @Cluster(v = "V1,V2,V3,V4")
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied3() {
         // in 4 node cluster with pre-vote disabled, member becomes candidate due to only partitioned from leader only
         // the recovery task will be canceled during election timeout
         testRecoveryConditionNotSatisfied0();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied4() {
         // member becomes candidate due to being removed from cluster
         String leader = group.currentLeader().get();
@@ -103,7 +106,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied5() {
         // normal cluster reject recovery operation
         String leader = group.currentLeader().get();
@@ -123,7 +126,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied6() {
         // candidate state because of leadership transferring
         String leader = group.currentLeader().get();
@@ -142,7 +145,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied7() {
         // 3 member cluster with pre-check enabled candidate state due to being removed from cluster during isolation
         String leader = group.currentLeader().get();
@@ -177,12 +180,12 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
     }
 
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionNotSatisfied8() {
         testRecoveryConditionNotSatisfied7();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionMeet0() {
         // recovery single candidate cluster
         String leader = group.currentLeader().get();
@@ -195,21 +198,21 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         await().until(() -> group.nodeState(leader) == RaftNodeStatus.Leader);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionMeet1() {
         // node is being isolated for long time
         String leader = group.currentLeader().get();
         group.isolate(leader);
         group.waitForNextElection();
         await().until(() -> group.nodeState(leader) == RaftNodeStatus.Candidate);
-        Assert.assertNotEquals(leader, group.currentLeader().get());
+        assertNotEquals(group.currentLeader().get(), leader);
         log.info("Recover {}", leader);
         group.recover(leader);
         await().until(() -> group.nodeState(leader) == RaftNodeStatus.Leader);
     }
 
     @Cluster(v = "V1,V2,V3,V4")
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionMeet2() {
         // recovery two candidates cluster with identical logs
         String leader = group.currentLeader().get();
@@ -224,12 +227,12 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         group.recover(leader);
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(1, group.currentFollowers().size());
+        assertEquals(1, group.currentFollowers().size());
     }
 
     @Cluster(v = "V1,V2,V3,V4")
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionMeet3() throws InterruptedException {
         // recovery two candidates cluster with identical logs when pre-vote disabled
         String leader = group.currentLeader().get();
@@ -260,11 +263,11 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         }
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(1, group.currentFollowers().size());
+        assertEquals(1, group.currentFollowers().size());
     }
 
     @Cluster(v = "V1,V2,V3,V4")
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionMeet4() {
         // recovery two candidates cluster with different logs
         String leader = group.currentLeader().get();
@@ -297,12 +300,12 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         group.recover(leader);
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(1, group.currentFollowers().size());
+        assertEquals(1, group.currentFollowers().size());
     }
 
     @Cluster(v = "V1,V2,V3,V4")
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testRecoveryConditionMeet5() throws InterruptedException {
         // recovery two candidates cluster with different logs when prevote disabled
         String leader = group.currentLeader().get();
@@ -349,10 +352,10 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
 
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(1, group.currentFollowers().size());
+        assertEquals(1, group.currentFollowers().size());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testDuplicateRecovery() {
         // duplicated recovery to same candidate
         String leader = group.currentLeader().get();
@@ -363,7 +366,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         try {
             group.recover(leader).join();
         } catch (Exception e) {
-            Assert.assertEquals(RecoveryException.RECOVERY_IN_PROGRESS, e.getCause());
+            assertEquals(RecoveryException.RECOVERY_IN_PROGRESS, e.getCause());
         }
         await().until(() -> group.nodeState(leader) == RaftNodeStatus.Leader);
     }

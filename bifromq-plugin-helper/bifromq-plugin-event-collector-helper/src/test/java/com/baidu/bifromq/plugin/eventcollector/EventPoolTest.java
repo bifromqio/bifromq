@@ -1,9 +1,9 @@
 package com.baidu.bifromq.plugin.eventcollector;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import org.testng.annotations.Test;
 
-import org.junit.Test;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.AssertJUnit.assertEquals;
 
 public class EventPoolTest {
     @Test

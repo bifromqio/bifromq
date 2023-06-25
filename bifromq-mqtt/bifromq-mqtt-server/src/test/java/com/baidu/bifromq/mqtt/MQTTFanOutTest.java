@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -32,18 +32,15 @@ import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTFanOutTest extends MQTTTest {
     private String trafficId = "testTraffic";
     private String deviceKey = "testDevice";
 
-    @Before
+    @BeforeMethod
     public void setup() {
         super.setup();
         when(authProvider.auth(any(MQTT3AuthData.class)))
@@ -62,7 +59,7 @@ public class MQTTFanOutTest extends MQTTTest {
         }).when(eventCollector).report(any(Event.class));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void fanout() {
         fanout(0);
         fanout(1);

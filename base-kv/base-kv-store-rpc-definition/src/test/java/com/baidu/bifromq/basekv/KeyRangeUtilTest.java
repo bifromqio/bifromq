@@ -26,12 +26,12 @@ import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.leastUpperBound;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFrom;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.Range;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class KeyRangeUtilTest {
 

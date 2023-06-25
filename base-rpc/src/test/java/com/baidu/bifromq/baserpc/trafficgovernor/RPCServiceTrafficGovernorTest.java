@@ -15,17 +15,17 @@ package com.baidu.bifromq.baserpc.trafficgovernor;
 
 import static java.util.Collections.singletonMap;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.google.common.collect.Sets;
 import java.net.InetSocketAddress;
 import java.util.Map;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
 
-    @Test
+    @Test(groups = "integration")
     public void defaultTrafficDirective() {
         String service = "service";
         ICRDTService crdtService = newCRDTService();
@@ -36,7 +36,7 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
         crdtService.stop();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void updateTrafficDirective() {
         String service = "service";
         Map<String, Map<String, Integer>> td = singletonMap("traffic", singletonMap("group1", 1));
@@ -58,7 +58,7 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
         tdCrdtService.stop();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void updateGroupAssignments() {
         String service = "service";
         String server = "server";

@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.time.Duration;
 import java.util.Map;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class KVRangeStoreStatsCollectorTest {
 

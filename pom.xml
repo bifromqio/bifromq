@@ -76,7 +76,7 @@
         <awaitility.version>4.2.0</awaitility.version>
         <paho.mqtt.version>1.2.5</paho.mqtt.version>
         <mockito.version>4.6.0</mockito.version>
-        <junit.version>4.13.2</junit.version>
+        <testng.version>7.8.0</testng.version>
         <jmh.version>1.36</jmh.version>
 
         <!-- maven.plugin.version-->
@@ -497,9 +497,9 @@
                 <scope>test</scope>
             </dependency>
             <dependency>
-                <groupId>junit</groupId>
-                <artifactId>junit</artifactId>
-                <version>${junit.version}</version>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <version>${testng.version}</version>
                 <scope>test</scope>
             </dependency>
             <dependency>

@@ -15,21 +15,24 @@ package com.baidu.bifromq.basekv.raft.functest;
 
 import static com.baidu.bifromq.basekv.raft.functest.RaftNodeGroup.DefaultRaftConfig;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.RaftConfig;
+import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestTemplate;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(RaftGroupTestListener.class)
 public class RaftConfigMigrationTest extends RaftGroupTestTemplate {
-    @Test
+    @Test(groups = "integration")
     public void testLeaderElectionWithPreVoteMigration() {
         RaftConfig raftConfigWithPreVote = DefaultRaftConfig.toBuilder().preVote(true).build();
         RaftConfig raftConfigWithoutPreVote = DefaultRaftConfig.toBuilder().preVote(false).build();
@@ -61,7 +64,7 @@ public class RaftConfigMigrationTest extends RaftGroupTestTemplate {
         await().until(() -> group.currentLeader().isPresent() && !leader.equals(group.currentLeader().get()));
         String newLeader = group.currentLeader().get();
         log.info("New leader {} elected", newLeader);
-        assertNotEquals(leader, newLeader);
-        assertNotEquals(blockedFollower, newLeader);
+        assertNotEquals(newLeader, leader);
+        assertNotEquals(newLeader, blockedFollower);
     }
 }

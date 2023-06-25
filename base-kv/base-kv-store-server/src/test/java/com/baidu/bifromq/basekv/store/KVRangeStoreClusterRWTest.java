@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.store;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -24,11 +24,13 @@ import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
-    @Test
+    @Test(groups = "integration")
     public void readFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
@@ -39,7 +41,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void readFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
@@ -50,7 +52,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void readWhenReplicaRestart() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
@@ -96,7 +98,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void readWhileAddNewReplica() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);

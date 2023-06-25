@@ -14,12 +14,12 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.google.common.hash.Hashing.murmur3_128;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertTrue;
 
 import com.google.common.collect.Sets;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class RendezvousHashTest {
     @Test

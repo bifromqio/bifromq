@@ -16,10 +16,10 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.ormap;
 import static java.util.Collections.emptySet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.core.api.AWORSetOperation;
 import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
@@ -45,7 +45,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class ORMapTest extends CRDTTest {
@@ -299,8 +299,8 @@ public class ORMapTest extends CRDTTest {
         subCtr = null;
         System.gc();
         // once subCtr is unreachable, its parent ormap will be gc'ed as well
-        assertNotEquals(hashCode, orMap.getORMap(key1).hashCode());
-        assertNotEquals(subCtrHashCode, orMap.getCCounter(key1, key1_1).hashCode());
+        assertNotEquals(orMap.getORMap(key1).hashCode(), hashCode);
+        assertNotEquals(orMap.getCCounter(key1, key1_1).hashCode(), subCtrHashCode);
     }
 
     @Test
@@ -325,7 +325,7 @@ public class ORMapTest extends CRDTTest {
         disposable.dispose();
         System.gc();
         subCtr = orMap.getCCounter(key1, key1_1);
-        assertNotEquals(hashcode, subCtr.hashCode());
+        assertNotEquals(subCtr.hashCode(), hashcode);
         subCtr.execute(CCounterOperation.add(1)).join();
         assertEquals(2, inflationCount.get());
     }

@@ -28,12 +28,16 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.rules.TemporaryFolder;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
@@ -61,7 +65,7 @@ abstract class InboxServiceState {
 
     private IInboxServer inboxServer;
 
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
+    private Path dbRootDir;
 
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
@@ -72,7 +76,7 @@ abstract class InboxServiceState {
 
     public InboxServiceState() {
         try {
-            dbRootDir.create();
+            dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
@@ -100,15 +104,15 @@ abstract class InboxServiceState {
         kvRangeStoreOptions.setDataEngineConfigurator(new RocksDBKVEngineConfigurator());
         String uuid = UUID.randomUUID().toString();
         ((RocksDBKVEngineConfigurator) kvRangeStoreOptions.getDataEngineConfigurator())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                 .toString())
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
         kvRangeStoreOptions.setWalEngineConfigurator(new RocksDBKVEngineConfigurator());
         ((RocksDBKVEngineConfigurator) kvRangeStoreOptions
             .getWalEngineConfigurator())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
                 .toString())
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
 
         inboxStoreKVStoreClient = IBaseKVStoreClient
             .inProcClientBuilder()
@@ -156,7 +160,14 @@ abstract class InboxServiceState {
         serverCrdtService.stop();
         log.debug("agent host stopping");
         agentHost.shutdown();
-        dbRootDir.delete();
+        try {
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+        } catch (IOException e) {
+            log.error("Failed to delete db root dir", e);
+        }
     }
 
     protected abstract void beforeTeardown();

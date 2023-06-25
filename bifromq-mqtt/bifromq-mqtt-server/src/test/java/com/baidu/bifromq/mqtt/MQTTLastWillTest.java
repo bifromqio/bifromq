@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -33,15 +33,12 @@ import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTLastWillTest extends MQTTTest {
 
-    @Test
+    @Test(groups = "integration")
     public void lastWillQoS1() {
         String trafficId = "ashdsha";
         String deviceKey = "testDevice";
@@ -90,7 +87,7 @@ public class MQTTLastWillTest extends MQTTTest {
         assertFalse(msg.isRetain);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void lastWillQoS1Retained() {
         String trafficId = "ashdsha";
         String deviceKey = "testDevice";
@@ -137,7 +134,7 @@ public class MQTTLastWillTest extends MQTTTest {
         assertTrue(msg.isRetain);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void lastWillQoS2() {
         String trafficId = "ashdsha";
         String deviceKey = "testDevice";
@@ -185,7 +182,7 @@ public class MQTTLastWillTest extends MQTTTest {
         assertFalse(msg.isRetain);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void lastWillQoS2Retained() {
         String trafficId = "ashdsha";
         String deviceKey = "testDevice";

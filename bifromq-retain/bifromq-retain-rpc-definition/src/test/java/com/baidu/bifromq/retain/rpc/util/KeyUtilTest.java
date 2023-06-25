@@ -20,12 +20,12 @@ import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
 import static com.baidu.bifromq.retain.utils.KeyUtil.trafficNS;
 import static com.baidu.bifromq.retain.utils.TopicUtil.parse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.google.protobuf.ByteString;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class KeyUtilTest {
     @Test

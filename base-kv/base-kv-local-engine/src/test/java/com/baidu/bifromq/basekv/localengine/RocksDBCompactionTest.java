@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.localengine;
 import static java.lang.Math.max;
 import static java.lang.Runtime.getRuntime;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.fail;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -37,10 +37,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Ignore;
+import org.testng.annotations.Test;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.ColumnFamilyOptionsInterface;
 import org.rocksdb.CompactionPriority;
@@ -62,7 +62,7 @@ public class RocksDBCompactionTest {
     private ScheduledExecutorService bgTaskExecutor;
     private Path dataDir;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         dataDir = Paths.get(System.getProperty("user.dir"), "data");
         dataDir.toFile().mkdirs();
@@ -70,7 +70,7 @@ public class RocksDBCompactionTest {
         start();
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         stop();
         MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);

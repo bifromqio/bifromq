@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basecrdt.store.compressor;
 
 import com.google.protobuf.ByteString;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 public class CompressorTest {
 

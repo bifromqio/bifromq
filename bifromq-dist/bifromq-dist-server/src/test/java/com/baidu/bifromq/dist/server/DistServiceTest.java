@@ -43,8 +43,9 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.mockito.Mock;
 
 @Slf4j
@@ -97,8 +98,11 @@ public abstract class DistServiceTest {
         }
     };
 
-    @Before
+    private AutoCloseable closeable;
+
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(2, 2, 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -172,8 +176,8 @@ public abstract class DistServiceTest {
         log.info("Setup finished, and start testing");
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         workerClient.stop();
         distWorker.stop();
@@ -186,6 +190,7 @@ public abstract class DistServiceTest {
 //        mutationExecutor.shutdown();
 //        tickTaskExecutor.shutdown();
 //        bgTaskExecutor.shutdown();
+        closeable.close();
     }
 
     protected final IDistClient distClient() {

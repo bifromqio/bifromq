@@ -18,8 +18,8 @@ import static com.baidu.bifromq.inbox.util.MessageUtil.buildBatchInboxInsertRequ
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildCreateRequest;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildHasRequest;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildTouchRequest;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -57,16 +57,20 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.rules.TemporaryFolder;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
@@ -78,7 +82,7 @@ abstract class InboxStoreState {
 
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
+    public Path dbRootDir;
     protected IBaseKVStoreClient storeClient;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
@@ -93,7 +97,7 @@ abstract class InboxStoreState {
 
     public InboxStoreState() {
         try {
-            dbRootDir.create();
+            dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
 
@@ -113,13 +117,13 @@ abstract class InboxStoreState {
 //        options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
 //        options.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
         ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                 .toString())
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME, uuid).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
         ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_CHECKPOINT_DIR, uuid)
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
                 .toString())
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_WAL_NAME, uuid).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
 
         storeClient = IBaseKVStoreClient
             .inProcClientBuilder()
@@ -156,7 +160,14 @@ abstract class InboxStoreState {
         testStore.stop();
         crdtService.stop();
         agentHost.shutdown();
-        dbRootDir.delete();
+        try {
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+        } catch (IOException e) {
+            log.error("Failed to delete db root dir", e);
+        }
     }
 
     abstract void beforeTeardown();

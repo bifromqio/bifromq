@@ -15,11 +15,11 @@ package com.baidu.bifromq.basekv.raft;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
@@ -31,8 +31,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 public abstract class BasicStateStoreTest {
 
@@ -241,7 +241,7 @@ public abstract class BasicStateStoreTest {
         }
         assertEquals(updatedClusterConfig, stateStorage.latestClusterConfig());
         stateStorage.append(newEntries, true);
-        assertNotEquals(updatedClusterConfig, stateStorage.latestClusterConfig());
+        assertNotEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
         assertEquals(1, stateStorage.firstIndex());
         assertEquals(8, stateStorage.lastIndex());
         Iterator<LogEntry> entries5To8 = stateStorage.entries(5, 9, -1);

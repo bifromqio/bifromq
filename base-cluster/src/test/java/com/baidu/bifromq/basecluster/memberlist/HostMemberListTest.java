@@ -20,9 +20,9 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_REPLICA_ID
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.ZOMBIE_ENDPOINT;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockConstruction;
@@ -57,16 +57,15 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class HostMemberListTest {
     @Mock
     private IMessenger messenger;
@@ -79,14 +78,20 @@ public class HostMemberListTest {
     private Scheduler scheduler = Schedulers.from(MoreExecutors.directExecutor());
     private PublishSubject<Long> inflationSubject = PublishSubject.create();
     private PublishSubject<Timed<MessageEnvelope>> messageSubject = PublishSubject.create();
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         when(store.host(CRDTUtil.AGENT_HOST_MAP_URI)).thenReturn(LOCAL_REPLICA);
         when(store.get(CRDTUtil.AGENT_HOST_MAP_URI)).thenReturn(Optional.of(hostListCRDT));
         when(hostListCRDT.id()).thenReturn(LOCAL_REPLICA);
         when(hostListCRDT.inflation()).thenReturn(inflationSubject);
         when(messenger.receive()).thenReturn(messageSubject);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test

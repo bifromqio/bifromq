@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.sysprops.parser;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class DoubleParserTest {
     @Test
@@ -24,7 +24,7 @@ public class DoubleParserTest {
         assertTrue(Double.compare(0.0, parser.parse("0.0").doubleValue()) == 0);
     }
 
-    @Test(expected = SysPropParseException.class)
+    @Test(expectedExceptions = SysPropParseException.class)
     public void parseFail() {
         DoubleParser parser = DoubleParser.from(0.0, 1.0, true);
         Double.compare(0.0, parser.parse("0.0").doubleValue());

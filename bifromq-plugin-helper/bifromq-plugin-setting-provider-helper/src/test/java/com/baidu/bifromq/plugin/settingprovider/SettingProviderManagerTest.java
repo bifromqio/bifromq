@@ -14,13 +14,13 @@
 package com.baidu.bifromq.plugin.settingprovider;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.type.ClientInfo;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.PluginManager;
 
@@ -29,14 +29,14 @@ public class SettingProviderManagerTest {
     private SettingProviderManager manager;
     private PluginManager pluginManager;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         pluginManager = new DefaultPluginManager();
         pluginManager.loadPlugins();
         pluginManager.startPlugins();
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         pluginManager.stopPlugins();
         pluginManager.unloadPlugins();

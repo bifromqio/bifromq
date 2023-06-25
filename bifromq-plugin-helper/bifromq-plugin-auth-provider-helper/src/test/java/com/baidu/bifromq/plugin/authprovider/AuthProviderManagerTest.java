@@ -14,11 +14,10 @@
 package com.baidu.bifromq.plugin.authprovider;
 
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
-import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.assertFalse;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,25 +34,19 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessControlError;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 import org.pf4j.PluginManager;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class AuthProviderManagerTest {
     @Mock
     PluginManager pluginManager;
@@ -68,11 +61,21 @@ public class AuthProviderManagerTest {
     private MQTT3AuthData authData = MQTT3AuthData.newBuilder().build();
     private MQTTAction mockActionInfo = MQTTAction.newBuilder().setPub(PubAction.getDefaultInstance()).build();
     private AuthProviderManager manager;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
+        clientInfo = ClientInfo.getDefaultInstance();
+        mockAuthData = MQTT3AuthData.newBuilder().build();
+        authData = MQTT3AuthData.newBuilder().build();
+        mockActionInfo = MQTTAction.newBuilder().setPub(PubAction.getDefaultInstance()).build();
         when(pluginManager.getExtensions(IAuthProvider.class)).thenReturn(
-            Collections.singletonList(mockProvider));
+                Collections.singletonList(mockProvider));
+    }
+
+    @AfterMethod
+    public void teardown() throws Exception {
+        closeable.close();
     }
 
     @Test

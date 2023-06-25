@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.store;
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.fail;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
@@ -26,46 +26,41 @@ import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
+
+import java.lang.reflect.Method;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.testng.annotations.AfterMethod;
 
 @Slf4j
 public abstract class KVRangeStoreClusterTestTemplate {
     protected KVRangeStoreTestCluster cluster;
     private int initNodes = 3;
     private KVRangeStoreOptions options;
-    @Rule
-    public final TestRule rule = new TestWatcher() {
-        @Override
-        protected void starting(Description description) {
-            super.starting(description);
-            Cluster cluster = description.getAnnotation(Cluster.class);
-            options = new KVRangeStoreOptions();
-            if (isDevEnv()) {
-                options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
-                options.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
-            }
-            if (cluster != null) {
-                Preconditions.checkArgument(cluster.initNodes() > 0,
-                    "Init nodes number must be greater than zero");
-                initNodes = cluster.initNodes();
-                KVRangeOptions rangeOptions = new KVRangeOptions();
-                rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig().setAsyncAppend(cluster.asyncAppend()));
-                rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig()
-                    .setInstallSnapshotTimeoutTick(cluster.installSnapshotTimeoutTick()));
-                options.setKvRangeOptions(rangeOptions);
-            }
-            log.info("Starting test: " + description.getMethodName());
-        }
-    };
 
-    @Before
+    public void createClusterByAnnotation(Method testMethod) {
+        Cluster cluster = testMethod.getAnnotation(Cluster.class);
+        options = new KVRangeStoreOptions();
+        if (isDevEnv()) {
+            options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
+            options.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
+        }
+        if (cluster != null) {
+            Preconditions.checkArgument(cluster.initNodes() > 0,
+                    "Init nodes number must be greater than zero");
+            initNodes = cluster.initNodes();
+            KVRangeOptions rangeOptions = new KVRangeOptions();
+            rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig().setAsyncAppend(cluster.asyncAppend()));
+            rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig()
+                    .setInstallSnapshotTimeoutTick(cluster.installSnapshotTimeoutTick()));
+            options.setKvRangeOptions(rangeOptions);
+        } else {
+            initNodes = 3;
+        }
+        log.info("Starting test: " + testMethod.getName());
+        setup();
+    }
+
     public void setup() {
         try {
             log.info("Starting test cluster");
@@ -98,7 +93,7 @@ public abstract class KVRangeStoreClusterTestTemplate {
         }
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         if (cluster != null) {
             log.info("Shutting down test cluster");

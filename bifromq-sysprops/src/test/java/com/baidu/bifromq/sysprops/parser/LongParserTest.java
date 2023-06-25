@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.sysprops.parser;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class LongParserTest {
     @Test
@@ -24,7 +24,7 @@ public class LongParserTest {
         assertTrue(parser.parse("1") == 1);
     }
 
-    @Test(expected = SysPropParseException.class)
+    @Test(expectedExceptions = SysPropParseException.class)
     public void parseException() {
         LongParser.POSITIVE.parse("0");
     }

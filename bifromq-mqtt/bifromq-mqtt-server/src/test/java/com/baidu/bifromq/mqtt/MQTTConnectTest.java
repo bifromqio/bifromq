@@ -16,9 +16,9 @@ package com.baidu.bifromq.mqtt;
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_BROKER_UNAVAILABLE;
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_FAILED_AUTHENTICATION;
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_NOT_AUTHORIZED;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
@@ -39,31 +39,28 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTConnectTest extends MQTTTest {
     private MqttTestClient mqttClient;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         super.setup();
         mqttClient = new MqttTestClient(brokerURI, "mqtt_client_test");
         log.info("Mqtt client created");
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         mqttClient.close();
         super.teardown();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void connectWithCleanSessionTrue() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -82,7 +79,7 @@ public class MQTTConnectTest extends MQTTTest {
         // TODO: verify event report
     }
 
-    @Test
+    @Test(groups = "integration")
     public void connectWithCleanSessionFalse() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -101,7 +98,7 @@ public class MQTTConnectTest extends MQTTTest {
         // TODO: verify event report
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testBadWillTopic() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -125,7 +122,7 @@ public class MQTTConnectTest extends MQTTTest {
             .report(argThat(event -> event instanceof InvalidWillTopic));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testUnauthenticated() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -144,7 +141,7 @@ public class MQTTConnectTest extends MQTTTest {
         verify(eventCollector).report(argThat(event -> event instanceof UnauthenticatedClient));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testBanned() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -163,7 +160,7 @@ public class MQTTConnectTest extends MQTTTest {
         verify(eventCollector).report(argThat(event -> event instanceof NotAuthorizedClient));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testAuthError() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()

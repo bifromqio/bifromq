@@ -26,13 +26,15 @@ import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 public class KVRangeWALStoreTest extends BasicStateStoreTest {
     private static final String DB_NAME = "testDB";
@@ -40,30 +42,33 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
     private KVRangeWALStorageEngine stateStorageEngine;
     private ScheduledExecutorService bgMgmtTaskExecutor;
 
-    @Rule
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
+    public Path dbRootDir;
 
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
         bgMgmtTaskExecutor =
-            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("bg-executor").build());
+                newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("bg-executor").build());
         KVEngineConfigurator<?> walConfigurator;
         if (isDevEnv()) {
             walConfigurator = new InMemoryKVEngineConfigurator();
         } else {
+            dbRootDir = Files.createTempDirectory("");
             walConfigurator = new RocksDBKVEngineConfigurator()
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString())
-                .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString());
+                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
         }
         stateStorageEngine = new KVRangeWALStorageEngine(null, walConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         MoreExecutors.shutdownAndAwaitTermination(bgMgmtTaskExecutor, 5, TimeUnit.SECONDS);
         stateStorageEngine.stop();
-        TestUtil.deleteDir(dbRootDir.getRoot().toString());
+        if (dbRootDir != null) {
+            TestUtil.deleteDir(dbRootDir.toString());
+            dbRootDir.toFile().delete();
+        }
     }
 
     @Override

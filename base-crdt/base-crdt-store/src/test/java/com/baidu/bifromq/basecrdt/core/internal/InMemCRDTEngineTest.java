@@ -16,25 +16,25 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.aworset;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 
 import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.proto.Replica;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 public class InMemCRDTEngineTest {
     private InMemCRDTEngine engine;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         engine = new InMemCRDTEngine(CRDTEngineOptions.builder().build());
         engine.start();
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         engine.stop();
     }
@@ -45,6 +45,6 @@ public class InMemCRDTEngineTest {
         Replica aworsetReplica = engine.host(toURI(aworset, "aworset"), mvRegReplica.getId());
 
         assertEquals(mvRegReplica.getId(), aworsetReplica.getId());
-        assertNotEquals(engine.get(toURI(mvreg, "mvreg")).get(), engine.get(toURI(aworset, "aworset")).get());
+        assertNotEquals(engine.get(toURI(aworset, "aworset")).get(), engine.get(toURI(mvreg, "mvreg")).get());
     }
 }

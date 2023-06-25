@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class DeleteBehaviorTest extends RetainStoreTest {
-    @Test
+    @Test(groups = "integration")
     public void deleteFromEmptyRetainSet() {
         String trafficId = "trafficId";
         String topic = "/a/b/c";
@@ -29,7 +29,7 @@ public class DeleteBehaviorTest extends RetainStoreTest {
         assertEquals(RetainCoProcReply.Result.CLEARED, reply.getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void deleteNonExisting() {
         String trafficId = "trafficId";
         // empty payload signal deletion
@@ -40,7 +40,7 @@ public class DeleteBehaviorTest extends RetainStoreTest {
             requestRetain(trafficId, 10, message("/a", "")).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void deleteNonExpired() {
         String trafficId = "trafficId";
         String topic = "/a/b/c";

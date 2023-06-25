@@ -17,10 +17,10 @@ import static com.baidu.bifromq.basecluster.fd.Fixtures.toPing;
 import static com.baidu.bifromq.basecluster.fd.Fixtures.toPingAck;
 import static com.baidu.bifromq.basecluster.fd.Fixtures.toPingNack;
 import static com.baidu.bifromq.basecluster.fd.Fixtures.toPingReq;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -44,15 +44,14 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class FailureDetectorTest {
     @Mock
     IMessenger messenger;
@@ -67,9 +66,10 @@ public class FailureDetectorTest {
     private TestScheduler scheduler;
     private PublishSubject<MessageEnvelope> messageSource;
     private FailureDetector failureDetector;
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         scheduler = new TestScheduler();
         messageSource = PublishSubject.create();
         when(messenger.receive()).thenReturn(messageSource.timestamp());
@@ -87,6 +87,11 @@ public class FailureDetectorTest {
         failureDetector.suspecting().subscribe(suspectProbeConsumer);
         assertEquals(Fixtures.BASE_PROBE_INTERVAL, failureDetector.baseProbeInterval());
         assertEquals(Fixtures.BASE_PROBE_TIMEOUT, failureDetector.baseProbeTimeout());
+    }
+
+    @AfterMethod
+    public void teardown() throws Exception {
+        closeable.close();
     }
 
     @Test

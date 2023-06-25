@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import java.util.ArrayList;
@@ -29,20 +29,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class AsyncRunnerTest {
     private ExecutorService executor;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         executor = Executors.newWorkStealingPool();
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
     }

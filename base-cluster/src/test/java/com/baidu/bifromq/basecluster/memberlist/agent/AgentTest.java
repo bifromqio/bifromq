@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -49,15 +49,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class AgentTest {
     private String agentId = "agentA";
     private ByteString hostId = ByteString.copyFromUtf8("host1");
@@ -84,9 +83,10 @@ public class AgentTest {
     private PublishSubject<Long> inflationSubject = PublishSubject.create();
     private PublishSubject<Set<HostEndpoint>> hostsSubjects = PublishSubject.create();
     private PublishSubject<AgentMessageEnvelope> messageSubject = PublishSubject.create();
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         when(crdtStore.host(CRDTUtil.toAgentURI(agentId), endpoint1.toByteString())).thenReturn(replica);
         when(crdtStore.get(CRDTUtil.toAgentURI(agentId))).thenReturn(Optional.of(orMap));
         when(orMap.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
@@ -94,6 +94,11 @@ public class AgentTest {
         when(orMap.inflation()).thenReturn(inflationSubject);
         when(hostProvider.getHostEndpoints()).thenReturn(hostsSubjects);
         when(agentMessenger.receive()).thenReturn(messageSubject);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @Test
@@ -141,7 +146,7 @@ public class AgentTest {
 
         // register again should return distinct object
         IAgentMember newAgentMember = agent.register(agentMemberName);
-        assertNotEquals(agentMember, newAgentMember);
+        assertNotEquals(newAgentMember, agentMember);
     }
 
     @Test

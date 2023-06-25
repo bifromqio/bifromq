@@ -14,21 +14,26 @@
 package com.baidu.bifromq.basekv.localengine;
 
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 public class OverrideIdentityTest {
     private String DB_NAME = "testDB";
@@ -37,27 +42,34 @@ public class OverrideIdentityTest {
     private IKVEngine engine;
     private AtomicReference<String> cp = new AtomicReference<>();
     private ScheduledExecutorService bgTaskExecutor;
+    public Path dbRootDir;
 
-    @Rule
-    public TemporaryFolder dbRootDir = new TemporaryFolder();
-
-    @Before
-    public void setup() {
+    @BeforeMethod
+    public void setup() throws IOException {
+        dbRootDir = Files.createTempDirectory("");
         bgTaskExecutor =
-            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
+                newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
     }
 
-    @After
+    @AfterMethod
     public void teardown() {
         MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
+        try {
+            Files.walk(dbRootDir)
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Test
     public void testOverrideIdentity() {
         String overrideIdentity = UUID.randomUUID().toString();
         KVEngineConfigurator configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
         engine = KVEngineFactory.create(overrideIdentity, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
         engine.start(bgTaskExecutor);
@@ -65,8 +77,8 @@ public class OverrideIdentityTest {
         engine.stop();
         // restart without overrideIdentity specified
         configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
 
         engine = KVEngineFactory.create(null, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
@@ -77,8 +89,8 @@ public class OverrideIdentityTest {
         // restart with different overrideIdentity specified
         String another = UUID.randomUUID().toString();
         configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
 
         engine = KVEngineFactory.create(another, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
@@ -91,8 +103,8 @@ public class OverrideIdentityTest {
     @Test
     public void testCanOnlyOverrideWhenInit() {
         KVEngineConfigurator configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
 
         engine = KVEngineFactory.create(null, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
@@ -102,8 +114,8 @@ public class OverrideIdentityTest {
         // restart with overrideIdentity specified
         String overrideIdentity = UUID.randomUUID().toString();
         configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), DB_CHECKPOINT_DIR).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
 
         engine = KVEngineFactory.create(overrideIdentity, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);

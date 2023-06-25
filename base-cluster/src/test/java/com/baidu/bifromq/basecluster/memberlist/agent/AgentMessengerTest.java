@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.verify;
@@ -37,14 +37,14 @@ import java.rmi.UnknownHostException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class AgentMessengerTest {
     private String agentId = "agent";
     private InetSocketAddress srcAddr = new InetSocketAddress("localhost", 1111);
@@ -75,7 +75,16 @@ public class AgentMessengerTest {
     private IHostAddressResolver addressResolver;
     @Mock
     private IMessenger messenger;
+    private AutoCloseable closeable;
+    @BeforeMethod
+    public void openMocks() {
+        closeable = MockitoAnnotations.openMocks(this);
+    }
 
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
+    }
     @Test
     public void sendToUnknownHost() {
         AgentMessenger agentMessenger = new AgentMessenger(agentId, addressResolver, messenger);

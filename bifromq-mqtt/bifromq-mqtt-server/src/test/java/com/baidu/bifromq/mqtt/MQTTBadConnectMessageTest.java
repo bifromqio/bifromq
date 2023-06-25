@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_INVALID_CLIENT_ID;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 
@@ -23,15 +23,11 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Identifi
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTBadConnectMessageTest extends MQTTTest {
-    @Test
+    @Test(groups = "integration")
     public void testCleanSessionFalseAndEmptyClientIdentifier() {
         MqttTestClient mqttClient = new MqttTestClient(brokerURI, "");
 
@@ -46,7 +42,7 @@ public class MQTTBadConnectMessageTest extends MQTTTest {
         mqttClient.close();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testInvalidClientId() {
         MqttTestClient mqttClient = new MqttTestClient(brokerURI, ",.+!@");
 

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;

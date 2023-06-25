@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class VerUtilTest {
     @Test

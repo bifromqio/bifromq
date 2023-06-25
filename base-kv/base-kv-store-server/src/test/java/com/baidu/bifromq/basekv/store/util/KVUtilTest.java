@@ -19,13 +19,13 @@ import static com.baidu.bifromq.basekv.store.util.KVUtil.toInt;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toKVRangeId;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toLong;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toLongNativeOrder;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class KVUtilTest {

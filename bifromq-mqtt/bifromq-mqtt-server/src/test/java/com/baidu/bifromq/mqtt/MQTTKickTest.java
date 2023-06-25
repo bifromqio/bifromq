@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
@@ -27,13 +27,10 @@ import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Kicked;
 import java.util.concurrent.CompletableFuture;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
-@RunWith(MockitoJUnitRunner.class)
 public class MQTTKickTest extends MQTTTest {
-    @Test
+    @Test(groups = "integration")
     public void testKick() {
         String trafficId = "ashdsha";
         String deviceKey = "testDevice";

@@ -23,9 +23,9 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.baidu.bifromq.basecrdt.proto.StateLattice;
@@ -35,8 +35,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 public class InMemReplicaStateLatticeTest {
     private InMemReplicaStateLattice testLattice;
@@ -44,7 +44,7 @@ public class InMemReplicaStateLatticeTest {
     private final ByteString replicaA = copyFromUtf8("A");
     private final ByteString replicaB = copyFromUtf8("B");
 
-    @Before
+    @BeforeMethod
     public void setup() {
         testLattice = new InMemReplicaStateLattice(ownerReplica, Duration.ofMillis(1000), Duration.ofMillis(200));
         assertFalse(testLattice.lattices().hasNext());

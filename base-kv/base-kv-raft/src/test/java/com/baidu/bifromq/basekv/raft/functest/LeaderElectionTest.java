@@ -14,10 +14,11 @@
 package com.baidu.bifromq.basekv.raft.functest;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertSame;
 
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
 import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
@@ -25,6 +26,7 @@ import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Ticker;
+import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
@@ -35,24 +37,25 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(RaftGroupTestListener.class)
 public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
-    @Test
+    @Test(groups = "integration")
     public void testNonJointElectionWithPreVote() {
         group.pause();
-        Assert.assertEquals(clusterConfig(), group.latestClusterConfig("V1"));
-        Assert.assertEquals(clusterConfig(), group.latestClusterConfig("V2"));
-        Assert.assertEquals(clusterConfig(), group.latestClusterConfig("V3"));
-        Assert.assertEquals(0, group.latestSnapshot("V1").size());
-        Assert.assertEquals(0, group.latestSnapshot("V2").size());
-        Assert.assertEquals(0, group.latestSnapshot("V3").size());
+        assertEquals(clusterConfig(), group.latestClusterConfig("V1"));
+        assertEquals(clusterConfig(), group.latestClusterConfig("V2"));
+        assertEquals(clusterConfig(), group.latestClusterConfig("V3"));
+        assertEquals(0, group.latestSnapshot("V1").size());
+        assertEquals(0, group.latestSnapshot("V2").size());
+        assertEquals(0, group.latestSnapshot("V3").size());
         assertTrue(group.currentLeader().isPresent());
         assertTrue(group.currentCandidates().isEmpty());
-        Assert.assertEquals(2, group.currentFollowers().size());
+        assertEquals(2, group.currentFollowers().size());
         // leader elected and at least one node got notified
         assertTrue(group.electionLog("V1").size() == 1
             || group.electionLog("V2").size() == 1
@@ -65,12 +68,12 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         assertEquals(3, elected.size());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testNonJointElectionWithoutPreVote() {
         group.pause();
         assertTrue(group.currentLeader().isPresent());
         assertTrue(group.currentCandidates().isEmpty());
-        Assert.assertEquals(2, group.currentFollowers().size());
+        assertEquals(2, group.currentFollowers().size());
         // leader elected and at least one node got notified
         assertTrue(group.electionLog("V1").size() == 1
             || group.electionLog("V2").size() == 1
@@ -84,17 +87,17 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
     }
 
     @Cluster(v = "V1")
-    @Test
+    @Test(groups = "integration")
     public void testSingleNodeElectionWithPreVote() {
     }
 
     @Cluster(v = "V1")
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testSingleNodeElectionWithoutPreVote() {
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderElectionWithOnlyMajorityFollowersVoted() {
         // isolate Leader
         String leader = group.currentLeader().get();
@@ -104,7 +107,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         await().until(() -> group.currentLeader().isPresent() && !group.currentLeader().get().equals(leader));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderStepDownBeforeAuthorityEstablished() {
         String leader = group.currentLeader().get();
 
@@ -120,17 +123,17 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         assertTrue(group.currentLeader().isPresent());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderStepDownWhenQuorumActive() {
         // FIXME: @luyong01, what is the expected logic?
 
         String leader = group.currentLeader().get();
         // wait enough time
         group.await(ticks(5));
-        Assert.assertEquals(RaftNodeStatus.Leader, group.nodeState(leader));
+        assertEquals(RaftNodeStatus.Leader, group.nodeState(leader));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderStepDownWhenQuorumLost() {
         // enough ticks for leader election
         String leader = group.currentLeader().get();
@@ -139,10 +142,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         group.isolate(leader);
         group.waitForNextElection();
         group.await(ticks(5));
-        Assert.assertNotEquals(RaftNodeStatus.Leader, group.nodeState(leader));
+        assertNotEquals(group.nodeState(leader), RaftNodeStatus.Leader);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipWithoutPreVote() {
         String leader = group.currentLeader().get();
 
@@ -156,11 +159,11 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         group.waitForNextElection();
 
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(transferee, group.currentLeader().get());
+        assertEquals(transferee, group.currentLeader().get());
     }
 
     @Cluster(l = "L1,L2,L3")
-    @Test
+    @Test(groups = "integration")
     public void testLearnerElectionTimeout() {
         group.isolate("V1");
         group.isolate("V2");
@@ -170,7 +173,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
     }
 
     @Cluster(l = "L1,L2,L3,L4,L5")
-    @Test
+    @Test(groups = "integration")
     public void testLearnerPromotion() {
         String leader = group.currentLeader().get();
 
@@ -186,13 +189,13 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         assertTrue(newVoters.contains(group.currentLeader().get()));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderElectionOverwriteNewerLogsWithPreVote() {
         testLeaderElectionOverwriteNewerLogs();
     }
 
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testLeaderElectionOverwriteNewerLogsWithoutPreVote() {
         testLeaderElectionOverwriteNewerLogs();
     }
@@ -223,7 +226,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         assertTrue(leader.equals(follower1) || leader.equals(follower2));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipWithPreVote() {
         String leader = group.currentLeader().get();
 
@@ -235,12 +238,12 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         group.waitForNextElection();
 
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(transferee, group.currentLeader().get());
-        Assert.assertEquals(cId, group.latestClusterConfig(group.currentLeader().get()).getCorrelateId());
+        assertEquals(transferee, group.currentLeader().get());
+        assertEquals(cId, group.latestClusterConfig(group.currentLeader().get()).getCorrelateId());
     }
 
     @Ticker(disable = true)
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipImmediatelyAfterLeaderElected() {
         group.run(10, TimeUnit.MILLISECONDS);
         group.waitForNextElection();
@@ -254,7 +257,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         }
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToUpToDateNode() {
         String leader = group.currentLeader().get();
 
@@ -269,10 +272,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         assertTrue(done.isDone() && !done.isCompletedExceptionally());
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(transferee, group.currentLeader().get());
+        assertEquals(transferee, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToUpToDateNodeFromFollower() {
         String leader = group.currentLeader().get();
 
@@ -290,7 +293,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
             }).join();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToSlowFollower() {
         String leader = group.currentLeader().get();
 
@@ -314,10 +317,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         group.transferLeadership(leader, transferee);
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(transferee, group.currentLeader().get());
+        assertEquals(transferee, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderTransferAfterSnapshot() {
         String leader = group.currentLeader().get();
 
@@ -339,10 +342,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         group.transferLeadership(leader, transferee);
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(transferee, group.currentLeader().get());
+        assertEquals(transferee, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToSelf() {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(leader, 1));
@@ -355,7 +358,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
             }).join();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToNonExistingNode() {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(leader, 1));
@@ -369,7 +372,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
     }
 
     @Cluster(l = "l1")
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToLearner() {
         String leader = group.currentLeader().get();
 
@@ -380,7 +383,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
             }).join();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipTimeout() {
         String leader = group.currentLeader().get();
 
@@ -397,10 +400,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
                 return CompletableFuture.completedFuture(null);
             }).join();
         group.await(ticks(5));
-        Assert.assertEquals(leader, group.currentLeader().get());
+        assertEquals(leader, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipIgnoreProposal() {
         String leader = group.currentLeader().get();
 
@@ -415,7 +418,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
     }
 
     @Config(preVote = false)
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipReceiveHigherTermVote() {
         String leader = group.currentLeader().get();
 
@@ -430,10 +433,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(follower, group.currentLeader().get());
+        assertEquals(follower, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipRemoveNode() {
         String leader = group.currentLeader().get();
 
@@ -451,10 +454,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         group.changeClusterConfig(leader, newVoters, Collections.emptySet());
 
         group.await(ticks(10));
-        Assert.assertEquals(leader, group.currentLeader().get());
+        assertEquals(leader, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testTransferLeadershipToDemoteNode() {
         String leader = group.currentLeader().get();
 
@@ -477,10 +480,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         assertEquals(newVoters, new HashSet<>(group.latestClusterConfig(leader).getVotersList()));
         assertEquals(Collections.singleton(transferee),
             new HashSet<>(group.latestClusterConfig(leader).getLearnersList()));
-        Assert.assertEquals(leader, group.currentLeader().get());
+        assertEquals(leader, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderTransferWhenOriginLeaderLostVote() {
         String leader = group.currentLeader().get();
 
@@ -489,10 +492,10 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         log.info("Transferee: {}", transferee);
         group.ignore(transferee, leader, RaftMessage.MessageTypeCase.REQUESTVOTE);
         group.waitForNextElection();
-        Assert.assertEquals(transferee, group.currentLeader().get());
+        assertEquals(transferee, group.currentLeader().get());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testNodeWithSmallerTermCanCompleteElection() {
         String leader = group.currentLeader().get();
 
@@ -510,25 +513,25 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        Assert.assertEquals(normalFollower, group.currentLeader().get());
+        assertEquals(normalFollower, group.currentLeader().get());
     }
 
     @Config(preVote = true)
-    @Test
+    @Test(groups = "integration")
     public void testNodeWithSmallerTermCanCompleteElectionWithPreVote() {
         this.testNodeWithSmallerTermCanCompleteElection();
     }
 
-    @Test
+    @Test(groups = "integration")
     public void testLeaderStepDown() {
         String leader = group.currentLeader().get();
         assertTrue(group.stepDown(leader));
-        Assert.assertEquals(RaftNodeStatus.Follower, group.nodeState(leader));
+        assertEquals(RaftNodeStatus.Follower, group.nodeState(leader));
         group.waitForNextElection();
     }
 
     @Config(preVote = true)
-    @Test
+    @Test(groups = "integration")
     public void testLeaderStepDownWithPreVote() {
         this.testLeaderStepDown();
     }

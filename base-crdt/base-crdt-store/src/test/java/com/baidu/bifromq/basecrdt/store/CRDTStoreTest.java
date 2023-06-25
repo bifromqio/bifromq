@@ -15,9 +15,9 @@ package com.baidu.bifromq.basecrdt.store;
 
 import static com.baidu.bifromq.basecrdt.core.util.Log.info;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.core.api.AWORSetOperation;
 import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
@@ -48,14 +48,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Listeners;
+import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(CRDTStoreTestListener.class)
 public class CRDTStoreTest extends CRDTStoreTestTemplate {
 
     @StoreCfgs(stores = {@StoreCfg(id = "s1")})
-    @Test
+    @Test(groups = "integration")
     public void testHosting() {
         ICRDTStore store = storeMgr.getStore("s1");
         String awseturi = CRDTURI.toURI(CausalCRDTType.aworset, "set");
@@ -71,7 +73,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         @StoreCfg(id = "s2"),
         @StoreCfg(id = "s3"),
     })
-    @Test
+    @Test(groups = "integration")
     public void testAntiEntropy() {
         String setId = CRDTURI.toURI(CausalCRDTType.aworset, "set");
         Replica setR1 = storeMgr.host("s1", setId);
@@ -132,7 +134,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         @StoreCfg(id = "s18"),
         @StoreCfg(id = "s19"),
     })
-    @Test
+    @Test(groups = "integration")
     public void testMassiveNestedCounters() throws InterruptedException {
         int size = storeMgr.stores().size();
         int countersPerMap = 100;
@@ -231,7 +233,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         @StoreCfg(id = "s8"),
         @StoreCfg(id = "s9")
     })
-    @Test
+    @Test(groups = "integration")
     public void testCCountersWithPacketLossAndReorder() throws InterruptedException {
         ccounterConcurrentWritingTest(5000);
     }
@@ -248,7 +250,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         @StoreCfg(id = "ss8", inflationInterval = 10, packetRandom = false),
         @StoreCfg(id = "ss9", inflationInterval = 10, packetRandom = false)
     })
-    @Test
+    @Test(groups = "integration")
     public void testCCounters() throws InterruptedException {
         ccounterConcurrentWritingTest(10000);
     }
@@ -312,7 +314,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         @StoreCfg(id = "s2"),
         @StoreCfg(id = "s3")
     })
-    @Test
+    @Test(groups = "integration")
     public void testNewReplicaJoin() {
         String setId = CRDTURI.toURI(CausalCRDTType.aworset, "set");
         Replica setR1 = storeMgr.host("s1", setId);
@@ -358,7 +360,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         @StoreCfg(id = "s2"),
         @StoreCfg(id = "s3"),
     })
-    @Test
+    @Test(groups = "integration")
     public void testMemberLeave() throws InterruptedException {
         String ctrId = CRDTURI.toURI(CausalCRDTType.cctr, "cctr");
         Replica ctrR1 = storeMgr.host("s1", ctrId);
@@ -403,7 +405,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         @StoreCfg(id = "s2"),
         @StoreCfg(id = "s3"),
     })
-    @Test
+    @Test(groups = "integration")
     public void testAutoHealWhenFalsePositiveNetworkPartition() throws InterruptedException {
         String clusterId = CRDTURI.toURI(CausalCRDTType.ormap, "ormap");
         Replica clusterR1 = storeMgr.host("s1", clusterId);

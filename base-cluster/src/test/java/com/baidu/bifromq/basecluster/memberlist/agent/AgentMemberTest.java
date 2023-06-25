@@ -14,10 +14,10 @@
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
 import static com.baidu.bifromq.basecluster.memberlist.agent.MockUtil.toAgentMemberAddr;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.atLeast;
@@ -51,15 +51,14 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
 @Slf4j
-@RunWith(MockitoJUnitRunner.class)
 public class AgentMemberTest {
     private String agentId = "agentId";
     private ByteString hostId = ByteString.copyFromUtf8("host1");
@@ -93,13 +92,19 @@ public class AgentMemberTest {
     private PublishSubject<Long> inflationSubject = PublishSubject.create();
     private PublishSubject<Set<HostEndpoint>> hostsSubjects = PublishSubject.create();
     private PublishSubject<AgentMessageEnvelope> messageSubject = PublishSubject.create();
-
-    @Before
+    private AutoCloseable closeable;
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
         when(orMap.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
         when(orMap.inflation()).thenReturn(inflationSubject);
         when(agentMessenger.send(any(), any(), anyBoolean())).thenReturn(CompletableFuture.completedFuture(null));
         when(agentMessenger.receive()).thenReturn(messageSubject);
+    }
+
+    @AfterMethod
+    public void releaseMocks() throws Exception {
+        closeable.close();
     }
 
     @SneakyThrows

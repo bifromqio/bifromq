@@ -34,9 +34,8 @@ import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.testng.annotations.Ignore;
+import org.testng.annotations.Test;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.runner.Runner;
@@ -60,15 +59,16 @@ import org.rocksdb.util.SizeUnit;
 
 @Slf4j
 public abstract class BenchmarkTemplate {
-    private TemporaryFolder dbRootDir = new TemporaryFolder();
+    private Path dbRootDir;
     protected IKVEngine kvEngine;
     private ScheduledExecutorService bgTaskExecutor;
 
     @Setup
     public void setup() {
         try {
-            dbRootDir.create();
+            dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
+            log.error("Failed to create temp dir", e);
         }
         String DB_NAME = "testDB";
         String DB_CHECKPOINT_DIR = "testDB_cp";
@@ -137,8 +137,8 @@ public abstract class BenchmarkTemplate {
             public void config(String name, MutableColumnFamilyOptionsInterface<ColumnFamilyOptions> targetOption) {
 
             }
-        }).setDbCheckpointRootDir(Paths.get(dbRootDir.getRoot().toString(), uuid, DB_CHECKPOINT_DIR).toString())
-            .setDbRootDir(Paths.get(dbRootDir.getRoot().toString(), uuid, DB_NAME).toString());
+        }).setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), uuid, DB_CHECKPOINT_DIR).toString())
+            .setDbRootDir(Paths.get(dbRootDir.toString(), uuid, DB_NAME).toString());
         kvEngine = KVEngineFactory.create(null, List.of(DEFAULT_NS), cpId -> true, configurator);
         kvEngine.start(bgTaskExecutor);
         doSetup();
@@ -149,10 +149,11 @@ public abstract class BenchmarkTemplate {
         kvEngine.stop();
         MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
         try {
-            Files.walk(Paths.get(dbRootDir.getRoot().toString()))
+            Files.walk(dbRootDir)
                 .sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
                 .forEach(File::delete);
+            Files.delete(dbRootDir);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }

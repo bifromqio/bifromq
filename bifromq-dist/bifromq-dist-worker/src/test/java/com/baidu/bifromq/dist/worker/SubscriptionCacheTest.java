@@ -16,8 +16,8 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static java.util.Collections.singleton;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
@@ -43,14 +43,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import lombok.SneakyThrows;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
 public class SubscriptionCacheTest {
     private KVRangeId id = KVRangeIdUtil.generate();
     @Mock
@@ -65,19 +63,23 @@ public class SubscriptionCacheTest {
     @Mock
     private ILoadEstimator loadTracker;
     private ExecutorService matchExecutor;
+    private AutoCloseable closeable;
 
-    @Before
+    @BeforeMethod
     public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
+        id = KVRangeIdUtil.generate();
         System.setProperty(DIST_TOPIC_MATCH_EXPIRY.propKey, "1");
         when(kvReader.iterator()).thenReturn(kvIterator);
         when(rangeReader.kvReader()).thenReturn(kvReader);
         when(rangeReaderProvider.get()).thenReturn(rangeReader);
-        matchExecutor = Executors.newSingleThreadScheduledExecutor();
+        matchExecutor = MoreExecutors.newDirectExecutorService();
     }
 
-    @After
-    public void teardown() {
+    @AfterMethod
+    public void teardown() throws Exception {
         MoreExecutors.shutdownAndAwaitTermination(matchExecutor, 5, TimeUnit.SECONDS);
+        closeable.close();
     }
 
     @Test
@@ -155,7 +157,7 @@ public class SubscriptionCacheTest {
     }
 
     @SneakyThrows
-    @Test
+    @Test(priority = 0)
     public void cacheTouchAndMatch() {
         String trafficId = "testTraffic";
         ScopedTopic scopedTopic = ScopedTopic.builder()
@@ -167,9 +169,7 @@ public class SubscriptionCacheTest {
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
         when(kvIterator.isValid()).thenReturn(false);
-
         Map<NormalMatching, Set<ClientInfo>> routes = cache.get(scopedTopic, singleton(sender)).join();
-
         Thread.sleep(500);
         cache.get(scopedTopic, singleton(sender)).join();
         cache.touch(trafficId);

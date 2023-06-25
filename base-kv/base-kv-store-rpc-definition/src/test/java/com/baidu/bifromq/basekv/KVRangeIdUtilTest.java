@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.basekv;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import lombok.SneakyThrows;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class KVRangeIdUtilTest {
 

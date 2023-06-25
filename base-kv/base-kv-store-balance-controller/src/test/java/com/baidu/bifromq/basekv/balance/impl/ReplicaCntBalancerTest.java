@@ -27,9 +27,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 public class ReplicaCntBalancerTest {
 
@@ -37,7 +37,7 @@ public class ReplicaCntBalancerTest {
 
     private ReplicaCntBalancer balancer;
 
-    @Before
+    @BeforeMethod
     public void setup() {
         balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
     }

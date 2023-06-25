@@ -14,12 +14,12 @@
 package com.baidu.bifromq.basecrdt.core.util;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import java.util.NavigableMap;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 public class LatticeIndexUtilTest {
     private final ByteString replicaA = copyFromUtf8("A");

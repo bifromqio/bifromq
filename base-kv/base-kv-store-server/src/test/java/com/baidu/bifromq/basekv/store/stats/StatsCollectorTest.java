@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.stats;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doAnswer;
 
@@ -23,7 +23,7 @@ import io.reactivex.rxjava3.observers.TestObserver;
 import java.time.Duration;
 import java.util.Map;
 import lombok.SneakyThrows;
-import org.junit.Test;
+import org.testng.annotations.Test;
 import org.mockito.Mockito;
 
 public class StatsCollectorTest {
