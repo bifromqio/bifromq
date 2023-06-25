@@ -78,7 +78,7 @@ public abstract class InboxServiceTest {
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         try {
             dbRootDir = Files.createTempDirectory("");
@@ -155,7 +155,7 @@ public abstract class InboxServiceTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() {
         log.info("Finish testing, and tearing down");
         inboxBrokerClient.close();

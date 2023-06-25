@@ -38,7 +38,7 @@ public abstract class RaftGroupTestTemplate {
     protected void startingTest(Method testMethod) {
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() {
         clusterConfigInUse = null;
     }

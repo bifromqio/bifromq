@@ -106,8 +106,7 @@ public class TopicFilterMatcherTest {
     public void testFindingHigherTopicFilter() {
         long s = System.nanoTime();
         List<String> topics = new ArrayList<>();
-//        int topicCount = ThreadLocalRandom.current().nextInt(1, 11);
-        int topicCount = 10;
+        int topicCount = ThreadLocalRandom.current().nextInt(1, 11);
         log.info("Expanding {} topics", topicCount);
         for (int i = 0; i < topicCount; i++) {
             String topic = TestUtil.randomTopic();

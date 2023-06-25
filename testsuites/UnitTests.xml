@@ -1,0 +1,13 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd" >
+<suite name="BifroMQ Unit Test Suite" parallel="classes">
+    <test name="UnitTests">
+        <groups>
+            <run>
+                <exclude name="integration"/>
+            </run>
+        </groups>
+        <packages>
+            <package name="com.baidu.bifromq.*"/>
+        </packages>
+    </test>
+</suite>

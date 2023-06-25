@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static org.testng.AssertJUnit.assertEquals;
 import static org.testng.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -61,7 +61,6 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -81,24 +80,17 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.mockito.Mock;
 
 @Slf4j
 abstract class InboxStoreTest {
     private static final String DB_NAME = "testDB";
     private static final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
-
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-//    @Rule
-//    public TestRule watcher = new TestWatcher() {
-//        protected void starting(Description description) {
-//            log.info("Starting test: " + description.getMethodName());
-//        }
-//    };
 
     @Mock
     protected IEventCollector eventCollector;
@@ -115,7 +107,8 @@ abstract class InboxStoreTest {
     protected InboxStore testStore;
 
     private AutoCloseable closeable;
-    @BeforeMethod
+
+    @BeforeMethod(groups = "integration")
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
         dbRootDir = Files.createTempDirectory("");
@@ -185,7 +178,7 @@ abstract class InboxStoreTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod
+    @AfterMethod(groups = "integration")
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();
@@ -195,9 +188,9 @@ abstract class InboxStoreTest {
         agentHost.shutdown();
         try {
             Files.walk(dbRootDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }

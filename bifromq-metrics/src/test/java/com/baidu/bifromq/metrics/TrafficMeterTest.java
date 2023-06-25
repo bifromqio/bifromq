@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.metrics;
 
-import static org.testng.Assert.assertFalse;
+import static com.baidu.bifromq.metrics.TrafficMeter.TAG_TRAFFIC_ID;
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 
 import io.micrometer.core.instrument.Metrics;
@@ -23,15 +24,21 @@ import org.testng.annotations.Test;
 @Slf4j
 public class TrafficMeterTest {
     @Test
-    public void test() throws InterruptedException {
-        TrafficMeter meter = TrafficMeter.get("trafficA");
+    public void get() throws InterruptedException {
+        String trafficId = "testing_traffic";
+        TrafficMeter meter = TrafficMeter.get(trafficId);
         meter.recordCount(TrafficMetric.MqttConnectCount);
-        assertFalse(Metrics.globalRegistry.getMeters().isEmpty());
+        assertTrue(Metrics.globalRegistry.getMeters().stream()
+            .anyMatch(m -> trafficId.equals(m.getId().getTag(TAG_TRAFFIC_ID))));
         meter = null;
         System.gc();
         TrafficMeter.cleanUp();
         System.gc();
         Thread.sleep(100);
-        assertTrue(Metrics.globalRegistry.getMeters().isEmpty());
+        await().until(() -> {
+            Thread.sleep(100);
+            return Metrics.globalRegistry.getMeters().stream()
+                .noneMatch(m -> trafficId.equals(m.getId().getTag(TAG_TRAFFIC_ID)));
+        });
     }
 }

@@ -18,7 +18,6 @@ import static org.testng.Assert.fail;
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfg;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfgs;
-
 import java.lang.reflect.Method;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
@@ -44,8 +43,8 @@ public class CRDTServiceTestTemplate {
             }
             if (serviceCfg != null) {
                 testCluster.newService(serviceCfg.id(),
-                        buildHostOptions(serviceCfg),
-                        buildCrdtServiceOptions(serviceCfg));
+                    buildHostOptions(serviceCfg),
+                    buildCrdtServiceOptions(serviceCfg));
             }
             if (seedStoreId != null && serviceCfgs != null) {
                 for (ServiceCfg cfg : serviceCfgs.services()) {
@@ -61,12 +60,12 @@ public class CRDTServiceTestTemplate {
         }
     }
 
-    @BeforeMethod
+    @BeforeMethod(groups = "integration")
     public void setup() {
         testCluster = new CRDTServiceTestCluster();
     }
 
-    @AfterMethod
+    @AfterMethod(groups = "integration")
     public void teardown() {
         if (testCluster != null) {
             log.info("Shutting down test cluster");

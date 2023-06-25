@@ -67,7 +67,7 @@ public abstract class SharedRaftConfigTestTemplate extends RaftGroupTestTemplate
         }
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public final void teardown() {
         log.info("Stop the test raft group");
         group.shutdown();

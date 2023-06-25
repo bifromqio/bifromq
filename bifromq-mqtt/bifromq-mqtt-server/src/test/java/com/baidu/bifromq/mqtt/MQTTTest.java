@@ -62,27 +62,20 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.pf4j.DefaultPluginManager;
+import org.pf4j.PluginManager;
 import org.testng.ITestListener;
 import org.testng.ITestNGMethod;
 import org.testng.ITestResult;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.mockito.Mock;
-import org.pf4j.DefaultPluginManager;
-import org.pf4j.PluginManager;
 import org.testng.annotations.Test;
 
 @Slf4j
 abstract class MQTTTest implements ITestListener {
     protected static final String brokerURI = "tcp://127.0.0.1:1883";
-//    @Rule
-//    public TestRule watcher = new TestWatcher() {
-//        protected void starting(Description description) {
-//            log.info("Starting test: " + description.getMethodName());
-//        }
-//    };
-
     @Mock
     protected IAuthProvider authProvider;
 
@@ -135,7 +128,7 @@ abstract class MQTTTest implements ITestListener {
         System.out.println(method.getDescription());
     }
 
-    @BeforeMethod
+    @BeforeMethod(groups = "integration")
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         pluginMgr = new DefaultPluginManager();
@@ -335,7 +328,7 @@ abstract class MQTTTest implements ITestListener {
         });
     }
 
-    @AfterMethod
+    @AfterMethod(groups = "integration")
     public void teardown() throws Exception {
         log.info("Start to tearing down");
         mqttBroker.shutdown();

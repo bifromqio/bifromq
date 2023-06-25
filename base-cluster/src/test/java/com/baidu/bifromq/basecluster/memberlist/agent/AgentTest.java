@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.Assert.assertNotEquals;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basecluster.agent.proto.AgentMember;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
@@ -49,12 +49,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
 
 @Slf4j
 public class AgentTest {
@@ -73,20 +73,25 @@ public class AgentTest {
     private Replica replica = Replica.newBuilder().setUri(CRDTUtil.toAgentURI(agentId)).build();
     @Mock
     private IAgentMessenger agentMessenger;
-    private Scheduler scheduler = Schedulers.from(MoreExecutors.directExecutor()); // make test more deterministic
+    private Scheduler scheduler; // make test more deterministic
     @Mock
     private ICRDTStore crdtStore;
     @Mock
     private IAgentHostProvider hostProvider;
     @Mock
     private IORMap orMap;
-    private PublishSubject<Long> inflationSubject = PublishSubject.create();
-    private PublishSubject<Set<HostEndpoint>> hostsSubjects = PublishSubject.create();
-    private PublishSubject<AgentMessageEnvelope> messageSubject = PublishSubject.create();
+    private PublishSubject<Long> inflationSubject;
+    private PublishSubject<Set<HostEndpoint>> hostsSubjects;
+    private PublishSubject<AgentMessageEnvelope> messageSubject;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        scheduler = Schedulers.from(MoreExecutors.directExecutor());
+        inflationSubject = PublishSubject.create();
+        hostsSubjects = PublishSubject.create();
+        messageSubject = PublishSubject.create();
         when(crdtStore.host(CRDTUtil.toAgentURI(agentId), endpoint1.toByteString())).thenReturn(replica);
         when(crdtStore.get(CRDTUtil.toAgentURI(agentId))).thenReturn(Optional.of(orMap));
         when(orMap.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
@@ -187,8 +192,10 @@ public class AgentTest {
         String agentMember2 = "agentMember2";
         Agent agent = new Agent(agentId, endpoint1, agentMessenger, scheduler, crdtStore, hostProvider);
         Map<AgentMemberAddr, AgentMemberMetadata> members = new HashMap<>();
-        members.put(MockUtil.toAgentMemberAddr(agentMember1, endpoint1), MockUtil.toAgentMemberMetadata(ByteString.EMPTY));
-        members.put(MockUtil.toAgentMemberAddr(agentMember2, endpoint2), MockUtil.toAgentMemberMetadata(ByteString.EMPTY));
+        members.put(MockUtil.toAgentMemberAddr(agentMember1, endpoint1),
+            MockUtil.toAgentMemberMetadata(ByteString.EMPTY));
+        members.put(MockUtil.toAgentMemberAddr(agentMember2, endpoint2),
+            MockUtil.toAgentMemberMetadata(ByteString.EMPTY));
         MockUtil.mockAgentMemberCRDT(orMap, members);
         Set<HostEndpoint> endpoints = Sets.newHashSet(endpoint1, endpoint2);
         hostsSubjects.onNext(endpoints);

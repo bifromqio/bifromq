@@ -50,7 +50,7 @@ public class MQTTPubSubTest extends MQTTTest {
     private String trafficId = "ashdsha";
     private String deviceKey = "testDevice";
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         super.setup();

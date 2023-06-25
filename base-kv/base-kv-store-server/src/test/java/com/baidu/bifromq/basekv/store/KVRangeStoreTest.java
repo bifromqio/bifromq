@@ -90,7 +90,7 @@ public class KVRangeStoreTest {
 
     public Path dbRootDir;
     private AutoCloseable closeable;
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
         options.getKvRangeOptions().getWalRaftConfig().setAsyncAppend(false);
@@ -156,7 +156,7 @@ public class KVRangeStoreTest {
         assertTrue(rangeStore.bootstrap());
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() throws Exception {
         rangeStore.stop();
         queryExecutor.shutdownNow();

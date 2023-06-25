@@ -53,7 +53,7 @@ public class QoS1InboxTest extends InboxStoreTest {
     @Mock
     private Clock clock;
 
-    @BeforeMethod
+    @BeforeMethod(groups = "integration")
     public void setup() throws IOException {
         super.setup();
         when(clock.millis()).thenReturn(0L);

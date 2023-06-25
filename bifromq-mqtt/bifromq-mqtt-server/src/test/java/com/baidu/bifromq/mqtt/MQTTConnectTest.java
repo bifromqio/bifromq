@@ -47,14 +47,14 @@ import org.testng.annotations.Test;
 public class MQTTConnectTest extends MQTTTest {
     private MqttTestClient mqttClient;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         super.setup();
         mqttClient = new MqttTestClient(brokerURI, "mqtt_client_test");
         log.info("Mqtt client created");
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() throws Exception {
         mqttClient.close();
         super.teardown();

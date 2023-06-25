@@ -23,7 +23,10 @@
     </parent>
 
     <artifactId>base-kv-store-client</artifactId>
-
+    <properties>
+        <!--remove when tests are added-->
+        <maven.test.skip>true</maven.test.skip>
+    </properties>
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -48,12 +51,6 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-        </dependency>
-        <!-- for testing -->
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

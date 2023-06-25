@@ -50,7 +50,7 @@ public class TestUtil {
     }
 
     private static class RandomTopicName {
-        public static final String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        public static final String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ你好😄";
 
         public static final String lower = upper.toLowerCase(Locale.ROOT);
 

@@ -69,7 +69,7 @@ public class TrafficMeter {
     private static final ConcurrentMap<String, Map<TrafficMetric, Gauge>> TRAFFIC_GAUGES = new ConcurrentHashMap<>();
     private static final LoadingCache<String, TrafficMeter> TRAFFIC_METER_CACHE = Caffeine.newBuilder()
         .weakValues()
-        .build(trafficId -> new TrafficMeter(trafficId));
+        .build(TrafficMeter::new);
 
     public static TrafficMeter get(String trafficId) {
         return TRAFFIC_METER_CACHE.get(trafficId);

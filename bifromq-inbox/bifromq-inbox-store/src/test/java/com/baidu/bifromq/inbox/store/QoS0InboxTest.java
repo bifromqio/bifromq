@@ -15,12 +15,12 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.inbox.storage.proto.HasReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxFetchReply;
@@ -30,13 +30,12 @@ import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-
 import java.io.IOException;
 import java.time.Clock;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 public class QoS0InboxTest extends InboxStoreTest {
     private String trafficId = "trafficId";
@@ -51,7 +50,7 @@ public class QoS0InboxTest extends InboxStoreTest {
     @Mock
     private Clock clock;
 
-    @BeforeMethod
+    @BeforeMethod(groups = "integration")
     public void setup() throws IOException {
         super.setup();
         when(clock.millis()).thenReturn(0L);
@@ -99,7 +98,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         assertEquals(InboxInsertResult.Result.NO_INBOX, reply.getResults(0).getResult());
     }
 
-    @Test
+    @Test(groups = "integration")
     public void fetchWithoutStartAfter() {
         String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
         String topic = "greeting";

@@ -30,7 +30,7 @@ public class GCTest extends RetainStoreTest {
     @Mock
     private Clock clock;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() throws IOException {
         super.setup();
         when(clock.millis()).thenReturn(0L);

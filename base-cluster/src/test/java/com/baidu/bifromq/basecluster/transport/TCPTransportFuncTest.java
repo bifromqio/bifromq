@@ -50,13 +50,13 @@ public class TCPTransportFuncTest {
     TCPTransport transport1;
     TCPTransport transport2;
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void shutdown() {
         if (transport1 != null) {
-            transport1.shutdown();
+            transport1.shutdown().join();
         }
         if (transport2 != null) {
-            transport2.shutdown();
+            transport2.shutdown().join();
         }
     }
 

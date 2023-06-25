@@ -53,7 +53,7 @@ public class MessengerFuncTest {
     private Scheduler scheduler = Schedulers.single();
     private ClusterMessage quit;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void init() {
         MessengerOptions opts = new MessengerOptions();
         opts.maxFanout(maxFanout)
@@ -115,7 +115,7 @@ public class MessengerFuncTest {
             .build();
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void close() {
         localMessenger.shutdown().join();
         remoteMessenger.shutdown().join();

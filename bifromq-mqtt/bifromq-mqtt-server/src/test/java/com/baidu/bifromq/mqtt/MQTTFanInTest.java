@@ -43,7 +43,7 @@ public class MQTTFanInTest extends MQTTTest {
     private String trafficId = "testTraffic";
     private String deviceKey = "testDevice";
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         super.setup();
         when(authProvider.auth(any(MQTT3AuthData.class)))

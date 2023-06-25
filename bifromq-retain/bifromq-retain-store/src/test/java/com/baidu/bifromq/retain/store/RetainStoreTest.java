@@ -76,13 +76,6 @@ public class RetainStoreTest {
 
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-//    @Rule
-//    public TestRule watcher = new TestWatcher() {
-//        protected void starting(Description description) {
-//            log.info("Starting test: " + description.getMethodName());
-//        }
-//    };
-
     private IAgentHost agentHost;
 
     private ICRDTService clientCrdtService;
@@ -97,7 +90,7 @@ public class RetainStoreTest {
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
     private AutoCloseable closeable;
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
         dbRootDir = Files.createTempDirectory("");
@@ -164,7 +157,7 @@ public class RetainStoreTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();

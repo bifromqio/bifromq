@@ -61,29 +61,12 @@ public abstract class AgentTestTemplate {
         }
     }
 
-    @BeforeClass
-    public static void setupOnce() {
-        LoggingRegistryConfig registryConfig = new LoggingRegistryConfig() {
-            @Override
-            public String get(String s) {
-                return null;
-            }
-
-            @Override
-            public Duration step() {
-                return Duration.ofSeconds(1);
-            }
-        };
-        LoggingMeterRegistry meterRegistry = new LoggingMeterRegistry(registryConfig, Clock.SYSTEM);
-//        Metrics.addRegistry(meterRegistry);
-    }
-
-    @BeforeMethod
+    @BeforeMethod(groups = "integration")
     public void setup() {
         storeMgr = new AgentTestCluster();
     }
 
-    @AfterMethod
+    @AfterMethod(groups = "integration")
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");

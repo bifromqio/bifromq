@@ -94,21 +94,21 @@ public class DistQoS0Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
+        insertMatchRecord("trafficA", "/你好/hello/😄", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
         insertMatchRecord("trafficA", "/#", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
         insertMatchRecord("trafficA", "/#", AT_LEAST_ONCE,
             InboxService, "inbox2", "batch2");
 
-        BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
+        BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/你好/hello/😄", copyFromUtf8("Hello"), "orderKey1");
+        assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/你好/hello/😄").intValue() > 0);
 
         ArgumentCaptor<Iterable<InboxPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);
         verify(writer1, timeout(1000).atLeastOnce()).write(msgCap.capture());
         for (InboxPack pack : msgCap.getValue()) {
             TopicMessagePack msgPack = pack.messagePack;
-            assertEquals("/a/b/c", msgPack.getTopic());
+            assertEquals("/你好/hello/😄", msgPack.getTopic());
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgPack.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {
                     assertEquals(copyFromUtf8("Hello"), msg.getPayload());
@@ -120,7 +120,7 @@ public class DistQoS0Test extends DistWorkerTest {
         verify(writer2, timeout(1000).times(1)).write(msgCap.capture());
         for (InboxPack pack : msgCap.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
-            assertEquals("/a/b/c", msgs.getTopic());
+            assertEquals("/你好/hello/😄", msgs.getTopic());
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {
                     assertEquals(copyFromUtf8("Hello"), msg.getPayload());

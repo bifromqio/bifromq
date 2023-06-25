@@ -100,7 +100,7 @@ public abstract class DistServiceTest {
 
     private AutoCloseable closeable;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
@@ -176,7 +176,7 @@ public abstract class DistServiceTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         workerClient.stop();

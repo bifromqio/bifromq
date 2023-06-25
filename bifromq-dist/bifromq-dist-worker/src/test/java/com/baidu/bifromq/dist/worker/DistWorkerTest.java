@@ -122,7 +122,7 @@ public abstract class DistWorkerTest {
     protected IInboxWriter writer2;
     @Mock
     protected IInboxWriter writer3;
-    protected SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    protected SimpleMeterRegistry meterRegistry;
     protected IDistWorker testWorker;
     protected IBaseKVStoreClient storeClient;
     private ExecutorService queryExecutor;
@@ -137,9 +137,10 @@ public abstract class DistWorkerTest {
     }
 
     private AutoCloseable closeable;
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        meterRegistry = new SimpleMeterRegistry();
         try {
             dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
@@ -233,7 +234,7 @@ public abstract class DistWorkerTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();

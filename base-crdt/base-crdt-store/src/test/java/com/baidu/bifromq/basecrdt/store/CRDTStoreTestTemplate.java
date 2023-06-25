@@ -40,30 +40,13 @@ public abstract class CRDTStoreTestTemplate {
     private Path dbRootDir;
     protected CRDTStoreTestCluster storeMgr;
 
-    @BeforeClass
-    public static void setupOnce() {
-        LoggingRegistryConfig registryConfig = new LoggingRegistryConfig() {
-            @Override
-            public String get(String s) {
-                return null;
-            }
-
-            @Override
-            public Duration step() {
-                return Duration.ofSeconds(1);
-            }
-        };
-        LoggingMeterRegistry meterRegistry = new LoggingMeterRegistry(registryConfig, Clock.SYSTEM);
-//        Metrics.addRegistry(meterRegistry);
-    }
-
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() throws IOException {
         dbRootDir = Files.createTempDirectory("");
         storeMgr = new CRDTStoreTestCluster(dbRootDir.toString());
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");

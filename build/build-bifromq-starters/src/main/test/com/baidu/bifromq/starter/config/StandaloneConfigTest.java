@@ -13,20 +13,22 @@
 
 package com.baidu.bifromq.starter.config;
 
-import static org.testng.AssertJUnit.assertEquals;
 import static org.testng.Assert.assertNotNull;
+import static org.testng.AssertJUnit.assertEquals;
 
 import java.io.File;
 import java.nio.file.Paths;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class StandaloneConfigTest {
 
+    @SneakyThrows
     @Test
     public void buildFromYaml() {
-        File confFile = Paths.get(System.getProperty("user.dir"), "conf", "standalone.yml").toFile();
+        File confFile = Paths.get(this.getClass().getResource("/standalone.yml").toURI()).toFile();
         StandaloneConfig config = StandaloneConfig.build(confFile);
         assertEquals("0.0.0.0", config.getHost());
         assertNotNull(config.getDistWorkerConfig());

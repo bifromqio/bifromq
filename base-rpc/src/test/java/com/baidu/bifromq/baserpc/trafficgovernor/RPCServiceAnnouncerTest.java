@@ -28,7 +28,7 @@ import org.testng.annotations.BeforeMethod;
 abstract class RPCServiceAnnouncerTest {
     private IAgentHost agentHost;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
@@ -42,7 +42,7 @@ abstract class RPCServiceAnnouncerTest {
         log.info("Agent host started");
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() {
         agentHost.shutdown();
     }
