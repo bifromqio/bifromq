@@ -18,7 +18,6 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.DeliveryPack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
-import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -32,10 +31,10 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteReply> {
-    private final Map<String, IMQTTSession> sessionMap;
+class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteReply> {
+    private final Map<String, IMQTT3TransientSession> sessionMap;
 
-    public LocalSessionWritePipeline(Map<String, IMQTTSession> sessionMap,
+    public LocalSessionWritePipeline(Map<String, IMQTT3TransientSession> sessionMap,
                                      StreamObserver<WriteReply> responseObserver) {
         super(responseObserver);
         this.sessionMap = sessionMap;
@@ -50,17 +49,17 @@ public class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, Wr
         for (DeliveryPack deliveryPack : request.getDeliveryPackList()) {
             TopicMessagePack topicMsgPack = deliveryPack.getMessagePack();
             List<SubInfo> subInfos = deliveryPack.getSubscriberList();
-            Map<IMQTTSession, SubInfo> inboxes = new HashMap<>();
+            Map<IMQTT3TransientSession, SubInfo> inboxes = new HashMap<>();
             for (SubInfo subInfo : subInfos) {
-                IMQTTSession session = sessionMap.get(subInfo.getInboxId());
-                if (!noInbox.contains(subInfo) && session instanceof IMQTT3TransientSession) {
+                IMQTT3TransientSession session = sessionMap.get(subInfo.getInboxId());
+                if (!noInbox.contains(subInfo) && session != null) {
                     ok.add(subInfo);
                     inboxes.put(session, subInfo);
                 } else {
                     noInbox.add(subInfo);
                 }
             }
-            inboxes.forEach((session, subInfo) -> ((IMQTT3TransientSession) session).publish(subInfo, topicMsgPack));
+            inboxes.forEach((session, subInfo) -> session.publish(subInfo, topicMsgPack));
         }
         ok.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
             .setSubInfo(subInfo)

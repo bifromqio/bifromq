@@ -21,6 +21,7 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
+import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
 import com.google.common.util.concurrent.RateLimiter;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Gauge;
@@ -33,8 +34,9 @@ import java.util.concurrent.ConcurrentMap;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxBrokerImplBase {
+final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxBrokerImplBase {
     private final ConcurrentMap<String, IMQTTSession> sessionMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, IMQTT3TransientSession> transientSessionMap = new ConcurrentHashMap<>();
 
     private final Gauge connCountGauge;
 
@@ -45,7 +47,7 @@ public final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.Onlin
 
     @Override
     public StreamObserver<WriteRequest> write(StreamObserver<WriteReply> responseObserver) {
-        return new LocalSessionWritePipeline(sessionMap, responseObserver);
+        return new LocalSessionWritePipeline(transientSessionMap, responseObserver);
     }
 
     @Override
@@ -61,9 +63,13 @@ public final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.Onlin
 
     void reg(String sessionId, IMQTTSession session) {
         sessionMap.putIfAbsent(sessionId, session);
+        if (session instanceof IMQTT3TransientSession) {
+            transientSessionMap.putIfAbsent(sessionId, (IMQTT3TransientSession) session);
+        }
     }
 
     boolean unreg(String sessionId, IMQTTSession session) {
+        transientSessionMap.remove(sessionId);
         return sessionMap.remove(sessionId, session);
     }
 
@@ -83,6 +89,7 @@ public final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.Onlin
 
     private CompletableFuture<Void> disconnect(String sessionId) {
         IMQTTSession session = sessionMap.remove(sessionId);
+        transientSessionMap.remove(sessionId);
         if (session != null) {
             return session.disconnect();
         }

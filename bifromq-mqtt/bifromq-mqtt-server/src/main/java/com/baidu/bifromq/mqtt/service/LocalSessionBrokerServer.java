@@ -49,6 +49,7 @@ abstract class LocalSessionBrokerServer implements ILocalSessionBrokerServer {
     @Override
     public void shutdown() {
         server.shutdown();
+        service.close();
     }
 
     @Override
