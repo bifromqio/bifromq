@@ -14,7 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.google.common.hash.Hashing.murmur3_128;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertTrue;
 
 import com.google.common.collect.Sets;
 import java.util.Set;

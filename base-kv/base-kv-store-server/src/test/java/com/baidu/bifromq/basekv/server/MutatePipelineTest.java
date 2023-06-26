@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -74,8 +74,8 @@ public class MutatePipelineTest {
 
         KVRangeRWReply putReply = pipeline.handleRequest("_", putRequest).join();
 
-        assertEquals(1, putReply.getReqId());
-        assertEquals(ReplyCode.Ok, putReply.getCode());
+        assertEquals(putReply.getReqId(), 1);
+        assertEquals(putReply.getCode(), ReplyCode.Ok);
         assertTrue(putReply.getPutResult().isEmpty());
     }
 
@@ -95,8 +95,8 @@ public class MutatePipelineTest {
 
         KVRangeRWReply delReply = pipeline.handleRequest("_", delRequest).join();
 
-        assertEquals(1, delReply.getReqId());
-        assertEquals(ReplyCode.Ok, delReply.getCode());
+        assertEquals(delReply.getReqId(), 1);
+        assertEquals(delReply.getCode(), ReplyCode.Ok);
         assertTrue(delReply.getDeleteResult().isEmpty());
     }
 
@@ -117,8 +117,8 @@ public class MutatePipelineTest {
 
         KVRangeRWReply mutateReply = pipeline.handleRequest("_", mutateRequest).join();
 
-        assertEquals(1, mutateReply.getReqId());
-        assertEquals(ReplyCode.Ok, mutateReply.getCode());
+        assertEquals(mutateReply.getReqId(), 1);
+        assertEquals(mutateReply.getCode(), ReplyCode.Ok);
         assertTrue(mutateReply.getRwCoProcResult().isEmpty());
     }
 
@@ -142,7 +142,7 @@ public class MutatePipelineTest {
         when(rangeStore.put(1, rangeId, putKey, putVal)).thenReturn(
             CompletableFuture.failedFuture(new KVRangeException.BadVersion("bad version")));
         KVRangeRWReply putReply = pipeline.handleRequest("_", putRequest).join();
-        assertEquals(ReplyCode.BadVersion, putReply.getCode());
+        assertEquals(putReply.getCode(), ReplyCode.BadVersion);
 
         // bad request
         putRequest = KVRangeRWRequest.newBuilder()
@@ -154,7 +154,7 @@ public class MutatePipelineTest {
         when(rangeStore.put(2, rangeId, putKey, putVal)).thenReturn(
             CompletableFuture.failedFuture(new KVRangeException.BadRequest("bad request")));
         putReply = pipeline.handleRequest("_", putRequest).join();
-        assertEquals(ReplyCode.BadRequest, putReply.getCode());
+        assertEquals(putReply.getCode(), ReplyCode.BadRequest);
 
         // try later
         putRequest = KVRangeRWRequest.newBuilder()
@@ -166,7 +166,7 @@ public class MutatePipelineTest {
         when(rangeStore.put(3, rangeId, putKey, putVal)).thenReturn(
             CompletableFuture.failedFuture(new KVRangeException.TryLater("try later")));
         putReply = pipeline.handleRequest("_", putRequest).join();
-        assertEquals(ReplyCode.TryLater, putReply.getCode());
+        assertEquals(putReply.getCode(), ReplyCode.TryLater);
 
         putRequest = KVRangeRWRequest.newBuilder()
             .setReqId(1)
@@ -177,6 +177,6 @@ public class MutatePipelineTest {
         when(rangeStore.put(4, rangeId, putKey, putVal)).thenReturn(
             CompletableFuture.failedFuture(new KVRangeException.InternalException("internal error")));
         putReply = pipeline.handleRequest("_", putRequest).join();
-        assertEquals(ReplyCode.InternalError, putReply.getCode());
+        assertEquals(putReply.getCode(), ReplyCode.InternalError);
     }
 }

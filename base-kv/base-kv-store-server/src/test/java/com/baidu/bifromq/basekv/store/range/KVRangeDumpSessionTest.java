@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -80,10 +80,10 @@ public class KVRangeDumpSessionTest {
         ArgumentCaptor<KVRangeMessage> messageCap = ArgumentCaptor.forClass(KVRangeMessage.class);
         verify(messenger).send(messageCap.capture());
         KVRangeMessage message = messageCap.getValue();
-        assertEquals(peerStoreId, message.getHostStoreId());
-        assertEquals(rangeId, message.getRangeId());
-        assertEquals(sessionId, message.getSaveSnapshotDataRequest().getSessionId());
-        assertEquals(SaveSnapshotDataRequest.Flag.End, message.getSaveSnapshotDataRequest().getFlag());
+        assertEquals(message.getHostStoreId(), peerStoreId);
+        assertEquals(message.getRangeId(), rangeId);
+        assertEquals(message.getSaveSnapshotDataRequest().getSessionId(), sessionId);
+        assertEquals(message.getSaveSnapshotDataRequest().getFlag(), SaveSnapshotDataRequest.Flag.End);
     }
 
     @Test
@@ -106,10 +106,10 @@ public class KVRangeDumpSessionTest {
         ArgumentCaptor<KVRangeMessage> messageCap = ArgumentCaptor.forClass(KVRangeMessage.class);
         verify(messenger).send(messageCap.capture());
         KVRangeMessage message = messageCap.getValue();
-        assertEquals(peerStoreId, message.getHostStoreId());
-        assertEquals(rangeId, message.getRangeId());
-        assertEquals(sessionId, message.getSaveSnapshotDataRequest().getSessionId());
-        assertEquals(SaveSnapshotDataRequest.Flag.Error, message.getSaveSnapshotDataRequest().getFlag());
+        assertEquals(message.getHostStoreId(), peerStoreId);
+        assertEquals(message.getRangeId(), rangeId);
+        assertEquals(message.getSaveSnapshotDataRequest().getSessionId(), sessionId);
+        assertEquals(message.getSaveSnapshotDataRequest().getFlag(), SaveSnapshotDataRequest.Flag.Error);
     }
 
     @Test
@@ -152,7 +152,7 @@ public class KVRangeDumpSessionTest {
         when(snapItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofSeconds(5), 1024, dumpBytesRecorder);
-        assertEquals(checkpointId, dumpSession.checkpointId());
+        assertEquals(dumpSession.checkpointId(), checkpointId);
         verify(snapItr).seekToFirst();
         verify(snapItr).next();
         assertFalse(dumpSession.awaitDone().toCompletableFuture().isDone());
@@ -199,7 +199,7 @@ public class KVRangeDumpSessionTest {
             MoreExecutors.directExecutor(), Duration.ofMillis(100), 5, dumpBytesRecorder);
         ArgumentCaptor<KVRangeMessage> messageCap = ArgumentCaptor.forClass(KVRangeMessage.class);
         verify(messenger, times(1)).send(messageCap.capture());
-        assertEquals(SaveSnapshotDataRequest.Flag.More, messageCap.getValue().getSaveSnapshotDataRequest().getFlag());
+        assertEquals(messageCap.getValue().getSaveSnapshotDataRequest().getFlag(), SaveSnapshotDataRequest.Flag.More);
     }
 
     @SneakyThrows
@@ -232,7 +232,7 @@ public class KVRangeDumpSessionTest {
         dumpSession.tick();
         ArgumentCaptor<KVRangeMessage> messageCap = ArgumentCaptor.forClass(KVRangeMessage.class);
         verify(messenger, times(2)).send(messageCap.capture());
-        assertEquals(messageCap.getAllValues().get(0), messageCap.getAllValues().get(1));
+        assertEquals(messageCap.getAllValues().get(1), messageCap.getAllValues().get(0));
     }
 
     @SneakyThrows

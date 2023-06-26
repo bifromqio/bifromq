@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.localengine;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
@@ -184,8 +184,8 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
 
             iterator.seekToFirst();
             assertTrue(iterator.isValid());
-            assertEquals(key1, iterator.key());
-            assertEquals(val1, iterator.value());
+            assertEquals(iterator.key(), key1);
+            assertEquals(iterator.value(), val1);
             iterator.next();
             assertFalse(iterator.isValid());
 
@@ -195,12 +195,12 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
             iterator.refresh();
             iterator.seekToFirst();
             assertTrue(iterator.isValid());
-            assertEquals(key1, iterator.key());
-            assertEquals(val1, iterator.value());
+            assertEquals(iterator.key(), key1);
+            assertEquals(iterator.value(), val1);
             iterator.next();
             assertTrue(iterator.isValid());
-            assertEquals(key2, iterator.key());
-            assertEquals(val2, iterator.value());
+            assertEquals(iterator.key(), key2);
+            assertEquals(iterator.value(), val2);
             iterator.next();
             assertFalse(iterator.isValid());
 
@@ -218,8 +218,8 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
             iterator.refresh();
             iterator.seekToFirst();
             assertTrue(iterator.isValid());
-            assertEquals(key1, iterator.key());
-            assertEquals(val1, iterator.value());
+            assertEquals(iterator.key(), key1);
+            assertEquals(iterator.value(), val1);
             iterator.next();
             // Error: expect not exist key2 anymore, but got it
             assertFalse(iterator.isValid());
@@ -255,11 +255,11 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
 
         rangeId = kvEngine.registerKeyRange(IKVEngine.DEFAULT_NS, EMPTY, copyFromUtf8("key0"));
         size = kvEngine.size(rangeId);
-        assertEquals(0, size);
+        assertEquals(size, 0);
 
         rangeId = kvEngine.registerKeyRange(IKVEngine.DEFAULT_NS, EMPTY, EMPTY);
         size = kvEngine.size(rangeId);
-        assertEquals(0, size);
+        assertEquals(size, 0);
     }
 
     @Test

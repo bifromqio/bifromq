@@ -17,8 +17,8 @@ import static com.baidu.bifromq.basekv.raft.exception.ReadIndexException.COMMIT_
 import static com.baidu.bifromq.basekv.raft.exception.ReadIndexException.LEADER_STEP_DOWN;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertSame;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
 
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
@@ -114,9 +114,9 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
             // readIndex may be successful
             Optional<LogEntry> logEntry = group.entryAt(leader, commitIndex);
             assertTrue(logEntry.isPresent());
-            assertEquals(LogEntry.TypeCase.CONFIG, logEntry.get().getTypeCase());
+            assertEquals(logEntry.get().getTypeCase(), LogEntry.TypeCase.CONFIG);
         } catch (Throwable e) {
-            assertSame(COMMIT_INDEX_NOT_CONFIRMED, e.getCause());
+            assertSame(e.getCause(), COMMIT_INDEX_NOT_CONFIRMED);
         }
     }
 
@@ -210,7 +210,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
 
         group.readIndex(leader)
             .handle((r, e) -> {
-                assertEquals(LEADER_STEP_DOWN, e);
+                assertEquals(e, LEADER_STEP_DOWN);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }
@@ -233,7 +233,7 @@ public class ReadIndexTest extends SharedRaftConfigTestTemplate {
 
         group.readIndex(leader)
             .handle((r, e) -> {
-                assertEquals(LEADER_STEP_DOWN, e);
+                assertEquals(e, LEADER_STEP_DOWN);
                 return CompletableFuture.completedFuture(null);
             }).join();
 

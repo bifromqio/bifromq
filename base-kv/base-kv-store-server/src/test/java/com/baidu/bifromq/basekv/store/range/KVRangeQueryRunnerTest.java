@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -157,10 +157,10 @@ public class KVRangeQueryRunnerTest {
         ArgumentCaptor<ByteString> inputCap = ArgumentCaptor.forClass(ByteString.class);
         ArgumentCaptor<IKVReader> kvReaderCap = ArgumentCaptor.forClass(IKVReader.class);
         verify(coProc).query(inputCap.capture(), kvReaderCap.capture());
-        assertEquals(key, inputCap.getValue());
-        assertEquals(kvReader, kvReaderCap.getValue());
+        assertEquals(inputCap.getValue(), key);
+        assertEquals(kvReaderCap.getValue(), kvReader);
         try {
-            assertEquals(value, queryFuture.join());
+            assertEquals(queryFuture.join(), value);
         } catch (Throwable e) {
             fail();
         }
@@ -183,10 +183,10 @@ public class KVRangeQueryRunnerTest {
         ArgumentCaptor<ByteString> inputCap = ArgumentCaptor.forClass(ByteString.class);
         ArgumentCaptor<IKVReader> kvReaderCap = ArgumentCaptor.forClass(IKVReader.class);
         verify(coProc).query(inputCap.capture(), kvReaderCap.capture());
-        assertEquals(key, inputCap.getValue());
-        assertEquals(kvReader, kvReaderCap.getValue());
+        assertEquals(inputCap.getValue(), key);
+        assertEquals(kvReaderCap.getValue(), kvReader);
         try {
-            assertEquals(value, queryFuture.join());
+            assertEquals(queryFuture.join(), value);
         } catch (Throwable e) {
             fail();
         }

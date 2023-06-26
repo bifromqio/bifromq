@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -96,10 +96,10 @@ public class AutoSeederTest {
 
             verify(messenger, atMost(10)).send(msgCap.capture(), addCap.capture(), reliableCap.capture());
 
-            assertEquals(LOCAL_ENDPOINT, msgCap.getValue().getJoin().getMember().getEndpoint());
-            assertEquals(0, msgCap.getValue().getJoin().getMember().getIncarnation());
+            assertEquals(msgCap.getValue().getJoin().getMember().getEndpoint(), LOCAL_ENDPOINT);
+            assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 0);
             assertFalse(msgCap.getValue().getJoin().hasExpectedHost());
-            assertEquals(REMOTE_ADDR_1, addCap.getValue());
+            assertEquals(addCap.getValue(), REMOTE_ADDR_1);
             assertTrue(reliableCap.getValue());
         }
     }
@@ -148,10 +148,10 @@ public class AutoSeederTest {
             ArgumentCaptor<InetSocketAddress> addCap = ArgumentCaptor.forClass(InetSocketAddress.class);
             ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
             verify(messenger, atLeast(1)).send(msgCap.capture(), addCap.capture(), reliableCap.capture());
-            assertEquals(LOCAL_ENDPOINT, msgCap.getValue().getJoin().getMember().getEndpoint());
-            assertEquals(0, msgCap.getValue().getJoin().getMember().getIncarnation());
+            assertEquals(msgCap.getValue().getJoin().getMember().getEndpoint(), LOCAL_ENDPOINT);
+            assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 0);
             assertFalse(msgCap.getValue().getJoin().hasExpectedHost());
-            assertEquals(REMOTE_ADDR_1, addCap.getValue());
+            assertEquals(addCap.getValue(), REMOTE_ADDR_1);
             assertTrue(reliableCap.getValue());
         }
     }

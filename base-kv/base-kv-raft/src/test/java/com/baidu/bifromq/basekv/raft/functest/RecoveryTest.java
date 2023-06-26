@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.raft.functest;
 
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertNotEquals;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -227,7 +227,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         group.recover(leader);
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        assertEquals(1, group.currentFollowers().size());
+        assertEquals(group.currentFollowers().size(), 1);
     }
 
     @Cluster(v = "V1,V2,V3,V4")
@@ -263,7 +263,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         }
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        assertEquals(1, group.currentFollowers().size());
+        assertEquals(group.currentFollowers().size(), 1);
     }
 
     @Cluster(v = "V1,V2,V3,V4")
@@ -293,14 +293,14 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
             group.recover(remain).join();
             fail();
         } catch (CompletionException e) {
-            assertEquals(RecoveryException.NOT_QUALIFY, e.getCause());
+            assertEquals(e.getCause(), RecoveryException.NOT_QUALIFY);
         }
 
         log.info("Recover {}", leader);
         group.recover(leader);
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        assertEquals(1, group.currentFollowers().size());
+        assertEquals(group.currentFollowers().size(), 1);
     }
 
     @Cluster(v = "V1,V2,V3,V4")
@@ -352,7 +352,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
 
         group.waitForNextElection();
         assertTrue(group.currentLeader().isPresent());
-        assertEquals(1, group.currentFollowers().size());
+        assertEquals(group.currentFollowers().size(), 1);
     }
 
     @Test(groups = "integration")
@@ -366,7 +366,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         try {
             group.recover(leader).join();
         } catch (Exception e) {
-            assertEquals(RecoveryException.RECOVERY_IN_PROGRESS, e.getCause());
+            assertEquals(e.getCause(), RecoveryException.RECOVERY_IN_PROGRESS);
         }
         await().until(() -> group.nodeState(leader) == RaftNodeStatus.Leader);
     }

@@ -19,8 +19,8 @@ import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertNotEquals;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertSame;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -101,17 +101,17 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         log.info("Integrate {}", leader);
         group.integrate(leader);
         assertTrue(group.awaitIndexCommitted(leader, 9));
-        Assert.assertEquals(group.logEntries(newLeader, 8), group.logEntries(leader, 8));
+        Assert.assertEquals(group.logEntries(leader, 8), group.logEntries(newLeader, 8));
         // the uncommitted proposal on old leader will be failed with Overridden exception
         try {
             propose5Future.get();
         } catch (Exception e) {
-            assertEquals(OVERRIDDEN, e.getCause());
+            assertEquals(e.getCause(), OVERRIDDEN);
         }
         try {
             propose6Future.get();
         } catch (Exception e) {
-            assertEquals(OVERRIDDEN, e.getCause());
+            assertEquals(e.getCause(), OVERRIDDEN);
         }
     }
 
@@ -130,11 +130,11 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
 
         List<LogEntry> entries = group.retrieveCommitted(leader, 2, -1);
         Optional<LogEntry> entry4 = group.entryAt(leader, 4);
-        assertEquals(copyFromUtf8("appCommand3"), entry4.get().getData());
-        assertEquals(3, entries.size());
-        assertEquals(copyFromUtf8("appCommand1"), entries.get(0).getData());
-        assertEquals(copyFromUtf8("appCommand2"), entries.get(1).getData());
-        assertEquals(copyFromUtf8("appCommand3"), entries.get(2).getData());
+        assertEquals(entry4.get().getData(), copyFromUtf8("appCommand3"));
+        assertEquals(entries.size(), 3);
+        assertEquals(entries.get(0).getData(), copyFromUtf8("appCommand1"));
+        assertEquals(entries.get(1).getData(), copyFromUtf8("appCommand2"));
+        assertEquals(entries.get(2).getData(), copyFromUtf8("appCommand3"));
     }
 
     @Test(groups = "integration")
@@ -146,16 +146,16 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
             // propose from leader
             group.propose(leader, copyFromUtf8("appCommand1")).join();
             await().until(() -> 2 == group.commitIndex(leader));
-            Assert.assertEquals(copyFromUtf8("appCommand1"),
-                group.retrieveCommitted(leader, 2, -1).get(0).getData());
+            Assert.assertEquals(group.retrieveCommitted(leader, 2, -1).get(0).getData(),
+                copyFromUtf8("appCommand1"));
             group.propose(leader, copyFromUtf8("appCommand2")).join();
             await().until(() -> 3 == group.commitIndex(leader));
-            Assert.assertEquals(copyFromUtf8("appCommand2"),
-                group.retrieveCommitted(leader, 3, -1).get(0).getData());
+            Assert.assertEquals(group.retrieveCommitted(leader, 3, -1).get(0).getData(),
+                copyFromUtf8("appCommand2"));
             group.propose(leader, copyFromUtf8("appCommand3")).join();
             await().until(() -> 4 == group.commitIndex(leader));
-            Assert.assertEquals(copyFromUtf8("appCommand3"),
-                group.retrieveCommitted(leader, 4, -1).get(0).getData());
+            Assert.assertEquals(group.retrieveCommitted(leader, 4, -1).get(0).getData(),
+                copyFromUtf8("appCommand3"));
         } catch (Exception e) {
             fail();
         }
@@ -170,25 +170,25 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         String follower = group.currentFollowers().get(0);
         try {
             group.propose(follower, copyFromUtf8("appCommand1")).join();
-            Assert.assertEquals(2, group.commitIndex(group.currentLeader().get()));
+            Assert.assertEquals(group.commitIndex(group.currentLeader().get()), 2);
             assertTrue(group.awaitIndexCommitted("V1", 2));
             assertTrue(group.awaitIndexCommitted("V2", 2));
             assertTrue(group.awaitIndexCommitted("V3", 2));
-            Assert.assertEquals(copyFromUtf8("appCommand1"),
-                group.retrieveCommitted(follower, 2, -1).get(0).getData());
+            Assert.assertEquals(group.retrieveCommitted(follower, 2, -1).get(0).getData(),
+                copyFromUtf8("appCommand1"));
 
             group.propose(follower, copyFromUtf8("appCommand2")).join();
-            Assert.assertEquals(3, group.commitIndex(group.currentLeader().get()));
+            Assert.assertEquals(group.commitIndex(group.currentLeader().get()), 3);
             group.propose(follower, copyFromUtf8("appCommand3")).join();
-            Assert.assertEquals(4, group.commitIndex(group.currentLeader().get()));
+            Assert.assertEquals(group.commitIndex(group.currentLeader().get()), 4);
             group.propose(follower, copyFromUtf8("appCommand4")).join();
-            Assert.assertEquals(5, group.commitIndex(group.currentLeader().get()));
+            Assert.assertEquals(group.commitIndex(group.currentLeader().get()), 5);
             assertTrue(group.awaitIndexCommitted("V1", 5));
             assertTrue(group.awaitIndexCommitted("V2", 5));
             assertTrue(group.awaitIndexCommitted("V3", 5));
 
-            Assert.assertEquals(copyFromUtf8("appCommand4"),
-                group.retrieveCommitted(follower, 5, -1).get(0).getData());
+            Assert.assertEquals(group.retrieveCommitted(follower, 5, -1).get(0).getData(),
+                copyFromUtf8("appCommand4"));
         } catch (Exception e) {
             e.printStackTrace();
             fail();
@@ -209,7 +209,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         try {
             group.propose(leader, copyFromUtf8("appCommand-10")).join();
         } catch (Exception e) {
-            assertSame(THROTTLED_BY_THRESHOLD, e.getCause());
+            assertSame(e.getCause(), THROTTLED_BY_THRESHOLD);
         }
     }
 

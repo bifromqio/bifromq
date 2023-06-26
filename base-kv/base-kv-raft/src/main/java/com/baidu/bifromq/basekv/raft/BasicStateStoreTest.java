@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.raft;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
@@ -52,11 +52,11 @@ public abstract class BasicStateStoreTest {
             .setTerm(0)
             .build();
         IRaftStateStore stateStorage = createStorage(localId(), initSnapshot);
-        assertEquals(localId(), stateStorage.local());
-        assertEquals(1, stateStorage.firstIndex());
-        assertEquals(0, stateStorage.lastIndex());
-        assertEquals(initSnapshot, stateStorage.latestSnapshot());
-        assertEquals(initSnapshot.getClusterConfig(), stateStorage.latestClusterConfig());
+        assertEquals(stateStorage.local(), localId());
+        assertEquals(stateStorage.firstIndex(), 1);
+        assertEquals(stateStorage.lastIndex(), 0);
+        assertEquals(stateStorage.latestSnapshot(), initSnapshot);
+        assertEquals(stateStorage.latestClusterConfig(), initSnapshot.getClusterConfig());
         Assert.assertFalse(stateStorage.entryAt(1).isPresent());
         Assert.assertFalse(stateStorage.entryAt(0).isPresent());
         try {
@@ -70,11 +70,11 @@ public abstract class BasicStateStoreTest {
     @Test
     public void testSaveAndLoadCurrentTerm() {
         IRaftStateStore stateStorage = setupStateStorage();
-        assertEquals(0, stateStorage.currentTerm());
+        assertEquals(stateStorage.currentTerm(), 0);
         stateStorage.saveTerm(0);
-        assertEquals(0, stateStorage.currentTerm());
+        assertEquals(stateStorage.currentTerm(), 0);
         stateStorage.saveTerm(1);
-        assertEquals(1, stateStorage.currentTerm());
+        assertEquals(stateStorage.currentTerm(), 1);
         try {
             stateStorage.saveTerm(0);
             fail();
@@ -89,7 +89,7 @@ public abstract class BasicStateStoreTest {
         Assert.assertFalse(stateStorage.currentVoting().isPresent());
         Voting voting = Voting.newBuilder().setFor(localId()).setTerm(1L).build();
         stateStorage.saveVoting(voting);
-        assertEquals(voting, stateStorage.currentVoting().get());
+        assertEquals(stateStorage.currentVoting().get(), voting);
     }
 
     @Test
@@ -105,10 +105,10 @@ public abstract class BasicStateStoreTest {
                 .setData(ByteString.EMPTY)
                 .build();
             stateStorage.append(singletonList(entry), true);
-            assertEquals(stateStorage.lastIndex(), stateStorage.entryAt(stateStorage.lastIndex()).get().getIndex());
+            assertEquals(stateStorage.entryAt(stateStorage.lastIndex()).get().getIndex(), stateStorage.lastIndex());
         }
         for (int i = 0; i < stabledIndexes.size(); i++) {
-            assertEquals(Long.valueOf(i + 1), stabledIndexes.get(i));
+            assertEquals(stabledIndexes.get(i), Long.valueOf(i + 1));
         }
     }
 
@@ -197,7 +197,7 @@ public abstract class BasicStateStoreTest {
                 .setData(ByteString.EMPTY)
                 .build();
             stateStorage.append(singletonList(entry), false);
-            assertEquals(stateStorage.lastIndex(), stateStorage.entryAt(stateStorage.lastIndex()).get().getIndex());
+            assertEquals(stateStorage.entryAt(stateStorage.lastIndex()).get().getIndex(), stateStorage.lastIndex());
         }
         countDownLatch.await();
         assertTrue(1 <= stabledIndexes.size());
@@ -226,7 +226,7 @@ public abstract class BasicStateStoreTest {
             }
             LogEntry entry = entryBuilder.build();
             stateStorage.append(singletonList(entry), true);
-            assertEquals(entry.getIndex(), stateStorage.lastIndex());
+            assertEquals(stateStorage.lastIndex(), entry.getIndex());
         }
         count = 5;
         List<LogEntry> newEntries = new ArrayList<>();
@@ -239,16 +239,16 @@ public abstract class BasicStateStoreTest {
                 .build());
             count++;
         }
-        assertEquals(updatedClusterConfig, stateStorage.latestClusterConfig());
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
         stateStorage.append(newEntries, true);
         assertNotEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
-        assertEquals(1, stateStorage.firstIndex());
-        assertEquals(8, stateStorage.lastIndex());
+        assertEquals(stateStorage.firstIndex(), 1);
+        assertEquals(stateStorage.lastIndex(), 8);
         Iterator<LogEntry> entries5To8 = stateStorage.entries(5, 9, -1);
         for (int i = 0; entries5To8.hasNext(); i++) {
             LogEntry entry = entries5To8.next();
-            assertEquals(2, entry.getTerm());
-            assertEquals(i + 5, entry.getIndex());
+            assertEquals(entry.getTerm(), 2);
+            assertEquals(entry.getIndex(), i + 5);
         }
     }
 
@@ -267,8 +267,8 @@ public abstract class BasicStateStoreTest {
             .build();
         IRaftStateStore stateStorage = createStorage(localId(), initSnapshot);
         // log starts from 6
-        assertEquals(6, stateStorage.firstIndex());
-        assertEquals(5, stateStorage.lastIndex());
+        assertEquals(stateStorage.firstIndex(), 6);
+        assertEquals(stateStorage.lastIndex(), 5);
 
         List<LogEntry> newEntries = asList(LogEntry.newBuilder()
             .setTerm(1)
@@ -276,8 +276,8 @@ public abstract class BasicStateStoreTest {
             .setData(ByteString.EMPTY)
             .build());
         stateStorage.append(newEntries, true);
-        assertEquals(6, stateStorage.firstIndex());
-        assertEquals(6, stateStorage.lastIndex());
+        assertEquals(stateStorage.firstIndex(), 6);
+        assertEquals(stateStorage.lastIndex(), 6);
 
         newEntries = asList(LogEntry.newBuilder()
                 .setTerm(1)
@@ -290,8 +290,8 @@ public abstract class BasicStateStoreTest {
                 .setData(ByteString.EMPTY)
                 .build());
         stateStorage.append(newEntries, true);
-        assertEquals(6, stateStorage.firstIndex());
-        assertEquals(7, stateStorage.lastIndex());
+        assertEquals(stateStorage.firstIndex(), 6);
+        assertEquals(stateStorage.lastIndex(), 7);
 
         newEntries = asList(LogEntry.newBuilder()
             .setTerm(1)
@@ -299,8 +299,8 @@ public abstract class BasicStateStoreTest {
             .setData(ByteString.EMPTY)
             .build());
         stateStorage.append(newEntries, true);
-        assertEquals(6, stateStorage.firstIndex());
-        assertEquals(6, stateStorage.lastIndex());
+        assertEquals(stateStorage.firstIndex(), 6);
+        assertEquals(stateStorage.lastIndex(), 6);
     }
 
     @Test
@@ -330,10 +330,10 @@ public abstract class BasicStateStoreTest {
             i++;
         }
         stateStorage.append(newEntries, true);
-        assertEquals(1, stateStorage.firstIndex());
-        assertEquals(5, stateStorage.lastIndex());
-        assertEquals(2, stateStorage.entryAt(stateStorage.firstIndex()).get().getTerm());
-        assertEquals(2, stateStorage.entryAt(stateStorage.lastIndex()).get().getTerm());
+        assertEquals(stateStorage.firstIndex(), 1);
+        assertEquals(stateStorage.lastIndex(), 5);
+        assertEquals(stateStorage.entryAt(stateStorage.firstIndex()).get().getTerm(), 2);
+        assertEquals(stateStorage.entryAt(stateStorage.lastIndex()).get().getTerm(), 2);
     }
 
     @Test
@@ -358,7 +358,7 @@ public abstract class BasicStateStoreTest {
             }
             stateStorage.append(singletonList(entryBuilder.build()), true);
         }
-        assertEquals(updatedClusterConfig, stateStorage.latestClusterConfig());
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
         Snapshot snapshot = Snapshot.newBuilder()
             .setClusterConfig(stateStorage.latestClusterConfig())
             .setData(ByteString.EMPTY)
@@ -366,9 +366,9 @@ public abstract class BasicStateStoreTest {
             .setIndex(3)
             .build();
         stateStorage.applySnapshot(snapshot);
-        assertEquals(updatedClusterConfig, stateStorage.latestClusterConfig());
-        assertEquals(4, stateStorage.firstIndex());
-        assertEquals(10, stateStorage.lastIndex());
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
+        assertEquals(stateStorage.firstIndex(), 4);
+        assertEquals(stateStorage.lastIndex(), 10);
     }
 
     @Test
@@ -400,9 +400,9 @@ public abstract class BasicStateStoreTest {
             .setIndex(10)
             .build();
         stateStorage.applySnapshot(snapshot);
-        assertEquals(updatedClusterConfig, stateStorage.latestClusterConfig());
-        assertEquals(11, stateStorage.firstIndex());
-        assertEquals(10, stateStorage.lastIndex());
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
+        assertEquals(stateStorage.firstIndex(), 11);
+        assertEquals(stateStorage.lastIndex(), 10);
     }
 
     @Test
@@ -427,9 +427,9 @@ public abstract class BasicStateStoreTest {
             .setIndex(15)
             .build();
         stateStorage.applySnapshot(snapshot);
-        assertEquals(updatedClusterConfig, stateStorage.latestClusterConfig());
-        assertEquals(16, stateStorage.firstIndex());
-        assertEquals(15, stateStorage.lastIndex());
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
+        assertEquals(stateStorage.firstIndex(), 16);
+        assertEquals(stateStorage.lastIndex(), 15);
     }
 
     @Test
@@ -452,11 +452,11 @@ public abstract class BasicStateStoreTest {
             .setIndex(3)
             .build();
         stateStorage.applySnapshot(snapshot);
-        assertEquals(3, stateStorage.lastIndex());
-        assertEquals(4, stateStorage.firstIndex());
-        assertEquals(3, stateStorage.latestSnapshot().getIndex());
-        assertEquals(2, stateStorage.latestSnapshot().getTerm());
-        assertEquals(cc, stateStorage.latestClusterConfig());
+        assertEquals(stateStorage.lastIndex(), 3);
+        assertEquals(stateStorage.firstIndex(), 4);
+        assertEquals(stateStorage.latestSnapshot().getIndex(), 3);
+        assertEquals(stateStorage.latestSnapshot().getTerm(), 2);
+        assertEquals(stateStorage.latestClusterConfig(), cc);
     }
 
     @Test
@@ -476,16 +476,16 @@ public abstract class BasicStateStoreTest {
         AtomicInteger counter = new AtomicInteger(0);
         stateStorage.entries(stateStorage.firstIndex(), stateStorage.lastIndex() + 1, -1)
             .forEachRemaining(e -> counter.incrementAndGet());
-        assertEquals(10, counter.get());
+        assertEquals(counter.get(), 10);
         counter.set(0);
         stateStorage.entries(stateStorage.firstIndex(), stateStorage.lastIndex() + 1, 2)
             .forEachRemaining(e -> counter.incrementAndGet());
-        assertEquals(1, counter.get());
+        assertEquals(counter.get(), 1);
 
         counter.set(0);
         stateStorage.entries(stateStorage.firstIndex(), stateStorage.lastIndex() + 1, 10)
             .forEachRemaining(e -> counter.incrementAndGet());
-        assertEquals(2, counter.get());
+        assertEquals(counter.get(), 2);
     }
 
     @Test
@@ -513,13 +513,13 @@ public abstract class BasicStateStoreTest {
             }
             stateStorage.append(singletonList(entryBuilder.build()), true);
         }
-        assertEquals(ClusterConfig.newBuilder()
+        assertEquals(stateStorage.latestClusterConfig(), ClusterConfig.newBuilder()
             .addVoters("V1")
             .addVoters("V2")
             .addVoters("V3")
             .addVoters("V4")
             .addVoters("V5")
-            .build(), stateStorage.latestClusterConfig());
+            .build());
 
         stateStorage.append(singletonList(LogEntry.newBuilder()
             .setTerm(1)
@@ -531,11 +531,11 @@ public abstract class BasicStateStoreTest {
                 .build())
             .build()), true);
 
-        assertEquals(ClusterConfig.newBuilder()
+        assertEquals(stateStorage.latestClusterConfig(), ClusterConfig.newBuilder()
             .addVoters("S1")
             .addVoters("S2")
             .addVoters("S3")
-            .build(), stateStorage.latestClusterConfig());
+            .build());
     }
 
     private IRaftStateStore setupStateStorage() {

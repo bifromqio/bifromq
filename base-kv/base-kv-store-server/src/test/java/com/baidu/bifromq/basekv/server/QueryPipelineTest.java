@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
@@ -79,8 +79,8 @@ public class QueryPipelineTest {
 
         KVRangeROReply getReply = pipeline.handleRequest("_", getRequest).join();
 
-        assertEquals(1, getReply.getReqId());
-        assertEquals(ReplyCode.Ok, getReply.getCode());
+        assertEquals(getReply.getReqId(), 1);
+        assertEquals(getReply.getCode(), ReplyCode.Ok);
         assertFalse(getReply.getGetResult().hasValue());
     }
 
@@ -106,8 +106,8 @@ public class QueryPipelineTest {
 
         KVRangeROReply existReply = pipeline.handleRequest("_", existRequest).join();
 
-        assertEquals(1, existReply.getReqId());
-        assertEquals(ReplyCode.Ok, existReply.getCode());
+        assertEquals(existReply.getReqId(), 1);
+        assertEquals(existReply.getCode(), ReplyCode.Ok);
         assertTrue(existReply.getExistResult());
     }
 
@@ -133,9 +133,9 @@ public class QueryPipelineTest {
 
         KVRangeROReply coProcReply = pipeline.handleRequest("_", coProcRequest).join();
 
-        assertEquals(1, coProcReply.getReqId());
-        assertEquals(ReplyCode.Ok, coProcReply.getCode());
-        assertEquals(ByteString.empty(), coProcReply.getRoCoProcResult());
+        assertEquals(coProcReply.getReqId(), 1);
+        assertEquals(coProcReply.getCode(), ReplyCode.Ok);
+        assertEquals(coProcReply.getRoCoProcResult(), ByteString.empty());
     }
 
 
@@ -170,9 +170,9 @@ public class QueryPipelineTest {
                 .whenComplete((v, e) -> replies.add(v)));
         }
         CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[] {})).join();
-        assertEquals(requests.size(), replies.size());
+        assertEquals(replies.size(), requests.size());
         for (int i = 0; i < reqCount; i++) {
-            assertEquals(requests.get(i).getReqId(), replies.get(i).getReqId());
+            assertEquals(replies.get(i).getReqId(), requests.get(i).getReqId());
         }
     }
 
@@ -192,7 +192,7 @@ public class QueryPipelineTest {
         when(rangeStore.get(1, rangeId, getKey, false))
             .thenReturn(CompletableFuture.failedFuture(new KVRangeException.BadVersion("bad version")));
         KVRangeROReply getReply = pipeline.handleRequest("_", getRequest).join();
-        assertEquals(ReplyCode.BadVersion, getReply.getCode());
+        assertEquals(getReply.getCode(), ReplyCode.BadVersion);
 
         // bad request
         getRequest = KVRangeRORequest.newBuilder()
@@ -204,7 +204,7 @@ public class QueryPipelineTest {
         when(rangeStore.get(2, rangeId, getKey, false))
             .thenReturn(CompletableFuture.failedFuture(new KVRangeException.BadRequest("bad request")));
         getReply = pipeline.handleRequest("_", getRequest).join();
-        assertEquals(ReplyCode.BadRequest, getReply.getCode());
+        assertEquals(getReply.getCode(), ReplyCode.BadRequest);
 
         // try later
         getRequest = KVRangeRORequest.newBuilder()
@@ -216,7 +216,7 @@ public class QueryPipelineTest {
         when(rangeStore.get(3, rangeId, getKey, false))
             .thenReturn(CompletableFuture.failedFuture(new KVRangeException.TryLater("try later")));
         getReply = pipeline.handleRequest("_", getRequest).join();
-        assertEquals(ReplyCode.TryLater, getReply.getCode());
+        assertEquals(getReply.getCode(), ReplyCode.TryLater);
 
         // internal error
         getRequest = KVRangeRORequest.newBuilder()
@@ -228,6 +228,6 @@ public class QueryPipelineTest {
         when(rangeStore.get(4, rangeId, getKey, false))
             .thenReturn(CompletableFuture.failedFuture(new KVRangeException.InternalException("internal error")));
         getReply = pipeline.handleRequest("_", getRequest).join();
-        assertEquals(ReplyCode.InternalError, getReply.getCode());
+        assertEquals(getReply.getCode(), ReplyCode.InternalError);
     }
 }

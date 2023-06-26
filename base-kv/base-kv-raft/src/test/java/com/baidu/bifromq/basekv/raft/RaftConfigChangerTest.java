@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -63,7 +63,7 @@ public class RaftConfigChangerTest {
 
     @Test
     public void testStateAfterInit() {
-        Assert.assertEquals(RaftConfigChanger.State.Waiting, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.Waiting);
     }
 
     @Test
@@ -89,7 +89,7 @@ public class RaftConfigChangerTest {
             add("N3");
             add("L1");
         }}, true);
-        Assert.assertEquals(RaftConfigChanger.State.CatchingUp, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.CatchingUp);
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "N1", "N2", "N3", "L1")));
         assertTrue(!onDone.isDone());
     }
@@ -167,7 +167,7 @@ public class RaftConfigChangerTest {
             add("L2");
         }}, true);
 
-        Assert.assertEquals(RaftConfigChanger.State.CatchingUp, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.CatchingUp);
 
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "N2", "N3", "L1", "L2")));
 
@@ -182,7 +182,7 @@ public class RaftConfigChangerTest {
             add("L2");
         }});
 
-        Assert.assertEquals(RaftConfigChanger.State.Waiting, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.Waiting);
 
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "L1")));
         assertTrue(onDone.isDone() && onDone.isCompletedExceptionally());
@@ -212,7 +212,7 @@ public class RaftConfigChangerTest {
             add("L1");
         }}, true);
 
-        Assert.assertEquals(RaftConfigChanger.State.CatchingUp, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.CatchingUp);
 
         when(peerLogTracker.status(anyString())).thenReturn(RaftNodeSyncState.Replicating);
         when(peerLogTracker.matchIndex(anyString())).thenReturn(10L);
@@ -220,7 +220,7 @@ public class RaftConfigChangerTest {
         when(stateStorage.lastIndex()).thenReturn(10L, 11L);
         when(stateStorage.local()).thenReturn("localId");
         assertTrue(configChanger.tick(1));
-        Assert.assertEquals(RaftConfigChanger.State.TargetConfigCommitting, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.TargetConfigCommitting);
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "L1")));
         assertTrue(!onDone.isDone());
 
@@ -231,20 +231,20 @@ public class RaftConfigChangerTest {
 
         verify(stateStorage).append(entries.capture(), flush.capture());
         assertTrue(flush.getValue());
-        assertEquals(1, entries.getValue().size());
+        assertEquals(entries.getValue().size(), 1);
         LogEntry logEntry = entries.getValue().get(0);
-        assertEquals(1, logEntry.getTerm());
-        assertEquals(12, logEntry.getIndex());
+        assertEquals(logEntry.getTerm(), 1);
+        assertEquals(logEntry.getIndex(), 12);
         assertTrue(logEntry.hasConfig());
         ClusterConfig targetConfig = logEntry.getConfig();
-        assertEquals(new HashSet<String>() {{
+        assertEquals(new HashSet<>(targetConfig.getVotersList()), new HashSet<String>() {{
             add("V1");
             add("V2");
             add("V3");
-        }}, new HashSet(targetConfig.getVotersList()));
-        assertEquals(new HashSet<String>() {{
+        }});
+        assertEquals(new HashSet<>(targetConfig.getLearnersList()), new HashSet<String>() {{
             add("L1");
-        }}, new HashSet(targetConfig.getLearnersList()));
+        }});
         assertTrue(targetConfig.getNextVotersList().isEmpty());
         assertTrue(targetConfig.getNextLearnersList().isEmpty());
 
@@ -269,7 +269,7 @@ public class RaftConfigChangerTest {
             add("L1");
             add("L2");
         }}, onDone);
-        Assert.assertEquals(RaftConfigChanger.State.CatchingUp, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.CatchingUp);
         verify(peerLogTracker).startTracking(new HashSet<>() {{
             add("V1");
             add("N2");
@@ -284,7 +284,7 @@ public class RaftConfigChangerTest {
         when(stateStorage.local()).thenReturn("localId");
 
         assertTrue(configChanger.tick(1));
-        Assert.assertEquals(RaftConfigChanger.State.JointConfigCommitting, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.JointConfigCommitting);
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "N2", "N3", "L1", "L2")));
         assertTrue(!onDone.isDone());
 
@@ -294,21 +294,21 @@ public class RaftConfigChangerTest {
         ArgumentCaptor<Boolean> flush = ArgumentCaptor.forClass(Boolean.class);
         verify(stateStorage).append(entries.capture(), flush.capture());
         assertTrue(flush.getValue());
-        assertEquals(1, entries.getValue().size());
+        assertEquals(entries.getValue().size(), 1);
         LogEntry logEntry = entries.getValue().get(0);
-        assertEquals(1, logEntry.getTerm());
-        assertEquals(12, logEntry.getIndex());
+        assertEquals(logEntry.getTerm(), 1);
+        assertEquals(logEntry.getIndex(), 12);
         assertTrue(logEntry.hasConfig());
         ClusterConfig jointConfig = logEntry.getConfig();
-        assertEquals(new HashSet<String>() {{
+        assertEquals(new HashSet<>(jointConfig.getNextVotersList()), new HashSet<String>() {{
             add("V1");
             add("N2");
             add("N3");
-        }}, new HashSet(jointConfig.getNextVotersList()));
-        assertEquals(new HashSet<String>() {{
+        }});
+        assertEquals(new HashSet<>(jointConfig.getNextLearnersList()), new HashSet<String>() {{
             add("L1");
             add("L2");
-        }}, new HashSet(jointConfig.getNextLearnersList()));
+        }});
 
         // later ticks won't change state
         assertFalse(configChanger.tick(1));
@@ -317,7 +317,7 @@ public class RaftConfigChangerTest {
     @Test
     public void testCommitToInWaitingState() {
         // never change state if it's waiting
-        Assert.assertEquals(RaftConfigChanger.State.Waiting, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.Waiting);
         assertFalse(configChanger.commitTo(100, 100));
     }
 
@@ -343,7 +343,7 @@ public class RaftConfigChangerTest {
             add("N3");
             add("L1");
         }}, true);
-        Assert.assertEquals(RaftConfigChanger.State.CatchingUp, configChanger.state());
+        Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.CatchingUp);
         assertFalse(configChanger.commitTo(100, 100));
     }
 

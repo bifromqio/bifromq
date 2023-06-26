@@ -16,7 +16,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.diff;
 import static com.baidu.bifromq.basecrdt.core.util.LatticeIndexUtil.remember;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -38,14 +38,14 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             NavigableMap<Long, Long> c = Maps.newTreeMap();
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
             a.put(0L, 1L);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             NavigableMap<Long, Long> c = Maps.newTreeMap();
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -53,7 +53,7 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             b.put(2L, 3L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -62,7 +62,7 @@ public class EventHistoryUtilTest {
             b.put(0L, 1L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(0L, 1L);
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -71,7 +71,7 @@ public class EventHistoryUtilTest {
             b.put(0L, 1L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(0L, 1L);
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -80,7 +80,7 @@ public class EventHistoryUtilTest {
             b.put(1L, 1L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(1L, 1L);
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -89,7 +89,7 @@ public class EventHistoryUtilTest {
             b.put(0L, 10L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(0L, 5L);
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -100,7 +100,7 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(4L, 5L);
             c.put(7L, 8L);
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -111,7 +111,7 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(4L, 5L);
             c.put(7L, 10L);
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -122,7 +122,7 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(4L, 5L);
             c.put(7L, 10L);
-            assertEquals(c, EventHistoryUtil.common(a, b));
+            assertEquals(EventHistoryUtil.common(a, b), c);
         }
     }
 
@@ -153,13 +153,13 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             NavigableMap<Long, Long> c = Maps.newTreeMap();
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
             a.put(0L, 1L);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
-            assertEquals(a, diff(a, b));
+            assertEquals(diff(a, b), a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -167,7 +167,7 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             b.put(0L, 1L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -175,14 +175,14 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             b.put(0L, 2L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
             a.put(0L, 1L);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             b.put(2L, 3L);
-            assertEquals(a, diff(a, b));
+            assertEquals(diff(a, b), a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -191,7 +191,7 @@ public class EventHistoryUtilTest {
             b.put(1L, 3L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(0L, 0L);
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -200,7 +200,7 @@ public class EventHistoryUtilTest {
             b.put(0L, 1L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(2L, 3L);
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -209,7 +209,7 @@ public class EventHistoryUtilTest {
             b.put(2L, 4L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(1L, 1L);
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -218,7 +218,7 @@ public class EventHistoryUtilTest {
             b.put(1L, 3L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(4L, 5L);
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -228,7 +228,7 @@ public class EventHistoryUtilTest {
             b.put(4L, 11L);
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(0L, 3L);
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -239,7 +239,7 @@ public class EventHistoryUtilTest {
             NavigableMap<Long, Long> c = Maps.newTreeMap();
             c.put(6L, 6L);
             c.put(11L, 11L);
-            assertEquals(c, diff(a, b));
+            assertEquals(diff(a, b), c);
         }
     }
 }

@@ -22,7 +22,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.stateKey;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.verKey;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteString;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteStringNativeOrder;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.fail;
@@ -70,9 +70,9 @@ public class KVRangeMetadataAccessorTest {
         when(engine.get(anyString(), any(ByteString.class))).thenReturn(Optional.empty());
         try {
             KVRangeMetadataAccessor metadata = new KVRangeMetadataAccessor(id, engine);
-            assertEquals(-1L, metadata.version());
-            assertEquals(-1, metadata.lastAppliedIndex());
-            assertEquals(EMPTY_RANGE, metadata.range());
+            assertEquals(metadata.version(), -1L);
+            assertEquals(metadata.lastAppliedIndex(), -1);
+            assertEquals(metadata.range(), EMPTY_RANGE);
             Maybe<IKVRangeState.KVRangeMeta> metaMayBe = metadata.source().firstElement();
             metadata.destroy(true);
             assertNull(metaMayBe.blockingGet());
@@ -100,16 +100,16 @@ public class KVRangeMetadataAccessorTest {
         when(engine.get(IKVEngine.DEFAULT_NS, stateKey(id))).thenReturn(Optional.of(state.toByteString()));
 
         KVRangeMetadataAccessor metadata = new KVRangeMetadataAccessor(id, engine);
-        assertEquals(ver, metadata.version());
-        assertEquals(range, metadata.range());
-        assertEquals(lastAppliedIndex, metadata.lastAppliedIndex());
-        assertEquals(state, metadata.state());
-        assertEquals(keyRangeId, metadata.dataBoundId());
+        assertEquals(metadata.version(), ver);
+        assertEquals(metadata.range(), range);
+        assertEquals(metadata.lastAppliedIndex(), lastAppliedIndex);
+        assertEquals(metadata.state(), state);
+        assertEquals(metadata.dataBoundId(), keyRangeId);
 
         IKVRangeState.KVRangeMeta meta = metadata.source().blockingFirst();
-        assertEquals(ver, meta.ver);
-        assertEquals(range, meta.range);
-        assertEquals(state, meta.state);
+        assertEquals(meta.ver, ver);
+        assertEquals(meta.range, range);
+        assertEquals(meta.state, state);
     }
 
     @Test
@@ -131,12 +131,12 @@ public class KVRangeMetadataAccessorTest {
         when(engine.get(IKVEngine.DEFAULT_NS, stateKey(id))).thenReturn(Optional.of(state.toByteString()));
 
         KVRangeMetadataAccessor metadata = new KVRangeMetadataAccessor(id, engine);
-        assertEquals(lastAppliedIndex, metadata.lastAppliedIndex());
+        assertEquals(metadata.lastAppliedIndex(), lastAppliedIndex);
 
         lastAppliedIndex = 11;
         when(engine.get(IKVEngine.DEFAULT_NS, lastAppliedIndexKey(id)))
             .thenReturn(Optional.of(toByteString(lastAppliedIndex)));
-        assertEquals(lastAppliedIndex, metadata.lastAppliedIndex());
+        assertEquals(metadata.lastAppliedIndex(), lastAppliedIndex);
     }
 
     @Test
@@ -175,10 +175,10 @@ public class KVRangeMetadataAccessorTest {
 
         metadata.refresh();
         IKVRangeState.KVRangeMeta newMeta = metadata.source().blockingFirst();
-        assertEquals(newVer, metadata.version());
-        assertEquals(newRange, metadata.range());
-        assertEquals(lastAppliedIndex, metadata.lastAppliedIndex());
-        assertEquals(newKeyRangeId, metadata.dataBoundId());
+        assertEquals(metadata.version(), newVer);
+        assertEquals(metadata.range(), newRange);
+        assertEquals(metadata.lastAppliedIndex(), lastAppliedIndex);
+        assertEquals(metadata.dataBoundId(), newKeyRangeId);
         assertNotEquals(newMeta, meta);
     }
 
@@ -211,11 +211,11 @@ public class KVRangeMetadataAccessorTest {
 
         metadata.refresh();
         IKVRangeState.KVRangeMeta newMeta = metadata.source().blockingFirst();
-        assertEquals(newVer, metadata.version());
-        assertEquals(range, metadata.range());
-        assertEquals(lastAppliedIndex, metadata.lastAppliedIndex());
-        assertEquals(newState, metadata.state());
-        assertEquals(keyRangeId, metadata.dataBoundId());
+        assertEquals(metadata.version(), newVer);
+        assertEquals(metadata.range(), range);
+        assertEquals(metadata.lastAppliedIndex(), lastAppliedIndex);
+        assertEquals(metadata.state(), newState);
+        assertEquals(metadata.dataBoundId(), keyRangeId);
 
         assertNotEquals(newMeta, meta);
     }
@@ -236,7 +236,7 @@ public class KVRangeMetadataAccessorTest {
         when(engine.get(IKVEngine.DEFAULT_NS, stateKey(id))).thenReturn(Optional.of(state.toByteString()));
 
         KVRangeMetadataAccessor metadata = new KVRangeMetadataAccessor(id, engine);
-        assertEquals(KVRangeKeys.dataBound(FULL_RANGE), metadata.dataBound());
+        assertEquals(metadata.dataBound(), KVRangeKeys.dataBound(FULL_RANGE));
         IKVRangeState.KVRangeMeta meta = metadata.source().blockingFirst();
 
         // version upgrade to 11;
@@ -257,10 +257,10 @@ public class KVRangeMetadataAccessorTest {
         IKVRangeState.KVRangeMeta newMeta = metadata.source().blockingFirst();
 
         verify(engine).unregisterKeyRange(keyRangeId);
-        assertEquals(newVer, metadata.version());
-        assertEquals(newRange, metadata.range());
-        assertEquals(KVRangeKeys.dataBound(newRange), newBound);
-        assertEquals(newKeyRangeId, metadata.dataBoundId());
+        assertEquals(metadata.version(), newVer);
+        assertEquals(metadata.range(), newRange);
+        assertEquals(newBound, KVRangeKeys.dataBound(newRange));
+        assertEquals(metadata.dataBoundId(), newKeyRangeId);
         assertNotEquals(newMeta, meta);
     }
 

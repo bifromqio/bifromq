@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 import static org.mockito.Mockito.when;
@@ -93,7 +93,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
         KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
-        assertEquals(replicaId, wal.id());
+        assertEquals(wal.id(), replicaId);
     }
 
     @SneakyThrows
@@ -112,8 +112,8 @@ public class KVRangeWALTest {
         assertTrue(wal.isLeader());
         assertTrue(wal.currentLeader().isPresent());
         ElectionEvent election = testObserver.values().get(0);
-        assertEquals(replicaId, election.leaderId);
-        assertEquals(1, election.term);
+        assertEquals(election.leaderId, replicaId);
+        assertEquals(election.term, 1);
 
         tickTask.cancel(true);
         wal.close().join();
@@ -149,8 +149,8 @@ public class KVRangeWALTest {
         CompletableFuture<Void> onDone = wal.installSnapshot(ByteString.EMPTY);
         testObserver.awaitCount(1);
         IKVRangeWAL.SnapshotInstallTask task = testObserver.values().get(0);
-        assertEquals(ByteString.EMPTY, task.snapshot);
-        assertEquals(onDone, task.onDone);
+        assertEquals(task.snapshot, ByteString.EMPTY);
+        assertEquals(task.onDone, onDone);
         wal.close().join();
         testObserver.assertComplete();
     }

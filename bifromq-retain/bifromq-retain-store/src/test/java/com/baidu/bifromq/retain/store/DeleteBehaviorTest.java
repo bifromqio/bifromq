@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
@@ -26,18 +26,18 @@ public class DeleteBehaviorTest extends RetainStoreTest {
         String topic = "/a/b/c";
         // empty payload signal deletion
         RetainCoProcReply reply = requestRetain(trafficId, 10, message(topic, ""));
-        assertEquals(RetainCoProcReply.Result.CLEARED, reply.getResult());
+        assertEquals(reply.getResult(), RetainCoProcReply.Result.CLEARED);
     }
 
     @Test(groups = "integration")
     public void deleteNonExisting() {
         String trafficId = "trafficId";
         // empty payload signal deletion
-        assertEquals(RetainCoProcReply.Result.RETAINED,
-            requestRetain(trafficId, 10, message("/a/b/c", "hello")).getResult());
+        assertEquals(requestRetain(trafficId, 10, message("/a/b/c", "hello")).getResult(),
+            RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(RetainCoProcReply.Result.CLEARED,
-            requestRetain(trafficId, 10, message("/a", "")).getResult());
+        assertEquals(requestRetain(trafficId, 10, message("/a", "")).getResult(),
+            RetainCoProcReply.Result.CLEARED);
     }
 
     @Test(groups = "integration")
@@ -45,13 +45,13 @@ public class DeleteBehaviorTest extends RetainStoreTest {
         String trafficId = "trafficId";
         String topic = "/a/b/c";
         // empty payload signal deletion
-        assertEquals(RetainCoProcReply.Result.RETAINED,
-            requestRetain(trafficId, 10, message(topic, "hello")).getResult());
+        assertEquals(requestRetain(trafficId, 10, message(topic, "hello")).getResult(),
+            RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(RetainCoProcReply.Result.CLEARED,
-            requestRetain(trafficId, 10, message(topic, "")).getResult());
+        assertEquals(requestRetain(trafficId, 10, message(topic, "")).getResult(),
+            RetainCoProcReply.Result.CLEARED);
 
         MatchCoProcReply matchReply = requestMatch(trafficId, topic, 10);
-        assertEquals(0, matchReply.getMessagesCount());
+        assertEquals(matchReply.getMessagesCount(), 0);
     }
 }

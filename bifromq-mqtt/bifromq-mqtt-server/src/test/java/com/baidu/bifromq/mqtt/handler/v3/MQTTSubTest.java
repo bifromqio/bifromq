@@ -13,24 +13,20 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-
-import static com.baidu.bifromq.plugin.eventcollector.EventType.ACCESS_CONTROL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_SUBSCRIPTION;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
@@ -45,7 +41,6 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mockito;
 
 @Slf4j
 public class MQTTSubTest extends BaseMQTTTest {
@@ -248,9 +243,9 @@ public class MQTTSubTest extends BaseMQTTTest {
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {
-        assertEquals(expectedQos.length, subAckMessage.payload().grantedQoSLevels().size());
+        assertEquals(subAckMessage.payload().grantedQoSLevels().size(), expectedQos.length);
         for (int i = 0; i < expectedQos.length; i++) {
-            assertEquals((int) subAckMessage.payload().grantedQoSLevels().get(i), expectedQos[i]);
+            assertEquals(expectedQos[i], (int) subAckMessage.payload().grantedQoSLevels().get(i));
         }
     }
 

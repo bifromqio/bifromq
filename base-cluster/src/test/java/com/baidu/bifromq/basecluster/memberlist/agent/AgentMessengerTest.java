@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -108,10 +108,10 @@ public class AgentMessengerTest {
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(messenger).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(agentId, msgCap.getValue().getAgentMessage().getAgentId());
-        assertEquals(message, msgCap.getValue().getAgentMessage().getMessage());
-        assertEquals(targetMemberAddr, msgCap.getValue().getAgentMessage().getReceiver());
-        assertEquals(tgtAddr, addrCap.getValue());
+        assertEquals(msgCap.getValue().getAgentMessage().getAgentId(), agentId);
+        assertEquals(msgCap.getValue().getAgentMessage().getMessage(), message);
+        assertEquals(msgCap.getValue().getAgentMessage().getReceiver(), targetMemberAddr);
+        assertEquals(addrCap.getValue(), tgtAddr);
         assertTrue(reliableCap.getValue());
     }
 
@@ -152,6 +152,6 @@ public class AgentMessengerTest {
         msgSubject.onNext(new Timed<>(msg3, System.currentTimeMillis(), TimeUnit.MILLISECONDS));
 
         msgReceiver.awaitCount(1);
-        assertEquals(msg3.message.getAgentMessage().getMessage(), message);
+        assertEquals(message, msg3.message.getAgentMessage().getMessage());
     }
 }

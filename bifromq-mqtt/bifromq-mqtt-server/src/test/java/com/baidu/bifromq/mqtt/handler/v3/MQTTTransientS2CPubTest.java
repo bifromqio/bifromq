@@ -31,9 +31,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertNull;
+import static org.testng.Assert.assertNull;
 
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
@@ -58,7 +58,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mockito;
 
 @Slf4j
 public class MQTTTransientS2CPubTest extends BaseMQTTTest {
@@ -85,8 +84,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.AT_MOST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_MOST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
     }
@@ -119,7 +118,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 0; i < 10; i++) {
             MqttPublishMessage message = channel.readOutbound();
             if (i < 9) {
-                assertEquals("testTopic", message.variableHeader().topicName());
+                assertEquals(message.variableHeader().topicName(), "testTopic");
             } else {
                 assertNull(message);
             }
@@ -139,8 +138,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         // s2c pub received and ack
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
             channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
         }
         verifyEvent(7, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
@@ -175,7 +174,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 0; i < 10; i++) {
             MqttPublishMessage message = channel.readOutbound();
             if (i < 9) {
-                assertEquals("testTopic", message.variableHeader().topicName());
+                assertEquals(message.variableHeader().topicName(), "testTopic");
             } else {
                 assertNull(message);
             }
@@ -196,8 +195,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         List<Integer> packetIds = Lists.newArrayList();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
             packetIds.add(message.variableHeader().packetId());
         }
         // resent once
@@ -206,9 +205,9 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
-            assertEquals((int) packetIds.get(i), message.variableHeader().packetId());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
+            assertEquals(message.variableHeader().packetId(), (int) packetIds.get(i));
         }
         // resent twice
         testTicker.advanceTimeBy(100, TimeUnit.MILLISECONDS);
@@ -216,9 +215,9 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
-            assertEquals((int) packetIds.get(i), message.variableHeader().packetId());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
+            assertEquals(message.variableHeader().packetId(), (int) packetIds.get(i));
         }
         // resent three times and remove
         testTicker.advanceTimeBy(100, TimeUnit.MILLISECONDS);
@@ -250,8 +249,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
             if (message != null) {
-                assertEquals(QoS.AT_LEAST_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-                assertEquals("testTopic", message.variableHeader().topicName());
+                assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+                assertEquals(message.variableHeader().topicName(), "testTopic");
                 packetIds.add(message.variableHeader().packetId());
             }
         }
@@ -279,14 +278,14 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         // s2c pub received and rec
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
             channel.writeInbound(MQTTMessageUtils.publishRecMessage(message.variableHeader().packetId()));
         }
         // pubRel received and comp
         for (int i = 0; i < messageCount; i++) {
             MqttMessage message = channel.readOutbound();
-            assertEquals(PUBREL, message.fixedHeader().messageType());
+            assertEquals(message.fixedHeader().messageType(), PUBREL);
             channel.writeInbound(MQTTMessageUtils.publishCompMessage(
                 ((MqttMessageIdVariableHeader) message.variableHeader()).messageId()));
         }
@@ -321,7 +320,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 0; i < 10; i++) {
             MqttPublishMessage message = channel.readOutbound();
             if (i < 9) {
-                assertEquals("testTopic", message.variableHeader().topicName());
+                assertEquals(message.variableHeader().topicName(), "testTopic");
             } else {
                 assertNull(message);
             }
@@ -343,8 +342,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         List<Integer> packetIds = Lists.newArrayList();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
             packetIds.add(message.variableHeader().packetId());
         }
         // resent once
@@ -354,9 +353,9 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         channel.flushOutbound();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
-            assertEquals((int) packetIds.get(i), message.variableHeader().packetId());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
+            assertEquals(message.variableHeader().packetId(), (int) packetIds.get(i));
         }
         // resent twice
         channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
@@ -366,9 +365,9 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         channel.flushOutbound();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-            assertEquals("testTopic", message.variableHeader().topicName());
-            assertEquals((int) packetIds.get(i), message.variableHeader().packetId());
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), "testTopic");
+            assertEquals(message.variableHeader().packetId(), (int) packetIds.get(i));
         }
         // resent three times and remove
         channel.advanceTimeBy(100, TimeUnit.MILLISECONDS);
@@ -402,8 +401,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
             if (message != null) {
-                assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-                assertEquals("testTopic", message.variableHeader().topicName());
+                assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
+                assertEquals(message.variableHeader().topicName(), "testTopic");
                 packetIds.add(message.variableHeader().packetId());
             }
         }
@@ -481,12 +480,12 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         // should two messages from client1 and client2
         MqttPublishMessage message = channel.readOutbound();
-        assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-        assertEquals("testTopic1", message.variableHeader().topicName());
+        assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
+        assertEquals(message.variableHeader().topicName(), "testTopic1");
 
         message = channel.readOutbound();
-        assertEquals(QoS.EXACTLY_ONCE_VALUE, message.fixedHeader().qosLevel().value());
-        assertEquals("testTopic2", message.variableHeader().topicName());
+        assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
+        assertEquals(message.variableHeader().topicName(), "testTopic2");
 
         message = channel.readOutbound();
         assertNull(message);

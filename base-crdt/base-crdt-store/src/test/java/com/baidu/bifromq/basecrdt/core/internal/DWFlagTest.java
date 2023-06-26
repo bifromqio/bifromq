@@ -15,7 +15,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.dwflag;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -43,7 +43,7 @@ public class DWFlagTest extends CRDTTest {
         DWFlagInflater dwFlagInflater = new DWFlagInflater(0, leftReplica,
             newStateLattice(leftReplica.getId(), 1000), executor, Duration.ofMillis(100));
         IDWFlag dwFlag = dwFlagInflater.getCRDT();
-        assertEquals(leftReplica, dwFlag.id());
+        assertEquals(dwFlag.id(), leftReplica);
 
         assertTrue(dwFlag.read());
         dwFlag.execute(DWFlagOperation.disable()).join();
@@ -79,13 +79,13 @@ public class DWFlagTest extends CRDTTest {
             .delta(rightInflater.latticeEvents(), rightInflater.historyEvents(), 10).join().get()).join();
 
         assertFalse(left.read());
-        assertEquals(left.read(), right.read());
+        assertEquals(right.read(), left.read());
 
         right.execute(DWFlagOperation.enable()).join();
         assertTrue(right.read());
 
         sync(leftInflater, rightInflater);
         assertTrue(left.read());
-        assertEquals(left.read(), right.read());
+        assertEquals(right.read(), left.read());
     }
 }

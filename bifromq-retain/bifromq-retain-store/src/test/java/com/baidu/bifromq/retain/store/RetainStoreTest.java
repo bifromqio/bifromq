@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
@@ -215,11 +215,11 @@ public class RetainStoreTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             RetainServiceRWCoProcOutput output = RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.hasRetainReply());
-            assertEquals(message.getMessageId(), output.getRetainReply().getReqId());
+            assertEquals(output.getRetainReply().getReqId(), message.getMessageId());
             return output.getRetainReply();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -243,11 +243,11 @@ public class RetainStoreTest {
                 .setKvRangeId(s.id)
                 .setRoCoProcInput(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             RetainServiceROCoProcOutput output = RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
             assertTrue(output.hasMatchReply());
-            assertEquals(reqId, output.getMatchReply().getReqId());
+            assertEquals(output.getMatchReply().getReqId(), reqId);
             return output.getMatchReply();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -266,11 +266,11 @@ public class RetainStoreTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             RetainServiceRWCoProcOutput output = RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.hasGcReply());
-            assertEquals(reqId, output.getGcReply().getReqId());
+            assertEquals(output.getGcReply().getReqId(), reqId);
             return output.getGcReply();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);

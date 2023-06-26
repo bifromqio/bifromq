@@ -16,7 +16,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
 import static java.util.Collections.emptyIterator;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basecrdt.core.api.IMVReg;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
@@ -45,7 +45,7 @@ public class MVRegTest extends CRDTTest {
         MVRegInflater mvRegInflater = new MVRegInflater(0, leftReplica,
             newStateLattice(leftReplica.getId(), 1000), executor, Duration.ofMillis(100));
         IMVReg mvReg = mvRegInflater.getCRDT();
-        assertEquals(leftReplica, mvReg.id());
+        assertEquals(mvReg.id(), leftReplica);
 
         mvReg.execute(MVRegOperation.write(val1)).join();
         TestUtil.assertSame(Sets.<ByteString>newHashSet(val1).iterator(), mvReg.read());

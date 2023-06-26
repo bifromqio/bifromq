@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft.event;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
@@ -24,19 +24,19 @@ public class RaftEventTest {
     @Test
     public void typeMatch() {
         CommitEvent commitEvent = new CommitEvent("S1", 1);
-        assertEquals(RaftEventType.COMMIT, commitEvent.type);
+        assertEquals(commitEvent.type, RaftEventType.COMMIT);
 
         ElectionEvent electionEvent = new ElectionEvent("S1", "S2", 0);
-        assertEquals(RaftEventType.ELECTION, electionEvent.type);
+        assertEquals(electionEvent.type, RaftEventType.ELECTION);
 
         SnapshotRestoredEvent snapshotRestoredEvent = new SnapshotRestoredEvent("S1", Snapshot.getDefaultInstance());
-        assertEquals(RaftEventType.SNAPSHOT_RESTORED, snapshotRestoredEvent.type);
+        assertEquals(snapshotRestoredEvent.type, RaftEventType.SNAPSHOT_RESTORED);
 
         StatusChangedEvent statusChangedEvent = new StatusChangedEvent("S1", RaftNodeStatus.Leader);
-        assertEquals(RaftEventType.STATUS_CHANGED, statusChangedEvent.type);
+        assertEquals(statusChangedEvent.type, RaftEventType.STATUS_CHANGED);
 
         SyncStateChangedEvent syncStateChangedEvent = new SyncStateChangedEvent("S1", Collections.emptyMap());
-        assertEquals(RaftEventType.SYNC_STATE_CHANGED, syncStateChangedEvent.type);
+        assertEquals(syncStateChangedEvent.type, RaftEventType.SYNC_STATE_CHANGED);
     }
 
     @Test

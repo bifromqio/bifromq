@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
@@ -141,7 +141,7 @@ public class KVRangeWALSubscriptionTest {
         latch.await();
         int c = retryCount.get();
         Thread.sleep(100);
-        assertEquals(c, retryCount.get());
+        assertEquals(retryCount.get(), c);
         verify(wal, atLeast(2)).retrieveCommitted(0, maxSize);
     }
 
@@ -229,7 +229,7 @@ public class KVRangeWALSubscriptionTest {
         latch.await();
         int c = retryCount.get();
         Thread.sleep(100);
-        assertEquals(c, retryCount.get());
+        assertEquals(retryCount.get(), c);
     }
 
     @SneakyThrows

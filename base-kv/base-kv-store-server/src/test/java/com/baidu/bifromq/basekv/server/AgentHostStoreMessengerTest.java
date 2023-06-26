@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.server;
 
 import static com.baidu.bifromq.basekv.server.AgentHostStoreMessenger.agentId;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -80,7 +80,7 @@ public class AgentHostStoreMessengerTest {
 
         ArgumentCaptor<String> agentMemberCap = ArgumentCaptor.forClass(String.class);
         verify(agent).register(agentMemberCap.capture());
-        assertEquals(srcStore, agentMemberCap.getValue());
+        assertEquals(agentMemberCap.getValue(), srcStore);
     }
 
     @Test
@@ -98,8 +98,8 @@ public class AgentHostStoreMessengerTest {
         verify(srcStoreAgentMember).multicast(targetMemberCap.capture(), msgCap.capture(),
             reliableCap.capture());
 
-        assertEquals(targetStore, targetMemberCap.getValue());
-        assertEquals(message.toByteString(), msgCap.getValue());
+        assertEquals(targetMemberCap.getValue(), targetStore);
+        assertEquals(msgCap.getValue(), message.toByteString());
         assertTrue(reliableCap.getValue());
     }
 
@@ -116,7 +116,7 @@ public class AgentHostStoreMessengerTest {
         ArgumentCaptor<ByteString> msgCap = ArgumentCaptor.forClass(ByteString.class);
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(srcStoreAgentMember).broadcast(msgCap.capture(), reliableCap.capture());
-        assertEquals(message.toByteString(), msgCap.getValue());
+        assertEquals(msgCap.getValue(), message.toByteString());
         assertTrue(reliableCap.getValue());
     }
 
@@ -137,7 +137,7 @@ public class AgentHostStoreMessengerTest {
             .build();
         tgtStoreMessageSubject.onNext(nodeMessage);
         testObserver.awaitCount(1);
-        assertEquals(message, testObserver.values().get(0));
+        assertEquals(testObserver.values().get(0), message);
     }
 
     @Test
@@ -157,6 +157,6 @@ public class AgentHostStoreMessengerTest {
             .build();
         tgtStoreMessageSubject.onNext(nodeMessage);
         testObserver.awaitCount(1);
-        assertEquals(targetStore, testObserver.values().get(0).getPayload().getHostStoreId());
+        assertEquals(testObserver.values().get(0).getPayload().getHostStoreId(), targetStore);
     }
 }

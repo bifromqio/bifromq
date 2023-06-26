@@ -23,7 +23,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -69,7 +69,7 @@ public class InMemReplicaStateLatticeTest {
             singleDot(replicaA, 7),
             singleDot(replicaA, 8)
         );
-        assertEquals(toMatch, newHashSet(diff.adds()));
+        assertEquals(newHashSet(diff.adds()), toMatch);
         assertFalse(diff.removes().iterator().hasNext());
         TestUtil.assertUnorderedSame(toMatch.iterator(), testLattice.lattices());
 
@@ -78,7 +78,7 @@ public class InMemReplicaStateLatticeTest {
         assertFalse(diff.adds().iterator().hasNext());
         assertFalse(diff.removes().iterator().hasNext());
 
-        assertEquals(TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5, 7, 8), testLattice.latticeIndex());
+        assertEquals(testLattice.latticeIndex(), TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5, 7, 8));
         assertTrue(testLattice.historyIndex().isEmpty());
     }
 
@@ -88,12 +88,12 @@ public class InMemReplicaStateLatticeTest {
         testLattice.join(singleton(replacement(dot(replicaA, 3, singleDot(replicaA, 3)), dot(replicaA, 2))));
         testLattice.join(replacements(dot(replicaA, 4, singleDot(replicaA, 4)), singleton(dot(replicaA, 1))));
         testLattice.join(replacements(dot(replicaA, 4, singleDot(replicaA, 4)), singleton(dot(replicaA, 3))));
-        assertEquals(singleDot(replicaA, 4), testLattice.lattices().next());
+        assertEquals(testLattice.lattices().next(), singleDot(replicaA, 4));
         Optional<Iterable<Replacement>> deltaLattice = testLattice
             .delta(TestUtil.toLatticeEvents(replicaA, 1, 3), emptyMap(), 10);
         assertTrue(deltaLattice.isPresent());
-        assertEquals(Sets.newHashSet(replacements(dot(replicaA, 4, singleDot(replicaA, 4)),
-            newHashSet(dot(replicaA, 3), dot(replicaA, 1)))), deltaLattice.get());
+        assertEquals(deltaLattice.get(), Sets.newHashSet(replacements(dot(replicaA, 4, singleDot(replicaA, 4)),
+            newHashSet(dot(replicaA, 3), dot(replicaA, 1)))));
     }
 
     @Test
@@ -113,17 +113,17 @@ public class InMemReplicaStateLatticeTest {
             replacement(dot(replicaA, 3)));
         IReplicaStateLattice.JoinDiff diff = testLattice.join(removalDelta);
         assertFalse(diff.adds().iterator().hasNext());
-        assertEquals(Sets.newHashSet(
+        assertEquals(newHashSet(diff.removes()), Sets.newHashSet(
             singleDot(replicaA, 1),
             singleDot(replicaA, 2),
             singleDot(replicaA, 3)
-        ), newHashSet(diff.removes()));
+        ));
         TestUtil.assertSame(newArrayList(singleDot(replicaA, 5), singleDot(replicaA, 7), singleDot(replicaA, 8))
             .iterator(), testLattice.lattices());
 
-        assertEquals(TestUtil.toLatticeEvents(replicaA, 5, 5, 7, 8), testLattice.latticeIndex());
+        assertEquals(testLattice.latticeIndex(), TestUtil.toLatticeEvents(replicaA, 5, 5, 7, 8));
 
-        assertEquals(TestUtil.toLatticeEvents(replicaA, 1, 3), testLattice.historyIndex());
+        assertEquals(testLattice.historyIndex(), TestUtil.toLatticeEvents(replicaA, 1, 3));
 
         // remove again
         diff = testLattice.join(removalDelta);
@@ -145,7 +145,7 @@ public class InMemReplicaStateLatticeTest {
             );
         // compare history
         assertTrue(testLattice.latticeIndex().isEmpty());
-        assertEquals(TestUtil.toLatticeEvents(replicaA, 1, 3), testLattice.historyIndex());
+        assertEquals(testLattice.historyIndex(), TestUtil.toLatticeEvents(replicaA, 1, 3));
 
         assertFalse(diff.adds().iterator().hasNext());
         assertFalse(diff.removes().iterator().hasNext());
@@ -160,7 +160,7 @@ public class InMemReplicaStateLatticeTest {
         assertFalse(diff.removes().iterator().hasNext());
         // no change to history
         assertTrue(testLattice.latticeIndex().isEmpty());
-        assertEquals(TestUtil.toLatticeEvents(replicaA, 1, 3), testLattice.historyIndex());
+        assertEquals(testLattice.historyIndex(), TestUtil.toLatticeEvents(replicaA, 1, 3));
         // sleep until removalHistory being forgotten
         Thread.sleep(3000);
         testLattice.compact();
@@ -173,7 +173,7 @@ public class InMemReplicaStateLatticeTest {
                 singleDot(replicaA, 3))
                 .iterator(),
             diff.adds().iterator());
-        assertEquals(TestUtil.toLatticeEvents(replicaA, 1, 3), testLattice.latticeIndex());
+        assertEquals(testLattice.latticeIndex(), TestUtil.toLatticeEvents(replicaA, 1, 3));
         assertTrue(testLattice.historyIndex().isEmpty());
     }
 
@@ -184,7 +184,7 @@ public class InMemReplicaStateLatticeTest {
             replacement(dot(replicaA, 2, singleDot(replicaA, 2))),
             replacement(dot(replicaA, 3, singleDot(replicaA, 3))));
         testLattice.join(states);
-        assertEquals(Sets.<ByteString>newHashSet(replicaA), testLattice.latticeIndex().keySet());
+        assertEquals(testLattice.latticeIndex().keySet(), Sets.<ByteString>newHashSet(replicaA));
         assertTrue(testLattice.historyIndex().isEmpty());
 
         testLattice.join(newArrayList(
@@ -193,7 +193,7 @@ public class InMemReplicaStateLatticeTest {
             replacement(dot(replicaA, 3)))
         );
         assertTrue(testLattice.latticeIndex().isEmpty());
-        assertEquals(Sets.<ByteString>newHashSet(replicaA), testLattice.historyIndex().keySet());
+        assertEquals(testLattice.historyIndex().keySet(), Sets.<ByteString>newHashSet(replicaA));
 
         // join again before history expire
         testLattice.join(states);
@@ -219,21 +219,21 @@ public class InMemReplicaStateLatticeTest {
 
         testLattice.join(states);
         // no contributor to compare
-        assertEquals(states, newHashSet(testLattice.delta(emptyMap(), emptyMap(), 100).get()));
+        assertEquals(newHashSet(testLattice.delta(emptyMap(), emptyMap(), 100).get()), states);
         //
-        assertEquals(states, testLattice.delta(TestUtil.toLatticeEvents(replicaB), emptyMap(), 100).get());
+        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaB), emptyMap(), 100).get(), states);
 
-        assertEquals(newHashSet(
+        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaB, 1, 8), TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5),
+            100).get(), newHashSet(
             replacement(dot(replicaA, 7, singleDot(replicaA, 7))),
             replacement(dot(replicaA, 8, singleDot(replicaA, 8)))
-        ), testLattice.delta(TestUtil.toLatticeEvents(replicaB, 1, 8), TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5),
-            100).get());
+        ));
 
         // limited history
         Optional<Iterable<Replacement>> deltaProto =
             testLattice.delta(TestUtil.toLatticeEvents(replicaA), emptyMap(), 3);
         assertTrue(deltaProto.isPresent());
-        assertEquals(3, Sets.newHashSet(deltaProto.get()).size());
+        assertEquals(Sets.newHashSet(deltaProto.get()).size(), 3);
         // oa history to exclude
         deltaProto = testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 2, 5, 5), emptyMap(), 10);
         assertTrue(deltaProto.isPresent());
@@ -252,7 +252,7 @@ public class InMemReplicaStateLatticeTest {
         // oa history to exclude with limited events
         deltaProto = testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 2), emptyMap(), 2);
         assertTrue(deltaProto.isPresent());
-        assertEquals(2, Sets.newHashSet(deltaProto.get()).size());
+        assertEquals(Sets.newHashSet(deltaProto.get()).size(), 2);
         assertFalse(Sets.newHashSet(deltaProto.get()).contains(dot(replicaA, 1, singleDot(replicaA, 1))));
         assertFalse(Sets.newHashSet(deltaProto.get()).contains(dot(replicaA, 2, singleDot(replicaA, 2))));
     }
@@ -266,15 +266,15 @@ public class InMemReplicaStateLatticeTest {
         );
         testLattice.join(states);
 
-        assertEquals(newHashSet(
+        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaA), TestUtil.toLatticeEvents(replicaA, 1, 3), 100).get(), newHashSet(
             replacement(dot(replicaA, 5, singleDot(replicaA, 5))),
             replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7), dot(replicaA, 6))
-        ), testLattice.delta(TestUtil.toLatticeEvents(replicaA), TestUtil.toLatticeEvents(replicaA, 1, 3), 100).get());
+        ));
 
-        assertEquals(newHashSet(
+        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaA, 5, 5), TestUtil.toLatticeEvents(replicaA, 1, 3, 6, 7),
+            100).get(), newHashSet(
             replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7))
-        ), testLattice.delta(TestUtil.toLatticeEvents(replicaA, 5, 5), TestUtil.toLatticeEvents(replicaA, 1, 3, 6, 7),
-            100).get());
+        ));
 
         assertFalse(
             testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5, 6, 8), emptyMap(), 100).isPresent());
@@ -298,16 +298,16 @@ public class InMemReplicaStateLatticeTest {
         Optional<Iterable<Replacement>> deltaProto =
             testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 4), emptyMap(), 2);
         assertTrue(deltaProto.isPresent());
-        assertEquals(states, deltaProto.get());
+        assertEquals(deltaProto.get(), states);
 
         deltaProto = testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 5), emptyMap(), 2);
         assertTrue(deltaProto.isPresent());
-        assertEquals(states, deltaProto.get());
+        assertEquals(deltaProto.get(), states);
 
         deltaProto = testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 7), emptyMap(), 2);
         assertTrue(deltaProto.isPresent());
-        assertEquals(newHashSet(replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7))),
-            deltaProto.get());
+        assertEquals(deltaProto.get(),
+            newHashSet(replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7))));
     }
 
     @Test
@@ -322,16 +322,16 @@ public class InMemReplicaStateLatticeTest {
         Optional<Iterable<Replacement>> deltaProto =
             testLattice.delta(TestUtil.toLatticeEvents(replicaA, 5, 5), emptyMap(), 2);
         assertTrue(deltaProto.isPresent());
-        assertEquals(states, deltaProto.get());
+        assertEquals(deltaProto.get(), states);
 
         deltaProto = testLattice.delta(TestUtil.toLatticeEvents(replicaA, 6, 6), emptyMap(), 2);
         assertTrue(deltaProto.isPresent());
-        assertEquals(newHashSet(replacement(dot(replicaA, 8), dot(replicaA, 7), dot(replicaA, 6))),
-            deltaProto.get());
+        assertEquals(deltaProto.get(),
+            newHashSet(replacement(dot(replicaA, 8), dot(replicaA, 7), dot(replicaA, 6))));
 
         deltaProto = testLattice.delta(TestUtil.toLatticeEvents(replicaA, 7, 7), emptyMap(), 2);
         assertTrue(deltaProto.isPresent());
-        assertEquals(newHashSet(replacement(dot(replicaA, 8), dot(replicaA, 7))), deltaProto.get());
+        assertEquals(deltaProto.get(), newHashSet(replacement(dot(replicaA, 8), dot(replicaA, 7))));
     }
 
     @Test
@@ -344,8 +344,8 @@ public class InMemReplicaStateLatticeTest {
         Optional<Iterable<Replacement>> deltaProto =
             testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 2), emptyMap(), 10);
         assertTrue(deltaProto.isPresent());
-        assertEquals(newHashSet(replacement(dot(replicaA, 2)),
-            replacement(dot(replicaA, 1))), newHashSet(deltaProto.get()));
+        assertEquals(newHashSet(deltaProto.get()), newHashSet(replacement(dot(replicaA, 2)),
+            replacement(dot(replicaA, 1))));
         // wait for forgetting
         Thread.sleep(3000);
         testLattice.compact();

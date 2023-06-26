@@ -20,7 +20,7 @@ import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
 import static com.baidu.bifromq.retain.utils.KeyUtil.trafficNS;
 import static com.baidu.bifromq.retain.utils.TopicUtil.parse;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -31,10 +31,10 @@ public class KeyUtilTest {
     @Test
     public void testParseTrafficNS() {
         ByteString trafficNS = trafficNS("trafficId");
-        assertEquals(trafficNS, parseTrafficNS(trafficNS));
+        assertEquals(parseTrafficNS(trafficNS), trafficNS);
 
-        assertEquals(trafficNS, parseTrafficNS(retainKey(trafficNS, "/a/b/c")));
-        assertEquals(trafficNS, parseTrafficNS(retainKeyPrefix(trafficNS, parse("/a/b/c", false))));
+        assertEquals(parseTrafficNS(retainKey(trafficNS, "/a/b/c")), trafficNS);
+        assertEquals(parseTrafficNS(retainKeyPrefix(trafficNS, parse("/a/b/c", false))), trafficNS);
     }
 
     @Test
@@ -49,6 +49,6 @@ public class KeyUtilTest {
     public void testParseTopic() {
         ByteString trafficNS = trafficNS("trafficId");
         String topic = "/a/b/c";
-        assertEquals(parseTopic(retainKey(trafficNS, topic)), parse(topic, false));
+        assertEquals(parse(topic, false), parseTopic(retainKey(trafficNS, topic)));
     }
 }

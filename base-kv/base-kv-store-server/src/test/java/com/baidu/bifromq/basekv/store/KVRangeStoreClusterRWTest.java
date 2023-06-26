@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.store;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -37,7 +37,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSetting.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> getValue = cluster.get(rangeSetting.leader, rangeId, copyFromUtf8("key" + i));
-            assertEquals(copyFromUtf8("value" + i), getValue.get());
+            assertEquals(getValue.get(), copyFromUtf8("value" + i));
         }
     }
 
@@ -48,7 +48,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSetting.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> getValue = cluster.get(nonLeaderStore(rangeSetting), rangeId, copyFromUtf8("key" + i));
-            assertEquals(copyFromUtf8("value" + i), getValue.get());
+            assertEquals(getValue.get(), copyFromUtf8("value" + i));
         }
     }
 
@@ -63,7 +63,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSetting.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> resp = cluster.get(rangeSetting.leader, rangeId, copyFromUtf8("key" + i));
-            assertEquals(copyFromUtf8("value" + i), resp.get());
+            assertEquals(resp.get(), copyFromUtf8("value" + i));
         }
         await().ignoreExceptions().until(() -> {
             KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
@@ -94,7 +94,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         cluster.awaitKVRangeReady(restartStoreId, rangeId);
         for (int i = 0; i < 10; i++) {
             Optional<ByteString> resp = cluster.get(restartStoreId, rangeId, copyFromUtf8("key" + i));
-            assertEquals(copyFromUtf8("value" + i), resp.get());
+            assertEquals(resp.get(), copyFromUtf8("value" + i));
         }
     }
 
@@ -106,7 +106,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSettings.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> resp = cluster.get(rangeSettings.leader, rangeId, copyFromUtf8("key" + i));
-            assertEquals(copyFromUtf8("value" + i), resp.get());
+            assertEquals(resp.get(), copyFromUtf8("value" + i));
         }
         String storeId = cluster.addStore();
         log.info("Add new store: {}", storeId);
@@ -126,7 +126,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         log.info("New store ready");
         for (int i = 0; i < 10; i++) {
             Optional<ByteString> resp = cluster.get(storeId, rangeId, copyFromUtf8("key" + i));
-            assertEquals(copyFromUtf8("value" + i), resp.get());
+            assertEquals(resp.get(), copyFromUtf8("value" + i));
         }
     }
 }

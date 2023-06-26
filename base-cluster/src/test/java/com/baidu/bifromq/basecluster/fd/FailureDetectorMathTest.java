@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basecluster.fd;
 
 import static com.baidu.bifromq.basecluster.fd.FailureDetectorMath.scale;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import java.time.Duration;
 import org.testng.annotations.Test;
@@ -22,8 +22,8 @@ import org.testng.annotations.Test;
 public class FailureDetectorMathTest {
     @Test
     public void scaleDuration() {
-        assertEquals(Duration.ofMillis(100), scale(Duration.ofMillis(100), -1));
-        assertEquals(Duration.ofMillis(100), scale(Duration.ofMillis(100), 0));
-        assertEquals(Duration.ofMillis(200), scale(Duration.ofMillis(100), 1));
+        assertEquals(scale(Duration.ofMillis(100), -1), Duration.ofMillis(100));
+        assertEquals(scale(Duration.ofMillis(100), 0), Duration.ofMillis(100));
+        assertEquals(scale(Duration.ofMillis(100), 1), Duration.ofMillis(200));
     }
 }

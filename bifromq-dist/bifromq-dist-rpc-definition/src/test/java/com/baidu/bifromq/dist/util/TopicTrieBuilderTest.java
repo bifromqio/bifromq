@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.util;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.type.TopicMessage;
 import java.util.ArrayList;
@@ -28,16 +28,16 @@ public class TopicTrieBuilderTest {
     @Test
     public void testStats() {
         TopicTrie trie = new TopicTrie();
-        assertEquals(0, trie.topicCount());
+        assertEquals(trie.topicCount(), 0);
 
         trie.add("a", Collections.singleton(TopicMessage.newBuilder().setTopic("a").build()));
-        assertEquals(1, trie.topicCount());
+        assertEquals(trie.topicCount(), 1);
 
         trie.add("a", Collections.singleton(TopicMessage.newBuilder().setTopic("a").build()));
-        assertEquals(1, trie.topicCount());
+        assertEquals(trie.topicCount(), 1);
 
         trie.add("a/", Collections.singleton(TopicMessage.newBuilder().setTopic("a/").build()));
-        assertEquals(2, trie.topicCount());
+        assertEquals(trie.topicCount(), 2);
     }
 
     @Test
@@ -60,6 +60,6 @@ public class TopicTrieBuilderTest {
                 log.info("{}: {}", i, topics.get(i));
             }
         }
-        assertEquals(topics, toVerify);
+        assertEquals(toVerify, topics);
     }
 }

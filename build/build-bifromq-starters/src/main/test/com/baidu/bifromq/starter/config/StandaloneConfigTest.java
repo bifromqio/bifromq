@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.starter.config;
 
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
-import static org.testng.AssertJUnit.assertEquals;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -30,7 +30,7 @@ public class StandaloneConfigTest {
     public void buildFromYaml() {
         File confFile = Paths.get(this.getClass().getResource("/standalone.yml").toURI()).toFile();
         StandaloneConfig config = StandaloneConfig.build(confFile);
-        assertEquals("0.0.0.0", config.getHost());
+        assertEquals(config.getHost(), "0.0.0.0");
         assertNotNull(config.getDistWorkerConfig());
         assertNotNull(config.getInboxStoreConfig());
         assertNotNull(config.getRetainStoreConfig());

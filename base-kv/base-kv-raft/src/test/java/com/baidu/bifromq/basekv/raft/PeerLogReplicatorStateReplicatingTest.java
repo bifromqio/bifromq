@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
@@ -52,29 +52,29 @@ public class PeerLogReplicatorStateReplicatingTest {
     @Test
     public void testInitialize() {
         assertFalse(stateReplicating.pauseReplicating());
-        assertEquals(1, stateReplicating.matchIndex());
-        assertEquals(2, stateReplicating.nextIndex());
-        assertEquals(0, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.matchIndex(), 1);
+        assertEquals(stateReplicating.nextIndex(), 2);
+        assertEquals(stateReplicating.catchupRate(), 0);
     }
 
     @Test
     public void testCurrentState() {
-        assertEquals(RaftNodeSyncState.Replicating, stateReplicating.state());
+        assertEquals(stateReplicating.state(), RaftNodeSyncState.Replicating);
     }
 
     @Test
     public void testPauseByMaxInflight() {
         stateReplicating.replicateTo(2);
-        assertEquals(1, stateReplicating.matchIndex());
-        assertEquals(3, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 1);
+        assertEquals(stateReplicating.nextIndex(), 3);
         assertFalse(stateReplicating.pauseReplicating());
         stateReplicating.replicateTo(3);
-        assertEquals(1, stateReplicating.matchIndex());
-        assertEquals(4, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 1);
+        assertEquals(stateReplicating.nextIndex(), 4);
         assertFalse(stateReplicating.pauseReplicating());
         stateReplicating.replicateTo(4);
-        assertEquals(1, stateReplicating.matchIndex());
-        assertEquals(5, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 1);
+        assertEquals(stateReplicating.nextIndex(), 5);
         assertTrue(stateReplicating.pauseReplicating()); // now we have 3 inflight replicating messages
 
         stateReplicating.confirmMatch(2);
@@ -118,18 +118,18 @@ public class PeerLogReplicatorStateReplicatingTest {
 
         stateReplicating.confirmMatch(2);
         assertFalse(stateReplicating.pauseReplicating()); // now we have 2 inflight replicating messages
-        assertEquals(2, stateReplicating.matchIndex());
-        assertEquals(5, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 2);
+        assertEquals(stateReplicating.nextIndex(), 5);
 
         stateReplicating.confirmMatch(3);
         assertFalse(stateReplicating.pauseReplicating()); // now we have 1 inflight replicating messages
-        assertEquals(3, stateReplicating.matchIndex());
-        assertEquals(5, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 3);
+        assertEquals(stateReplicating.nextIndex(), 5);
 
         stateReplicating.confirmMatch(4);
         assertFalse(stateReplicating.pauseReplicating()); // now we have 0 inflight replicating messages
-        assertEquals(4, stateReplicating.matchIndex());
-        assertEquals(5, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 4);
+        assertEquals(stateReplicating.nextIndex(), 5);
     }
 
     @Test
@@ -140,40 +140,40 @@ public class PeerLogReplicatorStateReplicatingTest {
 
         stateReplicating.confirmMatch(4);
         assertFalse(stateReplicating.pauseReplicating()); // now we have 0 inflight replicating messages
-        assertEquals(4, stateReplicating.matchIndex());
-        assertEquals(5, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 4);
+        assertEquals(stateReplicating.nextIndex(), 5);
 
         stateReplicating.confirmMatch(2);
         assertFalse(stateReplicating.pauseReplicating()); // now we have 0 inflight replicating messages
-        assertEquals(4, stateReplicating.matchIndex());
-        assertEquals(5, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 4);
+        assertEquals(stateReplicating.nextIndex(), 5);
 
         stateReplicating.confirmMatch(3);
         assertFalse(stateReplicating.pauseReplicating()); // now we have 0 inflight replicating messages
-        assertEquals(4, stateReplicating.matchIndex());
-        assertEquals(5, stateReplicating.nextIndex());
+        assertEquals(stateReplicating.matchIndex(), 4);
+        assertEquals(stateReplicating.nextIndex(), 5);
     }
 
     @Test
     public void testCatchupRate() {
-        assertEquals(0, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.catchupRate(), 0);
         stateReplicating.replicateTo(2);
         stateReplicating.tick();
-        assertEquals(0, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.catchupRate(), 0);
         stateReplicating.replicateTo(3);
         stateReplicating.tick();
-        assertEquals(0, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.catchupRate(), 0);
         stateReplicating.replicateTo(4);
         stateReplicating.tick();
-        assertEquals(0, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.catchupRate(), 0);
 
         stateReplicating.confirmMatch(4);
-        assertEquals(0, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.catchupRate(), 0);
         stateReplicating.tick();
         // catchup rate is calculated in tick
-        assertEquals(3, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.catchupRate(), 3);
         stateReplicating.tick();
-        assertEquals(0, stateReplicating.catchupRate());
+        assertEquals(stateReplicating.catchupRate(), 0);
     }
 
     @Test
@@ -181,7 +181,7 @@ public class PeerLogReplicatorStateReplicatingTest {
         stateReplicating.replicateTo(4);
         stateReplicating.confirmMatch(4);
         PeerLogReplicatorState nextState = stateReplicating.backoff(3, 3);
-        assertEquals(stateReplicating, nextState);
+        assertEquals(nextState, stateReplicating);
     }
 
     @Test
@@ -191,9 +191,9 @@ public class PeerLogReplicatorStateReplicatingTest {
         stateReplicating.replicateTo(4);
         // peerLastIndex is greater than matchIndex
         PeerLogReplicatorState nextState = stateReplicating.backoff(1, 2);
-        assertEquals(RaftNodeSyncState.Probing, nextState.state());
-        assertEquals(1, nextState.matchIndex());
-        assertEquals(2, nextState.nextIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.Probing);
+        assertEquals(nextState.matchIndex(), 1);
+        assertEquals(nextState.nextIndex(), 2);
     }
 
     @Test
@@ -206,9 +206,9 @@ public class PeerLogReplicatorStateReplicatingTest {
         stateReplicating.replicateTo(20);
         // peerLastIndex is less than matchIndex
         PeerLogReplicatorState nextState = stateReplicating.backoff(14, 8);
-        assertEquals(RaftNodeSyncState.Probing, nextState.state());
-        assertEquals(8, nextState.matchIndex());
-        assertEquals(9, nextState.nextIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.Probing);
+        assertEquals(nextState.matchIndex(), 8);
+        assertEquals(nextState.nextIndex(), 9);
     }
 
     @Test
@@ -219,9 +219,9 @@ public class PeerLogReplicatorStateReplicatingTest {
         stateReplicating.replicateTo(4);
         // peerLastIndex is greater than matchIndex
         PeerLogReplicatorState nextState = stateReplicating.backoff(1, 2);
-        assertEquals(RaftNodeSyncState.SnapshotSyncing, nextState.state());
-        assertEquals(1, nextState.matchIndex());
-        assertEquals(2, nextState.nextIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.SnapshotSyncing);
+        assertEquals(nextState.matchIndex(), 1);
+        assertEquals(nextState.nextIndex(), 2);
     }
 
     @Test
@@ -231,18 +231,18 @@ public class PeerLogReplicatorStateReplicatingTest {
         stateReplicating.replicateTo(3);
         stateReplicating.replicateTo(4);
         // 5 ticks to trigger heartbeat timeout
-        assertEquals(stateReplicating, stateReplicating.tick());
+        assertEquals(stateReplicating.tick(), stateReplicating);
         stateReplicating.replicateTo(5);
-        assertEquals(stateReplicating, stateReplicating.tick());
+        assertEquals(stateReplicating.tick(), stateReplicating);
         stateReplicating.replicateTo(6);
-        assertEquals(stateReplicating, stateReplicating.tick());
+        assertEquals(stateReplicating.tick(), stateReplicating);
         stateReplicating.replicateTo(7);
-        assertEquals(stateReplicating, stateReplicating.tick());
+        assertEquals(stateReplicating.tick(), stateReplicating);
         stateReplicating.replicateTo(7);
-        assertEquals(stateReplicating, stateReplicating.tick());
+        assertEquals(stateReplicating.tick(), stateReplicating);
         stateReplicating.replicateTo(7);
 
         // election timeout
-        assertEquals(RaftNodeSyncState.Probing, stateReplicating.tick().state());
+        assertEquals(stateReplicating.tick().state(), RaftNodeSyncState.Probing);
     }
 }

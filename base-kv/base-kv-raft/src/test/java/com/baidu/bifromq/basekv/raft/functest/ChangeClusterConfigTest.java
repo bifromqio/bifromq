@@ -19,8 +19,8 @@ import static com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeExcepti
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertSame;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
 
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
@@ -52,7 +52,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         try {
             group.changeClusterConfig(follower, newVoters, Collections.emptySet()).join();
         } catch (Throwable e) {
-            assertSame(NOT_LEADER, e.getCause());
+            assertSame(e.getCause(), NOT_LEADER);
         }
     }
 
@@ -78,14 +78,14 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         for (String peerId : newVoters) {
             assertTrue(group.awaitIndexCommitted(peerId, 3));
             if (peerId.equals(leader)) {
-                assertEquals(leaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), leaderStatusLog);
             } else {
-                assertEquals(nonLeaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), nonLeaderStatusLog);
             }
         }
         assertTrue(done.isDone());
-        assertEquals(group.latestClusterConfig(group.currentLeader().get()), group.latestClusterConfig("V4"));
-        assertEquals(group.latestClusterConfig(group.currentLeader().get()).getCorrelateId(), "cId");
+        assertEquals(group.latestClusterConfig("V4"), group.latestClusterConfig(group.currentLeader().get()));
+        assertEquals("cId", group.latestClusterConfig(group.currentLeader().get()).getCorrelateId());
     }
 
     @Cluster(v = "V1")
@@ -113,15 +113,15 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         for (String peerId : newVoters) {
             assertTrue(group.awaitIndexCommitted(peerId, 4));
             if (peerId.equals(leader)) {
-                assertEquals(RaftNodeSyncState.Replicating, group.latestReplicationStatus(peerId));
+                assertEquals(group.latestReplicationStatus(peerId), RaftNodeSyncState.Replicating);
             } else {
-                assertEquals(RaftNodeSyncState.Replicating, group.latestReplicationStatus(peerId));
+                assertEquals(group.latestReplicationStatus(peerId), RaftNodeSyncState.Replicating);
             }
         }
 
         assertTrue(done.isDone());
-        assertEquals(group.latestClusterConfig(group.currentLeader().get()), group.latestClusterConfig("V4"));
-        assertEquals(group.latestClusterConfig(group.currentLeader().get()).getCorrelateId(), "cId");
+        assertEquals(group.latestClusterConfig("V4"), group.latestClusterConfig(group.currentLeader().get()));
+        assertEquals("cId", group.latestClusterConfig(group.currentLeader().get()).getCorrelateId());
     }
 
     @Test(groups = "integration")
@@ -148,15 +148,15 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         for (String peerId : newVoters) {
             assertTrue(group.awaitIndexCommitted(peerId, 3));
             if (peerId.equals(leader)) {
-                assertEquals(leaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), leaderStatusLog);
             } else {
-                assertEquals(nonLeaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), nonLeaderStatusLog);
             }
         }
 
         assertTrue(done.isDone());
-        assertEquals(group.latestClusterConfig(group.currentLeader().get()), group.latestClusterConfig("V4"));
-        assertEquals(group.latestClusterConfig(group.currentLeader().get()), group.latestClusterConfig("V5"));
+        assertEquals(group.latestClusterConfig("V4"), group.latestClusterConfig(group.currentLeader().get()));
+        assertEquals(group.latestClusterConfig("V5"), group.latestClusterConfig(group.currentLeader().get()));
     }
 
     @Test(groups = "integration")
@@ -265,15 +265,15 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         for (String peerId : newVoters) {
             assertTrue(group.awaitIndexCommitted(peerId, 8));
             if (peerId.equals(leader)) {
-                assertEquals(leaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), leaderStatusLog);
             } else {
-                assertEquals(nonLeaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), nonLeaderStatusLog);
             }
         }
         assertTrue(group.awaitIndexCommitted("L1", 8));
-        assertEquals(nonLeaderStatusLog, group.syncStateLogs("L1"));
+        assertEquals(group.syncStateLogs("L1"), nonLeaderStatusLog);
         assertTrue(group.awaitIndexCommitted("L2", 8));
-        assertEquals(nonLeaderStatusLog, group.syncStateLogs("L2"));
+        assertEquals(group.syncStateLogs("L2"), nonLeaderStatusLog);
         assertTrue(done.isDone());
     }
 
@@ -330,24 +330,24 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         for (String peerId : oldVoters) {
             assertTrue(group.awaitIndexCommitted(peerId, 9));
             if (peerId.equals(leader)) {
-                assertEquals(leaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), leaderStatusLog);
             } else {
-                assertEquals(nonLeaderStatusLog, group.syncStateLogs(peerId));
+                assertEquals(group.syncStateLogs(peerId), nonLeaderStatusLog);
             }
         }
 
         assertTrue(group.awaitIndexCommitted("V4", 9));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating), group.syncStateLogs("V4"));
+        assertEquals(group.syncStateLogs("V4"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+            RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted("V5", 9));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating), group.syncStateLogs("V5"));
+        assertEquals(group.syncStateLogs("V5"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+            RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted("L1", 9));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating), group.syncStateLogs("L1"));
+        assertEquals(group.syncStateLogs("L1"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+            RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted("L2", 9));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating), group.syncStateLogs("L2"));
+        assertEquals(group.syncStateLogs("L2"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+            RaftNodeSyncState.Replicating));
         assertTrue(done.isDone());
     }
 
@@ -365,20 +365,20 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         assertFalse(done.isDone());
 
         assertTrue(group.awaitIndexCommitted(leader, 3));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Replicating), group.syncStateLogs(leader));
+        assertEquals(group.syncStateLogs(leader), Arrays.asList(RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted(normalFollower, 3));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating),
-            group.syncStateLogs(normalFollower));
+        assertEquals(group.syncStateLogs(normalFollower),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating));
         // the removed follower will receive new JointConfigEntry but it will not be committed
         assertTrue(group.awaitIndexCommitted(toRemovedFollower, 3));
         // stop tracking as well
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null),
-            group.syncStateLogs(toRemovedFollower));
+        assertEquals(group.syncStateLogs(toRemovedFollower),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null));
 
         assertTrue(newVoters.containsAll(group.latestClusterConfig(toRemovedFollower).getVotersList()));
         group.await(ticks(5));
         // the removed should always stay in follower state
-        assertEquals(RaftNodeStatus.Candidate, group.nodeState(toRemovedFollower));
+        assertEquals(group.nodeState(toRemovedFollower), RaftNodeStatus.Candidate);
         assertTrue(done.isDone());
     }
 
@@ -449,8 +449,8 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
     public void testRemoveFollowersAndLearners() {
         String leader = group.currentLeader().get();
 
-        assertEquals(4, group.currentFollowers().size());
-        assertEquals(2, group.currentLearners().size());
+        assertEquals(group.currentFollowers().size(), 4);
+        assertEquals(group.currentLearners().size(), 2);
 
         String toRemovedVoter1 = group.currentFollowers().get(0);
         String toRemovedVoter2 = group.currentFollowers().get(1);
@@ -470,17 +470,17 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         assertTrue(group.awaitIndexCommitted(normalFollower1, 3));
         assertTrue(group.awaitIndexCommitted(normalFollower2, 3));
         assertTrue(group.awaitIndexCommitted(toRemovedVoter1, 3));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null),
-            group.syncStateLogs(toRemovedVoter1));
+        assertEquals(group.syncStateLogs(toRemovedVoter1),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null));
         assertTrue(group.awaitIndexCommitted(toRemovedVoter2, 3));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null),
-            group.syncStateLogs(toRemovedVoter2));
+        assertEquals(group.syncStateLogs(toRemovedVoter2),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null));
         assertTrue(group.awaitIndexCommitted("L1", 3));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null),
-            group.syncStateLogs("L1"));
+        assertEquals(group.syncStateLogs("L1"),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null));
         assertTrue(group.awaitIndexCommitted("L2", 3));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null),
-            group.syncStateLogs("L2"));
+        assertEquals(group.syncStateLogs("L2"),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating, null));
     }
 
     @Test(groups = "integration")
@@ -495,7 +495,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         done.join();
         assertTrue(done.isDone() && !done.isCompletedExceptionally());
         await().until(() -> group.currentLeader().isPresent() && !leader.equals(group.currentLeader().get()));
-        assertEquals(Arrays.asList(RaftNodeSyncState.Replicating, null), group.syncStateLogs(leader));
+        assertEquals(group.syncStateLogs(leader), Arrays.asList(RaftNodeSyncState.Replicating, null));
         assertTrue(
             RaftNodeStatus.Follower == group.nodeState(leader) || RaftNodeStatus.Candidate == group.nodeState(leader));
     }
@@ -512,7 +512,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         newVoters.remove(follower);
         group.changeClusterConfig(leader, newVoters, Collections.emptySet())
             .handle((r, e) -> {
-                assertSame(LEADER_STEP_DOWN, e);
+                assertSame(e, LEADER_STEP_DOWN);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }
@@ -525,7 +525,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("V1", 0, 0, ClusterConfig.getDefaultInstance(), raftConfig());
         group.connect("V1");
         group.await(ticks(5));
-        assertEquals(RaftNodeStatus.Candidate, group.nodeState("V1"));
+        assertEquals(group.nodeState("V1"), RaftNodeStatus.Candidate);
     }
 
     @Cluster(v = "")
@@ -541,7 +541,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.connect("V1");
         group.await(ticks(5));
         // the node should be un-promotable
-        assertEquals(RaftNodeStatus.Candidate, group.nodeState("V1"));
+        assertEquals(group.nodeState("V1"), RaftNodeStatus.Candidate);
     }
 
     @Cluster(v = "V1")
@@ -551,7 +551,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         // V2 should stay in follower state
         group.connect("V2");
         group.await(ticks(5));
-        assertEquals(RaftNodeStatus.Candidate, group.nodeState("V2"));
+        assertEquals(group.nodeState("V2"), RaftNodeStatus.Candidate);
 
         String leader = group.currentLeader().get();
         log.info("Change cluster config to voters=[V1,V2]");
@@ -559,6 +559,6 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
 
         assertTrue(group.awaitIndexCommitted("V1", 3));
         assertTrue(group.awaitIndexCommitted("V2", 3));
-        assertEquals(2, group.latestClusterConfig("V2").getVotersCount());
+        assertEquals(group.latestClusterConfig("V2").getVotersCount(), 2);
     }
 }

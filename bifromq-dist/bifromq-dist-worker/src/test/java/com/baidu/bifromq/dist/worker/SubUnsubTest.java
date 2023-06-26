@@ -19,8 +19,8 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.ClearSubInfoReply;
@@ -40,20 +40,20 @@ public class SubUnsubTest extends DistWorkerTest {
             toQualifiedInboxId(MqttBroker, "inbox1", "server1")).toStringUtf8();
         AddTopicFilterReply reply = addTopicFilter("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1",
             "server1");
-        assertEquals(AddTopicFilterReply.Result.OK,
-            reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"),
+            AddTopicFilterReply.Result.OK);
 
         reply = addTopicFilter("trafficA", "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(AddTopicFilterReply.Result.OK,
-            reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"),
+            AddTopicFilterReply.Result.OK);
 
         reply = addTopicFilter("trafficA", "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(AddTopicFilterReply.Result.OK,
-            reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"),
+            AddTopicFilterReply.Result.OK);
 
         reply = addTopicFilter("trafficA", "/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(AddTopicFilterReply.Result.OK,
-            reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"),
+            AddTopicFilterReply.Result.OK);
     }
 
     @Test(groups = "integration")
@@ -65,50 +65,50 @@ public class SubUnsubTest extends DistWorkerTest {
         String topicFilter = "/a/b/c";
         RemoveTopicFilterReply reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1",
             "server2");
-        assertEquals(RemoveTopicFilterReply.Result.NonExist,
-            reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.NonExist);
 
         addTopicFilter("trafficA", topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server2");
-        assertEquals(RemoveTopicFilterReply.Result.NonExist,
-            reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.NonExist);
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server1");
-        assertEquals(RemoveTopicFilterReply.Result.Exist,
-            reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.Exist);
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server1");
-        assertEquals(RemoveTopicFilterReply.Result.NonExist,
-            reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.NonExist);
 
         addTopicFilter("trafficA", topicFilter, AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server2");
-        assertEquals(RemoveTopicFilterReply.Result.NonExist,
-            reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.NonExist);
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server1");
-        assertEquals(RemoveTopicFilterReply.Result.Exist,
-            reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.Exist);
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server1");
-        assertEquals(RemoveTopicFilterReply.Result.NonExist,
-            reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.NonExist);
 
         addTopicFilter("trafficA", topicFilter, EXACTLY_ONCE, MqttBroker, "inbox1", "server1");
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server2");
-        assertEquals(RemoveTopicFilterReply.Result.NonExist,
-            reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_2).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.NonExist);
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server1");
-        assertEquals(RemoveTopicFilterReply.Result.Exist,
-            reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.Exist);
 
         reply = removeTopicFilter("trafficA", topicFilter, MqttBroker, "inbox1", "server1");
-        assertEquals(RemoveTopicFilterReply.Result.NonExist,
-            reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter));
+        assertEquals(reply.getResultMap().get(subInfoKeyUtf8_1).getResultMap().get(topicFilter),
+            RemoveTopicFilterReply.Result.NonExist);
     }
 
     @Test(groups = "integration")
@@ -131,22 +131,22 @@ public class SubUnsubTest extends DistWorkerTest {
 
         JoinMatchGroupReply reply = joinMatchGroup(trafficId, topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1",
             "server1");
-        assertEquals(JoinMatchGroupReply.Result.OK,
-            reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId));
+        assertEquals(reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId),
+            JoinMatchGroupReply.Result.OK);
 
         qInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "server2");
         matchRecordKeyUtf8 = matchRecordKey(trafficId, topicFilter, qInboxId).toStringUtf8();
         reply = joinMatchGroup(trafficId, topicFilter, AT_LEAST_ONCE, MqttBroker, "inbox1",
             "server2");
-        assertEquals(JoinMatchGroupReply.Result.OK,
-            reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId));
+        assertEquals(reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId),
+            JoinMatchGroupReply.Result.OK);
 
         qInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "server3");
         matchRecordKeyUtf8 = matchRecordKey(trafficId, topicFilter, qInboxId).toStringUtf8();
         reply = joinMatchGroup(trafficId, topicFilter, EXACTLY_ONCE, MqttBroker, "inbox1",
             "server3");
-        assertEquals(JoinMatchGroupReply.Result.OK,
-            reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId));
+        assertEquals(reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId),
+            JoinMatchGroupReply.Result.OK);
     }
 
     @Test(groups = "integration")
@@ -185,8 +185,8 @@ public class SubUnsubTest extends DistWorkerTest {
         addTopicFilter("trafficA", "$share/group/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server1");
 
         reply = clearSubInfo("trafficA", MqttBroker, "inbox1", "server1");
-        assertEquals(Map.of("/a/b/c", AT_LEAST_ONCE, "$share/group/a/b/c", EXACTLY_ONCE),
-            reply.getSubInfo(0).getTopicFiltersMap());
+        assertEquals(reply.getSubInfo(0).getTopicFiltersMap(),
+            Map.of("/a/b/c", AT_LEAST_ONCE, "$share/group/a/b/c", EXACTLY_ONCE));
 
         reply = clearSubInfo("trafficA", MqttBroker, "inbox1", "server1");
         assertTrue(reply.getSubInfo(0).getTopicFiltersMap().isEmpty());

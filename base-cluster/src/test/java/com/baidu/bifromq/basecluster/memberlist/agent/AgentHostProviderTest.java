@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
@@ -69,10 +69,10 @@ public class AgentHostProviderTest {
             put(endpoint2, hostMember2);
         }});
 
-        assertEquals(1, hostProvider1.getHostEndpoints().blockingFirst().size());
+        assertEquals(hostProvider1.getHostEndpoints().blockingFirst().size(), 1);
         assertTrue(hostProvider1.getHostEndpoints().blockingFirst().contains(endpoint1));
 
-        assertEquals(2, hostProvider2.getHostEndpoints().blockingFirst().size());
+        assertEquals(hostProvider2.getHostEndpoints().blockingFirst().size(), 2);
         assertTrue(hostProvider2.getHostEndpoints().blockingFirst().containsAll(Sets.newHashSet(endpoint1, endpoint2)));
     }
 }

@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
-import static org.testng.AssertJUnit.fail;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -181,11 +181,11 @@ public class MQTTPubSubTest extends MQTTTest {
 
 
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(topic, msg.topic);
-        assertEquals(0, msg.qos);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, 0);
         assertFalse(msg.isDup);
         assertFalse(msg.isRetain);
-        assertEquals(ByteString.copyFromUtf8("hello"), msg.payload);
+        assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
         subClient.unsubscribe(topic);
         subClient.disconnect();
         subClient.close();
@@ -264,11 +264,11 @@ public class MQTTPubSubTest extends MQTTTest {
 
         subClient.connect(subClientOpts);
         MqttMsg msg = subClient.messageArrived().blockingFirst();
-        assertEquals(topic, msg.topic);
-        assertEquals(Math.min(pubQoS, subQoS), msg.qos);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, Math.min(pubQoS, subQoS));
         assertFalse(msg.isDup);
         assertFalse(msg.isRetain);
-        assertEquals(ByteString.copyFromUtf8("hello"), msg.payload);
+        assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
 
         pubClient.disconnect();
         pubClient.close();
@@ -291,11 +291,11 @@ public class MQTTPubSubTest extends MQTTTest {
         Observable<MqttMsg> topicSub = client.subscribe(topicFilter, subQoS);
         client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(topic, msg.topic);
-        assertEquals(Math.min(pubQoS, subQoS), msg.qos);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, Math.min(pubQoS, subQoS));
         assertFalse(msg.isDup);
         assertFalse(msg.isRetain);
-        assertEquals(ByteString.copyFromUtf8("hello"), msg.payload);
+        assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
         client.unsubscribe(topicFilter);
         client.disconnect();
         client.close();
@@ -337,14 +337,14 @@ public class MQTTPubSubTest extends MQTTTest {
         }
         try {
             latch.await();
-            assertEquals(msgList.size(), responseList.size());
+            assertEquals(responseList.size(), msgList.size());
             assertTrue(checkMsgIdConsecutive(msgList, responseList));
             for (int index = 0; index < responseList.size(); index++) {
                 MqttResponse mqttResponse = responseList.get(index);
                 if (mqttMessages[index].getQos() == 1) {
-                    assertEquals(mqttResponse.type, MqttWireMessage.MESSAGE_TYPE_PUBACK);
+                    assertEquals(MqttWireMessage.MESSAGE_TYPE_PUBACK, mqttResponse.type);
                 } else if (mqttMessages[index].getQos() == 2) {
-                    assertEquals(mqttResponse.type, MqttWireMessage.MESSAGE_TYPE_PUBCOMP);
+                    assertEquals(MqttWireMessage.MESSAGE_TYPE_PUBCOMP, mqttResponse.type);
                 } else {
                     fail();
                 }

@@ -18,7 +18,7 @@ import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.singleDot;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.singleMap;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.singleValue;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -47,7 +47,7 @@ public class DotMapTest {
         assertTrue(dotMap.add(singleMap(key1, singleDot(replicaA, 1))));
         assertFalse(dotMap.isBottom());
         TestUtil.assertUnorderedSame(Sets.<ByteString>newHashSet(key1).iterator(), dotMap.dotSetKeys());
-        assertEquals(Sets.newHashSet(dot(replicaA, 1)), Sets.newHashSet(dotMap));
+        assertEquals(Sets.newHashSet(dotMap), Sets.newHashSet(dot(replicaA, 1)));
     }
 
     @Test

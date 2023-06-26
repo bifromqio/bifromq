@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_INVALID_CLIENT_ID;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 
@@ -36,7 +36,7 @@ public class MQTTBadConnectMessageTest extends MQTTTest {
         connOpts.setCleanSession(false);
         connOpts.setWill("/abc", new byte[] {}, 0, false);
         MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
-        assertEquals(REASON_CODE_INVALID_CLIENT_ID, e.getReasonCode());
+        assertEquals(e.getReasonCode(), REASON_CODE_INVALID_CLIENT_ID);
 
         verify(eventCollector).report(argThat(event -> event instanceof IdentifierRejected));
         mqttClient.close();
@@ -51,7 +51,7 @@ public class MQTTBadConnectMessageTest extends MQTTTest {
         connOpts.setCleanSession(false);
         connOpts.setWill("/abc", new byte[] {}, 0, false);
         MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
-        assertEquals(REASON_CODE_INVALID_CLIENT_ID, e.getReasonCode());
+        assertEquals(e.getReasonCode(), REASON_CODE_INVALID_CLIENT_ID);
 
         verify(eventCollector).report(argThat(event -> event instanceof IdentifierRejected));
     }

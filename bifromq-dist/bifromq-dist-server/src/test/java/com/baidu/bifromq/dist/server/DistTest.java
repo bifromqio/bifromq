@@ -15,7 +15,7 @@ package com.baidu.bifromq.dist.server;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.SubResult;
@@ -72,7 +72,7 @@ public class DistTest extends DistServiceTest {
                         log.info("Error", e);
                     }
                     latch.countDown();
-                    assertEquals(DistResult.Succeed.type(), v.type());
+                    assertEquals(v.type(), DistResult.Succeed.type());
                 });
         }
         latch.await();
@@ -110,7 +110,7 @@ public class DistTest extends DistServiceTest {
                         log.info("Error", e);
                     }
                     latch.countDown();
-                    assertEquals(DistResult.Succeed.type(), v.type());
+                    assertEquals(v.type(), DistResult.Succeed.type());
                 });
         }
         latch.await();
@@ -139,7 +139,7 @@ public class DistTest extends DistServiceTest {
             clientInfo = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("user" + i).build();
             SubResult subResult = distClient().sub(reqId, "$share/g1/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i,
                 "server1", 0, clientInfo).get();
-            assertEquals(Type.OK_QoS1, subResult.type());
+            assertEquals(subResult.type(), Type.OK_QoS1);
         }
         CountDownLatch latch = new CountDownLatch(totalMsg);
         for (int i = 0; i < totalMsg; i++) {
@@ -150,7 +150,7 @@ public class DistTest extends DistServiceTest {
                         log.info("Error", e);
                     }
                     latch.countDown();
-                    assertEquals(DistResult.Succeed.type(), v.type());
+                    assertEquals(v.type(), DistResult.Succeed.type());
                 });
         }
         latch.await();
@@ -202,7 +202,7 @@ public class DistTest extends DistServiceTest {
                 msgCount += msgs.getMessageCount() * inboxes.size();
             }
         }
-        assertEquals(totalInbox, subInfos.size());
-        assertEquals(totalInbox * totalPub, msgCount);
+        assertEquals(subInfos.size(), totalInbox);
+        assertEquals(msgCount, totalInbox * totalPub);
     }
 }

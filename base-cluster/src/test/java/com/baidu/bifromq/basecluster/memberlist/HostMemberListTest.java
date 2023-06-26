@@ -20,7 +20,7 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_REPLICA_ID
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.ZOMBIE_ENDPOINT;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -99,14 +99,14 @@ public class HostMemberListTest {
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         HostMember local = memberList.local();
-        assertEquals(LOCAL_REPLICA_ID, local.getEndpoint().getId());
-        assertEquals(LOCAL_ADDR.getHostName(), local.getEndpoint().getAddress());
-        assertEquals(LOCAL_ADDR.getPort(), local.getEndpoint().getPort());
+        assertEquals(local.getEndpoint().getId(), LOCAL_REPLICA_ID);
+        assertEquals(local.getEndpoint().getAddress(), LOCAL_ADDR.getHostName());
+        assertEquals(local.getEndpoint().getPort(), LOCAL_ADDR.getPort());
         assertTrue(local.getIncarnation() >= 0);
         assertTrue(local.getAgentIdList().isEmpty());
         assertTrue(memberList.agents().isEmpty());
         Map<HostEndpoint, Integer> hostMap = memberList.members().blockingFirst();
-        assertEquals(1, hostMap.size());
+        assertEquals(hostMap.size(), 1);
         assertTrue(local.getIncarnation() == hostMap.get(local.getEndpoint()));
     }
 
@@ -118,12 +118,12 @@ public class HostMemberListTest {
                 messenger, scheduler, store, addressResolver);
             HostMember local = memberList.local();
             IAgent agent = memberList.host(agentId);
-            assertEquals(1, memberList.agents().size());
+            assertEquals(memberList.agents().size(), 1);
             assertTrue(memberList.agents().contains(agentId));
-            assertEquals(1, mockAgent.constructed().size());
+            assertEquals(mockAgent.constructed().size(), 1);
             assertTrue(local.getIncarnation() + 1 == memberList.local().getIncarnation());
             Map<HostEndpoint, Integer> hostMap = memberList.members().blockingFirst();
-            assertEquals(1, hostMap.size());
+            assertEquals(hostMap.size(), 1);
             assertTrue(local.getIncarnation() + 1 == hostMap.get(local.getEndpoint()));
 
             verify(hostListCRDT, times(2)).execute(any(ORMapOperation.ORMapUpdate.class));
@@ -140,8 +140,8 @@ public class HostMemberListTest {
             memberList.host(agentId);
             when(mockAgent.constructed().get(0).quit()).thenReturn(CompletableFuture.completedFuture(null));
             memberList.stopHosting(agentId);
-            assertEquals(0, memberList.local().getAgentIdCount());
-            assertEquals(0, memberList.agents().size());
+            assertEquals(memberList.local().getAgentIdCount(), 0);
+            assertEquals(memberList.agents().size(), 0);
             assertTrue(local.getIncarnation() + 2 == memberList.local().getIncarnation());
             Map<HostEndpoint, Integer> hostMap = memberList.members().blockingFirst();
             assertTrue(local.getIncarnation() + 2 == hostMap.get(local.getEndpoint()));
@@ -187,14 +187,14 @@ public class HostMemberListTest {
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(hostListCRDT, times(2)).execute(opCap.capture());
-        assertEquals(CausalCRDTType.mvreg, ((ORMapOperation.ORMapRemove) opCap.getAllValues().get(1)).valueType);
-        assertEquals(ZOMBIE_ENDPOINT.toByteString(), opCap.getAllValues().get(1).keyPath[0]);
+        assertEquals(((ORMapOperation.ORMapRemove) opCap.getAllValues().get(1)).valueType, CausalCRDTType.mvreg);
+        assertEquals(opCap.getAllValues().get(1).keyPath[0], ZOMBIE_ENDPOINT.toByteString());
 
         ArgumentCaptor<ClusterMessage> msgCap = ArgumentCaptor.forClass(ClusterMessage.class);
         verify(messenger).spread(msgCap.capture());
 
-        assertEquals(ZOMBIE_ENDPOINT, msgCap.getValue().getQuit().getEndpoint());
-        assertEquals(Integer.MAX_VALUE, msgCap.getValue().getQuit().getIncarnation());
+        assertEquals(msgCap.getValue().getQuit().getEndpoint(), ZOMBIE_ENDPOINT);
+        assertEquals(msgCap.getValue().getQuit().getIncarnation(), Integer.MAX_VALUE);
     }
 
     @Test
@@ -215,9 +215,9 @@ public class HostMemberListTest {
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(messenger, times(1)).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(LOCAL_ENDPOINT, msgCap.getValue().getJoin().getMember().getEndpoint());
-        assertEquals(0, msgCap.getValue().getJoin().getMember().getIncarnation());
-        assertEquals(REMOTE_ADDR_1, addrCap.getValue());
+        assertEquals(msgCap.getValue().getJoin().getMember().getEndpoint(), LOCAL_ENDPOINT);
+        assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 0);
+        assertEquals(addrCap.getValue(), REMOTE_ADDR_1);
         assertTrue(reliableCap.getValue());
     }
 
@@ -229,14 +229,14 @@ public class HostMemberListTest {
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(hostListCRDT, times(2)).execute(opCap.capture());
-        assertEquals(CausalCRDTType.mvreg, ((ORMapOperation.ORMapRemove) opCap.getAllValues().get(1)).valueType);
-        assertEquals(ZOMBIE_ENDPOINT.toByteString(), opCap.getAllValues().get(1).keyPath[0]);
+        assertEquals(((ORMapOperation.ORMapRemove) opCap.getAllValues().get(1)).valueType, CausalCRDTType.mvreg);
+        assertEquals(opCap.getAllValues().get(1).keyPath[0], ZOMBIE_ENDPOINT.toByteString());
 
         ArgumentCaptor<ClusterMessage> msgCap = ArgumentCaptor.forClass(ClusterMessage.class);
         verify(messenger).spread(msgCap.capture());
 
-        assertEquals(ZOMBIE_ENDPOINT, msgCap.getValue().getQuit().getEndpoint());
-        assertEquals(Integer.MAX_VALUE, msgCap.getValue().getQuit().getIncarnation());
+        assertEquals(msgCap.getValue().getQuit().getEndpoint(), ZOMBIE_ENDPOINT);
+        assertEquals(msgCap.getValue().getQuit().getIncarnation(), Integer.MAX_VALUE);
     }
 
     @Test
@@ -251,15 +251,15 @@ public class HostMemberListTest {
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(hostListCRDT, times(3)).execute(opCap.capture());
-        assertEquals(CausalCRDTType.mvreg, ((ORMapOperation.ORMapRemove) opCap.getAllValues().get(2)).valueType);
-        assertEquals(REMOTE_HOST_1_ENDPOINT.toByteString(), opCap.getAllValues().get(2).keyPath[0]);
+        assertEquals(((ORMapOperation.ORMapRemove) opCap.getAllValues().get(2)).valueType, CausalCRDTType.mvreg);
+        assertEquals(opCap.getAllValues().get(2).keyPath[0], REMOTE_HOST_1_ENDPOINT.toByteString());
     }
 
     @Test
     public void handleFailAndRenew() {
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
-        assertEquals(0, memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue());
+        assertEquals(memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue(), 0);
 
 
         messageSubject.onNext(failMsg(LOCAL_ENDPOINT, 0));
@@ -267,13 +267,13 @@ public class HostMemberListTest {
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(hostListCRDT, times(2)).execute(opCap.capture());
-        assertEquals(LOCAL_ENDPOINT.toByteString(), opCap.getAllValues().get(1).keyPath[0]);
+        assertEquals(opCap.getAllValues().get(1).keyPath[0], LOCAL_ENDPOINT.toByteString());
 
         ArgumentCaptor<ClusterMessage> msgCap = ArgumentCaptor.forClass(ClusterMessage.class);
         verify(messenger).spread(msgCap.capture());
-        assertEquals(1, msgCap.getValue().getJoin().getMember().getIncarnation());
+        assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 1);
 
-        assertEquals(1, memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue());
+        assertEquals(memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue(), 1);
     }
 
     @Test
@@ -331,12 +331,12 @@ public class HostMemberListTest {
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(hostListCRDT, times(2)).execute(opCap.capture());
-        assertEquals(LOCAL_ENDPOINT.toByteString(), opCap.getAllValues().get(1).keyPath[0]);
+        assertEquals(opCap.getAllValues().get(1).keyPath[0], LOCAL_ENDPOINT.toByteString());
 
         ArgumentCaptor<ClusterMessage> msgCap = ArgumentCaptor.forClass(ClusterMessage.class);
         verify(messenger).spread(msgCap.capture());
-        assertEquals(1, msgCap.getValue().getJoin().getMember().getIncarnation());
-        assertEquals(1, memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue());
+        assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 1);
+        assertEquals(memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue(), 1);
     }
 
     @Test
@@ -345,7 +345,7 @@ public class HostMemberListTest {
             messenger, scheduler, store, addressResolver);
         messageSubject.onNext(doubtMsg(REMOTE_HOST_1_ENDPOINT, 0));
         verify(messenger, times(0)).spread(any());
-        assertEquals(0, memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue());
+        assertEquals(memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue(), 0);
     }
 
 

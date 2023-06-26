@@ -22,7 +22,7 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.endorseMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.failMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.joinMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.quitMsg;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -117,9 +117,9 @@ public class AutoHealerTest {
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(messenger, timeout(1500).atLeast(1)).send(msgCap.capture(), addCap.capture(), reliableCap.capture());
 
-        assertEquals(LOCAL_ENDPOINT, msgCap.getValue().getJoin().getMember().getEndpoint());
-        assertEquals(0, msgCap.getValue().getJoin().getMember().getIncarnation());
-        assertEquals(REMOTE_ADDR_1, addCap.getValue());
+        assertEquals(msgCap.getValue().getJoin().getMember().getEndpoint(), LOCAL_ENDPOINT);
+        assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 0);
+        assertEquals(addCap.getValue(), REMOTE_ADDR_1);
         assertTrue(reliableCap.getValue());
     }
 

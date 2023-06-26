@@ -14,7 +14,7 @@
 package com.baidu.bifromq.plugin.eventcollector;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.baidu.bifromq.type.ClientInfo;
@@ -44,7 +44,7 @@ public class EventCollectorManagerTest {
     public void ReportEvent() {
         EventCollectorManager manager = new EventCollectorManager(pluginManager);
         EventCollectorTestStub collector = (EventCollectorTestStub) manager.get(EventCollectorTestStub.class.getName());
-        assertEquals(0, collector.events.size());
+        assertEquals(collector.events.size(), 0);
         manager.report(ThreadLocalEventPool.getLocal(PingReq.class).clientInfo(ClientInfo.getDefaultInstance()));
         await().until(() -> collector.events.size() == 1);
     }

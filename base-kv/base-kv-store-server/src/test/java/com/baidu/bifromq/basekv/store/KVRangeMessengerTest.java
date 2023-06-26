@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,8 +59,8 @@ public class KVRangeMessengerTest {
         messenger.send(KVRangeMessage.getDefaultInstance());
         ArgumentCaptor<StoreMessage> messageCap = ArgumentCaptor.forClass(StoreMessage.class);
         verify(storeMessenger).send(messageCap.capture());
-        assertEquals(srcStoreId, messageCap.getValue().getFrom());
-        assertEquals(srcRangeId, messageCap.getValue().getSrcRange());
+        assertEquals(messageCap.getValue().getFrom(), srcStoreId);
+        assertEquals(messageCap.getValue().getSrcRange(), srcRangeId);
     }
 
     @Test
@@ -87,8 +87,8 @@ public class KVRangeMessengerTest {
         rangeMsgObserver.awaitCount(1);
 
         KVRangeMessage receivedMsg = rangeMsgObserver.values().get(0);
-        assertEquals(srcStoreId, receivedMsg.getHostStoreId());
-        assertEquals(srcRangeId, receivedMsg.getRangeId());
+        assertEquals(receivedMsg.getHostStoreId(), srcStoreId);
+        assertEquals(receivedMsg.getRangeId(), srcRangeId);
     }
 
     @SneakyThrows
@@ -116,7 +116,7 @@ public class KVRangeMessengerTest {
             .build();
         incomingStoreMsg.onNext(storeMessage);
         rangeMsgObserver.await(100, TimeUnit.MILLISECONDS);
-        assertEquals(0, rangeMsgObserver.values().size());
+        assertEquals(rangeMsgObserver.values().size(), 0);
 
         rangeMessage = KVRangeMessage.newBuilder()
             .setHostStoreId(targetStoreId1)
@@ -129,7 +129,7 @@ public class KVRangeMessengerTest {
             .build();
         incomingStoreMsg.onNext(storeMessage);
         rangeMsgObserver.await(100, TimeUnit.MILLISECONDS);
-        assertEquals(0, rangeMsgObserver.values().size());
+        assertEquals(rangeMsgObserver.values().size(), 0);
     }
 
     @Test

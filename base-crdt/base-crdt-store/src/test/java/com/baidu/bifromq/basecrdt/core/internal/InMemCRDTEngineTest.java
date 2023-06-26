@@ -16,7 +16,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.aworset;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 
 import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
@@ -44,7 +44,7 @@ public class InMemCRDTEngineTest {
         Replica mvRegReplica = engine.host(toURI(mvreg, "mvreg"));
         Replica aworsetReplica = engine.host(toURI(aworset, "aworset"), mvRegReplica.getId());
 
-        assertEquals(mvRegReplica.getId(), aworsetReplica.getId());
+        assertEquals(aworsetReplica.getId(), mvRegReplica.getId());
         assertNotEquals(engine.get(toURI(aworset, "aworset")).get(), engine.get(toURI(mvreg, "mvreg")).get());
     }
 }

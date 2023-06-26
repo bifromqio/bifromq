@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
 import static com.baidu.bifromq.basecluster.memberlist.agent.MockUtil.toAgentMemberAddr;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -114,10 +114,10 @@ public class AgentMemberTest {
 
         AgentMember agentMember = new AgentMember(agentMemberAddr, orMap, agentMessenger, scheduler, memberAddresses);
         AgentMemberMetadata metadata = agentMember.metadata();
-        assertEquals(ByteString.EMPTY, metadata.getValue());
+        assertEquals(metadata.getValue(), ByteString.EMPTY);
 
         agentMember.metadata(ByteString.EMPTY); // nothing will happen to crdt
-        assertEquals(metadata, agentMember.metadata());
+        assertEquals(agentMember.metadata(), metadata);
 
         agentMember.metadata(meta2);
 
@@ -127,18 +127,18 @@ public class AgentMemberTest {
         assertTrue(op instanceof ORMapOperation.ORMapUpdate);
         assertTrue(((ORMapOperation.ORMapUpdate) op).valueOp instanceof MVRegOperation);
         AgentMemberAddr key = AgentMemberAddr.parseFrom(op.keyPath[0]);
-        assertEquals(agentMemberName, key.getName());
-        assertEquals(endpoint1, key.getEndpoint());
+        assertEquals(key.getName(), agentMemberName);
+        assertEquals(key.getEndpoint(), endpoint1);
 
         AgentMemberMetadata agentMemberMetadata1 =
             AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate) op).valueOp).value);
-        assertEquals(ByteString.EMPTY, agentMemberMetadata1.getValue());
+        assertEquals(agentMemberMetadata1.getValue(), ByteString.EMPTY);
         assertTrue(agentMemberMetadata1.getHlc() > 0);
 
         op = orMapOpCap.getAllValues().get(1);
         AgentMemberMetadata agentMemberMetadata2 =
             AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate) op).valueOp).value);
-        assertEquals(meta2, agentMemberMetadata2.getValue());
+        assertEquals(agentMemberMetadata2.getValue(), meta2);
         assertTrue(agentMemberMetadata1.getHlc() < agentMemberMetadata2.getHlc());
     }
 
@@ -154,9 +154,9 @@ public class AgentMemberTest {
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(agentMessenger, times(1)).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(ByteString.EMPTY, msgCap.getValue().getPayload());
-        assertEquals(agentMemberAddr, msgCap.getValue().getSender());
-        assertEquals(agentMemberAddr, addrCap.getValue());
+        assertEquals(msgCap.getValue().getPayload(), ByteString.EMPTY);
+        assertEquals(msgCap.getValue().getSender(), agentMemberAddr);
+        assertEquals(addrCap.getValue(), agentMemberAddr);
         assertTrue(reliableCap.getValue());
     }
 
@@ -205,11 +205,11 @@ public class AgentMemberTest {
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(agentMessenger, times(1)).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(ByteString.EMPTY, msgCap.getValue().getPayload());
-        assertEquals(agentMemberName, msgCap.getValue().getSender().getName());
-        assertEquals(endpoint1, msgCap.getValue().getSender().getEndpoint());
-        assertEquals(agentMemberName2, addrCap.getValue().getName());
-        assertEquals(endpoint1, addrCap.getValue().getEndpoint());
+        assertEquals(msgCap.getValue().getPayload(), ByteString.EMPTY);
+        assertEquals(msgCap.getValue().getSender().getName(), agentMemberName);
+        assertEquals(msgCap.getValue().getSender().getEndpoint(), endpoint1);
+        assertEquals(addrCap.getValue().getName(), agentMemberName2);
+        assertEquals(addrCap.getValue().getEndpoint(), endpoint1);
         assertFalse(reliableCap.getValue());
     }
 
@@ -232,13 +232,13 @@ public class AgentMemberTest {
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(agentMessenger, times(2)).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(ByteString.EMPTY, msgCap.getAllValues().get(0).getPayload());
-        assertEquals(1, Sets.newHashSet(msgCap.getAllValues()).size());
+        assertEquals(msgCap.getAllValues().get(0).getPayload(), ByteString.EMPTY);
+        assertEquals(Sets.newHashSet(msgCap.getAllValues()).size(), 1);
 
-        assertEquals(senderName, msgCap.getAllValues().get(0).getSender().getName());
-        assertEquals(senderName, msgCap.getAllValues().get(1).getSender().getName());
-        assertEquals(endpoint1, msgCap.getAllValues().get(0).getSender().getEndpoint());
-        assertEquals(endpoint1, msgCap.getAllValues().get(1).getSender().getEndpoint());
+        assertEquals(msgCap.getAllValues().get(0).getSender().getName(), senderName);
+        assertEquals(msgCap.getAllValues().get(1).getSender().getName(), senderName);
+        assertEquals(msgCap.getAllValues().get(0).getSender().getEndpoint(), endpoint1);
+        assertEquals(msgCap.getAllValues().get(1).getSender().getEndpoint(), endpoint1);
 
         Set<HostEndpoint> receiverEndpoints = addrCap.getAllValues().stream().map(AgentMemberAddr::getEndpoint).collect(
             Collectors.toSet());
@@ -276,7 +276,7 @@ public class AgentMemberTest {
             .setMessage(message2)
             .build());
         testObserver.awaitCount(1);
-        assertEquals(message2, testObserver.values().get(0));
+        assertEquals(testObserver.values().get(0), message2);
     }
 
     @SneakyThrows
@@ -294,8 +294,8 @@ public class AgentMemberTest {
         verify(orMap, atLeast(1)).execute(orMapOpCap.capture());
         ORMapOperation op = orMapOpCap.getAllValues().get(orMapOpCap.getAllValues().size() - 1);
         assertTrue(op instanceof ORMapOperation.ORMapRemove);
-        assertEquals(CausalCRDTType.mvreg, ((ORMapOperation.ORMapRemove) op).valueType);
+        assertEquals(((ORMapOperation.ORMapRemove) op).valueType, CausalCRDTType.mvreg);
         AgentMemberAddr key = AgentMemberAddr.parseFrom(op.keyPath[0]);
-        assertEquals(key, agentMember.address());
+        assertEquals(agentMember.address(), key);
     }
 }

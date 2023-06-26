@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
@@ -66,7 +66,7 @@ public class KVRangeStatsCollectorTest {
         statsCollector.collect().subscribe(statsObserver);
         statsObserver.awaitCount(1);
         Map<String, Double> stats = statsObserver.values().get(0);
-        assertEquals(0.0, stats.get("dataSize"), 0.0);
-        assertEquals(0.0, stats.get("walSize"), 0.0);
+        assertEquals(0.0, 0.0, stats.get("dataSize"));
+        assertEquals(0.0, 0.0, stats.get("walSize"));
     }
 }

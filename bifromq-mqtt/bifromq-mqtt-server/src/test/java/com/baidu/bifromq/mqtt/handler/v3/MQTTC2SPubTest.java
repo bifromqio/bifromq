@@ -36,9 +36,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
@@ -55,7 +55,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
-import org.mockito.Mockito;
 
 @Slf4j
 public class MQTTC2SPubTest extends BaseMQTTTest {
@@ -125,7 +124,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         MqttPubAckMessage ackMessage = channel.readOutbound();
-        assertEquals(123, ackMessage.variableHeader().messageId());
+        assertEquals(ackMessage.variableHeader().messageId(), 123);
         verifyEvent(2, CLIENT_CONNECTED, PUB_ACKED);
     }
 
@@ -188,14 +187,14 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         // publish
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
         MqttMessage mqttMessage = channel.readOutbound();
-        assertEquals(MqttMessageType.PUBREC, mqttMessage.fixedHeader().messageType());
-        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBREC);
+        assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
         assertTrue(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
         // publish release
         channel.writeInbound(MQTTMessageUtils.publishRelMessage(123));
         mqttMessage = channel.readOutbound();
-        assertEquals(MqttMessageType.PUBCOMP, mqttMessage.fixedHeader().messageType());
-        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
+        assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
         verifyEvent(2, CLIENT_CONNECTED, PUB_RECED);
         assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
     }
@@ -250,14 +249,14 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, PUB_REC_DROPPED);
         MqttMessage mqttMessage = channel.readOutbound();
-        assertEquals(MqttMessageType.PUBREC, mqttMessage.fixedHeader().messageType());
-        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBREC);
+        assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
 
         // continue to publish PubRel
         channel.writeInbound(MQTTMessageUtils.publishRelMessage(123));
         mqttMessage = channel.readOutbound();
-        assertEquals(MqttMessageType.PUBCOMP, mqttMessage.fixedHeader().messageType());
-        assertEquals(123, ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId());
+        assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
+        assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
         verifyEvent(2, CLIENT_CONNECTED, PUB_REC_DROPPED);
         assertFalse(sessionContext.isConfirming(trafficId, channel.id().asLongText(), 123));
     }
@@ -298,7 +297,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage);
         channel.writeInbound(publishMessage2);
         MqttPubAckMessage ackMessage = channel.readOutbound();
-        assertEquals(1, ackMessage.variableHeader().messageId());
+        assertEquals(ackMessage.variableHeader().messageId(), 1);
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACKED, DISCARD);
     }
 

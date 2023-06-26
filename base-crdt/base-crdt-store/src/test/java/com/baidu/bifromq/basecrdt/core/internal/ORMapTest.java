@@ -16,7 +16,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.ormap;
 import static java.util.Collections.emptySet;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
@@ -72,7 +72,7 @@ public class ORMapTest extends CRDTTest {
         ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica.getId(), 1000),
             executor, Duration.ofMillis(100));
         IORMap ormap = orMapInflater.getCRDT();
-        assertEquals(leftReplica, ormap.id());
+        assertEquals(ormap.id(), leftReplica);
 
         {
             // sub ormap
@@ -84,14 +84,14 @@ public class ORMapTest extends CRDTTest {
             assertTrue(subSubSet.contains(elem2));
 
             List<IORMap.ORMapKey> keys = Lists.newArrayList(ormap.keys());
-            assertEquals(1, keys.size());
-            assertEquals(key1, keys.get(0).key());
-            assertEquals(CausalCRDTType.ormap, keys.get(0).valueType());
+            assertEquals(keys.size(), 1);
+            assertEquals(keys.get(0).key(), key1);
+            assertEquals(keys.get(0).valueType(), CausalCRDTType.ormap);
 
             keys = Lists.newArrayList(subMap.keys());
-            assertEquals(1, keys.size());
-            assertEquals(key1_1, keys.get(0).key());
-            assertEquals(CausalCRDTType.aworset, keys.get(0).valueType());
+            assertEquals(keys.size(), 1);
+            assertEquals(keys.get(0).key(), key1_1);
+            assertEquals(keys.get(0).valueType(), CausalCRDTType.aworset);
 
 
             ormap.execute(ORMapOperation.remove(key1).of(CausalCRDTType.ormap)).join();
@@ -99,10 +99,10 @@ public class ORMapTest extends CRDTTest {
             assertFalse(subSubSet.contains(elem2));
 
             keys = Lists.newArrayList(ormap.keys());
-            assertEquals(0, keys.size());
+            assertEquals(keys.size(), 0);
 
             keys = Lists.newArrayList(subMap.keys());
-            assertEquals(0, keys.size());
+            assertEquals(keys.size(), 0);
         }
 
         {
@@ -136,29 +136,29 @@ public class ORMapTest extends CRDTTest {
             ICCounter subCounter = ormap.getCCounter(key1);
             ormap.execute(ORMapOperation.update(key1).with(CCounterOperation.add(10)));
             subCounter.execute(CCounterOperation.add(10)).join();
-            assertEquals(20, subCounter.read());
+            assertEquals(subCounter.read(), 20);
             ormap.execute(ORMapOperation.update(key1).with(CCounterOperation.zeroOut())).join();
-            assertEquals(0, subCounter.read());
+            assertEquals(subCounter.read(), 0);
         }
 
         {
             // sub mvreg
             IMVReg subMVReg = ormap.getMVReg(key1);
             ormap.execute(ORMapOperation.update(key1).with(MVRegOperation.write(elem1))).join();
-            assertEquals(Sets.<ByteString>newHashSet(elem1), Sets.newHashSet(subMVReg.read()));
+            assertEquals(Sets.newHashSet(subMVReg.read()), Sets.<ByteString>newHashSet(elem1));
             subMVReg.execute(MVRegOperation.reset()).join();
-            assertEquals(emptySet(), Sets.newHashSet(subMVReg.read()));
+            assertEquals(Sets.newHashSet(subMVReg.read()), emptySet());
             subMVReg.execute(MVRegOperation.write(elem2)).join();
-            assertEquals(Sets.<ByteString>newHashSet(elem2), Sets.newHashSet(subMVReg.read()));
+            assertEquals(Sets.newHashSet(subMVReg.read()), Sets.<ByteString>newHashSet(elem2));
 
             IORMap subORMap = ormap.getORMap(key2);
             subMVReg = subORMap.getMVReg(key1);
             ormap.execute(ORMapOperation.update(key2, key1).with(MVRegOperation.write(elem1))).join();
-            assertEquals(Sets.<ByteString>newHashSet(elem1), Sets.newHashSet(subMVReg.read()));
+            assertEquals(Sets.newHashSet(subMVReg.read()), Sets.<ByteString>newHashSet(elem1));
             subMVReg.execute(MVRegOperation.reset()).join();
-            assertEquals(emptySet(), Sets.newHashSet(subMVReg.read()));
+            assertEquals(Sets.newHashSet(subMVReg.read()), emptySet());
             subMVReg.execute(MVRegOperation.write(elem2)).join();
-            assertEquals(Sets.<ByteString>newHashSet(elem2), Sets.newHashSet(subMVReg.read()));
+            assertEquals(Sets.newHashSet(subMVReg.read()), Sets.<ByteString>newHashSet(elem2));
         }
 
         {
@@ -225,13 +225,13 @@ public class ORMapTest extends CRDTTest {
             ICCounter right = rightMap.getCCounter(key1);
 
             left.execute(CCounterOperation.add(10)).join();
-            assertEquals(10, left.read());
+            assertEquals(left.read(), 10);
             right.execute(CCounterOperation.add(10)).join();
-            assertEquals(10, right.read());
+            assertEquals(right.read(), 10);
 
             sync(leftInflater, rightInflater);
-            assertEquals(20, left.read());
-            assertEquals(20, right.read());
+            assertEquals(left.read(), 20);
+            assertEquals(right.read(), 20);
         }
 
         {
@@ -239,13 +239,13 @@ public class ORMapTest extends CRDTTest {
             IMVReg right = rightMap.getMVReg(key1);
 
             left.execute(MVRegOperation.write(elem1)).join();
-            assertEquals(Sets.<ByteString>newHashSet(elem1), Sets.newHashSet(left.read()));
+            assertEquals(Sets.newHashSet(left.read()), Sets.<ByteString>newHashSet(elem1));
             right.execute(MVRegOperation.write(elem2)).join();
-            assertEquals(Sets.<ByteString>newHashSet(elem2), Sets.newHashSet(right.read()));
+            assertEquals(Sets.newHashSet(right.read()), Sets.<ByteString>newHashSet(elem2));
 
             sync(leftInflater, rightInflater);
-            assertEquals(Sets.newHashSet(elem1, elem2), Sets.newHashSet(left.read()));
-            assertEquals(Sets.newHashSet(elem1, elem2), Sets.newHashSet(right.read()));
+            assertEquals(Sets.newHashSet(left.read()), Sets.newHashSet(elem1, elem2));
+            assertEquals(Sets.newHashSet(right.read()), Sets.newHashSet(elem1, elem2));
         }
 
         {
@@ -286,14 +286,14 @@ public class ORMapTest extends CRDTTest {
         IORMap subORMap = orMap.getORMap(key1);
         ICCounter subCtr = orMap.getCCounter(key1, key1_1);
 
-        assertEquals(subORMap, orMap.getORMap(key1));
-        assertEquals(subCtr, orMap.getCCounter(key1, key1_1));
+        assertEquals(orMap.getORMap(key1), subORMap);
+        assertEquals(orMap.getCCounter(key1, key1_1), subCtr);
 
         int hashCode = subORMap.hashCode();
         subORMap = null;
         System.gc();
         // intermediate ormap is still implicitly referenced by its child CRDT subCtr
-        assertEquals(hashCode, orMap.getORMap(key1).hashCode());
+        assertEquals(orMap.getORMap(key1).hashCode(), hashCode);
 
         int subCtrHashCode = subCtr.hashCode();
         subCtr = null;
@@ -312,14 +312,14 @@ public class ORMapTest extends CRDTTest {
         ICCounter subCtr = orMap.getCCounter(key1, key1_1);
         Disposable disposable = subCtr.inflation().subscribe(ts -> inflationCount.incrementAndGet());
         subCtr.execute(CCounterOperation.add(1)).join();
-        assertEquals(1, inflationCount.get());
+        assertEquals(inflationCount.get(), 1);
         int hashcode = subCtr.hashCode();
         subCtr = null;
         System.gc();
         subCtr = orMap.getCCounter(key1, key1_1);
-        assertEquals(hashcode, subCtr.hashCode());
+        assertEquals(subCtr.hashCode(), hashcode);
         subCtr.execute(CCounterOperation.add(1)).join();
-        assertEquals(2, inflationCount.get());
+        assertEquals(inflationCount.get(), 2);
 
         subCtr = null;
         disposable.dispose();
@@ -327,6 +327,6 @@ public class ORMapTest extends CRDTTest {
         subCtr = orMap.getCCounter(key1, key1_1);
         assertNotEquals(subCtr.hashCode(), hashcode);
         subCtr.execute(CCounterOperation.add(1)).join();
-        assertEquals(2, inflationCount.get());
+        assertEquals(inflationCount.get(), 2);
     }
 }

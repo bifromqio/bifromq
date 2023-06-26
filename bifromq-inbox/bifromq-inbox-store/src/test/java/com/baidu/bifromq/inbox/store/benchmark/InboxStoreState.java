@@ -18,7 +18,7 @@ import static com.baidu.bifromq.inbox.util.MessageUtil.buildBatchInboxInsertRequ
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildCreateRequest;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildHasRequest;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildTouchRequest;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
@@ -185,11 +185,11 @@ abstract class InboxStoreState {
                 .setKvRangeId(s.id)
                 .setRoCoProcInput(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
             assertTrue(output.getReply().hasHas());
-            assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(output.getReply().getReqId(), reqId);
             return output.getReply().getHas();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -216,11 +216,11 @@ abstract class InboxStoreState {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasCreateInbox());
-            assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(output.getReply().getReqId(), reqId);
             return output.getReply().getCreateInbox();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -242,11 +242,11 @@ abstract class InboxStoreState {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasTouch());
-            assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(output.getReply().getReqId(), reqId);
             return output.getReply().getTouch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -265,11 +265,11 @@ abstract class InboxStoreState {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasInsert());
-            assertEquals(reqId, output.getReply().getInsert());
+            assertEquals(output.getReply().getInsert(), reqId);
             return output.getReply().getInsert();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -305,11 +305,11 @@ abstract class InboxStoreState {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build(), inboxId).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
             assertTrue(output.getReply().hasInsert());
-            assertEquals(reqId, output.getReply().getReqId());
+            assertEquals(output.getReply().getReqId(), reqId);
             return output.getReply().getInsert();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);

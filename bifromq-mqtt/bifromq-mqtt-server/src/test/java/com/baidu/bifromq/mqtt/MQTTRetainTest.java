@@ -14,9 +14,9 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -92,21 +92,21 @@ public class MQTTRetainTest extends MQTTTest {
         Observable<MqttMsg> topicSub = client.subscribe(topic, subQoS);
 
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(topic, msg.topic);
-        assertEquals(Math.min(pubQoS, subQoS), msg.qos);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, Math.min(pubQoS, subQoS));
         assertFalse(msg.isDup);
         assertTrue(msg.isRetain);
-        assertEquals(payload, msg.payload);
+        assertEquals(msg.payload, payload);
 
         // unsub and sub again
         client.unsubscribe(topic);
         topicSub = client.subscribe("#", subQoS);
         msg = topicSub.blockingFirst();
-        assertEquals(topic, msg.topic);
-        assertEquals(Math.min(pubQoS, subQoS), msg.qos);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, Math.min(pubQoS, subQoS));
         assertFalse(msg.isDup);
         assertTrue(msg.isRetain);
-        assertEquals(payload, msg.payload);
+        assertEquals(msg.payload, payload);
 
         client.disconnect();
         client.close();
@@ -148,20 +148,20 @@ public class MQTTRetainTest extends MQTTTest {
         Observable<MqttMsg> topicSub = client.subscribe(topic, 1);
 
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(topic, msg.topic);
-        assertEquals(1, msg.qos);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, 1);
         assertFalse(msg.isDup);
         assertTrue(msg.isRetain);
-        assertEquals(payload, msg.payload);
+        assertEquals(msg.payload, payload);
 
         // sub again without unsub
         topicSub = client.subscribe(topic, 1);
         msg = topicSub.blockingFirst();
-        assertEquals(topic, msg.topic);
-        assertEquals(1, msg.qos);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, 1);
         assertFalse(msg.isDup);
         assertTrue(msg.isRetain);
-        assertEquals(payload, msg.payload);
+        assertEquals(msg.payload, payload);
 
         client.disconnect();
         client.close();
@@ -214,7 +214,7 @@ public class MQTTRetainTest extends MQTTTest {
         client.connect(connOpts);
         Observable<MqttMsg> topicSub = client.subscribe(topic, 1);
         client.publish(topic, pubRetainQoS, payload, true);
-        assertEquals(payload, topicSub.blockingFirst().payload);
+        assertEquals(topicSub.blockingFirst().payload, payload);
         log.info("Pub to clear retain");
         client.publish(topic, pubClearQoS, ByteString.EMPTY, true);
         log.info("Unsubscribe from topic");

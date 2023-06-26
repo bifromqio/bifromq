@@ -16,8 +16,8 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -94,10 +94,10 @@ public class DistQoS1Test extends DistWorkerTest {
 
         for (InboxPack inboxPack : messageListCap.getValue()) {
             TopicMessagePack msgs = inboxPack.messagePack;
-            assertEquals("/a/b/c", msgs.getTopic());
+            assertEquals(msgs.getTopic(), "/a/b/c");
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {
-                    assertEquals(copyFromUtf8("Hello"), msg.getPayload());
+                    assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                 }
             }
         }
@@ -140,10 +140,10 @@ public class DistQoS1Test extends DistWorkerTest {
 
         for (InboxPack inboxPack : messageListCap.getValue()) {
             TopicMessagePack msgs = inboxPack.messagePack;
-            assertEquals("/a/b/c", msgs.getTopic());
+            assertEquals(msgs.getTopic(), "/a/b/c");
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                 for (Message msg : senderMsgPack.getMessageList()) {
-                    assertEquals(copyFromUtf8("Hello"), msg.getPayload());
+                    assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                 }
             }
         }
@@ -186,10 +186,10 @@ public class DistQoS1Test extends DistWorkerTest {
         for (Iterable<InboxPack> packs : messageListCap.getAllValues()) {
             for (InboxPack pack : packs) {
                 TopicMessagePack msgs = pack.messagePack;
-                assertEquals("/a/b/c", msgs.getTopic());
+                assertEquals(msgs.getTopic(), "/a/b/c");
                 for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                     for (Message msg : senderMsgPack.getMessageList()) {
-                        assertEquals(copyFromUtf8("Hello"), msg.getPayload());
+                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                     }
                 }
             }
@@ -238,10 +238,10 @@ public class DistQoS1Test extends DistWorkerTest {
         for (Iterable<InboxPack> packs : messageListCap.getAllValues()) {
             for (InboxPack pack : packs) {
                 TopicMessagePack msgs = pack.messagePack;
-                assertEquals("/a/b/c", msgs.getTopic());
+                assertEquals(msgs.getTopic(), "/a/b/c");
                 for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
                     for (Message msg : senderMsgPack.getMessageList()) {
-                        assertEquals(copyFromUtf8("Hello"), msg.getPayload());
+                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                     }
                 }
             }

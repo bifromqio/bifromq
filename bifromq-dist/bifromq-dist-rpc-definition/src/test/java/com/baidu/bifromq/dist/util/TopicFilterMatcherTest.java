@@ -17,10 +17,10 @@ package com.baidu.bifromq.dist.util;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.dist.util.TopicUtil.parse;
 import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
-import static org.testng.AssertJUnit.fail;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.common.collect.Lists;
@@ -41,20 +41,20 @@ public class TopicFilterMatcherTest {
 
     @Test
     public void testParse() {
-        assertEquals(Lists.newArrayList("", ""), parse("/", false));
-        assertEquals(Lists.newArrayList("", ""), parse(escape("/"), true));
-        assertEquals(Lists.newArrayList("", "", ""), parse("//", false));
-        assertEquals(Lists.newArrayList("", "", ""), parse(escape("//"), true));
-        assertEquals(Lists.newArrayList(" ", "", ""), parse(" //", false));
-        assertEquals(Lists.newArrayList(" ", "", ""), parse(escape(" //"), true));
-        assertEquals(Lists.newArrayList(" ", " ", " "), parse(" / / ", false));
-        assertEquals(Lists.newArrayList(" ", " ", " "), parse(escape(" / / "), true));
-        assertEquals(Lists.newArrayList("a", ""), parse("a/", false));
-        assertEquals(Lists.newArrayList("a", ""), parse(escape("a/"), true));
-        assertEquals(Lists.newArrayList("a", "b"), parse("a/b", false));
-        assertEquals(Lists.newArrayList("a", "b"), parse(escape("a/b"), true));
-        assertEquals(Lists.newArrayList("a", "b", ""), parse("a/b/", false));
-        assertEquals(Lists.newArrayList("a", "b", ""), parse(escape("a/b/"), true));
+        assertEquals(parse("/", false), Lists.newArrayList("", ""));
+        assertEquals(parse(escape("/"), true), Lists.newArrayList("", ""));
+        assertEquals(parse("//", false), Lists.newArrayList("", "", ""));
+        assertEquals(parse(escape("//"), true), Lists.newArrayList("", "", ""));
+        assertEquals(parse(" //", false), Lists.newArrayList(" ", "", ""));
+        assertEquals(parse(escape(" //"), true), Lists.newArrayList(" ", "", ""));
+        assertEquals(parse(" / / ", false), Lists.newArrayList(" ", " ", " "));
+        assertEquals(parse(escape(" / / "), true), Lists.newArrayList(" ", " ", " "));
+        assertEquals(parse("a/", false), Lists.newArrayList("a", ""));
+        assertEquals(parse(escape("a/"), true), Lists.newArrayList("a", ""));
+        assertEquals(parse("a/b", false), Lists.newArrayList("a", "b"));
+        assertEquals(parse(escape("a/b"), true), Lists.newArrayList("a", "b"));
+        assertEquals(parse("a/b/", false), Lists.newArrayList("a", "b", ""));
+        assertEquals(parse(escape("a/b/"), true), Lists.newArrayList("a", "b", ""));
     }
 
 //    @Test
@@ -91,7 +91,7 @@ public class TopicFilterMatcherTest {
         log.info("Expand {} topics into {} topic filters costs {}ms", topicCount, topicFilters.size(),
             Duration.ofNanos(System.nanoTime() - s).toMillis());
         TreeSet<String> verifySet = Sets.newTreeSet(topicFilters);
-        assertEquals(Lists.newArrayList(verifySet), topicFilters);
+        assertEquals(topicFilters, Lists.newArrayList(verifySet));
 
         TopicFilterMatcher matcher = new TopicFilterMatcher(trie);
         for (String topicFilter : topicFilters) {
@@ -119,7 +119,7 @@ public class TopicFilterMatcherTest {
         log.info("Expand {} topics into {} topic filters costs {}ms", topicCount, topicFilters.size(),
             Duration.ofNanos(System.nanoTime() - s).toMillis());
         TreeSet<String> verifySet = Sets.newTreeSet(topicFilters);
-        assertEquals(Lists.newArrayList(verifySet), topicFilters);
+        assertEquals(topicFilters, Lists.newArrayList(verifySet));
 
 
         // test set includes additional random topic filters which may not match

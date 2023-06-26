@@ -26,7 +26,7 @@ import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.leastUpperBound;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFrom;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -38,19 +38,19 @@ public class KeyRangeUtilTest {
     @Test
     public void testLeastUpperBound() {
         assertFalse(leastUpperBound(FULL_RANGE, FULL_RANGE).isPresent());
-        assertEquals(EMPTY, leastUpperBound(FULL_RANGE, EMPTY_RANGE).get());
-        assertEquals(copyFromUtf8("b"), leastUpperBound(FULL_RANGE, range("a", "b")).get());
-        assertEquals(copyFromUtf8("b"), leastUpperBound(range("a", "b"), range("a", "b")).get());
-        assertEquals(copyFromUtf8("b"), leastUpperBound(range("a", "b"), range("a", "b1")).get());
+        assertEquals(leastUpperBound(FULL_RANGE, EMPTY_RANGE).get(), EMPTY);
+        assertEquals(leastUpperBound(FULL_RANGE, range("a", "b")).get(), copyFromUtf8("b"));
+        assertEquals(leastUpperBound(range("a", "b"), range("a", "b")).get(), copyFromUtf8("b"));
+        assertEquals(leastUpperBound(range("a", "b"), range("a", "b1")).get(), copyFromUtf8("b"));
     }
 
     @Test
     public void testGreaterLowerBound() {
         assertFalse(greaterLowerBound(FULL_RANGE, FULL_RANGE).isPresent());
         assertFalse(greaterLowerBound(FULL_RANGE, EMPTY_RANGE).isPresent());
-        assertEquals(copyFromUtf8("a"), greaterLowerBound(range("a", "b"), FULL_RANGE).get());
-        assertEquals(copyFromUtf8("a"), greaterLowerBound(range("a", "b"), range("a", "a")).get());
-        assertEquals(copyFromUtf8("a1"), greaterLowerBound(range("a", "b"), range("a1", "a")).get());
+        assertEquals(greaterLowerBound(range("a", "b"), FULL_RANGE).get(), copyFromUtf8("a"));
+        assertEquals(greaterLowerBound(range("a", "b"), range("a", "a")).get(), copyFromUtf8("a"));
+        assertEquals(greaterLowerBound(range("a", "b"), range("a1", "a")).get(), copyFromUtf8("a1"));
     }
 
     @Test
@@ -89,22 +89,22 @@ public class KeyRangeUtilTest {
         Range b_f = range("b", "f");
         Range f_g = range("f", "g");
         Range f_ = range("f", null);
-        assertEquals(a_e, intersect(a_e, a_e));
-        assertEquals(_a, intersect(_a, _a));
-        assertEquals(f_, intersect(f_, f_));
-        assertEquals(range("b", "e"), intersect(a_e, b_f));
-        assertEquals(range("b", "e"), intersect(b_f, a_e));
-        assertEquals(range("f", "g"), intersect(f_g, FULL_RANGE));
-        assertEquals(range("f", "g"), intersect(f_g, f_));
-        assertEquals(_a, intersect(_a, FULL_RANGE));
-        assertEquals(f_, intersect(f_, FULL_RANGE));
-        assertEquals(EMPTY_RANGE, intersect(_a, EMPTY_RANGE));
-        assertEquals(EMPTY_RANGE, intersect(f_, EMPTY_RANGE));
-        assertEquals(EMPTY_RANGE, intersect(_a, a_e));
-        assertEquals(EMPTY_RANGE, intersect(b_f, f_g));
-        assertEquals(EMPTY_RANGE, intersect(EMPTY_RANGE, FULL_RANGE));
-        assertEquals(EMPTY_RANGE, intersect(EMPTY_RANGE, EMPTY_RANGE));
-        assertEquals(FULL_RANGE, intersect(FULL_RANGE, FULL_RANGE));
+        assertEquals(intersect(a_e, a_e), a_e);
+        assertEquals(intersect(_a, _a), _a);
+        assertEquals(intersect(f_, f_), f_);
+        assertEquals(intersect(a_e, b_f), range("b", "e"));
+        assertEquals(intersect(b_f, a_e), range("b", "e"));
+        assertEquals(intersect(f_g, FULL_RANGE), range("f", "g"));
+        assertEquals(intersect(f_g, f_), range("f", "g"));
+        assertEquals(intersect(_a, FULL_RANGE), _a);
+        assertEquals(intersect(f_, FULL_RANGE), f_);
+        assertEquals(intersect(_a, EMPTY_RANGE), EMPTY_RANGE);
+        assertEquals(intersect(f_, EMPTY_RANGE), EMPTY_RANGE);
+        assertEquals(intersect(_a, a_e), EMPTY_RANGE);
+        assertEquals(intersect(b_f, f_g), EMPTY_RANGE);
+        assertEquals(intersect(EMPTY_RANGE, FULL_RANGE), EMPTY_RANGE);
+        assertEquals(intersect(EMPTY_RANGE, EMPTY_RANGE), EMPTY_RANGE);
+        assertEquals(intersect(FULL_RANGE, FULL_RANGE), FULL_RANGE);
     }
 
     @Test

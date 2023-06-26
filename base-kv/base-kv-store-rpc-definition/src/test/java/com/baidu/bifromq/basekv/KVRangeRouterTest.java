@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -110,17 +110,17 @@ public class KVRangeRouterTest {
             .build();
 
         router.upsert(bucket_a_e_oldVer);
-        assertEquals(convert(bucket_a_c), router.findByKey(copyFromUtf8("a")).get());
-        assertEquals(convert(bucket_c_e), router.findByKey(copyFromUtf8("c")).get());
-        assertEquals(convert(bucket_e_), router.findByKey(copyFromUtf8("e")).get());
+        assertEquals(router.findByKey(copyFromUtf8("a")).get(), convert(bucket_a_c));
+        assertEquals(router.findByKey(copyFromUtf8("c")).get(), convert(bucket_c_e));
+        assertEquals(router.findByKey(copyFromUtf8("e")).get(), convert(bucket_e_));
 
         KVRangeStoreDescriptor bucket_a_e_newVer = bucket_a_e_oldVer.toBuilder()
             .setRanges(0, bucket_a_e_oldVer.getRanges(0).toBuilder().setVer(1).build())
             .build();
         router.upsert(bucket_a_e_newVer);
-        assertEquals(convert(bucket_a_e_newVer), router.findByKey(copyFromUtf8("a")).get());
-        assertEquals(convert(bucket_a_e_newVer), router.findByKey(copyFromUtf8("c")).get());
-        assertEquals(convert(bucket_e_), router.findByKey(copyFromUtf8("e")).get());
+        assertEquals(router.findByKey(copyFromUtf8("a")).get(), convert(bucket_a_e_newVer));
+        assertEquals(router.findByKey(copyFromUtf8("c")).get(), convert(bucket_a_e_newVer));
+        assertEquals(router.findByKey(copyFromUtf8("e")).get(), convert(bucket_e_));
     }
 
     @Test
@@ -128,8 +128,8 @@ public class KVRangeRouterTest {
         KVRangeRouter router = new KVRangeRouter();
         router.upsert(bucket_e_);
         router.upsert(bucket_full_range);
-        assertEquals(1, router.findByRange(FULL_RANGE).size());
-        assertEquals(convert(bucket_full_range), router.findByRange(FULL_RANGE).get(0));
+        assertEquals(router.findByRange(FULL_RANGE).size(), 1);
+        assertEquals(router.findByRange(FULL_RANGE).get(0), convert(bucket_full_range));
     }
 
     @Test
@@ -140,10 +140,10 @@ public class KVRangeRouterTest {
         router.upsert(bucket_a_c);
         router.upsert(bucket_c_e);
         router.upsert(bucket_e_);
-        assertEquals(convert(bucket__a), router.findByKey(ByteString.EMPTY).get());
-        assertEquals(convert(bucket_a_c), router.findByKey(copyFromUtf8("a")).get());
-        assertEquals(convert(bucket_a_c), router.findByKey(copyFromUtf8("a1")).get());
-        assertEquals(convert(bucket_c_e), router.findByKey(copyFromUtf8("c")).get());
+        assertEquals(router.findByKey(ByteString.EMPTY).get(), convert(bucket__a));
+        assertEquals(router.findByKey(copyFromUtf8("a")).get(), convert(bucket_a_c));
+        assertEquals(router.findByKey(copyFromUtf8("a1")).get(), convert(bucket_a_c));
+        assertEquals(router.findByKey(copyFromUtf8("c")).get(), convert(bucket_c_e));
     }
 
     @Test
@@ -158,10 +158,10 @@ public class KVRangeRouterTest {
         assertTrue(overlapped.size() == 1 && overlapped.contains(convert(bucket__a)));
 
         overlapped = router.findByRange(Range.getDefaultInstance()); // default instance is full range
-        assertEquals(4, overlapped.size());
+        assertEquals(overlapped.size(), 4);
 
         overlapped = router.findByRange(FULL_RANGE);
-        assertEquals(4, overlapped.size());
+        assertEquals(overlapped.size(), 4);
         assertTrue(overlapped.size() == 4 &&
             overlapped.containsAll(
                 Arrays.asList(convert(bucket__a), convert(bucket_a_c), convert(bucket_c_e), convert(bucket_e_))));
@@ -176,28 +176,28 @@ public class KVRangeRouterTest {
             .setStartKey(copyFromUtf8("a1"))
             .setEndKey(copyFromUtf8("d"))
             .build());
-        assertEquals(2, overlapped.size());
-        assertEquals(Arrays.asList(convert(bucket_a_c), convert(bucket_c_e)), new ArrayList<>(overlapped));
+        assertEquals(overlapped.size(), 2);
+        assertEquals(new ArrayList<>(overlapped), Arrays.asList(convert(bucket_a_c), convert(bucket_c_e)));
 
         overlapped = router.findByRange(Range.newBuilder()
             .setStartKey(copyFromUtf8("c"))
             .setEndKey(copyFromUtf8("c"))
             .build());
-        assertEquals(0, overlapped.size());
+        assertEquals(overlapped.size(), 0);
 
         overlapped = router.findByRange(Range.newBuilder()
             .setStartKey(copyFromUtf8("c"))
             .setEndKey(copyFromUtf8("c1"))
             .build());
-        assertEquals(1, overlapped.size());
-        assertEquals(convert(bucket_c_e), overlapped.get(0));
+        assertEquals(overlapped.size(), 1);
+        assertEquals(overlapped.get(0), convert(bucket_c_e));
 
 
         overlapped = router.findByRange(Range.newBuilder()
             .setEndKey(copyFromUtf8("c"))
             .build());
-        assertEquals(2, overlapped.size());
-        assertEquals(Arrays.asList(convert(bucket__a), convert(bucket_a_c)), new ArrayList<>(overlapped));
+        assertEquals(overlapped.size(), 2);
+        assertEquals(new ArrayList<>(overlapped), Arrays.asList(convert(bucket__a), convert(bucket_a_c)));
     }
 
     @Test
@@ -209,7 +209,7 @@ public class KVRangeRouterTest {
         router.upsert(bucket_e_);
         assertTrue(router.isFullRangeCovered());
         router.reset(bucket_full_range);
-        assertEquals(convert(bucket_full_range), router.findByKey(copyFromUtf8("a")).get());
+        assertEquals(router.findByKey(copyFromUtf8("a")).get(), convert(bucket_full_range));
     }
 
     @Test

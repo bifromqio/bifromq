@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -26,7 +26,7 @@ public class NullableValueTest {
     public void testNullable() {
         NullableValue nullable = NullableValue.newBuilder().build();
         assertFalse(nullable.hasValue());
-        assertEquals(ByteString.EMPTY, nullable.getValue());
+        assertEquals(nullable.getValue(), ByteString.EMPTY);
         nullable = NullableValue.newBuilder().setValue(ByteString.EMPTY).build();
         assertTrue(nullable.hasValue());
     }

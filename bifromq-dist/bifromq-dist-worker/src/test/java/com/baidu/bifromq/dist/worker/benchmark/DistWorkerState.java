@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.dist.worker.benchmark;
 
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -168,11 +168,11 @@ public class DistWorkerState {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasClearSubInfo());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getClearSubInfo();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);

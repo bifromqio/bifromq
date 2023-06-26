@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.stats;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doAnswer;
 
@@ -42,7 +42,7 @@ public class StatsCollectorTest {
         collector.collect().subscribe(statsObserver);
         collector.tick();
         statsObserver.awaitCount(1);
-        assertEquals(0.0d, statsObserver.values().get(0).get("stat1").doubleValue(), 0.0);
+        assertEquals(0.0, 0.0d, statsObserver.values().get(0).get("stat1").doubleValue());
     }
 
     @SneakyThrows
@@ -65,7 +65,7 @@ public class StatsCollectorTest {
         collector.tick();
         collector.stop().toCompletableFuture().join();
         statsObserver.await();
-        assertEquals(2, statsObserver.values().size());
+        assertEquals(statsObserver.values().size(), 2);
     }
 
     @SneakyThrows
@@ -88,6 +88,6 @@ public class StatsCollectorTest {
         collector.tick();
         collector.stop().toCompletableFuture().join();
         statsObserver.await();
-        assertEquals(1, statsObserver.values().size());
+        assertEquals(statsObserver.values().size(), 1);
     }
 }

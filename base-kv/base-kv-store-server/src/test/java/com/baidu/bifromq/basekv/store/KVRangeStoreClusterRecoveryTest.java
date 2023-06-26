@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus.Candidate;
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
@@ -37,7 +37,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
         String leader = rangeSetting.leader;
         List<String> storeIds = cluster.allStoreIds();
-        assertEquals(2, storeIds.size());
+        assertEquals(storeIds.size(), 2);
         storeIds.remove(leader);
         cluster.shutdownStore(storeIds.get(0));
         await().ignoreExceptions().until(() -> {
@@ -59,7 +59,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         KVRangeSetting setting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
         String leader = setting.leader;
         List<String> storeIds = cluster.allStoreIds();
-        assertEquals(3, storeIds.size());
+        assertEquals(storeIds.size(), 3);
         storeIds.remove(leader);
         cluster.shutdownStore(storeIds.get(0));
         cluster.shutdownStore(storeIds.get(1));

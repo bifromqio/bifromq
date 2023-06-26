@@ -14,8 +14,8 @@
 package com.baidu.bifromq.dist.util;
 
 import static com.baidu.bifromq.dist.util.TestUtil.randomTopic;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.common.collect.Lists;
@@ -40,6 +40,6 @@ public class TopicFilterTrieTest {
         topicTrie.add(topic, Collections.singleton(TopicMessage.newBuilder().setTopic(topic).build()));
         TopicFilterTrieIterator itr = new TopicFilterTrieIterator(topicTrie);
         List<String> allFilters = TopicUtil.expand(topicTrie);
-        assertEquals(allFilters, Lists.newArrayList(itr));
+        assertEquals(Lists.newArrayList(itr), allFilters);
     }
 }

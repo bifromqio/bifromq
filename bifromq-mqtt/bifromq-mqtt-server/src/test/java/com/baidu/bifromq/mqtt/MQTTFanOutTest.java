@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -89,25 +89,25 @@ public class MQTTFanOutTest extends MQTTTest {
         pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
 
         MqttMsg msg1 = topicSub1.blockingFirst();
-        assertEquals(topic, msg1.topic);
-        assertEquals(Math.min(0, pubQoS), msg1.qos);
+        assertEquals(msg1.topic, topic);
+        assertEquals(msg1.qos, Math.min(0, pubQoS));
         assertFalse(msg1.isDup);
         assertFalse(msg1.isRetain);
-        assertEquals(ByteString.copyFromUtf8("hello"), msg1.payload);
+        assertEquals(msg1.payload, ByteString.copyFromUtf8("hello"));
 
         MqttMsg msg2 = topicSub2.blockingFirst();
-        assertEquals(topic, msg2.topic);
-        assertEquals(Math.min(1, pubQoS), msg2.qos);
+        assertEquals(msg2.topic, topic);
+        assertEquals(msg2.qos, Math.min(1, pubQoS));
         assertFalse(msg2.isDup);
         assertFalse(msg2.isRetain);
-        assertEquals(ByteString.copyFromUtf8("hello"), msg2.payload);
+        assertEquals(msg2.payload, ByteString.copyFromUtf8("hello"));
 
         MqttMsg msg3 = topicSub3.blockingFirst();
-        assertEquals(topic, msg3.topic);
-        assertEquals(Math.min(2, pubQoS), msg3.qos);
+        assertEquals(msg3.topic, topic);
+        assertEquals(msg3.qos, Math.min(2, pubQoS));
         assertFalse(msg3.isDup);
         assertFalse(msg3.isRetain);
-        assertEquals(ByteString.copyFromUtf8("hello"), msg3.payload);
+        assertEquals(msg3.payload, ByteString.copyFromUtf8("hello"));
 
         // TODO: verify event collected
 

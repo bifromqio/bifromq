@@ -15,7 +15,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.rworset;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -46,7 +46,7 @@ public class RWORSetTest extends CRDTTest {
             new RWORSetInflater(0, leftReplica, newStateLattice(leftReplica.getId(), 1000),
                 executor, Duration.ofMillis(100));
         IRWORSet rworSet = rworSetInflater.getCRDT();
-        assertEquals(leftReplica, rworSet.id());
+        assertEquals(rworSet.id(), leftReplica);
 
         assertTrue(rworSet.isEmpty());
         assertFalse(rworSet.elements().hasNext());
