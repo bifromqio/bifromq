@@ -28,7 +28,7 @@
             <lineEnding>windows</lineEnding>
             <fileMode>0755</fileMode>
             <includes>
-                <include>bin/*</include>
+                <include>bin/*.bat</include>
             </includes>
         </fileSet>
         <fileSet>

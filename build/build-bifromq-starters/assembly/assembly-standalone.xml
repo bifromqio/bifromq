@@ -28,7 +28,7 @@
             <lineEnding>unix</lineEnding>
             <fileMode>0755</fileMode>
             <includes>
-                <include>bin/*</include>
+                <include>bin/*.sh</include>
             </includes>
         </fileSet>
         <fileSet>
