@@ -66,15 +66,11 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.PluginManager;
-import org.testng.ITestListener;
-import org.testng.ITestNGMethod;
-import org.testng.ITestResult;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
 
 @Slf4j
-abstract class MQTTTest implements ITestListener {
+abstract class MQTTTest {
     protected static final String brokerURI = "tcp://127.0.0.1:1883";
     @Mock
     protected IAuthProvider authProvider;
@@ -114,19 +110,6 @@ abstract class MQTTTest implements ITestListener {
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
-
-    @Override
-    public void onTestStart(ITestResult result) {
-        ITestNGMethod method = result.getMethod();
-        Test testAn = method.getConstructorOrMethod().getMethod().getAnnotation(Test.class);
-        if (testAn != null) {
-            String[] groups = testAn.groups();
-            if (groups.length > 0) {
-                System.out.println("yes");
-            }
-        }
-        System.out.println(method.getDescription());
-    }
 
     @BeforeMethod(groups = "integration")
     public void setup() {

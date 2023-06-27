@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,7 +46,7 @@ public class KVRangeIteratorTest {
         ByteString userKey = ByteString.copyFromUtf8("key");
         when(engineIterator.key()).thenReturn(KVRangeKeys.dataKey(userKey));
         IKVIterator itr = new KVRangeIterator(() -> engineIterator);
-        assertEquals(userKey, itr.key());
+        assertEquals(itr.key(), userKey);
     }
 
     @Test
@@ -98,7 +98,7 @@ public class KVRangeIteratorTest {
         itr.seek(userKey);
         ArgumentCaptor<ByteString> captor = ArgumentCaptor.forClass(ByteString.class);
         verify(engineIterator).seek(captor.capture());
-        assertEquals(KVRangeKeys.dataKey(userKey), captor.getValue());
+        assertEquals(captor.getValue(), KVRangeKeys.dataKey(userKey));
     }
 
     @Test
@@ -108,7 +108,7 @@ public class KVRangeIteratorTest {
         itr.seekForPrev(userKey);
         ArgumentCaptor<ByteString> captor = ArgumentCaptor.forClass(ByteString.class);
         verify(engineIterator).seekForPrev(captor.capture());
-        assertEquals(KVRangeKeys.dataKey(userKey), captor.getValue());
+        assertEquals(captor.getValue(), KVRangeKeys.dataKey(userKey));
     }
 
 }

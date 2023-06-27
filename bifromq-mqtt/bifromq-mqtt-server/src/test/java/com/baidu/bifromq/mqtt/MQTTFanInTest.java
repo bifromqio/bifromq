@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -98,22 +98,22 @@ public class MQTTFanInTest extends MQTTTest {
 
         for (MqttMsg m : testObserver.values()) {
             if (m.topic.equals("/" + subQoS)) {
-                assertEquals(Math.min(0, subQoS), m.qos);
+                assertEquals(m.qos, Math.min(0, subQoS));
                 assertFalse(m.isDup);
                 assertFalse(m.isRetain);
-                assertEquals(ByteString.copyFromUtf8("hello"), m.payload);
+                assertEquals(m.payload, ByteString.copyFromUtf8("hello"));
             }
             if (m.topic.equals("/a/" + subQoS)) {
-                assertEquals(Math.min(1, subQoS), m.qos);
+                assertEquals(m.qos, Math.min(1, subQoS));
                 assertFalse(m.isDup);
                 assertFalse(m.isRetain);
-                assertEquals(ByteString.copyFromUtf8("world"), m.payload);
+                assertEquals(m.payload, ByteString.copyFromUtf8("world"));
             }
             if (m.topic.equals("/a/b" + subQoS)) {
-                assertEquals(Math.min(2, subQoS), m.qos);
+                assertEquals(m.qos, Math.min(2, subQoS));
                 assertFalse(m.isDup);
                 assertFalse(m.isRetain);
-                assertEquals(ByteString.copyFromUtf8("greeting"), m.payload);
+                assertEquals(m.payload, ByteString.copyFromUtf8("greeting"));
             }
         }
 

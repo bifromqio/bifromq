@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecluster.messenger;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -107,11 +107,11 @@ public class MessengerTransportTest {
 
         testObserver.awaitCount(2);
 
-        assertEquals(address, testObserver.values().get(0).value().sender);
-        assertEquals(address, testObserver.values().get(0).value().recipient);
-        assertEquals(packetData.get(0), testObserver.values().get(0).value().message.toByteString());
+        assertEquals(testObserver.values().get(0).value().sender, address);
+        assertEquals(testObserver.values().get(0).value().recipient, address);
+        assertEquals(testObserver.values().get(0).value().message.toByteString(), packetData.get(0));
 
-        assertEquals(address, testObserver.values().get(1).value().recipient);
-        assertEquals(packetData.get(1), testObserver.values().get(1).value().message.toByteString());
+        assertEquals(testObserver.values().get(1).value().recipient, address);
+        assertEquals(testObserver.values().get(1).value().message.toByteString(), packetData.get(1));
     }
 }

@@ -13,9 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
-import static org.testng.AssertJUnit.assertEquals;
 
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
@@ -58,15 +57,15 @@ public class MQTTMessageDebounceHandlerTest extends BaseMQTTTest {
         assertNull(channel.readInbound());
 
         channel.read();
-        assertEquals(connMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), connMsg);
         assertNull(channel.readInbound());
 
         channel.read();
-        assertEquals(pingReqMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), pingReqMsg);
         assertNull(channel.readInbound());
 
         channel.read();
-        assertEquals(connAckMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), connAckMsg);
         assertNull(channel.readInbound());
 
         channel.read();
@@ -81,8 +80,8 @@ public class MQTTMessageDebounceHandlerTest extends BaseMQTTTest {
         MqttMessage connAckMsg = MqttMessageBuilders.connAck()
             .returnCode(MqttConnectReturnCode.CONNECTION_ACCEPTED).build();
         channel.writeInbound(connMsg, connAckMsg);
-        assertEquals(connMsg, channel.readInbound());
-        assertEquals(connAckMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), connMsg);
+        assertEquals(channel.readInbound(), connAckMsg);
     }
 
     @Test
@@ -91,7 +90,7 @@ public class MQTTMessageDebounceHandlerTest extends BaseMQTTTest {
         MqttMessage connMsg = MqttMessageBuilders.connect()
             .protocolVersion(MqttVersion.MQTT_3_1_1).keepAlive(30).build();
         channel.writeInbound(connMsg);
-        assertEquals(connMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), connMsg);
 
         channel.config().setAutoRead(false);
         MqttMessage pingReqMsg = MqttMessage.PINGREQ;
@@ -99,7 +98,7 @@ public class MQTTMessageDebounceHandlerTest extends BaseMQTTTest {
         assertNull(channel.readInbound());
 
         channel.read();
-        assertEquals(pingReqMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), pingReqMsg);
         assertNull(channel.readInbound());
     }
 
@@ -111,14 +110,14 @@ public class MQTTMessageDebounceHandlerTest extends BaseMQTTTest {
         channel.writeInbound(connMsg);
         assertNull(channel.readInbound());
         channel.read();
-        assertEquals(connMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), connMsg);
 
         channel.config().setAutoRead(true);
         MqttMessage pingReqMsg = MqttMessage.PINGREQ;
         MqttMessage connAckMsg = MqttMessageBuilders.connAck()
             .returnCode(MqttConnectReturnCode.CONNECTION_ACCEPTED).build();
         channel.writeInbound(pingReqMsg, connAckMsg);
-        assertEquals(pingReqMsg, channel.readInbound());
-        assertEquals(connAckMsg, channel.readInbound());
+        assertEquals(channel.readInbound(), pingReqMsg);
+        assertEquals(channel.readInbound(), connAckMsg);
     }
 }

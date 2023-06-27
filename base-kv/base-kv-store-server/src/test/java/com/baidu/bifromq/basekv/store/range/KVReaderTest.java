@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -104,7 +104,7 @@ public class KVReaderTest {
         when(engineIteratorForPointQuery.isValid()).thenReturn(true);
         when(engineIteratorForPointQuery.key()).thenReturn(KVRangeKeys.dataKey(getKey3));
         when(engineIteratorForPointQuery.value()).thenReturn(getValue3);
-        assertEquals(getValue3, reader.get(getKey3).get());
+        assertEquals(reader.get(getKey3).get(), getValue3);
         verify(engineIteratorForPointQuery).seek(KVRangeKeys.dataKey(getKey3));
     }
 }

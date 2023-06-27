@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
@@ -52,14 +52,14 @@ public class PeerLogReplicatorStateSnapshotSyncingTest {
     @Test
     public void testInitialize() {
         assertFalse(stateSnapshotSyncing.pauseReplicating());
-        assertEquals(10, stateSnapshotSyncing.matchIndex());
-        assertEquals(11, stateSnapshotSyncing.nextIndex());
-        assertEquals(0, stateSnapshotSyncing.catchupRate());
+        assertEquals(stateSnapshotSyncing.matchIndex(), 10);
+        assertEquals(stateSnapshotSyncing.nextIndex(), 11);
+        assertEquals(stateSnapshotSyncing.catchupRate(), 0);
     }
 
     @Test
     public void testCurrentState() {
-        assertEquals(RaftNodeSyncState.SnapshotSyncing, stateSnapshotSyncing.state());
+        assertEquals(stateSnapshotSyncing.state(), RaftNodeSyncState.SnapshotSyncing);
     }
 
     @Test
@@ -74,16 +74,16 @@ public class PeerLogReplicatorStateSnapshotSyncingTest {
 
         stateSnapshotSyncing.replicateTo(10);
         assertTrue(stateSnapshotSyncing.pauseReplicating());
-        assertEquals(stateSnapshotSyncing, stateSnapshotSyncing.tick());
+        assertEquals(stateSnapshotSyncing.tick(), stateSnapshotSyncing);
         assertFalse(stateSnapshotSyncing.needHeartbeat());
-        assertEquals(stateSnapshotSyncing, stateSnapshotSyncing.tick());
+        assertEquals(stateSnapshotSyncing.tick(), stateSnapshotSyncing);
         assertTrue(stateSnapshotSyncing.needHeartbeat());
         stateSnapshotSyncing.replicateTo(10);
         PeerLogReplicatorState nextState = stateSnapshotSyncing.tick();
         assertFalse(stateSnapshotSyncing.needHeartbeat());
-        assertEquals(RaftNodeSyncState.Probing, nextState.state());
-        assertEquals(10, nextState.matchIndex());
-        assertEquals(16, nextState.nextIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.Probing);
+        assertEquals(nextState.matchIndex(), 10);
+        assertEquals(nextState.nextIndex(), 16);
     }
 
     @Test
@@ -91,9 +91,9 @@ public class PeerLogReplicatorStateSnapshotSyncingTest {
         stateSnapshotSyncing.replicateTo(10);
         assertTrue(stateSnapshotSyncing.pauseReplicating());
         PeerLogReplicatorState nextState = stateSnapshotSyncing.confirmMatch(10);
-        assertEquals(RaftNodeSyncState.Replicating, nextState.state());
-        assertEquals(10, nextState.matchIndex());
-        assertEquals(11, nextState.nextIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.Replicating);
+        assertEquals(nextState.matchIndex(), 10);
+        assertEquals(nextState.nextIndex(), 11);
     }
 
     @Test
@@ -103,8 +103,8 @@ public class PeerLogReplicatorStateSnapshotSyncingTest {
         stateSnapshotSyncing.replicateTo(10);
         assertTrue(stateSnapshotSyncing.pauseReplicating());
         PeerLogReplicatorState nextState = stateSnapshotSyncing.confirmMatch(10);
-        assertEquals(RaftNodeSyncState.SnapshotSyncing, nextState.state());
-        assertEquals(11, nextState.matchIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.SnapshotSyncing);
+        assertEquals(nextState.matchIndex(), 11);
     }
 
     @Test
@@ -112,9 +112,9 @@ public class PeerLogReplicatorStateSnapshotSyncingTest {
         stateSnapshotSyncing.replicateTo(10);
         assertTrue(stateSnapshotSyncing.pauseReplicating());
         PeerLogReplicatorState nextState = stateSnapshotSyncing.backoff(10, 10);
-        assertEquals(RaftNodeSyncState.SnapshotSyncing, nextState.state());
-        assertEquals(10, nextState.matchIndex());
-        assertEquals(11, nextState.nextIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.SnapshotSyncing);
+        assertEquals(nextState.matchIndex(), 10);
+        assertEquals(nextState.nextIndex(), 11);
     }
 
     @Test
@@ -124,7 +124,7 @@ public class PeerLogReplicatorStateSnapshotSyncingTest {
             .build();
         when(stateStorage.latestSnapshot()).thenReturn(snapshot);
         PeerLogReplicatorState nextState = stateSnapshotSyncing.replicateTo(20);
-        assertEquals(20, nextState.matchIndex());
-        assertEquals(21, nextState.nextIndex());
+        assertEquals(nextState.matchIndex(), 20);
+        assertEquals(nextState.nextIndex(), 21);
     }
 }

@@ -18,7 +18,7 @@ import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -99,10 +99,10 @@ public class KVRangeStateTest {
             .build();
         KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
         IKVRangeState.KVRangeMeta meta = accessor.metadata().blockingFirst();
-        assertEquals(snapshot.getVer(), meta.ver);
-        assertEquals(snapshot.getRange(), meta.range);
-        assertEquals(snapshot.getState(), meta.state);
-        assertEquals(snapshot.getLastAppliedIndex(), accessor.getReader().lastAppliedIndex());
+        assertEquals(meta.ver, snapshot.getVer());
+        assertEquals(meta.range, snapshot.getRange());
+        assertEquals(meta.state, snapshot.getState());
+        assertEquals(accessor.getReader().lastAppliedIndex(), snapshot.getLastAppliedIndex());
     }
 
     @Test
@@ -118,10 +118,10 @@ public class KVRangeStateTest {
 
         KVRangeState accessor = new KVRangeState(snapshot.getId(), kvEngine);
         IKVRangeState.KVRangeMeta meta = accessor.metadata().blockingFirst();
-        assertEquals(snapshot.getVer(), meta.ver);
-        assertEquals(snapshot.getRange(), meta.range);
-        assertEquals(snapshot.getState(), meta.state);
-        assertEquals(snapshot.getLastAppliedIndex(), accessor.getReader().lastAppliedIndex());
+        assertEquals(meta.ver, snapshot.getVer());
+        assertEquals(meta.range, snapshot.getRange());
+        assertEquals(meta.state, snapshot.getState());
+        assertEquals(accessor.getReader().lastAppliedIndex(), snapshot.getLastAppliedIndex());
     }
 
     @Test
@@ -136,7 +136,7 @@ public class KVRangeStateTest {
         KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
         accessor.getWriter().resetVer(2).close();
         IKVRangeState.KVRangeMeta meta = accessor.metadata().blockingFirst();
-        assertEquals(2, meta.ver);
+        assertEquals(meta.ver, 2);
     }
 
     @Test
@@ -155,11 +155,11 @@ public class KVRangeStateTest {
 
         assertTrue(accessor.hasCheckpoint(snap));
         assertTrue(snap.hasCheckpointId());
-        assertEquals(snapshot.getId(), snap.getId());
-        assertEquals(snapshot.getVer(), snap.getVer());
-        assertEquals(snapshot.getLastAppliedIndex(), snap.getLastAppliedIndex());
-        assertEquals(snapshot.getState(), snap.getState());
-        assertEquals(snapshot.getRange(), snap.getRange());
+        assertEquals(snap.getId(), snapshot.getId());
+        assertEquals(snap.getVer(), snapshot.getVer());
+        assertEquals(snap.getLastAppliedIndex(), snapshot.getLastAppliedIndex());
+        assertEquals(snap.getState(), snapshot.getState());
+        assertEquals(snap.getRange(), snapshot.getRange());
     }
 
     @Test
@@ -188,8 +188,8 @@ public class KVRangeStateTest {
         itr = accessor.open(snapshot);
         itr.seekToFirst();
         assertTrue(itr.isValid());
-        assertEquals(key, itr.key());
-        assertEquals(val, itr.value());
+        assertEquals(itr.key(), key);
+        assertEquals(itr.value(), val);
         itr.next();
         assertFalse(itr.isValid());
     }
@@ -216,14 +216,14 @@ public class KVRangeStateTest {
         rangeWriter.close();
         assertFalse(rangeReader.kvReader().exist(key));
         rangeReader.refresh();
-        assertEquals(val, rangeReader.kvReader().get(key).get());
+        assertEquals(rangeReader.kvReader().get(key).get(), val);
 
         // make a range change
         Range newRange = range.toBuilder().setStartKey(ByteString.copyFromUtf8("b")).build();
         accessor.getWriter().resetVer(1).setRange(newRange).close();
         rangeReader.refresh();
-        assertEquals(1, rangeReader.ver());
-        assertEquals(newRange, rangeReader.kvReader().range());
+        assertEquals(rangeReader.ver(), 1);
+        assertEquals(rangeReader.kvReader().range(), newRange);
         IKVIterator itr = rangeReader.kvReader().iterator();
         itr.seekToFirst();
         assertFalse(itr.isValid());
@@ -363,11 +363,11 @@ public class KVRangeStateTest {
 
         accessor = new KVRangeState(snapshot.getId(), kvEngine);
         IKVRangeReader rangeReader = accessor.getReader();
-        assertEquals(-1, rangeReader.ver());
+        assertEquals(rangeReader.ver(), -1);
 
         accessor = new KVRangeState(snapshot, kvEngine);
         rangeReader = accessor.getReader();
-        assertEquals(0, rangeReader.ver());
+        assertEquals(rangeReader.ver(), 0);
         assertFalse(rangeReader.kvReader().exist(key));
     }
 

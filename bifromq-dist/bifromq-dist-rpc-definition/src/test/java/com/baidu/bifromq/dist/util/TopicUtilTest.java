@@ -17,10 +17,10 @@ package com.baidu.bifromq.dist.util;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.dist.util.TopicUtil.isWildcardTopicFilter;
 import static com.baidu.bifromq.dist.util.TopicUtil.parse;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
-import static org.testng.AssertJUnit.fail;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -44,20 +44,20 @@ public class TopicUtilTest {
 
     @Test
     public void testParse() {
-        assertEquals(Lists.newArrayList("", ""), parse("/", false));
-        assertEquals(Lists.newArrayList("", ""), parse(escape("/"), true));
-        assertEquals(Lists.newArrayList("", "", ""), parse("//", false));
-        assertEquals(Lists.newArrayList("", "", ""), parse(escape("//"), true));
-        assertEquals(Lists.newArrayList(" ", "", ""), parse(" //", false));
-        assertEquals(Lists.newArrayList(" ", "", ""), parse(escape(" //"), true));
-        assertEquals(Lists.newArrayList(" ", " ", " "), parse(" / / ", false));
-        assertEquals(Lists.newArrayList(" ", " ", " "), parse(escape(" / / "), true));
-        assertEquals(Lists.newArrayList("a", ""), parse("a/", false));
-        assertEquals(Lists.newArrayList("a", ""), parse(escape("a/"), true));
-        assertEquals(Lists.newArrayList("a", "b"), parse("a/b", false));
-        assertEquals(Lists.newArrayList("a", "b"), parse(escape("a/b"), true));
-        assertEquals(Lists.newArrayList("a", "b", ""), parse("a/b/", false));
-        assertEquals(Lists.newArrayList("a", "b", ""), parse(escape("a/b/"), true));
+        assertEquals(parse("/", false), Lists.newArrayList("", ""));
+        assertEquals(parse(escape("/"), true), Lists.newArrayList("", ""));
+        assertEquals(parse("//", false), Lists.newArrayList("", "", ""));
+        assertEquals(parse(escape("//"), true), Lists.newArrayList("", "", ""));
+        assertEquals(parse(" //", false), Lists.newArrayList(" ", "", ""));
+        assertEquals(parse(escape(" //"), true), Lists.newArrayList(" ", "", ""));
+        assertEquals(parse(" / / ", false), Lists.newArrayList(" ", " ", " "));
+        assertEquals(parse(escape(" / / "), true), Lists.newArrayList(" ", " ", " "));
+        assertEquals(parse("a/", false), Lists.newArrayList("a", ""));
+        assertEquals(parse(escape("a/"), true), Lists.newArrayList("a", ""));
+        assertEquals(parse("a/b", false), Lists.newArrayList("a", "b"));
+        assertEquals(parse(escape("a/b"), true), Lists.newArrayList("a", "b"));
+        assertEquals(parse("a/b/", false), Lists.newArrayList("a", "b", ""));
+        assertEquals(parse(escape("a/b/"), true), Lists.newArrayList("a", "b", ""));
     }
 
     @Test
@@ -86,7 +86,7 @@ public class TopicUtilTest {
             String topicFilter = topicFilters.get(i);
             assertTrue(matcher.match(topicFilter));
             if (i < topicFilters.size() - 1) {
-                assertEquals(topicFilters.get(i + 1), matcher.next(topicFilter).get());
+                assertEquals(matcher.next(topicFilter).get(), topicFilters.get(i + 1));
             } else {
                 assertFalse(matcher.next(topicFilter).isPresent());
             }
@@ -102,7 +102,7 @@ public class TopicUtilTest {
             String topicFilter = topicFilters.get(i);
             assertTrue(matcher.match(topicFilter));
             if (i < topicFilters.size() - 1) {
-                assertEquals(topicFilters.get(i + 1), matcher.next(topicFilter).get());
+                assertEquals(matcher.next(topicFilter).get(), topicFilters.get(i + 1));
             } else {
                 assertFalse(matcher.next(topicFilter).isPresent());
             }

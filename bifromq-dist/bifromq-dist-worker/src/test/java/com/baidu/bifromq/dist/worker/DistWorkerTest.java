@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -282,11 +282,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasAddTopicFilter());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getAddTopicFilter();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -317,11 +317,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasRemoveTopicFilter());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getRemoveTopicFilter();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -353,11 +353,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasInsertMatchRecord());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getInsertMatchRecord();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -379,11 +379,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasDeleteMatchRecord());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getDeleteMatchRecord();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -415,11 +415,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasJoinMatchGroup());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getJoinMatchGroup();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -441,11 +441,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasLeaveMatchGroup());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getLeaveMatchGroup();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -468,11 +468,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRwCoProc(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
             assertTrue(updateReply.hasClearSubInfo());
-            assertEquals(reqId, updateReply.getReqId());
+            assertEquals(updateReply.getReqId(), reqId);
             return updateReply.getClearSubInfo();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
@@ -498,11 +498,11 @@ public abstract class DistWorkerTest {
                 .setKvRangeId(s.id)
                 .setRoCoProcInput(input.toByteString())
                 .build()).join();
-            assertEquals(reqId, reply.getReqId());
-            assertEquals(ReplyCode.Ok, reply.getCode());
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
             DistServiceROCoProcOutput output = DistServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
             assertTrue(output.hasDistReply());
-            assertEquals(reqId, output.getDistReply().getReqId());
+            assertEquals(output.getDistReply().getReqId(), reqId);
             return output.getDistReply();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);

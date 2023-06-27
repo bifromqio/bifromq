@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.testng.AssertJUnit.assertSame;
+import static org.testng.Assert.assertSame;
 
 import com.baidu.bifromq.basekv.raft.event.CommitEvent;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
@@ -102,7 +102,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
         leader.receive("v1", appendEntriesReply);
         PeerLogTracker peerLogTracker = ReflectionUtils.getField(leader, "peerLogTracker");
         assert peerLogTracker != null;
-        assertEquals(2, peerLogTracker.matchIndex("v1"));
+        assertEquals(peerLogTracker.matchIndex("v1"), 2);
         // v2 will reject last empty appendEntry since preLogIndex is mismatched, which causes the state of the log
         // tracker changed to SnapshotSyncing
         RaftMessage appendEntriesReplyRejected = RaftMessage.newBuilder()
@@ -117,7 +117,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 .build())
             .build();
         leader.receive("v2", appendEntriesReplyRejected);
-        assertSame(RaftNodeSyncState.SnapshotSyncing, peerLogTracker.status("v2"));
+        assertSame(peerLogTracker.status("v2"), RaftNodeSyncState.SnapshotSyncing);
         // tick to heartbeat, send empty appendEntry to v1 and send snapshot to v2
         leader.tick();
         leader.tick();
@@ -133,7 +133,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 .build())
             .build();
         leader.receive("v2", installSnapshotReply);
-        assertSame(RaftNodeSyncState.Replicating, peerLogTracker.status("v2"));
+        assertSame(peerLogTracker.status("v2"), RaftNodeSyncState.Replicating);
     }
 
     @Test
@@ -176,7 +176,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateLeader leader = startUpLeader(stateStorage, messages ->
-            assertEquals(new HashMap<String, List<RaftMessage>>() {{
+            assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
                     .setTerm(1)
                     .setInstallSnapshot(InstallSnapshot.newBuilder()
@@ -185,7 +185,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                         .build())
                     .build()
                 ));
-            }}, messages));
+            }}));
 
         RaftMessage appendEntriesReplyRejectedMessage = RaftMessage.newBuilder()
             .setTerm(1)
@@ -228,7 +228,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
         // electionElapsedTick timeout
         RaftNodeState raftNodeState = leader.tick();
 
-        assertSame(RaftNodeStatus.Leader, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Leader);
         // transfer leadership timeout
 
         leader.tick();
@@ -238,7 +238,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
         raftNodeState = leader.tick();
 
         // activityTracker will tally failed
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
     }
 
     @Test
@@ -247,12 +247,12 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateLeader leader = startUpLeader(stateStorage, messages ->
-            assertEquals(new HashMap<String, List<RaftMessage>>() {{
+            assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
                     .setTerm(1)
                     .setTimeoutNow(TimeoutNow.newBuilder().build())
                     .build()));
-            }}, messages));
+            }}));
 
         leader.transferLeadership("v1", new CompletableFuture<>());
     }
@@ -269,7 +269,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 // entry for proposed command
             } else if (onMessageReadyIndex.get() == 1) {
                 onMessageReadyIndex.incrementAndGet();
-                assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                     put("v1", Collections.singletonList(RaftMessage.newBuilder()
                         .setTerm(1)
                         .setAppendEntries(AppendEntries.newBuilder()
@@ -280,15 +280,15 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                             .setReadIndex(0)
                             .build())
                         .build()));
-                }}, messages);
+                }});
             } else if (onMessageReadyIndex.get() == 2) {
                 onMessageReadyIndex.incrementAndGet();
-                assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                     put("v1", Collections.singletonList(RaftMessage.newBuilder()
                         .setTerm(1)
                         .setTimeoutNow(TimeoutNow.newBuilder().build())
                         .build()));
-                }}, messages);
+                }});
             }
         });
 
@@ -348,7 +348,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
 
         RaftConfigChanger raftConfigChanger = ReflectionUtils.getField(leader, "configChanger");
         assert raftConfigChanger != null;
-        assertEquals(RaftConfigChanger.State.CatchingUp, raftConfigChanger.state());
+        assertEquals(raftConfigChanger.state(), RaftConfigChanger.State.CatchingUp);
 
         // broadcast appendEntries and wait all nextVoters catchup
         leader.tick();
@@ -362,7 +362,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 .build())
             .build());
         leader.tick();
-        assertEquals(RaftConfigChanger.State.JointConfigCommitting, raftConfigChanger.state());
+        assertEquals(raftConfigChanger.state(), RaftConfigChanger.State.JointConfigCommitting);
 
         leader.transferLeadership("v1", new CompletableFuture<>());
 
@@ -381,7 +381,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
         leader.tick();
         leader.tick();
         leader.tick();
-        assertEquals(RaftConfigChanger.State.TargetConfigCommitting, raftConfigChanger.state());
+        assertEquals(raftConfigChanger.state(), RaftConfigChanger.State.TargetConfigCommitting);
 
         leader.stableTo(3);
 
@@ -398,8 +398,8 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
             .build();
         leader.receive("v2", appendEntriesReply);
         RaftNodeState raftNodeState = leader.receive("v3", appendEntriesReply);
-        assertSame(RaftConfigChanger.State.Waiting, raftConfigChanger.state());
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
+        assertSame(raftConfigChanger.state(), RaftConfigChanger.State.Waiting);
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
     }
 
     @Test
@@ -413,7 +413,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 .build())
             .build();
         RaftNodeState raftNodeState = leader.receive("v3", vote); // v3 is not a member
-        assertSame(RaftNodeStatus.Leader, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Leader);
 
         leader = startUpLeader();
         vote = RaftMessage.newBuilder()
@@ -424,13 +424,13 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 .build())
             .build();
         raftNodeState = leader.receive("v2", vote); // v2 is a member
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
 
         leader = startUpLeader(event -> {
             if (event.type == RaftEventType.ELECTION) {
                 ElectionEvent electionEvent = ((ElectionEvent) event);
-                assertEquals("v1", electionEvent.leaderId);
-                assertEquals(2, electionEvent.term);
+                assertEquals(electionEvent.leaderId, "v1");
+                assertEquals(electionEvent.term, 2);
             }
         });
         RaftMessage appendEntries = RaftMessage.newBuilder()
@@ -440,7 +440,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 .build())
             .build();
         raftNodeState = leader.receive("v1", appendEntries);
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
     }
 
     private RaftNodeStateLeader startUpLeader() {
@@ -475,7 +475,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
             log, new LinkedHashMap<>(), messages -> {
             if (onMessageReadyIndex.get() == 0) {
                 onMessageReadyIndex.incrementAndGet();
-                assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                     put("l1", Collections.singletonList(RaftMessage.newBuilder()
                         .setTerm(1)
                         .setAppendEntries(AppendEntries.newBuilder()
@@ -510,7 +510,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                                 defaultRaftConfig.getMaxSizePerAppend())))
                             .build())
                         .build()));
-                }}, messages);
+                }});
             } else if (onMessageReadyIndex.get() > 1) {
                 if (msgSender != null) {
                     msgSender.send(messages);
@@ -521,7 +521,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
                 case COMMIT:
                     if (onCommitIndex.get() == 0) {
                         onCommitIndex.incrementAndGet();
-                        assertEquals(1, ((CommitEvent) event).index);
+                        assertEquals(((CommitEvent) event).index, 1);
                     }
                     break;
                 case ELECTION:
@@ -533,7 +533,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
         }, snapshotInstaller, onSnapshotInstalled);
         RaftConfigChanger raftConfigChanger = ReflectionUtils.getField(leader, "configChanger");
         assert raftConfigChanger != null;
-        assertEquals(RaftConfigChanger.State.CatchingUp, raftConfigChanger.state());
+        assertEquals(raftConfigChanger.state(), RaftConfigChanger.State.CatchingUp);
 
         for (String peer : clusterConfig.getVotersList()) {
             if (!peer.equals(local)) {
@@ -552,7 +552,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
         // 2. configChanger state change to TargetConfigCommitting,
         // 3. tick to broadcast appendEntries containing clusterconfig
         leader.tick();
-        assertEquals(RaftConfigChanger.State.TargetConfigCommitting, raftConfigChanger.state());
+        assertEquals(raftConfigChanger.state(), RaftConfigChanger.State.TargetConfigCommitting);
 
         // 1. receive jointConfig appendEntriesReply
         // 2. commitTo configChanger and its state change to TargetConfigCommitting
@@ -567,7 +567,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
             .build();
         leader.receive("v1", appendEntriesReply);
         leader.receive("v2", appendEntriesReply);
-        assertEquals(RaftConfigChanger.State.Waiting, raftConfigChanger.state());
+        assertEquals(raftConfigChanger.state(), RaftConfigChanger.State.Waiting);
         return leader;
     }
 

@@ -16,12 +16,12 @@ package com.baidu.bifromq.basehookloader;
 import java.util.Map;
 import org.testng.annotations.Test;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 public class BaseHookLoaderTest {
     @Test
     public void testLoad() {
         Map<String, ITestHookAPI> serviceMap = BaseHookLoader.load(ITestHookAPI.class);
-        assertEquals(1, serviceMap.size());
+        assertEquals(serviceMap.size(), 1);
     }
 }

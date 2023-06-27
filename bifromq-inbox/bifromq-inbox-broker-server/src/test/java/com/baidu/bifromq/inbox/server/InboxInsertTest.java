@@ -14,7 +14,7 @@
 package com.baidu.bifromq.inbox.server;
 
 import static java.util.Collections.singletonList;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -44,8 +44,8 @@ public class InboxInsertTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
         long reqId = System.nanoTime();
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, createInboxReply.getReqId());
-        assertEquals(CreateInboxReply.Result.OK, createInboxReply.getResult());
+        assertEquals(createInboxReply.getReqId(), reqId);
+        assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
         IInboxWriter writer = inboxBrokerClient.openInboxWriter(inboxGroupKey);
         Message msg = Message.newBuilder()
@@ -68,7 +68,7 @@ public class InboxInsertTest extends InboxServiceTest {
         List<InboxPack> msgPack = new LinkedList<>();
         msgPack.add(new InboxPack(pack, singletonList(subInfo)));
         Map<SubInfo, WriteResult> result = writer.write(msgPack).join();
-        assertEquals(WriteResult.OK, result.get(subInfo));
+        assertEquals(result.get(subInfo), WriteResult.OK);
 
         IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, inboxGroupKey, clientInfo);
 
@@ -79,9 +79,9 @@ public class InboxInsertTest extends InboxServiceTest {
             latch.countDown();
         });
         latch.await();
-        assertEquals(Fetched.Result.OK, fetchedRef.get().getResult());
-        assertEquals(1, fetchedRef.get().getQos1MsgCount());
-        assertEquals(msg, fetchedRef.get().getQos1Msg(0).getMsg().getMessage());
+        assertEquals(fetchedRef.get().getResult(), Fetched.Result.OK);
+        assertEquals(fetchedRef.get().getQos1MsgCount(), 1);
+        assertEquals(fetchedRef.get().getQos1Msg(0).getMsg().getMessage(), msg);
 
         reader.close();
         writer.close();
@@ -95,8 +95,8 @@ public class InboxInsertTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
         long reqId = System.nanoTime();
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, createInboxReply.getReqId());
-        assertEquals(CreateInboxReply.Result.OK, createInboxReply.getResult());
+        assertEquals(createInboxReply.getReqId(), reqId);
+        assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
         IInboxWriter writer = inboxBrokerClient.openInboxWriter(inboxGroupKey);
         Message msg = Message.newBuilder()
@@ -129,11 +129,11 @@ public class InboxInsertTest extends InboxServiceTest {
         CompletableFuture<Map<SubInfo, WriteResult>> writeFuture3 = writer.write(msgPack2);
 
         Map<SubInfo, WriteResult> result1 = writeFuture1.join();
-        assertEquals(WriteResult.OK, result1.get(subInfo));
+        assertEquals(result1.get(subInfo), WriteResult.OK);
         Map<SubInfo, WriteResult> result2 = writeFuture2.join();
-        assertEquals(WriteResult.OK, result2.get(subInfo));
+        assertEquals(result2.get(subInfo), WriteResult.OK);
         Map<SubInfo, WriteResult> result3 = writeFuture3.join();
-        assertEquals(WriteResult.OK, result3.get(subInfo));
+        assertEquals(result3.get(subInfo), WriteResult.OK);
 
         IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, inboxGroupKey, clientInfo);
         CountDownLatch latch = new CountDownLatch(1);
@@ -143,9 +143,9 @@ public class InboxInsertTest extends InboxServiceTest {
             latch.countDown();
         });
         latch.await();
-        assertEquals(Fetched.Result.OK, fetchedRef.get().getResult());
-        assertEquals(3, fetchedRef.get().getQos1MsgCount());
-        assertEquals(msg, fetchedRef.get().getQos1Msg(0).getMsg().getMessage());
+        assertEquals(fetchedRef.get().getResult(), Fetched.Result.OK);
+        assertEquals(fetchedRef.get().getQos1MsgCount(), 3);
+        assertEquals(fetchedRef.get().getQos1Msg(0).getMsg().getMessage(), msg);
 
         reader.close();
         writer.close();

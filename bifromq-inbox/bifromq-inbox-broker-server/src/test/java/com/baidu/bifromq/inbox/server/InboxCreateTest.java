@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
@@ -30,16 +30,16 @@ public class InboxCreateTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
         long reqId = System.nanoTime();
         HasInboxReply hasInboxReply = inboxReaderClient.has(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, hasInboxReply.getReqId());
-        assertEquals(HasInboxReply.Result.NO, hasInboxReply.getResult());
+        assertEquals(hasInboxReply.getReqId(), reqId);
+        assertEquals(hasInboxReply.getResult(), HasInboxReply.Result.NO);
 
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, createInboxReply.getReqId());
-        assertEquals(CreateInboxReply.Result.OK, createInboxReply.getResult());
+        assertEquals(createInboxReply.getReqId(), reqId);
+        assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
         hasInboxReply = inboxReaderClient.has(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, hasInboxReply.getReqId());
-        assertEquals(HasInboxReply.Result.YES, hasInboxReply.getResult());
+        assertEquals(hasInboxReply.getReqId(), reqId);
+        assertEquals(hasInboxReply.getResult(), HasInboxReply.Result.YES);
     }
 
     @Test(groups = "integration")
@@ -50,15 +50,15 @@ public class InboxCreateTest extends InboxServiceTest {
         long reqId = System.nanoTime();
 
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, createInboxReply.getReqId());
-        assertEquals(CreateInboxReply.Result.OK, createInboxReply.getResult());
+        assertEquals(createInboxReply.getReqId(), reqId);
+        assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
         DeleteInboxReply deleteInboxReply = inboxReaderClient.delete(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, deleteInboxReply.getReqId());
-        assertEquals(DeleteInboxReply.Result.OK, deleteInboxReply.getResult());
+        assertEquals(deleteInboxReply.getReqId(), reqId);
+        assertEquals(deleteInboxReply.getResult(), DeleteInboxReply.Result.OK);
 
         HasInboxReply hasInboxReply = inboxReaderClient.has(reqId, inboxId, clientInfo).join();
-        assertEquals(reqId, hasInboxReply.getReqId());
-        assertEquals(HasInboxReply.Result.NO, hasInboxReply.getResult());
+        assertEquals(hasInboxReply.getReqId(), reqId);
+        assertEquals(hasInboxReply.getResult(), HasInboxReply.Result.NO);
     }
 }

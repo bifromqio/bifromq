@@ -15,7 +15,7 @@ package com.baidu.bifromq.basecluster.transport;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.testng.Assert.assertNotEquals;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -67,7 +67,7 @@ public class TCPTransportFuncTest {
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
-        transport1.receive().subscribe(t -> assertEquals(t.data, data));
+        transport1.receive().subscribe(t -> assertEquals(data, t.data));
         transport1.send(data, address1).join();
     }
 
@@ -78,7 +78,7 @@ public class TCPTransportFuncTest {
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
-        transport1.receive().subscribe(t -> assertEquals(t.data, data));
+        transport1.receive().subscribe(t -> assertEquals(data, t.data));
         try {
             transport1.send(data, fakeAddr).join();
             fail();
@@ -123,7 +123,7 @@ public class TCPTransportFuncTest {
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
-        transport1.receive().subscribe(t -> assertEquals(t.data, data));
+        transport1.receive().subscribe(t -> assertEquals(data, t.data));
         transport1.send(data, address1).join();
     }
 
@@ -170,7 +170,7 @@ public class TCPTransportFuncTest {
         List<ByteString> data = Arrays.asList(copyFromUtf8("test"));
 
         transport1.send(data, address2);
-        assertEquals(transport2.receive().blockingFirst().data, data);
+        assertEquals(data, transport2.receive().blockingFirst().data);
 
         TestObserver<PacketEnvelope> result = TestObserver.create();
         transport2.receive().subscribeWith(result);

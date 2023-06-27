@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import org.mockito.MockitoAnnotations;
@@ -46,12 +46,12 @@ public class QuorumTrackerTest {
             .build();
         QuorumTracker quorumTracker = new QuorumTracker(clusterConfig, logger);
 
-        Assert.assertEquals(QuorumTracker.VoteResult.Pending, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Pending);
         verifyVoteGroupResult(quorumTracker.tally().groupOneResult, QuorumTracker.VoteResult.Pending, 0, 0, 3);
 
         quorumTracker.reset();
         quorumTracker.poll("V1", true);
-        Assert.assertEquals(QuorumTracker.VoteResult.Pending, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Pending);
         verifyVoteGroupResult(quorumTracker.tally().groupOneResult, QuorumTracker.VoteResult.Pending, 1, 0, 2);
 
         quorumTracker.reset();
@@ -101,12 +101,12 @@ public class QuorumTrackerTest {
             .build();
         QuorumTracker quorumTracker = new QuorumTracker(clusterConfig, logger);
 
-        Assert.assertEquals(QuorumTracker.VoteResult.Pending, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Pending);
         verifyVoteGroupResult(quorumTracker.tally().groupOneResult, QuorumTracker.VoteResult.Pending, 0, 0, 2);
 
         quorumTracker.reset();
         quorumTracker.poll("V1", true);
-        Assert.assertEquals(QuorumTracker.VoteResult.Pending, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Pending);
         verifyVoteGroupResult(quorumTracker.tally().groupOneResult, QuorumTracker.VoteResult.Pending, 1, 0, 1);
 
         quorumTracker.reset();
@@ -144,7 +144,7 @@ public class QuorumTrackerTest {
     public void testEmptyQuorum() {
         ClusterConfig clusterConfig = ClusterConfig.newBuilder().build();
         QuorumTracker quorumTracker = new QuorumTracker(clusterConfig, logger);
-        Assert.assertEquals(QuorumTracker.VoteResult.Won, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Won);
         verifyVoteGroupResult(quorumTracker.tally().groupOneResult, QuorumTracker.VoteResult.Won, 0, 0, 0);
         verifyVoteGroupResult(quorumTracker.tally().groupTwoResult, QuorumTracker.VoteResult.Won, 0, 0, 0);
     }
@@ -162,34 +162,34 @@ public class QuorumTrackerTest {
         QuorumTracker quorumTracker = new QuorumTracker(clusterConfig, logger);
         quorumTracker.poll("V1", true); // pending
         quorumTracker.poll("N1", true); // pending
-        Assert.assertEquals(QuorumTracker.VoteResult.Pending, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Pending);
 
         quorumTracker.reset();
         quorumTracker.poll("V1", true);
         quorumTracker.poll("V2", true); // won
         quorumTracker.poll("N1", true); // pending
-        Assert.assertEquals(QuorumTracker.VoteResult.Pending, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Pending);
 
         quorumTracker.reset();
         quorumTracker.poll("V1", true);
         quorumTracker.poll("V2", true); // won
         quorumTracker.poll("N1", true);
         quorumTracker.poll("N2", true); // won
-        Assert.assertEquals(QuorumTracker.VoteResult.Won, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Won);
 
         quorumTracker.reset();
         quorumTracker.poll("V1", true);
         quorumTracker.poll("V2", true); // won
         quorumTracker.poll("N1", false);
         quorumTracker.poll("N2", false); // lost
-        Assert.assertEquals(QuorumTracker.VoteResult.Lost, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Lost);
 
         quorumTracker.reset();
         quorumTracker.poll("V1", false);
         quorumTracker.poll("V2", false); // lost
         quorumTracker.poll("N1", false);
         quorumTracker.poll("N2", false); // lost
-        Assert.assertEquals(QuorumTracker.VoteResult.Lost, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Lost);
     }
 
     @Test
@@ -205,13 +205,13 @@ public class QuorumTrackerTest {
         QuorumTracker quorumTracker = new QuorumTracker(clusterConfig, logger);
         quorumTracker.poll("V1", true); // pending
         quorumTracker.poll("N1", true); // pending
-        Assert.assertEquals(QuorumTracker.VoteResult.Pending, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Pending);
 
         ClusterConfig clusterConfig1 = ClusterConfig.newBuilder()
             .addVoters("V1")
             .build();
         quorumTracker.refresh(clusterConfig1);
-        Assert.assertEquals(QuorumTracker.VoteResult.Won, quorumTracker.tally().result);
+        Assert.assertEquals(quorumTracker.tally().result, QuorumTracker.VoteResult.Won);
         verifyVoteGroupResult(quorumTracker.tally().groupOneResult, QuorumTracker.VoteResult.Won, 1, 0, 0);
     }
 
@@ -221,9 +221,9 @@ public class QuorumTrackerTest {
                                        int no,
                                        int missing) {
 
-        assertEquals(result, voteGroupResult.result);
-        assertEquals(yes, voteGroupResult.yes);
-        assertEquals(no, voteGroupResult.no);
-        assertEquals(missing, voteGroupResult.miss);
+        assertEquals(voteGroupResult.result, result);
+        assertEquals(voteGroupResult.yes, yes);
+        assertEquals(voteGroupResult.no, no);
+        assertEquals(voteGroupResult.miss, missing);
     }
 }

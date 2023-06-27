@@ -5,7 +5,7 @@ import org.testng.annotations.Test;
 import java.net.InetSocketAddress;
 
 import static org.testng.Assert.assertTrue;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 public class TransportTest {
     @Test
@@ -17,7 +17,7 @@ public class TransportTest {
         transport = Transport.builder()
             .bindAddr(new InetSocketAddress(port))
             .build();
-        assertEquals(port, transport.bindAddress().getPort());
+        assertEquals(transport.bindAddress().getPort(), port);
     }
 
     @Test

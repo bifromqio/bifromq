@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -63,7 +63,7 @@ public class AsyncRunnerTest {
                 .whenComplete((v, e) -> counter.incrementAndGet()));
         }
         queue.awaitDone().toCompletableFuture().join();
-        assertEquals(10, counter.get());
+        assertEquals(counter.get(), 10);
 
         for (int i = 0; i < 10; i++) {
             queue.add(() -> new CompletableFuture<Void>()
@@ -71,7 +71,7 @@ public class AsyncRunnerTest {
                 .whenComplete((v, e) -> counter.incrementAndGet()));
         }
         queue.awaitDone().toCompletableFuture().join();
-        assertEquals(20, counter.get());
+        assertEquals(counter.get(), 20);
     }
 
     @SneakyThrows
@@ -136,8 +136,8 @@ public class AsyncRunnerTest {
         });
         queue.add(() -> result.add(2));
         queue.awaitDone().toCompletableFuture().join();
-        assertEquals(1, result.get(0).intValue());
-        assertEquals(2, result.get(1).intValue());
+        assertEquals(result.get(0).intValue(), 1);
+        assertEquals(result.get(1).intValue(), 2);
     }
 
     @Test
@@ -163,7 +163,7 @@ public class AsyncRunnerTest {
             }).join();
             fail();
         } catch (Throwable e) {
-            assertEquals(e.getCause(), exp);
+            assertEquals(exp, e.getCause());
         }
         queue.awaitDone().toCompletableFuture().join();
     }
@@ -181,7 +181,7 @@ public class AsyncRunnerTest {
             }).join();
             fail();
         } catch (Throwable e) {
-            assertEquals(e.getCause(), exp);
+            assertEquals(exp, e.getCause());
         }
         queue.awaitDone().toCompletableFuture().join();
     }

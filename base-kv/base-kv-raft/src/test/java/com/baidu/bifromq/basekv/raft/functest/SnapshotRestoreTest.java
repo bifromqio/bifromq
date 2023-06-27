@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft.functest;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
@@ -51,8 +51,8 @@ public class SnapshotRestoreTest extends SharedRaftConfigTestTemplate {
             assertTrue(group.awaitIndexCommitted(peerId, 3));
         }
         List<SnapshotRestoredEvent> events = group.snapshotRestoredLogs("V2");
-        assertEquals(1, events.size());
-        assertEquals("V2", events.get(0).nodeId);
+        assertEquals(events.size(), 1);
+        assertEquals(events.get(0).nodeId, "V2");
         assertTrue(events.get(0).snapshot.getClusterConfig().getVotersList().contains("V1"));
     }
 }

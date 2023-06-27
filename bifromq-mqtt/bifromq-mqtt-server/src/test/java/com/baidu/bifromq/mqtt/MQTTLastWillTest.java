@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -81,9 +81,9 @@ public class MQTTLastWillTest extends MQTTTest {
             "lwtPubclient", ClientInfo.getDefaultInstance()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(willTopic, msg.topic);
-        assertEquals(1, msg.qos);
-        assertEquals(willPayload, msg.payload);
+        assertEquals(msg.topic, willTopic);
+        assertEquals(msg.qos, 1);
+        assertEquals(msg.payload, willPayload);
         assertFalse(msg.isRetain);
     }
 
@@ -128,9 +128,9 @@ public class MQTTLastWillTest extends MQTTTest {
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
 
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(willTopic, msg.topic);
-        assertEquals(1, msg.qos);
-        assertEquals(willPayload, msg.payload);
+        assertEquals(msg.topic, willTopic);
+        assertEquals(msg.qos, 1);
+        assertEquals(msg.payload, willPayload);
         assertTrue(msg.isRetain);
     }
 
@@ -176,9 +176,9 @@ public class MQTTLastWillTest extends MQTTTest {
             "lwtPubclient", ClientInfo.getDefaultInstance()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(willTopic, msg.topic);
-        assertEquals(2, msg.qos);
-        assertEquals(willPayload, msg.payload);
+        assertEquals(msg.topic, willTopic);
+        assertEquals(msg.qos, 2);
+        assertEquals(msg.payload, willPayload);
         assertFalse(msg.isRetain);
     }
 
@@ -223,9 +223,9 @@ public class MQTTLastWillTest extends MQTTTest {
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2);
 
         MqttMsg msg = topicSub.blockingFirst();
-        assertEquals(willTopic, msg.topic);
-        assertEquals(2, msg.qos);
-        assertEquals(willPayload, msg.payload);
+        assertEquals(msg.topic, willTopic);
+        assertEquals(msg.qos, 2);
+        assertEquals(msg.payload, willPayload);
         assertTrue(msg.isRetain);
     }
 }

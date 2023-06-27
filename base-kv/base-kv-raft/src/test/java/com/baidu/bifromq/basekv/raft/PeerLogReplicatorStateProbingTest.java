@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
@@ -28,7 +28,6 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 import org.mockito.Mock;
-
 
 public class PeerLogReplicatorStateProbingTest {
     private PeerLogReplicatorStateProbing stateProbing;
@@ -54,9 +53,9 @@ public class PeerLogReplicatorStateProbingTest {
         when(stateStorage.latestSnapshot()).thenReturn(Snapshot.newBuilder().setIndex(10L).build());
         stateProbing = new PeerLogReplicatorStateProbing(peerId, config, stateStorage, logger);
 
-        assertEquals(10, stateProbing.matchIndex);
-        assertEquals(16, stateProbing.nextIndex);
-        assertEquals(stateProbing.state(), RaftNodeSyncState.Probing);
+        assertEquals(stateProbing.matchIndex, 10);
+        assertEquals(stateProbing.nextIndex, 16);
+        assertEquals(RaftNodeSyncState.Probing, stateProbing.state());
     }
 
     @Test
@@ -67,7 +66,7 @@ public class PeerLogReplicatorStateProbingTest {
 
         int i = 6;
         while (i-- > 0) {
-            assertEquals(stateProbing.tick(), stateProbing);
+            assertEquals(stateProbing, stateProbing.tick());
         }
     }
 
@@ -79,13 +78,13 @@ public class PeerLogReplicatorStateProbingTest {
 
         assertFalse(stateProbing.pauseReplicating());
         stateProbing.replicateTo(1);
-        assertEquals(0, stateProbing.catchupRate());
-        assertEquals(1, stateProbing.nextIndex);
+        assertEquals(stateProbing.catchupRate(), 0);
+        assertEquals(stateProbing.nextIndex, 1);
         assertTrue(stateProbing.pauseReplicating());
         int i = 5;
         while (i-- > 0) {
             stateProbing.tick();
-            assertEquals(stateProbing.tick(), stateProbing);
+            assertEquals(stateProbing, stateProbing.tick());
         }
         stateProbing.tick();
         assertFalse(stateProbing.pauseReplicating());
@@ -95,21 +94,21 @@ public class PeerLogReplicatorStateProbingTest {
     public void testConfirmMatchIgnoreOutdatedIndex() {
         stateProbing = new PeerLogReplicatorStateProbing(peerId, config, stateStorage, 10, 15, logger);
 
-        assertEquals(10, stateProbing.matchIndex());
-        assertEquals(15, stateProbing.nextIndex());
-        assertEquals(stateProbing, stateProbing.confirmMatch(9));
+        assertEquals(stateProbing.matchIndex(), 10);
+        assertEquals(stateProbing.nextIndex(), 15);
+        assertEquals(stateProbing.confirmMatch(9), stateProbing);
     }
 
     @Test
     public void testConfirmMatch() {
         stateProbing = new PeerLogReplicatorStateProbing(peerId, config, stateStorage, 10, 15, logger);
-        assertEquals(10, stateProbing.matchIndex);
-        assertEquals(15, stateProbing.nextIndex);
+        assertEquals(stateProbing.matchIndex, 10);
+        assertEquals(stateProbing.nextIndex, 15);
         PeerLogReplicatorState nextState = stateProbing.confirmMatch(16);
-        assertEquals(0, stateProbing.catchupRate());
-        assertEquals(RaftNodeSyncState.Replicating, nextState.state());
-        assertEquals(16, nextState.matchIndex());
-        assertEquals(17, nextState.nextIndex());
+        assertEquals(stateProbing.catchupRate(), 0);
+        assertEquals(nextState.state(), RaftNodeSyncState.Replicating);
+        assertEquals(nextState.matchIndex(), 16);
+        assertEquals(nextState.nextIndex(), 17);
     }
 
     @Test
@@ -130,11 +129,11 @@ public class PeerLogReplicatorStateProbingTest {
 
         stateProbing.replicateTo(20);
         assertTrue(stateProbing.pauseReplicating());
-        assertEquals(15, stateProbing.nextIndex); //next index won't be update in probing
+        assertEquals(stateProbing.nextIndex, 15); //next index won't be update in probing
         PeerLogReplicatorState nextState = stateProbing.backoff(14, 9); // not matched
         assertEquals(stateProbing, nextState);
-        assertEquals(9, stateProbing.matchIndex());
-        assertEquals(10, stateProbing.nextIndex());
+        assertEquals(stateProbing.matchIndex(), 9);
+        assertEquals(stateProbing.nextIndex(), 10);
         assertFalse(stateProbing.pauseReplicating());
     }
 
@@ -147,9 +146,9 @@ public class PeerLogReplicatorStateProbingTest {
         stateProbing.replicateTo(20);
         assertTrue(stateProbing.pauseReplicating());
         PeerLogReplicatorState nextState = stateProbing.backoff(14, 9); // not matched
-        assertEquals(RaftNodeSyncState.SnapshotSyncing, nextState.state());
-        assertEquals(5, nextState.matchIndex());
-        assertEquals(6, nextState.nextIndex());
+        assertEquals(nextState.state(), RaftNodeSyncState.SnapshotSyncing);
+        assertEquals(nextState.matchIndex(), 5);
+        assertEquals(nextState.nextIndex(), 6);
     }
 
     @Test
@@ -159,9 +158,9 @@ public class PeerLogReplicatorStateProbingTest {
 
         stateProbing.replicateTo(2); // send log entry at index 2
         PeerLogReplicatorState nextState = stateProbing.backoff(1, 1);
-        assertEquals(stateProbing, nextState);
-        assertEquals(0, nextState.matchIndex());
-        assertEquals(1, nextState.nextIndex());
+        assertEquals(nextState, stateProbing);
+        assertEquals(nextState.matchIndex(), 0);
+        assertEquals(nextState.nextIndex(), 1);
         assertFalse(stateProbing.pauseReplicating());
     }
 }

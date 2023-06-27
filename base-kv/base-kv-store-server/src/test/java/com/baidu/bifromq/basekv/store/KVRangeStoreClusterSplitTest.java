@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -47,16 +47,16 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
             });
 
             KVRangeSetting kvRangeSettings = cluster.kvRangeSetting(kvRangeId);
-            assertEquals(genesisKVRangeSettings.ver + 1, kvRangeSettings.ver);
+            assertEquals(kvRangeSettings.ver, genesisKVRangeSettings.ver + 1);
             if (kvRangeId.equals(genesisKVRangeId)) {
-                assertEquals(genesisKVRangeSettings.leader, kvRangeSettings.leader);
-                assertEquals(Range.newBuilder()
+                assertEquals(kvRangeSettings.leader, genesisKVRangeSettings.leader);
+                assertEquals(kvRangeSettings.range, Range.newBuilder()
                     .setEndKey(ByteString.copyFromUtf8("e"))
-                    .build(), kvRangeSettings.range);
+                    .build());
             } else {
-                assertEquals(Range.newBuilder()
+                assertEquals(kvRangeSettings.range, Range.newBuilder()
                     .setStartKey(ByteString.copyFromUtf8("e"))
-                    .build(), kvRangeSettings.range);
+                    .build());
             }
         }
     }
@@ -76,16 +76,16 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
                 return kvRangeSettings.allReplicas.size() == 3;
             });
             KVRangeSetting kvRangeSettings = cluster.kvRangeSetting(kvRangeId);
-            assertEquals(genesisKVRangeSettings.ver + 1, kvRangeSettings.ver);
+            assertEquals(kvRangeSettings.ver, genesisKVRangeSettings.ver + 1);
             if (kvRangeId.equals(genesisKVRangeId)) {
-                assertEquals(genesisKVRangeSettings.leader, kvRangeSettings.leader);
-                assertEquals(Range.newBuilder()
+                assertEquals(kvRangeSettings.leader, genesisKVRangeSettings.leader);
+                assertEquals(kvRangeSettings.range, Range.newBuilder()
                     .setEndKey(ByteString.copyFromUtf8("e"))
-                    .build(), kvRangeSettings.range);
+                    .build());
             } else {
-                assertEquals(Range.newBuilder()
+                assertEquals(kvRangeSettings.range, Range.newBuilder()
                     .setStartKey(ByteString.copyFromUtf8("e"))
-                    .build(), kvRangeSettings.range);
+                    .build());
             }
         }
     }

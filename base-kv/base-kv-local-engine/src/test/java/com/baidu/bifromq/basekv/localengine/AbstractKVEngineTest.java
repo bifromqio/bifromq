@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -68,10 +68,10 @@ public abstract class AbstractKVEngineTest {
         int rangeId = kvEngine.registerKeyRange(NS, null, null);
         try {
             int batchId = kvEngine.startBatch();
-            assertEquals(0, kvEngine.batchSize(batchId));
+            assertEquals(kvEngine.batchSize(batchId), 0);
             kvEngine.insert(batchId, rangeId, copyFromUtf8("key"), copyFromUtf8("value"));
             assertFalse(kvEngine.exist(rangeId, copyFromUtf8("key")));
-            assertEquals(1, kvEngine.batchSize(batchId));
+            assertEquals(kvEngine.batchSize(batchId), 1);
             kvEngine.endBatch(batchId);
         } catch (Exception e) {
             fail();
@@ -95,11 +95,11 @@ public abstract class AbstractKVEngineTest {
         ByteString value = copyFromUtf8("value");
         kvEngine.put(rangeId, EMPTY, value);
         assertTrue(kvEngine.exist(rangeId, EMPTY));
-        assertEquals(value, kvEngine.get(rangeId, EMPTY).get());
+        assertEquals(kvEngine.get(rangeId, EMPTY).get(), value);
         try (IKVEngineIterator itr = kvEngine.newIterator(rangeId)) {
             itr.seekToFirst();
-            assertEquals(EMPTY, itr.key());
-            assertEquals(value, itr.value());
+            assertEquals(itr.key(), EMPTY);
+            assertEquals(itr.value(), value);
         }
         try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, null, EMPTY)) {
             itr.seekToFirst();
@@ -107,8 +107,8 @@ public abstract class AbstractKVEngineTest {
         }
         try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, EMPTY, null)) {
             itr.seekToFirst();
-            assertEquals(EMPTY, itr.key());
-            assertEquals(value, itr.value());
+            assertEquals(itr.key(), EMPTY);
+            assertEquals(itr.value(), value);
         }
         kvEngine.delete(rangeId, EMPTY);
         assertFalse(kvEngine.exist(rangeId, EMPTY));
@@ -138,7 +138,7 @@ public abstract class AbstractKVEngineTest {
     public void testStats() {
         int rangeId = kvEngine.registerKeyRange(NS, null, null);
         long size = kvEngine.size(rangeId);
-        assertEquals(0, size);
+        assertEquals(size, 0);
 
         int batchId = kvEngine.startBatch();
         kvEngine.put(batchId, rangeId, copyFromUtf8("key1"), copyFromUtf8("value"));
@@ -160,11 +160,11 @@ public abstract class AbstractKVEngineTest {
 
         rangeId = kvEngine.registerKeyRange(NS, EMPTY, copyFromUtf8("key1"));
         size = kvEngine.size(rangeId);
-        assertEquals(0, size);
+        assertEquals(size, 0);
 
         rangeId = kvEngine.registerKeyRange(NS, EMPTY, EMPTY);
         size = kvEngine.size(rangeId);
-        assertEquals(0, size);
+        assertEquals(size, 0);
     }
 
     @Test
@@ -183,11 +183,11 @@ public abstract class AbstractKVEngineTest {
         try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
             kvItr.seekToFirst();
             assertTrue(kvItr.isValid());
-            assertEquals(key, kvItr.key());
-            assertEquals(value1, kvItr.value());
+            assertEquals(kvItr.key(), key);
+            assertEquals(kvItr.value(), value1);
         }
         assertTrue(kvEngine.exist(cpId, rangeId, key));
-        assertEquals(value1, kvEngine.get(cpId, rangeId, key).get());
+        assertEquals(kvEngine.get(cpId, rangeId, key).get(), value1);
     }
 
     @Test
@@ -197,7 +197,7 @@ public abstract class AbstractKVEngineTest {
         assertFalse(kvEngine.exist(rangeId, copyFromUtf8("key1")));
         kvEngine.insert(rangeId, copyFromUtf8("key1"), copyFromUtf8("value1"));
         assertTrue(kvEngine.exist(rangeId, copyFromUtf8("key1")));
-        assertEquals(copyFromUtf8("value1"), kvEngine.get(rangeId, copyFromUtf8("key1")).get());
+        assertEquals(kvEngine.get(rangeId, copyFromUtf8("key1")).get(), copyFromUtf8("value1"));
         try {
             kvEngine.insert(rangeId, copyFromUtf8("key1"), copyFromUtf8("value2"));
             fail();
@@ -210,11 +210,11 @@ public abstract class AbstractKVEngineTest {
     public void testPut() {
         int rangeId = kvEngine.registerKeyRange(NS, null, null);
         kvEngine.put(rangeId, copyFromUtf8("key1"), copyFromUtf8("value1"));
-        assertEquals(copyFromUtf8("value1"), kvEngine.get(rangeId, copyFromUtf8("key1")).get());
+        assertEquals(kvEngine.get(rangeId, copyFromUtf8("key1")).get(), copyFromUtf8("value1"));
         assertTrue(kvEngine.exist(rangeId, copyFromUtf8("key1")));
 
         kvEngine.put(rangeId, copyFromUtf8("key1"), copyFromUtf8("value2"));
-        assertEquals(copyFromUtf8("value2"), kvEngine.get(rangeId, copyFromUtf8("key1")).get());
+        assertEquals(kvEngine.get(rangeId, copyFromUtf8("key1")).get(), copyFromUtf8("value2"));
     }
 
     @Test
@@ -244,12 +244,12 @@ public abstract class AbstractKVEngineTest {
         try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, toByteString(1), upperBound(copyFromUtf8("Key")))) {
             itr.seekToFirst();
             assertTrue(itr.isValid());
-            assertEquals(1, toLong(itr.key()));
+            assertEquals(toLong(itr.key()), 1);
         }
         try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, null, upperBound(copyFromUtf8("Key")))) {
             itr.seekToFirst();
             assertTrue(itr.isValid());
-            assertEquals(1, toLong(itr.key()));
+            assertEquals(toLong(itr.key()), 1);
         }
     }
 
@@ -290,8 +290,8 @@ public abstract class AbstractKVEngineTest {
                 try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
                     kvItr.seekToFirst();
                     assertTrue(kvItr.isValid());
-                    assertEquals(key, kvItr.key());
-                    assertEquals(value1, kvItr.value());
+                    assertEquals(kvItr.key(), key);
+                    assertEquals(kvItr.value(), value1);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -303,8 +303,8 @@ public abstract class AbstractKVEngineTest {
                 try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
                     kvItr.seekToFirst();
                     assertTrue(kvItr.isValid());
-                    assertEquals(key, kvItr.key());
-                    assertEquals(value1, kvItr.value());
+                    assertEquals(kvItr.key(), key);
+                    assertEquals(kvItr.value(), value1);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -316,8 +316,8 @@ public abstract class AbstractKVEngineTest {
                 try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
                     kvItr.seekToFirst();
                     assertTrue(kvItr.isValid());
-                    assertEquals(key, kvItr.key());
-                    assertEquals(value1, kvItr.value());
+                    assertEquals(kvItr.key(), key);
+                    assertEquals(kvItr.value(), value1);
                 }
             } catch (Exception e) {
                 e.printStackTrace();

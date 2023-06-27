@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.testng.AssertJUnit.assertSame;
+import static org.testng.Assert.assertSame;
 
 import com.baidu.bifromq.basekv.raft.proto.AppendEntries;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -74,7 +74,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         // preVote && !leaderTransfer
         new RaftNodeStateCandidate(1, 0, raftConfig, stateStorage, log,
             new LinkedHashMap<>(),
-            messages -> assertEquals(new HashMap<String, List<RaftMessage>>() {{
+            messages -> assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
                     .setTerm(2)
                     .setRequestPreVote(RequestPreVote.newBuilder()
@@ -91,7 +91,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                         .setLastLogIndex(0)
                         .build())
                     .build()));
-            }}, messages), eventListener, snapshotInstaller, onSnapshotInstalled);
+            }}), eventListener, snapshotInstaller, onSnapshotInstalled);
 
 
         stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
@@ -106,7 +106,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         // !preVote && !leaderTransfer
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, raftConfig,
             stateStorage, log, new LinkedHashMap<>(),
-            messages -> assertEquals(new HashMap<String, List<RaftMessage>>() {{
+            messages -> assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
                     .setTerm(2)
                     .setRequestVote(RequestVote.newBuilder()
@@ -125,16 +125,16 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                         .setLeaderTransfer(false)
                         .build())
                     .build()));
-            }}, messages), eventListener, snapshotInstaller, onSnapshotInstalled);
+            }}), eventListener, snapshotInstaller, onSnapshotInstalled);
         raftNodeStateCandidate.campaign(false, false);
-        assertEquals(2, raftNodeStateCandidate.currentTerm());
+        assertEquals(raftNodeStateCandidate.currentTerm(), 2);
 
         stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
             .setClusterConfig(clusterConfig).build());
         // !preVote && !leaderTransfer
         raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, raftConfig, stateStorage, log,
             new LinkedHashMap<>(),
-            messages -> assertEquals(new HashMap<String, List<RaftMessage>>() {{
+            messages -> assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
                     .setTerm(2)
                     .setRequestVote(RequestVote.newBuilder()
@@ -153,9 +153,9 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                         .setLeaderTransfer(true)
                         .build())
                     .build()));
-            }}, messages), eventListener, snapshotInstaller, onSnapshotInstalled);
+            }}), eventListener, snapshotInstaller, onSnapshotInstalled);
         raftNodeStateCandidate.campaign(raftConfig.isPreVote(), true);
-        assertEquals(2, raftNodeStateCandidate.currentTerm());
+        assertEquals(raftNodeStateCandidate.currentTerm(), 2);
     }
 
     @Test
@@ -176,7 +176,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             messages -> {
                 if (onMessageReadyIndex.get() == 0) {
                     onMessageReadyIndex.incrementAndGet();
-                    assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                    assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("v1", Collections.singletonList(RaftMessage.newBuilder()
                             .setTerm(2)
                             .setRequestPreVote(RequestPreVote.newBuilder()
@@ -193,10 +193,10 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                                 .setLastLogIndex(0)
                                 .build())
                             .build()));
-                    }}, messages);
+                    }});
                 } else if (onMessageReadyIndex.get() == 1) {
                     onMessageReadyIndex.incrementAndGet();
-                    assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                    assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("v1", Collections.singletonList(RaftMessage.newBuilder()
                             .setTerm(2)
                             .setRequestPreVote(RequestPreVote.newBuilder()
@@ -213,7 +213,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                                 .setLastLogIndex(0)
                                 .build())
                             .build()));
-                    }}, messages);
+                    }});
                 } else if (onMessageReadyIndex.get() == 2) {
                     // !promotable
                     fail();
@@ -308,14 +308,14 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 if (onMessageReadyIndex.get() == 1) {
                     onMessageReadyIndex.incrementAndGet();
                     onMessageReadyIndex.incrementAndGet();
-                    assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                    assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("v1", Collections.singletonList(RaftMessage.newBuilder()
                             .setTerm(2)
                             .setRequestPreVoteReply(RequestPreVoteReply.newBuilder()
                                 .setVoteCouldGranted(true)
                                 .build())
                             .build()));
-                    }}, messages);
+                    }});
                 }
             }, eventListener, snapshotInstaller, onSnapshotInstalled);
 
@@ -327,21 +327,21 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 .build())
             .build();
         RaftNodeState raftNodeState = raftNodeStateCandidate.receive("v1", preVote);
-        assertSame(RaftNodeStatus.Candidate, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Candidate);
 
         raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
             stateStorage, log, new LinkedHashMap<>(),
             messages -> {
                 if (onMessageReadyIndex.get() == 1) {
                     onMessageReadyIndex.incrementAndGet();
-                    assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                    assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("v1", Collections.singletonList(RaftMessage.newBuilder()
                             .setTerm(2)
                             .setRequestPreVoteReply(RequestPreVoteReply.newBuilder()
                                 .setVoteCouldGranted(true)
                                 .build())
                             .build()));
-                    }}, messages);
+                    }});
                 }
             }, eventListener, snapshotInstaller, onSnapshotInstalled);
 
@@ -352,7 +352,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 .build())
             .build();
         raftNodeState = raftNodeStateCandidate.receive("v1", appendEntries);
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
 
 
     }
@@ -371,7 +371,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                     // preVoteRequests
                 } else if (onMessageReadyIndex.get() == 1) {
                     onMessageReadyIndex.incrementAndGet();
-                    assertEquals(new HashMap<String, List<RaftMessage>>() {
+                    assertEquals(messages, new HashMap<String, List<RaftMessage>>() {
                         {
                             put("v1", Collections.singletonList(RaftMessage.newBuilder()
                                 .setTerm(2)
@@ -392,7 +392,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                                     .build())
                                 .build()));
                         }
-                    }, messages);
+                    });
                 }
             }, eventListener, snapshotInstaller, onSnapshotInstalled);
         RaftMessage preVoteReplyGranted = RaftMessage.newBuilder()
@@ -422,8 +422,8 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         RaftNodeState raftNodeState = raftNodeStateCandidate.receive("v2", preVoteReplyRejected);
 
         // keep in candidate state when pre-vote lost
-        assertSame(RaftNodeStatus.Candidate, raftNodeState.getState());
-        assertEquals(1, raftNodeState.currentTerm());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Candidate);
+        assertEquals(raftNodeState.currentTerm(), 1);
         assertNull(raftNodeState.currentLeader());
     }
 
@@ -447,8 +447,8 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 .build())
             .build();
         RaftNodeState raftNodeState = raftNodeStateCandidate.receive("v1", appendEntries);
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
-        assertEquals("v1", raftNodeState.currentLeader());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
+        assertEquals(raftNodeState.currentLeader(), "v1");
 
         stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
             .setClusterConfig(clusterConfig).build());
@@ -464,8 +464,8 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 .build())
             .build();
         raftNodeState = raftNodeStateCandidate.receive("v1", installSnapshot);
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
-        assertEquals("v1", raftNodeState.currentLeader());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
+        assertEquals(raftNodeState.currentLeader(), "v1");
     }
 
     @Test
@@ -482,14 +482,14 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                     // preVoteRequests
                 } else if (onMessageReadyIndex.get() == 1) {
                     onMessageReadyIndex.incrementAndGet();
-                    assertEquals(new HashMap<String, List<RaftMessage>>() {{
+                    assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("v1", Collections.singletonList(RaftMessage.newBuilder()
                             .setTerm(1)
                             .setRequestVoteReply(RequestVoteReply.newBuilder()
                                 .setVoteGranted(false)
                                 .build())
                             .build()));
-                    }}, messages);
+                    }});
                 }
             }, eventListener, snapshotInstaller, onSnapshotInstalled);
 
@@ -499,7 +499,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 .build())
             .build();
         RaftNodeState raftNodeState = raftNodeStateCandidate.receive("v1", vote);
-        assertSame(RaftNodeStatus.Candidate, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Candidate);
     }
 
     @Test
@@ -525,7 +525,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 .build())
             .build();
         RaftNodeState raftNodeState = raftNodeStateCandidate.receive("v1", voteReply);
-        assertSame(RaftNodeStatus.Leader, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Leader);
     }
 
     @Test
@@ -552,8 +552,8 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
                 .build())
             .build();
         RaftNodeState raftNodeState = raftNodeStateCandidate.receive("v1", voteReplyNoGranted);
-        assertSame(RaftNodeStatus.Candidate, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Candidate);
         raftNodeState = raftNodeStateCandidate.receive("v2", voteReplyNoGranted);
-        assertSame(RaftNodeStatus.Follower, raftNodeState.getState());
+        assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
     }
 }

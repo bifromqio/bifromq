@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft.functest;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,7 +64,7 @@ public class RaftNodeNetworkTest {
         when(raftNode1.id()).thenReturn("V1");
         when(raftNode2.id()).thenReturn("V2");
         IRaftNode.IRaftMessageSender raftMessageListenerV1 = raftNodeNetwork.connect(raftNode1);
-        assertEquals(raftMessageListenerV1, raftNodeNetwork.connect(raftNode1));
+        assertEquals(raftNodeNetwork.connect(raftNode1), raftMessageListenerV1);
         assertNotEquals(raftNodeNetwork.connect(raftNode2), raftMessageListenerV1);
     }
 
@@ -86,8 +86,8 @@ public class RaftNodeNetworkTest {
         ArgumentCaptor<String> fromPeers = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<RaftMessage> receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode2, times(2)).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(Arrays.asList("V1", "V1"), fromPeers.getAllValues());
-        assertEquals(testMessages, receivedMessages.getAllValues());
+        assertEquals(fromPeers.getAllValues(), Arrays.asList("V1", "V1"));
+        assertEquals(receivedMessages.getAllValues(), testMessages);
 
         raftNodeNetwork.disconnect("V2");
         raftMessageListenerV1.send(new HashMap<String, List<RaftMessage>>() {{
@@ -124,14 +124,14 @@ public class RaftNodeNetworkTest {
         ArgumentCaptor<String> fromPeers = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<RaftMessage> receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode2, times(2)).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(Arrays.asList("V1", "V1"), fromPeers.getAllValues());
-        assertEquals(testMessages, receivedMessages.getAllValues());
+        assertEquals(fromPeers.getAllValues(), Arrays.asList("V1", "V1"));
+        assertEquals(receivedMessages.getAllValues(), testMessages);
 
         fromPeers = ArgumentCaptor.forClass(String.class);
         receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode3, times(2)).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(Arrays.asList("V1", "V1"), fromPeers.getAllValues());
-        assertEquals(testMessages, receivedMessages.getAllValues());
+        assertEquals(fromPeers.getAllValues(), Arrays.asList("V1", "V1"));
+        assertEquals(receivedMessages.getAllValues(), testMessages);
 
         raftMessageListenerV2.send(new HashMap<String, List<RaftMessage>>() {{
             put("V1", testMessages);
@@ -141,8 +141,8 @@ public class RaftNodeNetworkTest {
         fromPeers = ArgumentCaptor.forClass(String.class);
         receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode1, times(2)).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(Arrays.asList("V2", "V2"), fromPeers.getAllValues());
-        assertEquals(testMessages, receivedMessages.getAllValues());
+        assertEquals(fromPeers.getAllValues(), Arrays.asList("V2", "V2"));
+        assertEquals(receivedMessages.getAllValues(), testMessages);
     }
 
     @Test
@@ -229,7 +229,7 @@ public class RaftNodeNetworkTest {
         ArgumentCaptor<String> fromPeers = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<RaftMessage> receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode2, atLeastOnce()).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(sendMessages.size(), receivedMessages.getAllValues().size());
+        assertEquals(receivedMessages.getAllValues().size(), sendMessages.size());
         assertNotEquals(receivedMessages.getAllValues(), sendMessages);
     }
 
@@ -282,8 +282,8 @@ public class RaftNodeNetworkTest {
         ArgumentCaptor<String> fromPeers = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<RaftMessage> receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode2, times(2)).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(Arrays.asList("V1", "V1"), fromPeers.getAllValues());
-        assertEquals(testMessages, receivedMessages.getAllValues());
+        assertEquals(fromPeers.getAllValues(), Arrays.asList("V1", "V1"));
+        assertEquals(receivedMessages.getAllValues(), testMessages);
 
         verify(raftNode3, times(0)).receive(anyString(), any(RaftMessage.class));
     }
@@ -313,8 +313,8 @@ public class RaftNodeNetworkTest {
         ArgumentCaptor<String> fromPeers = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<RaftMessage> receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode2, times(2)).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(Arrays.asList("V1", "V1"), fromPeers.getAllValues());
-        assertEquals(testMessages, receivedMessages.getAllValues());
+        assertEquals(fromPeers.getAllValues(), Arrays.asList("V1", "V1"));
+        assertEquals(receivedMessages.getAllValues(), testMessages);
 
         verify(raftNode3, times(0)).receive(anyString(), any(RaftMessage.class));
     }
@@ -381,7 +381,7 @@ public class RaftNodeNetworkTest {
         ArgumentCaptor<String> fromPeers = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<RaftMessage> receivedMessages = ArgumentCaptor.forClass(RaftMessage.class);
         verify(raftNode2, atLeastOnce()).receive(fromPeers.capture(), receivedMessages.capture());
-        assertEquals(sendMessages.size(), receivedMessages.getAllValues().size());
-        assertEquals(sendMessages, receivedMessages.getAllValues());
+        assertEquals(receivedMessages.getAllValues().size(), sendMessages.size());
+        assertEquals(receivedMessages.getAllValues(), sendMessages);
     }
 }

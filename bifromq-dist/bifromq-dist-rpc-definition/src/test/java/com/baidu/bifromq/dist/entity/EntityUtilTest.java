@@ -18,8 +18,8 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
@@ -38,7 +38,7 @@ public class EntityUtilTest {
         String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "inboxGroupKey1");
         String topicFilter = "/a/b/c";
         ByteString key = matchRecordKey("trafficId", topicFilter, scopedInboxId);
-        assertEquals(topicFilter, parseTopicFilter(key.toStringUtf8()));
+        assertEquals(parseTopicFilter(key.toStringUtf8()), topicFilter);
     }
 
     @Test
@@ -48,20 +48,20 @@ public class EntityUtilTest {
         MatchRecord normal = MatchRecord.newBuilder()
             .setNormal(QoS.AT_MOST_ONCE).build();
         Matching matching = parseMatchRecord(key, normal.toByteString());
-        assertEquals("trafficId", matching.trafficId);
-        assertEquals(escape("/a/b/c"), matching.escapedTopicFilter);
-        assertEquals("/a/b/c", matching.originalTopicFilter());
+        assertEquals(matching.trafficId, "trafficId");
+        assertEquals(matching.escapedTopicFilter, escape("/a/b/c"));
+        assertEquals(matching.originalTopicFilter(), "/a/b/c");
         assertTrue(matching instanceof NormalMatching);
-        assertEquals(scopedInboxId, ((NormalMatching) matching).scopedInboxId);
+        assertEquals(((NormalMatching) matching).scopedInboxId, scopedInboxId);
 
         SubInfo subInfo = ((NormalMatching) matching).subInfo;
-        assertEquals("trafficId", subInfo.getTrafficId());
-        assertEquals(normal.getNormal(), subInfo.getSubQoS());
-        assertEquals("inbox1", subInfo.getInboxId());
-        assertEquals("/a/b/c", subInfo.getTopicFilter());
+        assertEquals(subInfo.getTrafficId(), "trafficId");
+        assertEquals(subInfo.getSubQoS(), normal.getNormal());
+        assertEquals(subInfo.getInboxId(), "inbox1");
+        assertEquals(subInfo.getTopicFilter(), "/a/b/c");
 
-        assertEquals(MqttBroker, ((NormalMatching) matching).brokerId);
-        assertEquals("inboxGroupKey1", ((NormalMatching) matching).inboxGroupKey);
+        assertEquals(((NormalMatching) matching).brokerId, MqttBroker);
+        assertEquals(((NormalMatching) matching).inboxGroupKey, "inboxGroupKey1");
     }
 
     @Test
@@ -74,18 +74,18 @@ public class EntityUtilTest {
                 .build())
             .build();
         Matching matching = parseMatchRecord(key, record.toByteString());
-        assertEquals("trafficId", matching.trafficId);
-        assertEquals(escape("/a/b/c"), matching.escapedTopicFilter);
-        assertEquals("$share/group//a/b/c", matching.originalTopicFilter());
+        assertEquals(matching.trafficId, "trafficId");
+        assertEquals(matching.escapedTopicFilter, escape("/a/b/c"));
+        assertEquals(matching.originalTopicFilter(), "$share/group//a/b/c");
         assertTrue(matching instanceof GroupMatching);
-        assertEquals("group", ((GroupMatching) matching).group);
-        assertEquals(scopedInboxId, ((GroupMatching) matching).inboxList.get(0).scopedInboxId);
+        assertEquals(((GroupMatching) matching).group, "group");
+        assertEquals(((GroupMatching) matching).inboxList.get(0).scopedInboxId, scopedInboxId);
 
         SubInfo subInfo = ((GroupMatching) matching).inboxList.get(0).subInfo;
-        assertEquals(record.getGroup().getEntryMap().get(scopedInboxId), subInfo.getSubQoS());
-        assertEquals("inbox1", subInfo.getInboxId());
-        assertEquals(MqttBroker, ((GroupMatching) matching).inboxList.get(0).brokerId);
-        assertEquals("server1", ((GroupMatching) matching).inboxList.get(0).inboxGroupKey);
+        assertEquals(subInfo.getSubQoS(), record.getGroup().getEntryMap().get(scopedInboxId));
+        assertEquals(subInfo.getInboxId(), "inbox1");
+        assertEquals(((GroupMatching) matching).inboxList.get(0).brokerId, MqttBroker);
+        assertEquals(((GroupMatching) matching).inboxList.get(0).inboxGroupKey, "server1");
 
     }
 }

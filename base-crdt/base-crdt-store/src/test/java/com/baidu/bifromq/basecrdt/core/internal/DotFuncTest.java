@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.dot;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.singleValue;
 import static com.baidu.bifromq.basecrdt.core.internal.TestUtil.assertUnorderedSame;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -44,7 +44,7 @@ public class DotFuncTest {
         assertTrue(dotFunc.add(singleValue(replicaA, 1, val1)));
         assertTrue(dotFunc.add(singleValue(replicaB, 1, val2)));
         assertFalse(dotFunc.isBottom());
-        assertEquals(Sets.newHashSet(dot(replicaA, 1), dot(replicaB, 1)), Sets.newHashSet(dotFunc));
+        assertEquals(Sets.newHashSet(dotFunc), Sets.newHashSet(dot(replicaA, 1), dot(replicaB, 1)));
         assertUnorderedSame(Lists.newArrayList(val1, val2).iterator(), dotFunc.values().iterator());
     }
 
@@ -54,7 +54,7 @@ public class DotFuncTest {
 
         dotFunc.add(singleValue(replicaA, 1, val1));
         assertFalse(dotFunc.add(singleValue(replicaA, 1, val2)));
-        assertEquals(Sets.newHashSet(dot(replicaA, 1)), Sets.newHashSet(dotFunc));
+        assertEquals(Sets.newHashSet(dotFunc), Sets.newHashSet(dot(replicaA, 1)));
         assertUnorderedSame(Lists.<ByteString>newArrayList(val1).iterator(), dotFunc.values().iterator());
     }
 
@@ -64,7 +64,7 @@ public class DotFuncTest {
 
         dotFunc.add(singleValue(replicaA, 1, val1));
         assertFalse(dotFunc.add(singleValue(replicaA, 1, val1)));
-        assertEquals(Sets.newHashSet(dot(replicaA, 1)), Sets.newHashSet(dotFunc));
+        assertEquals(Sets.newHashSet(dotFunc), Sets.newHashSet(dot(replicaA, 1)));
         assertUnorderedSame(Lists.newArrayList(val1, val1).iterator(), dotFunc.values().iterator());
     }
 

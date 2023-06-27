@@ -16,9 +16,9 @@ package com.baidu.bifromq.mqtt;
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_BROKER_UNAVAILABLE;
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_FAILED_AUTHENTICATION;
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_NOT_AUTHORIZED;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
@@ -136,7 +136,7 @@ public class MQTTConnectTest extends MQTTTest {
         connOpts.setCleanSession(true);
         connOpts.setUserName("abcdef/testClient");
         MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
-        assertEquals(REASON_CODE_FAILED_AUTHENTICATION, e.getReasonCode());
+        assertEquals(e.getReasonCode(), REASON_CODE_FAILED_AUTHENTICATION);
 
         verify(eventCollector).report(argThat(event -> event instanceof UnauthenticatedClient));
     }
@@ -155,7 +155,7 @@ public class MQTTConnectTest extends MQTTTest {
         connOpts.setCleanSession(true);
         connOpts.setUserName("abcdef/testClient");
         MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
-        assertEquals(REASON_CODE_NOT_AUTHORIZED, e.getReasonCode());
+        assertEquals(e.getReasonCode(), REASON_CODE_NOT_AUTHORIZED);
 
         verify(eventCollector).report(argThat(event -> event instanceof NotAuthorizedClient));
     }
@@ -175,7 +175,7 @@ public class MQTTConnectTest extends MQTTTest {
         connOpts.setCleanSession(true);
         connOpts.setUserName("abcdef/testClient");
         MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
-        assertEquals(REASON_CODE_BROKER_UNAVAILABLE, e.getReasonCode());
+        assertEquals(e.getReasonCode(), REASON_CODE_BROKER_UNAVAILABLE);
 
         verify(eventCollector).report(argThat(event -> event instanceof AuthError));
     }

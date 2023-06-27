@@ -15,7 +15,7 @@ package com.baidu.bifromq.basecrdt.store;
 
 import static com.baidu.bifromq.basecrdt.core.util.Log.info;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -64,7 +64,7 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         Replica awset = store.host(awseturi);
         ByteString id = awset.getId();
         Set<Replica> hosted = Sets.newHashSet(store.hosting());
-        assertEquals(Sets.newHashSet(awset), hosted);
+        assertEquals(hosted, Sets.newHashSet(awset));
         assertTrue(store.get(awseturi).isPresent());
     }
 

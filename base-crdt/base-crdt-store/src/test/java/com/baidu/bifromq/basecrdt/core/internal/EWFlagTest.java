@@ -15,7 +15,7 @@ package com.baidu.bifromq.basecrdt.core.internal;
 
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.ewflag;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -45,7 +45,7 @@ public class EWFlagTest extends CRDTTest {
             newStateLattice(leftReplica.getId(), 1000),
             executor, Duration.ofMillis(100));
         IEWFlag ewFlag = ewFlagInflater.getCRDT();
-        assertEquals(leftReplica, ewFlag.id());
+        assertEquals(ewFlag.id(), leftReplica);
 
         assertFalse(ewFlag.read());
         ewFlag.execute(EWFlagOperation.enable()).join();
@@ -74,7 +74,7 @@ public class EWFlagTest extends CRDTTest {
         sync(leftInflater, rightInflater);
 
         assertTrue(left.read());
-        assertEquals(left.read(), right.read());
+        assertEquals(right.read(), left.read());
 
         TestObserver<Long> inflationObserver = new TestObserver<>();
         right.inflation().subscribe(inflationObserver);
@@ -83,6 +83,6 @@ public class EWFlagTest extends CRDTTest {
         assertFalse(inflationObserver.values().isEmpty());
         sync(leftInflater, rightInflater);
         assertFalse(left.read());
-        assertEquals(left.read(), right.read());
+        assertEquals(right.read(), left.read());
     }
 }

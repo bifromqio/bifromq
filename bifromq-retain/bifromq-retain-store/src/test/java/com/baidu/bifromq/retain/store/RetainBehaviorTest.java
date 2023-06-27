@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
@@ -28,11 +28,11 @@ public class RetainBehaviorTest extends RetainStoreTest {
         String topic = "/a/b/c";
         TopicMessage message = message(topic, "hello");
         RetainCoProcReply reply = requestRetain(trafficId, 10, message);
-        assertEquals(RetainCoProcReply.Result.RETAINED, reply.getResult());
+        assertEquals(reply.getResult(), RetainCoProcReply.Result.RETAINED);
 
         MatchCoProcReply matchReply = requestMatch(trafficId, topic, 10);
-        assertEquals(1, matchReply.getMessagesCount());
-        assertEquals(message, matchReply.getMessages(0));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(matchReply.getMessages(0), message);
     }
 
     @Test(groups = "integration")
@@ -40,22 +40,22 @@ public class RetainBehaviorTest extends RetainStoreTest {
         String trafficId = "trafficId";
         String topic = "/a/b/c";
         RetainCoProcReply reply = requestRetain(trafficId, 0, message(topic, "hello"));
-        assertEquals(RetainCoProcReply.Result.ERROR, reply.getResult());
+        assertEquals(reply.getResult(), RetainCoProcReply.Result.ERROR);
 
         MatchCoProcReply matchReply = requestMatch(trafficId, topic, 10);
-        assertEquals(0, matchReply.getMessagesCount());
+        assertEquals(matchReply.getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
     public void retainNewExceedLimit() {
         String trafficId = "trafficId";
-        assertEquals(RetainCoProcReply.Result.RETAINED,
-            requestRetain(trafficId, 1, message("/a", "hello")).getResult());
+        assertEquals(requestRetain(trafficId, 1, message("/a", "hello")).getResult(),
+            RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(RetainCoProcReply.Result.ERROR,
-            requestRetain(trafficId, 1, message("/b", "hello")).getResult());
+        assertEquals(requestRetain(trafficId, 1, message("/b", "hello")).getResult(),
+            RetainCoProcReply.Result.ERROR);
 
         MatchCoProcReply matchReply = requestMatch(trafficId, "/b", 10);
-        assertEquals(0, matchReply.getMessagesCount());
+        assertEquals(matchReply.getMessagesCount(), 0);
     }
 }

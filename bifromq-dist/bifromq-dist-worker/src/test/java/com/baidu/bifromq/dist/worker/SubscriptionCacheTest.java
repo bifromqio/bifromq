@@ -16,8 +16,8 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static java.util.Collections.singleton;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
@@ -95,12 +95,12 @@ public class SubscriptionCacheTest {
         when(kvIterator.isValid()).thenReturn(false);
 
         Map<NormalMatching, Set<ClientInfo>> routes = cache.get(scopedTopic, singleton(sender)).join();
-        assertEquals(0, routes.size());
+        assertEquals(routes.size(), 0);
 //        assertTrue(routes.get(scopedTopic).isEmpty());
 
         // cacheHit
         routes = cache.get(scopedTopic, singleton(sender)).join();
-        assertEquals(0, routes.size());
+        assertEquals(routes.size(), 0);
 //        assertTrue(routes.get(scopedTopic).isEmpty());
 
         verify(rangeReader).refresh();
@@ -125,7 +125,7 @@ public class SubscriptionCacheTest {
         cache.get(scopedTopic, singleton(sender)).join();
         Thread.sleep(600);
         routes = cache.get(scopedTopic, singleton(sender)).join();
-        assertEquals(0, routes.size());
+        assertEquals(routes.size(), 0);
 
         verify(kvIterator, times(1)).seek(any());
         verify(rangeReader, times(1)).refresh();
@@ -151,7 +151,7 @@ public class SubscriptionCacheTest {
         when(kvIterator.isValid()).thenReturn(false);
 
         routes = cache.get(scopedTopic, singleton(sender)).join();
-        assertEquals(0, routes.size());
+        assertEquals(routes.size(), 0);
         verify(kvIterator, times(2)).seek(any());
         verify(kvIterator, times(2)).seek(scopedTopic.matchRecordRange.getStartKey());
     }
@@ -179,7 +179,7 @@ public class SubscriptionCacheTest {
         when(kvIterator.isValid()).thenReturn(false);
 
         routes = cache.get(scopedTopic, singleton(sender)).join();
-        assertEquals(0, routes.size());
+        assertEquals(routes.size(), 0);
         verify(kvIterator, times(2)).seek(any());
         verify(kvIterator, times(2)).seek(scopedTopic.matchRecordRange.getStartKey());
     }
@@ -209,7 +209,7 @@ public class SubscriptionCacheTest {
         when(kvIterator.isValid()).thenReturn(false);
 
         routes = cache.get(scopedTopic, singleton(sender)).join();
-        assertEquals(0, routes.size());
+        assertEquals(routes.size(), 0);
         verify(kvIterator, times(2)).seek(any());
         verify(kvIterator, times(2)).seek(scopedTopic.matchRecordRange.getStartKey());
     }
@@ -236,15 +236,15 @@ public class SubscriptionCacheTest {
                 .build().toByteString());
 
         Map<NormalMatching, Set<ClientInfo>> routes = cache.get(scopedTopic, singleton(sender)).join();
-        assertEquals(1, routes.size());
+        assertEquals(routes.size(), 1);
         for (Map.Entry<NormalMatching, Set<ClientInfo>> entry : routes.entrySet()) {
             NormalMatching matching = entry.getKey();
-            assertEquals(scopedTopic.trafficId, matching.trafficId);
-            assertEquals(sharedTopicFilter, matching.originalTopicFilter());
-            assertEquals(0, matching.brokerId);
-            assertEquals("inbox1", matching.subInfo.getInboxId());
-            assertEquals(QoS.AT_MOST_ONCE, matching.subInfo.getSubQoS());
-            assertEquals("inboxGroupKey", matching.inboxGroupKey);
+            assertEquals(matching.trafficId, scopedTopic.trafficId);
+            assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
+            assertEquals(matching.brokerId, 0);
+            assertEquals(matching.subInfo.getInboxId(), "inbox1");
+            assertEquals(matching.subInfo.getSubQoS(), QoS.AT_MOST_ONCE);
+            assertEquals(matching.inboxGroupKey, "inboxGroupKey");
             assertTrue(entry.getValue().contains(sender));
         }
     }
@@ -282,15 +282,15 @@ public class SubscriptionCacheTest {
         Thread.sleep(1100);
         routes = cache.get(scopedTopic, singleton(sender)).join();
 
-        assertEquals(1, routes.size());
+        assertEquals(routes.size(), 1);
         for (Map.Entry<NormalMatching, Set<ClientInfo>> entry : routes.entrySet()) {
             NormalMatching matching = entry.getKey();
-            assertEquals(scopedTopic.trafficId, matching.trafficId);
-            assertEquals(sharedTopicFilter, matching.originalTopicFilter());
-            assertEquals(0, matching.brokerId);
-            assertEquals("inbox2", matching.subInfo.getInboxId());
-            assertEquals(QoS.AT_LEAST_ONCE, matching.subInfo.getSubQoS());
-            assertEquals("inboxGroupKey", matching.inboxGroupKey);
+            assertEquals(matching.trafficId, scopedTopic.trafficId);
+            assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
+            assertEquals(matching.brokerId, 0);
+            assertEquals(matching.subInfo.getInboxId(), "inbox2");
+            assertEquals(matching.subInfo.getSubQoS(), QoS.AT_LEAST_ONCE);
+            assertEquals(matching.inboxGroupKey, "inboxGroupKey");
             assertTrue(entry.getValue().contains(sender));
         }
     }

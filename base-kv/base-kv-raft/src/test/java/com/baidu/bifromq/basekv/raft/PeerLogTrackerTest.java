@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,9 +70,9 @@ public class PeerLogTrackerTest {
 
         ArgumentCaptor<SyncStateChangedEvent> captured = ArgumentCaptor.forClass(SyncStateChangedEvent.class);
         verify(statusListener).onEvent(captured.capture());
-        assertEquals(new HashMap<String, RaftNodeSyncState>() {{
+        assertEquals(captured.getValue().states, new HashMap<String, RaftNodeSyncState>() {{
             put("V1", RaftNodeSyncState.Probing);
-        }}, captured.getValue().states);
+        }});
 
         logTracker.startTracking(new HashSet<>() {{
             add("V2");
@@ -81,10 +81,10 @@ public class PeerLogTrackerTest {
         captured = ArgumentCaptor.forClass(SyncStateChangedEvent.class);
         verify(statusListener, times(2)).onEvent(captured.capture());
 
-        assertEquals(new HashMap<String, RaftNodeSyncState>() {{
+        assertEquals(captured.getValue().states, new HashMap<String, RaftNodeSyncState>() {{
             put("V1", RaftNodeSyncState.Probing);
             put("V2", RaftNodeSyncState.Probing);
-        }}, captured.getValue().states);
+        }});
     }
 
     @Test
@@ -94,7 +94,7 @@ public class PeerLogTrackerTest {
             add("Abc");
         }}, true);
         assertTrue(logTracker.isTracking("Abc"));
-        assertEquals(RaftNodeSyncState.Probing, logTracker.status("Abc"));
+        assertEquals(logTracker.status("Abc"), RaftNodeSyncState.Probing);
     }
 
     @Test
@@ -117,19 +117,19 @@ public class PeerLogTrackerTest {
 
         ArgumentCaptor<SyncStateChangedEvent> captured = ArgumentCaptor.forClass(SyncStateChangedEvent.class);
         verify(statusListener).onEvent(captured.capture());
-        assertEquals(new HashMap<String, RaftNodeSyncState>() {{
+        assertEquals(captured.getValue().states, new HashMap<String, RaftNodeSyncState>() {{
             put("A1", RaftNodeSyncState.Probing);
             put("A2", RaftNodeSyncState.Probing);
             put("B1", RaftNodeSyncState.Probing);
-        }}, captured.getValue().states);
+        }});
 
         logTracker.stopTracking(key -> key.startsWith("A"), true);
 
         captured = ArgumentCaptor.forClass(SyncStateChangedEvent.class);
         verify(statusListener, times(2)).onEvent(captured.capture());
-        assertEquals(new HashMap<String, RaftNodeSyncState>() {{
+        assertEquals(captured.getValue().states, new HashMap<String, RaftNodeSyncState>() {{
             put("B1", RaftNodeSyncState.Probing);
-        }}, captured.getValue().states);
+        }});
 
         assertFalse(logTracker.isTracking("A1"));
         assertFalse(logTracker.isTracking("A2"));
@@ -146,11 +146,11 @@ public class PeerLogTrackerTest {
 
         ArgumentCaptor<SyncStateChangedEvent> captured = ArgumentCaptor.forClass(SyncStateChangedEvent.class);
         verify(statusListener).onEvent(captured.capture());
-        assertEquals(new HashMap<String, RaftNodeSyncState>() {{
+        assertEquals(captured.getValue().states, new HashMap<String, RaftNodeSyncState>() {{
             put("A1", RaftNodeSyncState.Probing);
             put("A2", RaftNodeSyncState.Probing);
             put("B1", RaftNodeSyncState.Probing);
-        }}, captured.getValue().states);
+        }});
         logTracker.stopTracking(key -> key.startsWith("A"), false);
         verify(statusListener, times(1)).onEvent(any());
 

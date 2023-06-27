@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.raft;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -61,7 +61,7 @@ public class RaftNodeTest {
 
     @Test
     public void id() {
-        assertEquals("V1", testNode.id());
+        assertEquals(testNode.id(), "V1");
     }
 
     @Test(expectedExceptions = IllegalStateException.class)

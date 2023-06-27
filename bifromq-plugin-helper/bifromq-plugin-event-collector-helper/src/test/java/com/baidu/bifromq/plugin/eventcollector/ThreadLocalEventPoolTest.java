@@ -6,7 +6,7 @@ import org.testng.annotations.Test;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.testng.AssertJUnit.assertNotSame;
+import static org.testng.Assert.assertNotSame;
 
 public class ThreadLocalEventPoolTest {
     @Test
@@ -16,6 +16,6 @@ public class ThreadLocalEventPoolTest {
         Thread t = new Thread(() -> pingReqRef.set(pingReqRef.get()));
         t.start();
         Uninterruptibles.joinUninterruptibly(t);
-        assertNotSame(pingReq, pingReqRef.get());
+        assertNotSame(pingReqRef.get(), pingReq);
     }
 }

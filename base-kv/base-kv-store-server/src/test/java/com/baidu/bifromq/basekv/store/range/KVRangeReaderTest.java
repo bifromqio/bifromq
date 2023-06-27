@@ -21,7 +21,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.stateKey;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.verKey;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteString;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteStringNativeOrder;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
@@ -67,10 +67,10 @@ public class KVRangeReaderTest {
         when(engine.registerKeyRange(anyString(), any(ByteString.class), any(ByteString.class)))
             .thenReturn(1);
         KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher());
-        assertEquals(-1L, rangeReader.ver());
-        assertEquals(-1L, rangeReader.lastAppliedIndex());
-        assertEquals(State.StateType.Normal, rangeReader.state().getType());
-        assertEquals(EMPTY_RANGE, rangeReader.kvReader().range());
+        assertEquals(rangeReader.ver(), -1L);
+        assertEquals(rangeReader.lastAppliedIndex(), -1L);
+        assertEquals(rangeReader.state().getType(), State.StateType.Normal);
+        assertEquals(rangeReader.kvReader().range(), EMPTY_RANGE);
     }
 
     @Test
@@ -103,10 +103,10 @@ public class KVRangeReaderTest {
 
         rangeReader.refresh();
 
-        assertEquals(10, rangeReader.ver());
-        assertEquals(10, rangeReader.lastAppliedIndex());
-        assertEquals(State.StateType.Normal, rangeReader.state().getType());
-        assertEquals(FULL_RANGE, rangeReader.kvReader().range());
+        assertEquals(rangeReader.ver(), 10);
+        assertEquals(rangeReader.lastAppliedIndex(), 10);
+        assertEquals(rangeReader.state().getType(), State.StateType.Normal);
+        assertEquals(rangeReader.kvReader().range(), FULL_RANGE);
         verify(engine, times(2)).newIterator(2);
         verify(engineIterator, times(2)).close();
     }

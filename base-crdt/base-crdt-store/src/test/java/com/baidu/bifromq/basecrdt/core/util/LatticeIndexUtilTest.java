@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basecrdt.core.util;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
@@ -33,7 +33,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 3, 3);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 3);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -41,7 +41,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 1, 2);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 3);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -49,7 +49,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 3, 5);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 5);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -58,7 +58,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 6, 8);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 8);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -67,7 +67,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 4, 5);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 8);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -76,7 +76,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 4, 5);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 8);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -84,7 +84,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 1, 5);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 5);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -93,7 +93,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 56, 95);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 95);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
         {
             NavigableMap<Long, Long> a = Maps.newTreeMap();
@@ -105,7 +105,7 @@ public class LatticeIndexUtilTest {
             LatticeIndexUtil.remember(a, 45, 96);
             NavigableMap<Long, Long> b = Maps.newTreeMap();
             LatticeIndexUtil.remember(b, 1, 96);
-            assertEquals(a, b);
+            assertEquals(b, a);
         }
     }
 }

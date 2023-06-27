@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.localengine;
 
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -73,7 +73,7 @@ public class OverrideIdentityTest {
         engine = KVEngineFactory.create(overrideIdentity, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
         engine.start(bgTaskExecutor);
-        assertEquals(overrideIdentity, engine.id());
+        assertEquals(engine.id(), overrideIdentity);
         engine.stop();
         // restart without overrideIdentity specified
         configurator = new RocksDBKVEngineConfigurator()
@@ -84,7 +84,7 @@ public class OverrideIdentityTest {
             this::isUsed, configurator);
         engine.start(bgTaskExecutor);
 
-        assertEquals(overrideIdentity, engine.id());
+        assertEquals(engine.id(), overrideIdentity);
         engine.stop();
         // restart with different overrideIdentity specified
         String another = UUID.randomUUID().toString();
@@ -96,7 +96,7 @@ public class OverrideIdentityTest {
             this::isUsed, configurator);
         engine.start(bgTaskExecutor);
 
-        assertEquals(overrideIdentity, engine.id());
+        assertEquals(engine.id(), overrideIdentity);
         engine.stop();
     }
 
@@ -121,7 +121,7 @@ public class OverrideIdentityTest {
             this::isUsed, configurator);
         engine.start(bgTaskExecutor);
 
-        assertEquals(identity, engine.id());
+        assertEquals(engine.id(), identity);
         engine.stop();
     }
 

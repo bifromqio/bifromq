@@ -16,8 +16,8 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -112,10 +112,10 @@ public class BatchDistTest extends DistWorkerTest {
                     .addMessage(toMsg("trafficA", AT_MOST_ONCE, copyFromUtf8("Hello")))
                     .build()), "orderKey1");
 
-        assertEquals(1, reply.getResultMap().get("trafficA").getFanoutMap().get("/a/1").intValue());
-        assertEquals(2, reply.getResultMap().get("trafficA").getFanoutMap().get("/a/2").intValue());
-        assertEquals(1, reply.getResultMap().get("trafficA").getFanoutMap().get("/a/3").intValue());
-        assertEquals(1, reply.getResultMap().get("trafficA").getFanoutMap().get("/a/4").intValue());
+        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/1").intValue(), 1);
+        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/2").intValue(), 2);
+        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/3").intValue(), 1);
+        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/4").intValue(), 1);
     }
 
     private TopicMessagePack.SenderMessagePack toMsg(String trafficId, QoS qos, ByteString payload) {

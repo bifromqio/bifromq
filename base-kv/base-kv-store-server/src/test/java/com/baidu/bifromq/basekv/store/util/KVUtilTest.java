@@ -19,7 +19,7 @@ import static com.baidu.bifromq.basekv.store.util.KVUtil.toInt;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toKVRangeId;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toLong;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toLongNativeOrder;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
@@ -31,33 +31,33 @@ import org.testng.annotations.Test;
 public class KVUtilTest {
     @Test
     public void testToBytes() {
-        assertEquals(100L, toLong(KVUtil.toByteString(100L)));
-        assertEquals(100, toInt(KVUtil.toByteString(100)));
-        assertEquals(100L, toLongNativeOrder(KVUtil.toByteStringNativeOrder(100L)));
+        assertEquals(toLong(KVUtil.toByteString(100L)), 100L);
+        assertEquals(toInt(KVUtil.toByteString(100)), 100);
+        assertEquals(toLongNativeOrder(KVUtil.toByteStringNativeOrder(100L)), 100L);
     }
 
     @Test
     public void testConcat() {
-        assertEquals(ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5, 6, 7}),
-            KVUtil.concat(ByteString.copyFrom(new byte[] {1, 2}),
+        assertEquals(KVUtil.concat(ByteString.copyFrom(new byte[] {1, 2}),
                 ByteString.copyFrom(new byte[] {3, 4, 5}),
                 ByteString.copyFrom(new byte[0]),
-                ByteString.copyFrom(new byte[] {6, 7})));
-        assertEquals(ByteString.EMPTY, KVUtil.concat(ByteString.EMPTY, ByteString.EMPTY));
-        assertEquals(ByteString.copyFrom(new byte[] {1, 2, 3}),
-            KVUtil.concat(ByteString.copyFrom(new byte[] {1, 2, 3})));
+                ByteString.copyFrom(new byte[] {6, 7})),
+            ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5, 6, 7}));
+        assertEquals(KVUtil.concat(ByteString.EMPTY, ByteString.EMPTY), ByteString.EMPTY);
+        assertEquals(KVUtil.concat(ByteString.copyFrom(new byte[] {1, 2, 3})),
+            ByteString.copyFrom(new byte[] {1, 2, 3}));
     }
 
     @Test
     public void testUpperBound() {
         KVRangeId bucketId = cap(KVRangeId.newBuilder().build());
-        assertEquals(bucketId.getEpoch(), 0L);
-        assertEquals(bucketId.getId(), 1L);
+        assertEquals(0L, bucketId.getEpoch());
+        assertEquals(1L, bucketId.getId());
     }
 
     @Test
     public void testKVRangeIdCodec() {
         KVRangeId id = KVRangeIdUtil.generate();
-        assertEquals(id, toKVRangeId(toByteString(id)));
+        assertEquals(toKVRangeId(toByteString(id)), id);
     }
 }

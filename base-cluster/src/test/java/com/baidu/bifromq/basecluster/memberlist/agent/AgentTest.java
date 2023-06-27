@@ -17,10 +17,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
-import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basecluster.agent.proto.AgentMember;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
@@ -109,8 +109,8 @@ public class AgentTest {
     @Test
     public void init() {
         Agent agent = new Agent(agentId, endpoint1, agentMessenger, scheduler, crdtStore, hostProvider);
-        assertEquals(agentId, agent.id());
-        assertEquals(endpoint1, agent.endpoint());
+        assertEquals(agent.id(), agentId);
+        assertEquals(agent.endpoint(), endpoint1);
     }
 
     @SneakyThrows
@@ -122,8 +122,8 @@ public class AgentTest {
 
         Agent agent = new Agent(agentId, endpoint1, agentMessenger, scheduler, crdtStore, hostProvider);
         IAgentMember agentMember = agent.register(agentMemberName);
-        assertEquals(agentMemberName, agentMember.address().getName());
-        assertEquals(endpoint1, agentMember.address().getEndpoint());
+        assertEquals(agentMember.address().getName(), agentMemberName);
+        assertEquals(agentMember.address().getEndpoint(), endpoint1);
 
         ArgumentCaptor<ORMapOperation> orMapOpCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(orMap, times(1)).execute(orMapOpCap.capture());
@@ -131,12 +131,12 @@ public class AgentTest {
         assertTrue(op instanceof ORMapOperation.ORMapUpdate);
         assertTrue(((ORMapOperation.ORMapUpdate) op).valueOp instanceof MVRegOperation);
         AgentMemberAddr key = AgentMemberAddr.parseFrom(op.keyPath[0]);
-        assertEquals(agentMemberName, key.getName());
-        assertEquals(endpoint1, key.getEndpoint());
+        assertEquals(key.getName(), agentMemberName);
+        assertEquals(key.getEndpoint(), endpoint1);
 
         AgentMemberMetadata agentMemberMetadata1 =
             AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate) op).valueOp).value);
-        assertEquals(meta1, agentMemberMetadata1.getValue());
+        assertEquals(agentMemberMetadata1.getValue(), meta1);
         assertTrue(agentMemberMetadata1.getHlc() > 0);
     }
 
@@ -170,7 +170,7 @@ public class AgentTest {
             MockUtil.toAgentMemberMetadata(ByteString.EMPTY)));
         inflationSubject.onNext(System.currentTimeMillis());
         testObserver.awaitCount(2);
-        assertEquals(1, testObserver.values().get(1).size());
+        assertEquals(testObserver.values().get(1).size(), 1);
     }
 
     @Test
@@ -208,10 +208,10 @@ public class AgentTest {
         verify(orMap).execute(orMapOpCap.capture());
         ORMapOperation op = orMapOpCap.getValue();
         assertTrue(op instanceof ORMapOperation.ORMapRemove);
-        assertEquals(CausalCRDTType.mvreg, ((ORMapOperation.ORMapRemove) op).valueType);
+        assertEquals(((ORMapOperation.ORMapRemove) op).valueType, CausalCRDTType.mvreg);
         AgentMemberAddr key = AgentMemberAddr.parseFrom(op.keyPath[0]);
-        assertEquals(agentMember2, key.getName());
-        assertEquals(endpoint2, key.getEndpoint());
+        assertEquals(key.getName(), agentMember2);
+        assertEquals(key.getEndpoint(), endpoint2);
 
         verify(crdtStore).join(replica.getUri(), endpoint1.toByteString(),
             endpoints.stream().map(HostEndpoint::toByteString).collect(

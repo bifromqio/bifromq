@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basecluster.fd.Fixtures.toPing;
 import static com.baidu.bifromq.basecluster.fd.Fixtures.toPingAck;
 import static com.baidu.bifromq.basecluster.fd.Fixtures.toPingNack;
 import static com.baidu.bifromq.basecluster.fd.Fixtures.toPingReq;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -85,8 +85,8 @@ public class FailureDetectorTest {
         failureDetector.healthScoring().subscribe(healthScoreConsumer);
         failureDetector.succeeding().subscribe(successProbeConsumer);
         failureDetector.suspecting().subscribe(suspectProbeConsumer);
-        assertEquals(Fixtures.BASE_PROBE_INTERVAL, failureDetector.baseProbeInterval());
-        assertEquals(Fixtures.BASE_PROBE_TIMEOUT, failureDetector.baseProbeTimeout());
+        assertEquals(failureDetector.baseProbeInterval(), Fixtures.BASE_PROBE_INTERVAL);
+        assertEquals(failureDetector.baseProbeTimeout(), Fixtures.BASE_PROBE_TIMEOUT);
     }
 
     @AfterMethod
@@ -121,9 +121,9 @@ public class FailureDetectorTest {
             targetAddrCaptor.capture(),
             reliableCaptor.capture());
 
-        assertEquals(toPing(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET), msgCaptor.getValue());
+        assertEquals(msgCaptor.getValue(), toPing(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET));
         assertTrue(piggybackMsgsCaptor.getValue().isEmpty());
-        assertEquals(Fixtures.DIRECT_TARGET_ADDRESS, targetAddrCaptor.getValue());
+        assertEquals(targetAddrCaptor.getValue(), Fixtures.DIRECT_TARGET_ADDRESS);
         assertFalse(reliableCaptor.getValue());
     }
 
@@ -148,7 +148,7 @@ public class FailureDetectorTest {
         verify(successProbeConsumer).accept(targetCap.capture());
         Timed<IProbingTarget> successProbe = targetCap.getValue();
         assertTrue(successProbe.time() > 0);
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, successProbe.value());
+        assertEquals(successProbe.value(), Fixtures.DIRECT_PROBING_TARGET);
     }
 
     @SneakyThrows
@@ -178,7 +178,7 @@ public class FailureDetectorTest {
         verify(successProbeConsumer).accept(targetCap.capture());
         Timed<IProbingTarget> successProbe = targetCap.getValue();
         assertTrue(successProbe.time() > 0);
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, successProbe.value());
+        assertEquals(successProbe.value(), Fixtures.DIRECT_PROBING_TARGET);
     }
 
     @SneakyThrows
@@ -227,7 +227,7 @@ public class FailureDetectorTest {
         verify(suspectProbeConsumer).accept(targetCap.capture());
         Timed<IProbingTarget> suspectProbe = targetCap.getValue();
         assertTrue(suspectProbe.time() > 0);
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, suspectProbe.value());
+        assertEquals(suspectProbe.value(), Fixtures.DIRECT_PROBING_TARGET);
     }
 
     @SneakyThrows
@@ -262,16 +262,16 @@ public class FailureDetectorTest {
             targetAddrCaptor.capture(),
             reliableCaptor.capture());
 
-        assertEquals(toPingReq(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET),
-            msgCaptor.getAllValues().get(1));
-        assertEquals(toPingReq(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET),
-            msgCaptor.getAllValues().get(2));
+        assertEquals(msgCaptor.getAllValues().get(1),
+            toPingReq(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET));
+        assertEquals(msgCaptor.getAllValues().get(2),
+            toPingReq(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET));
 
         assertTrue(piggybackMsgsCaptor.getAllValues().get(1).isEmpty());
         assertTrue(piggybackMsgsCaptor.getAllValues().get(2).isEmpty());
 
-        assertEquals(Fixtures.INDIRECT_TARGET_ADDRESS_1, targetAddrCaptor.getAllValues().get(1));
-        assertEquals(Fixtures.INDIRECT_TARGET_ADDRESS_2, targetAddrCaptor.getAllValues().get(2));
+        assertEquals(targetAddrCaptor.getAllValues().get(1), Fixtures.INDIRECT_TARGET_ADDRESS_1);
+        assertEquals(targetAddrCaptor.getAllValues().get(2), Fixtures.INDIRECT_TARGET_ADDRESS_2);
 
         assertFalse(reliableCaptor.getAllValues().get(1));
         assertFalse(reliableCaptor.getAllValues().get(2));
@@ -294,7 +294,7 @@ public class FailureDetectorTest {
         verify(suspectProbeConsumer).accept(targetCap.capture());
         Timed<IProbingTarget> suspectProbe = targetCap.getValue();
         assertTrue(suspectProbe.time() > 0);
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, suspectProbe.value());
+        assertEquals(suspectProbe.value(), Fixtures.DIRECT_PROBING_TARGET);
     }
 
     @SneakyThrows
@@ -334,7 +334,7 @@ public class FailureDetectorTest {
         verify(suspectProbeConsumer).accept(targetCap.capture());
         Timed<IProbingTarget> suspectProbe = targetCap.getValue();
         assertTrue(suspectProbe.time() > 0);
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, suspectProbe.value());
+        assertEquals(suspectProbe.value(), Fixtures.DIRECT_PROBING_TARGET);
     }
 
     @SneakyThrows
@@ -360,7 +360,7 @@ public class FailureDetectorTest {
         verify(successProbeConsumer).accept(targetCap.capture());
         Timed<IProbingTarget> suspectProbe = targetCap.getValue();
         assertTrue(suspectProbe.time() > 0);
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, suspectProbe.value());
+        assertEquals(suspectProbe.value(), Fixtures.DIRECT_PROBING_TARGET);
     }
 
     @Test
@@ -411,7 +411,7 @@ public class FailureDetectorTest {
         verify(suspectProbeConsumer).accept(targetCap.capture());
         Timed<IProbingTarget> suspectProbe = targetCap.getValue();
         assertTrue(suspectProbe.time() > 0);
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, suspectProbe.value());
+        assertEquals(suspectProbe.value(), Fixtures.DIRECT_PROBING_TARGET);
     }
 
     @Test
@@ -454,8 +454,8 @@ public class FailureDetectorTest {
         ArgumentCaptor<Boolean> reliableCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(messenger).send(msgCaptor.capture(), targetAddrCaptor.capture(), reliableCaptor.capture());
 
-        assertEquals(toPingAck(0), msgCaptor.getValue());
-        assertEquals(Fixtures.DIRECT_TARGET_ADDRESS, targetAddrCaptor.getValue());
+        assertEquals(msgCaptor.getValue(), toPingAck(0));
+        assertEquals(targetAddrCaptor.getValue(), Fixtures.DIRECT_TARGET_ADDRESS);
         assertFalse(reliableCaptor.getValue());
     }
 
@@ -488,8 +488,8 @@ public class FailureDetectorTest {
         ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
         verify(messenger).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(toPing(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET), msgCap.getValue());
-        assertEquals(Fixtures.DIRECT_TARGET_ADDRESS, addrCap.getValue());
+        assertEquals(msgCap.getValue(), toPing(0, Fixtures.LOCAL_PROBING_TARGET, Fixtures.DIRECT_PROBING_TARGET));
+        assertEquals(addrCap.getValue(), Fixtures.DIRECT_TARGET_ADDRESS);
         assertTrue(reliableCap.getValue());
     }
 
@@ -516,8 +516,8 @@ public class FailureDetectorTest {
 
         verify(messenger, times(2)).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(toPingAck(0), msgCap.getAllValues().get(1));
-        assertEquals(Fixtures.INDIRECT_TARGET_ADDRESS_1, addrCap.getAllValues().get(1));
+        assertEquals(msgCap.getAllValues().get(1), toPingAck(0));
+        assertEquals(addrCap.getAllValues().get(1), Fixtures.INDIRECT_TARGET_ADDRESS_1);
         assertTrue(reliableCap.getAllValues().get(1));
     }
 
@@ -537,8 +537,8 @@ public class FailureDetectorTest {
 
         verify(messenger, times(2)).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
 
-        assertEquals(toPingNack(0), msgCap.getAllValues().get(1));
-        assertEquals(Fixtures.INDIRECT_TARGET_ADDRESS_1, addrCap.getAllValues().get(1));
+        assertEquals(msgCap.getAllValues().get(1), toPingNack(0));
+        assertEquals(addrCap.getAllValues().get(1), Fixtures.INDIRECT_TARGET_ADDRESS_1);
         assertTrue(reliableCap.getAllValues().get(1));
     }
 }

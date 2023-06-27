@@ -13,17 +13,17 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import org.testng.annotations.Test;
 
 public class VerUtilTest {
     @Test
     public void bumpTest() {
-        assertEquals(2, VerUtil.bump(0, false));
-        assertEquals(2, VerUtil.bump(1, false));
+        assertEquals(VerUtil.bump(0, false), 2);
+        assertEquals(VerUtil.bump(1, false), 2);
 
-        assertEquals(1, VerUtil.bump(0, true));
-        assertEquals(3, VerUtil.bump(1, true));
+        assertEquals(VerUtil.bump(0, true), 1);
+        assertEquals(VerUtil.bump(1, true), 3);
     }
 }

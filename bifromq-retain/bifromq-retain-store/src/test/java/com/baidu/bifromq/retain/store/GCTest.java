@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
@@ -50,7 +50,7 @@ public class GCTest extends RetainStoreTest {
         // make it expired
         when(clock.millis()).thenReturn(1100L);
 
-        assertEquals(RetainCoProcReply.Result.ERROR, requestRetain(trafficId, 1, message).getResult());
+        assertEquals(requestRetain(trafficId, 1, message).getResult(), RetainCoProcReply.Result.ERROR);
     }
 
     @Test(groups = "integration")
@@ -61,22 +61,22 @@ public class GCTest extends RetainStoreTest {
         TopicMessage message1 = message(topic1, "hello", 0, 1);
         requestRetain(trafficId, 1, message1);
         MatchCoProcReply matchReply = requestMatch(trafficId, topic1, 10);
-        assertEquals(1, matchReply.getMessagesCount());
-        assertEquals(message1, matchReply.getMessages(0));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(matchReply.getMessages(0), message1);
 
         when(clock.millis()).thenReturn(1100L);
 
         // message1 has expired
-        assertEquals(0, requestMatch(trafficId, topic1, 10).getMessagesCount());
+        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 0);
 
         TopicMessage message2 = message(topic2, "world", 1000, 1);
-        assertEquals(RetainCoProcReply.Result.RETAINED, requestRetain(trafficId, 1, message2).getResult());
+        assertEquals(requestRetain(trafficId, 1, message2).getResult(), RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(0, requestMatch(trafficId, topic1, 10).getMessagesCount());
+        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 0);
 
         matchReply = requestMatch(trafficId, topic2, 10);
-        assertEquals(1, matchReply.getMessagesCount());
-        assertEquals(message2, matchReply.getMessages(0));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(matchReply.getMessages(0), message2);
     }
 
     @Test(groups = "integration")
@@ -88,9 +88,9 @@ public class GCTest extends RetainStoreTest {
 
         when(clock.millis()).thenReturn(1100L);
 
-        assertEquals(RetainCoProcReply.Result.CLEARED,
-            requestRetain(trafficId, 1, message(topic, "")).getResult());
-        assertEquals(0, requestMatch(trafficId, topic, 10).getMessagesCount());
+        assertEquals(requestRetain(trafficId, 1, message(topic, "")).getResult(),
+            RetainCoProcReply.Result.CLEARED);
+        assertEquals(requestMatch(trafficId, topic, 10).getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
@@ -107,19 +107,19 @@ public class GCTest extends RetainStoreTest {
         when(clock.millis()).thenReturn(1100L);
 
 
-        assertEquals(RetainCoProcReply.Result.RETAINED,
-            requestRetain(trafficId, 2, message3).getResult());
+        assertEquals(requestRetain(trafficId, 2, message3).getResult(),
+            RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(0, requestMatch(trafficId, topic1, 10).getMessagesCount());
-        assertEquals(1, requestMatch(trafficId, topic2, 10).getMessagesCount());
-        assertEquals(message3, requestMatch(trafficId, topic2, 10).getMessages(0));
+        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(trafficId, topic2, 10).getMessagesCount(), 1);
+        assertEquals(requestMatch(trafficId, topic2, 10).getMessages(0), message3);
 
         // message1 will be removed as well, so retain set size should be 1
-        assertEquals(RetainCoProcReply.Result.RETAINED,
-            requestRetain(trafficId, 2, message("/c", "abc")).getResult());
+        assertEquals(requestRetain(trafficId, 2, message("/c", "abc")).getResult(),
+            RetainCoProcReply.Result.RETAINED);
         // no room
-        assertEquals(RetainCoProcReply.Result.ERROR,
-            requestRetain(trafficId, 2, message("/d", "abc")).getResult());
+        assertEquals(requestRetain(trafficId, 2, message("/d", "abc")).getResult(),
+            RetainCoProcReply.Result.ERROR);
     }
 
     @Test(groups = "integration")
@@ -135,18 +135,18 @@ public class GCTest extends RetainStoreTest {
 
         when(clock.millis()).thenReturn(1100L);
         // message2 expired
-        assertEquals(1, requestMatch(trafficId, topic1, 10).getMessagesCount());
-        assertEquals(0, requestMatch(trafficId, topic2, 10).getMessagesCount());
+        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 1);
+        assertEquals(requestMatch(trafficId, topic2, 10).getMessagesCount(), 0);
 
-        assertEquals(RetainCoProcReply.Result.RETAINED, requestRetain(trafficId, 2,
-            message("/c", "abc")).getResult());
-        assertEquals(RetainCoProcReply.Result.ERROR, requestRetain(trafficId, 2,
-            message("/d", "abc")).getResult());
+        assertEquals(requestRetain(trafficId, 2,
+            message("/c", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(trafficId, 2,
+            message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
 
         when(clock.millis()).thenReturn(2100L);
         // now message1 expired
-        assertEquals(RetainCoProcReply.Result.RETAINED, requestRetain(trafficId, 2,
-            message("/d", "abc")).getResult());
+        assertEquals(requestRetain(trafficId, 2,
+            message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
     }
 
     @Test(groups = "integration")
@@ -160,12 +160,12 @@ public class GCTest extends RetainStoreTest {
         requestRetain(trafficId, 1, message2);
 
         // no room for new message
-        assertEquals(RetainCoProcReply.Result.ERROR, requestRetain(trafficId, 1,
-            message("/d", "abc")).getResult());
+        assertEquals(requestRetain(trafficId, 1,
+            message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
         when(clock.millis()).thenReturn(1100L);
-        assertEquals(RetainCoProcReply.Result.RETAINED, requestRetain(trafficId, 1,
-            message("/d", "abc")).getResult());
-        assertEquals(0, requestMatch(trafficId, topic, 10).getMessagesCount());
+        assertEquals(requestRetain(trafficId, 1,
+            message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestMatch(trafficId, topic, 10).getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
@@ -176,13 +176,13 @@ public class GCTest extends RetainStoreTest {
         requestRetain(trafficId, 1, message);
 
         requestGC(trafficId);
-        assertEquals(RetainCoProcReply.Result.ERROR, requestRetain(trafficId, 1,
-            message("/d", "abc")).getResult());
+        assertEquals(requestRetain(trafficId, 1,
+            message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
 
         when(clock.millis()).thenReturn(1100L);
         requestGC(trafficId);
 
-        assertEquals(RetainCoProcReply.Result.RETAINED, requestRetain(trafficId, 1,
-            message("/d", "abc")).getResult());
+        assertEquals(requestRetain(trafficId, 1,
+            message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
     }
 }

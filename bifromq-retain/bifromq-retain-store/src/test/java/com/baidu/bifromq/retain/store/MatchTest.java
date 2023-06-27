@@ -14,7 +14,7 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.google.common.collect.Sets.newHashSet;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
 import com.baidu.bifromq.type.TopicMessage;
@@ -33,23 +33,23 @@ public class MatchTest extends RetainStoreTest {
         requestRetain(trafficId, 10, message3);
 
         MatchCoProcReply matchReply = requestMatch(trafficId, "#", 10);
-        assertEquals(3, matchReply.getMessagesCount());
-        assertEquals(newHashSet(message1, message2, message3), newHashSet(matchReply.getMessagesList()));
+        assertEquals(matchReply.getMessagesCount(), 3);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2, message3));
 
         matchReply = requestMatch(trafficId, "/a/+", 10);
-        assertEquals(0, matchReply.getMessagesCount());
+        assertEquals(matchReply.getMessagesCount(), 0);
 
         matchReply = requestMatch(trafficId, "/a/+/+", 10);
-        assertEquals(2, matchReply.getMessagesCount());
-        assertEquals(newHashSet(message1, message2), newHashSet(matchReply.getMessagesList()));
+        assertEquals(matchReply.getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
 
         matchReply = requestMatch(trafficId, "/+/b/", 10);
-        assertEquals(1, matchReply.getMessagesCount());
-        assertEquals(newHashSet(message2), newHashSet(matchReply.getMessagesList()));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message2));
 
         matchReply = requestMatch(trafficId, "/+/b/#", 10);
-        assertEquals(2, matchReply.getMessagesCount());
-        assertEquals(newHashSet(message1, message2), newHashSet(matchReply.getMessagesList()));
+        assertEquals(matchReply.getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
     }
 
     @Test(groups = "integration")
@@ -62,7 +62,7 @@ public class MatchTest extends RetainStoreTest {
         requestRetain(trafficId, 10, message2);
         requestRetain(trafficId, 10, message3);
 
-        assertEquals(0, requestMatch(trafficId, "#", 0).getMessagesCount());
-        assertEquals(1, requestMatch(trafficId, "#", 1).getMessagesCount());
+        assertEquals(requestMatch(trafficId, "#", 0).getMessagesCount(), 0);
+        assertEquals(requestMatch(trafficId, "#", 1).getMessagesCount(), 1);
     }
 }

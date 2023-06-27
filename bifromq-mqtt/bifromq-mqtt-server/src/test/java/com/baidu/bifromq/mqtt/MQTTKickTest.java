@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;

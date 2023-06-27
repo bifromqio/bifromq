@@ -3,7 +3,6 @@ package com.baidu.bifromq.basecluster.transport;
 import static org.testng.Assert.assertTrue;
 
 import java.net.InetSocketAddress;
-import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 public class TCPTransportTest {

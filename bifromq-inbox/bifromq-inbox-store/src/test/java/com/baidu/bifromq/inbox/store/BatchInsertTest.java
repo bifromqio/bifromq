@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.inbox.storage.proto.InboxFetchReply;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
@@ -79,27 +79,27 @@ public class BatchInsertTest extends InboxStoreTest {
                 .build());
 
         InboxFetchReply reply0 = requestFetchQoS0(trafficId, inboxId, 10);
-        Assert.assertEquals(1, reply0.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount());
+        Assert.assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 1);
 
-        Assert.assertEquals(1, reply0.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount());
-        Assert.assertEquals(msg0.getMessage(0),
-            reply0.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(0).getMsg().getMessage());
+        Assert.assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount(), 1);
+        Assert.assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(0).getMsg().getMessage(),
+            msg0.getMessage(0));
 
         InboxFetchReply reply1 = requestFetchQoS1(trafficId, inboxId, 10);
-        Assert.assertEquals(1, reply1.getResultMap().get(scopedInboxIdUtf8).getQos1SeqCount());
-        Assert.assertEquals(0, reply1.getResultMap().get(scopedInboxIdUtf8).getQos1Seq(0));
+        Assert.assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1SeqCount(), 1);
+        Assert.assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1Seq(0), 0);
 
-        Assert.assertEquals(1, reply1.getResultMap().get(scopedInboxIdUtf8).getQos1MsgCount());
-        Assert.assertEquals(msg1.getMessage(0),
-            reply1.getResultMap().get(scopedInboxIdUtf8).getQos1Msg(0).getMsg().getMessage());
+        Assert.assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1MsgCount(), 1);
+        Assert.assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1Msg(0).getMsg().getMessage(),
+            msg1.getMessage(0));
 
         InboxFetchReply reply2 = requestFetchQoS2(trafficId, inboxId, 10, null);
-        Assert.assertEquals(1, reply2.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount());
-        Assert.assertEquals(0, reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0));
+        Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
+        Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
 
-        Assert.assertEquals(1, reply2.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount());
-        Assert.assertEquals(msg2.getMessage(0),
-            reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage());
+        Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount(), 1);
+        Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage(),
+            msg2.getMessage(0));
     }
 
     @Test(groups = "integration")
@@ -141,17 +141,17 @@ public class BatchInsertTest extends InboxStoreTest {
                 .build());
 
         InboxFetchReply reply0 = requestFetchQoS0(trafficId, inboxId, 10);
-        assertEquals(0, reply0.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount());
-        assertEquals(0, reply0.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount());
+        assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 0);
+        assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount(), 0);
 
         InboxFetchReply reply1 = requestFetchQoS1(trafficId, inboxId, 10);
-        assertEquals(0, reply1.getResultMap().get(scopedInboxIdUtf8).getQos1SeqCount());
-        assertEquals(0, reply1.getResultMap().get(scopedInboxIdUtf8).getQos1MsgCount());
+        assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1SeqCount(), 0);
+        assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1MsgCount(), 0);
 
         InboxFetchReply reply2 = requestFetchQoS2(trafficId, inboxId, 10, null);
-        assertEquals(1, reply2.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount());
-        assertEquals(0, reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0));
-        assertEquals(msg.getMessage(0),
-            reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage());
+        assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
+        assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
+        assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage(),
+            msg.getMessage(0));
     }
 }

@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertFalse;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.LoadHint;
@@ -113,7 +113,7 @@ public class LoadEstimatorTest {
         LoadHint hint = estimator.estimate();
         if (now / trackWindow == nextSecond / trackWindow) {
             assertTrue(hint.getLoad() == 0.8d);
-            assertEquals(ByteString.copyFrom(new byte[] {(byte) 79}), hint.getSplitKey());
+            assertEquals(hint.getSplitKey(), ByteString.copyFrom(new byte[] {(byte) 79}));
         } else {
             assertTrue(hint.getLoad() == 0.4d);
             assertFalse(hint.hasSplitKey());
@@ -131,6 +131,6 @@ public class LoadEstimatorTest {
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(1).toNanos());
         LoadHint hint = estimator.estimate();
         assertTrue(hint.getLoad() == 0.8d);
-        assertEquals(ByteString.copyFrom(new byte[] {(byte) 39}), hint.getSplitKey());
+        assertEquals(hint.getSplitKey(), ByteString.copyFrom(new byte[] {(byte) 39}));
     }
 }

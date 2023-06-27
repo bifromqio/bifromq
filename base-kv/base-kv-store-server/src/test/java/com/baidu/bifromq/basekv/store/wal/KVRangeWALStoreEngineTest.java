@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -110,16 +110,16 @@ public class KVRangeWALStoreEngineTest {
                     .build())
                 .build();
             IRaftStateStore stateStorage = stateStorageEngine.newRaftStateStorage(testId, snapshot);
-            assertEquals(stateStorageEngine.id(), stateStorage.local());
-            assertEquals(0, stateStorage.lastIndex());
-            assertEquals(1, stateStorage.firstIndex());
+            assertEquals(stateStorage.local(), stateStorageEngine.id());
+            assertEquals(stateStorage.lastIndex(), 0);
+            assertEquals(stateStorage.firstIndex(), 1);
             assertFalse(stateStorage.currentVoting().isPresent());
-            assertEquals(snapshot, stateStorage.latestSnapshot());
-            assertEquals(snapshot.getClusterConfig(), stateStorage.latestClusterConfig());
+            assertEquals(stateStorage.latestSnapshot(), snapshot);
+            assertEquals(stateStorage.latestClusterConfig(), snapshot.getClusterConfig());
 
             assertTrue(stateStorageEngine.has(testId));
-            assertEquals(stateStorage, stateStorageEngine.get(testId));
-            assertEquals(1, stateStorageEngine.allKVRangeIds().size());
+            assertEquals(stateStorageEngine.get(testId), stateStorage);
+            assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
             assertTrue(stateStorageEngine.allKVRangeIds().contains(testId));
             stateStorageEngine.stop();
         } catch (Exception e) {
@@ -148,19 +148,19 @@ public class KVRangeWALStoreEngineTest {
             .build();
         stateStorageEngine.newRaftStateStorage(testId1, snapshot);
         stateStorageEngine.newRaftStateStorage(testId2, snapshot);
-        assertEquals(2, stateStorageEngine.allKVRangeIds().size());
+        assertEquals(stateStorageEngine.allKVRangeIds().size(), 2);
         stateStorageEngine.stop();
 
         stateStorageEngine = new KVRangeWALStorageEngine(null, engineConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
-        assertEquals(2, stateStorageEngine.allKVRangeIds().size());
+        assertEquals(stateStorageEngine.allKVRangeIds().size(), 2);
         IRaftStateStore stateStorage = stateStorageEngine.get(testId1);
-        assertEquals(stateStorageEngine.id(), stateStorage.local());
-        assertEquals(0, stateStorage.lastIndex());
-        assertEquals(1, stateStorage.firstIndex());
+        assertEquals(stateStorage.local(), stateStorageEngine.id());
+        assertEquals(stateStorage.lastIndex(), 0);
+        assertEquals(stateStorage.firstIndex(), 1);
         assertFalse(stateStorage.currentVoting().isPresent());
-        assertEquals(snapshot, stateStorage.latestSnapshot());
-        assertEquals(snapshot.getClusterConfig(), stateStorage.latestClusterConfig());
+        assertEquals(stateStorage.latestSnapshot(), snapshot);
+        assertEquals(stateStorage.latestClusterConfig(), snapshot.getClusterConfig());
     }
 
     @Test
@@ -184,14 +184,14 @@ public class KVRangeWALStoreEngineTest {
         stateStorageEngine.newRaftStateStorage(testId1, snapshot);
         stateStorageEngine.newRaftStateStorage(testId2, snapshot);
         stateStorageEngine.destroy(testId1);
-        assertEquals(1, stateStorageEngine.allKVRangeIds().size());
+        assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
         assertFalse(stateStorageEngine.has(testId1));
         assertTrue(stateStorageEngine.has(testId2));
         stateStorageEngine.stop();
 
         stateStorageEngine = new KVRangeWALStorageEngine(null, engineConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
-        assertEquals(1, stateStorageEngine.allKVRangeIds().size());
+        assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
         assertTrue(stateStorageEngine.has(testId2));
     }
 }

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -26,9 +26,9 @@ import java.util.Set;
 public class TestUtil {
     public static <E> void assertSame(Iterator<E> a, Iterator<E> b) {
         while (a.hasNext() && b.hasNext()) {
-            assertEquals(a.next(), b.next());
+            assertEquals(b.next(), a.next());
         }
-        assertEquals(a.hasNext(), b.hasNext());
+        assertEquals(b.hasNext(), a.hasNext());
     }
 
     public static <E> void assertUnorderedSame(Iterator<E> a, Iterator<E> b) {
@@ -36,7 +36,7 @@ public class TestUtil {
         Set<E> bSet = Sets.newHashSet();
         a.forEachRemaining(aSet::add);
         b.forEachRemaining(bSet::add);
-        assertEquals(aSet, bSet);
+        assertEquals(bSet, aSet);
     }
 
     public static Map<ByteString, NavigableMap<Long, Long>> toLatticeEvents(ByteString replicaId, long... boundaries) {

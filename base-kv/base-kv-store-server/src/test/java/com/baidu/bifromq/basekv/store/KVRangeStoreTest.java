@@ -22,10 +22,10 @@ import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.combine;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
-import static org.testng.AssertJUnit.assertEquals;
 
 import com.baidu.bifromq.basekv.TestCoProcFactory;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -182,7 +182,7 @@ public class KVRangeStoreTest {
     public void testBootStrap() {
         KVRangeDescriptor descriptor = firstRangeDescriptor();
         KVRangeId id = descriptor.getId();
-        assertEquals(KVRangeDescriptor.newBuilder()
+        assertEquals(descriptor.toBuilder().clearStatistics().setHlc(0).build(), KVRangeDescriptor.newBuilder()
             .setId(id)
             .setVer(0)
             .setRole(RaftNodeStatus.Leader)
@@ -191,7 +191,7 @@ public class KVRangeStoreTest {
             .setConfig(ClusterConfig.newBuilder().addVoters(rangeStore.id()).build())
             .putSyncState(rangeStore.id(), RaftNodeSyncState.Replicating)
             .setLoadHint(LoadHint.newBuilder().setLoad(0.0).build())
-            .build(), descriptor.toBuilder().clearStatistics().setHlc(0).build());
+            .build());
     }
 
     @Test(groups = "integration")
@@ -238,14 +238,14 @@ public class KVRangeStoreTest {
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
         {
             log.info("Test PutKV");
-            assertEquals(ByteString.empty(),
-                rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join());
+            assertEquals(rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join(),
+                ByteString.empty());
 
-            assertEquals(ByteString.empty(),
-                rangeStore.put(1, id, copyFromUtf8("key2"), copyFromUtf8("hello")).toCompletableFuture().join());
+            assertEquals(rangeStore.put(1, id, copyFromUtf8("key2"), copyFromUtf8("hello")).toCompletableFuture().join(),
+                ByteString.empty());
 
-            assertEquals(ByteString.empty(),
-                rangeStore.put(1, id, copyFromUtf8("key3"), copyFromUtf8("hello")).toCompletableFuture().join());
+            assertEquals(rangeStore.put(1, id, copyFromUtf8("key3"), copyFromUtf8("hello")).toCompletableFuture().join(),
+                ByteString.empty());
         }
         {
             log.info("Test PutKV with version mismatch");
@@ -278,10 +278,10 @@ public class KVRangeStoreTest {
         rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
         {
             log.info("Test Get");
-            assertEquals(copyFromUtf8("hello"),
-                rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().get());
-            assertEquals(copyFromUtf8("hello"),
-                rangeStore.get(1, id, copyFromUtf8("key1"), false).toCompletableFuture().join().get());
+            assertEquals(rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().get(),
+                copyFromUtf8("hello"));
+            assertEquals(rangeStore.get(1, id, copyFromUtf8("key1"), false).toCompletableFuture().join().get(),
+                copyFromUtf8("hello"));
             assertFalse(rangeStore.get(1, id, copyFromUtf8("key2"), true).toCompletableFuture().join().isPresent());
         }
         {
@@ -316,13 +316,13 @@ public class KVRangeStoreTest {
         {
             log.info("Test Delete");
             ByteString delVal = rangeStore.delete(1, id, copyFromUtf8("key1")).toCompletableFuture().join();
-            assertEquals(copyFromUtf8("hello"), delVal);
+            assertEquals(delVal, copyFromUtf8("hello"));
 
             assertFalse(
                 rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().isPresent());
 
-            assertEquals(ByteString.empty(),
-                rangeStore.delete(1, id, copyFromUtf8("key2")).toCompletableFuture().join());
+            assertEquals(rangeStore.delete(1, id, copyFromUtf8("key2")).toCompletableFuture().join(),
+                ByteString.empty());
         }
         {
             log.info("Test Delete with version mismatch");
@@ -356,10 +356,10 @@ public class KVRangeStoreTest {
 
         {
             log.info("Test exec ReadOnly Co-Proc");
-            assertEquals(copyFromUtf8("hello"),
-                rangeStore.queryCoProc(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join());
-            assertEquals(copyFromUtf8("hello"),
-                rangeStore.queryCoProc(1, id, copyFromUtf8("key1"), false).toCompletableFuture().join());
+            assertEquals(rangeStore.queryCoProc(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join(),
+                copyFromUtf8("hello"));
+            assertEquals(rangeStore.queryCoProc(1, id, copyFromUtf8("key1"), false).toCompletableFuture().join(),
+                copyFromUtf8("hello"));
         }
         {
             log.info("Test exec ReadOnly CoProc with version mismatch");
@@ -392,8 +392,8 @@ public class KVRangeStoreTest {
 
         {
             log.info("Test exec ReadWrite Co-Proc");
-            assertEquals(copyFromUtf8("hello"),
-                rangeStore.mutateCoProc(1, id, copyFromUtf8("key1_world")).toCompletableFuture().join());
+            assertEquals(rangeStore.mutateCoProc(1, id, copyFromUtf8("key1_world")).toCompletableFuture().join(),
+                copyFromUtf8("hello"));
 
             assertTrue(rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().isPresent());
         }
@@ -428,7 +428,7 @@ public class KVRangeStoreTest {
             rangeStore.split(0, id, copyFromUtf8("a")).toCompletableFuture().join();
             List<KVRangeDescriptor> ls = await().until(() -> rangeStore.describe().blockingFirst(),
                 storeDescriptor -> storeDescriptor.getRangesList().size() == 2).getRangesList();
-            assertEquals(FULL_RANGE, combine(ls.get(0).getRange(), ls.get(1).getRange()));
+            assertEquals(combine(ls.get(0).getRange(), ls.get(1).getRange()), FULL_RANGE);
         }
         {
             log.info("Split with version mismatch test");

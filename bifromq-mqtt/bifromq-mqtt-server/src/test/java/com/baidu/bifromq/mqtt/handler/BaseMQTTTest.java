@@ -37,8 +37,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
@@ -419,7 +419,7 @@ public abstract class BaseMQTTTest {
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
-        assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
+        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
         if (!cleanSession && hasInbox) {
             assertTrue(ackMessage.variableHeader().isSessionPresent());
         }

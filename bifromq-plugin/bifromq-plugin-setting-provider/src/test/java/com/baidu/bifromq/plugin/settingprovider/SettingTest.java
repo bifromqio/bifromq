@@ -16,8 +16,8 @@ package com.baidu.bifromq.plugin.settingprovider;
 import com.baidu.bifromq.type.ClientInfo;
 import org.testng.annotations.Test;
 
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
-import static org.testng.AssertJUnit.assertEquals;
 
 public class SettingTest {
     @Test
@@ -53,9 +53,9 @@ public class SettingTest {
     @Test
     public void systemPropertyOverride() {
         System.setProperty("MsgPubPerSec", "100");
-        assertEquals(100, (int) Setting.MsgPubPerSec.resolve(200));
+        assertEquals((int) Setting.MsgPubPerSec.resolve(200), 100);
 
         System.setProperty("MsgPubPerSec", "sdfa");
-        assertEquals(200, (int) Setting.MsgPubPerSec.resolve(200));
+        assertEquals((int) Setting.MsgPubPerSec.resolve(200), 200);
     }
 }

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -48,7 +48,7 @@ public class ReadProgressTrackerTest {
 
     @Test
     public void testHighestReadIndexAfterInit() {
-        assertEquals(0, readProgressTracker.highestReadIndex());
+        assertEquals(readProgressTracker.highestReadIndex(), 0);
     }
 
     @Test
@@ -60,17 +60,17 @@ public class ReadProgressTrackerTest {
             .build());
         CompletableFuture<Long> onDone = new CompletableFuture<>();
         readProgressTracker.add(5L, onDone);
-        assertEquals(1, readProgressTracker.underConfirming());
+        assertEquals(readProgressTracker.underConfirming(), 1);
         assertFalse(onDone.isDone());
 
         onDone = new CompletableFuture<>();
         readProgressTracker.add(5L, onDone);
-        assertEquals(2, readProgressTracker.underConfirming());
+        assertEquals(readProgressTracker.underConfirming(), 2);
         assertFalse(onDone.isDone());
 
         onDone = new CompletableFuture<>();
         readProgressTracker.add(6L, onDone);
-        assertEquals(3, readProgressTracker.underConfirming());
+        assertEquals(readProgressTracker.underConfirming(), 3);
         assertFalse(onDone.isDone());
     }
 
@@ -91,7 +91,7 @@ public class ReadProgressTrackerTest {
         CompletableFuture<Long> onDone3 = new CompletableFuture<>();
         readProgressTracker.add(6L, onDone3);
         readProgressTracker.abort();
-        assertEquals(0, readProgressTracker.underConfirming());
+        assertEquals(readProgressTracker.underConfirming(), 0);
         assertTrue(onDone1.isCompletedExceptionally());
         assertTrue(onDone2.isCompletedExceptionally());
         assertTrue(onDone3.isCompletedExceptionally());
@@ -132,11 +132,11 @@ public class ReadProgressTrackerTest {
         assertTrue(onDone2.isDone());
         assertTrue(onDone3.isDone());
         assertFalse(onDone4.isDone());
-        assertEquals(1, readProgressTracker.underConfirming());
+        assertEquals(readProgressTracker.underConfirming(), 1);
         readProgressTracker.confirm(7L, "V2");
         assertFalse(onDone4.isDone());
         readProgressTracker.confirm(7L, "V3");
         assertTrue(onDone4.isDone());
-        assertEquals(0, readProgressTracker.underConfirming());
+        assertEquals(readProgressTracker.underConfirming(), 0);
     }
 }

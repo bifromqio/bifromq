@@ -14,8 +14,8 @@
 package com.baidu.bifromq.plugin.authprovider;
 
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.AssertJUnit.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -83,8 +83,8 @@ public class AuthProviderManagerTest {
         when(pluginManager.getExtensions(IAuthProvider.class)).thenReturn(Collections.emptyList());
         manager = new AuthProviderManager(null, pluginManager, settingProvider, eventCollector);
         MQTT3AuthResult result = manager.auth(authData).join();
-        assertEquals(MQTT3AuthResult.TypeCase.OK, result.getTypeCase());
-        assertEquals("DevOnly", result.getOk().getTrafficId());
+        assertEquals(result.getTypeCase(), MQTT3AuthResult.TypeCase.OK);
+        assertEquals(result.getOk().getTrafficId(), "DevOnly");
 
         boolean allow = manager.check(ClientInfo.getDefaultInstance(), MQTTAction.newBuilder()
             .setSub(SubAction.getDefaultInstance()).build()).join();
@@ -104,8 +104,8 @@ public class AuthProviderManagerTest {
                 .setCode(Reject.Code.BadPass)
                 .build()).build()));
         MQTT3AuthResult result = manager.auth(authData).join();
-        assertEquals(MQTT3AuthResult.TypeCase.REJECT, result.getTypeCase());
-        assertEquals(Reject.Code.BadPass, result.getReject().getCode());
+        assertEquals(result.getTypeCase(), MQTT3AuthResult.TypeCase.REJECT);
+        assertEquals(result.getReject().getCode(), Reject.Code.BadPass);
         manager.close();
     }
 
@@ -137,8 +137,8 @@ public class AuthProviderManagerTest {
                     .build();
             }));
         MQTT3AuthResult result = manager.auth(mockAuthData).join();
-        assertEquals(MQTT3AuthResult.TypeCase.REJECT, result.getTypeCase());
-        assertEquals(Reject.Code.BadPass, result.getReject().getCode());
+        assertEquals(result.getTypeCase(), MQTT3AuthResult.TypeCase.REJECT);
+        assertEquals(result.getReject().getCode(), Reject.Code.BadPass);
         manager.close();
     }
 
@@ -149,9 +149,9 @@ public class AuthProviderManagerTest {
         when(mockProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Intend Error")));
         MQTT3AuthResult result = manager.auth(mockAuthData).join();
-        assertEquals(MQTT3AuthResult.TypeCase.REJECT, result.getTypeCase());
-        assertEquals(Reject.Code.Error, result.getReject().getCode());
-        assertEquals("Intend Error", result.getReject().getReason());
+        assertEquals(result.getTypeCase(), MQTT3AuthResult.TypeCase.REJECT);
+        assertEquals(result.getReject().getCode(), Reject.Code.Error);
+        assertEquals(result.getReject().getReason(), "Intend Error");
         manager.close();
     }
 
@@ -218,7 +218,7 @@ public class AuthProviderManagerTest {
         assertFalse(manager.check(clientInfo, mockActionInfo).join());
         ArgumentCaptor<Event<?>> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector).report(eventArgumentCaptor.capture());
-        assertEquals(EventType.ACCESS_CONTROL_ERROR, eventArgumentCaptor.getValue().type());
+        assertEquals(eventArgumentCaptor.getValue().type(), EventType.ACCESS_CONTROL_ERROR);
         assertTrue(((AccessControlError) eventArgumentCaptor.getValue()).cause().getMessage().contains("Intend Error"));
     }
 
@@ -232,6 +232,6 @@ public class AuthProviderManagerTest {
         assertTrue(manager.check(clientInfo, mockActionInfo).join());
         ArgumentCaptor<Event<?>> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector).report(eventArgumentCaptor.capture());
-        assertEquals(EventType.ACCESS_CONTROL_ERROR, eventArgumentCaptor.getValue().type());
+        assertEquals(eventArgumentCaptor.getValue().type(), EventType.ACCESS_CONTROL_ERROR);
     }
 }

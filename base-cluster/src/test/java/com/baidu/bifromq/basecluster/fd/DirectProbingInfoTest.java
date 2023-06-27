@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecluster.fd;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import java.util.Optional;
@@ -23,7 +23,7 @@ public class DirectProbingInfoTest {
     @Test
     public void construct() {
         DirectProbingInfo info = new DirectProbingInfo(Optional.of(Fixtures.DIRECT_PROBING_TARGET));
-        assertEquals(Fixtures.DIRECT_PROBING_TARGET, info.target.get());
+        assertEquals(info.target.get(), Fixtures.DIRECT_PROBING_TARGET);
         assertTrue(info.piggybacked.isEmpty());
     }
 }

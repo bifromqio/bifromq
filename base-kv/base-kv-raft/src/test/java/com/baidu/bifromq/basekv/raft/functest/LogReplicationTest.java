@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft.functest;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -121,8 +121,8 @@ public class LogReplicationTest extends SharedRaftConfigTestTemplate {
                 fail();
             }
         }
-        assertEquals(Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating,
-                RaftNodeSyncState.SnapshotSyncing, RaftNodeSyncState.Replicating),
-            group.syncStateLogs(slowFollower));
+        assertEquals(group.syncStateLogs(slowFollower),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating,
+                RaftNodeSyncState.SnapshotSyncing, RaftNodeSyncState.Replicating));
     }
 }

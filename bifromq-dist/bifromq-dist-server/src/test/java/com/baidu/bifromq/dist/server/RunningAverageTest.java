@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.server;
 
-import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 import org.testng.annotations.Test;
 
@@ -21,17 +21,17 @@ public class RunningAverageTest {
     @Test
     public void test() {
         RunningAverage runningAverage = new RunningAverage(1);
-        assertEquals(0, runningAverage.estimate());
+        assertEquals(runningAverage.estimate(), 0);
 
         runningAverage.log(1);
-        assertEquals(1, runningAverage.estimate());
+        assertEquals(runningAverage.estimate(), 1);
 
         runningAverage.log(2);
-        assertEquals(2, runningAverage.estimate());
+        assertEquals(runningAverage.estimate(), 2);
 
         runningAverage = new RunningAverage(2);
         runningAverage.log(1);
         runningAverage.log(3);
-        assertEquals(2, runningAverage.estimate());
+        assertEquals(runningAverage.estimate(), 2);
     }
 }
