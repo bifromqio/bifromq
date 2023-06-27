@@ -122,11 +122,10 @@ if [ -z "$JVM_GC_OPTS" ]; then
   -XX:+UnlockDiagnosticVMOptions \
   -XX:+UseZGC \
   -XX:ZAllocationSpikeTolerance=5 \
-  -XX:+HeapDumpOnOutOfMemoryError \
-  -XX:HeapDumpPath=${LOG_DIR} \
   -Xlog:async \
   -Xlog:gc:file=${LOG_DIR}/gc-%t.log:time,tid,tags:filecount=5,filesize=50m \
-  -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=${LOG_DIR}"
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=${LOG_DIR}"
 fi
 
 # Memory options
