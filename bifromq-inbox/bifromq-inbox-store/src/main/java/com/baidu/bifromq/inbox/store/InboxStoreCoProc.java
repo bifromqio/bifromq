@@ -335,6 +335,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                         .setDropOldest(inboxParams.getDropOldest())
                         .setQos0NextSeq(0)
                         .setQos1NextSeq(0)
+                        .setQos2NextSeq(0)
+                        .setClient(inboxParams.getClient())
                         .build()
                         .toByteString());
             }
