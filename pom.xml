@@ -92,9 +92,12 @@
         <maven.jacoco.plugin.version>0.8.9</maven.jacoco.plugin.version>
         <maven.checkstyle.plugin.version>3.2.2</maven.checkstyle.plugin.version>
         <maven.wrapper.plugin.version>3.1.1</maven.wrapper.plugin.version>
+        <maven.gpg.plugin.version>1.6</maven.gpg.plugin.version>
+        <nexus.staging.maven.plugin.version>1.6.13</nexus.staging.maven.plugin.version>
         <protobuf.plugin.version>0.6.1</protobuf.plugin.version>
         <os.plugin.version>1.6.2</os.plugin.version>
         <checkstyle.version>10.11.0</checkstyle.version>
+        <maven.bos.plugin.version>0.0.2</maven.bos.plugin.version>
 
         <!-- build properties -->
         <java.source.version>17</java.source.version>
@@ -535,19 +538,12 @@
             <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
-
-    <!-- The remote central repository -->
-    <distributionManagement>
-        <repository>
-            <id>Baidu_Local</id>
-            <url>http://maven.baidu-int.com/nexus/content/repositories/Baidu_Local</url>
-        </repository>
-        <snapshotRepository>
-            <id>Baidu_Local_Snapshots</id>
-            <url>http://maven.baidu-int.com/nexus/content/repositories/Baidu_Local_Snapshots</url>
-        </snapshotRepository>
-    </distributionManagement>
 
     <build>
         <extensions>
@@ -555,6 +551,11 @@
                 <groupId>kr.motd.maven</groupId>
                 <artifactId>os-maven-plugin</artifactId>
                 <version>${os.plugin.version}</version>
+            </extension>
+            <extension>
+                <groupId>io.github.mafei6827</groupId>
+                <artifactId>maven-repository-bos</artifactId>
+                <version>${maven.bos.plugin.version}</version>
             </extension>
         </extensions>
         <pluginManagement>
@@ -786,6 +787,22 @@
             </activation>
         </profile>
         <profile>
+            <id>build</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <suiteXmlFiles>
+                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
+                            </suiteXmlFiles>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>jacoco</id>
             <build>
                 <plugins>
@@ -794,8 +811,8 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <suiteXmlFiles>
-                                <suiteXmlFile>testsuites/UnitTests.xml</suiteXmlFile>
-                                <suiteXmlFile>testsuites/IntegrationTests.xml</suiteXmlFile>
+                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
+                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml</suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>
                     </plugin>
@@ -808,7 +825,7 @@
         </profile>
         <!-- mvn clean install -Prelease -->
         <profile>
-            <id>release</id>
+            <id>maven-central-deploy</id>
             <build>
                 <plugins>
                     <plugin>
@@ -838,11 +855,94 @@
                         </executions>
                     </plugin>
                     <plugin>
-                        <artifactId>maven-release-plugin</artifactId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>create-javadoc-jar</id>
+                                <goals>
+                                    <goal>javadoc</goal>
+                                    <goal>jar</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
                         <configuration>
-                            <!--  Pass these arguments to the deploy plugin.  -->
-                            <arguments>-Prelease</arguments>
+                            <source>${java.source.version}</source>
                         </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven.gpg.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.plugins</groupId>
+                        <artifactId>nexus-staging-maven-plugin</artifactId>
+                        <version>${nexus.staging.maven.plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <serverId>sonatype-nexus-repository</serverId>
+                            <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
+                            <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <distributionManagement>
+                <snapshotRepository>
+                    <id>sonatype-nexus-repository</id>
+                    <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+                </snapshotRepository>
+                <repository>
+                    <id>sonatype-nexus-repository</id>
+                    <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2</url>
+                </repository>
+            </distributionManagement>
+        </profile>
+        <profile>
+            <id>bos-repo-deploy</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>create-source-jar</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                    <goal>test-jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>test-jar</goal>
+                                </goals>
+                                <configuration>
+                                    <!--  Avoids an error when releasing the parent pom  -->
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                     <plugin>
                         <artifactId>maven-javadoc-plugin</artifactId>
@@ -862,6 +962,16 @@
                     </plugin>
                 </plugins>
             </build>
+            <distributionManagement>
+                <repository>
+                    <id>bos-repo</id>
+                    <url>${bos.repo.release}</url>
+                </repository>
+                <snapshotRepository>
+                    <id>bos-repo</id>
+                    <url>${bos.repo.snapshot}</url>
+                </snapshotRepository>
+            </distributionManagement>
         </profile>
     </profiles>
 </project>

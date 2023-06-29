@@ -24,9 +24,6 @@
     <packaging>pom</packaging>
 
     <artifactId>bifromq-dist</artifactId>
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
 
     <modules>
         <module>bifromq-dist-client</module>

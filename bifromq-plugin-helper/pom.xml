@@ -24,9 +24,6 @@
     <packaging>pom</packaging>
 
     <artifactId>bifromq-plugin-helper</artifactId>
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
 
     <modules>
         <module>bifromq-plugin-auth-provider-helper</module>

@@ -24,9 +24,6 @@
     <packaging>pom</packaging>
 
     <artifactId>base-kv</artifactId>
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
 
     <modules>
         <module>base-kv-raft-type</module>

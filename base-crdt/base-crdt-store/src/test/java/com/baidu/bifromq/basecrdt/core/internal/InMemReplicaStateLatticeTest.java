@@ -32,6 +32,7 @@ import com.baidu.bifromq.basecrdt.proto.StateLattice;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -219,12 +220,15 @@ public class InMemReplicaStateLatticeTest {
 
         testLattice.join(states);
         // no contributor to compare
+
         assertEquals(newHashSet(testLattice.delta(emptyMap(), emptyMap(), 100).get()), states);
         //
-        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaB), emptyMap(), 100).get(), states);
+        assertEquals(newHashSet(testLattice.delta(TestUtil.toLatticeEvents(replicaB), emptyMap(), 100).get()), states);
 
-        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaB, 1, 8), TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5),
-            100).get(), newHashSet(
+        assertEquals(newHashSet(
+            testLattice.delta(TestUtil.toLatticeEvents(replicaB, 1, 8), TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5),
+                100).get()
+        ), newHashSet(
             replacement(dot(replicaA, 7, singleDot(replicaA, 7))),
             replacement(dot(replicaA, 8, singleDot(replicaA, 8)))
         ));
@@ -266,15 +270,21 @@ public class InMemReplicaStateLatticeTest {
         );
         testLattice.join(states);
 
-        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaA), TestUtil.toLatticeEvents(replicaA, 1, 3), 100).get(), newHashSet(
-            replacement(dot(replicaA, 5, singleDot(replicaA, 5))),
-            replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7), dot(replicaA, 6))
-        ));
+        assertEquals(newHashSet(
+                testLattice.delta(TestUtil.toLatticeEvents(replicaA), TestUtil.toLatticeEvents(replicaA, 1, 3), 100).get()
+            ),
+            newHashSet(
+                replacement(dot(replicaA, 5, singleDot(replicaA, 5))),
+                replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7), dot(replicaA, 6))
+            ));
 
-        assertEquals(testLattice.delta(TestUtil.toLatticeEvents(replicaA, 5, 5), TestUtil.toLatticeEvents(replicaA, 1, 3, 6, 7),
-            100).get(), newHashSet(
-            replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7))
-        ));
+        assertEquals(newHashSet(
+                testLattice.delta(TestUtil.toLatticeEvents(replicaA, 5, 5), TestUtil.toLatticeEvents(replicaA, 1, 3, 6, 7),
+                    100).get()
+            ),
+            newHashSet(
+                replacement(dot(replicaA, 8, singleDot(replicaA, 8)), dot(replicaA, 7))
+            ));
 
         assertFalse(
             testLattice.delta(TestUtil.toLatticeEvents(replicaA, 1, 3, 5, 5, 6, 8), emptyMap(), 100).isPresent());

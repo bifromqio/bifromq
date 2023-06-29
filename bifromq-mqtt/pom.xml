@@ -24,9 +24,6 @@
     <packaging>pom</packaging>
 
     <artifactId>bifromq-mqtt</artifactId>
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
 
     <modules>
         <module>bifromq-mqtt-broker-client</module>

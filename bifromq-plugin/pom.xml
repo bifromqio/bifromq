@@ -24,9 +24,7 @@
     <packaging>pom</packaging>
 
     <artifactId>bifromq-plugin</artifactId>
-    <properties>
-        <maven.deploy.skip>false</maven.deploy.skip>
-    </properties>
+
     <modules>
         <module>bifromq-plugin-auth-provider</module>
         <module>bifromq-plugin-event-collector</module>
