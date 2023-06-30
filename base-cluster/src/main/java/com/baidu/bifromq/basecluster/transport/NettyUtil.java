@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.basecluster.transport;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.IEnvProvider;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollDatagramChannel;
@@ -66,13 +67,13 @@ public class NettyUtil {
     }
 
     static EventLoopGroup getEventLoopGroup(int threads, String name) {
-        ThreadFactoryBuilder tFacBuilder = new ThreadFactoryBuilder().setDaemon(false);
+        IEnvProvider envProvider = EnvProvider.INSTANCE;
         if (Epoll.isAvailable()) {
-            return new EpollEventLoopGroup(threads, tFacBuilder.setNameFormat("Epoll-" + name + "-%d").build());
+            return new EpollEventLoopGroup(threads, envProvider.newThreadFactory("Epoll-" + name));
         }
         if (KQueue.isAvailable()) {
-            return new KQueueEventLoopGroup(threads, tFacBuilder.setNameFormat("KQueue-" + name + "-%d").build());
+            return new KQueueEventLoopGroup(threads, envProvider.newThreadFactory("KQueue-" + name));
         }
-        return new NioEventLoopGroup(threads, tFacBuilder.setNameFormat("Nio-" + name + "-%d").build());
+        return new NioEventLoopGroup(threads, envProvider.newThreadFactory("Nio-" + name));
     }
 }

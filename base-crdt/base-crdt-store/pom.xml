@@ -26,6 +26,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-env-provider</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java-util</artifactId>
         </dependency>

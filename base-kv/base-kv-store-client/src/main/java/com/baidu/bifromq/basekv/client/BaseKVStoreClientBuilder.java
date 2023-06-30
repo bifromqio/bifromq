@@ -22,7 +22,7 @@ import java.io.File;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
-public abstract class BaseKVStoreClientBuilder<T extends BaseKVStoreClientBuilder> {
+public abstract class BaseKVStoreClientBuilder<T extends BaseKVStoreClientBuilder<T>> {
     protected final String id = UUID.randomUUID().toString();
     protected String clusterId;
     protected ICRDTService crdtService;
@@ -73,7 +73,7 @@ public abstract class BaseKVStoreClientBuilder<T extends BaseKVStoreClientBuilde
         }
     }
 
-    public abstract static class InterProcClientBuilder<T extends InterProcClientBuilder>
+    public abstract static class InterProcClientBuilder<T extends InterProcClientBuilder<T>>
         extends BaseKVStoreClientBuilder<T> {
         protected EventLoopGroup eventLoopGroup;
         protected long keepAliveInSec;

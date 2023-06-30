@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-public interface KVEngineConfigurator<T extends KVEngineConfigurator> {
-    interface KVEngineConfiguratorBuilder<T extends KVEngineConfigurator> {
+public interface KVEngineConfigurator<T extends KVEngineConfigurator<?>> {
+    interface KVEngineConfiguratorBuilder<T extends KVEngineConfigurator<?>> {
         T build();
     }
 

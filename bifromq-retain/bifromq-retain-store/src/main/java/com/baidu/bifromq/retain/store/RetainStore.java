@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
@@ -26,7 +27,6 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.retain.utils.MessageUtil;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Clock;
@@ -93,7 +93,7 @@ abstract class RetainStore implements IRetainStore {
             jobExecutor = ExecutorServiceMetrics
                 .monitor(Metrics.globalRegistry,
                     new ScheduledThreadPoolExecutor(1,
-                        new ThreadFactoryBuilder().setNameFormat("retain-store-job-executor-%d").build()),
+                        EnvProvider.INSTANCE.newThreadFactory("retain-store-job-executor")),
                     CLUSTER_NAME + "-job-executor");
         } else {
             jobExecutor = bgTaskExecutor;

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter.config;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.starter.config.model.AgentHostConfig;
 import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
 import com.baidu.bifromq.starter.config.model.StorageEngineConfig;
@@ -27,7 +28,7 @@ public class RetainStoreConfig implements StarterConfig {
 
     private int port;
 
-    private int bgWorkerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
+    private int bgWorkerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4);
 
     private boolean bootstrap;
 

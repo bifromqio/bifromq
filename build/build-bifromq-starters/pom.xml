@@ -25,6 +25,10 @@
     <artifactId>build-bifromq-starters</artifactId>
 
     <dependencies>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-env-provider</artifactId>
+        </dependency>
         <!-- third party dependencies -->
         <dependency>
             <groupId>commons-cli</groupId>

@@ -23,6 +23,7 @@ import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import java.util.concurrent.ThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -35,10 +36,15 @@ public class NettyUtil {
     }
 
     public static EventLoopGroup createEventLoopGroup(int nThreads) {
+        return createEventLoopGroup(nThreads, null);
+    }
+
+    public static EventLoopGroup createEventLoopGroup(int nThreads, ThreadFactory threadFactory) {
         if (Epoll.isAvailable()) {
-            return new EpollEventLoopGroup(nThreads);
+            return new EpollEventLoopGroup(nThreads, threadFactory);
         }
-        return new NioEventLoopGroup(nThreads);
+        return new NioEventLoopGroup(nThreads, threadFactory);
+
     }
 
     public static Class<? extends SocketChannel> getSocketChannelClass() {

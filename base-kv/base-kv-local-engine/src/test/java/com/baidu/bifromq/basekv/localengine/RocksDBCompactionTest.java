@@ -14,12 +14,11 @@
 package com.baidu.bifromq.basekv.localengine;
 
 import static java.lang.Math.max;
-import static java.lang.Runtime.getRuntime;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import java.nio.ByteBuffer;
@@ -37,10 +36,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Ignore;
-import org.testng.annotations.Test;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.ColumnFamilyOptionsInterface;
 import org.rocksdb.CompactionPriority;
@@ -53,6 +48,10 @@ import org.rocksdb.RateLimiter;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.Statistics;
 import org.rocksdb.util.SizeUnit;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Ignore;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class RocksDBCompactionTest {
@@ -66,7 +65,8 @@ public class RocksDBCompactionTest {
     public void setup() {
         dataDir = Paths.get(System.getProperty("user.dir"), "data");
         dataDir.toFile().mkdirs();
-        bgTaskExecutor = newScheduledThreadPool(4, new ThreadFactoryBuilder().setNameFormat("bg-executor-%d").build());
+        bgTaskExecutor = newScheduledThreadPool(4,
+            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
         start();
     }
 
@@ -102,7 +102,7 @@ public class RocksDBCompactionTest {
                     targetOption
                         .setMaxOpenFiles(20)
                         .setStatsDumpPeriodSec(10)
-                        .setMaxBackgroundJobs(max(getRuntime().availableProcessors(), 2));
+                        .setMaxBackgroundJobs(max(EnvProvider.INSTANCE.availableProcessors(), 2));
                 }
             },
             new RocksDBKVEngineConfigurator.CFOptionsConfigurator() {

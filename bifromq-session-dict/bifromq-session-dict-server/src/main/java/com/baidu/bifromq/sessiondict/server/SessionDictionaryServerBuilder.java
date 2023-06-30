@@ -43,7 +43,7 @@ public abstract class SessionDictionaryServerBuilder<T extends SessionDictionary
                 protected IRPCServer buildRPCServer(SessionDictionaryService distService) {
                     return IRPCServer.inProcServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(distService)
                         .build();
@@ -100,7 +100,7 @@ public abstract class SessionDictionaryServerBuilder<T extends SessionDictionary
                 protected IRPCServer buildRPCServer(SessionDictionaryService distService) {
                     return IRPCServer.nonSSLServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(distService)
                         .id(id)
@@ -143,7 +143,7 @@ public abstract class SessionDictionaryServerBuilder<T extends SessionDictionary
                 @Override
                 protected IRPCServer buildRPCServer(SessionDictionaryService distService) {
                     return IRPCServer.sslServerBuilder()
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(distService)
                         .id(id)

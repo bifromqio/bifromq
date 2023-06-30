@@ -27,10 +27,10 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.NonNull;
 
-public abstract class InboxServerBuilder<T extends InboxServerBuilder>
+public abstract class InboxServerBuilder<T extends InboxServerBuilder<T>>
     implements IInboxServiceBuilder {
     protected ISettingProvider settingProvider;
-    protected Executor ioExecutor;
+    protected Executor executor;
     protected IBaseKVStoreClient storeClient;
     protected ScheduledExecutorService bgTaskExecutor;
 
@@ -39,8 +39,8 @@ public abstract class InboxServerBuilder<T extends InboxServerBuilder>
         return (T) this;
     }
 
-    public T ioExecutor(Executor ioExecutor) {
-        this.ioExecutor = ioExecutor;
+    public T executor(Executor ioExecutor) {
+        this.executor = ioExecutor;
         return (T) this;
     }
 
@@ -65,7 +65,7 @@ public abstract class InboxServerBuilder<T extends InboxServerBuilder>
                 protected IRPCServer buildRPCServer(InboxService inboxService) {
                     return IRPCServer.inProcServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(ioExecutor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(inboxService)
                         .build();
@@ -74,7 +74,7 @@ public abstract class InboxServerBuilder<T extends InboxServerBuilder>
         }
     }
 
-    abstract static class InterProcInboxServerBuilder<T extends InterProcInboxServerBuilder>
+    abstract static class InterProcInboxServerBuilder<T extends InterProcInboxServerBuilder<T>>
         extends InboxServerBuilder<T> {
         protected String id;
         protected String host;
@@ -123,7 +123,7 @@ public abstract class InboxServerBuilder<T extends InboxServerBuilder>
                 protected IRPCServer buildRPCServer(InboxService inboxService) {
                     return IRPCServer.nonSSLServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(ioExecutor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(inboxService)
                         .id(id)
@@ -172,7 +172,7 @@ public abstract class InboxServerBuilder<T extends InboxServerBuilder>
                         .port(port)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(inboxService)
-                        .defaultExecutor(ioExecutor)
+                        .executor(executor)
                         .bossEventLoopGroup(bossEventLoopGroup)
                         .workerEventLoopGroup(workerEventLoopGroup)
                         .crdtService(crdtService)

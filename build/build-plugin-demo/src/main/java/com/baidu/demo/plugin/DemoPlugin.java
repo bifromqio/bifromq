@@ -23,6 +23,7 @@ import io.micrometer.prometheus.PrometheusMeterRegistry;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.Plugin;
 import org.pf4j.PluginWrapper;
@@ -47,16 +48,22 @@ public class DemoPlugin extends Plugin {
         registry.config().meterFilter(new MeterFilter() {
             @Override
             public DistributionStatisticConfig configure(Meter.Id id, DistributionStatisticConfig config) {
-//                switch (id.getType()) {
-//                    case TIMER:
-//                    case DISTRIBUTION_SUMMARY:
-//                        // following config will cause huge performance penalty
-//                        // don't enable it unless you accept the consequence
-//                        return DistributionStatisticConfig.builder()
-//                            .percentiles(0.5, 0.99)
-//                            .build();
-//                }
-                return config;
+                switch (id.getType()) {
+                    case TIMER:
+                    case DISTRIBUTION_SUMMARY:
+                        // following config will cause huge performance penalty
+                        // don't enable it unless you accept the consequence
+//                        if (id.getTag("trafficId") != null) {
+//                            return DistributionStatisticConfig.builder()
+//                                .percentiles(0.5, 0.99, 0.999)
+//                                .expiry(Duration.ofSeconds(5))
+//                                .build()
+//                                .merge(config);
+//                        }
+                }
+                return DistributionStatisticConfig.builder()
+                    .expiry(Duration.ofSeconds(5))
+                    .build().merge(config);
             }
         });
         Metrics.addRegistry(registry);

@@ -57,7 +57,7 @@ public abstract class RetainServerBuilder<T extends RetainServerBuilder> impleme
                 protected IRPCServer buildRPCServer(RetainService retainService) {
                     return IRPCServer.inProcServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(retainService)
                         .build();
@@ -114,7 +114,7 @@ public abstract class RetainServerBuilder<T extends RetainServerBuilder> impleme
                 protected IRPCServer buildRPCServer(RetainService retainService) {
                     return IRPCServer.nonSSLServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(retainService)
                         .id(id)
@@ -158,7 +158,7 @@ public abstract class RetainServerBuilder<T extends RetainServerBuilder> impleme
                 @Override
                 protected IRPCServer buildRPCServer(RetainService retainService) {
                     return IRPCServer.sslServerBuilder()
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(retainService)
                         .id(id)

@@ -17,6 +17,7 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -28,8 +29,6 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -118,14 +117,14 @@ public abstract class InboxServiceTest {
 //                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
         mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            new ThreadFactoryBuilder().setNameFormat("tick-task-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-            new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
         inboxStoreClient = IBaseKVStoreClient
             .inProcClientBuilder()
@@ -168,9 +167,9 @@ public abstract class InboxServiceTest {
         agentHost.shutdown();
         try {
             Files.walk(dbRootDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }

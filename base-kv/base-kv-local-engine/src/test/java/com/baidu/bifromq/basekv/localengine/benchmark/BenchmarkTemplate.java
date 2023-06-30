@@ -15,14 +15,13 @@ package com.baidu.bifromq.basekv.localengine.benchmark;
 
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static java.lang.Math.max;
-import static java.lang.Runtime.getRuntime;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,8 +33,6 @@ import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Ignore;
-import org.testng.annotations.Test;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.runner.Runner;
@@ -56,6 +53,8 @@ import org.rocksdb.MutableColumnFamilyOptionsInterface;
 import org.rocksdb.MutableDBOptionsInterface;
 import org.rocksdb.Statistics;
 import org.rocksdb.util.SizeUnit;
+import org.testng.annotations.Ignore;
+import org.testng.annotations.Test;
 
 @Slf4j
 public abstract class BenchmarkTemplate {
@@ -74,7 +73,7 @@ public abstract class BenchmarkTemplate {
         String DB_CHECKPOINT_DIR = "testDB_cp";
         String uuid = UUID.randomUUID().toString();
         bgTaskExecutor =
-            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
+            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
         RocksDBKVEngineConfigurator configurator = new RocksDBKVEngineConfigurator(new RocksDBKVEngineConfigurator
             .DBOptionsConfigurator() {
             @Override
@@ -93,7 +92,7 @@ public abstract class BenchmarkTemplate {
                 targetOption
                     .setMaxOpenFiles(20)
                     .setStatsDumpPeriodSec(5)
-                    .setMaxBackgroundJobs(max(getRuntime().availableProcessors(), 2));
+                    .setMaxBackgroundJobs(max(EnvProvider.INSTANCE.availableProcessors(), 2));
             }
         }, new RocksDBKVEngineConfigurator.CFOptionsConfigurator() {
             @Override

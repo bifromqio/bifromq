@@ -16,6 +16,7 @@ package com.baidu.bifromq.inbox.server;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
@@ -43,7 +44,6 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -102,8 +102,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.bgTaskExecutorOwner = bgTaskExecutor == null;
         if (bgTaskExecutorOwner) {
             this.bgTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ScheduledThreadPoolExecutor(1,
-                    new ThreadFactoryBuilder().setNameFormat("inboxservice-default-bg-executor").build()),
+                new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("inboxservice-bg-executor")),
                 "inboxservice-default-bg-executor");
         } else {
             this.bgTaskExecutor = bgTaskExecutor;

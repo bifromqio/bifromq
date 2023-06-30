@@ -23,13 +23,14 @@ import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 @Slf4j
 public class RaftNodeTest {
@@ -41,6 +42,7 @@ public class RaftNodeTest {
     private IRaftNode.ISnapshotInstaller snapshotInstaller;
     private RaftNode testNode;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -51,7 +53,7 @@ public class RaftNodeTest {
                 .addVoters("V1")
                 .build()).build();
         IRaftStateStore stateStorage = new InMemoryStateStore("V1", snapshot);
-        testNode = new RaftNode(new RaftConfig(), stateStorage, log);
+        testNode = new RaftNode(new RaftConfig(), stateStorage, log, Executors.defaultThreadFactory());
     }
 
     @AfterMethod

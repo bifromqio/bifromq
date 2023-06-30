@@ -13,18 +13,19 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -68,12 +69,10 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -92,10 +91,10 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.mockito.Mock;
 
 @Slf4j
 public abstract class DistWorkerTest {
@@ -137,6 +136,7 @@ public abstract class DistWorkerTest {
     }
 
     private AutoCloseable closeable;
+
     @BeforeMethod(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -154,14 +154,14 @@ public abstract class DistWorkerTest {
 
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
         mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            new ThreadFactoryBuilder().setNameFormat("tick-task-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-            new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
         Metrics.globalRegistry.add(meterRegistry);
 
@@ -244,9 +244,9 @@ public abstract class DistWorkerTest {
         agentHost.shutdown();
         try {
             Files.walk(dbRootDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }

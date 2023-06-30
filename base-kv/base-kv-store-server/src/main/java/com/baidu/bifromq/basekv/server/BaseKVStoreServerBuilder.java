@@ -125,7 +125,7 @@ public abstract class BaseKVStoreServerBuilder<T extends BaseKVStoreServerBuilde
                 protected IRPCServer buildServer(BaseKVStoreService service) {
                     return IRPCServer.inProcServerBuilder()
                         .serviceUniqueName(clusterId)
-                        .defaultExecutor(ioExecutor)
+                        .executor(ioExecutor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(service)
                         .build();
@@ -194,7 +194,7 @@ public abstract class BaseKVStoreServerBuilder<T extends BaseKVStoreServerBuilde
                         .bossEventLoopGroup(bossEventLoopGroup)
                         .workerEventLoopGroup(workerEventLoopGroup)
                         .crdtService(crdtService)
-                        .defaultExecutor(ioExecutor)
+                        .executor(ioExecutor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(service)
                         .build();
@@ -254,7 +254,7 @@ public abstract class BaseKVStoreServerBuilder<T extends BaseKVStoreServerBuilde
                         .crdtService(crdtService)
                         .bossEventLoopGroup(bossEventLoopGroup)
                         .workerEventLoopGroup(workerEventLoopGroup)
-                        .defaultExecutor(ioExecutor)
+                        .executor(ioExecutor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(service)
                         .build();

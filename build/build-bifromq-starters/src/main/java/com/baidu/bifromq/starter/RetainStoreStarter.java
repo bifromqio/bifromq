@@ -16,6 +16,7 @@ package com.baidu.bifromq.starter;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
@@ -24,7 +25,6 @@ import com.baidu.bifromq.retain.store.RetainStoreBuilder;
 import com.baidu.bifromq.starter.config.RetainStoreConfig;
 import com.baidu.bifromq.starter.config.model.StoreClientConfig;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.ScheduledExecutorService;
@@ -58,7 +58,7 @@ public class RetainStoreStarter extends BaseEngineStarter<RetainStoreConfig> {
 
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
-                new ThreadFactoryBuilder().setNameFormat("bg-job-executor-%d").build()), "bgTaskExecutor");
+                EnvProvider.INSTANCE.newThreadFactory("bg-job-executor")), "bgTaskExecutor");
 
         agentHost = initAgentHost(config.getAgentHostConfig());
         log.info("Agent host started");

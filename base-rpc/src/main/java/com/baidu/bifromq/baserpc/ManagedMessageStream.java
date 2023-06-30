@@ -108,7 +108,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
         disposables.add(Observable.combineLatest(channelHolder.serverSelectorObservable()
                 // reset backoff when new selector available
                 .doOnNext(s -> retargetBackoff.reset()), signal, (s, t) -> s)
-            .subscribeOn(Schedulers.from(channelHolder.ioExecutor()))
+            .subscribeOn(Schedulers.from(channelHolder.rpcExecutor()))
             .subscribe(selector -> {
                 synchronized (this) {
                     if (state.get() == State.Closed) {

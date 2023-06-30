@@ -27,6 +27,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.TestCoProcFactory;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
@@ -47,11 +48,9 @@ import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -90,6 +89,7 @@ public class KVRangeStoreTest {
 
     public Path dbRootDir;
     private AutoCloseable closeable;
+
     @BeforeMethod(alwaysRun = true)
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
@@ -97,15 +97,15 @@ public class KVRangeStoreTest {
         options.getKvRangeOptions().getWalRaftConfig().setInstallSnapshotTimeoutTick(10);
 
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build());
+            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
         mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build());
+            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-                new ThreadFactoryBuilder().setNameFormat("tick-task-executor").build());
+            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-                new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build());
+            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
         if (isDevEnv()) {
             options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
@@ -166,9 +166,9 @@ public class KVRangeStoreTest {
         if (dbRootDir != null) {
             try {
                 Files.walk(dbRootDir)
-                        .sorted(Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
             } catch (IOException e) {
                 log.error("Failed to delete db root dir", e);
             }
@@ -238,13 +238,16 @@ public class KVRangeStoreTest {
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
         {
             log.info("Test PutKV");
-            assertEquals(rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join(),
+            assertEquals(
+                rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join(),
                 ByteString.empty());
 
-            assertEquals(rangeStore.put(1, id, copyFromUtf8("key2"), copyFromUtf8("hello")).toCompletableFuture().join(),
+            assertEquals(
+                rangeStore.put(1, id, copyFromUtf8("key2"), copyFromUtf8("hello")).toCompletableFuture().join(),
                 ByteString.empty());
 
-            assertEquals(rangeStore.put(1, id, copyFromUtf8("key3"), copyFromUtf8("hello")).toCompletableFuture().join(),
+            assertEquals(
+                rangeStore.put(1, id, copyFromUtf8("key3"), copyFromUtf8("hello")).toCompletableFuture().join(),
                 ByteString.empty());
         }
         {

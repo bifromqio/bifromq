@@ -219,7 +219,7 @@ final class RPCClient implements IRPCClient {
     interface ChannelHolder {
         boolean inProc();
 
-        Executor ioExecutor();
+        Executor rpcExecutor();
 
         Channel channel();
 

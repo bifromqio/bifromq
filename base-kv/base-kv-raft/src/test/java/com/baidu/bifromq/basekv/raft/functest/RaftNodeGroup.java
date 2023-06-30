@@ -116,7 +116,8 @@ public final class RaftNodeGroup {
         Snapshot snapshot =
             Snapshot.newBuilder().setIndex(snapLastIndex).setTerm(snapLastTerm).setClusterConfig(clusterConfig).build();
         IRaftStateStore stateStorage = new InMemoryStateStore(id, snapshot);
-        RaftNode raftNode = new RaftNode(raftConfig, stateStorage, RAFT_LOGGER, "id", id);
+        RaftNode raftNode =
+            new RaftNode(raftConfig, stateStorage, RAFT_LOGGER, Executors.defaultThreadFactory(), "id", id);
         nodes.put(id, raftNode);
     }
 

@@ -17,6 +17,7 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -31,7 +32,6 @@ import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
@@ -43,10 +43,10 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.mockito.Mock;
 
 @Slf4j
 public abstract class DistServiceTest {
@@ -106,19 +106,19 @@ public abstract class DistServiceTest {
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(2, 2, 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build()),
+                EnvProvider.INSTANCE.newThreadFactory("query-executor")),
             "query-executor");
         mutationExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(2, 2, 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build()),
+                EnvProvider.INSTANCE.newThreadFactory("mutation-executor")),
             "mutation-executor");
         tickTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(2,
-                new ThreadFactoryBuilder().setNameFormat("tick-task-executor-%d").build()), "tick-task-executor");
+                EnvProvider.INSTANCE.newThreadFactory("tick-task-executor")), "tick-task-executor");
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(1,
-                new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build()), "bg-task-executor");
+                EnvProvider.INSTANCE.newThreadFactory("bg-task-executor")), "bg-task-executor");
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))

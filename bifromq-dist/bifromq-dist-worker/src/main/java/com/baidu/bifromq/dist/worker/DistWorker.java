@@ -22,6 +22,7 @@ import static com.baidu.bifromq.metrics.TrafficMetric.DistSubInfoSizeGauge;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
@@ -38,7 +39,6 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -113,7 +113,7 @@ abstract class DistWorker implements IDistWorker {
         jobExecutorOwner = bgTaskExecutor == null;
         if (jobExecutorOwner) {
             jobScheduler = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(1,
-                    new ThreadFactoryBuilder().setNameFormat("dist-worker-job-executor-%d").build()),
+                    EnvProvider.INSTANCE.newThreadFactory("dist-worker-job-executor")),
                 CLUSTER_NAME + "-job-executor");
         } else {
             jobScheduler = bgTaskExecutor;

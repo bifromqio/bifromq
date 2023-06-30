@@ -47,7 +47,7 @@ import org.openjdk.jmh.annotations.TearDown;
 public class NonSSLPipelineUnaryState {
     private IAgentHost agentHost;
     private ICRDTService crdtService;
-    private Executor ioExecutor;
+    private Executor executor;
 
     private BluePrint bluePrint = BluePrint.builder()
         .serviceDescriptor(RPCTestGrpc.getServiceDescriptor())
@@ -69,14 +69,14 @@ public class NonSSLPipelineUnaryState {
         agentHost.start();
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
-        ioExecutor = Executors.newFixedThreadPool(4);
+        executor = Executors.newFixedThreadPool(4);
         this.server = IRPCServer.nonSSLServerBuilder()
             .id("NonSSLServer1")
             .host("127.0.0.1")
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
             .serviceUniqueName("PipelineUnaryBenchmark")
-            .defaultExecutor(ioExecutor)
+            .executor(executor)
             .crdtService(crdtService)
             .bluePrint(bluePrint)
             .bindService(new RPCTestGrpc.RPCTestImplBase() {
@@ -125,8 +125,8 @@ public class NonSSLPipelineUnaryState {
     public void teardown() {
         client.stop();
         server.shutdown();
-        if (ioExecutor instanceof ExecutorService) {
-            ((ExecutorService) ioExecutor).shutdownNow();
+        if (executor instanceof ExecutorService) {
+            ((ExecutorService) executor).shutdownNow();
         }
     }
 

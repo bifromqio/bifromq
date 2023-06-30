@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.wal;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
@@ -29,7 +30,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -74,17 +74,17 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
 
     private ScheduledExecutorService bgTaskExecutor;
 
-    public KVRangeWALStorageEngine(String overrideIdentity, int flushBufferSize, KVEngineConfigurator configurator) {
+    public KVRangeWALStorageEngine(String overrideIdentity, int flushBufferSize, KVEngineConfigurator<?> configurator) {
         this.flushBufferSize = flushBufferSize;
         kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
         flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(), new ThreadFactoryBuilder().setNameFormat("wal-flusher").build()),
+                new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("wal-flusher")),
             "basekv[" + kvEngine.id() + "]-wal-flusher");
         metricMgr = new MetricManager(kvEngine.id());
     }
 
-    public KVRangeWALStorageEngine(String overrideIdentity, KVEngineConfigurator configurator) {
+    public KVRangeWALStorageEngine(String overrideIdentity, KVEngineConfigurator<?> configurator) {
         this(overrideIdentity, 1024, configurator);
     }
 

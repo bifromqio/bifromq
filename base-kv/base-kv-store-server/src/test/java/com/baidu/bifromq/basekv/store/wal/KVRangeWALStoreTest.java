@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.wal;
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
@@ -25,8 +26,6 @@ import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,7 +46,7 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
     @BeforeMethod
     public void setup() throws IOException {
         bgMgmtTaskExecutor =
-                newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("bg-executor").build());
+            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
         KVEngineConfigurator<?> walConfigurator;
         if (isDevEnv()) {
             walConfigurator = new InMemoryKVEngineConfigurator();

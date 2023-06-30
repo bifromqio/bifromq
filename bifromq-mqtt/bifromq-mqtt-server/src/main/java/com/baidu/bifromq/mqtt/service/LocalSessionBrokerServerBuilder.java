@@ -44,7 +44,7 @@ abstract class LocalSessionBrokerServerBuilder<T extends LocalSessionBrokerServe
                 protected IRPCServer buildRPCServer(LocalSessionBrokerService service) {
                     return IRPCServer.inProcServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(service)
                         .build();
@@ -110,7 +110,7 @@ abstract class LocalSessionBrokerServerBuilder<T extends LocalSessionBrokerServe
                         .host(host)
                         .port(port)
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bossEventLoopGroup(bossEventLoopGroup)
                         .workerEventLoopGroup(workerEventLoopGroup)
                         .crdtService(crdtService)
@@ -154,7 +154,7 @@ abstract class LocalSessionBrokerServerBuilder<T extends LocalSessionBrokerServe
                         .host(host)
                         .port(port)
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bossEventLoopGroup(bossEventLoopGroup)
                         .workerEventLoopGroup(workerEventLoopGroup)
                         .crdtService(crdtService)

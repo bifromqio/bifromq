@@ -22,6 +22,7 @@ import static io.grpc.ConnectivityState.READY;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.google.common.collect.Maps;
 import io.grpc.Attributes;
@@ -87,7 +88,7 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         boolean updatePicker = (!resolvedAddresses.getAttributes()
             .get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY).equals(currentTrafficDirective));
         currentTrafficDirective = resolvedAddresses.getAttributes().get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY);
-        int requested = Math.min(5, Runtime.getRuntime().availableProcessors());
+        int requested = Math.min(5, EnvProvider.INSTANCE.availableProcessors());
         Set<String> currentServers = subchannelRegistry.keySet();
         Set<String> latestServers = newResolved.keySet();
         Set<String> addedServers = setsDifference(latestServers, currentServers);

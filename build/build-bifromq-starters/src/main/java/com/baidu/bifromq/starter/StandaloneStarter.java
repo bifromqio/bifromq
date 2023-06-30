@@ -17,6 +17,7 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -45,12 +46,8 @@ import com.baidu.bifromq.sessiondict.server.ISessionDictionaryServer;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
-import java.io.IOException;
-import java.net.ServerSocket;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -63,9 +60,9 @@ import org.pf4j.PluginManager;
 @Slf4j
 public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private PluginManager pluginMgr;
-    private Executor ioClientExecutor;
-    private Executor ioServerExecutor;
-    private Executor queryExecutor;
+    private ExecutorService ioClientExecutor;
+    private ExecutorService ioServerExecutor;
+    private ExecutorService queryExecutor;
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
@@ -75,7 +72,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
-    private IMqttBrokerClient mqttBrokerClient;
     private ISessionDictionaryClient sessionDictClient;
     private ISessionDictionaryServer sessionDictServer;
     private IDistClient distClient;
@@ -83,7 +79,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IDistWorker distWorker;
     private IDistServer distServer;
     private IInboxReaderClient inboxReaderClient;
-    private IInboxBrokerClient inboxBrokerClient;
     private IBaseKVStoreClient inboxStoreClient;
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
@@ -106,29 +101,25 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         ioClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getIoClientParallelism(), config.getIoClientParallelism(), 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("io-client-executor-%d").build()),
-            "io-client-executor");
+                EnvProvider.INSTANCE.newThreadFactory("io-client-executor")), "io-client-executor");
         ioServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getIoServerParallelism(), config.getIoServerParallelism(), 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("io-server-executor-%d").build()),
-            "io-server-executor");
+                EnvProvider.INSTANCE.newThreadFactory("io-server-executor")), "io-server-executor");
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getQueryThreads(), config.getQueryThreads(), 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("query-executor-%d").build()),
-            "query-executor");
+                EnvProvider.INSTANCE.newThreadFactory("query-executor")), "query-executor");
         mutationExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getMutationThreads(), config.getMutationThreads(), 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("mutation-executor-%d").build()),
-            "mutation-executor");
+                EnvProvider.INSTANCE.newThreadFactory("mutation-executor")), "mutation-executor");
         tickTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getTickerThreads(),
-                new ThreadFactoryBuilder().setNameFormat("tick-task-executor-%d").build()), "tick-task-executor");
+                EnvProvider.INSTANCE.newThreadFactory("tick-task-executor")), "tick-task-executor");
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
-                new ThreadFactoryBuilder().setNameFormat("bg-task-executor-%d").build()), "bg-task-executor");
+                EnvProvider.INSTANCE.newThreadFactory("bg-task-executor")), "bg-task-executor");
 
         eventCollectorMgr = new EventCollectorManager(pluginMgr);
 
@@ -137,8 +128,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(),
             pluginMgr, settingProviderMgr, eventCollectorMgr);
 
-        AgentHostOptions agentHostOpts = AgentHostOptions.builder().addr("127.0.0.1").port(freePort()).build();
-        agentHost = IAgentHost.newInstance(agentHostOpts);
+        agentHost = IAgentHost.newInstance(AgentHostOptions.builder().addr("127.0.0.1").build());
         agentHost.start();
         log.debug("Agent host started");
 
@@ -157,7 +147,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         inboxReaderClient = IInboxReaderClient.inProcClientBuilder()
             .executor(MoreExecutors.directExecutor())
             .build();
-        inboxBrokerClient = IInboxBrokerClient.inProcClientBuilder()
+        IInboxBrokerClient inboxBrokerClient = IInboxBrokerClient.inProcClientBuilder()
             .executor(MoreExecutors.directExecutor())
             .build();
         inboxStoreClient = IBaseKVStoreClient.inProcClientBuilder()
@@ -187,7 +177,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         inboxServer = IInboxServer.inProcBuilder()
             .settingProvider(settingProviderMgr)
-            .ioExecutor(ioServerExecutor)
+            .executor(ioServerExecutor)
             .storeClient(inboxStoreClient)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
@@ -231,7 +221,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .executor(MoreExecutors.directExecutor())
             .build();
 
-        mqttBrokerClient = IMqttBrokerClient.inProcClientBuilder()
+        IMqttBrokerClient mqttBrokerClient = IMqttBrokerClient.inProcClientBuilder()
             .executor(MoreExecutors.directExecutor())
             .build();
 
@@ -390,19 +380,19 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         inboxBrokerMgr.stop();
 
-        if (ioClientExecutor instanceof ExecutorService) {
-            ((ExecutorService) ioClientExecutor).shutdownNow();
+        if (ioClientExecutor != null) {
+            ioClientExecutor.shutdownNow();
             log.debug("Shutdown io client executor");
         }
-        if (ioServerExecutor instanceof ExecutorService) {
-            ((ExecutorService) ioServerExecutor).shutdownNow();
+        if (ioServerExecutor != null) {
+            ioServerExecutor.shutdownNow();
             log.debug("Shutdown io server executor");
         }
-        if (queryExecutor instanceof ExecutorService) {
-            ((ExecutorService) queryExecutor).shutdownNow();
+        if (queryExecutor != null) {
+            queryExecutor.shutdownNow();
             log.debug("Shutdown query executor");
         }
-        if (mutationExecutor instanceof ExecutorService) {
+        if (mutationExecutor != null) {
             mutationExecutor.shutdownNow();
             log.debug("Shutdown mutation executor");
         }
@@ -417,15 +407,5 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
     public static void main(String[] args) {
         StarterRunner.run(StandaloneStarter.class, args);
-    }
-
-
-    private int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            socket.setReuseAddress(true);
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 }

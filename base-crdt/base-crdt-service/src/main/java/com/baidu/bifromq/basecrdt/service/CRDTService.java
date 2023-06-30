@@ -21,9 +21,9 @@ import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
@@ -49,9 +49,8 @@ public class CRDTService implements ICRDTService {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final Map<String, CRDTContext> hostedCRDT = Maps.newConcurrentMap(); // key is the uri of crdt
     private final Subject<CRDTStoreMessage> incomingStoreMessages;
-    private final ExecutorService executor = newSingleThreadExecutor(new ThreadFactoryBuilder()
-        .setNameFormat("crdt-service-scheduler")
-        .build());
+    private final ExecutorService executor =
+        newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("crdt-service-scheduler"));
     private final Scheduler scheduler = Schedulers.from(executor);
 
 

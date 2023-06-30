@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.balance;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController.MetricManager.CommandMetrics;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
@@ -21,7 +22,6 @@ import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
@@ -81,9 +81,8 @@ public class KVRangeBalanceController {
         this.commandRunner = new CommandRunner(storeClient);
         executorOwner = executor == null;
         if (executor == null) {
-            this.executor = ExecutorServiceMetrics
-                .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(1,
-                    new ThreadFactoryBuilder().setNameFormat("balance-executor-%d").build()), "balanceExecutor");
+            this.executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(1,
+                EnvProvider.INSTANCE.newThreadFactory("balance-executor")), "balanceExecutor");
         } else {
             this.executor = executor;
         }

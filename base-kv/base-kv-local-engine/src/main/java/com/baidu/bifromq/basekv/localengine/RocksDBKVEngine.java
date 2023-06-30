@@ -24,6 +24,7 @@ import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.rocksdb.SizeApproximationFlag.INCLUDE_FILES;
 import static org.rocksdb.SizeApproximationFlag.INCLUDE_MEMTABLES;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
@@ -32,7 +33,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -468,8 +468,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             try {
                 bgTaskExecutor.execute(compact);
             } catch (RejectedExecutionException ree) {
-                ExecutorService fallbackExecutor =
-                    newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("fallback-executor").build());
+                ExecutorService fallbackExecutor = newSingleThreadExecutor(
+                    EnvProvider.INSTANCE.newThreadFactory("fallback-executor"));
                 fallbackExecutor.execute(() -> {
                     compact.run();
                     fallbackExecutor.shutdown();

@@ -21,6 +21,7 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -49,7 +50,6 @@ import com.baidu.bifromq.sessiondict.server.ISessionDictionaryServer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.reactivex.rxjava3.core.Observable;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -115,17 +115,17 @@ abstract class MQTTTest {
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         pluginMgr = new DefaultPluginManager();
-        ioExecutor = newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("MQTTTestExecutor-%d").build());
+        ioExecutor = newCachedThreadPool(EnvProvider.INSTANCE.newThreadFactory("MQTTTestExecutor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-            new ThreadFactoryBuilder().setNameFormat("bg-task-executor").build());
+            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            new ThreadFactoryBuilder().setNameFormat("tick-task-executor").build());
+            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         queryExecutor = new ThreadPoolExecutor(2, 2, 10, TimeUnit.SECONDS,
             new LinkedBlockingDeque<>(20_000),
-            new ThreadFactoryBuilder().setNameFormat("query-executor").build());
+            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
         mutationExecutor = new ThreadPoolExecutor(2, 2, 10, TimeUnit.SECONDS,
             new LinkedBlockingDeque<>(20_000),
-            new ThreadFactoryBuilder().setNameFormat("mutation-executor").build());
+            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .port(freePort())
@@ -179,7 +179,7 @@ abstract class MQTTTest {
                 .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
             .build();
         inboxServer = IInboxServer.inProcBuilder()
-            .ioExecutor(MoreExecutors.directExecutor())
+            .executor(MoreExecutors.directExecutor())
             .settingProvider(settingProvider)
             .storeClient(inboxStoreKVStoreClient)
             .build();

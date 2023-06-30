@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter.config;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.starter.config.model.AgentHostConfig;
 import com.baidu.bifromq.starter.config.model.RPCClientConfig;
@@ -37,9 +38,9 @@ public class DistWorkerConfig implements StarterConfig {
 
     private String settingProviderFQN = null;
 
-    private int pushIOThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
+    private int pushIOThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4);
 
-    private int bgWorkerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
+    private int bgWorkerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4);
 
     private ServerSSLContextConfig serverSSLCtxConfig;
 

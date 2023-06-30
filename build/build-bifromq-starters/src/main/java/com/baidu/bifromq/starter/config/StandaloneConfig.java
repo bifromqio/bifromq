@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter.config;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -48,18 +49,17 @@ public class StandaloneConfig implements StarterConfig {
     private DistWorkerConfig distWorkerConfig;
     private InboxStoreConfig inboxStoreConfig;
     private RetainStoreConfig retainStoreConfig;
-    private int mqttWorkerThreads = Runtime.getRuntime().availableProcessors();
-    private int ioClientParallelism = Math.max(2, Runtime.getRuntime().availableProcessors() / 3);
-    private int ioServerParallelism = Math.max(2, Runtime.getRuntime().availableProcessors() / 3);
-    private int queryThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 4);
+    private int mqttWorkerThreads = EnvProvider.INSTANCE.availableProcessors();
+    private int ioClientParallelism = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 3);
+    private int ioServerParallelism = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 3);
+    private int queryThreads = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 4);
     private int mutationThreads = 3;
-    private int tickerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
-    private int bgWorkerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
+    private int tickerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 20);
+    private int bgWorkerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 20);
     public static StandaloneConfig build(File confFile) {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         try {
-            StandaloneConfig config = mapper.readValue(confFile, StandaloneConfig.class);
-            return config;
+            return mapper.readValue(confFile, StandaloneConfig.class);
         } catch (IOException e) {
             throw new RuntimeException("Unable to read config file: " + confFile, e);
         }

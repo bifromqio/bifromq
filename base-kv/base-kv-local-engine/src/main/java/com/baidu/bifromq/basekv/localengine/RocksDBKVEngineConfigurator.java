@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basekv.localengine;
 
 import static java.lang.Math.max;
-import static java.lang.Runtime.getRuntime;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import java.lang.ref.Cleaner;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -93,7 +93,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         public void config(MutableDBOptionsInterface<DBOptions> targetOption) {
             targetOption
                 .setMaxOpenFiles(256)
-                .setMaxBackgroundJobs(max(getRuntime().availableProcessors() / 4, 2));
+                .setMaxBackgroundJobs(max(EnvProvider.INSTANCE.availableProcessors() / 4, 2));
         }
     }
 

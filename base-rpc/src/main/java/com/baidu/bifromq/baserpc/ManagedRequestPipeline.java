@@ -111,7 +111,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         disposables.add(Observable.combineLatest(channelHolder.serverSelectorObservable()
                 // reset backoff when new selector available
                 .doOnNext(s -> retargetBackoff.reset()), signal, (s, t) -> s)
-            .observeOn(Schedulers.from(channelHolder.ioExecutor()))
+            .observeOn(Schedulers.from(channelHolder.rpcExecutor()))
             .subscribe(selector -> {
                 synchronized (this) {
                     if (state.get() == State.Closed) {

@@ -55,7 +55,7 @@ public class InProcPipelineUnaryState {
         this.server = IRPCServer.inProcServerBuilder()
             .serviceUniqueName("PipelineUnaryBenchmark")
 //                .executor(ioExecutor)
-            .defaultExecutor(MoreExecutors.directExecutor())
+            .executor(MoreExecutors.directExecutor())
             .bluePrint(bluePrint)
             .bindService(new RPCTestGrpc.RPCTestImplBase() {
                 private ExecutorService executor = Executors.newSingleThreadExecutor();

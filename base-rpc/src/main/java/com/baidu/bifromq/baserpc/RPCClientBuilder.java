@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.baserpc;
 
-import static io.grpc.internal.GrpcUtil.getThreadFactory;
 import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.interceptor.TrafficAwareClientInterceptor;
 import com.baidu.bifromq.baserpc.loadbalancer.IUpdateListener;
 import com.baidu.bifromq.baserpc.loadbalancer.TrafficDirectiveLoadBalancerProvider;
@@ -107,21 +107,21 @@ public class RPCClientBuilder {
             private final BehaviorSubject<IRPCClient.ConnState> connStateSubject = BehaviorSubject.create();
             private final Observable<Set<String>> serverListSubject;
             private LoadBalancerProvider lbProvider;
-            private final Executor ioExecutor;
+            private final Executor rpcExecutor;
             private final boolean needShutdownExecutor;
 
             {
                 this.needShutdownExecutor = executor == null;
                 if (needShutdownExecutor) {
-                    int threadNum = Math.max(Runtime.getRuntime().availableProcessors(), 1);
-                    ioExecutor = ExecutorServiceMetrics
+                    int threadNum = Math.max(EnvProvider.INSTANCE.availableProcessors(), 1);
+                    rpcExecutor = ExecutorServiceMetrics
                         .monitor(Metrics.globalRegistry, new ThreadPoolExecutor(threadNum, threadNum,
                                 0L, TimeUnit.MILLISECONDS,
                                 new LinkedTransferQueue<>(),
-                                getThreadFactory(serviceUniqueName + "_client-executor-%d", true)),
+                                EnvProvider.INSTANCE.newThreadFactory(serviceUniqueName + "_client-executor", true)),
                             serviceUniqueName + "_client-executor");
                 } else {
-                    ioExecutor = executor;
+                    rpcExecutor = executor;
                 }
 
                 if (channelBuilder instanceof InProcChannelBuilder) {
@@ -151,7 +151,7 @@ public class RPCClientBuilder {
                     });
                     channel = InProcessChannelBuilder.forName(serviceUniqueName)
                         .intercept(new TrafficAwareClientInterceptor(serviceUniqueName))
-                        .executor(ioExecutor)
+                        .executor(rpcExecutor)
                         .build();
                 } else {
                     inProc = false;
@@ -177,7 +177,7 @@ public class RPCClientBuilder {
                             .trafficDirector(trafficDirector)
                             .build())
                         .defaultLoadBalancingPolicy(lbProvider.getPolicyName())
-                        .executor(ioExecutor);
+                        .executor(rpcExecutor);
                     if (ncBuilder instanceof SSLChannelBuilder) {
                         channelBuilder
                             .negotiationType(NegotiationType.TLS)
@@ -206,8 +206,8 @@ public class RPCClientBuilder {
             }
 
             @Override
-            public Executor ioExecutor() {
-                return ioExecutor;
+            public Executor rpcExecutor() {
+                return rpcExecutor;
             }
 
             @Override
@@ -250,7 +250,7 @@ public class RPCClientBuilder {
                     result = channel.isTerminated();
                 }
                 if (needShutdownExecutor) {
-                    ExecutorService executorService = (ExecutorService) ioExecutor;
+                    ExecutorService executorService = (ExecutorService) rpcExecutor;
                     result &= MoreExecutors.shutdownAndAwaitTermination(executorService,
                         Math.max(timeoutNS / 2, nsLeft), TimeUnit.NANOSECONDS);
                 }
@@ -288,7 +288,7 @@ public class RPCClientBuilder {
         }
     }
 
-    public abstract static class InterProcChannelBuilder<T extends InterProcChannelBuilder<?>>
+    public abstract static class InterProcChannelBuilder<T extends InterProcChannelBuilder<T>>
         extends ChannelBuilder {
         private ICRDTService crdtService;
         private EventLoopGroup eventLoopGroup;

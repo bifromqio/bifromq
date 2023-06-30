@@ -15,14 +15,13 @@ package com.baidu.bifromq.basekv.localengine.benchmark;
 
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static java.lang.Math.max;
-import static java.lang.Runtime.getRuntime;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -69,7 +68,7 @@ abstract class BenchmarkState {
         String DB_CHECKPOINT_DIR = "testDB_cp";
         String uuid = UUID.randomUUID().toString();
         bgTaskExecutor =
-            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
+            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
         RocksDBKVEngineConfigurator configurator =
             new RocksDBKVEngineConfigurator(new RocksDBKVEngineConfigurator.DBOptionsConfigurator() {
                 @Override
@@ -88,7 +87,7 @@ abstract class BenchmarkState {
                     targetOption
                         .setMaxOpenFiles(20)
                         .setStatsDumpPeriodSec(5)
-                        .setMaxBackgroundJobs(max(getRuntime().availableProcessors(), 2));
+                        .setMaxBackgroundJobs(max(EnvProvider.INSTANCE.availableProcessors(), 2));
                 }
             }, new RocksDBKVEngineConfigurator.CFOptionsConfigurator() {
                 @Override

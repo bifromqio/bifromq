@@ -16,6 +16,7 @@ package com.baidu.bifromq.starter;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -32,7 +33,6 @@ import com.baidu.bifromq.starter.config.DistWorkerConfig;
 import com.baidu.bifromq.starter.config.model.RPCClientConfig;
 import com.baidu.bifromq.starter.config.model.StoreClientConfig;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.ExecutorService;
@@ -91,7 +91,7 @@ public class DistWorkerStarter extends BaseEngineStarter<DistWorkerConfig> {
                 }, null, true), "push-io-executor");
         bgTaskExecutor = ExecutorServiceMetrics
             .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(config.getBgWorkerThreads(),
-                new ThreadFactoryBuilder().setNameFormat("bg-job-executor-%d").build()), "bgTaskExecutor");
+                EnvProvider.INSTANCE.newThreadFactory("bg-job-executor")), "bgTaskExecutor");
         pluginMgr = new BifroMQPluginManager();
         pluginMgr.loadPlugins();
         pluginMgr.startPlugins();

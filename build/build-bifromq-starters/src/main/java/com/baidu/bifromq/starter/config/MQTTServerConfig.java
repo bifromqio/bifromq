@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter.config;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.starter.config.model.AgentHostConfig;
 import com.baidu.bifromq.starter.config.model.LocalSessionServerConfig;
 import com.baidu.bifromq.starter.config.model.RPCClientConfig;
@@ -64,7 +65,7 @@ public class MQTTServerConfig implements StarterConfig {
 
     private String settingProviderFQN = null;
 
-    private int mqttWorkerThreads = Runtime.getRuntime().availableProcessors();
+    private int mqttWorkerThreads = EnvProvider.INSTANCE.availableProcessors();
 
     private ServerSSLContextConfig brokerSSLCtxConfig;
 

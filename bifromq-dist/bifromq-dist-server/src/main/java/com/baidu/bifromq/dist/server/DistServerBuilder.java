@@ -100,7 +100,7 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
                 protected IRPCServer buildRPCServer(DistService distService) {
                     return IRPCServer.inProcServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(distService)
                         .build();
@@ -154,7 +154,7 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
                 protected IRPCServer buildRPCServer(DistService distService) {
                     return IRPCServer.nonSSLServerBuilder()
                         .serviceUniqueName(SERVICE_NAME)
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(distService)
                         .id(id)
@@ -198,7 +198,7 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
                 @Override
                 protected IRPCServer buildRPCServer(DistService distService) {
                     return IRPCServer.sslServerBuilder()
-                        .defaultExecutor(executor)
+                        .executor(executor)
                         .bluePrint(RPCBluePrint.INSTANCE)
                         .bindService(distService)
                         .id(id)

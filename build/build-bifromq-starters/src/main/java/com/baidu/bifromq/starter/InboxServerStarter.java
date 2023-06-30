@@ -128,7 +128,7 @@ public class InboxServerStarter extends BaseStarter<InboxServerConfig> {
                 .crdtService(crdtService)
                 .settingProvider(settingProviderMgr)
                 .storeClient(inboxStoreClient)
-                .ioExecutor(MoreExecutors.directExecutor())
+                .executor(MoreExecutors.directExecutor())
                 .trustCertsFile(loadFromConfDir(config.getServerSSLCtxConfig().getTrustCertsFile()))
                 .serviceIdentityCertFile(loadFromConfDir(config.getServerSSLCtxConfig().getCertFile()))
                 .privateKeyFile(loadFromConfDir(config.getServerSSLCtxConfig().getKeyFile()))
@@ -141,7 +141,7 @@ public class InboxServerStarter extends BaseStarter<InboxServerConfig> {
             .crdtService(crdtService)
             .settingProvider(settingProviderMgr)
             .storeClient(inboxStoreClient)
-            .ioExecutor(MoreExecutors.directExecutor())
+            .executor(MoreExecutors.directExecutor())
             .build();
     }
 

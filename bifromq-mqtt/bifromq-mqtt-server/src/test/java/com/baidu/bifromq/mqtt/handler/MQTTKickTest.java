@@ -26,7 +26,7 @@ import org.testng.annotations.Test;
 
 public class MQTTKickTest extends BaseMQTTTest {
 
-    @Test(groups = "integration")
+    @Test
     public void testKick() {
         mockAuthPass();
         mockSessionReg();
@@ -42,5 +42,4 @@ public class MQTTKickTest extends BaseMQTTTest {
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, KICKED);
     }
-
 }

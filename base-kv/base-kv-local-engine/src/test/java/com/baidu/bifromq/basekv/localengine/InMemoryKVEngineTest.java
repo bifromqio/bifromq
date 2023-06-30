@@ -16,8 +16,8 @@ package com.baidu.bifromq.basekv.localengine;
 import static java.util.Collections.singletonList;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +32,7 @@ public class InMemoryKVEngineTest extends AbstractKVEngineTest {
     @BeforeMethod
     public void setup() {
         maintenanceTaskExecutor =
-            newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("Checkpoint GC").build());
+            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
         InMemoryKVEngineConfigurator configurator = new InMemoryKVEngineConfigurator().setGcIntervalInSec(60000);
         kvEngine = new InMemoryKVEngine(null, singletonList(NS), this::isUsed, configurator,
             Duration.ofSeconds(-1));

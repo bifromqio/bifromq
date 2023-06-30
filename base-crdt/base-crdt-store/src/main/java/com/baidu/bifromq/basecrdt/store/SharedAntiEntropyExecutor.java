@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.basecrdt.store;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.IEnvProvider;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -22,9 +23,10 @@ class SharedAntiEntropyExecutor {
 
     static synchronized ScheduledExecutorService getInstance() {
         if (instance == null) {
+            IEnvProvider envProvider = EnvProvider.INSTANCE;
             instance = new ScheduledThreadPoolExecutor(
-                Math.max(2, Runtime.getRuntime().availableProcessors() / 10),
-                new ThreadFactoryBuilder().setNameFormat("shared-crdt-store-%d").setDaemon(true).build());
+                Math.max(2, envProvider.availableProcessors() / 20),
+                envProvider.newThreadFactory("shared-crdt-store", true));
         }
         return instance;
     }

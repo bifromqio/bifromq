@@ -14,11 +14,11 @@
 package com.baidu.bifromq.baserpc;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static io.grpc.internal.GrpcUtil.getThreadFactory;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.interceptor.TrafficAwareServerInterceptor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
@@ -61,15 +61,15 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
+public abstract class RPCServerBuilder<T extends RPCServerBuilder<T>> {
     public interface ExecutorSupplier {
-        @NonNull Executor getExecutor(MethodDescriptor call);
+        @NonNull Executor getExecutor(MethodDescriptor<?, ?> call);
     }
 
     protected ArrayList<BindableService> bindServices = new ArrayList<>();
 
     protected ExecutorSupplier executorSupplier;
-    protected Executor defaultExecutor;
+    protected Executor executor;
 
     protected String serviceUniqueName;
 
@@ -100,8 +100,8 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
         return (T) this;
     }
 
-    public T defaultExecutor(Executor executor) {
-        this.defaultExecutor = executor;
+    public T executor(Executor executor) {
+        this.executor = executor;
         return (T) this;
     }
 
@@ -139,15 +139,15 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
             this.bindServices = bindServices;
             this.inProc = inProc;
             needShutdownExecutor = defaultExecutor == null;
-            this.executorSupplier = executorSupplier != null ? executorSupplier : null;
+            this.executorSupplier = executorSupplier;
 
             if (needShutdownExecutor) {
-                int threadNum = Math.max(Runtime.getRuntime().availableProcessors(), 1);
+                int threadNum = Math.max(EnvProvider.INSTANCE.availableProcessors(), 1);
                 this.defaultExecutor = ExecutorServiceMetrics
                     .monitor(Metrics.globalRegistry, new ThreadPoolExecutor(threadNum, threadNum,
                             0L, TimeUnit.MILLISECONDS,
                             new LinkedTransferQueue<>(),
-                            getThreadFactory(serviceUniqueName + "_server-executor-%d", true)),
+                            EnvProvider.INSTANCE.newThreadFactory(serviceUniqueName + "_server-executor", true)),
                         serviceUniqueName + "_server-executor");
             } else {
                 this.defaultExecutor = defaultExecutor;
@@ -303,7 +303,7 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
         public IRPCServer build() {
             Preconditions.checkArgument(!isNullOrEmpty(serviceUniqueName));
             Preconditions.checkArgument(!bindServices.isEmpty());
-            return new RPCServer(serviceUniqueName, bindServices, bluePrint, executorSupplier, defaultExecutor, true) {
+            return new RPCServer(serviceUniqueName, bindServices, bluePrint, executorSupplier, executor, true) {
                 @Override
                 public String id() {
                     // only one server instance in proc mode, so use service unique name as its id
@@ -335,7 +335,7 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
         }
     }
 
-    public abstract static class InterProcServerBuilder<T extends InterProcServerBuilder<?>>
+    public abstract static class InterProcServerBuilder<T extends InterProcServerBuilder<T>>
         extends RPCServerBuilder<T> {
         protected String id;
         protected String host;
@@ -398,7 +398,7 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
                 .bluePrint(bluePrint)
                 .bindServices(bindServices)
                 .executorSupplier(executorSupplier)
-                .executor(defaultExecutor)
+                .executor(executor)
                 .build();
         }
     }
@@ -445,7 +445,7 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder> {
                 .workerEventLoopGroup(workerEventLoopGroup)
                 .crdtService(crdtService)
                 .executorSupplier(executorSupplier)
-                .executor(defaultExecutor)
+                .executor(executor)
                 .bindServices(bindServices)
                 .sslContext(sslContext())
                 .build();

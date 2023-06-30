@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class BaseHookLoader {
+public final class BaseHookLoader {
     public static <T> Map<String, T> load(Class<T> hookInterface) {
         Map<String, T> loadedFactories = new HashMap<>();
         ServiceLoader<T> serviceLoader = ServiceLoader.load(hookInterface);

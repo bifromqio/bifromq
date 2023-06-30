@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
@@ -243,10 +242,6 @@ public final class RaftNode implements IRaftNode {
     private final AtomicReference<CompletableFuture<Void>> stopFuture = new AtomicReference<>();
     private final Tags metricTags;
     private MetricManager metricMgr;
-
-    public RaftNode(RaftConfig config, IRaftStateStore stateStore, Logger logger, String... metricTags) {
-        this(config, stateStore, logger, Executors.defaultThreadFactory(), metricTags);
-    }
 
     public RaftNode(RaftConfig config, IRaftStateStore stateStore, Logger logger, ThreadFactory threadFactory,
                     String... metricTags) {

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecluster;
 
 import static com.github.benmanes.caffeine.cache.Scheduler.systemScheduler;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 import com.baidu.bifromq.basecluster.fd.FailureDetector;
 import com.baidu.bifromq.basecluster.fd.IFailureDetector;
@@ -32,11 +33,11 @@ import com.baidu.bifromq.basecluster.messenger.MessengerOptions;
 import com.baidu.bifromq.basecluster.proto.ClusterMessage;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
@@ -47,8 +48,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
@@ -60,12 +59,8 @@ final class AgentHost implements IAgentHost {
 
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final AgentHostOptions options;
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(
-        new ThreadFactoryBuilder().setNameFormat("agent-host-scheduler").setDaemon(true).build());
-    private final Scheduler scheduler = Schedulers.from(executor);
     private final ICRDTStore store;
     private final IMessenger messenger;
-    private final IFailureDetector failureDetector;
     private final IHostMemberList memberList;
     private final MemberSelector memberSelector;
     private final AutoHealer healer;
@@ -90,6 +85,8 @@ final class AgentHost implements IAgentHost {
             .maxChannelsPerHost(options.maxChannelsPerHost())
             .idleTimeoutInSec(options.idleTimeoutInSec())
             .connTimeoutInMS(options.connTimeoutInMS());
+        Scheduler scheduler = Schedulers.from(newSingleThreadScheduledExecutor(
+            EnvProvider.INSTANCE.newThreadFactory("agent-host-scheduler", true)));
         this.messenger = Messenger.builder()
             .bindAddr(new InetSocketAddress(options.addr(), options.port()))
             .serverSslContext(options.serverSslContext())
@@ -107,7 +104,7 @@ final class AgentHost implements IAgentHost {
             .map(m -> m.value().message.getCrdtStoreMessage()));
         this.memberList = new HostMemberList(options.addr(), messenger.bindAddress().getPort(),
             messenger, scheduler, store, hostAddressCache::get);
-        this.failureDetector = FailureDetector.builder()
+        IFailureDetector failureDetector = FailureDetector.builder()
             .local(new IProbingTarget() {
                 @Override
                 public ByteString id() {
