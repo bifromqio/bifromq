@@ -24,19 +24,12 @@
 
     <artifactId>base-hookloader</artifactId>
 
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
     <dependencies>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
         <!-- test dependencies -->
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
-        </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>

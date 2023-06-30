@@ -110,11 +110,6 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-auth-provider-helper</artifactId>
         </dependency>
-        <!-- for testing -->
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
-        </dependency>
     </dependencies>
     <build>
         <plugins>

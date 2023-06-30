@@ -36,10 +36,5 @@
             <groupId>org.pf4j</groupId>
             <artifactId>pf4j</artifactId>
         </dependency>
-        <!--for testing-->
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
-        </dependency>
     </dependencies>
 </project>
