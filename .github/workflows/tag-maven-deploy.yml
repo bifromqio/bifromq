@@ -35,7 +35,7 @@ jobs:
         gpg-passphrase: MAVEN_GPG_PASSPHRASE # env variable for GPG private key passphrase
 
     - name: Publish to Apache Maven Central
-      run: mvn clean deploy -P maven-central-deploy -pl bifromq-plugin-auth-provider,bifromq-plugin-event-collector,bifromq-plugin-setting-provider -am -DskipTests
+      run: mvn clean deploy -P maven-central-deploy -pl :bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-setting-provider -am -DskipTests
       env:
         MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
         MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
@@ -65,11 +65,11 @@ jobs:
           server-password: BOS_REPO_SK # env variable for token in deploy
 
       - name: Publish to BoS maven repo
-        run: mvn clean deploy -P bos-repo-deploy -pl bifromq-plugin-auth-provider,bifromq-plugin-event-collector,bifromq-plugin-inbox-broker,bifromq-plugin-setting-provider,base-kv-store-balance-spi,bifromq-dist-spi -am -DskipTests -Dbos.repo.release=$BOS_REPO_RELEASE -Dbos.repo.snapshot=$BOS_REPO_SNAPSHOT
-          env:
-            MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-            MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
-            BOS_REPO_AK: ${{ secrets.BOS_REPO_AK }}
-            BOS_REPO_SK: ${{ secrets.BOS_REPO_SK }}
-            BOS_REPO_RELEASE: ${{ secrets.BOS_REPO_RELEASE }}
-            BOS_REPO_SNAPSHOT: ${{ secrets.BOS_REPO_SNAPSHOT }}
+        run: mvn clean deploy -P bos-repo-deploy -pl :bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-inbox-broker,:bifromq-plugin-setting-provider,:base-kv-store-balance-spi,:bifromq-dist-spi -am -DskipTests -Dbos.repo.release=$BOS_REPO_RELEASE -Dbos.repo.snapshot=$BOS_REPO_SNAPSHOT
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
+          BOS_REPO_AK: ${{ secrets.BOS_REPO_AK }}
+          BOS_REPO_SK: ${{ secrets.BOS_REPO_SK }}
+          BOS_REPO_RELEASE: ${{ secrets.BOS_REPO_RELEASE }}
+          BOS_REPO_SNAPSHOT: ${{ secrets.BOS_REPO_SNAPSHOT }}
