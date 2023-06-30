@@ -17,35 +17,35 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <groupId>com.baidu.bifromq</groupId>
-        <artifactId>bifromq-plugin-helper</artifactId>
+        <artifactId>bifromq-plugin</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>bifromq-plugin-setting-provider-helper</artifactId>
+    <artifactId>bifromq-plugin-inbox-broker-helper</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-setting-provider</artifactId>
+            <artifactId>bifromq-plugin-inbox-broker</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.pf4j</groupId>
-            <artifactId>pf4j</artifactId>
-        </dependency>
-        <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <groupId>com.netflix.concurrency-limits</groupId>
+            <artifactId>concurrency-limits-core</artifactId>
         </dependency>
-        <!--for testing-->
+        <dependency>
+            <groupId>org.pf4j</groupId>
+            <artifactId>pf4j</artifactId>
+        </dependency>
+        <!-- for testing -->
         <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>

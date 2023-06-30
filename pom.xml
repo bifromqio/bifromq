@@ -32,7 +32,6 @@
         <module>bifromq-metrics</module>
         <module>bifromq-sysprops</module>
         <module>bifromq-plugin</module>
-        <module>bifromq-plugin-helper</module>
 
         <module>bifromq-dist</module>
         <module>bifromq-retain</module>
