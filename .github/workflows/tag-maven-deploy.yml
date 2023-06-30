@@ -35,7 +35,7 @@ jobs:
         gpg-passphrase: MAVEN_GPG_PASSPHRASE # env variable for GPG private key passphrase
 
     - name: Publish to Apache Maven Central
-      run: mvn clean deploy -P maven-central-deploy -pl bifromq-plugin-auth-provider,bifromq-plugin-event-collector,bifromq-plugin-inbox-broker,bifromq-plugin-setting-provider -am -DskipTests
+      run: mvn clean deploy -P maven-central-deploy -pl bifromq-plugin-auth-provider,bifromq-plugin-event-collector,bifromq-plugin-setting-provider -am -DskipTests
       env:
         MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
         MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
