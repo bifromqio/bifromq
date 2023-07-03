@@ -154,7 +154,7 @@ public final class TCPTransport extends AbstractTransport {
                 "maxBufferSizeInBytes must be a positive number");
             Preconditions.checkArgument(opts.maxChannelsPerHost > 0, "maxChannelsPerHost must be a positive number");
             this.opts = opts.toBuilder().build();
-            elg = NettyUtil.getEventLoopGroup(4, "TCP-Transport-ELG");
+            elg = NettyUtil.getEventLoopGroup(4, "cluster-tcp-transport");
             clientBootstrap = setupTcpClient(clientSslContext);
             tcpListeningChannel = setupTcpServer(bindAddr, serverSslContext);
             localAddress = (InetSocketAddress) tcpListeningChannel.channel().localAddress();

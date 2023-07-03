@@ -77,7 +77,7 @@ public final class UDPTransport extends AbstractTransport {
         super(sharedToken);
         try {
             bridger = new Bridger();
-            elg = getEventLoopGroup(4, "UDP-Transport-ELG");
+            elg = getEventLoopGroup(4, "cluster-udp-transport");
             Bootstrap bootstrap = new Bootstrap();
             channel = bootstrap.group(elg)
                 .channel(getDatagramChannelClass())

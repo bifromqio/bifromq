@@ -69,11 +69,11 @@ public class NettyUtil {
     static EventLoopGroup getEventLoopGroup(int threads, String name) {
         IEnvProvider envProvider = EnvProvider.INSTANCE;
         if (Epoll.isAvailable()) {
-            return new EpollEventLoopGroup(threads, envProvider.newThreadFactory("Epoll-" + name));
+            return new EpollEventLoopGroup(threads, envProvider.newThreadFactory(name));
         }
         if (KQueue.isAvailable()) {
-            return new KQueueEventLoopGroup(threads, envProvider.newThreadFactory("KQueue-" + name));
+            return new KQueueEventLoopGroup(threads, envProvider.newThreadFactory(name));
         }
-        return new NioEventLoopGroup(threads, envProvider.newThreadFactory("Nio-" + name));
+        return new NioEventLoopGroup(threads, envProvider.newThreadFactory(name));
     }
 }

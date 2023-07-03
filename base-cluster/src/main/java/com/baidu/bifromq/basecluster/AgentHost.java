@@ -73,8 +73,8 @@ final class AgentHost implements IAgentHost {
     AgentHost(AgentHostOptions options) {
         checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
             "Invalid bind address");
-        checkArgument(!Strings.isNullOrEmpty(options.clusterDomainName()) && options.port() > 0,
-            "Invalid port number");
+        checkArgument(Strings.isNullOrEmpty(options.clusterDomainName()) ||
+            !Strings.isNullOrEmpty(options.clusterDomainName()) && options.port() > 0, "Invalid port number");
         this.options = options.toBuilder().build();
         this.store = ICRDTStore.newInstance(options.crdtStoreOptions());
         MessengerOptions messengerOptions = new MessengerOptions();
