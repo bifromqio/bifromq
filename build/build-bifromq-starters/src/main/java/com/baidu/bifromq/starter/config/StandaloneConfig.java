@@ -49,13 +49,15 @@ public class StandaloneConfig implements StarterConfig {
     private DistWorkerConfig distWorkerConfig;
     private InboxStoreConfig inboxStoreConfig;
     private RetainStoreConfig retainStoreConfig;
-    private int mqttWorkerThreads = EnvProvider.INSTANCE.availableProcessors();
+    private int mqttBossThreads = 1;
+    private int mqttWorkerThreads = EnvProvider.INSTANCE.availableProcessors() / 2;
     private int ioClientParallelism = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 3);
     private int ioServerParallelism = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 3);
     private int queryThreads = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 4);
     private int mutationThreads = 3;
-    private int tickerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 20);
-    private int bgWorkerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 20);
+    private int tickerThreads = 3;
+    private int bgWorkerThreads = 3;
+
     public static StandaloneConfig build(File confFile) {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         try {

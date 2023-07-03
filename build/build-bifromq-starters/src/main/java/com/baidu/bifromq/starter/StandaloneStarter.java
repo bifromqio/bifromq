@@ -268,8 +268,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         MQTTBrokerBuilder.InProcBrokerBuilder brokerBuilder = IMQTTBroker.inProcBrokerBuilder()
             .host(config.getHost())
-            .bossGroup(NettyUtil.createEventLoopGroup(1))
-            .workerGroup(NettyUtil.createEventLoopGroup(config.getMqttWorkerThreads()))
+            .bossGroup(NettyUtil.createEventLoopGroup(config.getMqttBossThreads(),
+                EnvProvider.INSTANCE.newThreadFactory("mqtt-boss")))
+            .workerGroup(NettyUtil.createEventLoopGroup(config.getMqttWorkerThreads(),
+                EnvProvider.INSTANCE.newThreadFactory("mqtt-worker")))
             .ioExecutor(ioServerExecutor)
             .authProvider(authProviderMgr)
             .eventCollector(eventCollectorMgr)
@@ -396,11 +398,14 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             mutationExecutor.shutdownNow();
             log.debug("Shutdown mutation executor");
         }
-        tickTaskExecutor.shutdownNow();
-        log.debug("Shutdown tick task executor");
-        bgTaskExecutor.shutdownNow();
-        log.debug("Shutdown bg task executor");
-
+        if (tickTaskExecutor != null) {
+            tickTaskExecutor.shutdownNow();
+            log.debug("Shutdown tick task executor");
+        }
+        if (bgTaskExecutor != null) {
+            bgTaskExecutor.shutdownNow();
+            log.debug("Shutdown bg task executor");
+        }
         pluginMgr.stopPlugins();
         pluginMgr.unloadPlugins();
     }
