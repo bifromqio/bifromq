@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecluster;
 
 import static com.github.benmanes.caffeine.cache.Scheduler.systemScheduler;
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 import com.baidu.bifromq.basecluster.fd.FailureDetector;
@@ -70,7 +71,10 @@ final class AgentHost implements IAgentHost {
     private final LoadingCache<HostEndpoint, InetSocketAddress> hostAddressCache;
 
     AgentHost(AgentHostOptions options) {
-        Preconditions.checkArgument(!"0.0.0.0".equals(options.addr()), "Invalid bind address");
+        checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
+            "Invalid bind address");
+        checkArgument(!Strings.isNullOrEmpty(options.clusterDomainName()) && options.port() > 0,
+            "Invalid port number");
         this.options = options.toBuilder().build();
         this.store = ICRDTStore.newInstance(options.crdtStoreOptions());
         MessengerOptions messengerOptions = new MessengerOptions();
@@ -113,7 +117,7 @@ final class AgentHost implements IAgentHost {
 
                 @Override
                 public InetSocketAddress addr() {
-                    return new InetSocketAddress(options.addr(), options.port());
+                    return messenger.bindAddress();
                 }
             })
             .baseProbeInterval(options.baseProbeInterval())
@@ -171,7 +175,12 @@ final class AgentHost implements IAgentHost {
             messenger.start(memberSelector);
             deadDropper.start();
             if (!Strings.isNullOrEmpty(options.clusterDomainName())) {
-                seeder.join(options.clusterDomainName(), options.port());
+                if (options.port() > 0) {
+                    seeder.join(options.clusterDomainName(), options.port());
+                } else {
+                    throw new IllegalArgumentException(
+                        "Port number must be explicitly specified if cluster domain enabled");
+                }
             }
             state.set(State.STARTED);
         }
