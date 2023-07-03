@@ -16,6 +16,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.google.protobuf.ByteString;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
@@ -25,6 +26,7 @@ import org.testng.annotations.Test;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -32,18 +34,19 @@ import java.util.function.Supplier;
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
 public class InboxCreateTest {
     private KVRangeId id;
-    private Map<ByteString, ByteString> map = new HashMap<>();
     @Mock
     private IKVReader reader;
     @Mock
     private IKVIterator kvIterator;
-    private IKVWriter writer = new TestWriter(map);
+    @Mock
+    private IKVWriter writer;
     private Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
     private IEventCollector eventCollector = event -> {};
     private String trafficId = "trafficId";
@@ -70,7 +73,6 @@ public class InboxCreateTest {
 
     @AfterMethod
     public void teardown() throws Exception {
-        map.clear();
         closeable.close();
     }
 
@@ -90,13 +92,19 @@ public class InboxCreateTest {
                 .build();
 
         when(reader.get(any())).thenReturn(Optional.empty());
+        doNothing().when(writer).put(any(), any());
 
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
                 clock, Duration.ofMinutes(30));
         coProc.mutate(coProcInput.toByteString(), reader, writer);
+        ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
+        verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
+        List<ByteString> args = argumentCaptor.getAllValues();
 
         try {
-            InboxMetadata inboxMetadata = InboxMetadata.parseFrom(map.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)));
+            assertEquals(args.size(), 2);
+            assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8), args.get(0));
+            InboxMetadata inboxMetadata = InboxMetadata.parseFrom(args.get(1));
             assertEquals(0, inboxMetadata.getQos0NextSeq());
             assertEquals(0, inboxMetadata.getQos1NextSeq());
             assertEquals(0, inboxMetadata.getQos2NextSeq());
@@ -130,46 +138,25 @@ public class InboxCreateTest {
                 .build().toByteString()));
         doNothing().when(kvIterator).seek(any());
         when(kvIterator.isValid()).thenReturn(false);
+        doNothing().when(writer).put(any(), any());
 
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
                 Clock.systemUTC(), Duration.ofMinutes(30));
         coProc.mutate(coProcInput.toByteString(), reader, writer);
+        ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
+        verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
+        List<ByteString> args = argumentCaptor.getAllValues();
 
         try {
-            InboxMetadata inboxMetadata = InboxMetadata.parseFrom(map.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)));
+            assertEquals(args.size(), 2);
+            assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8), args.get(0));
+            InboxMetadata inboxMetadata = InboxMetadata.parseFrom(args.get(1));
             assertEquals(0, inboxMetadata.getQos0NextSeq());
             assertEquals(0, inboxMetadata.getQos1NextSeq());
             assertEquals(0, inboxMetadata.getQos2NextSeq());
             assertEquals(clientInfo, inboxMetadata.getClient());
         }catch (Exception exception) {
             fail();
-        }
-    }
-
-    class TestWriter implements IKVWriter {
-        private Map<ByteString, ByteString> map;
-
-        TestWriter(Map<ByteString, ByteString> map) {
-            this.map = map;
-        }
-        @Override
-        public void delete(ByteString key) {
-            map.remove(key);
-        }
-
-        @Override
-        public void deleteRange(Range range) {
-
-        }
-
-        @Override
-        public void insert(ByteString key, ByteString value) {
-            map.put(key, value);
-        }
-
-        @Override
-        public void put(ByteString key, ByteString value) {
-            map.put(key, value);
         }
     }
 }
