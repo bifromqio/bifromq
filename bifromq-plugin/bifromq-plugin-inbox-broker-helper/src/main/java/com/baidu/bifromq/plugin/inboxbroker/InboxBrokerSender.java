@@ -47,24 +47,23 @@ final class InboxBrokerSender implements IInboxBroker {
     }
 
     @Override
-    public IInboxWriter openInboxWriter(String inboxGroupKey) {
+    public IInboxGroupWriter open(String inboxGroupKey) {
         Preconditions.checkState(!hasStopped.get());
         return new MonitoredInboxWriter(inboxGroupKey);
     }
 
     @Override
-    public CompletableFuture<HasResult> hasInbox(long reqId,
-                                                 @NonNull String trafficId,
-                                                 @NonNull String inboxId,
-                                                 @Nullable String inboxGroupKey) {
+    public CompletableFuture<Boolean> hasInbox(long reqId,
+                                               @NonNull String trafficId,
+                                               @NonNull String inboxId,
+                                               @Nullable String inboxGroupKey) {
         Preconditions.checkState(!hasStopped.get());
         try {
             Timer.Sample start = Timer.start();
             return delegate.hasInbox(reqId, trafficId, inboxId, inboxGroupKey)
-                .exceptionally(HasResult::error)
                 .whenComplete((v, e) -> start.stop(hasInboxCallTimer));
         } catch (Throwable e) {
-            return CompletableFuture.completedFuture(HasResult.error(e));
+            return CompletableFuture.failedFuture(e);
         }
     }
 
@@ -78,11 +77,11 @@ final class InboxBrokerSender implements IInboxBroker {
         }
     }
 
-    private class MonitoredInboxWriter implements IInboxWriter {
-        private final IInboxWriter inboxWriter;
+    private class MonitoredInboxWriter implements IInboxGroupWriter {
+        private final IInboxGroupWriter inboxWriter;
 
         MonitoredInboxWriter(String inboxGroupKey) {
-            inboxWriter = delegate.openInboxWriter(inboxGroupKey);
+            inboxWriter = delegate.open(inboxGroupKey);
         }
 
         @Override

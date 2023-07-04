@@ -52,22 +52,27 @@ public class InboxBrokerManager implements IInboxBrokerManager {
     }
 
     @Override
-    public IInboxWriter openWriter(String inboxGroupKey, int brokerId) {
+    public IInboxGroupWriter openWriter(String inboxGroupKey, int brokerId) {
         IInboxBroker receiver = receivers.get(brokerId);
         if (receiver == null) {
             return null;
         }
-        return receiver.openInboxWriter(inboxGroupKey);
+        return receiver.open(inboxGroupKey);
     }
 
     @Override
-    public CompletableFuture<HasResult> hasInbox(long reqId, String trafficId,
-                                                 String inboxId, String inboxGroupKey, int brokerId) {
+    public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId,
+                                               String inboxId, String inboxGroupKey, int brokerId) {
         IInboxBroker receiver = receivers.get(brokerId);
         if (receiver == null) {
-            return CompletableFuture.completedFuture(HasResult.NO);
+            return CompletableFuture.completedFuture(false);
         }
-        return receiver.hasInbox(reqId, trafficId, inboxId, inboxGroupKey);
+        return receiver
+            .hasInbox(reqId, trafficId, inboxId, inboxGroupKey)
+            .exceptionally(e -> {
+                log.warn("Unexpected error during inbox existence check", e);
+                return true;
+            });
     }
 
     @Override

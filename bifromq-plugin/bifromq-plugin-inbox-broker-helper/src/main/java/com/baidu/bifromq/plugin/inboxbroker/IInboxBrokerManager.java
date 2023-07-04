@@ -19,10 +19,10 @@ public interface IInboxBrokerManager {
 
     boolean hasBroker(int brokerId);
 
-    IInboxWriter openWriter(String inboxGroupKey, int brokerId);
+    IInboxGroupWriter openWriter(String inboxGroupKey, int brokerId);
 
-    CompletableFuture<HasResult> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey,
-                                          int brokerId);
+    CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey,
+                                        int brokerId);
 
     void stop();
 }

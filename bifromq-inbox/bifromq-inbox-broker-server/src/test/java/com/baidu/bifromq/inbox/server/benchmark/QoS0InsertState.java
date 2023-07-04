@@ -17,7 +17,7 @@ import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
-import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.ClientInfo;
@@ -46,7 +46,7 @@ public class QoS0InsertState extends InboxServiceState {
         .build();
     private static final int inboxCount = 100;
 
-    private IInboxWriter inboxWriter;
+    private IInboxGroupWriter inboxWriter;
 
     @Override
     protected void afterSetup() {
@@ -57,7 +57,7 @@ public class QoS0InsertState extends InboxServiceState {
                 .build()).join();
             i++;
         }
-        inboxWriter = inboxBrokerClient.openInboxWriter("inboxGroupKey1");
+        inboxWriter = inboxBrokerClient.open("inboxGroupKey1");
     }
 
     @Override

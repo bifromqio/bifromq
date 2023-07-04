@@ -77,7 +77,6 @@ import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.rpc.proto.UpdateRequest;
 import com.baidu.bifromq.dist.worker.scheduler.InboxWriteScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
-import com.baidu.bifromq.plugin.inboxbroker.HasResult;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -551,8 +550,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 Inbox inbox = parseInbox(itr.key());
                 clearFutures.add(inboxBrokerManager
                     .hasInbox(request.getReqId(), trafficId, inbox.inboxId, inbox.inboxGroupKey, inbox.broker)
-                    .thenCompose(reply -> {
-                        if (reply.type() == HasResult.Type.NO) {
+                    .thenCompose(exist -> {
+                        if (!exist) {
                             return distClient.clear(request.getReqId(), inbox.inboxId, inbox.inboxGroupKey,
                                 inbox.broker,
                                 ClientInfo.newBuilder()

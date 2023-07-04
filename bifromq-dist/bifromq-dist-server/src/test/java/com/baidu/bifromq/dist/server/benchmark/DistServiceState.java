@@ -27,9 +27,8 @@ import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.HasResult;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
@@ -77,17 +76,17 @@ public class DistServiceState {
         }
 
         @Override
-        public IInboxWriter openWriter(String inboxGroupKey, int brokerId) {
+        public IInboxGroupWriter openWriter(String inboxGroupKey, int brokerId) {
             return null;
         }
 
         @Override
-        public CompletableFuture<HasResult> hasInbox(long reqId,
-                                                     String trafficId,
-                                                     String inboxId,
-                                                     String inboxGroupKey,
-                                                     int brokerId) {
-            return CompletableFuture.completedFuture(HasResult.YES);
+        public CompletableFuture<Boolean> hasInbox(long reqId,
+                                                   String trafficId,
+                                                   String inboxId,
+                                                   String inboxGroupKey,
+                                                   int brokerId) {
+            return CompletableFuture.completedFuture(true);
         }
 
         @Override

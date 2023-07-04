@@ -8,7 +8,7 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.SubInfo;
@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-class InboxPipeline implements IInboxWriter {
+class InboxPipeline implements IInboxGroupWriter {
     private final IRPCClient.IRequestPipeline<SendRequest, SendReply> ppln;
 
     InboxPipeline(String inboxGroupKey, IRPCClient rpcClient) {

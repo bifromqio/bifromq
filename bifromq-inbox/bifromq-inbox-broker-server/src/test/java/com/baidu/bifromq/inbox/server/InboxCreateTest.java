@@ -14,10 +14,11 @@
 package com.baidu.bifromq.inbox.server;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.type.ClientInfo;
 import org.testng.annotations.Test;
 
@@ -29,17 +30,13 @@ public class InboxCreateTest extends InboxServiceTest {
         String inboxId = "inbox1";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
         long reqId = System.nanoTime();
-        HasInboxReply hasInboxReply = inboxReaderClient.has(reqId, inboxId, clientInfo).join();
-        assertEquals(hasInboxReply.getReqId(), reqId);
-        assertEquals(hasInboxReply.getResult(), HasInboxReply.Result.NO);
+        assertFalse(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
 
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
         assertEquals(createInboxReply.getReqId(), reqId);
         assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
-        hasInboxReply = inboxReaderClient.has(reqId, inboxId, clientInfo).join();
-        assertEquals(hasInboxReply.getReqId(), reqId);
-        assertEquals(hasInboxReply.getResult(), HasInboxReply.Result.YES);
+        assertTrue(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
     }
 
     @Test(groups = "integration")
@@ -57,8 +54,6 @@ public class InboxCreateTest extends InboxServiceTest {
         assertEquals(deleteInboxReply.getReqId(), reqId);
         assertEquals(deleteInboxReply.getResult(), DeleteInboxReply.Result.OK);
 
-        HasInboxReply hasInboxReply = inboxReaderClient.has(reqId, inboxId, clientInfo).join();
-        assertEquals(hasInboxReply.getReqId(), reqId);
-        assertEquals(hasInboxReply.getResult(), HasInboxReply.Result.NO);
+        assertFalse(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
     }
 }

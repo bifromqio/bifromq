@@ -17,13 +17,13 @@ import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.DeliveryPack;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.util.InboxGroupKeyUtil;
-import com.baidu.bifromq.plugin.inboxbroker.HasResult;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.SubInfo;
@@ -46,29 +46,18 @@ class MqttBrokerClient implements IMqttBrokerClient {
         this.rpcClient = rpcClient;
     }
 
-    public IInboxWriter openInboxWriter(String inboxGroupKey) {
+    public IInboxGroupWriter open(String inboxGroupKey) {
         Preconditions.checkState(!hasStopped.get());
         return new InboxPipeline(inboxGroupKey);
     }
 
     @Override
-    public CompletableFuture<HasResult> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey) {
+    public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey) {
         Preconditions.checkState(!hasStopped.get());
         return rpcClient.invoke(trafficId, InboxGroupKeyUtil.parseServerId(inboxGroupKey),
                 HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
                 OnlineInboxBrokerGrpc.getHasInboxMethod())
-            .thenApply(hasInboxReply -> {
-                switch (hasInboxReply.getResult()) {
-                    case YES:
-                        return HasResult.YES;
-                    case NO:
-                        return HasResult.NO;
-                    case ERROR:
-                    default:
-                        return HasResult.error(new RuntimeException("Inbox service internal error"));
-                }
-            })
-            .exceptionally(HasResult::error);
+            .thenApply(HasInboxReply::getResult);
     }
 
 
@@ -82,7 +71,7 @@ class MqttBrokerClient implements IMqttBrokerClient {
         }
     }
 
-    private class InboxPipeline implements IInboxWriter {
+    private class InboxPipeline implements IInboxGroupWriter {
         private final IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln;
 
         InboxPipeline(String inboxGroupKey) {

@@ -60,9 +60,8 @@ import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.HasResult;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -116,11 +115,11 @@ public abstract class DistWorkerTest {
     @Mock
     protected IInboxBrokerManager receiverManager;
     @Mock
-    protected IInboxWriter writer1;
+    protected IInboxGroupWriter writer1;
     @Mock
-    protected IInboxWriter writer2;
+    protected IInboxGroupWriter writer2;
     @Mock
-    protected IInboxWriter writer3;
+    protected IInboxGroupWriter writer3;
     protected SimpleMeterRegistry meterRegistry;
     protected IDistWorker testWorker;
     protected IBaseKVStoreClient storeClient;
@@ -148,7 +147,7 @@ public abstract class DistWorkerTest {
         lenient().when(receiverManager.hasBroker(MqttBroker)).thenReturn(true);
         lenient().when(receiverManager.hasBroker(InboxService)).thenReturn(true);
         lenient().when(receiverManager.hasInbox(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(HasResult.YES));
+            .thenReturn(CompletableFuture.completedFuture(true));
         lenient().when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
 

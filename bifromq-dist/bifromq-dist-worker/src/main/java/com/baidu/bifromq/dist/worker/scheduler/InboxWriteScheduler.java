@@ -26,7 +26,7 @@ import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Delivered;
 import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.ClientInfo;
@@ -178,7 +178,7 @@ public class InboxWriteScheduler
 
         private final int brokerId;
         private final String inboxGroupKey;
-        private final IInboxWriter inboxWriter;
+        private final IInboxGroupWriter inboxWriter;
         private final DistributionSummary msgCountSummary;
 
         InboxWriteCallBuilder(String name, int maxInflights, InboxWriteRequest.InboxWriterKey key) {

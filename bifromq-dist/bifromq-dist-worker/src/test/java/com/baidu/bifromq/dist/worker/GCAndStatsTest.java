@@ -25,7 +25,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.dist.client.ClearResult;
-import com.baidu.bifromq.plugin.inboxbroker.HasResult;
 import com.baidu.bifromq.type.ClientInfo;
 import io.micrometer.core.instrument.Meter;
 import java.util.concurrent.CompletableFuture;
@@ -38,7 +37,7 @@ public class GCAndStatsTest extends DistWorkerTest {
     @Test(groups = "integration")
     public void gc() {
         when(receiverManager.hasInbox(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(HasResult.NO));
+            .thenReturn(CompletableFuture.completedFuture(false));
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));

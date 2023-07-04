@@ -53,19 +53,13 @@ class InboxReaderClient implements IInboxReaderClient {
     }
 
     @Override
-    public CompletableFuture<HasInboxReply> has(long reqId, String inboxId, ClientInfo clientInfo) {
+    public CompletableFuture<Boolean> has(long reqId, String inboxId, ClientInfo clientInfo) {
         return rpcClient.invoke(clientInfo.getTrafficId(), null, HasInboxRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setInboxId(inboxId)
-                    .setClientInfo(clientInfo)
-                    .build(),
-                InboxServiceGrpc.getHasInboxMethod())
-            .exceptionally(e -> {
-                log.debug("has request error: reqId={}", reqId, e);
-                return HasInboxReply.newBuilder()
-                    .setReqId(reqId)
-                    .setResult(HasInboxReply.Result.ERROR).build();
-            });
+                .setReqId(reqId)
+                .setInboxId(inboxId)
+                .setClientInfo(clientInfo)
+                .build(), InboxServiceGrpc.getHasInboxMethod())
+            .thenApply(HasInboxReply::getResult);
     }
 
     @Override

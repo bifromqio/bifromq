@@ -18,30 +18,33 @@ import org.pf4j.ExtensionPoint;
 
 public interface IInboxBroker extends ExtensionPoint {
     /**
-     * The id representing the message receiver(brokerId) in subscription
+     * A static id representing the message receiver(brokerId) in subscription
      *
-     * @return
+     * @return the statically assigned id for the downstream inbox broker
      */
     int id();
 
     /**
-     * Open a writer of in the specified inbox group
+     * Open a group writer
      *
      * @param inboxGroupKey the key of the inbox group
-     * @return
+     * @return a writer object
      */
-    IInboxWriter openInboxWriter(String inboxGroupKey);
+    IInboxGroupWriter open(String inboxGroupKey);
 
     /**
-     * Check the existence of particular inbox in given inbox group
+     * Check the existence of an inbox in given inbox group asynchronously.
      *
-     * @param reqId
-     * @param trafficId
-     * @param inboxId
-     * @param inboxGroupKey the key of the inbox group
-     * @return
+     * @param reqId         the request id
+     * @param trafficId     the id of the traffic to which the inbox belongs
+     * @param inboxId       the inbox id
+     * @param inboxGroupKey the key of the inbox group under which the inbox belongs
+     * @return boolean indicating if the inbox still exists
      */
-    CompletableFuture<HasResult> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey);
+    CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey);
 
+    /**
+     * Close the inbox broker
+     */
     void close();
 }

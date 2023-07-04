@@ -19,7 +19,7 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxWriter;
+import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
 import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
 import com.baidu.bifromq.type.ClientInfo;
@@ -47,7 +47,7 @@ public class InboxInsertTest extends InboxServiceTest {
         assertEquals(createInboxReply.getReqId(), reqId);
         assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
-        IInboxWriter writer = inboxBrokerClient.openInboxWriter(inboxGroupKey);
+        IInboxGroupWriter writer = inboxBrokerClient.open(inboxGroupKey);
         Message msg = Message.newBuilder()
             .setPubQoS(QoS.AT_LEAST_ONCE)
             .build();
@@ -98,7 +98,7 @@ public class InboxInsertTest extends InboxServiceTest {
         assertEquals(createInboxReply.getReqId(), reqId);
         assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
-        IInboxWriter writer = inboxBrokerClient.openInboxWriter(inboxGroupKey);
+        IInboxGroupWriter writer = inboxBrokerClient.open(inboxGroupKey);
         Message msg = Message.newBuilder()
             .setPubQoS(QoS.AT_LEAST_ONCE)
             .build();

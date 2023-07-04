@@ -142,29 +142,25 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
                     })
                     .handle((v, e) -> {
                         if (e != null) {
-                            onInboxChecked.forEach((req, f) -> {
-                                f.complete(HasInboxReply.newBuilder()
-                                    .setReqId(request.getReqId())
-                                    .setResult(HasInboxReply.Result.ERROR)
-                                    .build());
-                            });
+                            onInboxChecked.forEach((req, f) -> f.completeExceptionally(e));
                         } else {
                             onInboxChecked.forEach((req, f) -> {
                                 Boolean exists = v.getExistsMap()
                                     .get(scopedInboxId(req.getClientInfo().getTrafficId(),
                                         req.getInboxId()).toStringUtf8());
                                 // if query result doesn't contain the scoped inboxId, reply error
-                                f.complete(HasInboxReply.newBuilder()
-                                    .setReqId(req.getReqId())
-                                    .setResult(exists != null ?
-                                        (exists ? HasInboxReply.Result.YES : HasInboxReply.Result.NO) :
-                                        HasInboxReply.Result.ERROR)
-                                    .build());
+                                if (exists == null) {
+                                    f.completeExceptionally(new RuntimeException("Inbox not found"));
+                                } else {
+                                    f.complete(HasInboxReply.newBuilder()
+                                        .setReqId(req.getReqId())
+                                        .setResult(exists)
+                                        .build());
+                                }
                             });
                         }
                         return null;
                     });
-
             }
         }
 

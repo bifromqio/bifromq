@@ -45,12 +45,7 @@ message HasInboxRequest {
 }
 
 message HasInboxReply {
-  enum Result {
-    YES = 0;
-    NO = 1;
-    ERROR = 2;
-  }
   uint64 reqId = 1;
-  Result result = 2;
+  bool result = 2;
 }
 

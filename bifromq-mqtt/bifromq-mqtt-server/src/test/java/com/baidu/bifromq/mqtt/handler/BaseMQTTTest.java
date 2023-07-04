@@ -53,8 +53,6 @@ import com.baidu.bifromq.inbox.client.IInboxReaderClient.IInboxReader;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply.Result;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
@@ -92,14 +90,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.OngoingStubbing;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 public abstract class BaseMQTTTest {
 
@@ -139,6 +136,7 @@ public abstract class BaseMQTTTest {
     protected List<Integer> fetchHints = new ArrayList<>();
 
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -242,11 +240,7 @@ public abstract class BaseMQTTTest {
 
     protected void mockInboxHas(boolean success) {
         when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
-            .thenReturn(
-                CompletableFuture.completedFuture(HasInboxReply.newBuilder()
-                    .setResult(success ? Result.YES : Result.NO)
-                    .build())
-            );
+            .thenReturn(CompletableFuture.completedFuture(success));
     }
 
     protected void mockInboxCreate(boolean success) {

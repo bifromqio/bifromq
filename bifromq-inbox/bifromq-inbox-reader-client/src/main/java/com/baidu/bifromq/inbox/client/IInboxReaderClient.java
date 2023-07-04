@@ -40,7 +40,7 @@ public interface IInboxReaderClient {
 
     Observable<IRPCClient.ConnState> connState();
 
-    CompletableFuture<HasInboxReply> has(long reqId, String inboxId, ClientInfo clientInfo);
+    CompletableFuture<Boolean> has(long reqId, String inboxId, ClientInfo clientInfo);
 
     CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo clientInfo);
 

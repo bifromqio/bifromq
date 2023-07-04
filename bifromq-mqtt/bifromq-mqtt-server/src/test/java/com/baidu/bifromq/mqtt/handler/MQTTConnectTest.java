@@ -27,8 +27,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply.Result;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.Event;
@@ -40,9 +38,9 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.ArgumentCaptor;
 import org.testng.Assert;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
 
 @Slf4j
 public class MQTTConnectTest extends BaseMQTTTest {
@@ -65,11 +63,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuthPass();
         mockSessionReg();
         when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
-            .thenReturn(
-                CompletableFuture.completedFuture(HasInboxReply.newBuilder()
-                    .setResult(Result.ERROR)
-                    .build())
-            );
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mock exception")));
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
@@ -127,11 +121,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuthPass();
         mockSessionReg();
         when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
-            .thenReturn(
-                CompletableFuture.completedFuture(HasInboxReply.newBuilder()
-                    .setResult(Result.ERROR)
-                    .build())
-            );
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mock exception")));
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         // verifications

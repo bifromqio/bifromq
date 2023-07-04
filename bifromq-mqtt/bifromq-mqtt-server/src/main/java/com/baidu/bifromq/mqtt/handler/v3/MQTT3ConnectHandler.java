@@ -239,48 +239,44 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
      * done asynchronously case 2: existing connection is non-transient -  on the same host, clean session state
      * synchronously and disconnect -  on the other host, disconnect and clean session state asynchronously via
      * messaging delete probable exist prev offline routing state
-     *
-     * @param mqttConnectMessage
-     * @return
      */
     private CompletableFuture<Void> establishTransientSession(long reqId, MqttConnectMessage mqttConnectMessage) {
         String offlineInboxId = userSessionId(clientInfo);
         return cancelOnInactive(inboxClient.has(reqId, offlineInboxId, clientInfo))
-            .thenComposeAsync(hasInboxReply -> {
-                switch (hasInboxReply.getResult()) {
-                    case YES:
-                        // clear subscription of previous persistent session
-                        CompletableFuture<ClearResult> clearSubTask =
-                            cancelOnInactive(distClient.clear(reqId, offlineInboxId,
-                                inboxClient.getInboxGroupKey(offlineInboxId, clientInfo), 1, clientInfo));
-                        CompletableFuture<DeleteInboxReply> deleteInboxTask =
-                            cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo));
-                        return allOf(clearSubTask, deleteInboxTask)
-                            .thenAcceptAsync(v -> {
-                                ClearResult clearResult = clearSubTask.join();
-                                DeleteInboxReply deleteInboxReply = deleteInboxTask.join();
-                                if (clearResult.type() == ClearResult.Type.OK &&
-                                    deleteInboxReply.getResult() == DeleteInboxReply.Result.OK) {
-                                    establishSucceed(mqttConnectMessage, false, true);
-                                } else {
-                                    closeConnectionWithSomeDelay(MqttMessageBuilders
-                                            .connAck()
-                                            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-                                            .build(),
-                                        getLocal(SessionCleanupError.class).clientInfo(clientInfo));
-                                }
-                            }, ctx.channel().eventLoop());
-                    case NO:
-                        establishSucceed(mqttConnectMessage, false, true);
-                        return DONE;
-                    case ERROR:
-                    default:
-                        closeConnectionWithSomeDelay(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-                                .build(),
-                            getLocal(SessionCheckError.class).clientInfo(clientInfo));
-                        return DONE;
+            .exceptionallyComposeAsync(e -> {
+                closeConnectionWithSomeDelay(MqttMessageBuilders
+                        .connAck()
+                        .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                        .build(),
+                    getLocal(SessionCheckError.class).clientInfo(clientInfo));
+                return null;
+            }, ctx.channel().eventLoop())
+            .thenComposeAsync(exist -> {
+                if (exist) {
+                    // clear subscription of previous persistent session
+                    CompletableFuture<ClearResult> clearSubTask =
+                        cancelOnInactive(distClient.clear(reqId, offlineInboxId,
+                            inboxClient.getInboxGroupKey(offlineInboxId, clientInfo), 1, clientInfo));
+                    CompletableFuture<DeleteInboxReply> deleteInboxTask =
+                        cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo));
+                    return allOf(clearSubTask, deleteInboxTask)
+                        .thenAcceptAsync(v -> {
+                            ClearResult clearResult = clearSubTask.join();
+                            DeleteInboxReply deleteInboxReply = deleteInboxTask.join();
+                            if (clearResult.type() == ClearResult.Type.OK &&
+                                deleteInboxReply.getResult() == DeleteInboxReply.Result.OK) {
+                                establishSucceed(mqttConnectMessage, false, true);
+                            } else {
+                                closeConnectionWithSomeDelay(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                                        .build(),
+                                    getLocal(SessionCleanupError.class).clientInfo(clientInfo));
+                            }
+                        }, ctx.channel().eventLoop());
+                } else {
+                    establishSucceed(mqttConnectMessage, false, true);
+                    return DONE;
                 }
             }, ctx.channel().eventLoop());
     }
@@ -292,28 +288,24 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
      * asynchronously via messaging case 2: existing connection is non-transient -  on the same host, disconnect without
      * touching session state synchronously -  on the other host, disconnect without touching session state
      * asynchronously via messaging
-     *
-     * @param mqttConnectMessage
-     * @return
      */
     private CompletableFuture<Void> establishPersistentSession(long reqId, MqttConnectMessage mqttConnectMessage) {
         return cancelOnInactive(inboxClient.has(reqId, userSessionId(clientInfo), clientInfo))
-            .thenAcceptAsync(hasInboxReply -> {
-                switch (hasInboxReply.getResult()) {
-                    case YES:
-                        establishSucceed(mqttConnectMessage, true, false);
-                        break;
-                    case NO:
-                        establishSucceed(mqttConnectMessage, false, false);
-                        break;
-                    case ERROR:
-                        closeConnectionWithSomeDelay(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-                                .build(),
-                            getLocal(SessionCheckError.class).clientInfo(clientInfo));
-                    default:
+            .handleAsync((exist, e) -> {
+                if (e != null) {
+                    closeConnectionWithSomeDelay(MqttMessageBuilders
+                            .connAck()
+                            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                            .build(),
+                        getLocal(SessionCheckError.class).clientInfo(clientInfo));
+                    return null;
                 }
+                if (exist) {
+                    establishSucceed(mqttConnectMessage, true, false);
+                } else {
+                    establishSucceed(mqttConnectMessage, false, false);
+                }
+                return null;
             }, ctx.channel().eventLoop());
     }
 

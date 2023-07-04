@@ -17,7 +17,7 @@ import com.baidu.bifromq.type.SubInfo;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-public interface IInboxWriter {
+public interface IInboxGroupWriter {
     /**
      * Write a pack of messages to subscribers.
      *

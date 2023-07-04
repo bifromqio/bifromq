@@ -55,9 +55,7 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
         response(trafficId -> CompletableFuture.completedFuture(HasInboxReply
             .newBuilder()
             .setReqId(request.getReqId())
-            .setResult(sessionMap.containsKey(request.getInboxId()) ?
-                HasInboxReply.Result.YES :
-                HasInboxReply.Result.NO)
+            .setResult(sessionMap.containsKey(request.getInboxId()))
             .build()), responseObserver);
     }
 
