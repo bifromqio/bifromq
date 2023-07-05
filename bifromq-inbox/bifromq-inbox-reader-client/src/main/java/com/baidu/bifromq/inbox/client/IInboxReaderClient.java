@@ -17,7 +17,6 @@ import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -46,9 +45,9 @@ public interface IInboxReaderClient {
 
     CompletableFuture<DeleteInboxReply> delete(long reqId, String inboxId, ClientInfo clientInfo);
 
-    String getInboxGroupKey(String inboxId, ClientInfo clientInfo);
+    String getDelivererKey(String inboxId, ClientInfo clientInfo);
 
-    IInboxReader openInboxReader(String inboxId, String inboxGroupKey, ClientInfo clientInfo);
+    IInboxReader openInboxReader(String inboxId, String delivererKey, ClientInfo clientInfo);
 
     interface IInboxReader {
         void fetch(Consumer<Fetched> consumer);

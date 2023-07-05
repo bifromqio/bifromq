@@ -1,13 +1,21 @@
 package com.baidu.bifromq.dist.worker;
 
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.NormalMatching;
-import com.baidu.bifromq.dist.worker.scheduler.InboxWriteRequest;
-import com.baidu.bifromq.dist.worker.scheduler.InboxWriteScheduler;
+import com.baidu.bifromq.dist.worker.scheduler.DeliveryRequest;
+import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
+import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
+import com.baidu.bifromq.plugin.eventcollector.distservice.Delivered;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.SysClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -23,13 +31,19 @@ import org.jctools.queues.MpscBlockingConsumerArrayQueue;
 
 @Slf4j
 class FanoutExecutorGroup {
-    private final IInboxBrokerManager inboxBrokerManager;
-    private final InboxWriteScheduler scheduler;
+    private final IEventCollector eventCollector;
+    private final IDistClient distClient;
+    private final DeliveryScheduler scheduler;
     private final ExecutorService[] phaseOneExecutorGroup;
     private final ExecutorService[] phaseTwoExecutorGroup;
 
-    FanoutExecutorGroup(IInboxBrokerManager inboxBrokerManager, InboxWriteScheduler scheduler, int groupSize) {
-        this.inboxBrokerManager = inboxBrokerManager;
+    FanoutExecutorGroup(ISubBrokerManager subBrokerMgr,
+                        DeliveryScheduler scheduler,
+                        IEventCollector eventCollector,
+                        IDistClient distClient,
+                        int groupSize) {
+        this.eventCollector = eventCollector;
+        this.distClient = distClient;
         this.scheduler = scheduler;
         phaseOneExecutorGroup = new ExecutorService[groupSize];
         phaseTwoExecutorGroup = new ExecutorService[groupSize];
@@ -111,15 +125,47 @@ class FanoutExecutorGroup {
     }
 
     private void send(MessagePackWrapper msgPack, NormalMatching matched) {
+        int subBrokerId = matched.subBrokerId;
+        String delivererKey = matched.delivererKey;
         SubInfo sub = matched.subInfo;
-        if (!inboxBrokerManager.hasBroker(matched.brokerId)) {
-            log.error("Invalid inbox broker[{}] for sub[inboxId={}, qos={}, topicFilter={}]",
-                matched.brokerId,
-                sub.getInboxId(),
-                sub.getSubQoS(),
-                sub.getTopicFilter());
-            return;
-        }
-        scheduler.schedule(new InboxWriteRequest(matched, msgPack));
+        DeliveryRequest request = new DeliveryRequest(sub, subBrokerId, delivererKey, msgPack);
+        scheduler.schedule(request).whenComplete((result, e) -> {
+            if (e != null) {
+                eventCollector.report(getLocal(DeliverError.class)
+                    .brokerId(subBrokerId)
+                    .delivererKey(delivererKey)
+                    .subInfo(sub)
+                    .messages(msgPack.messagePack));
+
+            } else {
+                switch (result) {
+                    case OK:
+                        eventCollector.report(getLocal(Delivered.class)
+                            .brokerId(subBrokerId)
+                            .delivererKey(delivererKey)
+                            .subInfo(sub)
+                            .messages(msgPack.messagePack));
+                        break;
+                    case NO_INBOX:
+                        // clear all subs from the missing inbox
+                        SubInfo subInfo = matched.subInfo;
+                        distClient.clear(System.nanoTime(), subInfo.getInboxId(), delivererKey, subBrokerId,
+                            ClientInfo.newBuilder()
+                                .setTrafficId(subInfo.getTrafficId())
+                                .setUserId("distworker")
+                                .setSysClientInfo(SysClientInfo
+                                    .newBuilder()
+                                    .setType("distservice")
+                                    .build())
+                                .build());
+                        eventCollector.report(getLocal(DeliverNoInbox.class)
+                            .brokerId(subBrokerId)
+                            .delivererKey(delivererKey)
+                            .subInfo(sub)
+                            .messages(msgPack.messagePack));
+                        break;
+                }
+            }
+        });
     }
 }

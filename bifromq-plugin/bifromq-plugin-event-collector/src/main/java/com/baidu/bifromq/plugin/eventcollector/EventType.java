@@ -82,8 +82,6 @@ public enum EventType {
 
     // dist service
     DISTED,
-
-    DROP_EXCEED_LIMIT,
     DIST_ERROR,
     DELIVER_ERROR,
     DELIVER_NO_INBOX,

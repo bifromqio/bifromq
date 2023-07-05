@@ -50,10 +50,6 @@
             <artifactId>rxjava</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.netflix.concurrency-limits</groupId>
-            <artifactId>concurrency-limits-core</artifactId>
-        </dependency>
-        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-tcnative-boringssl-static</artifactId>
         </dependency>

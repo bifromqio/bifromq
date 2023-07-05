@@ -14,10 +14,10 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -44,11 +44,11 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 @Slf4j
 public class KVRangeWALTest {
@@ -68,6 +68,7 @@ public class KVRangeWALTest {
     @Mock
     private IKVRangeWALStoreEngine walStorageEngine;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -178,7 +179,7 @@ public class KVRangeWALTest {
 
         KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
         wal.start();
-        ScheduledFuture tickTask = ticker.scheduleAtFixedRate(wal::tick, 0, 100, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> tickTask = ticker.scheduleAtFixedRate(wal::tick, 0, 100, TimeUnit.MILLISECONDS);
         await().until(() -> wal.currentLeader().isPresent());
         wal.propose(KVRangeCommand.getDefaultInstance())
             .handle((v, e) -> {

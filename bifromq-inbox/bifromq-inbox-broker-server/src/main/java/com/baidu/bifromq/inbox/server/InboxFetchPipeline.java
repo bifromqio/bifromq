@@ -41,7 +41,7 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
     private final IBaseKVStoreClient kvStoreClient;
     private final AtomicBoolean fetchStarted = new AtomicBoolean(false);
 
-    private final String inboxGroupKey;
+    private final String delivererKey;
     private final String inboxId;
     // indicate downstream free buffer capacity, -1 stands for capacity not known yet
     private final AtomicInteger downStreamCapacity = new AtomicInteger(-1);
@@ -60,7 +60,7 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
                               InboxFetcherRegistry registry,
                               RateLimiter limiter) {
         super(responseObserver);
-        this.inboxGroupKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
+        this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
         this.inboxId = metadata.get(PIPELINE_ATTR_KEY_INBOX_ID);
         this.fetcher = fetcher;
         this.toucher = toucher;
@@ -91,8 +91,8 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
     }
 
     @Override
-    public String inboxGroupKey() {
-        return inboxGroupKey;
+    public String delivererKey() {
+        return delivererKey;
     }
 
     @Override

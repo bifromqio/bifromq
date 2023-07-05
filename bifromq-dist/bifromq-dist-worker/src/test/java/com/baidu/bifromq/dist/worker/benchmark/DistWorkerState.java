@@ -35,15 +35,20 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.dist.worker.IDistWorker;
-import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.ISubBroker;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
@@ -63,31 +68,44 @@ public class DistWorkerState {
     private ICRDTService crdtService;
 
     private ISettingProvider settingProvider = Setting::current;
-    private IEventCollector eventCollector = new IEventCollector() {
-        @Override
-        public void report(Event<?> event) {
+    private IEventCollector eventCollector = event -> {
 
-        }
     };
     private IDistClient distClient;
-    private IInboxBrokerManager receiverManager = new IInboxBrokerManager() {
-        @Override
-        public boolean hasBroker(int brokerId) {
-            return true;
-        }
+    private ISubBrokerManager receiverManager = new ISubBrokerManager() {
+        public ISubBroker get(int subBrokerId) {
+            return new ISubBroker() {
+                @Override
+                public int id() {
+                    return 0;
+                }
 
-        @Override
-        public IInboxGroupWriter openWriter(String inboxGroupKey, int brokerId) {
-            return null;
-        }
+                @Override
+                public IDeliverer open(String delivererKey) {
+                    return new IDeliverer() {
+                        @Override
+                        public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
+                            return CompletableFuture.completedFuture(Collections.emptyMap());
+                        }
 
-        @Override
-        public CompletableFuture<Boolean> hasInbox(long reqId,
-                                                   String trafficId,
-                                                   String inboxId,
-                                                   String inboxGroupKey,
-                                                   int brokerId) {
-            return CompletableFuture.completedFuture(true);
+                        @Override
+                        public void close() {
+
+                        }
+                    };
+                }
+
+                @Override
+                public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId,
+                                                           String delivererKey) {
+                    return CompletableFuture.completedFuture(true);
+                }
+
+                @Override
+                public void close() {
+
+                }
+            };
         }
 
         @Override
@@ -133,7 +151,7 @@ public class DistWorkerState {
             .distClient(distClient)
             .storeClient(storeClient)
             .kvRangeStoreOptions(kvRangeStoreOptions)
-            .inboxBrokerManager(receiverManager)
+            .subBrokerManager(receiverManager)
             .build();
     }
 

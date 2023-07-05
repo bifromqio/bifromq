@@ -34,8 +34,8 @@ import com.baidu.bifromq.mqtt.MQTTBrokerBuilder;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.InboxBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
@@ -87,7 +87,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IRetainStore retainStore;
     private IRetainServer retainServer;
     private IMQTTBroker mqttBroker;
-    private IInboxBrokerManager inboxBrokerMgr;
+    private ISubBrokerManager inboxBrokerMgr;
 
 
     @Override
@@ -225,7 +225,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .executor(MoreExecutors.directExecutor())
             .build();
 
-        inboxBrokerMgr = new InboxBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
+        inboxBrokerMgr = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
 
         distWorkerClient = IBaseKVStoreClient.inProcClientBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
@@ -255,7 +255,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .setWalEngineConfigurator(
                     buildEngineConf(config.getDistWorkerConfig().getWalEngineConfig(), "dist_wal")))
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
-            .inboxBrokerManager(inboxBrokerMgr)
+            .subBrokerManager(inboxBrokerMgr)
             .build();
 
         distServer = IDistServer.inProcBuilder()

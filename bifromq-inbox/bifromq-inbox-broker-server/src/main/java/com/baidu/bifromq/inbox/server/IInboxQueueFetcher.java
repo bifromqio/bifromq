@@ -15,7 +15,7 @@ package com.baidu.bifromq.inbox.server;
 
 public interface IInboxQueueFetcher {
 
-    String inboxGroupKey();
+    String delivererKey();
 
     String trafficId();
 

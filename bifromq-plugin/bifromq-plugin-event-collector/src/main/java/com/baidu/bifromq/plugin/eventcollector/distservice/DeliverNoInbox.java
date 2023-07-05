@@ -17,7 +17,6 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -29,8 +28,9 @@ import lombok.experimental.Accessors;
 @ToString(callSuper = true)
 public final class DeliverNoInbox extends Event<DeliverNoInbox> {
     private int brokerId;
-    private String inboxGroupKey;
-    private Map<SubInfo, TopicMessagePack> messages;
+    private String delivererKey;
+    private SubInfo subInfo;
+    private TopicMessagePack messages;
 
     @Override
     public EventType type() {
@@ -41,7 +41,8 @@ public final class DeliverNoInbox extends Event<DeliverNoInbox> {
     public void clone(DeliverNoInbox orig) {
         super.clone(orig);
         this.brokerId = orig.brokerId;
-        this.inboxGroupKey = orig.inboxGroupKey;
+        this.delivererKey = orig.delivererKey;
+        this.subInfo = orig.subInfo;
         this.messages = orig.messages;
     }
 }

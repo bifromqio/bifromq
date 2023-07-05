@@ -35,7 +35,7 @@ public class EntityUtilTest {
 
     @Test
     public void testParseTopicFilter() {
-        String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "inboxGroupKey1");
+        String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "delivererKey1");
         String topicFilter = "/a/b/c";
         ByteString key = matchRecordKey("trafficId", topicFilter, scopedInboxId);
         assertEquals(parseTopicFilter(key.toStringUtf8()), topicFilter);
@@ -43,7 +43,7 @@ public class EntityUtilTest {
 
     @Test
     public void testParseNormalMatchRecord() {
-        String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "inboxGroupKey1");
+        String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "delivererKey1");
         ByteString key = matchRecordKey("trafficId", "/a/b/c", scopedInboxId);
         MatchRecord normal = MatchRecord.newBuilder()
             .setNormal(QoS.AT_MOST_ONCE).build();
@@ -60,8 +60,8 @@ public class EntityUtilTest {
         assertEquals(subInfo.getInboxId(), "inbox1");
         assertEquals(subInfo.getTopicFilter(), "/a/b/c");
 
-        assertEquals(((NormalMatching) matching).brokerId, MqttBroker);
-        assertEquals(((NormalMatching) matching).inboxGroupKey, "inboxGroupKey1");
+        assertEquals(((NormalMatching) matching).subBrokerId, MqttBroker);
+        assertEquals(((NormalMatching) matching).delivererKey, "delivererKey1");
     }
 
     @Test
@@ -84,8 +84,8 @@ public class EntityUtilTest {
         SubInfo subInfo = ((GroupMatching) matching).inboxList.get(0).subInfo;
         assertEquals(subInfo.getSubQoS(), record.getGroup().getEntryMap().get(scopedInboxId));
         assertEquals(subInfo.getInboxId(), "inbox1");
-        assertEquals(((GroupMatching) matching).inboxList.get(0).brokerId, MqttBroker);
-        assertEquals(((GroupMatching) matching).inboxList.get(0).inboxGroupKey, "server1");
+        assertEquals(((GroupMatching) matching).inboxList.get(0).subBrokerId, MqttBroker);
+        assertEquals(((GroupMatching) matching).inboxList.get(0).delivererKey, "server1");
 
     }
 }

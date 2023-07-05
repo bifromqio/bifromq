@@ -66,15 +66,15 @@ class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<SubResult> sub(long reqId, String topicFilter, QoS qos, String inbox, String inboxGroupKey,
-                                            int inboxBrokerId, ClientInfo client) {
+    public CompletableFuture<SubResult> sub(long reqId, String topicFilter, QoS qos, String inbox, String delivererKey,
+                                            int subBrokerId, ClientInfo client) {
         SubRequest request = SubRequest.newBuilder()
             .setReqId(reqId)
             .setTopicFilter(topicFilter)
             .setSubQoS(qos)
             .setInboxId(inbox)
-            .setInboxGroupKey(inboxGroupKey)
-            .setBroker(inboxBrokerId)
+            .setDelivererKey(delivererKey)
+            .setBroker(subBrokerId)
             .setClient(client)
             .build();
         log.trace("Handling sub request:\n{}", request);
@@ -102,14 +102,14 @@ class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<UnsubResult> unsub(long reqId, String topicFilter, String inbox, String inboxGroupKey,
-                                                int inboxBrokerId, ClientInfo client) {
+    public CompletableFuture<UnsubResult> unsub(long reqId, String topicFilter, String inbox, String delivererKey,
+                                                int subBrokerId, ClientInfo client) {
         UnsubRequest request = UnsubRequest.newBuilder()
             .setReqId(reqId)
             .setTopicFilter(topicFilter)
             .setInboxId(inbox)
-            .setInboxGroupKey(inboxGroupKey)
-            .setBroker(inboxBrokerId)
+            .setDelivererKey(delivererKey)
+            .setBroker(subBrokerId)
             .setClient(client)
             .build();
         log.trace("Handling unsub request:\n{}", request);
@@ -132,14 +132,14 @@ class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<ClearResult> clear(long reqId, String inboxId, String inboxGroupKey,
-                                                int inboxBrokerId, ClientInfo client) {
+    public CompletableFuture<ClearResult> clear(long reqId, String inboxId, String delivererKey,
+                                                int subBrokerId, ClientInfo client) {
         log.trace("Requesting clear: reqId={}", reqId);
         ClearRequest request = ClearRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setInboxGroupKey(inboxGroupKey)
-            .setBroker(inboxBrokerId)
+            .setDelivererKey(delivererKey)
+            .setBroker(subBrokerId)
             .setClient(client)
             .build();
         return rpcClient.invoke(client.getTrafficId(), null, request, DistServiceGrpc.getClearMethod())

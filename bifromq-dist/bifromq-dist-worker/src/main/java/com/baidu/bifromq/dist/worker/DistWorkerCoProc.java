@@ -75,9 +75,10 @@ import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.rpc.proto.UpdateRequest;
-import com.baidu.bifromq.dist.worker.scheduler.InboxWriteScheduler;
+import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SysClientInfo;
@@ -107,8 +108,8 @@ import lombok.extern.slf4j.Slf4j;
 class DistWorkerCoProc implements IKVRangeCoProc {
     private final KVRangeId id;
     private final IDistClient distClient;
-    private final IInboxBrokerManager inboxBrokerManager;
-    private final InboxWriteScheduler scheduler;
+    private final ISubBrokerManager subBrokerManager;
+    private final DeliveryScheduler scheduler;
     private final SubscriptionCache routeCache;
     private final LoadEstimator loadEstimator;
     private final Gauge loadGauge;
@@ -116,13 +117,14 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
     public DistWorkerCoProc(KVRangeId id,
                             Supplier<IKVRangeReader> readClientProvider,
+                            IEventCollector eventCollector,
                             IDistClient distClient,
-                            IInboxBrokerManager messageReceiverManager,
-                            InboxWriteScheduler scheduler,
+                            ISubBrokerManager subBrokerManager,
+                            DeliveryScheduler scheduler,
                             Executor matchExecutor) {
         this.id = id;
         this.distClient = distClient;
-        this.inboxBrokerManager = messageReceiverManager;
+        this.subBrokerManager = subBrokerManager;
         this.scheduler = scheduler;
         this.loadEstimator = new LoadEstimator(DIST_MAX_RANGE_LOAD.get(), DIST_SPLIT_KEY_EST_THRESHOLD.get(),
             DIST_LOAD_TRACKING_SECONDS.get());
@@ -130,7 +132,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         loadGauge = Gauge.builder("dist.worker.load", () -> loadEstimator.estimate().getLoad())
             .tags("id", KVRangeIdUtil.toString(id))
             .register(Metrics.globalRegistry);
-        fanoutExecutorGroup = new FanoutExecutorGroup(inboxBrokerManager, scheduler, DIST_FAN_OUT_PARALLELISM.get());
+        fanoutExecutorGroup = new FanoutExecutorGroup(this.subBrokerManager, scheduler, eventCollector, distClient,
+            DIST_FAN_OUT_PARALLELISM.get());
     }
 
     @Override
@@ -548,11 +551,11 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             String trafficId = parseTrafficId(itr.key());
             if (isSubInfoKey(itr.key())) {
                 Inbox inbox = parseInbox(itr.key());
-                clearFutures.add(inboxBrokerManager
-                    .hasInbox(request.getReqId(), trafficId, inbox.inboxId, inbox.inboxGroupKey, inbox.broker)
+                clearFutures.add(subBrokerManager.get(inbox.broker)
+                    .hasInbox(request.getReqId(), trafficId, inbox.inboxId, inbox.delivererKey)
                     .thenCompose(exist -> {
                         if (!exist) {
-                            return distClient.clear(request.getReqId(), inbox.inboxId, inbox.inboxGroupKey,
+                            return distClient.clear(request.getReqId(), inbox.inboxId, inbox.delivererKey,
                                 inbox.broker,
                                 ClientInfo.newBuilder()
                                     .setTrafficId(trafficId)

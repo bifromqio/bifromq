@@ -22,7 +22,7 @@ message SubRequest {
   string topicFilter = 3;
   commontype.QoS subQoS = 4;
   uint32 broker = 5;
-  string inboxGroupKey = 6;
+  string delivererKey = 6;
   commontype.ClientInfo client = 7;
 }
 
@@ -42,7 +42,7 @@ message UnsubRequest {
   string inboxId = 2; // the inbox id defined in calling sub broker service identified by CN field of client cert
   string topicFilter = 3;
   uint32 broker = 4;
-  string inboxGroupKey = 5;
+  string delivererKey = 5;
   commontype.ClientInfo client = 6;
 }
 
@@ -59,7 +59,7 @@ message ClearRequest {
   uint64 reqId = 1;
   string inboxId = 2;
   uint32 broker = 3;
-  string inboxGroupKey = 4;
+  string delivererKey = 4;
   commontype.ClientInfo client = 5;
 }
 

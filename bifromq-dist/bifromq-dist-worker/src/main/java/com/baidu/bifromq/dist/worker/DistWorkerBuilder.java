@@ -22,7 +22,7 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.common.base.Preconditions;
 import io.netty.channel.EventLoopGroup;
@@ -40,7 +40,7 @@ public abstract class DistWorkerBuilder<T extends DistWorkerBuilder<?>> {
     protected IBaseKVStoreClient storeClient;
 
     protected ISettingProvider settingProvider;
-    protected IInboxBrokerManager inboxBrokerManager;
+    protected ISubBrokerManager subBrokerManager;
     protected KVRangeStoreOptions kvRangeStoreOptions;
     protected KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     protected Duration statsInterval = Duration.ofSeconds(30);
@@ -81,8 +81,8 @@ public abstract class DistWorkerBuilder<T extends DistWorkerBuilder<?>> {
         return (T) this;
     }
 
-    public T inboxBrokerManager(IInboxBrokerManager inboxBrokerManager) {
-        this.inboxBrokerManager = inboxBrokerManager;
+    public T subBrokerManager(ISubBrokerManager subBrokerManager) {
+        this.subBrokerManager = subBrokerManager;
         return (T) this;
     }
 
@@ -146,7 +146,7 @@ public abstract class DistWorkerBuilder<T extends DistWorkerBuilder<?>> {
                 eventCollector,
                 distClient,
                 storeClient,
-                inboxBrokerManager,
+                subBrokerManager,
                 statsInterval,
                 gcInterval,
                 kvRangeStoreOptions,
@@ -228,7 +228,7 @@ public abstract class DistWorkerBuilder<T extends DistWorkerBuilder<?>> {
                 eventCollector,
                 distClient,
                 storeClient,
-                inboxBrokerManager,
+                subBrokerManager,
                 statsInterval,
                 gcInterval,
                 kvRangeStoreOptions,
@@ -306,7 +306,7 @@ public abstract class DistWorkerBuilder<T extends DistWorkerBuilder<?>> {
                 eventCollector,
                 distClient,
                 storeClient,
-                inboxBrokerManager,
+                subBrokerManager,
                 statsInterval,
                 gcInterval,
                 kvRangeStoreOptions,

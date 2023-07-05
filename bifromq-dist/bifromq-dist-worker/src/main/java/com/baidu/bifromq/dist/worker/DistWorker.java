@@ -36,7 +36,7 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.rpc.proto.CollectMetricsReply;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -84,7 +84,7 @@ abstract class DistWorker implements IDistWorker {
                       IEventCollector eventCollector,
                       IDistClient distClient,
                       IBaseKVStoreClient storeClient,
-                      IInboxBrokerManager inboxBrokerManager,
+                      ISubBrokerManager subBrokerManager,
                       Duration statsInterval,
                       Duration gcInterval,
                       KVRangeStoreOptions kvRangeStoreOptions,
@@ -98,7 +98,7 @@ abstract class DistWorker implements IDistWorker {
         this.storeClient = storeClient;
         this.gcInterval = gcInterval;
         this.statsInterval = statsInterval;
-        coProcFactory = new DistWorkerCoProcFactory(distClient, settingProvider, eventCollector, inboxBrokerManager);
+        coProcFactory = new DistWorkerCoProcFactory(distClient, settingProvider, eventCollector, subBrokerManager);
         storeServer = buildKVStoreServer(CLUSTER_NAME,
             agentHost,
             crdtService,

@@ -26,8 +26,13 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
 public class DistError extends Event<DistError> {
+    public enum DistErrorCode {
+        DROP_EXCEED_LIMIT, RPC_FAILURE
+    }
+
     private long reqId;
     private Iterable<SenderMessagePack> messages;
+    private DistErrorCode code;
 
     @Override
     public EventType type() {
@@ -39,5 +44,6 @@ public class DistError extends Event<DistError> {
         super.clone(orig);
         this.reqId = orig.reqId;
         this.messages = orig.messages;
+        this.code = orig.code;
     }
 }

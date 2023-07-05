@@ -17,7 +17,6 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -29,9 +28,9 @@ import lombok.experimental.Accessors;
 @ToString(callSuper = true)
 public final class DeliverError extends Event<DeliverError> {
     private int brokerId;
-    private String inboxGroupKey;
-    private Map<SubInfo, TopicMessagePack> messages;
-    private Map<SubInfo, Throwable> causes;
+    private String delivererKey;
+    private SubInfo subInfo;
+    private TopicMessagePack messages;
 
     @Override
     public EventType type() {
@@ -42,8 +41,8 @@ public final class DeliverError extends Event<DeliverError> {
     public void clone(DeliverError orig) {
         super.clone(orig);
         this.brokerId = orig.brokerId;
-        this.inboxGroupKey = orig.inboxGroupKey;
+        this.delivererKey = orig.delivererKey;
+        this.subInfo = orig.subInfo;
         this.messages = orig.messages;
-        this.causes = orig.causes;
     }
 }

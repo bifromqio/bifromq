@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import static com.baidu.bifromq.mqtt.inbox.util.InboxGroupKeyUtil.toInboxGroupKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
@@ -65,7 +65,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
         super.channelInactive(ctx);
         if (clearOnDisconnect) {
             submitBgTask(() -> sessionCtx.distClient.clear(System.nanoTime(), channelId(),
-                    toInboxGroupKey(channelId(), sessionCtx.serverId), 0, clientInfo())
+                    toDelivererKey(channelId(), sessionCtx.serverId), 0, clientInfo())
                 .thenAccept(clearResult -> {
                     switch (clearResult.type()) {
                         case OK:
@@ -93,7 +93,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     @Override
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
         return sessionCtx.distClient.sub(reqId, topicSub.topicName(), QoS.forNumber(topicSub.qualityOfService()
-                .value()), channelId(), toInboxGroupKey(channelId(), sessionCtx.serverId), 0, clientInfo())
+                .value()), channelId(), toDelivererKey(channelId(), sessionCtx.serverId), 0, clientInfo())
             .thenApplyAsync(subResult -> {
                 if (subResult.type() != SubResult.Type.ERROR) {
                     clearOnDisconnect = true;
@@ -115,7 +115,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     @Override
     protected CompletableFuture<UnsubResult> doUnsubscribe(long reqId, String topicFilter) {
         return sessionCtx.distClient
-            .unsub(reqId, topicFilter, channelId(), toInboxGroupKey(channelId(), sessionCtx.serverId), 0, clientInfo());
+            .unsub(reqId, topicFilter, channelId(), toDelivererKey(channelId(), sessionCtx.serverId), 0, clientInfo());
     }
 
     @Override

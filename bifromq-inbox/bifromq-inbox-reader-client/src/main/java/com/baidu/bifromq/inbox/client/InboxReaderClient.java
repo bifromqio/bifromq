@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_INBOX_GROUPS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_DELIVERERS;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxReaderClient implements IInboxReaderClient {
-    private static final int INBOX_GROUPS = INBOX_INBOX_GROUPS.get();
+    private static final int INBOX_GROUPS = INBOX_DELIVERERS.get();
 
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -43,8 +43,8 @@ class InboxReaderClient implements IInboxReaderClient {
     }
 
     @Override
-    public IInboxReader openInboxReader(String inboxId, String inboxGroupKey, ClientInfo clientInfo) {
-        return new InboxReaderPipeline(inboxId, inboxGroupKey, clientInfo, rpcClient);
+    public IInboxReader openInboxReader(String inboxId, String delivererKey, ClientInfo clientInfo) {
+        return new InboxReaderPipeline(inboxId, delivererKey, clientInfo, rpcClient);
     }
 
     @Override
@@ -90,7 +90,7 @@ class InboxReaderClient implements IInboxReaderClient {
     }
 
     @Override
-    public String getInboxGroupKey(String inboxId, ClientInfo clientInfo) {
+    public String getDelivererKey(String inboxId, ClientInfo clientInfo) {
         int k = inboxId.hashCode() % INBOX_GROUPS;
         if (k < 0) {
             k = (k + INBOX_GROUPS) % INBOX_GROUPS;

@@ -32,8 +32,8 @@
         <module>bifromq-plugin-event-collector-helper</module>
         <module>bifromq-plugin-setting-provider</module>
         <module>bifromq-plugin-setting-provider-helper</module>
-        <module>bifromq-plugin-inbox-broker</module>
-        <module>bifromq-plugin-inbox-broker-helper</module>
+        <module>bifromq-plugin-sub-broker</module>
+        <module>bifromq-plugin-sub-broker-helper</module>
         <module>bifromq-plugin-manager</module>
     </modules>
 </project>

@@ -44,7 +44,7 @@ class InboxReaderPipeline implements IInboxReaderClient.IInboxReader {
     private volatile long lastFetchQoS0Seq = -1;
     private volatile long lastFetchQoS2Seq = -1;
 
-    InboxReaderPipeline(String inboxId, String inboxGroupKey, ClientInfo clientInfo, IRPCClient rpcClient) {
+    InboxReaderPipeline(String inboxId, String delivererKey, ClientInfo clientInfo, IRPCClient rpcClient) {
         this.clientInfo = clientInfo;
         this.inboxId = inboxId;
         this.rpcClient = rpcClient;
@@ -52,7 +52,7 @@ class InboxReaderPipeline implements IInboxReaderClient.IInboxReader {
             put(PIPELINE_ATTR_KEY_INBOX_ID, inboxId);
             put(PIPELINE_ATTR_KEY_CLIENT_INFO, encode(clientInfo));
         }};
-        ppln = rpcClient.createMessageStream(clientInfo.getTrafficId(), null, inboxGroupKey, () -> {
+        ppln = rpcClient.createMessageStream(clientInfo.getTrafficId(), null, delivererKey, () -> {
                 metadata.put(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ, lastFetchQoS0Seq + "");
                 metadata.put(PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ, lastFetchQoS2Seq + "");
                 return metadata;

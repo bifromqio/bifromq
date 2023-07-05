@@ -127,7 +127,7 @@ public abstract class BaseMQTTTest {
     protected String trafficId = "testTrafficId";
     protected String userId = "testDeviceKey";
     protected String clientId = "testClientId";
-    protected String inboxGroupKey = "testGroupKey";
+    protected String delivererKey = "testGroupKey";
     protected String remoteIp = "127.0.0.1";
     protected int remotePort = 8888;
     protected PublishSubject<Quit> kickSubject = PublishSubject.create();
@@ -271,7 +271,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockDistClear(boolean success) {
-        when(inboxClient.getInboxGroupKey(anyString(), any(ClientInfo.class))).thenReturn(inboxGroupKey);
+        when(inboxClient.getDelivererKey(anyString(), any(ClientInfo.class))).thenReturn(delivererKey);
         when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
             .thenReturn(
                 CompletableFuture.completedFuture(
@@ -330,7 +330,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockInboxReader() {
-        when(inboxClient.getInboxGroupKey(anyString(), any(ClientInfo.class))).thenReturn(inboxGroupKey);
+        when(inboxClient.getDelivererKey(anyString(), any(ClientInfo.class))).thenReturn(delivererKey);
         when(inboxClient.openInboxReader(anyString(), anyString(), any(ClientInfo.class))).thenReturn(inboxReader);
         doAnswer(invocationOnMock -> {
             inboxFetchConsumer = invocationOnMock.getArgument(0);

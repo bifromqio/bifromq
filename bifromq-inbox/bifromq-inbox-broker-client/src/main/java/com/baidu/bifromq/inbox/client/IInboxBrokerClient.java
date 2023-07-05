@@ -1,8 +1,8 @@
 package com.baidu.bifromq.inbox.client;
 
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBroker;
+import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 
-public interface IInboxBrokerClient extends IInboxBroker {
+public interface IInboxBrokerClient extends ISubBroker {
     static InboxBrokerClientBuilder.InProcOfflineInboxClientBuilder inProcClientBuilder() {
         return new InboxBrokerClientBuilder.InProcOfflineInboxClientBuilder();
     }

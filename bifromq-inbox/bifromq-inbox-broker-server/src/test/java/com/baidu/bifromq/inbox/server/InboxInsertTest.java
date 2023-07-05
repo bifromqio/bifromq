@@ -19,9 +19,9 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
-import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
-import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -40,14 +40,14 @@ public class InboxInsertTest extends InboxServiceTest {
     public void insert() throws InterruptedException {
         String trafficId = "trafficA";
         String inboxId = "inbox1";
-        String inboxGroupKey = "inboxGroup1";
+        String delivererKey = "deliverer1";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
         long reqId = System.nanoTime();
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
         assertEquals(createInboxReply.getReqId(), reqId);
         assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
-        IInboxGroupWriter writer = inboxBrokerClient.open(inboxGroupKey);
+        IDeliverer writer = inboxBrokerClient.open(delivererKey);
         Message msg = Message.newBuilder()
             .setPubQoS(QoS.AT_LEAST_ONCE)
             .build();
@@ -65,12 +65,12 @@ public class InboxInsertTest extends InboxServiceTest {
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)
             .build();
-        List<InboxPack> msgPack = new LinkedList<>();
-        msgPack.add(new InboxPack(pack, singletonList(subInfo)));
-        Map<SubInfo, WriteResult> result = writer.write(msgPack).join();
-        assertEquals(result.get(subInfo), WriteResult.OK);
+        List<DeliveryPack> msgPack = new LinkedList<>();
+        msgPack.add(new DeliveryPack(pack, singletonList(subInfo)));
+        Map<SubInfo, DeliveryResult> result = writer.deliver(msgPack).join();
+        assertEquals(result.get(subInfo), DeliveryResult.OK);
 
-        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, inboxGroupKey, clientInfo);
+        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, delivererKey, clientInfo);
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
@@ -91,14 +91,14 @@ public class InboxInsertTest extends InboxServiceTest {
     public void insertMultiMsgPackWithSameInbox() throws InterruptedException {
         String trafficId = "trafficA";
         String inboxId = "inbox1";
-        String inboxGroupKey = "inboxGroup1";
+        String delivererKey = "deliverer1";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
         long reqId = System.nanoTime();
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
         assertEquals(createInboxReply.getReqId(), reqId);
         assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
-        IInboxGroupWriter writer = inboxBrokerClient.open(inboxGroupKey);
+        IDeliverer writer = inboxBrokerClient.open(delivererKey);
         Message msg = Message.newBuilder()
             .setPubQoS(QoS.AT_LEAST_ONCE)
             .build();
@@ -120,22 +120,22 @@ public class InboxInsertTest extends InboxServiceTest {
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)
             .build();
-        List<InboxPack> msgPack1 = new LinkedList<>();
-        msgPack1.add(new InboxPack(pack1, singletonList(subInfo)));
-        List<InboxPack> msgPack2 = new LinkedList<>();
-        msgPack2.add(new InboxPack(pack2, singletonList(subInfo)));
-        CompletableFuture<Map<SubInfo, WriteResult>> writeFuture1 = writer.write(msgPack1);
-        CompletableFuture<Map<SubInfo, WriteResult>> writeFuture2 = writer.write(msgPack2);
-        CompletableFuture<Map<SubInfo, WriteResult>> writeFuture3 = writer.write(msgPack2);
+        List<DeliveryPack> msgPack1 = new LinkedList<>();
+        msgPack1.add(new DeliveryPack(pack1, singletonList(subInfo)));
+        List<DeliveryPack> msgPack2 = new LinkedList<>();
+        msgPack2.add(new DeliveryPack(pack2, singletonList(subInfo)));
+        CompletableFuture<Map<SubInfo, DeliveryResult>> writeFuture1 = writer.deliver(msgPack1);
+        CompletableFuture<Map<SubInfo, DeliveryResult>> writeFuture2 = writer.deliver(msgPack2);
+        CompletableFuture<Map<SubInfo, DeliveryResult>> writeFuture3 = writer.deliver(msgPack2);
 
-        Map<SubInfo, WriteResult> result1 = writeFuture1.join();
-        assertEquals(result1.get(subInfo), WriteResult.OK);
-        Map<SubInfo, WriteResult> result2 = writeFuture2.join();
-        assertEquals(result2.get(subInfo), WriteResult.OK);
-        Map<SubInfo, WriteResult> result3 = writeFuture3.join();
-        assertEquals(result3.get(subInfo), WriteResult.OK);
+        Map<SubInfo, DeliveryResult> result1 = writeFuture1.join();
+        assertEquals(result1.get(subInfo), DeliveryResult.OK);
+        Map<SubInfo, DeliveryResult> result2 = writeFuture2.join();
+        assertEquals(result2.get(subInfo), DeliveryResult.OK);
+        Map<SubInfo, DeliveryResult> result3 = writeFuture3.join();
+        assertEquals(result3.get(subInfo), DeliveryResult.OK);
 
-        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, inboxGroupKey, clientInfo);
+        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, delivererKey, clientInfo);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
         reader.fetch(fetched -> {

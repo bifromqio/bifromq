@@ -27,7 +27,7 @@
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-inbox-broker</artifactId>
+            <artifactId>bifromq-plugin-sub-broker</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

@@ -36,7 +36,8 @@ import org.testng.annotations.Test;
 public class GCAndStatsTest extends DistWorkerTest {
     @Test(groups = "integration")
     public void gc() {
-        when(receiverManager.hasInbox(anyLong(), anyString(), anyString(), anyString(), anyInt()))
+        when(receiverManager.get(anyInt())).thenReturn(mqttBroker);
+        when(mqttBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
             .thenReturn(CompletableFuture.completedFuture(false));
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))

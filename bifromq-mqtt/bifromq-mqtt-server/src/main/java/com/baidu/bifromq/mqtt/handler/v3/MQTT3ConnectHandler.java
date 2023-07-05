@@ -256,7 +256,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                     // clear subscription of previous persistent session
                     CompletableFuture<ClearResult> clearSubTask =
                         cancelOnInactive(distClient.clear(reqId, offlineInboxId,
-                            inboxClient.getInboxGroupKey(offlineInboxId, clientInfo), 1, clientInfo));
+                            inboxClient.getDelivererKey(offlineInboxId, clientInfo), 1, clientInfo));
                     CompletableFuture<DeleteInboxReply> deleteInboxTask =
                         cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo));
                     return allOf(clearSubTask, deleteInboxTask)

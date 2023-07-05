@@ -39,7 +39,6 @@ import com.google.common.util.concurrent.MoreExecutors;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import lombok.SneakyThrows;
@@ -226,7 +225,7 @@ public class SubscriptionCacheTest {
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(true, false);
-        String qInboxId = EntityUtil.toQualifiedInboxId(0, "inbox1", "inboxGroupKey");
+        String qInboxId = EntityUtil.toQualifiedInboxId(0, "inbox1", "deliverer1");
         String sharedTopicFilter = "$oshare/group/" + scopedTopic.topic;
         when(kvIterator.key())
             .thenReturn(EntityUtil.matchRecordKey(scopedTopic.trafficId, sharedTopicFilter, qInboxId));
@@ -241,10 +240,10 @@ public class SubscriptionCacheTest {
             NormalMatching matching = entry.getKey();
             assertEquals(matching.trafficId, scopedTopic.trafficId);
             assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
-            assertEquals(matching.brokerId, 0);
+            assertEquals(matching.subBrokerId, 0);
             assertEquals(matching.subInfo.getInboxId(), "inbox1");
             assertEquals(matching.subInfo.getSubQoS(), QoS.AT_MOST_ONCE);
-            assertEquals(matching.inboxGroupKey, "inboxGroupKey");
+            assertEquals(matching.delivererKey, "deliverer1");
             assertTrue(entry.getValue().contains(sender));
         }
     }
@@ -263,8 +262,8 @@ public class SubscriptionCacheTest {
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(true, false, true, false);
-        String qInboxId1 = EntityUtil.toQualifiedInboxId(0, "inbox1", "inboxGroupKey");
-        String qInboxId2 = EntityUtil.toQualifiedInboxId(0, "inbox2", "inboxGroupKey");
+        String qInboxId1 = EntityUtil.toQualifiedInboxId(0, "inbox1", "deliverer1");
+        String qInboxId2 = EntityUtil.toQualifiedInboxId(0, "inbox2", "deliverer1");
         String sharedTopicFilter = "$oshare/group/" + scopedTopic.topic;
         when(kvIterator.key())
             .thenReturn(EntityUtil.matchRecordKey(scopedTopic.trafficId, sharedTopicFilter, qInboxId1));
@@ -287,10 +286,10 @@ public class SubscriptionCacheTest {
             NormalMatching matching = entry.getKey();
             assertEquals(matching.trafficId, scopedTopic.trafficId);
             assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
-            assertEquals(matching.brokerId, 0);
+            assertEquals(matching.subBrokerId, 0);
             assertEquals(matching.subInfo.getInboxId(), "inbox2");
             assertEquals(matching.subInfo.getSubQoS(), QoS.AT_LEAST_ONCE);
-            assertEquals(matching.inboxGroupKey, "inboxGroupKey");
+            assertEquals(matching.delivererKey, "deliverer1");
             assertTrue(entry.getValue().contains(sender));
         }
     }

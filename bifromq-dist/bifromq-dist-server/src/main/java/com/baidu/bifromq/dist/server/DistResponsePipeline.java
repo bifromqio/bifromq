@@ -14,6 +14,8 @@
 package com.baidu.bifromq.dist.server;
 
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.DROP_EXCEED_LIMIT;
+import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.RPC_FAILURE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_CALL_QUEUES;
 
 import com.baidu.bifromq.baserpc.ResponsePipeline;
@@ -25,7 +27,6 @@ import com.baidu.bifromq.dist.server.scheduler.DistCall;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
-import com.baidu.bifromq.plugin.eventcollector.distservice.DropExceedLimit;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
 import java.util.Map;
@@ -57,15 +58,10 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                 callQueueIdx, trafficFanouts.get(trafficId).estimate()))
             .handle((v, e) -> {
                 if (e != null) {
-                    if (e.getCause() == DropException.EXCEED_LIMIT) {
-                        eventCollector.report(getLocal(DropExceedLimit.class)
-                            .trafficId(trafficId));
-                    } else {
-                        log.error("Failed to exec DistRequest, trafficId={}, req={}", trafficId, request, e);
-                        eventCollector.report(getLocal(DistError.class)
-                            .reqId(request.getReqId())
-                            .messages(request.getMessagesList()));
-                    }
+                    eventCollector.report(getLocal(DistError.class)
+                        .reqId(request.getReqId())
+                        .messages(request.getMessagesList())
+                        .code(e.getCause() == DropException.EXCEED_LIMIT ? DROP_EXCEED_LIMIT : RPC_FAILURE));
                     return DistReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(DistReply.Result.ERROR)

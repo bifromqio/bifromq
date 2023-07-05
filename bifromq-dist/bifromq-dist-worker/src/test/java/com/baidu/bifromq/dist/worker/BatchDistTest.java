@@ -16,13 +16,13 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -36,8 +36,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Test;
 import org.mockito.stubbing.Answer;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class BatchDistTest extends DistWorkerTest {
@@ -65,21 +65,21 @@ public class BatchDistTest extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void batchDist() {
-        when(receiverManager.openWriter("batch1", MqttBroker))
-            .thenReturn(writer1);
-        when(receiverManager.openWriter("batch2", InboxService))
-            .thenReturn(writer2);
-        when(writer1.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+        when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
+        when(inboxBroker.open("batch2")).thenReturn(writer2);
+        when(writer1.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
                 Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
                 return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.OK)));
+                    .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
             });
-        when(writer2.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
+        when(writer2.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
                 Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
                 return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> WriteResult.OK)));
+                    .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
             });
 
         insertMatchRecord("trafficA", "/a/1", AT_MOST_ONCE,

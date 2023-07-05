@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.dist.server;
 
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -27,10 +31,11 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.ISubBroker;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
@@ -70,38 +75,21 @@ public abstract class DistServiceTest {
     };
 
     @Mock
-    protected IInboxGroupWriter inboxWriter;
-    private IInboxBrokerManager receiverManager = new IInboxBrokerManager() {
-        @Override
-        public boolean hasBroker(int brokerId) {
-            return true;
-        }
-
-        @Override
-        public IInboxGroupWriter openWriter(String inboxGroupKey, int brokerId) {
-            return inboxWriter;
-        }
-
-        @Override
-        public CompletableFuture<Boolean> hasInbox(long reqId,
-                                                   String trafficId,
-                                                   String inboxId,
-                                                   String inboxGroupKey,
-                                                   int brokerId) {
-            return CompletableFuture.completedFuture(true);
-        }
-
-        @Override
-        public void stop() {
-
-        }
-    };
+    protected ISubBroker inboxBroker;
+    @Mock
+    protected IDeliverer inboxDeliverer;
+    @Mock
+    private ISubBrokerManager subBrokerMgr;
 
     private AutoCloseable closeable;
 
     @BeforeMethod(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        when(subBrokerMgr.get(anyInt())).thenReturn(inboxBroker);
+        when(inboxBroker.open(anyString())).thenReturn(inboxDeliverer);
+        when(inboxBroker.hasInbox(anyInt(), anyString(), anyString(), anyString())).thenReturn(
+            CompletableFuture.completedFuture(true));
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(2, 2, 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -159,7 +147,7 @@ public abstract class DistServiceTest {
             .bgTaskExecutor(bgTaskExecutor)
             .kvRangeStoreOptions(kvRangeStoreOptions)
             .balanceControllerOptions(balanceControllerOptions)
-            .inboxBrokerManager(receiverManager)
+            .subBrokerManager(subBrokerMgr)
             .build();
         distServer = IDistServer.inProcBuilder()
             .storeClient(workerClient)

@@ -32,9 +32,9 @@ public class NormalMatching extends Matching {
     public final QoS subQoS;
 
     @EqualsAndHashCode.Exclude
-    public final String inboxGroupKey;
+    public final String delivererKey;
     @EqualsAndHashCode.Exclude
-    public final int brokerId;
+    public final int subBrokerId;
     @EqualsAndHashCode.Exclude
     public final SubInfo subInfo;
 
@@ -46,8 +46,8 @@ public class NormalMatching extends Matching {
 
         scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);
         String[] parts = scopedInboxId.split(NUL);
-        brokerId = Integer.parseInt(parts[0]);
-        inboxGroupKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
+        subBrokerId = Integer.parseInt(parts[0]);
+        delivererKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
         subInfo = SubInfo.newBuilder()
             .setTrafficId(trafficId)
             .setInboxId(parts[1])
@@ -64,8 +64,8 @@ public class NormalMatching extends Matching {
 
         scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);
         String[] parts = scopedInboxId.split(NUL);
-        brokerId = Integer.parseInt(parts[0]);
-        inboxGroupKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
+        subBrokerId = Integer.parseInt(parts[0]);
+        delivererKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
         subInfo = SubInfo.newBuilder()
             .setTrafficId(trafficId)
             .setInboxId(parts[1])

@@ -17,8 +17,8 @@ import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
-import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
@@ -36,7 +36,7 @@ public class QoS1InsertState extends InboxServiceState {
     private static final String trafficId = "testTraffic";
     private TopicMessagePack msgs;
     private static final int inboxCount = 100;
-    private IInboxGroupWriter inboxWriter;
+    private IDeliverer inboxWriter;
 
     @Override
     protected void afterSetup() {
@@ -47,7 +47,7 @@ public class QoS1InsertState extends InboxServiceState {
                 .build()).join();
             i++;
         }
-        inboxWriter = inboxBrokerClient.open("inboxGroupKey1");
+        inboxWriter = inboxBrokerClient.open("deliverer1");
         TopicMessagePack.Builder builder = TopicMessagePack.newBuilder().setTopic("greeting");
         IntStream.range(0, 10).forEach(j -> builder
             .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
@@ -66,7 +66,7 @@ public class QoS1InsertState extends InboxServiceState {
     }
 
     public void insert() {
-        inboxWriter.write(singleton(new InboxPack(msgs, singletonList(SubInfo.newBuilder()
+        inboxWriter.deliver(singleton(new DeliveryPack(msgs, singletonList(SubInfo.newBuilder()
             .setTrafficId(trafficId)
             .setInboxId(ThreadLocalRandom.current().nextInt(0, inboxCount) + "")
             .setTopicFilter("greeting")

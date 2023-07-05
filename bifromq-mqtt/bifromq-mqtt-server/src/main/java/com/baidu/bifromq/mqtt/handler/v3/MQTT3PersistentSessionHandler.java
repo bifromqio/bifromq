@@ -134,7 +134,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
         String inboxId = userSessionId(clientInfo());
         return sessionCtx.distClient.sub(reqId, topicSub.topicName(), QoS.forNumber(topicSub.qualityOfService()
-                    .value()), inboxId, sessionCtx.inboxClient.getInboxGroupKey(inboxId,
+                    .value()), inboxId, sessionCtx.inboxClient.getDelivererKey(inboxId,
                     clientInfo()), 1,
                 clientInfo())
             .thenApply(subResult -> {
@@ -155,7 +155,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     @Override
     protected CompletableFuture<UnsubResult> doUnsubscribe(long reqId, String topicFilter) {
         String inboxId = userSessionId(clientInfo());
-        return sessionCtx.distClient.unsub(reqId, topicFilter, inboxId, sessionCtx.inboxClient.getInboxGroupKey(
+        return sessionCtx.distClient.unsub(reqId, topicFilter, inboxId, sessionCtx.inboxClient.getDelivererKey(
             inboxId, clientInfo()), 1, clientInfo());
     }
 
@@ -189,7 +189,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         }
         String inboxId = userSessionId(clientInfo());
         inboxReader = sessionCtx.inboxClient.openInboxReader(inboxId,
-            sessionCtx.inboxClient.getInboxGroupKey(inboxId, clientInfo()), clientInfo());
+            sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), clientInfo());
 
         inboxReader.fetch(this::consume);
         bufferCapacityHinter.hint(inboxReader::hint);

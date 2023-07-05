@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.mqtt.inbox;
 
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBroker;
+import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 
-public interface IMqttBrokerClient extends IInboxBroker {
+public interface IMqttBrokerClient extends ISubBroker {
     static MqttBrokerClientBuilder.InProcMqttBrokerClientBuilder inProcClientBuilder() {
         return new MqttBrokerClientBuilder.InProcMqttBrokerClientBuilder();
     }

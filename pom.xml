@@ -230,7 +230,7 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
-                <artifactId>bifromq-plugin-inbox-broker</artifactId>
+                <artifactId>bifromq-plugin-sub-broker</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- plugin helper -->
@@ -256,7 +256,7 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
-                <artifactId>bifromq-plugin-inbox-broker-helper</artifactId>
+                <artifactId>bifromq-plugin-sub-broker-helper</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- retain -->

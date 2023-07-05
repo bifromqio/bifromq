@@ -44,7 +44,7 @@ public class MessageUtil {
                     .putTopicFilter(
                         EntityUtil.subInfoKey(request.getClient().getTrafficId(),
                             EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getInboxGroupKey())).toStringUtf8(),
+                                request.getDelivererKey())).toStringUtf8(),
                         InboxSubInfo.newBuilder()
                             .putTopicFilters(request.getTopicFilter(), request.getSubQoS())
                             .build())
@@ -62,7 +62,7 @@ public class MessageUtil {
                     EntityUtil.matchRecordKey(request.getClient().getTrafficId(),
                         request.getTopicFilter(),
                         EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getInboxGroupKey())).toStringUtf8(),
+                            request.getDelivererKey())).toStringUtf8(),
                     request.getSubQoS()).build())
                 .build())
             .build();
@@ -77,11 +77,11 @@ public class MessageUtil {
                     .putRecord(
                         EntityUtil.matchRecordKey(request.getClient().getTrafficId(), request.getTopicFilter(),
                             EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getInboxGroupKey())).toStringUtf8(),
+                                request.getDelivererKey())).toStringUtf8(),
                         GroupMatchRecord.newBuilder()
                             .putEntry(EntityUtil.toQualifiedInboxId(request.getBroker(),
                                 request.getInboxId(),
-                                request.getInboxGroupKey()), request.getSubQoS())
+                                request.getDelivererKey()), request.getSubQoS())
                             .build())
                     .build())
                 .build())
@@ -97,7 +97,7 @@ public class MessageUtil {
                     .putTopicFilter(
                         EntityUtil.subInfoKey(request.getClient().getTrafficId(),
                             EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getInboxGroupKey())).toStringUtf8(),
+                                request.getDelivererKey())).toStringUtf8(),
                         TopicFilterList.newBuilder().addTopicFilter(request.getTopicFilter()).build())
                     .build())
                 .build())

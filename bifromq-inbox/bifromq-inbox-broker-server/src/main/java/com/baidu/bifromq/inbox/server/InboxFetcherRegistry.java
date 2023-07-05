@@ -29,11 +29,11 @@ import java.util.concurrent.ConcurrentSkipListMap;
 final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
     // how do we handle multiple fetchers under same (trafficId, inboxId, qos) combination which may happen when
     // "persistent session" clients kicking each other
-    // inboxGroupKey+trafficId -> inboxId -> InboxFetcher
+    // delivererKey+trafficId -> inboxId -> InboxFetcher
     private final NavigableMap<String, Map<String, IInboxQueueFetcher>> fetchers = new ConcurrentSkipListMap<>();
 
     void reg(IInboxQueueFetcher fetcher) {
-        fetchers.compute(fetcher.inboxGroupKey() + fetcher.trafficId(), (key, val) -> {
+        fetchers.compute(fetcher.delivererKey() + fetcher.trafficId(), (key, val) -> {
             if (val == null) {
                 val = new HashMap<>();
                 gauging(fetcher.trafficId(), InboxFetcherGauge,
@@ -45,7 +45,7 @@ final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
     }
 
     void unreg(IInboxQueueFetcher fetcher) {
-        fetchers.compute(fetcher.inboxGroupKey() + fetcher.trafficId(), (traffic, m) -> {
+        fetchers.compute(fetcher.delivererKey() + fetcher.trafficId(), (traffic, m) -> {
             if (m != null) {
                 m.remove(fetcher.inboxId(), fetcher);
                 if (m.size() == 0) {
@@ -57,18 +57,18 @@ final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
         });
     }
 
-    boolean has(String trafficId, String inboxId, String inboxGroupKey) {
-        return fetchers.getOrDefault(inboxGroupKey + trafficId, Collections.emptyMap()).containsKey(inboxId);
+    boolean has(String trafficId, String inboxId, String delivererKey) {
+        return fetchers.getOrDefault(delivererKey + trafficId, Collections.emptyMap()).containsKey(inboxId);
     }
 
-    IInboxQueueFetcher get(String trafficId, String inboxId, String inboxGroupKey) {
-        return fetchers.getOrDefault(inboxGroupKey + trafficId, Collections.emptyMap()).get(inboxId);
+    IInboxQueueFetcher get(String trafficId, String inboxId, String delivererKey) {
+        return fetchers.getOrDefault(delivererKey + trafficId, Collections.emptyMap()).get(inboxId);
     }
 
-    void signalFetch(String inboxGroupKey) {
-        SortedMap<String, Map<String, IInboxQueueFetcher>> subMap = fetchers.tailMap(inboxGroupKey);
+    void signalFetch(String delivererKey) {
+        SortedMap<String, Map<String, IInboxQueueFetcher>> subMap = fetchers.tailMap(delivererKey);
         for (String key : subMap.keySet()) {
-            if (key.startsWith(inboxGroupKey)) {
+            if (key.startsWith(delivererKey)) {
                 return;
             }
             for (IInboxQueueFetcher fetcher : subMap.get(key).values()) {

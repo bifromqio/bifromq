@@ -60,8 +60,9 @@ import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.ISubBroker;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -113,13 +114,19 @@ public abstract class DistWorkerTest {
     @Mock
     protected IDistClient distClient;
     @Mock
-    protected IInboxBrokerManager receiverManager;
+    protected ISubBrokerManager receiverManager;
+
     @Mock
-    protected IInboxGroupWriter writer1;
+    protected ISubBroker mqttBroker;
+
     @Mock
-    protected IInboxGroupWriter writer2;
+    protected ISubBroker inboxBroker;
     @Mock
-    protected IInboxGroupWriter writer3;
+    protected IDeliverer writer1;
+    @Mock
+    protected IDeliverer writer2;
+    @Mock
+    protected IDeliverer writer3;
     protected SimpleMeterRegistry meterRegistry;
     protected IDistWorker testWorker;
     protected IBaseKVStoreClient storeClient;
@@ -144,9 +151,11 @@ public abstract class DistWorkerTest {
             dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
-        lenient().when(receiverManager.hasBroker(MqttBroker)).thenReturn(true);
-        lenient().when(receiverManager.hasBroker(InboxService)).thenReturn(true);
-        lenient().when(receiverManager.hasInbox(anyLong(), anyString(), anyString(), anyString(), anyInt()))
+        lenient().when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        lenient().when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
+        lenient().when(mqttBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
+            .thenReturn(CompletableFuture.completedFuture(true));
+        lenient().when(inboxBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
             .thenReturn(CompletableFuture.completedFuture(true));
         lenient().when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
@@ -225,7 +234,7 @@ public abstract class DistWorkerTest {
             .gcInterval(Duration.ofSeconds(1))
             .statsInterval(Duration.ofSeconds(1))
             .kvRangeStoreOptions(options)
-            .inboxBrokerManager(receiverManager)
+            .subBrokerManager(receiverManager)
             .build();
         testWorker.start(true);
 
@@ -257,11 +266,11 @@ public abstract class DistWorkerTest {
     }
 
     protected AddTopicFilterReply addTopicFilter(String trafficId, String topicFilter, QoS subQoS,
-                                                 int subBroker, String inboxId, String inboxGroupKey) {
+                                                 int subBroker, String inboxId, String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString subInfoKey =
-                EntityUtil.subInfoKey(trafficId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, inboxGroupKey));
+                EntityUtil.subInfoKey(trafficId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
             KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
             SubRequest request = SubRequest.newBuilder()
                 .setReqId(reqId)
@@ -269,7 +278,7 @@ public abstract class DistWorkerTest {
                 .setSubQoS(subQoS)
                 .setInboxId(inboxId)
                 .setBroker(subBroker)
-                .setInboxGroupKey(inboxGroupKey)
+                .setDelivererKey(delivererKey)
                 .setClient(ClientInfo.newBuilder()
                     .setTrafficId(trafficId)
                     .build())
@@ -293,18 +302,18 @@ public abstract class DistWorkerTest {
     }
 
     protected RemoveTopicFilterReply removeTopicFilter(String trafficId, String topicFilter,
-                                                       int subBroker, String inboxId, String inboxGroupKey) {
+                                                       int subBroker, String inboxId, String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString subInfoKey =
-                EntityUtil.subInfoKey(trafficId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, inboxGroupKey));
+                EntityUtil.subInfoKey(trafficId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
             KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
             UnsubRequest request = UnsubRequest.newBuilder()
                 .setReqId(reqId)
                 .setTopicFilter(topicFilter)
                 .setBroker(subBroker)
                 .setInboxId(inboxId)
-                .setInboxGroupKey(inboxGroupKey)
+                .setDelivererKey(delivererKey)
                 .setClient(ClientInfo.newBuilder()
                     .setTrafficId(trafficId)
                     .build())
@@ -328,11 +337,11 @@ public abstract class DistWorkerTest {
     }
 
     protected InsertMatchRecordReply insertMatchRecord(String trafficId, String topicFilter, QoS subQoS,
-                                                       int subBroker, String inboxId, String inboxGroupKey) {
+                                                       int subBroker, String inboxId, String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString matchRecordKey = EntityUtil.matchRecordKey(trafficId, topicFilter,
-                EntityUtil.toQualifiedInboxId(subBroker, inboxId, inboxGroupKey));
+                EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
             KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
             SubRequest.Builder reqBuilder = SubRequest.newBuilder()
                 .setReqId(reqId)
@@ -340,7 +349,7 @@ public abstract class DistWorkerTest {
                 .setInboxId(inboxId)
                 .setBroker(subBroker)
                 .setSubQoS(subQoS)
-                .setInboxGroupKey(inboxGroupKey)
+                .setDelivererKey(delivererKey)
                 .setClient(ClientInfo.newBuilder()
                     .setTrafficId(trafficId)
                     .build());
@@ -390,11 +399,11 @@ public abstract class DistWorkerTest {
     }
 
     protected JoinMatchGroupReply joinMatchGroup(String trafficId, String topicFilter, QoS subQoS,
-                                                 int subBroker, String inboxId, String inboxGroupKey) {
+                                                 int subBroker, String inboxId, String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString matchRecordKey = EntityUtil.matchRecordKey(trafficId, topicFilter,
-                EntityUtil.toQualifiedInboxId(subBroker, inboxId, inboxGroupKey));
+                EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
             KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
             SubRequest.Builder reqBuilder = SubRequest.newBuilder()
                 .setReqId(reqId)
@@ -402,7 +411,7 @@ public abstract class DistWorkerTest {
                 .setInboxId(inboxId)
                 .setBroker(subBroker)
                 .setSubQoS(subQoS)
-                .setInboxGroupKey(inboxGroupKey)
+                .setDelivererKey(delivererKey)
                 .setClient(ClientInfo.newBuilder()
                     .setTrafficId(trafficId)
                     .build());

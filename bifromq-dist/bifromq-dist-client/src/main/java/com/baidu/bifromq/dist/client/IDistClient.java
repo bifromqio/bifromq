@@ -38,13 +38,13 @@ public interface IDistClient {
     CompletableFuture<DistResult> dist(long reqId, String topic, QoS qos, ByteBuffer payload, int expirySeconds,
                                        ClientInfo sender);
 
-    CompletableFuture<SubResult> sub(long reqId, String topicFilter, QoS qos, String inbox, String inboxGroupKey,
-                                     int inboxBrokerId, ClientInfo client);
+    CompletableFuture<SubResult> sub(long reqId, String topicFilter, QoS qos, String inbox, String delivererKey,
+                                     int subBrokerId, ClientInfo client);
 
-    CompletableFuture<UnsubResult> unsub(long reqId, String topicFilter, String inbox, String inboxGroupKey,
-                                         int inboxBrokerId, ClientInfo client);
+    CompletableFuture<UnsubResult> unsub(long reqId, String topicFilter, String inbox, String delivererKey,
+                                         int subBrokerId, ClientInfo client);
 
-    CompletableFuture<ClearResult> clear(long reqId, String inboxId, String inboxGroupKey, int inboxBrokerId,
+    CompletableFuture<ClearResult> clear(long reqId, String inboxId, String delivererKey, int subBrokerId,
                                          ClientInfo client);
 
     void stop();

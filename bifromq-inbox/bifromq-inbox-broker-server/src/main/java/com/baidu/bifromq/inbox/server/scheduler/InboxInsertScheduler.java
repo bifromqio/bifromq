@@ -19,6 +19,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_INBOXES_PER_IN
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.basescheduler.BatchCallBuilder;
 import com.baidu.bifromq.basescheduler.IBatchCall;
@@ -124,40 +125,36 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
                             .build())
                     .thenApply(reply -> {
                         start.stop(batchInsertTimer);
-                        switch (reply.getCode()) {
-                            case Ok:
-                                try {
-                                    return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                        .getReply().getInsert();
-                                } catch (InvalidProtocolBufferException e) {
-                                    log.error("Unable to parse rw co-proc output", e);
-                                    throw new RuntimeException(e);
-                                }
-                            default:
-                                log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
-                                throw new RuntimeException();
-                        }
-                    })
-                    .handle((v, e) -> {
-                        Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-                        for (InboxInsertResult result : v.getResultsList()) {
-                            switch (result.getResult()) {
-                                case OK:
-                                    insertResults.put(result.getSubInfo(), Result.OK);
-                                    break;
-                                case NO_INBOX:
-                                    insertResults.put(result.getSubInfo(), Result.NO_INBOX);
-                                    break;
-                                default:
-                                    insertResults.put(result.getSubInfo(), Result.ERROR);
+                        if (reply.getCode() == ReplyCode.Ok) {
+                            try {
+                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
+                                    .getReply().getInsert();
+                            } catch (InvalidProtocolBufferException e) {
+                                log.error("Unable to parse rw co-proc output", e);
+                                throw new RuntimeException(e);
                             }
                         }
-                        while (!inboxInserts.isEmpty()) {
-                            InsertTask task = inboxInserts.poll();
-                            if (e != null) {
-                                task.onDone.complete(Result.ERROR);
-                            } else {
-                                assert insertResults.containsKey(task.request.getSubInfo());
+                        log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
+                        throw new RuntimeException();
+                    })
+                    .handle((v, e) -> {
+                        if (e != null) {
+                            // TODO: report insert rpc error?
+                            while (!inboxInserts.isEmpty()) {
+                                InsertTask task = inboxInserts.poll();
+                                task.onDone.complete(Result.OK);
+                            }
+                        } else {
+                            Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
+                            for (InboxInsertResult result : v.getResultsList()) {
+                                if (result.getResult() == InboxInsertResult.Result.NO_INBOX) {
+                                    insertResults.put(result.getSubInfo(), Result.NO_INBOX);
+                                } else {
+                                    insertResults.put(result.getSubInfo(), Result.OK);
+                                }
+                            }
+                            while (!inboxInserts.isEmpty()) {
+                                InsertTask task = inboxInserts.poll();
                                 task.onDone.complete(insertResults.get(task.request.getSubInfo()));
                             }
                         }
@@ -182,7 +179,7 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
         private final Timer batchInsertTimer;
 
         BatchInsertBuilder(String name, int maxInflights,
-                                   KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
+                           KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
             super(name, maxInflights);
             this.range = range;
             this.kvStoreClient = kvStoreClient;

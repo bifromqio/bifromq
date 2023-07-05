@@ -104,7 +104,7 @@
         <!--for testing-->
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-inbox-broker-helper</artifactId>
+            <artifactId>bifromq-plugin-sub-broker-helper</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

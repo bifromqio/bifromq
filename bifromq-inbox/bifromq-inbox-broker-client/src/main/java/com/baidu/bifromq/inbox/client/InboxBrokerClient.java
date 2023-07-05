@@ -4,7 +4,7 @@ import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.google.common.base.Preconditions;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,18 +22,18 @@ class InboxBrokerClient implements IInboxBrokerClient {
     }
 
     @Override
-    public IInboxGroupWriter open(String inboxGroupKey) {
+    public IDeliverer open(String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return new InboxPipeline(inboxGroupKey, rpcClient);
+        return new DeliveryPipeline(delivererKey, rpcClient);
     }
 
     @Override
     public CompletableFuture<Boolean> hasInbox(long reqId,
                                                @NonNull String trafficId,
                                                @NonNull String inboxId,
-                                               @Nullable String inboxGroupKey) {
+                                               @Nullable String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return rpcClient.invoke(trafficId, inboxGroupKey,
+        return rpcClient.invoke(trafficId, delivererKey,
                 HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
                 InboxServiceGrpc.getHasInboxMethod())
             .thenApply(HasInboxReply::getResult);

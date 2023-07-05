@@ -98,8 +98,7 @@ public abstract class BatchCallBuilder<Req, Resp> {
                     task.whenComplete((v, e) -> {
                         long processingTime = System.nanoTime() - start;
                         // never throws
-                        inflightCalls.decrementAndGet();
-                        inflightLimiter.onSample(0, processingTime, inflightCalls.get(), false);
+                        inflightLimiter.onSample(0, processingTime, inflightCalls.decrementAndGet(), false);
                         meter.batchExecTimer.record(processingTime, TimeUnit.NANOSECONDS);
                         // try to reuse
                         batchCall.reset();

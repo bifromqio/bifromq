@@ -25,8 +25,8 @@ import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.inbox.client.IInboxBrokerClient;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.InboxBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.starter.config.DistWorkerConfig;
@@ -58,7 +58,7 @@ public class DistWorkerStarter extends BaseEngineStarter<DistWorkerConfig> {
 
     private EventCollectorManager eventCollectorMgr;
 
-    private IInboxBrokerManager inboxBrokerMgr;
+    private ISubBrokerManager inboxBrokerMgr;
 
     private IAgentHost agentHost;
 
@@ -115,7 +115,7 @@ public class DistWorkerStarter extends BaseEngineStarter<DistWorkerConfig> {
 
         distWorkerClient = buildDistWorkerClient(config.getDistWorkerClientConfig());
 
-        inboxBrokerMgr = new InboxBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
+        inboxBrokerMgr = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
 
         distWorker = buildDistWorker(config);
     }
@@ -270,7 +270,7 @@ public class DistWorkerStarter extends BaseEngineStarter<DistWorkerConfig> {
             .balanceControllerOptions(config.getBalanceConfig())
             .eventCollector(eventCollectorMgr)
             .settingProvider(settingProviderMgr)
-            .inboxBrokerManager(inboxBrokerMgr)
+            .subBrokerManager(inboxBrokerMgr)
             .build();
     }
 

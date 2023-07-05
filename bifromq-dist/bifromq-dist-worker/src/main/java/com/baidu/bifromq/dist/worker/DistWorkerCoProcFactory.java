@@ -20,9 +20,9 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.worker.scheduler.InboxWriteScheduler;
+import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -38,19 +38,19 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final IDistClient distClient;
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
-    private final IInboxBrokerManager inboxBrokerManager;
-    private final InboxWriteScheduler scheduler;
+    private final ISubBrokerManager subBrokerManager;
+    private final DeliveryScheduler scheduler;
     private final ExecutorService matchExecutor;
 
     public DistWorkerCoProcFactory(IDistClient distClient,
                                    ISettingProvider settingProvider,
                                    IEventCollector eventCollector,
-                                   IInboxBrokerManager inboxBrokerManager) {
+                                   ISubBrokerManager subBrokerManager) {
         this.distClient = distClient;
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
-        this.inboxBrokerManager = inboxBrokerManager;
-        scheduler = new InboxWriteScheduler(inboxBrokerManager, eventCollector, distClient);
+        this.subBrokerManager = subBrokerManager;
+        scheduler = new DeliveryScheduler(subBrokerManager);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ForkJoinPool(DIST_MATCH_PARALLELISM.get(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {
@@ -68,10 +68,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
 
     @Override
     public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider) {
-        return new DistWorkerCoProc(id, rangeReaderProvider,
-            distClient,
-            inboxBrokerManager,
-            scheduler,
+        return new DistWorkerCoProc(id, rangeReaderProvider, eventCollector, distClient, subBrokerManager, scheduler,
             matchExecutor);
     }
 

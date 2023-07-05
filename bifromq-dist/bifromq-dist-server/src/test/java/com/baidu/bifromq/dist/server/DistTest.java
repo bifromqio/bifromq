@@ -20,8 +20,8 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.SubResult;
 import com.baidu.bifromq.dist.client.SubResult.Type;
-import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
-import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
@@ -48,13 +48,13 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithNoSub() {
-        Mockito.lenient().when(inboxWriter.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        Mockito.lenient().when(inboxDeliverer.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -81,13 +81,13 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithSub() {
-        Mockito.lenient().when(inboxWriter.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        Mockito.lenient().when(inboxDeliverer.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -119,13 +119,13 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithSharedSub() {
-        Mockito.lenient().when(inboxWriter.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        Mockito.lenient().when(inboxDeliverer.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -159,16 +159,16 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithFanOutSub() {
-        List<Iterable<InboxPack>> capturedArguments = new CopyOnWriteArrayList<>();
-        when(inboxWriter.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
+        List<Iterable<DeliveryPack>> capturedArguments = new CopyOnWriteArrayList<>();
+        when(inboxDeliverer.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
                 // the argument object will be reused, so make a clone
                 capturedArguments.add(inboxPacks);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -194,8 +194,8 @@ public class DistTest extends DistServiceTest {
 
         Set<SubInfo> subInfos = new HashSet<>();
         int msgCount = 0;
-        for (Iterable<InboxPack> writeReq : capturedArguments) {
-            for (InboxPack pack : writeReq) {
+        for (Iterable<DeliveryPack> writeReq : capturedArguments) {
+            for (DeliveryPack pack : writeReq) {
                 TopicMessagePack msgs = pack.messagePack;
                 Set<SubInfo> inboxes = Sets.newHashSet(pack.inboxes);
                 subInfos.addAll(inboxes);

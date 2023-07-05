@@ -25,15 +25,20 @@ import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
-import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.ISubBroker;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.SysClientInfo;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -62,31 +67,44 @@ public class DistServiceState {
 
     private ISettingProvider settingProvider = Setting::current;
 
-    private IEventCollector eventCollector = new IEventCollector() {
-        @Override
-        public void report(Event<?> event) {
+    private IEventCollector eventCollector = event -> {
 
-        }
     };
     private IDistClient distClient;
-    private IInboxBrokerManager receiverManager = new IInboxBrokerManager() {
-        @Override
-        public boolean hasBroker(int brokerId) {
-            return true;
-        }
+    private ISubBrokerManager subBrokerMgr = new ISubBrokerManager() {
+        public ISubBroker get(int subBrokerId) {
+            return new ISubBroker() {
+                @Override
+                public int id() {
+                    return 0;
+                }
 
-        @Override
-        public IInboxGroupWriter openWriter(String inboxGroupKey, int brokerId) {
-            return null;
-        }
+                @Override
+                public IDeliverer open(String delivererKey) {
+                    return new IDeliverer() {
+                        @Override
+                        public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
+                            return CompletableFuture.completedFuture(Collections.emptyMap());
+                        }
 
-        @Override
-        public CompletableFuture<Boolean> hasInbox(long reqId,
-                                                   String trafficId,
-                                                   String inboxId,
-                                                   String inboxGroupKey,
-                                                   int brokerId) {
-            return CompletableFuture.completedFuture(true);
+                        @Override
+                        public void close() {
+
+                        }
+                    };
+                }
+
+                @Override
+                public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId,
+                                                           String delivererKey) {
+                    return CompletableFuture.completedFuture(true);
+                }
+
+                @Override
+                public void close() {
+
+                }
+            };
         }
 
         @Override
@@ -138,7 +156,7 @@ public class DistServiceState {
             .tickTaskExecutor(Executors.newSingleThreadScheduledExecutor())
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .kvRangeStoreOptions(kvRangeStoreOptions)
-            .inboxBrokerManager(receiverManager)
+            .subBrokerManager(subBrokerMgr)
             .build();
         distServer = IDistServer.inProcBuilder()
             .storeClient(storeClient)
@@ -166,9 +184,9 @@ public class DistServiceState {
         agentHost.shutdown();
     }
 
-    public ClearResult requestClear(String inboxId, String inboxGroupKey, int brokerId, ClientInfo clientInfo) {
+    public ClearResult requestClear(String inboxId, String delivererKey, int brokerId, ClientInfo clientInfo) {
         long reqId = seqNo.incrementAndGet();
-        return distClient.clear(reqId, inboxId, inboxGroupKey, brokerId, clientInfo)
+        return distClient.clear(reqId, inboxId, delivererKey, brokerId, clientInfo)
             .join();
     }
 }

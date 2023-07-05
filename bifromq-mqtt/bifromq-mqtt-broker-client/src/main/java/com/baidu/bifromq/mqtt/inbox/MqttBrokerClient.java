@@ -16,20 +16,18 @@ package com.baidu.bifromq.mqtt.inbox;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.DeliveryPack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
-import com.baidu.bifromq.mqtt.inbox.util.InboxGroupKeyUtil;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxGroupWriter;
-import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
-import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
+import com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -46,15 +44,15 @@ class MqttBrokerClient implements IMqttBrokerClient {
         this.rpcClient = rpcClient;
     }
 
-    public IInboxGroupWriter open(String inboxGroupKey) {
+    public IDeliverer open(String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return new InboxPipeline(inboxGroupKey);
+        return new DeliveryPipeline(delivererKey);
     }
 
     @Override
-    public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId, String inboxGroupKey) {
+    public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId, String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return rpcClient.invoke(trafficId, InboxGroupKeyUtil.parseServerId(inboxGroupKey),
+        return rpcClient.invoke(trafficId, DeliveryGroupKeyUtil.parseServerId(delivererKey),
                 HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
                 OnlineInboxBrokerGrpc.getHasInboxMethod())
             .thenApply(HasInboxReply::getResult);
@@ -71,21 +69,21 @@ class MqttBrokerClient implements IMqttBrokerClient {
         }
     }
 
-    private class InboxPipeline implements IInboxGroupWriter {
+    private class DeliveryPipeline implements IDeliverer {
         private final IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln;
 
-        InboxPipeline(String inboxGroupKey) {
-            ppln = rpcClient.createRequestPipeline("", InboxGroupKeyUtil.parseServerId(inboxGroupKey), "",
+        DeliveryPipeline(String deliveryGroupKey) {
+            ppln = rpcClient.createRequestPipeline("", DeliveryGroupKeyUtil.parseServerId(deliveryGroupKey), "",
                 emptyMap(), OnlineInboxBrokerGrpc.getWriteMethod());
         }
 
         @Override
-        public CompletableFuture<Map<SubInfo, WriteResult>> write(Iterable<InboxPack> messagePacks) {
+        public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
             Preconditions.checkState(!hasStopped.get());
             long reqId = System.nanoTime();
             return ppln.invoke(WriteRequest.newBuilder()
                     .setReqId(reqId)
-                    .addAllDeliveryPack(Iterables.transform(messagePacks, e -> DeliveryPack.newBuilder()
+                    .addAllDeliveryPack(Iterables.transform(packs, e -> com.baidu.bifromq.mqtt.inbox.rpc.proto.DeliveryPack.newBuilder()
                         .setMessagePack(e.messagePack)
                         .addAllSubscriber(e.inboxes)
                         .build()))
@@ -93,25 +91,13 @@ class MqttBrokerClient implements IMqttBrokerClient {
                 .thenApply(writeReply -> writeReply.getResultList().stream()
                     .collect(Collectors.toMap(e -> e.getSubInfo(), e -> {
                         switch (e.getResult()) {
-                            case OK:
-                                return WriteResult.OK;
                             case NO_INBOX:
-                                return WriteResult.NO_INBOX;
-                            case ERROR:
+                                return DeliveryResult.NO_INBOX;
+                            case OK:
                             default:
-                                return WriteResult.error(new RuntimeException("inbox server internal error"));
+                                return DeliveryResult.OK;
                         }
-                    })))
-                .exceptionally(e -> {
-                    WriteResult error = WriteResult.error(e);
-                    Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                    for (InboxPack inboxWrite : messagePacks) {
-                        for (SubInfo subInfo : inboxWrite.inboxes) {
-                            resultMap.put(subInfo, error);
-                        }
-                    }
-                    return resultMap;
-                });
+                    })));
         }
 
         @Override

@@ -17,8 +17,6 @@ import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,11 +27,13 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.plugin.inboxbroker.InboxPack;
-import com.baidu.bifromq.plugin.inboxbroker.WriteResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
@@ -44,9 +44,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.Answer;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class DistQoS0Test extends DistWorkerTest {
@@ -67,28 +67,28 @@ public class DistQoS0Test extends DistWorkerTest {
         // topic: "/a/b/c"
         // sub: inbox1 -> [(/a/b/c, qos0),(/#, qos0)], inbox2 -> [(/#,qos1)]
         // expected behavior: inbox1 gets 2 messages, inbox2 get 1 message
-        when(receiverManager.openWriter("batch1", MqttBroker))
-            .thenReturn(writer1);
-        when(receiverManager.openWriter("batch2", InboxService))
-            .thenReturn(writer2);
-        when(writer1.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+        when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
+        when(inboxBroker.open("batch2")).thenReturn(writer2);
+        when(writer1.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
             });
-        when(writer2.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(writer2.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -104,9 +104,9 @@ public class DistQoS0Test extends DistWorkerTest {
         BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/你好/hello/😄", copyFromUtf8("Hello"), "orderKey1");
         assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/你好/hello/😄").intValue() > 0);
 
-        ArgumentCaptor<Iterable<InboxPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, timeout(1000).atLeastOnce()).write(msgCap.capture());
-        for (InboxPack pack : msgCap.getValue()) {
+        ArgumentCaptor<Iterable<DeliveryPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, timeout(1000).atLeastOnce()).deliver(msgCap.capture());
+        for (DeliveryPack pack : msgCap.getValue()) {
             TopicMessagePack msgPack = pack.messagePack;
             assertEquals(msgPack.getTopic(), "/你好/hello/😄");
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgPack.getMessageList()) {
@@ -117,8 +117,8 @@ public class DistQoS0Test extends DistWorkerTest {
         }
 
         msgCap = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer2, timeout(1000).times(1)).write(msgCap.capture());
-        for (InboxPack pack : msgCap.getValue()) {
+        verify(writer2, timeout(1000).times(1)).deliver(msgCap.capture());
+        for (DeliveryPack pack : msgCap.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/你好/hello/😄");
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
@@ -135,15 +135,16 @@ public class DistQoS0Test extends DistWorkerTest {
         // topic: "/a/b/c"
         // sub: inbox1 -> [(/a/b/c, qos0),(/a/b/c, qos0)]
         // expected behavior: inbox1 gets 1 messages
-        when(receiverManager.openWriter("batch1", MqttBroker))
-            .thenReturn(writer1);
-        when(writer1.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+
+        when(writer1.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -156,9 +157,9 @@ public class DistQoS0Test extends DistWorkerTest {
         BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
 
-        ArgumentCaptor<Iterable<InboxPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, timeout(1000).times(1)).write(list1.capture());
-        for (InboxPack pack : list1.getValue()) {
+        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, timeout(1000).times(1)).deliver(list1.capture());
+        for (DeliveryPack pack : list1.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
@@ -176,30 +177,28 @@ public class DistQoS0Test extends DistWorkerTest {
         // sub: inbox1 -> [($share/group//a/b/c, qos0),(/#, qos0)], inbox2 -> [($share/group//a/b/c,qos1)]
         // expected behavior: total 10 messages, inbox1 gets N messages, inbox2 get M message, N + M == 10, N > 0, M > 0
 
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
 
-        when(receiverManager.openWriter("batch1", MqttBroker))
-            .thenReturn(writer1);
-        when(writer1.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(writer1.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
             });
-
-        when(receiverManager.openWriter("batch2", MqttBroker))
-            .thenReturn(writer2);
-        when(writer2.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(mqttBroker.open("batch2")).thenReturn(writer2);
+        when(writer2.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -214,9 +213,9 @@ public class DistQoS0Test extends DistWorkerTest {
             assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
-        ArgumentCaptor<Iterable<InboxPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, after(100).atMost(10)).write(list1.capture());
-        for (InboxPack pack : list1.getValue()) {
+        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, after(100).atMost(10)).deliver(list1.capture());
+        for (DeliveryPack pack : list1.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
@@ -226,10 +225,10 @@ public class DistQoS0Test extends DistWorkerTest {
             }
         }
 
-        ArgumentCaptor<Iterable<InboxPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
 
-        verify(writer2, after(100).atMost(10)).write(list2.capture());
-        for (InboxPack pack : list2.getValue()) {
+        verify(writer2, after(100).atMost(10)).deliver(list2.capture());
+        for (DeliveryPack pack : list2.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
             for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
@@ -248,29 +247,30 @@ public class DistQoS0Test extends DistWorkerTest {
         // sub: inbox1 -> [($oshare/group//a/b/c, qos0)], inbox2 -> [($oshare/group//a/b/c, qos1)]
         // expected behavior: total 10 messages, inbox1 gets N messages, inbox2 get M message, either N or M is 10
 
-        lenient().when(receiverManager.openWriter("batch1", MqttBroker))
-            .thenReturn(writer1);
-        lenient().when(writer1.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+
+        lenient().when(writer1.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        lenient().when(receiverManager.openWriter("batch2", MqttBroker))
-            .thenReturn(writer2);
-        lenient().when(writer2.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(mqttBroker.open("batch2")).thenReturn(writer2);
+
+        lenient().when(writer2.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.OK);
+                        resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -286,17 +286,17 @@ public class DistQoS0Test extends DistWorkerTest {
             assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() == 1);
         }
 
-        ArgumentCaptor<Iterable<InboxPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, after(100).atMost(10)).write(list1.capture());
+        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, after(100).atMost(10)).deliver(list1.capture());
 
-        ArgumentCaptor<Iterable<InboxPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer2, after(100).atMost(10)).write(list2.capture());
+        ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer2, after(100).atMost(10)).deliver(list2.capture());
 
-        List<Iterable<InboxPack>> captured = list1.getAllValues().isEmpty() ?
+        List<Iterable<DeliveryPack>> captured = list1.getAllValues().isEmpty() ?
             list2.getAllValues() : list1.getAllValues();
 
-        for (Iterable<InboxPack> packs : captured) {
-            for (InboxPack pack : packs) {
+        for (Iterable<DeliveryPack> packs : captured) {
+            for (DeliveryPack pack : packs) {
                 TopicMessagePack msgs = pack.messagePack;
                 assertEquals(msgs.getTopic(), "/a/b/c");
                 for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
@@ -317,43 +317,44 @@ public class DistQoS0Test extends DistWorkerTest {
         //      inbox3 -> [($oshare/group//a/b/c, qos0)]
         // subbroker: inbox1 -> NO_INBOX, inbox2 -> NO_INBOX, inbox3 -> NO_INBOX
         // expected behavior: clear gets called 3 times
-        when(receiverManager.openWriter("batch1", MqttBroker))
-            .thenReturn(writer1);
-        when(writer1.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+
+        when(writer1.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.NO_INBOX);
+                        resultMap.put(subInfo, DeliveryResult.NO_INBOX);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(receiverManager.openWriter("batch2", MqttBroker))
-            .thenReturn(writer2);
-        when(writer2.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(mqttBroker.open("batch2")).thenReturn(writer2);
+
+        when(writer2.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.NO_INBOX);
+                        resultMap.put(subInfo, DeliveryResult.NO_INBOX);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(receiverManager.openWriter("batch3", MqttBroker))
-            .thenReturn(writer3);
-        when(writer3.write(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, WriteResult>>>) invocation -> {
-                Iterable<InboxPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, WriteResult> resultMap = new HashMap<>();
-                for (InboxPack inboxWrite : inboxPacks) {
+        when(mqttBroker.open("batch3")).thenReturn(writer3);
+
+        when(writer3.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
                     for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, WriteResult.NO_INBOX);
+                        resultMap.put(subInfo, DeliveryResult.NO_INBOX);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -371,9 +372,9 @@ public class DistQoS0Test extends DistWorkerTest {
         BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
 
-        verify(writer1, timeout(1000).times(1)).write(any());
-        verify(writer2, timeout(1000).times(1)).write(any());
-        verify(writer3, timeout(1000).times(1)).write(any());
+        verify(writer1, timeout(1000).times(1)).deliver(any());
+        verify(writer2, timeout(1000).times(1)).deliver(any());
+        verify(writer3, timeout(1000).times(1)).deliver(any());
         await().until(() -> {
             try {
                 verify(distClient, times(3))

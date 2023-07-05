@@ -24,7 +24,7 @@ import lombok.EqualsAndHashCode;
 public class Inbox {
     public final int broker;
     public final String inboxId;
-    public final String inboxGroupKey;
+    public final String delivererKey;
 
     Inbox(String scopedInboxId) {
         scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);
@@ -32,6 +32,6 @@ public class Inbox {
         assert parts.length >= 3;
         broker = Integer.parseInt(parts[0]);
         inboxId = parts[1];
-        this.inboxGroupKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
+        this.delivererKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
     }
 }

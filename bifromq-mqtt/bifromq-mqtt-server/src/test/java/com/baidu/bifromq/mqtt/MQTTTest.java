@@ -38,8 +38,8 @@ import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.inboxbroker.IInboxBrokerManager;
-import com.baidu.bifromq.plugin.inboxbroker.InboxBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
@@ -102,7 +102,7 @@ abstract class MQTTTest {
     private IRetainStore retainStore;
     private IRetainServer retainServer;
     private IMQTTBroker mqttBroker;
-    private IInboxBrokerManager inboxBrokerMgr;
+    private ISubBrokerManager inboxBrokerMgr;
     private PluginManager pluginMgr;
     private ExecutorService ioExecutor;
     private ExecutorService queryExecutor;
@@ -224,7 +224,7 @@ abstract class MQTTTest {
             .executor(MoreExecutors.directExecutor())
             .build();
 
-        inboxBrokerMgr = new InboxBrokerManager(pluginMgr, onlineInboxBrokerClient, inboxWriterClient);
+        inboxBrokerMgr = new SubBrokerManager(pluginMgr, onlineInboxBrokerClient, inboxWriterClient);
 
         KVRangeStoreOptions distWorkerOptions = new KVRangeStoreOptions();
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
@@ -242,7 +242,7 @@ abstract class MQTTTest {
             .bgTaskExecutor(bgTaskExecutor)
             .kvRangeStoreOptions(distWorkerOptions)
             .balanceControllerOptions(balanceControllerOptions)
-            .inboxBrokerManager(inboxBrokerMgr)
+            .subBrokerManager(inboxBrokerMgr)
             .build();
         distServer = IDistServer.inProcBuilder()
             .storeClient(distWorkerStoreClient)

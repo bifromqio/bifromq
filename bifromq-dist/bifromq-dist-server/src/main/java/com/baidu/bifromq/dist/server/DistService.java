@@ -152,7 +152,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                                     .setInboxId(request.getInboxId())
                                     .setTopicFilter(tf)
                                     .setBroker(request.getBroker())
-                                    .setInboxGroupKey(request.getInboxGroupKey())
+                                    .setDelivererKey(request.getDelivererKey())
                                     .setClient(request.getClient())
                                     .build()));
                         } else {
@@ -162,7 +162,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                                     .setInboxId(request.getInboxId())
                                     .setTopicFilter(tf)
                                     .setBroker(request.getBroker())
-                                    .setInboxGroupKey(request.getInboxGroupKey())
+                                    .setDelivererKey(request.getDelivererKey())
                                     .setClient(request.getClient())
                                     .build()));
                         }

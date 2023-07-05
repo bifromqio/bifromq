@@ -34,8 +34,8 @@ public class EntityUtil {
     private static final ByteString FLAG_UNORDERD_SHARE = copyFromUtf8("1");
     private static final ByteString FLAG_ORDERD_SHARE = copyFromUtf8("2");
 
-    public static String toQualifiedInboxId(int inboxBrokerId, String inboxId, String inboxGroupKey) {
-        String scoped = inboxBrokerId + NUL + inboxId + NUL + inboxGroupKey;
+    public static String toQualifiedInboxId(int subBrokerId, String inboxId, String delivererKey) {
+        String scoped = subBrokerId + NUL + inboxId + NUL + delivererKey;
         return Base64.getEncoder().encodeToString(scoped.getBytes(StandardCharsets.UTF_8));
     }
 

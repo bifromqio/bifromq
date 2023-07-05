@@ -78,43 +78,43 @@ public class SubCallScheduler
             case ADD_TOPIC_FILTER: {
                 SubRequest request = ((SubCall.AddTopicFilter) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                    request.getInboxGroupKey());
+                    request.getDelivererKey());
                 return subInfoKey(request.getClient().getTrafficId(), qInboxId);
             }
             case INSERT_MATCH_RECORD: {
                 SubRequest request = ((SubCall.InsertMatchRecord) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                    request.getInboxGroupKey());
+                    request.getDelivererKey());
                 return matchRecordKey(request.getClient().getTrafficId(), request.getTopicFilter(), qInboxId);
             }
             case JOIN_MATCH_GROUP: {
                 SubRequest request = ((SubCall.JoinMatchGroup) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                    request.getInboxGroupKey());
+                    request.getDelivererKey());
                 return matchRecordKey(request.getClient().getTrafficId(), request.getTopicFilter(), qInboxId);
             }
             case REMOVE_TOPIC_FILTER: {
                 UnsubRequest request = ((SubCall.RemoveTopicFilter) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                    request.getInboxGroupKey());
+                    request.getDelivererKey());
                 return subInfoKey(request.getClient().getTrafficId(), qInboxId);
             }
             case DELETE_MATCH_RECORD: {
                 UnsubRequest request = ((SubCall.DeleteMatchRecord) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                    request.getInboxGroupKey());
+                    request.getDelivererKey());
                 return matchRecordKey(request.getClient().getTrafficId(), request.getTopicFilter(), qInboxId);
             }
             case LEAVE_JOIN_GROUP: {
                 UnsubRequest request = ((SubCall.LeaveJoinGroup) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                    request.getInboxGroupKey());
+                    request.getDelivererKey());
                 return matchRecordKey(request.getClient().getTrafficId(), request.getTopicFilter(), qInboxId);
             }
             case CLEAR: {
                 ClearRequest request = ((SubCall.Clear) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                    request.getInboxGroupKey());
+                    request.getDelivererKey());
                 return subInfoKey(request.getClient().getTrafficId(), qInboxId);
             }
             default:
@@ -190,7 +190,7 @@ public class SubCallScheduler
                         SubRequest request = ((SubCall.AddTopicFilter) subCall).request;
                         String subInfoKeyUtf8 = subInfoKey(request.getClient().getTrafficId(),
                             toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getInboxGroupKey())).toStringUtf8();
+                                request.getDelivererKey())).toStringUtf8();
                         addTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
                             .putIfAbsent(request.getTopicFilter(), request.getSubQoS());
                         return onAddTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
@@ -199,7 +199,7 @@ public class SubCallScheduler
                     case INSERT_MATCH_RECORD: {
                         SubRequest request = ((SubCall.InsertMatchRecord) subCall).request;
                         String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getInboxGroupKey());
+                            request.getDelivererKey());
                         String matchRecordKeyUtf8 = matchRecordKey(request.getClient().getTrafficId(),
                             request.getTopicFilter(), qInboxId).toStringUtf8();
                         insertMatchRecord.put(matchRecordKeyUtf8, request.getSubQoS());
@@ -208,7 +208,7 @@ public class SubCallScheduler
                     case JOIN_MATCH_GROUP: {
                         SubRequest request = ((SubCall.JoinMatchGroup) subCall).request;
                         String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getInboxGroupKey());
+                            request.getDelivererKey());
                         String matchRecordKeyUtf8 = matchRecordKey(request.getClient().getTrafficId(),
                             request.getTopicFilter(), qInboxId).toStringUtf8();
                         joinMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashMap<>())
@@ -220,7 +220,7 @@ public class SubCallScheduler
                         UnsubRequest request = ((SubCall.RemoveTopicFilter) subCall).request;
                         String subInfoKeyUtf8 = subInfoKey(request.getClient().getTrafficId(),
                             toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getInboxGroupKey())).toStringUtf8();
+                                request.getDelivererKey())).toStringUtf8();
                         remTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashSet<>())
                             .add(request.getTopicFilter());
                         return onRemTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
@@ -229,7 +229,7 @@ public class SubCallScheduler
                     case DELETE_MATCH_RECORD: {
                         UnsubRequest request = ((SubCall.DeleteMatchRecord) subCall).request;
                         String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getInboxGroupKey());
+                            request.getDelivererKey());
                         String matchRecordKeyUtf8 = matchRecordKey(request.getClient().getTrafficId(),
                             request.getTopicFilter(), qInboxId).toStringUtf8();
                         delMatchRecord.add(matchRecordKeyUtf8);
@@ -238,7 +238,7 @@ public class SubCallScheduler
                     case LEAVE_JOIN_GROUP: {
                         UnsubRequest request = ((SubCall.LeaveJoinGroup) subCall).request;
                         String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getInboxGroupKey());
+                            request.getDelivererKey());
                         String matchRecordKeyUtf8 = matchRecordKey(request.getClient().getTrafficId(),
                             request.getTopicFilter(), qInboxId).toStringUtf8();
                         leaveMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashSet<>())
@@ -248,8 +248,7 @@ public class SubCallScheduler
                     case CLEAR: {
                         ClearRequest request = ((SubCall.Clear) subCall).request;
                         ByteString subInfoKey = subInfoKey(request.getClient().getTrafficId(),
-                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getInboxGroupKey()));
+                            toQualifiedInboxId(request.getBroker(), request.getInboxId(), request.getDelivererKey()));
                         clearSubInfo.add(subInfoKey);
                         return onClearSubInfo.computeIfAbsent(subInfoKey, k -> new CompletableFuture<>());
                     }
