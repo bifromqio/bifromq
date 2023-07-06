@@ -123,27 +123,27 @@ public class SubUnsubTest extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testJoinMatchGroup() {
-        String trafficId = "trafficA";
+        String tenantId = "trafficA";
         String topicFilter = "$share/group/a/b/c";
 
         String qInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "server1");
-        String matchRecordKeyUtf8 = matchRecordKey(trafficId, topicFilter, qInboxId).toStringUtf8();
+        String matchRecordKeyUtf8 = matchRecordKey(tenantId, topicFilter, qInboxId).toStringUtf8();
 
-        JoinMatchGroupReply reply = joinMatchGroup(trafficId, topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1",
+        JoinMatchGroupReply reply = joinMatchGroup(tenantId, topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1",
             "server1");
         assertEquals(reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId),
             JoinMatchGroupReply.Result.OK);
 
         qInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "server2");
-        matchRecordKeyUtf8 = matchRecordKey(trafficId, topicFilter, qInboxId).toStringUtf8();
-        reply = joinMatchGroup(trafficId, topicFilter, AT_LEAST_ONCE, MqttBroker, "inbox1",
+        matchRecordKeyUtf8 = matchRecordKey(tenantId, topicFilter, qInboxId).toStringUtf8();
+        reply = joinMatchGroup(tenantId, topicFilter, AT_LEAST_ONCE, MqttBroker, "inbox1",
             "server2");
         assertEquals(reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId),
             JoinMatchGroupReply.Result.OK);
 
         qInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "server3");
-        matchRecordKeyUtf8 = matchRecordKey(trafficId, topicFilter, qInboxId).toStringUtf8();
-        reply = joinMatchGroup(trafficId, topicFilter, EXACTLY_ONCE, MqttBroker, "inbox1",
+        matchRecordKeyUtf8 = matchRecordKey(tenantId, topicFilter, qInboxId).toStringUtf8();
+        reply = joinMatchGroup(tenantId, topicFilter, EXACTLY_ONCE, MqttBroker, "inbox1",
             "server3");
         assertEquals(reply.getResultMap().get(matchRecordKeyUtf8).getResultMap().get(qInboxId),
             JoinMatchGroupReply.Result.OK);
@@ -151,28 +151,28 @@ public class SubUnsubTest extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testDeleteNormalMatchRecord() {
-        deleteMatchRecord("trafficId", "/a/b/c", MqttBroker, "inbox1", "server1");
+        deleteMatchRecord("tenantId", "/a/b/c", MqttBroker, "inbox1", "server1");
         insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        deleteMatchRecord("trafficId", "/a/b/c", MqttBroker, "inbox1", "server1");
+        deleteMatchRecord("tenantId", "/a/b/c", MqttBroker, "inbox1", "server1");
 
         insertMatchRecord("trafficA", "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server2");
-        deleteMatchRecord("trafficId", "/a/b/c", MqttBroker, "inbox1", "server2");
+        deleteMatchRecord("tenantId", "/a/b/c", MqttBroker, "inbox1", "server2");
 
         insertMatchRecord("trafficA", "/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server3");
-        deleteMatchRecord("trafficId", "/a/b/c", MqttBroker, "inbox1", "server3");
+        deleteMatchRecord("tenantId", "/a/b/c", MqttBroker, "inbox1", "server3");
     }
 
     @Test(groups = "integration")
     public void testLeaveMatchGroup() {
-        leaveMatchGroup("trafficId", "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
+        leaveMatchGroup("tenantId", "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
         joinMatchGroup("trafficA", "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        leaveMatchGroup("trafficId", "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
+        leaveMatchGroup("tenantId", "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
 
         joinMatchGroup("trafficA", "$share/group/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server2");
-        leaveMatchGroup("trafficId", "$share/group/a/b/c", MqttBroker, "inbox1", "server2");
+        leaveMatchGroup("tenantId", "$share/group/a/b/c", MqttBroker, "inbox1", "server2");
 
         joinMatchGroup("trafficA", "$share/group/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server3");
-        leaveMatchGroup("trafficId", "$share/group/a/b/c", MqttBroker, "inbox1", "server3");
+        leaveMatchGroup("tenantId", "$share/group/a/b/c", MqttBroker, "inbox1", "server3");
     }
 
     @Test(groups = "integration")

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.metrics.benchmark;
 
-import com.baidu.bifromq.metrics.TrafficMetric;
+import com.baidu.bifromq.metrics.TenantMetric;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -38,7 +38,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-public class TrafficMeterBenchmark {
+public class TenantMeterBenchmark {
     private static PrometheusMeterRegistry registry;
     private static HttpServer prometheusExportServer;
     private static Thread serverThread;
@@ -49,8 +49,8 @@ public class TrafficMeterBenchmark {
     @Measurement(iterations = 4)
     @Threads(4)
     @Fork(0)
-    public void timer(TrafficMeterBenchmarkState state) {
-        state.meter.timer(TrafficMetric.MqttQoS0InternalLatency)
+    public void timer(TenantMeterBenchmarkState state) {
+        state.meter.timer(TenantMetric.MqttQoS0InternalLatency)
             .record(ThreadLocalRandom.current().nextLong(0, 10000), TimeUnit.MILLISECONDS);
     }
 
@@ -87,7 +87,7 @@ public class TrafficMeterBenchmark {
             throw new RuntimeException(e);
         }
         Options opt = new OptionsBuilder()
-            .include(TrafficMeterBenchmark.class.getSimpleName())
+            .include(TenantMeterBenchmark.class.getSimpleName())
             .build();
         new Runner(opt).run();
     }

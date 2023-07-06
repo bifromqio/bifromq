@@ -24,17 +24,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class KeyUtil {
-    public static ByteString trafficNS(String trafficId) {
-        ByteString trafficIdBS = unsafeWrap(trafficId.getBytes(StandardCharsets.UTF_8));
-        return toByteString(trafficIdBS.size()).concat(trafficIdBS);
+    public static ByteString tenantNS(String tenantId) {
+        ByteString tenantIdBS = unsafeWrap(tenantId.getBytes(StandardCharsets.UTF_8));
+        return toByteString(tenantIdBS.size()).concat(tenantIdBS);
     }
 
-    public static ByteString retainKey(ByteString trafficNS, String topic) {
-        return trafficNS.concat(unsafeWrap(new byte[] {(byte) parse(topic, false).size()}))
+    public static ByteString retainKey(ByteString tenantNS, String topic) {
+        return tenantNS.concat(unsafeWrap(new byte[] {(byte) parse(topic, false).size()}))
             .concat(copyFromUtf8(escape(topic)));
     }
 
-    public static ByteString retainKeyPrefix(ByteString trafficNS, List<String> topicFilterLevels) {
+    public static ByteString retainKeyPrefix(ByteString tenantNS, List<String> topicFilterLevels) {
         ByteString prefix = ByteString.empty();
         byte leastLevels = 0;
         for (String tfl : topicFilterLevels) {
@@ -48,22 +48,22 @@ public class KeyUtil {
             leastLevels++;
             prefix = prefix.concat(copyFromUtf8(tfl));
         }
-        return trafficNS.concat(unsafeWrap(new byte[] {leastLevels})).concat(prefix);
+        return tenantNS.concat(unsafeWrap(new byte[] {leastLevels})).concat(prefix);
     }
 
-    public static boolean isTrafficNS(ByteString key) {
-        int trafficIdLength = toInt(key.substring(0, Integer.BYTES));
-        return key.size() == Integer.BYTES + trafficIdLength;
+    public static boolean isTenantNS(ByteString key) {
+        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
+        return key.size() == Integer.BYTES + tenantIdLength;
     }
 
-    public static ByteString parseTrafficNS(ByteString key) {
-        int trafficIdLength = toInt(key.substring(0, Integer.BYTES));
-        return key.substring(0, Integer.BYTES + trafficIdLength);
+    public static ByteString parseTenantNS(ByteString key) {
+        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
+        return key.substring(0, Integer.BYTES + tenantIdLength);
     }
 
     public static List<String> parseTopic(ByteString retainKey) {
-        int trafficIdLength = toInt(retainKey.substring(0, Integer.BYTES));
-        String escapedTopic = retainKey.substring(Integer.BYTES + trafficIdLength + 1).toStringUtf8();
+        int tenantIdLength = toInt(retainKey.substring(0, Integer.BYTES));
+        String escapedTopic = retainKey.substring(Integer.BYTES + tenantIdLength + 1).toStringUtf8();
         return parse(escapedTopic, true);
     }
 

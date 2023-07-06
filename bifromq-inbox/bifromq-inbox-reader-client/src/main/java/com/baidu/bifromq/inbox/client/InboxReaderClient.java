@@ -54,7 +54,7 @@ class InboxReaderClient implements IInboxReaderClient {
 
     @Override
     public CompletableFuture<Boolean> has(long reqId, String inboxId, ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTrafficId(), null, HasInboxRequest.newBuilder()
+        return rpcClient.invoke(clientInfo.getTenantId(), null, HasInboxRequest.newBuilder()
                 .setReqId(reqId)
                 .setInboxId(inboxId)
                 .setClientInfo(clientInfo)
@@ -64,7 +64,7 @@ class InboxReaderClient implements IInboxReaderClient {
 
     @Override
     public CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTrafficId(), null, CreateInboxRequest.newBuilder()
+        return rpcClient.invoke(clientInfo.getTenantId(), null, CreateInboxRequest.newBuilder()
                 .setReqId(reqId)
                 .setInboxId(inboxId)
                 .setClientInfo(clientInfo)
@@ -76,7 +76,7 @@ class InboxReaderClient implements IInboxReaderClient {
 
     @Override
     public CompletableFuture<DeleteInboxReply> delete(long reqId, String inboxId, ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTrafficId(), null, DeleteInboxRequest.newBuilder()
+        return rpcClient.invoke(clientInfo.getTenantId(), null, DeleteInboxRequest.newBuilder()
                 .setReqId(reqId)
                 .setInboxId(inboxId)
                 .setClientInfo(clientInfo)

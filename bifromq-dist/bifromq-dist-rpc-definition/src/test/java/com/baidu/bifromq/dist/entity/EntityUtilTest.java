@@ -37,25 +37,25 @@ public class EntityUtilTest {
     public void testParseTopicFilter() {
         String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "delivererKey1");
         String topicFilter = "/a/b/c";
-        ByteString key = matchRecordKey("trafficId", topicFilter, scopedInboxId);
+        ByteString key = matchRecordKey("tenantId", topicFilter, scopedInboxId);
         assertEquals(parseTopicFilter(key.toStringUtf8()), topicFilter);
     }
 
     @Test
     public void testParseNormalMatchRecord() {
         String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "delivererKey1");
-        ByteString key = matchRecordKey("trafficId", "/a/b/c", scopedInboxId);
+        ByteString key = matchRecordKey("tenantId", "/a/b/c", scopedInboxId);
         MatchRecord normal = MatchRecord.newBuilder()
             .setNormal(QoS.AT_MOST_ONCE).build();
         Matching matching = parseMatchRecord(key, normal.toByteString());
-        assertEquals(matching.trafficId, "trafficId");
+        assertEquals(matching.tenantId, "tenantId");
         assertEquals(matching.escapedTopicFilter, escape("/a/b/c"));
         assertEquals(matching.originalTopicFilter(), "/a/b/c");
         assertTrue(matching instanceof NormalMatching);
         assertEquals(((NormalMatching) matching).scopedInboxId, scopedInboxId);
 
         SubInfo subInfo = ((NormalMatching) matching).subInfo;
-        assertEquals(subInfo.getTrafficId(), "trafficId");
+        assertEquals(subInfo.getTenantId(), "tenantId");
         assertEquals(subInfo.getSubQoS(), normal.getNormal());
         assertEquals(subInfo.getInboxId(), "inbox1");
         assertEquals(subInfo.getTopicFilter(), "/a/b/c");
@@ -67,14 +67,14 @@ public class EntityUtilTest {
     @Test
     public void testParseGroupMatchRecord() {
         String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "server1");
-        ByteString key = matchRecordKey("trafficId", "$share/group//a/b/c", scopedInboxId);
+        ByteString key = matchRecordKey("tenantId", "$share/group//a/b/c", scopedInboxId);
         MatchRecord record = MatchRecord.newBuilder()
             .setGroup(GroupMatchRecord.newBuilder()
                 .putEntry(scopedInboxId, QoS.AT_MOST_ONCE)
                 .build())
             .build();
         Matching matching = parseMatchRecord(key, record.toByteString());
-        assertEquals(matching.trafficId, "trafficId");
+        assertEquals(matching.tenantId, "tenantId");
         assertEquals(matching.escapedTopicFilter, escape("/a/b/c"));
         assertEquals(matching.originalTopicFilter(), "$share/group//a/b/c");
         assertTrue(matching instanceof GroupMatching);

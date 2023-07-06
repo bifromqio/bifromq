@@ -49,66 +49,66 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void createAndHasCheck() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantId";
         String inboxId = "inboxId";
-        HasReply has = requestHas(trafficId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
-        requestCreate(trafficId, inboxId, 10, 100, false);
-        has = requestHas(trafficId, inboxId);
-        assertTrue(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
+        HasReply has = requestHas(tenantId, inboxId);
+        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
+        requestCreate(tenantId, inboxId, 10, 100, false);
+        has = requestHas(tenantId, inboxId);
+        assertTrue(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
     }
 
     @Test(groups = "integration")
     public void expireAndHasCheck() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantId";
         String inboxId = "inboxId";
-        HasReply has = requestHas(trafficId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
-        requestCreate(trafficId, inboxId, 10, 2, false);
-        has = requestHas(trafficId, inboxId);
-        assertTrue(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
+        HasReply has = requestHas(tenantId, inboxId);
+        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
+        requestCreate(tenantId, inboxId, 10, 2, false);
+        has = requestHas(tenantId, inboxId);
+        assertTrue(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
         when(clock.millis()).thenReturn(2100L);
-        has = requestHas(trafficId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
+        has = requestHas(tenantId, inboxId);
+        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
     }
 
     @Test(groups = "integration")
     public void createAndDelete() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantId";
         String inboxId1 = "inboxId1";
         String inboxId2 = "inboxId2";
-        requestCreate(trafficId, inboxId1, 10, 10, false);
-        requestCreate(trafficId, inboxId2, 10, 10, false);
-        assertTrue(requestHas(trafficId, inboxId1).getExistsMap()
-            .get(scopedInboxId(trafficId, inboxId1).toStringUtf8()));
-        requestDelete(trafficId, inboxId1);
+        requestCreate(tenantId, inboxId1, 10, 10, false);
+        requestCreate(tenantId, inboxId2, 10, 10, false);
+        assertTrue(requestHas(tenantId, inboxId1).getExistsMap()
+            .get(scopedInboxId(tenantId, inboxId1).toStringUtf8()));
+        requestDelete(tenantId, inboxId1);
 
-        assertFalse(requestHas(trafficId, inboxId1).getExistsMap()
-            .get(scopedInboxId(trafficId, inboxId1).toStringUtf8()));
-        assertTrue(requestHas(trafficId, inboxId2).getExistsMap()
-            .get(scopedInboxId(trafficId, inboxId2).toStringUtf8()));
+        assertFalse(requestHas(tenantId, inboxId1).getExistsMap()
+            .get(scopedInboxId(tenantId, inboxId1).toStringUtf8()));
+        assertTrue(requestHas(tenantId, inboxId2).getExistsMap()
+            .get(scopedInboxId(tenantId, inboxId2).toStringUtf8()));
     }
 
     @Test(groups = "integration")
     public void deleteNonExist() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantId";
         String inboxId = "inboxId";
-        requestDelete(trafficId, inboxId);
-        HasReply has = requestHas(trafficId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(trafficId, inboxId).toStringUtf8()));
+        requestDelete(tenantId, inboxId);
+        HasReply has = requestHas(tenantId, inboxId);
+        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
     }
 
     @Test(groups = "integration")
     public void testGC() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantId";
         String inboxId = "inboxId";
         String topic = "greeting";
         TopicMessagePack.SenderMessagePack msg0 = message(QoS.AT_MOST_ONCE, "hello");
         TopicMessagePack.SenderMessagePack msg1 = message(QoS.AT_LEAST_ONCE, "world");
         TopicMessagePack.SenderMessagePack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
-        requestCreate(trafficId, inboxId, 3, 1, true);
+        requestCreate(tenantId, inboxId, 3, 1, true);
         SubInfo subInfo = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setSubQoS(QoS.AT_MOST_ONCE)
             .setTopicFilter("greeting")
@@ -116,14 +116,14 @@ public class InboxAdminTest extends InboxStoreTest {
         requestInsert(subInfo, topic, msg0, msg1, msg2);
         // advance to gc'able
         when(clock.millis()).thenReturn(1100L);
-        KVRangeSetting s = storeClient.findByKey(scopedInboxId(trafficId, inboxId)).get();
+        KVRangeSetting s = storeClient.findByKey(scopedInboxId(tenantId, inboxId)).get();
         testStore.gcRange(s).join();
 
         KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
             .setReqId(System.nanoTime())
             .setKvRangeId(s.id)
             .setVer(s.ver)
-            .setExistKey(scopedInboxId(trafficId, inboxId))
+            .setExistKey(scopedInboxId(tenantId, inboxId))
             .build()).join();
         assertFalse(reply.getExistResult());
     }

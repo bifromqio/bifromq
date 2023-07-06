@@ -16,9 +16,9 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildCollectMetricsRequest;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildGCRequest;
-import static com.baidu.bifromq.metrics.TrafficMeter.gauging;
-import static com.baidu.bifromq.metrics.TrafficMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TrafficMetric.DistSubInfoSizeGauge;
+import static com.baidu.bifromq.metrics.TenantMeter.gauging;
+import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.TenantMetric.DistSubInfoSizeGauge;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
@@ -76,7 +76,7 @@ abstract class DistWorker implements IDistWorker {
     private final Duration gcInterval;
     private volatile ScheduledFuture<?> gcJob;
     private volatile ScheduledFuture<?> statsJob;
-    private final Map<String, Long> trafficSubInfoSize = new ConcurrentHashMap<>();
+    private final Map<String, Long> tenantSubInfoSize = new ConcurrentHashMap<>();
 
     public DistWorker(IAgentHost agentHost,
                       ICRDTService crdtService,
@@ -233,7 +233,7 @@ abstract class DistWorker implements IDistWorker {
                     if (e == null) {
                         Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
                             .reduce(new HashMap<>(), (result, item) -> {
-                                item.forEach((trafficId, usedSpace) -> result.compute(trafficId, (k, read) -> {
+                                item.forEach((tenantId, usedSpace) -> result.compute(tenantId, (k, read) -> {
                                     if (read == null) {
                                         read = 0L;
                                     }
@@ -250,17 +250,17 @@ abstract class DistWorker implements IDistWorker {
     }
 
     private void record(Map<String, Long> sizeMap) {
-        for (String trafficId : sizeMap.keySet()) {
-            boolean newGauging = !trafficSubInfoSize.containsKey(trafficId);
-            trafficSubInfoSize.put(trafficId, sizeMap.get(trafficId));
+        for (String tenantId : sizeMap.keySet()) {
+            boolean newGauging = !tenantSubInfoSize.containsKey(tenantId);
+            tenantSubInfoSize.put(tenantId, sizeMap.get(tenantId));
             if (newGauging) {
-                gauging(trafficId, DistSubInfoSizeGauge, () -> trafficSubInfoSize.getOrDefault(trafficId, 0L));
+                gauging(tenantId, DistSubInfoSizeGauge, () -> tenantSubInfoSize.getOrDefault(tenantId, 0L));
             }
         }
-        for (String trafficId : trafficSubInfoSize.keySet()) {
-            if (!sizeMap.containsKey(trafficId)) {
-                stopGauging(trafficId, DistSubInfoSizeGauge);
-                trafficSubInfoSize.remove(trafficId);
+        for (String tenantId : tenantSubInfoSize.keySet()) {
+            if (!sizeMap.containsKey(tenantId)) {
+                stopGauging(tenantId, DistSubInfoSizeGauge);
+                tenantSubInfoSize.remove(tenantId);
             }
         }
     }

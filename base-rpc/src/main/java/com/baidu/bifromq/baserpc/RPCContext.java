@@ -26,7 +26,7 @@ public class RPCContext {
         private String serverId;
     }
 
-    public static final Context.Key<String> TRAFFIC_ID_CTX_KEY = Context.key("TrafficId");
+    public static final Context.Key<String> TENANT_ID_CTX_KEY = Context.key("TenantId");
     public static final Context.Key<RPCMeters.MeterKey> METER_KEY_CTX_KEY = Context.key("MeterKey");
     public static final Context.Key<String> DESIRED_SERVER_ID_CTX_KEY = Context.key("DesiredServerId");
     public static final Context.Key<ServerSelection> SELECTED_SERVER_ID_CTX_KEY = Context.key("SelectedServerId");

@@ -1,7 +1,14 @@
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.fail;
+
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -16,28 +23,17 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.google.protobuf.ByteString;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-
-import java.time.Clock;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Supplier;
-
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.fail;
 
 public class InboxCreateTest {
     private KVRangeId id;
@@ -48,19 +44,20 @@ public class InboxCreateTest {
     @Mock
     private IKVWriter writer;
     private Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
-    private IEventCollector eventCollector = event -> {};
-    private String trafficId = "trafficId";
+    private IEventCollector eventCollector = event -> {
+    };
+    private String tenantId = "tenantA";
     private String inboxId = "inboxId";
-    private String scopedInboxIdUtf8 = scopedInboxId(trafficId, inboxId).toStringUtf8();
+    private String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
     private ClientInfo clientInfo = ClientInfo.newBuilder()
-            .setTrafficId(trafficId)
+        .setTenantId(tenantId)
+        .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
             .setUserId("testUser")
-            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                    .setClientId("clientId")
-                    .setPort(8888)
-                    .setIp("127.0.0.1")
-                    .build())
-            .build();
+            .setClientId("clientId")
+            .setPort(8888)
+            .setIp("127.0.0.1")
+            .build())
+        .build();
     private Clock clock = Clock.systemUTC();
     private AutoCloseable closeable;
 
@@ -79,23 +76,23 @@ public class InboxCreateTest {
     @Test
     public void testCreateNewInbox() {
         CreateRequest createRequest = CreateRequest.newBuilder()
-                .putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
-                        .setClient(clientInfo)
-                        .build())
-                .build();
+            .putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
+                .setClient(clientInfo)
+                .build())
+            .build();
         UpdateRequest updateRequest = UpdateRequest.newBuilder()
-                .setReqId(System.nanoTime())
-                .setCreateInbox(createRequest)
-                .build();
+            .setReqId(System.nanoTime())
+            .setCreateInbox(createRequest)
+            .build();
         InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.newBuilder()
-                .setRequest(updateRequest)
-                .build();
+            .setRequest(updateRequest)
+            .build();
 
         when(reader.get(any())).thenReturn(Optional.empty());
         doNothing().when(writer).put(any(), any());
 
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
-                clock, Duration.ofMinutes(30));
+            clock, Duration.ofMinutes(30));
         coProc.mutate(coProcInput.toByteString(), reader, writer);
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
         verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
@@ -109,7 +106,7 @@ public class InboxCreateTest {
             assertEquals(0, inboxMetadata.getQos1NextSeq());
             assertEquals(0, inboxMetadata.getQos2NextSeq());
             assertEquals(clientInfo, inboxMetadata.getClient());
-        }catch (Exception exception) {
+        } catch (Exception exception) {
             fail();
         }
     }
@@ -117,31 +114,31 @@ public class InboxCreateTest {
     @Test
     public void testCreateExpiredInbox() {
         CreateRequest createRequest = CreateRequest.newBuilder()
-                .putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
-                        .setClient(clientInfo)
-                        .build())
-                .build();
+            .putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
+                .setClient(clientInfo)
+                .build())
+            .build();
         UpdateRequest updateRequest = UpdateRequest.newBuilder()
-                .setReqId(System.nanoTime())
-                .setCreateInbox(createRequest)
-                .build();
+            .setReqId(System.nanoTime())
+            .setCreateInbox(createRequest)
+            .build();
         InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.newBuilder()
-                .setRequest(updateRequest)
-                .build();
+            .setRequest(updateRequest)
+            .build();
 
         when(reader.get(any())).thenReturn(Optional.of(InboxMetadata.newBuilder()
-                        .setLastFetchTime(clock.millis() - 30 * 1000)
-                        .setQos0NextSeq(1)
-                        .setQos1NextSeq(1)
-                        .setQos2NextSeq(1)
-                        .setExpireSeconds(1)
-                .build().toByteString()));
+            .setLastFetchTime(clock.millis() - 30 * 1000)
+            .setQos0NextSeq(1)
+            .setQos1NextSeq(1)
+            .setQos2NextSeq(1)
+            .setExpireSeconds(1)
+            .build().toByteString()));
         doNothing().when(kvIterator).seek(any());
         when(kvIterator.isValid()).thenReturn(false);
         doNothing().when(writer).put(any(), any());
 
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
-                Clock.systemUTC(), Duration.ofMinutes(30));
+            Clock.systemUTC(), Duration.ofMinutes(30));
         coProc.mutate(coProcInput.toByteString(), reader, writer);
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
         verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
@@ -155,7 +152,7 @@ public class InboxCreateTest {
             assertEquals(0, inboxMetadata.getQos1NextSeq());
             assertEquals(0, inboxMetadata.getQos2NextSeq());
             assertEquals(clientInfo, inboxMetadata.getClient());
-        }catch (Exception exception) {
+        } catch (Exception exception) {
             fail();
         }
     }

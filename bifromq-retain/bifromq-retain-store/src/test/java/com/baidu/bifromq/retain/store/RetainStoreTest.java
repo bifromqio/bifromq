@@ -190,15 +190,15 @@ public class RetainStoreTest {
         return osName != null && osName.startsWith("Mac");
     }
 
-    protected RetainCoProcReply requestRetain(String trafficId, int maxRetainedTopics, TopicMessage topicMsg) {
+    protected RetainCoProcReply requestRetain(String tenantId, int maxRetainedTopics, TopicMessage topicMsg) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString trafficNS = KeyUtil.trafficNS(trafficId);
-            KVRangeSetting s = storeClient.findByKey(trafficNS).get();
+            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+            KVRangeSetting s = storeClient.findByKey(tenantNS).get();
             String topic = topicMsg.getTopic();
             Message message = topicMsg.getMessage();
             RetainCoProcRequest request = RetainCoProcRequest.newBuilder()
-                .setTrafficId(trafficId)
+                .setTenantId(tenantId)
                 .setReqId(message.getMessageId())
                 .setQos(message.getPubQoS())
                 .setTopic(topic)
@@ -226,13 +226,13 @@ public class RetainStoreTest {
         }
     }
 
-    protected MatchCoProcReply requestMatch(String trafficId, String topicFilter, int limit) {
+    protected MatchCoProcReply requestMatch(String tenantId, String topicFilter, int limit) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString trafficNS = KeyUtil.trafficNS(trafficId);
-            KVRangeSetting s = storeClient.findByKey(trafficNS).get();
+            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+            KVRangeSetting s = storeClient.findByKey(tenantNS).get();
             MatchCoProcRequest request = MatchCoProcRequest.newBuilder().setReqId(reqId)
-                .setTrafficNS(trafficNS)
+                .setTenantNS(tenantNS)
                 .setTopicFilter(topicFilter)
                 .setLimit(limit)
                 .build();
@@ -254,11 +254,11 @@ public class RetainStoreTest {
         }
     }
 
-    protected GCReply requestGC(String trafficId) {
+    protected GCReply requestGC(String tenantId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString trafficNS = KeyUtil.trafficNS(trafficId);
-            KVRangeSetting s = storeClient.findByKey(trafficNS).get();
+            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+            KVRangeSetting s = storeClient.findByKey(tenantNS).get();
             RetainServiceRWCoProcInput input = MessageUtil.buildGCRequest(reqId);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)

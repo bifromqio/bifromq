@@ -24,17 +24,17 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
 
     @Test(groups = "integration")
     public void replaceWithinLimit() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantId";
         String topic = "/a";
         TopicMessage message = message(topic, "hello");
         TopicMessage message1 = message(topic, "world");
-        assertEquals(requestRetain(trafficId, 1, message).getResult(),
+        assertEquals(requestRetain(tenantId, 1, message).getResult(),
             RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(requestRetain(trafficId, 1, message1).getResult(),
+        assertEquals(requestRetain(tenantId, 1, message1).getResult(),
             RetainCoProcReply.Result.RETAINED);
 
-        MatchCoProcReply matchReply = requestMatch(trafficId, topic, 10);
+        MatchCoProcReply matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message1);
 
@@ -42,19 +42,19 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
 
     @Test(groups = "integration")
     public void replaceButExceedLimit() {
-        String trafficId = "trafficId";
-        assertEquals(requestRetain(trafficId, 2, message("/a", "hello")).getResult(),
+        String tenantId = "tenantId";
+        assertEquals(requestRetain(tenantId, 2, message("/a", "hello")).getResult(),
             RetainCoProcReply.Result.RETAINED);
 
         TopicMessage message = message("/b", "world");
-        assertEquals(requestRetain(trafficId, 2, message).getResult(),
+        assertEquals(requestRetain(tenantId, 2, message).getResult(),
             RetainCoProcReply.Result.RETAINED);
 
         // limit now shrink to 1
-        assertEquals(requestRetain(trafficId, 1, message("/b", "!!!")).getResult(),
+        assertEquals(requestRetain(tenantId, 1, message("/b", "!!!")).getResult(),
             RetainCoProcReply.Result.ERROR);
 
-        MatchCoProcReply matchReply = requestMatch(trafficId, "/b", 10);
+        MatchCoProcReply matchReply = requestMatch(tenantId, "/b", 10);
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message);
     }

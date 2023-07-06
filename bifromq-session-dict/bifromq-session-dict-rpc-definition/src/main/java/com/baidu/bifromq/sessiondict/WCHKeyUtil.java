@@ -17,7 +17,7 @@ import com.baidu.bifromq.type.ClientInfo;
 
 public class WCHKeyUtil {
     public static String toWCHKey(ClientInfo clientInfo) {
-        return toWCHKey(clientInfo.getUserId(), clientInfo.getMqtt3ClientInfo().getClientId());
+        return toWCHKey(clientInfo.getMqtt3ClientInfo().getUserId(), clientInfo.getMqtt3ClientInfo().getClientId());
     }
 
     public static String toWCHKey(String userId, String clientId) {

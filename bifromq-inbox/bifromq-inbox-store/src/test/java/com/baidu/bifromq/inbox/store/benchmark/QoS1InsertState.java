@@ -25,7 +25,7 @@ import org.openjdk.jmh.annotations.State;
 @Slf4j
 @State(Scope.Benchmark)
 public class QoS1InsertState extends InboxStoreState {
-    private static final String trafficId = "testTraffic";
+    private static final String tenantId = "testTraffic";
 
     private static final String topic = "greeting";
     private final Message msg = message(AT_LEAST_ONCE, "hello");
@@ -35,7 +35,7 @@ public class QoS1InsertState extends InboxStoreState {
     void afterSetup() {
         int i = 0;
         while (i < inboxCount) {
-            requestCreate(trafficId, i + "", 100, 600, false);
+            requestCreate(tenantId, i + "", 100, 600, false);
             i++;
         }
     }
@@ -46,7 +46,7 @@ public class QoS1InsertState extends InboxStoreState {
     }
 
     public InboxInsertReply insert() {
-        return requestInsert(trafficId, ThreadLocalRandom.current()
+        return requestInsert(tenantId, ThreadLocalRandom.current()
             .nextInt(0, inboxCount) + "", topic, msg);
     }
 }

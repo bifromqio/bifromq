@@ -19,7 +19,7 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
         .serviceDescriptor(OnlineInboxBrokerGrpc.getServiceDescriptor())
-        .methodSemantic(OnlineInboxBrokerGrpc.getWriteMethod(), BluePrint.DDPipelineUnaryMethod.INSTANCE)
-        .methodSemantic(OnlineInboxBrokerGrpc.getHasInboxMethod(), BluePrint.DDUnaryMethod.INSTANCE)
+        .methodSemantic(OnlineInboxBrokerGrpc.getWriteMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
+        .methodSemantic(OnlineInboxBrokerGrpc.getHasInboxMethod(), BluePrint.DDUnaryMethod.getInstance())
         .build();
 }

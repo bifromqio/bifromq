@@ -18,6 +18,6 @@ import com.baidu.bifromq.type.ClientInfo;
 public class MQTTSessionIdUtil {
     public static String userSessionId(ClientInfo info) {
         assert info.hasMqtt3ClientInfo();
-        return info.getUserId() + "/" + info.getMqtt3ClientInfo().getClientId();
+        return info.getMqtt3ClientInfo().getUserId() + "/" + info.getMqtt3ClientInfo().getClientId();
     }
 }

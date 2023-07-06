@@ -66,23 +66,23 @@ class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<SubResult> sub(long reqId, String topicFilter, QoS qos, String inbox, String delivererKey,
-                                            int subBrokerId, ClientInfo client) {
+    public CompletableFuture<SubResult> sub(long reqId, String topicFilter, QoS qos, String inboxId,
+                                            String delivererKey, int subBrokerId, ClientInfo client) {
         SubRequest request = SubRequest.newBuilder()
             .setReqId(reqId)
             .setTopicFilter(topicFilter)
             .setSubQoS(qos)
-            .setInboxId(inbox)
+            .setInboxId(inboxId)
             .setDelivererKey(delivererKey)
             .setBroker(subBrokerId)
             .setClient(client)
             .build();
         log.trace("Handling sub request:\n{}", request);
-        return rpcClient.invoke(client.getTrafficId(), null, request, DistServiceGrpc.getSubMethod())
+        return rpcClient.invoke(client.getTenantId(), null, request, DistServiceGrpc.getSubMethod())
             .handle((v, e) -> {
                 if (e != null) {
-                    log.debug("Sub request failed: reqId={}, trafficId={}", request.getReqId(),
-                        client.getTrafficId(), e);
+                    log.debug("Sub request failed: reqId={}, tenantId={}", request.getReqId(),
+                        client.getTenantId(), e);
                     return SubResult.error(e);
                 }
                 log.trace("Finish handling sub request:\n{}, reply:\n{}", request, v);
@@ -113,12 +113,12 @@ class DistClient implements IDistClient {
             .setClient(client)
             .build();
         log.trace("Handling unsub request:\n{}", request);
-        return rpcClient.invoke(client.getTrafficId(), null, request, DistServiceGrpc.getUnsubMethod())
+        return rpcClient.invoke(client.getTenantId(), null, request, DistServiceGrpc.getUnsubMethod())
             .handle((v, e) -> {
                 log.trace("Finish handling unsub request:\n{}", request);
                 if (e != null) {
-                    log.debug("unsub request error: reqId={}, trafficId={}",
-                        request.getReqId(), client.getTrafficId(), e);
+                    log.debug("unsub request error: reqId={}, tenantId={}",
+                        request.getReqId(), client.getTenantId(), e);
                     return UnsubResult.error(e);
                 }
                 switch (v.getResult()) {
@@ -142,7 +142,7 @@ class DistClient implements IDistClient {
             .setBroker(subBrokerId)
             .setClient(client)
             .build();
-        return rpcClient.invoke(client.getTrafficId(), null, request, DistServiceGrpc.getClearMethod())
+        return rpcClient.invoke(client.getTenantId(), null, request, DistServiceGrpc.getClearMethod())
             .handle((v, e) -> {
                 if (e != null) {
                     log.debug("clear request error: reqId={}", reqId, e);
@@ -162,7 +162,7 @@ class DistClient implements IDistClient {
 
     @Override
     public void stop() {
-        // close traffic logger and drain logs before closing the dist client
+        // close tenant logger and drain logs before closing the dist client
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping dist client");
             log.debug("Closing request scheduler");

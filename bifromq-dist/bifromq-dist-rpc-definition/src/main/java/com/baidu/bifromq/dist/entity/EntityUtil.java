@@ -51,20 +51,20 @@ public class EntityUtil {
         return scopedInboxId.substring(splitIdx + 1, scopedInboxId.lastIndexOf(NUL));
     }
 
-    public static ByteString trafficPrefix(String trafficId) {
-        return copyFromUtf8(trafficId + NUL);
+    public static ByteString tenantPrefix(String tenantId) {
+        return copyFromUtf8(tenantId + NUL);
     }
 
-    public static ByteString trafficUpperBound(String trafficId) {
-        return trafficPrefix(trafficId).concat(INFIX_UPPERBOUND_INFIX);
+    public static ByteString tenantUpperBound(String tenantId) {
+        return tenantPrefix(tenantId).concat(INFIX_UPPERBOUND_INFIX);
     }
 
-    public static ByteString subInfoKeyPrefix(String trafficId) {
-        return trafficPrefix(trafficId).concat(INFIX_SUBINFO_INFIX);
+    public static ByteString subInfoKeyPrefix(String tenantId) {
+        return tenantPrefix(tenantId).concat(INFIX_SUBINFO_INFIX);
     }
 
-    public static ByteString subInfoKey(String trafficId, String scopedInboxId) {
-        return subInfoKeyPrefix(trafficId).concat(copyFromUtf8(scopedInboxId));
+    public static ByteString subInfoKey(String tenantId, String scopedInboxId) {
+        return subInfoKeyPrefix(tenantId).concat(copyFromUtf8(scopedInboxId));
     }
 
     public static boolean isSubInfoKey(ByteString rawKey) {
@@ -73,17 +73,15 @@ public class EntityUtil {
         return keyStr.substring(firstSplit + 1, firstSplit + 2).equals(INFIX_SUBINFO_INFIX.toStringUtf8());
     }
 
-    public static String parseTrafficId(ByteString rawKey) {
+    public static String parseTenantId(ByteString rawKey) {
         String keyStr = rawKey.toStringUtf8();
         int firstSplit = keyStr.indexOf(NUL);
-        String trafficId = keyStr.substring(0, firstSplit);
-        return trafficId;
+        return keyStr.substring(0, firstSplit);
     }
 
-    public static String parseTrafficId(String rawKeyUtf8) {
+    public static String parseTenantId(String rawKeyUtf8) {
         int firstSplit = rawKeyUtf8.indexOf(NUL);
-        String trafficId = rawKeyUtf8.substring(0, firstSplit);
-        return trafficId;
+        return rawKeyUtf8.substring(0, firstSplit);
     }
 
     public static Inbox parseInbox(ByteString subInfoKey) {
@@ -94,7 +92,7 @@ public class EntityUtil {
     }
 
     public static Matching parseMatchRecord(ByteString matchRecordKey, ByteString matchRecordValue) {
-        // <trafficId><NUL><1><ESCAPED_TOPIC_FILTER><NUL><FLAG><SCOPED_INBOX|SHARE_GROUP>
+        // <tenantId><NUL><1><ESCAPED_TOPIC_FILTER><NUL><FLAG><SCOPED_INBOX|SHARE_GROUP>
         String matchRecordKeyStr = matchRecordKey.toStringUtf8();
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
         char flag = matchRecordKeyStr.charAt(lastSplit + 1);
@@ -117,31 +115,31 @@ public class EntityUtil {
         }
     }
 
-    public static ByteString matchRecordKeyPrefix(String trafficId) {
-        return trafficPrefix(trafficId).concat(INFIX_MATCH_RECORD_INFIX);
+    public static ByteString matchRecordKeyPrefix(String tenantId) {
+        return tenantPrefix(tenantId).concat(INFIX_MATCH_RECORD_INFIX);
     }
 
-    public static ByteString matchRecordKey(String trafficId, String topicFilter, String qInboxId) {
+    public static ByteString matchRecordKey(String tenantId, String topicFilter, String qInboxId) {
         if (isNormalTopicFilter(topicFilter)) {
-            return matchRecordKeyPrefix(trafficId)
+            return matchRecordKeyPrefix(tenantId)
                 .concat(copyFromUtf8(escape(topicFilter) + NUL))
                 .concat(FLAG_NORMAL)
                 .concat(copyFromUtf8(qInboxId));
         } else {
             TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
-            return matchRecordKeyPrefix(trafficId)
+            return matchRecordKeyPrefix(tenantId)
                 .concat(copyFromUtf8(escape(stf.topicFilter) + NUL))
                 .concat(stf.ordered ? FLAG_ORDERD_SHARE : FLAG_UNORDERD_SHARE)
                 .concat(copyFromUtf8(stf.shareGroup));
         }
     }
 
-    public static ByteString matchRecordTopicFilterPrefix(String trafficId, String escapedTopicFilter) {
-        return matchRecordKeyPrefix(trafficId).concat(copyFromUtf8(escapedTopicFilter + NUL));
+    public static ByteString matchRecordTopicFilterPrefix(String tenantId, String escapedTopicFilter) {
+        return matchRecordKeyPrefix(tenantId).concat(copyFromUtf8(escapedTopicFilter + NUL));
     }
 
     public static String parseTopicFilter(String matchRecordKeyStr) {
-        // <trafficId><NUL><1><ESCAPED_TOPIC_FILTER><NUL><FLAG><SCOPED_INBOX|SHARE_GROUP>
+        // <tenantId><NUL><1><ESCAPED_TOPIC_FILTER><NUL><FLAG><SCOPED_INBOX|SHARE_GROUP>
         int firstSplit = matchRecordKeyStr.indexOf(NUL);
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
         return unescape(matchRecordKeyStr.substring(firstSplit + 2, lastSplit));

@@ -59,7 +59,7 @@ public class MQTTRetainTest extends MQTTTest {
     }
 
     public void retainAndSubscribe(int pubQoS, int subQoS) {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
         String clientId = "testClient1";
         String topic = "retainTopic" + pubQoS + subQoS;
@@ -67,7 +67,7 @@ public class MQTTRetainTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -83,7 +83,7 @@ public class MQTTRetainTest extends MQTTTest {
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient client = new MqttTestClient(brokerURI, clientId);
         client.connect(connOpts);
@@ -115,7 +115,7 @@ public class MQTTRetainTest extends MQTTTest {
     @Test(groups = "integration")
     public void subMultipleTimes() {
         // test for [MQTT-3.8.4-3]
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
         String clientId = "testClient1";
         String topic = "retainTopic";
@@ -123,7 +123,7 @@ public class MQTTRetainTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -139,7 +139,7 @@ public class MQTTRetainTest extends MQTTTest {
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient client = new MqttTestClient(brokerURI, clientId);
         client.connect(connOpts);
@@ -184,7 +184,7 @@ public class MQTTRetainTest extends MQTTTest {
 
     @SneakyThrows
     public void clearRetained(int pubRetainQoS, int pubClearQoS) {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
         String clientId = "testClient1";
         String topic = "retainTopic" + pubRetainQoS + pubClearQoS;
@@ -192,7 +192,7 @@ public class MQTTRetainTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -208,7 +208,7 @@ public class MQTTRetainTest extends MQTTTest {
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient client = new MqttTestClient(brokerURI, clientId);
         client.connect(connOpts);
@@ -247,14 +247,14 @@ public class MQTTRetainTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void retainMatchLimit() {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
         String clientId = "testClient1";
         ByteString payload = ByteString.copyFromUtf8("hello");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -277,7 +277,7 @@ public class MQTTRetainTest extends MQTTTest {
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient client = new MqttTestClient(brokerURI, clientId);
         client.connect(connOpts);

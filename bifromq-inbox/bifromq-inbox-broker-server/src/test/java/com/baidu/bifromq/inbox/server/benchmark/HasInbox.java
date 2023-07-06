@@ -44,10 +44,10 @@ public class HasInbox {
     @Threads(4)
     @Fork(1)
     public void testHasInbox(HasInboxState state, Blackhole blackhole) {
-        String trafficId = "DevOnly";
+        String tenantId = "DevOnly";
         String inboxId = "Inbox_" + ThreadLocalRandom.current().nextInt();
         long reqId = System.nanoTime();
-        boolean reply = state.inboxBrokerClient.hasInbox(reqId, trafficId, inboxId, null).join();
+        boolean reply = state.inboxBrokerClient.hasInbox(reqId, tenantId, inboxId, null).join();
         blackhole.consume(reply);
     }
 }

@@ -66,7 +66,7 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
 
     @Override
     protected ByteString rangeKey(MessagePack request) {
-        return KeyUtil.scopedInboxId(request.getSubInfo().getTrafficId(), request.getSubInfo().getInboxId());
+        return KeyUtil.scopedInboxId(request.getSubInfo().getTenantId(), request.getSubInfo().getInboxId());
     }
 
     @Override

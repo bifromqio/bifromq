@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.dist.util;
 
+import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKey;
+
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilter;
 import com.baidu.bifromq.dist.rpc.proto.BatchDist;
@@ -42,7 +44,7 @@ public class MessageUtil {
                 .setReqId(request.getReqId())
                 .setAddTopicFilter(AddTopicFilter.newBuilder()
                     .putTopicFilter(
-                        EntityUtil.subInfoKey(request.getClient().getTrafficId(),
+                        EntityUtil.subInfoKey(request.getClient().getTenantId(),
                             EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                                 request.getDelivererKey())).toStringUtf8(),
                         InboxSubInfo.newBuilder()
@@ -59,7 +61,7 @@ public class MessageUtil {
             .setUpdateRequest(UpdateRequest.newBuilder()
                 .setReqId(request.getReqId())
                 .setInsertMatchRecord(InsertMatchRecord.newBuilder().putRecord(
-                    EntityUtil.matchRecordKey(request.getClient().getTrafficId(),
+                    matchRecordKey(request.getClient().getTenantId(),
                         request.getTopicFilter(),
                         EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                             request.getDelivererKey())).toStringUtf8(),
@@ -75,7 +77,7 @@ public class MessageUtil {
                 .setReqId(request.getReqId())
                 .setJoinMatchGroup(JoinMatchGroup.newBuilder()
                     .putRecord(
-                        EntityUtil.matchRecordKey(request.getClient().getTrafficId(), request.getTopicFilter(),
+                        matchRecordKey(request.getClient().getTenantId(), request.getTopicFilter(),
                             EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                                 request.getDelivererKey())).toStringUtf8(),
                         GroupMatchRecord.newBuilder()
@@ -95,7 +97,7 @@ public class MessageUtil {
                 .setReqId(request.getReqId())
                 .setRemoveTopicFilter(RemoveTopicFilter.newBuilder()
                     .putTopicFilter(
-                        EntityUtil.subInfoKey(request.getClient().getTrafficId(),
+                        EntityUtil.subInfoKey(request.getClient().getTenantId(),
                             EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                                 request.getDelivererKey())).toStringUtf8(),
                         TopicFilterList.newBuilder().addTopicFilter(request.getTopicFilter()).build())
@@ -104,27 +106,27 @@ public class MessageUtil {
             .build();
     }
 
-    public static DistServiceRWCoProcInput buildDeleteMatchRecordRequest(long reqId, String trafficId,
+    public static DistServiceRWCoProcInput buildDeleteMatchRecordRequest(long reqId, String tenantId,
                                                                          String scopedInboxId,
                                                                          String topicFilter) {
         return DistServiceRWCoProcInput.newBuilder()
             .setUpdateRequest(UpdateRequest.newBuilder()
                 .setReqId(reqId)
                 .setDeleteMatchRecord(DeleteMatchRecord.newBuilder()
-                    .addMatchRecordKey(EntityUtil.matchRecordKey(trafficId, topicFilter, scopedInboxId).toStringUtf8())
+                    .addMatchRecordKey(matchRecordKey(tenantId, topicFilter, scopedInboxId).toStringUtf8())
                     .build())
                 .build())
             .build();
     }
 
-    public static DistServiceRWCoProcInput buildLeaveMatchGroupRequest(long reqId, String trafficId,
+    public static DistServiceRWCoProcInput buildLeaveMatchGroupRequest(long reqId, String tenantId,
                                                                        String scopedInboxId,
                                                                        String topicFilter) {
         return DistServiceRWCoProcInput.newBuilder()
             .setUpdateRequest(UpdateRequest.newBuilder()
                 .setReqId(reqId)
                 .setLeaveMatchGroup(LeaveMatchGroup.newBuilder()
-                    .putRecord(EntityUtil.matchRecordKey(trafficId, topicFilter, scopedInboxId).toStringUtf8(),
+                    .putRecord(matchRecordKey(tenantId, topicFilter, scopedInboxId).toStringUtf8(),
                         QInboxIdList.newBuilder().addQInboxId(scopedInboxId).build())
                     .build())
                 .build())

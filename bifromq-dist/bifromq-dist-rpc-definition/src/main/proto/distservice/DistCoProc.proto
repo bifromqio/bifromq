@@ -142,13 +142,13 @@ message GCReply {
 }
 
 message DistPack{
-  string trafficId = 1;
-  repeated commontype.TopicMessagePack msgPack = 2; // topic messages packs shares same trafficId
+  string tenantId = 1;
+  repeated commontype.TopicMessagePack msgPack = 2; // topic messages packs shares same tenantId
 }
 
 message BatchDist {
   uint64 reqId = 1;
-  repeated DistPack distPack = 2; // sorted by trafficId and topic
+  repeated DistPack distPack = 2; // sorted by tenantId and topic
   string orderKey = 3;
 }
 

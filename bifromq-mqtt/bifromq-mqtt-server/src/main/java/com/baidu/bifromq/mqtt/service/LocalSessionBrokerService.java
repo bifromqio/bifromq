@@ -52,7 +52,7 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
 
     @Override
     public void hasInbox(HasInboxRequest request, StreamObserver<HasInboxReply> responseObserver) {
-        response(trafficId -> CompletableFuture.completedFuture(HasInboxReply
+        response(tenantId -> CompletableFuture.completedFuture(HasInboxReply
             .newBuilder()
             .setReqId(request.getReqId())
             .setResult(sessionMap.containsKey(request.getInboxId()))

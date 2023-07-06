@@ -45,7 +45,7 @@ public class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply
             for (SendResult result : v.getResultList()) {
                 if (result.getResult() == SendResult.Result.OK) {
                     IInboxQueueFetcher f =
-                        registry.get(result.getSubInfo().getTrafficId(), result.getSubInfo().getInboxId(),
+                        registry.get(result.getSubInfo().getTenantId(), result.getSubInfo().getInboxId(),
                             delivererKey);
                     if (f != null) {
                         f.signalFetch();

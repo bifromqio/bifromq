@@ -101,7 +101,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
 
     @Override
     public void bootstrap(BootstrapRequest request, StreamObserver<BootstrapReply> responseObserver) {
-        response(trafficId -> {
+        response(tenantId -> {
             try {
                 boolean ret = kvRangeStore.bootstrap();
                 if (ret) {
@@ -126,14 +126,14 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
 
     @Override
     public void recover(RecoverRequest request, StreamObserver<RecoverReply> responseObserver) {
-        response(trafficId -> kvRangeStore.recover()
+        response(tenantId -> kvRangeStore.recover()
             .handle((v, e) -> RecoverReply.newBuilder().setReqId(request.getReqId()).build()), responseObserver);
     }
 
     @Override
     public void transferLeadership(TransferLeadershipRequest request,
                                    StreamObserver<TransferLeadershipReply> responseObserver) {
-        response(trafficId -> kvRangeStore.transferLeadership(request.getVer(), request.getKvRangeId(),
+        response(tenantId -> kvRangeStore.transferLeadership(request.getVer(), request.getKvRangeId(),
                     request.getNewLeaderStore())
                 .thenApply(result -> TransferLeadershipReply.newBuilder()
                     .setReqId(request.getReqId())
@@ -169,7 +169,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     @Override
     public void changeReplicaConfig(ChangeReplicaConfigRequest request,
                                     StreamObserver<ChangeReplicaConfigReply> responseObserver) {
-        response(trafficId -> kvRangeStore.changeReplicaConfig(request.getVer(), request.getKvRangeId(),
+        response(tenantId -> kvRangeStore.changeReplicaConfig(request.getVer(), request.getKvRangeId(),
                     Sets.newHashSet(request.getNewVotersList()),
                     Sets.newHashSet(request.getNewLearnersList()))
                 .thenApply(result -> ChangeReplicaConfigReply.newBuilder()
@@ -205,7 +205,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
 
     @Override
     public void split(KVRangeSplitRequest request, StreamObserver<KVRangeSplitReply> responseObserver) {
-        response(trafficId -> kvRangeStore.split(request.getVer(), request.getKvRangeId(), request.getSplitKey())
+        response(tenantId -> kvRangeStore.split(request.getVer(), request.getKvRangeId(), request.getSplitKey())
                 .thenApply(result -> KVRangeSplitReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.Ok)
@@ -239,7 +239,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
 
     @Override
     public void merge(KVRangeMergeRequest request, StreamObserver<KVRangeMergeReply> responseObserver) {
-        response(trafficId -> kvRangeStore.merge(request.getVer(), request.getMergerId(), request.getMergeeId())
+        response(tenantId -> kvRangeStore.merge(request.getVer(), request.getMergerId(), request.getMergeeId())
                 .thenApply(result -> KVRangeMergeReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.Ok)

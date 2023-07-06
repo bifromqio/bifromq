@@ -37,7 +37,7 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class MQTTFanOutTest extends MQTTTest {
-    private String trafficId = "testTraffic";
+    private String tenantId = "testTraffic";
     private String deviceKey = "testDevice";
 
     @BeforeMethod(alwaysRun = true)
@@ -46,7 +46,7 @@ public class MQTTFanOutTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -70,7 +70,7 @@ public class MQTTFanOutTest extends MQTTTest {
         String topic = "/a/" + pubQoS;
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient pubClient = new MqttTestClient(brokerURI, "pubClient");
         pubClient.connect(connOpts);

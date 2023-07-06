@@ -66,7 +66,7 @@ class RetainServiceClient implements IRetainServiceClient {
         }};
         return new IClientPipeline() {
             private final IRPCClient.IRequestPipeline<RetainRequest, RetainReply> ppln =
-                rpcClient.createRequestPipeline(clientInfo.getTrafficId(), null,
+                rpcClient.createRequestPipeline(clientInfo.getTenantId(), null,
                     null, pipelineAttrs, RetainServiceGrpc.getRetainMethod());
 
             @Override
@@ -97,13 +97,13 @@ class RetainServiceClient implements IRetainServiceClient {
     }
 
     @Override
-    public CompletableFuture<MatchReply> match(long reqId, String trafficId,
+    public CompletableFuture<MatchReply> match(long reqId, String tenantId,
                                                String topicFilter, int limit, ClientInfo clientInfo) {
         Map<String, String> pipelineAttrs = new HashMap<>() {{
             put(PIPELINE_ATTR_KEY_CLIENT_INFO, encode(clientInfo));
         }};
         log.trace("Handling match request: reqId={}, topicFilter={}", reqId, topicFilter);
-        return rpcClient.invoke(trafficId, null, MatchRequest.newBuilder()
+        return rpcClient.invoke(tenantId, null, MatchRequest.newBuilder()
                 .setReqId(reqId)
                 .setTopicFilter(topicFilter)
                 .setLimit(limit)

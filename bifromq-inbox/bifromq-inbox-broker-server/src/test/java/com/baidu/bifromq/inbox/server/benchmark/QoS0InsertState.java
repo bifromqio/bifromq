@@ -34,7 +34,7 @@ import org.openjdk.jmh.annotations.State;
 @Slf4j
 @State(Scope.Benchmark)
 public class QoS0InsertState extends InboxServiceState {
-    private static final String trafficId = "testTraffic";
+    private static final String tenantId = "testTraffic";
     private final TopicMessagePack msg = TopicMessagePack.newBuilder()
         .setTopic("greeting")
         .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
@@ -53,7 +53,7 @@ public class QoS0InsertState extends InboxServiceState {
         int i = 0;
         while (i < inboxCount) {
             inboxReaderClient.create(System.nanoTime(), i + "", ClientInfo.newBuilder()
-                .setTrafficId(trafficId)
+                .setTenantId(tenantId)
                 .build()).join();
             i++;
         }
@@ -67,7 +67,7 @@ public class QoS0InsertState extends InboxServiceState {
 
     public Map<SubInfo, DeliveryResult> insert() {
         return inboxWriter.deliver(singleton(new DeliveryPack(msg, singletonList(SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(ThreadLocalRandom.current().nextInt(0, 100) + "")
             .setTopicFilter("greeting")
             .setSubQoS(AT_MOST_ONCE)

@@ -15,7 +15,7 @@ message RetainSetMetadata{
 }
 
 message RetainCoProcRequest{
-  string trafficId = 1;
+  string tenantId = 1;
   uint64 reqId = 2;
   commontype.QoS qos = 3; // the qos the sender specified
   string topic = 4;
@@ -24,7 +24,6 @@ message RetainCoProcRequest{
   uint64 expireTimestamp = 7; // UTC ts
   commontype.ClientInfo sender = 8;
   uint32 maxRetainedTopics = 9;
-  bytes trafficNS = 10;
 }
 
 message RetainCoProcReply {
@@ -39,7 +38,7 @@ message RetainCoProcReply {
 
 message MatchCoProcRequest{
   uint64 reqId = 1;
-  bytes trafficNS = 2;
+  bytes tenantNS = 2;
   string topicFilter = 3;
   uint32 limit = 4;
 }

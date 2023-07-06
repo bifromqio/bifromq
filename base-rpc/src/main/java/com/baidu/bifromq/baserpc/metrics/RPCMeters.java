@@ -33,7 +33,7 @@ public class RPCMeters {
     public static class MeterKey {
         final String service;
         final String method;
-        final String trafficId;
+        final String tenantId;
     }
 
     private static final LoadingCache<MeterKey, LoadingCache<RPCMetric, Meter>> TRAFFIC_METERS = Caffeine
@@ -56,7 +56,7 @@ public class RPCMeters {
             .build(metric -> {
                 Tags tags = Tags.of(MetricTag.SERVICE, key.service)
                     .and(MetricTag.METHOD, key.method)
-                    .and(MetricTag.TRAFFIC_ID, key.trafficId);
+                    .and(MetricTag.TENANT_ID, key.tenantId);
 
                 switch (metric.meterType) {
                     case TIMER:

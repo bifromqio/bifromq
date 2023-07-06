@@ -54,11 +54,11 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     private final ConcurrentLinkedQueue<AckT> ackSendingBuffers;
     private final PublishSubject<MsgT> msgSubject = PublishSubject.create();
     private final RPCMeters.MeterKey meterKey;
-    private final String trafficId;
+    private final String tenantId;
     private final String wchKey;
     private final Supplier<Map<String, String>> metadataSupplier;
     private final BluePrint.MethodSemantic<MsgT> semantic;
-    private final MethodDescriptor methodDescriptor;
+    private final MethodDescriptor<AckT, MsgT> methodDescriptor;
     private final BluePrint bluePrint;
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final BehaviorSubject<Long> signal = BehaviorSubject.createDefault(System.nanoTime());
@@ -73,14 +73,14 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     private final Backoff retargetBackoff = new Backoff(5, 10, 60000);
 
     ManagedMessageStream(
-        String trafficId,
+        String tenantId,
         @Nullable String wchKey,
         @Nullable String targetServerId,
         Supplier<Map<String, String>> metadataSupplier,
         String serviceUniqueName,
         RPCClient.ChannelHolder channelHolder,
         CallOptions callOptions,
-        MethodDescriptor methodDescriptor,
+        MethodDescriptor<AckT, MsgT> methodDescriptor,
         BluePrint bluePrint) {
         assert methodDescriptor.getType() == MethodDescriptor.MethodType.BIDI_STREAMING;
         this.bluePrint = bluePrint;
@@ -92,13 +92,13 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
         } else if (semantic instanceof BluePrint.WCHBalanced) {
             assert wchKey != null;
         }
-        this.trafficId = trafficId;
+        this.tenantId = tenantId;
         this.wchKey = wchKey;
         this.metadataSupplier = metadataSupplier;
         this.meterKey = RPCMeters.MeterKey.builder()
             .service(serviceUniqueName)
             .method(methodDescriptor.getBareMethodName())
-            .trafficId(trafficId)
+            .tenantId(tenantId)
             .build();
         ackSendingBuffers = new ConcurrentLinkedQueue<>();
         this.methodDescriptor = methodDescriptor;
@@ -115,7 +115,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                         return;
                     }
                     if (semantic instanceof BluePrint.DDBalanced) {
-                        boolean available = selector.direct(trafficId, desiredServerId.get(),
+                        boolean available = selector.direct(tenantId, desiredServerId.get(),
                             methodDescriptor);
                         if (available) {
                             state.set(State.Normal);
@@ -136,8 +136,8 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                             }
                         }
                     } else if (semantic instanceof BluePrint.WCHBalanced) {
-                        Optional<String> newServer = selector.hashing(trafficId, wchKey, methodDescriptor);
-                        if (!newServer.isPresent()) {
+                        Optional<String> newServer = selector.hashing(tenantId, wchKey, methodDescriptor);
+                        if (newServer.isEmpty()) {
                             state.set(State.ServiceUnavailable);
                             if (selectedServerId.get() != null) {
                                 log.debug("MsgStream@{} stop targeting to server[{}]",
@@ -165,8 +165,8 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                             }
                         }
                     } else if (semantic instanceof BluePrint.WRBalanced) {
-                        Optional<String> newServer = selector.random(trafficId, methodDescriptor);
-                        if (!newServer.isPresent()) {
+                        Optional<String> newServer = selector.random(tenantId, methodDescriptor);
+                        if (newServer.isEmpty()) {
                             state.set(State.ServiceUnavailable);
                             if (selectedServerId.get() != null) {
                                 log.debug("MsgStream@{} stop targeting to server[{}]",
@@ -181,8 +181,8 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                             }
                         }
                     } else if (semantic instanceof BluePrint.WRRBalanced) {
-                        Optional<String> newServer = selector.roundRobin(trafficId, methodDescriptor);
-                        if (!newServer.isPresent()) {
+                        Optional<String> newServer = selector.roundRobin(tenantId, methodDescriptor);
+                        if (newServer.isEmpty()) {
                             state.set(State.ServiceUnavailable);
                             if (selectedServerId.get() != null) {
                                 log.debug("MsgStream@{} stop targeting to server[{}]",
@@ -245,7 +245,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
         // currently, context attributes from caller are not allowed
         // start a new context by forking from ROOT,so no scaring warning should appear in the log
         Context ctx = Context.ROOT.fork()
-            .withValue(RPCContext.TRAFFIC_ID_CTX_KEY, trafficId)
+            .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .withValue(RPCContext.SELECTED_SERVER_ID_CTX_KEY, new RPCContext.ServerSelection())
             .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metadataSupplier.get());
         if (semantic instanceof BluePrint.DDBalanced) {
@@ -257,10 +257,9 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
             log.trace("MsgStream@{} creating request stream", hashCode());
             ClientCallStreamObserver<AckT> reqStream = (ClientCallStreamObserver<AckT>)
                 asyncBidiStreamingCall(channelHolder.channel()
-                        .newCall(bluePrint.methodDesc(methodDescriptor.getFullMethodName(),
-                                channelHolder.inProc()),
-                            callOptions),
-                    new ResponseObserver());
+                    .newCall(bluePrint.methodDesc(methodDescriptor.getFullMethodName(),
+                            channelHolder.inProc()),
+                        callOptions), new ResponseObserver());
             if (RPCContext.SELECTED_SERVER_ID_CTX_KEY.get().getServerId() != null) {
                 requester.set(reqStream);
                 log.trace("MsgStream@{} request stream@{} created", hashCode(), reqStream.hashCode());

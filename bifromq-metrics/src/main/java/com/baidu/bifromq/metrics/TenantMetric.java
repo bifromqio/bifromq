@@ -15,7 +15,7 @@ package com.baidu.bifromq.metrics;
 
 import io.micrometer.core.instrument.Meter;
 
-public enum TrafficMetric {
+public enum TenantMetric {
     MqttConnectionGauge("mqtt.connection.num.gauge", Meter.Type.GAUGE),
     MqttConnectCount("mqtt.connect.count", Meter.Type.COUNTER),
     MqttDisconnectCount("mqtt.disconnect.count", Meter.Type.COUNTER),
@@ -43,7 +43,7 @@ public enum TrafficMetric {
     public final String metricName;
     public final Meter.Type meterType;
 
-    TrafficMetric(String metricName, Meter.Type meterType) {
+    TenantMetric(String metricName, Meter.Type meterType) {
         this.metricName = metricName;
         this.meterType = meterType;
     }

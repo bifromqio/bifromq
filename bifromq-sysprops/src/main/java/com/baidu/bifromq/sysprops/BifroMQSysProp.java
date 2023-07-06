@@ -31,7 +31,7 @@ public enum BifroMQSysProp {
         Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 2), IntegerParser.POSITIVE),
     DIST_WORKER_MAX_INFLIGHT_CALLS_PER_QUEUE("dist_worker_max_inflight_send", 1, IntegerParser.POSITIVE),
     DIST_MAX_BATCH_SEND_MESSAGES("dist_worker_max_batch_send_messages", 100, IntegerParser.POSITIVE),
-    DIST_MAX_CACHED_SUBS_PER_TRAFFIC("dist_worker_max_cached_subs_per_traffic", 100_000L, LongParser.POSITIVE),
+    DIST_MAX_CACHED_SUBS_PER_TENANT("dist_worker_max_cached_subs_per_tenant", 100_000L, LongParser.POSITIVE),
     DIST_TOPIC_MATCH_EXPIRY("dist_worker_topic_match_expiry_seconds", 5, IntegerParser.POSITIVE),
     DIST_MATCH_PARALLELISM("dist_worker_match_parallelism",
         Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 2), IntegerParser.POSITIVE),

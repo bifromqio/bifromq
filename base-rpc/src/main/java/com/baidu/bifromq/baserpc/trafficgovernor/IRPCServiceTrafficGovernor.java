@@ -31,7 +31,7 @@ public interface IRPCServiceTrafficGovernor extends IRPCServiceTrafficDirector {
     void assignLBGroups(String id, Set<String> groupTags);
 
     /**
-     * Update the traffic directive in the form of mapping trafficIdPrefix to a set of group tags
+     * Update the traffic directive in the form of mapping tenantIdPrefix to a set of group tags
      *
      * @param trafficDirective
      */

@@ -26,15 +26,15 @@ import io.grpc.MethodDescriptor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class TrafficAwareClientInterceptor implements ClientInterceptor {
+public class TenantAwareClientInterceptor implements ClientInterceptor {
     private final String serviceUniqueName;
 
-    public TrafficAwareClientInterceptor() {
+    public TenantAwareClientInterceptor() {
         this(null);
     }
 
     // used in in-process mode
-    public TrafficAwareClientInterceptor(String serviceUniqueName) {
+    public TenantAwareClientInterceptor(String serviceUniqueName) {
         this.serviceUniqueName = serviceUniqueName;
     }
 
@@ -44,7 +44,7 @@ public class TrafficAwareClientInterceptor implements ClientInterceptor {
         return new ForwardingClientCall.SimpleForwardingClientCall<>(next.newCall(method, callOptions)) {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
-                headers.put(Constants.TRAFFIC_ID_META_KEY, RPCContext.TRAFFIC_ID_CTX_KEY.get());
+                headers.put(Constants.TENANT_ID_META_KEY, RPCContext.TENANT_ID_CTX_KEY.get());
                 if (RPCContext.DESIRED_SERVER_ID_CTX_KEY.get() != null) {
                     headers.put(Constants.DESIRED_SERVER_META_KEY, RPCContext.DESIRED_SERVER_ID_CTX_KEY.get());
                 }

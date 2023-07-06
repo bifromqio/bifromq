@@ -26,9 +26,9 @@ public class InboxCreateTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void create() {
-        String trafficId = "trafficA";
+        String tenantId = "trafficA";
         String inboxId = "inbox1";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
         assertFalse(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
 
@@ -41,9 +41,9 @@ public class InboxCreateTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void delete() {
-        String trafficId = "trafficA";
+        String tenantId = "trafficA";
         String inboxId = "inbox1";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
 
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();

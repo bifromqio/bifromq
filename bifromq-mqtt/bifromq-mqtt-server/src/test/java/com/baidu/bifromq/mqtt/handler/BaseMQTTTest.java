@@ -124,7 +124,7 @@ public abstract class BaseMQTTTest {
     protected MQTTSessionContext sessionContext;
     protected ILocalSessionBrokerServer sessionBrokerServer;
     protected EmbeddedChannel channel;
-    protected String trafficId = "testTrafficId";
+    protected String tenantId = "testTenantA";
     protected String userId = "testDeviceKey";
     protected String clientId = "testClientId";
     protected String delivererKey = "testGroupKey";
@@ -212,7 +212,7 @@ public abstract class BaseMQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(userId)
                     .build())
                 .build()));

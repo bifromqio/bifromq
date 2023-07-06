@@ -45,9 +45,9 @@ public class HasInbox {
     @Threads(4)
     @Fork(1)
     public void testHasInbox(HasInboxState state, Blackhole blackhole) {
-        String trafficId = "DevOnly";
+        String tenantId = "DevOnly";
         String inboxId = "Inbox_" + ThreadLocalRandom.current().nextInt();
-        HasReply reply = state.requestHas(trafficId, inboxId);
+        HasReply reply = state.requestHas(tenantId, inboxId);
         blackhole.consume(reply);
     }
 }

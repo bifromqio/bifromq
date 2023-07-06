@@ -111,12 +111,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Override
     public void hasInbox(HasInboxRequest request, StreamObserver<HasInboxReply> responseObserver) {
-        response(trafficId -> checkScheduler.schedule(request), responseObserver);
+        response(tenantId -> checkScheduler.schedule(request), responseObserver);
     }
 
     @Override
     public void createInbox(CreateInboxRequest request, StreamObserver<CreateInboxReply> responseObserver) {
-        response(trafficId -> createScheduler.schedule(request).exceptionally(e -> CreateInboxReply.newBuilder()
+        response(tenantId -> createScheduler.schedule(request).exceptionally(e -> CreateInboxReply.newBuilder()
             .setReqId(request.getReqId())
             .setResult(CreateInboxReply.Result.ERROR)
             .build()), responseObserver);
@@ -124,7 +124,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Override
     public void deleteInbox(DeleteInboxRequest request, StreamObserver<DeleteInboxReply> responseObserver) {
-        response(trafficId -> touchScheduler.schedule(new InboxTouchScheduler.Touch(request))
+        response(tenantId -> touchScheduler.schedule(new InboxTouchScheduler.Touch(request))
             .handle((v, e) -> DeleteInboxReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setResult(e == null ? DeleteInboxReply.Result.OK : DeleteInboxReply.Result.ERROR)
@@ -168,7 +168,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Override
     public void commit(CommitRequest request, StreamObserver<CommitReply> responseObserver) {
-        response(trafficId -> commitScheduler.schedule(request)
+        response(tenantId -> commitScheduler.schedule(request)
             .exceptionally(e -> CommitReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setResult(CommitReply.Result.ERROR)
@@ -219,10 +219,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         Set<String> touched = Sets.newHashSet();
         for (IInboxQueueFetcher fetcher : registry) {
             if (Duration.ofNanos(now - fetcher.lastFetchTS()).compareTo(touchIdle) > 0) {
-                if (!touched.contains(fetcher.trafficId() + fetcher.inboxId())) {
-                    log.debug("Touch inbox: trafficId={}, inboxId={}", fetcher.trafficId(), fetcher.inboxId());
+                if (!touched.contains(fetcher.tenantId() + fetcher.inboxId())) {
+                    log.debug("Touch inbox: tenantId={}, inboxId={}", fetcher.tenantId(), fetcher.inboxId());
                     fetcher.touch();
-                    touched.add(fetcher.trafficId() + fetcher.inboxId());
+                    touched.add(fetcher.tenantId() + fetcher.inboxId());
                 }
             }
         }

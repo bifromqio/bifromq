@@ -31,14 +31,14 @@ import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class TrafficMeter {
+public class TenantMeter {
     private static final Cleaner CLEANER = Cleaner.create();
 
     static class State implements Runnable {
-        final Map<TrafficMetric, Meter> meters = new HashMap<>();
+        final Map<TenantMetric, Meter> meters = new HashMap<>();
 
         State(Tags tags) {
-            for (TrafficMetric metric : TrafficMetric.values()) {
+            for (TenantMetric metric : TenantMetric.values()) {
                 switch (metric.meterType) {
                     case COUNTER:
                         meters.put(metric, Metrics.counter(metric.metricName, tags));
@@ -65,65 +65,65 @@ public class TrafficMeter {
         }
     }
 
-    public static final String TAG_TRAFFIC_ID = "trafficId";
-    private static final ConcurrentMap<String, Map<TrafficMetric, Gauge>> TRAFFIC_GAUGES = new ConcurrentHashMap<>();
-    private static final LoadingCache<String, TrafficMeter> TRAFFIC_METER_CACHE = Caffeine.newBuilder()
+    public static final String TAG_TENANT_ID = "tenantId";
+    private static final ConcurrentMap<String, Map<TenantMetric, Gauge>> TENANT_GAUGES = new ConcurrentHashMap<>();
+    private static final LoadingCache<String, TenantMeter> TENANT_METER_CACHE = Caffeine.newBuilder()
         .weakValues()
-        .build(TrafficMeter::new);
+        .build(TenantMeter::new);
 
-    public static TrafficMeter get(String trafficId) {
-        return TRAFFIC_METER_CACHE.get(trafficId);
+    public static TenantMeter get(String tenantId) {
+        return TENANT_METER_CACHE.get(tenantId);
     }
 
     public static void cleanUp() {
-        TRAFFIC_METER_CACHE.cleanUp();
+        TENANT_METER_CACHE.cleanUp();
     }
 
     private final State state;
     private final Tags tags;
     private final Cleaner.Cleanable cleanable;
 
-    public TrafficMeter(String trafficId) {
-        this.tags = Tags.of(TAG_TRAFFIC_ID, trafficId);
+    public TenantMeter(String tenantId) {
+        this.tags = Tags.of(TAG_TENANT_ID, tenantId);
         this.state = new State(tags);
         this.cleanable = CLEANER.register(this, state);
     }
 
-    public void recordCount(TrafficMetric metric) {
+    public void recordCount(TenantMetric metric) {
         recordCount(metric, 1);
     }
 
-    public void recordCount(TrafficMetric metric, double inc) {
+    public void recordCount(TenantMetric metric, double inc) {
         assert metric.meterType == Meter.Type.COUNTER;
         ((Counter) state.meters.get(metric)).increment(inc);
     }
 
-    public Timer timer(TrafficMetric metric) {
+    public Timer timer(TenantMetric metric) {
         assert metric.meterType == Meter.Type.TIMER;
         return (Timer) state.meters.get(metric);
     }
 
-    public void recordSummary(TrafficMetric metric, double value) {
+    public void recordSummary(TenantMetric metric, double value) {
         assert metric.meterType == Meter.Type.DISTRIBUTION_SUMMARY;
         ((DistributionSummary) state.meters.get(metric)).record(value);
     }
 
-    public static void gauging(String trafficId, TrafficMetric gaugeMetric, Supplier<Number> supplier) {
+    public static void gauging(String tenantId, TenantMetric gaugeMetric, Supplier<Number> supplier) {
         assert gaugeMetric.meterType == Meter.Type.GAUGE;
-        TRAFFIC_GAUGES.compute(trafficId, (k, v) -> {
+        TENANT_GAUGES.compute(tenantId, (k, v) -> {
             if (v == null) {
                 v = new HashMap<>();
             }
             v.put(gaugeMetric, Gauge.builder(gaugeMetric.metricName, supplier)
-                .tags(Tags.of(TAG_TRAFFIC_ID, trafficId))
+                .tags(Tags.of(TAG_TENANT_ID, tenantId))
                 .register(Metrics.globalRegistry));
             return v;
         });
     }
 
-    public static void stopGauging(String trafficId, TrafficMetric gaugeMetric) {
+    public static void stopGauging(String tenantId, TenantMetric gaugeMetric) {
         assert gaugeMetric.meterType == Meter.Type.GAUGE;
-        TRAFFIC_GAUGES.computeIfPresent(trafficId, (k, gaugeMap) -> {
+        TENANT_GAUGES.computeIfPresent(tenantId, (k, gaugeMap) -> {
             Gauge gauge = gaugeMap.remove(gaugeMetric);
             if (gauge != null) {
                 Metrics.globalRegistry.remove(gauge);

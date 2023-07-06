@@ -205,7 +205,7 @@ abstract class InboxStore implements IInboxStore {
 //                .whenComplete((v, e) -> {
 //                    Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
 //                            .reduce(new HashMap<>(), (result, item) -> {
-//                                item.forEach((trafficId, usedSpace) -> result.compute(trafficId, (k, read) -> {
+//                                item.forEach((tenantId, usedSpace) -> result.compute(tenantId, (k, read) -> {
 //                                    if (read == null) {
 //                                        read = 0L;
 //                                    }

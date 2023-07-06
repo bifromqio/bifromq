@@ -30,21 +30,21 @@ class DevOnlyAuthProvider implements IAuthProvider {
                 return CompletableFuture.completedFuture(MQTT3AuthResult
                     .newBuilder()
                     .setOk(Ok.newBuilder()
-                        .setTrafficId(username[0])
+                        .setTenantId(username[0])
                         .setUserId(username[1])
                         .build())
                     .build());
             } else {
                 return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                     .setOk(Ok.newBuilder()
-                        .setTrafficId("DevOnly")
+                        .setTenantId("DevOnly")
                         .setUserId("DevUser_" + System.nanoTime()).build())
                     .build());
             }
         } else {
             return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId("DevOnly")
+                    .setTenantId("DevOnly")
                     .setUserId("DevUser_" + System.nanoTime()).build())
                 .build());
         }

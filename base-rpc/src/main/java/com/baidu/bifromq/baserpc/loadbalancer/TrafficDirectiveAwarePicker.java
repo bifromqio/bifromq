@@ -33,7 +33,6 @@ import java.util.SortedMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -117,7 +116,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
     }
 
     private interface ITrafficMatcher {
-        WeightedServerSelector match(String trafficId);
+        WeightedServerSelector match(String tenantId);
 
         Optional<LoadBalancer.Subchannel> getSubchannel(String serverId);
     }
@@ -143,16 +142,16 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
                 }
             }
             // default group is used as fallback assignment
-            // make sure there is always a matcher for every trafficId
+            // make sure there is always a matcher for any tenantId
             prepareMatcher("", singletonMap("", 1), singletonMap("", defaultLBGroup));
 
-            for (String trafficIdPrefix : directive.keySet()) {
-                prepareMatcher(trafficIdPrefix, directive.get(trafficIdPrefix), lbGroups);
+            for (String tenantIdPrefix : directive.keySet()) {
+                prepareMatcher(tenantIdPrefix, directive.get(tenantIdPrefix), lbGroups);
             }
             this.subchannelMap = Maps.newHashMap(subchannelMap);
         }
 
-        private void prepareMatcher(String trafficIdPrefix,
+        private void prepareMatcher(String tenantIdPrefix,
                                     Map<String, Integer> trafficAssignment,
                                     Map<String, Set<String>> groupAssignment) {
             SortedMap<String, Integer> weightedServers = Maps.newTreeMap();
@@ -167,18 +166,18 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
                         return w;
                     }));
             }
-            matcher.put(trafficIdPrefix, new WeightedServerSelector(weightedServers));
+            matcher.put(tenantIdPrefix, new WeightedServerSelector(weightedServers));
 
         }
 
-        public WeightedServerSelector match(String trafficId) {
-            return matcher.bestMatch(trafficId);
+        public WeightedServerSelector match(String tenantId) {
+            return matcher.bestMatch(tenantId);
         }
 
         public Optional<LoadBalancer.Subchannel> getSubchannel(String serverId) {
             List<LoadBalancer.Subchannel> subchannels = subchannelMap.get(serverId).stream()
                 .filter(sc -> sc.getAttributes().get(Constants.STATE_INFO).get().getState() == READY)
-                .collect(Collectors.toList());
+                .toList();
             if (subchannels.isEmpty()) {
                 return Optional.empty();
             }
@@ -211,8 +210,8 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
         }
         pickSubchannelArgs.getHeaders().remove(Constants.COLLECT_SELECTION_METADATA_META_KEY,
             Boolean.toString(collectSelection));
-        String trafficId = pickSubchannelArgs.getHeaders().get(Constants.TRAFFIC_ID_META_KEY);
-        MethodDescriptor methodDescriptor = pickSubchannelArgs.getMethodDescriptor();
+        String tenantId = pickSubchannelArgs.getHeaders().get(Constants.TENANT_ID_META_KEY);
+        MethodDescriptor<?, ?> methodDescriptor = pickSubchannelArgs.getMethodDescriptor();
         ITrafficMatcher matcher = currentMatcher.get();
         // if this is a direct lb request
         if (pickSubchannelArgs.getHeaders().containsKey(Constants.DESIRED_SERVER_META_KEY)) {
@@ -220,7 +219,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
 //            if (!(bluePrint.getMethodSemantics().get(methodDescriptor) instanceof BluePrint.DDBalanced)) {
 //                log.warn("Method is not marked DDBalanced semantic");
 //            }
-            WeightedServerSelector selector = matcher.match(trafficId);
+            WeightedServerSelector selector = matcher.match(tenantId);
             String designatedServerId = pickSubchannelArgs.getHeaders().get(Constants.DESIRED_SERVER_META_KEY);
             if (selector.contains(designatedServerId)) {
                 trace("Direct pick sub-channel by serverId:{}", designatedServerId);
@@ -230,14 +229,12 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
                 // remove DESIRED_SERVER_META_KEY from header
                 pickSubchannelArgs.getHeaders().remove(Constants.DESIRED_SERVER_META_KEY, designatedServerId);
                 Optional<LoadBalancer.Subchannel> selectedSubchannel = matcher.getSubchannel(designatedServerId);
-                if (selectedSubchannel.isPresent()) {
-                    return LoadBalancer.PickResult.withSubchannel(selectedSubchannel.get());
-                }
-                return LoadBalancer.PickResult.withDrop(Constants.SERVER_UNREACHABLE);
+                return selectedSubchannel.map(LoadBalancer.PickResult::withSubchannel)
+                    .orElseGet(() -> LoadBalancer.PickResult.withDrop(Constants.SERVER_UNREACHABLE));
             }
             return LoadBalancer.PickResult.withDrop(Constants.SERVER_NOT_FOUND);
         } else {
-            WeightedServerSelector selector = matcher.match(trafficId);
+            WeightedServerSelector selector = matcher.match(tenantId);
             Optional<Map.Entry<String, Integer>> selection;
             if (bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WCHBalanced) {
                 // weighted-consistent-hashing mode
@@ -249,51 +246,49 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
                 // weighted-round-robin mode
                 selection = selector.roundRobin();
             }
-            if (!selection.isPresent()) {
+            if (selection.isEmpty()) {
                 return LoadBalancer.PickResult.withDrop(Constants.SERVICE_UNAVAILABLE);
             }
-            trace("Picked subchannel:{} for traffic:{}", selection.get(), trafficId);
+            trace("Picked subchannel:{} for tenant:{}", selection.get(), tenantId);
             if (collectSelection) {
                 RPCContext.SELECTED_SERVER_ID_CTX_KEY.get().setServerId(selection.get().getKey());
             }
             Optional<LoadBalancer.Subchannel> selectedSubchannel = matcher.getSubchannel(selection.get().getKey());
-            if (selectedSubchannel.isPresent()) {
-                return LoadBalancer.PickResult.withSubchannel(selectedSubchannel.get());
-            }
-            return LoadBalancer.PickResult.withDrop(Constants.SERVER_UNREACHABLE);
+            return selectedSubchannel.map(LoadBalancer.PickResult::withSubchannel)
+                .orElseGet(() -> LoadBalancer.PickResult.withDrop(Constants.SERVER_UNREACHABLE));
         }
     }
 
     @Override
-    public boolean direct(String trafficId, String serverId, MethodDescriptor methodDescriptor) {
+    public boolean direct(String tenantId, String serverId, MethodDescriptor methodDescriptor) {
         assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.DDBalanced;
-        WeightedServerSelector selector = currentMatcher.get().match(trafficId);
+        WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         return selector.contains(serverId);
     }
 
     @Override
-    public Optional<String> hashing(String trafficId, String key, MethodDescriptor methodDescriptor) {
+    public Optional<String> hashing(String tenantId, String key, MethodDescriptor<?, ?> methodDescriptor) {
         assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WCHBalanced;
         // weighted-consistent-hashing mode
-        WeightedServerSelector selector = currentMatcher.get().match(trafficId);
+        WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         Optional<Map.Entry<String, Integer>> selection = selector.hashing(key);
         return selection.map(Map.Entry::getKey);
     }
 
     @Override
-    public Optional<String> roundRobin(String trafficId, MethodDescriptor methodDescriptor) {
+    public Optional<String> roundRobin(String tenantId, MethodDescriptor<?, ?> methodDescriptor) {
         assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WRRBalanced;
         // weighted-round-robin mode
-        WeightedServerSelector selector = currentMatcher.get().match(trafficId);
+        WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         Optional<Map.Entry<String, Integer>> selection = selector.roundRobin();
         return selection.map(Map.Entry::getKey);
     }
 
     @Override
-    public Optional<String> random(String trafficId, MethodDescriptor methodDescriptor) {
+    public Optional<String> random(String tenantId, MethodDescriptor<?, ?> methodDescriptor) {
         assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WRBalanced;
         // weighted-random mode
-        WeightedServerSelector selector = currentMatcher.get().match(trafficId);
+        WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         Optional<Map.Entry<String, Integer>> selection = selector.random();
         return selection.map(Map.Entry::getKey);
     }

@@ -14,25 +14,26 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
+import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
+import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 
 import com.baidu.bifromq.basekv.proto.Range;
-import com.baidu.bifromq.dist.entity.EntityUtil;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode
 public class ScopedTopic {
-    public final String trafficId;
+    public final String tenantId;
     public final String topic;
     public final Range matchRecordRange;
 
     @Builder
-    private ScopedTopic(String trafficId, String topic, Range range) {
-        this.trafficId = trafficId;
+    private ScopedTopic(String tenantId, String topic, Range range) {
+        this.tenantId = tenantId;
         this.topic = topic;
         this.matchRecordRange = intersect(Range.newBuilder()
-            .setStartKey(EntityUtil.matchRecordKeyPrefix(trafficId))
-            .setEndKey(EntityUtil.trafficUpperBound(trafficId))
+            .setStartKey(matchRecordKeyPrefix(tenantId))
+            .setEndKey(tenantUpperBound(tenantId))
             .build(), range);
     }
 }

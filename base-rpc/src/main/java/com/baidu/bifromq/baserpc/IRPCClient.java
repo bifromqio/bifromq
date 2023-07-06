@@ -69,18 +69,18 @@ public interface IRPCClient {
     /**
      * The observable of rpc connectivity state
      *
-     * @return
+     * @return an observable of connection state
      */
     Observable<ConnState> connState();
 
-    default <ReqT, RespT> CompletableFuture<RespT> invoke(String trafficId,
+    default <ReqT, RespT> CompletableFuture<RespT> invoke(String tenantId,
                                                           @Nullable String desiredServerId,
                                                           ReqT req,
                                                           MethodDescriptor<ReqT, RespT> methodDesc) {
-        return invoke(trafficId, desiredServerId, req, emptyMap(), methodDesc);
+        return invoke(tenantId, desiredServerId, req, emptyMap(), methodDesc);
     }
 
-    <ReqT, RespT> CompletableFuture<RespT> invoke(String trafficId,
+    <ReqT, RespT> CompletableFuture<RespT> invoke(String tenantId,
                                                   @Nullable String desiredServerId,
                                                   ReqT req,
                                                   Map<String, String> metadata,
@@ -89,43 +89,43 @@ public interface IRPCClient {
     /**
      * Create a caller-managed auto-rebalanced request-response pipeline
      *
-     * @param trafficId
-     * @param desiredServerId
-     * @param wchKey
+     * @param tenantId        the tenant id
+     * @param desiredServerId the desired server id
+     * @param wchKey          key for calculating weighted consistent hash
      * @param metadata        associated with the pipeline
-     * @param methodDesc
-     * @return
+     * @param methodDesc      the method descriptor
+     * @return a request pipeline
      */
-    default <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String trafficId,
+    default <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String tenantId,
                                                                               @Nullable String desiredServerId,
                                                                               @Nullable String wchKey,
                                                                               Map<String, String> metadata,
                                                                               MethodDescriptor<ReqT, RespT>
                                                                                   methodDesc) {
-        return createRequestPipeline(trafficId, desiredServerId, wchKey, () -> metadata, methodDesc);
+        return createRequestPipeline(tenantId, desiredServerId, wchKey, () -> metadata, methodDesc);
     }
 
-    default <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String trafficId,
+    default <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String tenantId,
                                                                               @Nullable String desiredServerId,
                                                                               @Nullable String wchKey,
                                                                               Map<String, String> metadata,
                                                                               MethodDescriptor<ReqT, RespT> methodDesc,
                                                                               Executor executor) {
-        return createRequestPipeline(trafficId, desiredServerId, wchKey, () -> metadata, methodDesc, executor);
+        return createRequestPipeline(tenantId, desiredServerId, wchKey, () -> metadata, methodDesc, executor);
     }
 
 
     /**
      * Create a caller-managed auto-rebalanced request-response pipeline with default executor
      *
-     * @param trafficId
-     * @param desiredServerId
-     * @param wchKey
+     * @param tenantId         the tenant id
+     * @param desiredServerId  the desired server id
+     * @param wchKey           key for calculating weighted consistent hash
      * @param metadataSupplier supply the metadata of the pipeline
-     * @param methodDesc
-     * @return
+     * @param methodDesc       the method descriptor
+     * @return a request pipeline
      */
-    <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String trafficId,
+    <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String tenantId,
                                                                       @Nullable String desiredServerId,
                                                                       @Nullable String wchKey,
                                                                       Supplier<Map<String, String>> metadataSupplier,
@@ -134,15 +134,15 @@ public interface IRPCClient {
     /**
      * Create a caller-managed auto-rebalanced request-response pipeline with specified executor
      *
-     * @param trafficId
-     * @param desiredServerId
-     * @param wchKey
+     * @param tenantId         the tenant id
+     * @param desiredServerId  the desired server id
+     * @param wchKey           key for calculating weighted consistent hash
      * @param metadataSupplier supply the metadata of the pipeline
-     * @param methodDesc
+     * @param methodDesc       the method descriptor
      * @param executor         the executor for async callback
-     * @return
+     * @return a request pipeline
      */
-    <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String trafficId,
+    <ReqT, RespT> IRequestPipeline<ReqT, RespT> createRequestPipeline(String tenantId,
                                                                       @Nullable String desiredServerId,
                                                                       @Nullable String wchKey,
                                                                       Supplier<Map<String, String>> metadataSupplier,
@@ -152,22 +152,22 @@ public interface IRPCClient {
     /**
      * Create a caller-managed auto-rebalanced bi-directional message stream with at-most-once delivery guarantee.
      *
-     * @param trafficId
-     * @param desiredServerId
-     * @param wchKey
-     * @param metadata
-     * @param methodDesc
-     * @return
+     * @param tenantId        the tenant id
+     * @param desiredServerId the desired server id
+     * @param wchKey          key for calculating weighted consistent hash
+     * @param metadata        the metadata of the message stream
+     * @param methodDesc      the method descriptor
+     * @return a message stream
      */
-    default <MsgT, AckT> IMessageStream<MsgT, AckT> createMessageStream(String trafficId,
+    default <MsgT, AckT> IMessageStream<MsgT, AckT> createMessageStream(String tenantId,
                                                                         @Nullable String desiredServerId,
                                                                         @Nullable String wchKey,
                                                                         Map<String, String> metadata,
                                                                         MethodDescriptor<AckT, MsgT> methodDesc) {
-        return createMessageStream(trafficId, desiredServerId, wchKey, () -> metadata, methodDesc);
+        return createMessageStream(tenantId, desiredServerId, wchKey, () -> metadata, methodDesc);
     }
 
-    <MsgT, AckT> IMessageStream<MsgT, AckT> createMessageStream(String trafficId,
+    <MsgT, AckT> IMessageStream<MsgT, AckT> createMessageStream(String tenantId,
                                                                 @Nullable String desiredServerId,
                                                                 @Nullable String wchKey,
                                                                 Supplier<Map<String, String>> metadataSupplier,

@@ -17,7 +17,7 @@ public interface IInboxQueueFetcher {
 
     String delivererKey();
 
-    String trafficId();
+    String tenantId();
 
     String inboxId();
 

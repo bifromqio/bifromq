@@ -65,7 +65,7 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
 
     @Override
     protected ByteString rangeKey(HasInboxRequest request) {
-        return scopedInboxId(request.getClientInfo().getTrafficId(), request.getInboxId());
+        return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
     }
 
     @Override
@@ -92,7 +92,7 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
 
             @Override
             public CompletableFuture<HasInboxReply> add(HasInboxRequest request) {
-                checkInboxes.add(scopedInboxId(request.getClientInfo().getTrafficId(), request.getInboxId()));
+                checkInboxes.add(scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId()));
                 return onInboxChecked.computeIfAbsent(request, k -> new CompletableFuture<>());
             }
 
@@ -146,7 +146,7 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
                         } else {
                             onInboxChecked.forEach((req, f) -> {
                                 Boolean exists = v.getExistsMap()
-                                    .get(scopedInboxId(req.getClientInfo().getTrafficId(),
+                                    .get(scopedInboxId(req.getClientInfo().getTenantId(),
                                         req.getInboxId()).toStringUtf8());
                                 // if query result doesn't contain the scoped inboxId, reply error
                                 if (exists == null) {

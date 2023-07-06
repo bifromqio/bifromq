@@ -12,6 +12,6 @@ message LoadAssignment {
 }
 
 message TrafficDirective {
-  map<string, LoadAssignment> assignment = 1; // key: trafficIdPrefix, value: LoadAssignment
+  map<string, LoadAssignment> assignment = 1; // key: tenantIdPrefix, value: LoadAssignment
   uint64 announcedTS = 2;
 }

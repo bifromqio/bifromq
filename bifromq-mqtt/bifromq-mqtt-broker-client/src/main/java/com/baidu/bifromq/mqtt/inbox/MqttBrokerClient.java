@@ -50,9 +50,9 @@ class MqttBrokerClient implements IMqttBrokerClient {
     }
 
     @Override
-    public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId, String delivererKey) {
+    public CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId, String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return rpcClient.invoke(trafficId, DeliveryGroupKeyUtil.parseServerId(delivererKey),
+        return rpcClient.invoke(tenantId, DeliveryGroupKeyUtil.parseServerId(delivererKey),
                 HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
                 OnlineInboxBrokerGrpc.getHasInboxMethod())
             .thenApply(HasInboxReply::getResult);

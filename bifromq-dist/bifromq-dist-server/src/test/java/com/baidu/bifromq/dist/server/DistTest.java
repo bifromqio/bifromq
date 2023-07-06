@@ -23,6 +23,7 @@ import com.baidu.bifromq.dist.client.SubResult.Type;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -40,8 +41,8 @@ import java.util.concurrent.CountDownLatch;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mockito;
-import org.testng.annotations.Test;
 import org.mockito.stubbing.Answer;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class DistTest extends DistServiceTest {
@@ -65,7 +66,10 @@ public class DistTest extends DistServiceTest {
         int total = 10;
         CountDownLatch latch = new CountDownLatch(total);
         for (int i = 0; i < total; i++) {
-            clientInfo = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("user" + i).build();
+            clientInfo = ClientInfo.newBuilder().setTenantId("trafficA").setMqtt3ClientInfo(
+                MQTT3ClientInfo.newBuilder()
+                    .setUserId("user" + i)
+                    .build()).build();
             distClient().dist(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
                 .whenComplete((v, e) -> {
                     if (e != null) {
@@ -97,13 +101,21 @@ public class DistTest extends DistServiceTest {
         ClientInfo clientInfo;
         int total = 1;
         for (int i = 0; i < total; i++) {
-            clientInfo = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("user" + i).build();
+            clientInfo = ClientInfo.newBuilder().setTenantId("trafficA")
+                .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                    .setUserId("user" + i)
+                    .build())
+                .build();
             distClient().sub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0, clientInfo)
                 .join();
         }
         CountDownLatch latch = new CountDownLatch(total);
         for (int i = 0; i < total; i++) {
-            clientInfo = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("user" + i).build();
+            clientInfo = ClientInfo.newBuilder().setTenantId("trafficA")
+                .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                    .setUserId("user" + i)
+                    .build())
+                .build();
             distClient().dist(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
                 .whenComplete((v, e) -> {
                     if (e != null) {
@@ -136,14 +148,22 @@ public class DistTest extends DistServiceTest {
         int totalSub = 5;
         int totalMsg = 1;
         for (int i = 0; i < totalSub; i++) {
-            clientInfo = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("user" + i).build();
+            clientInfo = ClientInfo.newBuilder().setTenantId("trafficA")
+                .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                    .setUserId("user" + i)
+                    .build())
+                .build();
             SubResult subResult = distClient().sub(reqId, "$share/g1/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i,
                 "server1", 0, clientInfo).get();
             assertEquals(subResult.type(), Type.OK_QoS1);
         }
         CountDownLatch latch = new CountDownLatch(totalMsg);
         for (int i = 0; i < totalMsg; i++) {
-            clientInfo = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("user" + i).build();
+            clientInfo = ClientInfo.newBuilder().setTenantId("trafficA")
+                .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                    .setUserId("user" + i)
+                    .build())
+                .build();
             distClient().dist(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
                 .whenComplete((v, e) -> {
                     if (e != null) {
@@ -179,13 +199,21 @@ public class DistTest extends DistServiceTest {
         ClientInfo clientInfo;
         int totalInbox = 100;
         for (int i = 0; i < totalInbox; i++) {
-            clientInfo = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("subUser" + i).build();
+            clientInfo = ClientInfo.newBuilder().setTenantId("tenantA")
+                .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                    .setUserId("subUser" + i)
+                    .build())
+                .build();
             distClient().sub(reqId, "/sport/tennis", QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0, clientInfo)
                 .join();
         }
 
         int totalPub = 2;
-        ClientInfo pubClient = ClientInfo.newBuilder().setTrafficId("trafficA").setUserId("pubUser").build();
+        ClientInfo pubClient = ClientInfo.newBuilder().setTenantId("tenantA")
+            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                .setUserId("pubUser")
+                .build())
+            .build();
         for (int i = 0; i < totalPub; i++) {
             distClient().dist(reqId, "/sport/tennis", QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, pubClient).join();
         }

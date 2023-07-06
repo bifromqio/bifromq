@@ -72,22 +72,28 @@ public final class BluePrint {
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class DDUnaryMethod extends MethodSemantic implements Unary, DDBalanced {
-        public static final DDUnaryMethod INSTANCE = new DDUnaryMethod();
+    public static final class DDUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, DDBalanced {
+        public static <ReqT> DDUnaryMethod<ReqT> getInstance() {
+            return new DDUnaryMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRRUnaryMethod extends MethodSemantic implements Unary, WRRBalanced {
-        public static final WRRUnaryMethod INSTANCE = new WRRUnaryMethod();
+    public static final class WRRUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, WRRBalanced {
+        public static <ReqT> WRRUnaryMethod<ReqT> getInstance() {
+            return new WRRUnaryMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRUnaryMethod extends MethodSemantic implements Unary, WRBalanced {
-        public static final WRUnaryMethod INSTANCE = new WRUnaryMethod();
+    public static final class WRUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, WRBalanced {
+        public static <ReqT> WRUnaryMethod<ReqT> getInstance() {
+            return new WRUnaryMethod<>();
+        }
     }
 
     @Builder
-    public static final class WCHUnaryMethod<ReqT> extends MethodSemantic implements Unary, WCHBalancedReq<ReqT> {
+    public static final class WCHUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, WCHBalancedReq<ReqT> {
         private final Function<ReqT, String> keyHashFunc;
 
         public String hashKey(ReqT req) {
@@ -96,55 +102,75 @@ public final class BluePrint {
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class DDPipelineUnaryMethod extends MethodSemantic implements PipelineUnary, DDBalanced {
-        public static final DDPipelineUnaryMethod INSTANCE = new DDPipelineUnaryMethod();
+    public static final class DDPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
+        implements PipelineUnary, DDBalanced {
+        public static <ReqT> DDPipelineUnaryMethod<ReqT> getInstance() {
+            return new DDPipelineUnaryMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRRPipelineUnaryMethod extends MethodSemantic implements PipelineUnary, WRRBalanced {
-        public static final WRRPipelineUnaryMethod INSTANCE = new WRRPipelineUnaryMethod();
+    public static final class WRRPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
+        implements PipelineUnary, WRRBalanced {
+        public static <ReqT> WRRPipelineUnaryMethod<ReqT> getInstance() {
+            return new WRRPipelineUnaryMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRPipelineUnaryMethod extends MethodSemantic implements PipelineUnary, WRBalanced {
-        public static final WRPipelineUnaryMethod INSTANCE = new WRPipelineUnaryMethod();
+    public static final class WRPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
+        implements PipelineUnary, WRBalanced {
+        public static <ReqT> WRPipelineUnaryMethod<ReqT> getInstance() {
+            return new WRPipelineUnaryMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WCHPipelineUnaryMethod extends MethodSemantic implements PipelineUnary, WCHBalanced {
-        public static final WCHPipelineUnaryMethod INSTANCE = new WCHPipelineUnaryMethod();
+    public static final class WCHPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
+        implements PipelineUnary, WCHBalanced {
+        public static <ReqT> WCHPipelineUnaryMethod<ReqT> getInstance() {
+            return new WCHPipelineUnaryMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class DDStreamingMethod extends MethodSemantic implements Streaming, DDBalanced {
-        public static final DDStreamingMethod INSTANCE = new DDStreamingMethod();
+    public static final class DDStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, DDBalanced {
+        public static <ReqT> DDStreamingMethod<ReqT> getInstance() {
+            return new DDStreamingMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRRStreamingMethod extends MethodSemantic implements Streaming, WRRBalanced {
-        public static final WRRStreamingMethod INSTANCE = new WRRStreamingMethod();
+    public static final class WRRStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, WRRBalanced {
+        public static <ReqT> WRRStreamingMethod<ReqT> getInstance() {
+            return new WRRStreamingMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRStreamingMethod extends MethodSemantic implements Streaming, WRBalanced {
-        public static final WRStreamingMethod INSTANCE = new WRStreamingMethod();
+    public static final class WRStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, WRBalanced {
+        public static <ReqT> WRStreamingMethod<ReqT> getInstance() {
+            return new WRStreamingMethod<>();
+        }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WCHStreamingMethod extends MethodSemantic implements Streaming, WCHBalanced {
-        public static final WCHStreamingMethod INSTANCE = new WCHStreamingMethod();
+    public static final class WCHStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, WCHBalanced {
+        public static <ReqT> WCHStreamingMethod<ReqT> getInstance() {
+            return new WCHStreamingMethod<>();
+        }
     }
 
     private final ServiceDescriptor serviceDescriptor;
-    private final Map<String, MethodSemantic> methodSemantics;
-    private final Map<String, MethodDescriptor> methods;
-    private final Map<String, MethodDescriptor> wrappedMethods;
+    private final Map<String, MethodSemantic<?>> methodSemantics;
+    private final Map<String, MethodDescriptor<?, ?>> methods;
+    private final Map<String, MethodDescriptor<?, ?>> wrappedMethods;
 
     private BluePrint(
         ServiceDescriptor serviceDescriptor,
-        Map<String, MethodSemantic> methodSemantics,
-        Map<String, MethodDescriptor> methods,
-        Map<String, MethodDescriptor> wrappedMethods) {
+        Map<String, MethodSemantic<?>> methodSemantics,
+        Map<String, MethodDescriptor<?, ?>> methods,
+        Map<String, MethodDescriptor<?, ?>> wrappedMethods) {
         this.serviceDescriptor = serviceDescriptor;
         this.methodSemantics = methodSemantics;
         this.methods = methods;
@@ -153,8 +179,8 @@ public final class BluePrint {
             throw new RuntimeException("Some method is not defined in the supplied service descriptor");
         }
         for (String methodName : methodSemantics.keySet()) {
-            MethodDescriptor methodDesc = wrappedMethods.get(methodName);
-            MethodSemantic semantic = methodSemantics.get(methodName);
+            MethodDescriptor<?, ?> methodDesc = wrappedMethods.get(methodName);
+            MethodSemantic<?> semantic = methodSemantics.get(methodName);
             switch (methodDesc.getType()) {
                 case UNARY:
                     if (!(semantic instanceof Unary)) {
@@ -183,15 +209,17 @@ public final class BluePrint {
         return wrappedMethods.keySet();
     }
 
-    public MethodSemantic semantic(String fullMethodName) {
-        return methodSemantics.get(fullMethodName);
+    @SuppressWarnings("unchecked")
+    public <ReqT> MethodSemantic<ReqT> semantic(String fullMethodName) {
+        return (MethodSemantic<ReqT>) methodSemantics.get(fullMethodName);
     }
 
-    public MethodDescriptor methodDesc(String fullMethodName, boolean inProc) {
+    @SuppressWarnings("unchecked")
+    public <ReqT, RespT> MethodDescriptor<ReqT, RespT> methodDesc(String fullMethodName, boolean inProc) {
         if (inProc) {
-            return methods.get(fullMethodName);
+            return (MethodDescriptor<ReqT, RespT>) methods.get(fullMethodName);
         }
-        return wrappedMethods.get(fullMethodName);
+        return (MethodDescriptor<ReqT, RespT>) wrappedMethods.get(fullMethodName);
     }
 
     public static BluePrintBuilder builder() {
@@ -200,9 +228,9 @@ public final class BluePrint {
 
     public static class BluePrintBuilder {
         private ServiceDescriptor serviceDescriptor;
-        private ArrayList<MethodDescriptor> methods;
-        private ArrayList<MethodDescriptor> wrappedMethods;
-        private ArrayList<MethodSemantic> methodSemantics;
+        private ArrayList<MethodDescriptor<?, ?>> methods;
+        private ArrayList<MethodDescriptor<?, ?>> wrappedMethods;
+        private ArrayList<MethodSemantic<?>> methodSemantics;
 
         BluePrintBuilder() {
         }
@@ -231,9 +259,9 @@ public final class BluePrint {
         }
 
         public BluePrint build() {
-            Map<String, MethodDescriptor> methodsMap;
-            Map<String, MethodDescriptor> wrappedMethods;
-            Map<String, MethodSemantic> methodSemanticMap;
+            Map<String, MethodDescriptor<?, ?>> methodsMap;
+            Map<String, MethodDescriptor<?, ?>> wrappedMethods;
+            Map<String, MethodSemantic<?>> methodSemanticMap;
             switch (this.wrappedMethods == null ? 0 : this.wrappedMethods.size()) {
                 case 0:
                     methodSemanticMap = emptyMap();
@@ -241,7 +269,7 @@ public final class BluePrint {
                     wrappedMethods = emptyMap();
                     break;
                 case 1: {
-                    MethodDescriptor method = this.methods.get(0);
+                    MethodDescriptor<?, ?> method = this.methods.get(0);
                     String fullMethodName = method.getFullMethodName();
                     methodSemanticMap = singletonMap(fullMethodName, this.methodSemantics.get(0));
                     methodsMap = singletonMap(fullMethodName, method);
@@ -265,7 +293,7 @@ public final class BluePrint {
                                 ? 1 + this.wrappedMethods.size() + (this.wrappedMethods.size() - 3) / 3
                                 : Integer.MAX_VALUE);
                     for (int $i = 0; $i < this.methods.size(); $i++) {
-                        MethodDescriptor method = this.methods.get($i);
+                        MethodDescriptor<?, ?> method = this.methods.get($i);
                         String fullMethodName = method.getFullMethodName();
                         methodSemanticMap.put(fullMethodName, this.methodSemantics.get($i));
                         methodsMap.put(fullMethodName, method);
@@ -283,10 +311,10 @@ public final class BluePrint {
             MethodDescriptor.PrototypeMarshaller<T> marshaller) {
             return new MethodDescriptor.PrototypeMarshaller<>() {
                 private final ThreadLocal<UnknownFieldSet.Builder> localFieldSetBuilder =
-                    ThreadLocal.withInitial(() -> UnknownFieldSet.newBuilder());
+                    ThreadLocal.withInitial(UnknownFieldSet::newBuilder);
 
                 private final ThreadLocal<UnknownFieldSet.Field.Builder> localFieldBuilder =
-                    ThreadLocal.withInitial(() -> UnknownFieldSet.Field.newBuilder());
+                    ThreadLocal.withInitial(UnknownFieldSet.Field::newBuilder);
 
                 @Override
                 public Class<T> getMessageClass() {
@@ -299,6 +327,7 @@ public final class BluePrint {
                     return marshaller.getMessagePrototype();
                 }
 
+                @SuppressWarnings("unchecked")
                 @Override
                 public InputStream stream(T value) {
                     UnknownFieldSet.Field hlcField = localFieldBuilder.get().clear().addFixed64(HLC.INST.get()).build();

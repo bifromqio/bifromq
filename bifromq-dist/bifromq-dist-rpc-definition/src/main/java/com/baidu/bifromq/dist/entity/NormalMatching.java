@@ -49,7 +49,7 @@ public class NormalMatching extends Matching {
         subBrokerId = Integer.parseInt(parts[0]);
         delivererKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
         subInfo = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(parts[1])
             .setSubQoS(subQoS)
             .setTopicFilter(originalTopicFilter)
@@ -67,7 +67,7 @@ public class NormalMatching extends Matching {
         subBrokerId = Integer.parseInt(parts[0]);
         delivererKey = Strings.isNullOrEmpty(parts[2]) ? null : parts[2];
         subInfo = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(parts[1])
             .setSubQoS(subQoS)
             .setTopicFilter(originalTopicFilter)

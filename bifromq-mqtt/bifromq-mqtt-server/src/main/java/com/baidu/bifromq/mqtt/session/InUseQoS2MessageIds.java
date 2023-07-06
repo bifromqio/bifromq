@@ -31,17 +31,17 @@ public class InUseQoS2MessageIds {
                 .build());
     }
 
-    public void use(String trafficId, String channelId, int messageId) {
+    public void use(String tenantId, String channelId, int messageId) {
         MessageId msgId = new MessageId(channelId, messageId);
-        msgIdCache.get(trafficId).put(msgId, msgId);
+        msgIdCache.get(tenantId).put(msgId, msgId);
     }
 
-    public boolean inUse(String trafficId, String channelId, int messageId) {
-        return msgIdCache.get(trafficId).getIfPresent(new MessageId(channelId, messageId)) != null;
+    public boolean inUse(String tenantId, String channelId, int messageId) {
+        return msgIdCache.get(tenantId).getIfPresent(new MessageId(channelId, messageId)) != null;
     }
 
-    public void release(String trafficId, String channelId, int messageId) {
-        msgIdCache.get(trafficId).invalidate(new MessageId(channelId, messageId));
+    public void release(String tenantId, String channelId, int messageId) {
+        msgIdCache.get(tenantId).invalidate(new MessageId(channelId, messageId));
     }
 
     @AllArgsConstructor

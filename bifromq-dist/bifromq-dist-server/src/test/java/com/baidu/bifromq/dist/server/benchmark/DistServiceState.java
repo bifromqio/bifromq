@@ -55,8 +55,7 @@ public class DistServiceState {
     public static final int MqttBroker = 0;
     public static final int InboxService = 1;
     public final ClientInfo clientInfo = ClientInfo.newBuilder()
-        .setTrafficId("DevOnly")
-        .setUserId("benchmark")
+        .setTenantId("DevOnly")
         .setSysClientInfo(SysClientInfo.newBuilder()
             .setType("benchmark")
             .build())
@@ -95,7 +94,7 @@ public class DistServiceState {
                 }
 
                 @Override
-                public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId,
+                public CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId,
                                                            String delivererKey) {
                     return CompletableFuture.completedFuture(true);
                 }

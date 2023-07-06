@@ -429,7 +429,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             // messages with duplicated messageId
             messagesFromClient1.add(TopicMessagePack.SenderMessagePack.newBuilder()
                 .setSender(ClientInfo.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setMqtt3ClientInfo(
                         MQTT3ClientInfo.newBuilder()
                             .setClientId("client1")
@@ -449,7 +449,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
                 .build());
             messagesFromClient2.add(TopicMessagePack.SenderMessagePack.newBuilder()
                 .setSender(ClientInfo.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setMqtt3ClientInfo(
                         MQTT3ClientInfo.newBuilder()
                             .setClientId("client2")
@@ -498,7 +498,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         return SubInfo.newBuilder()
             .setTopicFilter(topicFilter)
             .setInboxId("testInboxId")
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setSubQoS(qoS)
             .build();
     }

@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordTopicFilterPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_CACHED_SUBS_PER_TRAFFIC;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_CACHED_SUBS_PER_TENANT;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static com.google.common.hash.Hashing.murmur3_128;
 import static java.util.Collections.singleton;
@@ -67,11 +67,11 @@ import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class SubscriptionCache {
-    // OuterCacheKey: <trafficId><escapedTopicFilter>
+    // OuterCacheKey: <tenantId><escapedTopicFilter>
     // InnerCacheKey: <orderKey>
     private final LoadingCache<String, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
-    private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> trafficCache;
-    private final LoadingCache<String, AtomicLong> trafficVerCache;
+    private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
+    private final LoadingCache<String, AtomicLong> tenantVerCache;
     private final ThreadLocal<IKVRangeReader> threadLocalReader;
     private final ILoadEstimator loadEstimator;
     private final Timer externalMatchTimer;
@@ -94,7 +94,7 @@ public class SubscriptionCache {
             .build(k -> Caffeine.newBuilder()
                 .expireAfterAccess(expirySec, TimeUnit.MINUTES)
                 .build());
-        trafficCache = Caffeine.newBuilder()
+        tenantCache = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 3L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
             .executor(MoreExecutors.directExecutor())
@@ -106,7 +106,7 @@ public class SubscriptionCache {
                 })
             .build(k -> Caffeine.newBuilder()
                 .scheduler(Scheduler.systemScheduler())
-                .maximumWeight(DIST_MAX_CACHED_SUBS_PER_TRAFFIC.get())
+                .maximumWeight(DIST_MAX_CACHED_SUBS_PER_TENANT.get())
                 .weigher(new Weigher<ScopedTopic, MatchResult>() {
                     @Override
                     public @NonNegative int weigh(ScopedTopic key, MatchResult value) {
@@ -119,36 +119,36 @@ public class SubscriptionCache {
                 .buildAsync(new CacheLoader<>() {
                     @Override
                     public @Nullable MatchResult load(ScopedTopic key) {
-                        return match(key.trafficId, singleton(key.topic), key.matchRecordRange).get(key);
+                        return match(key.tenantId, singleton(key.topic), key.matchRecordRange).get(key);
                     }
 
                     @Override
                     public Map<ScopedTopic, MatchResult> loadAll(Set<? extends ScopedTopic> keys) {
-                        Map<String, Set<String>> topicsByTrafficId = new HashMap<>();
-                        Map<String, Range> matchRecordRangeByTrafficId = new HashMap<>();
+                        Map<String, Set<String>> topicsByTenantId = new HashMap<>();
+                        Map<String, Range> matchRecordRangeByTenantId = new HashMap<>();
                         for (ScopedTopic st : keys) {
-                            topicsByTrafficId.computeIfAbsent(st.trafficId, k -> new HashSet<>()).add(st.topic);
-                            matchRecordRangeByTrafficId.computeIfAbsent(st.trafficId, k -> st.matchRecordRange);
+                            topicsByTenantId.computeIfAbsent(st.tenantId, k -> new HashSet<>()).add(st.topic);
+                            matchRecordRangeByTenantId.computeIfAbsent(st.tenantId, k -> st.matchRecordRange);
                         }
-                        return topicsByTrafficId
+                        return topicsByTenantId
                             .entrySet()
                             .stream()
                             .flatMap(entry -> match(entry.getKey(), entry.getValue(),
-                                matchRecordRangeByTrafficId.get(entry.getKey())).entrySet().stream())
+                                matchRecordRangeByTenantId.get(entry.getKey())).entrySet().stream())
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
                     }
 
                     @Override
                     public @Nullable MatchResult reload(ScopedTopic key, MatchResult oldValue) {
-                        long trafficVer = trafficVerCache.get(key.trafficId).get();
-                        if (oldValue.trafficVer >= trafficVer) {
+                        long tenantVer = tenantVerCache.get(key.tenantId).get();
+                        if (oldValue.tenantVer >= tenantVer) {
                             return oldValue;
                         }
-                        return match(key.trafficId, singleton(key.topic), key.matchRecordRange, trafficVer).get(
+                        return match(key.tenantId, singleton(key.topic), key.matchRecordRange, tenantVer).get(
                             key);
                     }
                 }));
-        trafficVerCache = Caffeine.newBuilder()
+        tenantVerCache = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
             .build(k -> new AtomicLong(System.nanoTime()));
@@ -164,7 +164,7 @@ public class SubscriptionCache {
 
     public CompletableFuture<Map<NormalMatching, Set<ClientInfo>>> get(ScopedTopic topic, Set<ClientInfo> senders) {
         Timer.Sample sample = Timer.start();
-        return trafficCache.get(topic.trafficId).get(topic)
+        return tenantCache.get(topic.tenantId).get(topic)
             .thenApply(matchResult -> {
                 sample.stop(externalMatchTimer);
                 Map<NormalMatching, Set<ClientInfo>> routesMap = new HashMap<>();
@@ -182,9 +182,9 @@ public class SubscriptionCache {
                         if (groupMatching.ordered) {
                             for (ClientInfo sender : senders) {
                                 matchedInbox = orderedSharedMatching
-                                    .get(groupMatching.trafficId +
+                                    .get(groupMatching.tenantId +
                                         groupMatching.escapedTopicFilter +
-                                        matchResult.trafficVer)
+                                        matchResult.tenantVer)
                                     .get(sender, k -> {
                                         RendezvousHash<ClientInfo, NormalMatching> hash =
                                             new RendezvousHash<>(murmur3_128(),
@@ -208,41 +208,41 @@ public class SubscriptionCache {
     }
 
     // TODO: explore the possibility to invalidate all keys which matching a given wildcard topic filter
-    public void touch(String trafficId) {
-        trafficVerCache.get(trafficId).updateAndGet(v -> Math.max(v, System.nanoTime()));
+    public void touch(String tenantId) {
+        tenantVerCache.get(tenantId).updateAndGet(v -> Math.max(v, System.nanoTime()));
     }
 
     public void invalidate(ScopedTopic topic) {
-        AsyncLoadingCache<ScopedTopic, MatchResult> routeCache = trafficCache.getIfPresent(topic.trafficId);
+        AsyncLoadingCache<ScopedTopic, MatchResult> routeCache = tenantCache.getIfPresent(topic.tenantId);
         if (routeCache != null) {
             routeCache.synchronous().invalidate(topic);
         }
     }
 
     public void close() {
-        trafficCache.invalidateAll();
+        tenantCache.invalidateAll();
         orderedSharedMatching.invalidateAll();
-        trafficVerCache.invalidateAll();
+        tenantVerCache.invalidateAll();
         Metrics.globalRegistry.remove(externalMatchTimer);
         Metrics.globalRegistry.remove(internalMatchTimer);
     }
 
-    private Map<ScopedTopic, MatchResult> match(String trafficId, Set<String> topics, Range matchRecordRange) {
-        long trafficVer = trafficVerCache.get(trafficId).get();
-        return match(trafficId, topics, matchRecordRange, trafficVer);
+    private Map<ScopedTopic, MatchResult> match(String tenantId, Set<String> topics, Range matchRecordRange) {
+        long tenantVer = tenantVerCache.get(tenantId).get();
+        return match(tenantId, topics, matchRecordRange, tenantVer);
     }
 
-    private Map<ScopedTopic, MatchResult> match(String trafficId,
+    private Map<ScopedTopic, MatchResult> match(String tenantId,
                                                 Set<String> topics,
                                                 Range matchRecordRange,
-                                                long trafficVer) {
+                                                long tenantVer) {
         Timer.Sample sample = Timer.start();
         Map<ScopedTopic, MatchResult> routes = Maps.newHashMap();
         topics.forEach(topic -> routes.put(ScopedTopic.builder()
-            .trafficId(trafficId)
+            .tenantId(tenantId)
             .topic(topic)
             .range(matchRecordRange)
-            .build(), new MatchResult(trafficVer)));
+            .build(), new MatchResult(tenantVer)));
         IKVRangeReader rangeReader = threadLocalReader.get();
         rangeReader.refresh();
 
@@ -279,7 +279,7 @@ public class SubscriptionCache {
                             itr.next();
                         } else {
                             // seek to match next topic filter
-                            ByteString nextMatch = matchRecordTopicFilterPrefix(trafficId, higherFilter.get());
+                            ByteString nextMatch = matchRecordTopicFilterPrefix(tenantId, higherFilter.get());
                             loadEstimator.track(nextMatch, LoadUnits.KEY_ITR_SEEK);
                             itr.seek(nextMatch);
                         }
@@ -292,7 +292,7 @@ public class SubscriptionCache {
                 itr.next();
             }
             matchedTopics.forEach(t -> routes.get(ScopedTopic.builder()
-                    .trafficId(trafficId)
+                    .tenantId(tenantId)
                     .topic(t)
                     .range(matchRecordRange)
                     .build())
@@ -305,6 +305,6 @@ public class SubscriptionCache {
     @AllArgsConstructor
     private static class MatchResult {
         final List<Matching> routes = new ArrayList<>();
-        final long trafficVer;
+        final long tenantVer;
     }
 }

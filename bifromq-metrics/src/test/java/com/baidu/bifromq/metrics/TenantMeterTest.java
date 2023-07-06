@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.metrics;
 
-import static com.baidu.bifromq.metrics.TrafficMeter.TAG_TRAFFIC_ID;
+import static com.baidu.bifromq.metrics.TenantMeter.TAG_TENANT_ID;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 
@@ -22,23 +22,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class TrafficMeterTest {
+public class TenantMeterTest {
     @Test
     public void get() throws InterruptedException {
-        String trafficId = "testing_traffic";
-        TrafficMeter meter = TrafficMeter.get(trafficId);
-        meter.recordCount(TrafficMetric.MqttConnectCount);
+        String tenantId = "testing_traffic";
+        TenantMeter meter = TenantMeter.get(tenantId);
+        meter.recordCount(TenantMetric.MqttConnectCount);
         assertTrue(Metrics.globalRegistry.getMeters().stream()
-            .anyMatch(m -> trafficId.equals(m.getId().getTag(TAG_TRAFFIC_ID))));
+            .anyMatch(m -> tenantId.equals(m.getId().getTag(TAG_TENANT_ID))));
         meter = null;
         System.gc();
-        TrafficMeter.cleanUp();
+        TenantMeter.cleanUp();
         System.gc();
         Thread.sleep(100);
         await().until(() -> {
             Thread.sleep(100);
             return Metrics.globalRegistry.getMeters().stream()
-                .noneMatch(m -> trafficId.equals(m.getId().getTag(TAG_TRAFFIC_ID)));
+                .noneMatch(m -> tenantId.equals(m.getId().getTag(TAG_TENANT_ID)));
         });
     }
 }

@@ -96,7 +96,7 @@ public class DistWorkerState {
                 }
 
                 @Override
-                public CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId,
+                public CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId,
                                                            String delivererKey) {
                     return CompletableFuture.completedFuture(true);
                 }
@@ -171,12 +171,12 @@ public class DistWorkerState {
         agentHost.shutdown();
     }
 
-    public ClearSubInfoReply requestClearSubInfo(String trafficId, int subBroker, String inboxId,
+    public ClearSubInfoReply requestClearSubInfo(String tenantId, int subBroker, String inboxId,
                                                  String serverId) {
         try {
             long reqId = seqNo.incrementAndGet();
             ByteString subInfoKey =
-                EntityUtil.subInfoKey(trafficId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, serverId));
+                EntityUtil.subInfoKey(tenantId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, serverId));
             KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
             DistServiceRWCoProcInput input = MessageUtil.buildClearSubInfoRequest(reqId, subInfoKey);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()

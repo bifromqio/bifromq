@@ -117,10 +117,10 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 .setResult(MatchCoProcReply.Result.OK)
                 .build());
         }
-        ByteString trafficNS = request.getTrafficNS();
+        ByteString tenantNS = request.getTenantNS();
         Range range = Range.newBuilder()
-            .setStartKey(trafficNS)
-            .setEndKey(RangeUtil.upperBound(trafficNS))
+            .setStartKey(tenantNS)
+            .setEndKey(RangeUtil.upperBound(tenantNS))
             .build();
         IKVIterator itr = reader.iterator();
         itr.seek(range.getStartKey());
@@ -131,7 +131,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 .build());
         }
         if (!isWildcardTopicFilter(request.getTopicFilter())) {
-            Optional<ByteString> val = reader.get(KeyUtil.retainKey(trafficNS, request.getTopicFilter()));
+            Optional<ByteString> val = reader.get(KeyUtil.retainKey(tenantNS, request.getTopicFilter()));
             if (val.isPresent()) {
                 TopicMessage message = TopicMessage.parseFrom(val.get());
                 if (message.getMessage().getExpireTimestamp() > clock.millis()) {
@@ -151,7 +151,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         List<String> matchLevels = TopicUtil.parse(request.getTopicFilter(), false);
         MatchCoProcReply.Builder replyBuilder = MatchCoProcReply.newBuilder()
             .setReqId(request.getReqId()).setResult(MatchCoProcReply.Result.OK);
-        itr.seek(KeyUtil.retainKeyPrefix(trafficNS, matchLevels));
+        itr.seek(KeyUtil.retainKeyPrefix(tenantNS, matchLevels));
         while (itr.isValid() &&
             compare(itr.key(), range.getEndKey()) < 0 &&
             replyBuilder.getMessagesCount() < request.getLimit()) {
@@ -169,8 +169,8 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     private RetainCoProcReply retain(RetainCoProcRequest request, IKVReader reader, IKVWriter writer) {
         try {
-            ByteString trafficNS = KeyUtil.trafficNS(request.getTrafficId());
-            Optional<ByteString> metaBytes = reader.get(trafficNS);
+            ByteString tenantNS = KeyUtil.tenantNS(request.getTenantId());
+            Optional<ByteString> metaBytes = reader.get(tenantNS);
             TopicMessage topicMessage = TopicMessage.newBuilder()
                 .setTopic(request.getTopic())
                 .setMessage(Message.newBuilder()
@@ -182,7 +182,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     .build())
                 .setSender(request.getSender())
                 .build();
-            ByteString retainKey = KeyUtil.retainKey(trafficNS, topicMessage.getTopic());
+            ByteString retainKey = KeyUtil.retainKey(tenantNS, topicMessage.getTopic());
             long now = clock.millis();
             if (topicMessage.getMessage().getExpireTimestamp() <= now) {
                 // already expired
@@ -198,7 +198,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         .setCount(1)
                         .setEstExpire(topicMessage.getMessage().getExpireTimestamp())
                         .build();
-                    writer.put(trafficNS, metadata.toByteString());
+                    writer.put(tenantNS, metadata.toByteString());
                     writer.put(retainKey, topicMessage.toByteString());
                     return RetainCoProcReply.newBuilder()
                         .setReqId(request.getReqId())
@@ -226,18 +226,18 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         TopicMessage existing = TopicMessage.parseFrom(val.get());
                         if (existing.getMessage().getExpireTimestamp() <= now) {
                             // the existing has already expired
-                            metadata = gc(now, trafficNS, metadata, reader, writer);
+                            metadata = gc(now, tenantNS, metadata, reader, writer);
                             if (metadata.getCount() > 0) {
-                                writer.put(trafficNS, metadata.toByteString());
+                                writer.put(tenantNS, metadata.toByteString());
                             }
                         } else {
                             writer.delete(retainKey);
                             metadata = metadata.toBuilder().setCount(metadata.getCount() - 1).build();
                             if (metadata.getCount() > 0) {
-                                writer.put(trafficNS, metadata.toByteString());
+                                writer.put(tenantNS, metadata.toByteString());
                             } else {
                                 // last retained message has been removed, no metadata needed
-                                writer.delete(trafficNS);
+                                writer.delete(tenantNS);
                             }
                         }
 
@@ -252,21 +252,21 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     if (metadata.getCount() >= request.getMaxRetainedTopics()) {
                         if (metadata.getEstExpire() <= now) {
                             // try to make some room via gc
-                            metadata = gc(now, trafficNS, metadata, reader, writer);
+                            metadata = gc(now, tenantNS, metadata, reader, writer);
                             if (metadata.getCount() < request.getMaxRetainedTopics()) {
                                 metadata = metadata.toBuilder()
                                     .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
                                         metadata.getEstExpire()))
                                     .setCount(metadata.getCount() + 1).build();
                                 writer.put(retainKey, topicMessage.toByteString());
-                                writer.put(trafficNS, metadata.toByteString());
+                                writer.put(tenantNS, metadata.toByteString());
                                 return RetainCoProcReply.newBuilder()
                                     .setReqId(request.getReqId())
                                     .setResult(RetainCoProcReply.Result.RETAINED)
                                     .build();
                             } else {
                                 // still no enough room
-                                writer.put(trafficNS, metadata.toByteString());
+                                writer.put(tenantNS, metadata.toByteString());
                                 return RetainCoProcReply.newBuilder()
                                     .setReqId(request.getReqId())
                                     .setResult(RetainCoProcReply.Result.ERROR)
@@ -286,7 +286,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                                 metadata.getEstExpire()))
                             .setCount(metadata.getCount() + 1).build();
                         writer.put(retainKey, topicMessage.toByteString());
-                        writer.put(trafficNS, metadata.toByteString());
+                        writer.put(tenantNS, metadata.toByteString());
                         return RetainCoProcReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setResult(RetainCoProcReply.Result.RETAINED)
@@ -297,7 +297,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     TopicMessage existing = TopicMessage.parseFrom(val.get());
                     if (existing.getMessage().getExpireTimestamp() <= now &&
                         metadata.getCount() >= request.getMaxRetainedTopics()) {
-                        metadata = gc(now, trafficNS, metadata, reader, writer);
+                        metadata = gc(now, tenantNS, metadata, reader, writer);
                         if (metadata.getCount() < request.getMaxRetainedTopics()) {
                             metadata = metadata.toBuilder()
                                 .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
@@ -305,14 +305,14 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                                 .setCount(metadata.getCount() + 1)
                                 .build();
                             writer.put(retainKey, topicMessage.toByteString());
-                            writer.put(trafficNS, metadata.toByteString());
+                            writer.put(tenantNS, metadata.toByteString());
                             return RetainCoProcReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setResult(RetainCoProcReply.Result.RETAINED)
                                 .build();
                         } else {
                             if (metadata.getCount() > 0) {
-                                writer.put(trafficNS, metadata.toByteString());
+                                writer.put(tenantNS, metadata.toByteString());
                             }
                             // no enough room
                             // TODO: report event: exceed limit
@@ -328,7 +328,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                                 metadata.getEstExpire()))
                             .build();
                         writer.put(retainKey, topicMessage.toByteString());
-                        writer.put(trafficNS, metadata.toByteString());
+                        writer.put(tenantNS, metadata.toByteString());
                         return RetainCoProcReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setResult(RetainCoProcReply.Result.RETAINED)
@@ -352,10 +352,10 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     }
 
     @SneakyThrows
-    private RetainSetMetadata gc(long now, ByteString trafficNS, RetainSetMetadata metadata,
+    private RetainSetMetadata gc(long now, ByteString tenantNS, RetainSetMetadata metadata,
                                  IKVReader reader,
                                  IKVWriter writer) {
-        Range range = Range.newBuilder().setStartKey(trafficNS).setEndKey(RangeUtil.upperBound(trafficNS)).build();
+        Range range = Range.newBuilder().setStartKey(tenantNS).setEndKey(RangeUtil.upperBound(tenantNS)).build();
         IKVIterator itr = reader.iterator();
         itr.seek(range.getStartKey());
         itr.next();
@@ -375,7 +375,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             .setEstExpire(earliestExp == Long.MAX_VALUE ? now : earliestExp)
             .build();
         if (metadata.getCount() == 0) {
-            writer.delete(trafficNS);
+            writer.delete(tenantNS);
         }
         return metadata;
     }
@@ -386,15 +386,15 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         try {
             itr.seekToFirst();
             while (itr.isValid()) {
-                ByteString trafficNS = KeyUtil.parseTrafficNS(itr.key());
-                if (KeyUtil.isTrafficNS(itr.key())) {
+                ByteString tenantNS = KeyUtil.parseTenantNS(itr.key());
+                if (KeyUtil.isTenantNS(itr.key())) {
                     RetainSetMetadata metadata = RetainSetMetadata.parseFrom(itr.value());
-                    RetainSetMetadata updated = gc(now, trafficNS, metadata, reader, writer);
+                    RetainSetMetadata updated = gc(now, tenantNS, metadata, reader, writer);
                     if (!updated.equals(metadata) && updated.getCount() > 0) {
-                        writer.put(trafficNS, updated.toByteString());
+                        writer.put(tenantNS, updated.toByteString());
                     }
                 }
-                itr.seek(RangeUtil.upperBound(trafficNS));
+                itr.seek(RangeUtil.upperBound(tenantNS));
             }
             return GCReply.newBuilder().setReqId(request.getReqId()).build();
         } catch (InvalidProtocolBufferException e) {

@@ -99,7 +99,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class InboxStoreCoProc implements IKVRangeCoProc {
-    private final Supplier<IKVRangeReader> rangeReaderProvider;
     private final IEventCollector eventCollector;
     private final Clock clock;
     private final Duration purgeDelay;
@@ -107,7 +106,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     InboxStoreCoProc(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, IEventCollector eventCollector,
                      Clock clock,
                      Duration purgeDelay) {
-        this.rangeReaderProvider = rangeReaderProvider;
         this.eventCollector = eventCollector;
         this.clock = clock;
         this.purgeDelay = purgeDelay;
@@ -402,7 +400,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
         for (MessagePack subMsgPack : request.getSubMsgPackList()) {
             SubInfo subInfo = subMsgPack.getSubInfo();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(subInfo.getTrafficId(), subInfo.getInboxId());
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(subInfo.getTenantId(), subInfo.getInboxId());
 
             results.put(subInfo, null);
             subMsgPacksByInbox.computeIfAbsent(scopedInboxId, k -> new LinkedList<>()).add(subMsgPack);
@@ -411,7 +409,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         for (ByteString scopedInboxId : subMsgPacksByInbox.keySet()) {
             List<MessagePack> subMsgPacks = subMsgPacksByInbox.get(scopedInboxId);
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
-            if (!metadataBytes.isPresent()) {
+            if (metadataBytes.isEmpty()) {
                 subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
                 continue;
             }
@@ -492,9 +490,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                                  IKVWriter writer) {
         SubInfo subInfo = msgPack.getSubInfo();
         String topicFilter = subInfo.getTopicFilter();
-        ByteString scopedInboxId = KeyUtil.scopedInboxId(subInfo.getTrafficId(), subInfo.getInboxId());
+        ByteString scopedInboxId = KeyUtil.scopedInboxId(subInfo.getTenantId(), subInfo.getInboxId());
         Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
-        if (!metadataBytes.isPresent()) {
+        if (metadataBytes.isEmpty()) {
             return InboxInsertResult.Result.NO_INBOX;
         }
         InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
@@ -853,7 +851,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                 IKVWriter writer) {
         try {
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
-            if (!metadataBytes.isPresent()) {
+            if (metadataBytes.isEmpty()) {
                 return false;
             }
             InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());

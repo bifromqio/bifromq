@@ -32,14 +32,14 @@ import org.testng.annotations.Test;
 public class MQTTKickTest extends MQTTTest {
     @Test(groups = "integration")
     public void testKick() {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
         String clientId = "testClient1";
 
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -47,7 +47,7 @@ public class MQTTKickTest extends MQTTTest {
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setMqttVersion(4);
         connOpts.setCleanSession(true);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient client1 = new MqttTestClient(brokerURI, clientId);
         client1.connect(connOpts);

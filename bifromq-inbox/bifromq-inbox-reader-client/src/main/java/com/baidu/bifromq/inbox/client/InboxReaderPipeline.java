@@ -52,7 +52,7 @@ class InboxReaderPipeline implements IInboxReaderClient.IInboxReader {
             put(PIPELINE_ATTR_KEY_INBOX_ID, inboxId);
             put(PIPELINE_ATTR_KEY_CLIENT_INFO, encode(clientInfo));
         }};
-        ppln = rpcClient.createMessageStream(clientInfo.getTrafficId(), null, delivererKey, () -> {
+        ppln = rpcClient.createMessageStream(clientInfo.getTenantId(), null, delivererKey, () -> {
                 metadata.put(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ, lastFetchQoS0Seq + "");
                 metadata.put(PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ, lastFetchQoS2Seq + "");
                 return metadata;
@@ -85,7 +85,7 @@ class InboxReaderPipeline implements IInboxReaderClient.IInboxReader {
     @Override
     public CompletableFuture<CommitReply> commit(long reqId, QoS qos, long upToSeq) {
         log.trace("Commit: inbox={}, qos={}, seq={}, client={}", inboxId, qos, upToSeq, clientInfo);
-        return rpcClient.invoke(clientInfo.getTrafficId(), null,
+        return rpcClient.invoke(clientInfo.getTenantId(), null,
                 CommitRequest.newBuilder()
                     .setReqId(reqId)
                     .setQos(qos)

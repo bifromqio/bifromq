@@ -20,5 +20,5 @@ public class MetricTag {
 
     public static final String METHOD = "method";
 
-    public static final String TRAFFIC_ID = "trafficId";
+    public static final String TENANT_ID = "tenantId";
 }

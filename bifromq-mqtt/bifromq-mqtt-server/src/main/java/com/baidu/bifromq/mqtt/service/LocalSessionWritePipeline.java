@@ -41,7 +41,7 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
     }
 
     @Override
-    protected CompletableFuture<WriteReply> handleRequest(String trafficId, WriteRequest request) {
+    protected CompletableFuture<WriteReply> handleRequest(String tenantId, WriteRequest request) {
         log.trace("Handle inbox write request: \n{}", request);
         WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
         Set<SubInfo> ok = new HashSet<>();

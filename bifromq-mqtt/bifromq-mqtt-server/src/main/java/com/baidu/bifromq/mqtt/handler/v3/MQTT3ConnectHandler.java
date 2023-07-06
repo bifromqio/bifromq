@@ -165,9 +165,9 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                         Optional<InetSocketAddress> clientAddr =
                             Optional.ofNullable(ChannelAttrs.socketAddress(ctx.channel()));
                         clientInfo = ClientInfo.newBuilder()
-                            .setTrafficId(ok.getTrafficId())
-                            .setUserId(ok.getUserId())
+                            .setTenantId(ok.getTenantId())
                             .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                                .setUserId(ok.getUserId())
                                 .setIsMQIsdp(connMsg.variableHeader().version() == 3)
                                 .setClientId(mqttClientId)
                                 .setIp(clientAddr.map(a -> a.getAddress().getHostAddress()).orElse(""))

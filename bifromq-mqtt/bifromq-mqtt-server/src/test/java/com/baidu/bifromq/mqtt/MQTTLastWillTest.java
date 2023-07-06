@@ -40,15 +40,15 @@ public class MQTTLastWillTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void lastWillQoS1() {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
-        String userName = trafficId + "/" + deviceKey;
+        String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -77,7 +77,7 @@ public class MQTTLastWillTest extends MQTTTest {
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
 
         log.info("Kill client");
-        sessionDictClient.kill(System.nanoTime(), trafficId, deviceKey,
+        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
             "lwtPubclient", ClientInfo.getDefaultInstance()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
@@ -89,15 +89,15 @@ public class MQTTLastWillTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void lastWillQoS1Retained() {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
-        String userName = trafficId + "/" + deviceKey;
+        String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -116,7 +116,7 @@ public class MQTTLastWillTest extends MQTTTest {
         lwtPubConnOpts.setUserName(userName);
         MqttTestClient lwtPubClient = new MqttTestClient(brokerURI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        sessionDictClient.kill(System.nanoTime(), trafficId, deviceKey,
+        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
             "lwtPubclient", ClientInfo.getDefaultInstance()).join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
@@ -136,15 +136,15 @@ public class MQTTLastWillTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void lastWillQoS2() {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
-        String userName = trafficId + "/" + deviceKey;
+        String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -172,7 +172,7 @@ public class MQTTLastWillTest extends MQTTTest {
         lwtSubClient.connect(lwtSubConnOpts);
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2);
 
-        sessionDictClient.kill(System.nanoTime(), trafficId, deviceKey,
+        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
             "lwtPubclient", ClientInfo.getDefaultInstance()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
@@ -184,15 +184,15 @@ public class MQTTLastWillTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void lastWillQoS2Retained() {
-        String trafficId = "ashdsha";
+        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
-        String userName = trafficId + "/" + deviceKey;
+        String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -211,7 +211,7 @@ public class MQTTLastWillTest extends MQTTTest {
         lwtPubConnOpts.setUserName(userName);
         MqttTestClient lwtPubClient = new MqttTestClient(brokerURI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        sessionDictClient.kill(System.nanoTime(), trafficId, deviceKey,
+        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
             "lwtPubclient", ClientInfo.getDefaultInstance()).join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();

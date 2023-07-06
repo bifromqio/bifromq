@@ -57,11 +57,11 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     private final ConcurrentLinkedDeque<RequestTask<ReqT, RespT>> preflightTaskQueue;
     private final ConcurrentLinkedDeque<RequestTask<ReqT, RespT>> inflightTaskQueue;
     private final RPCMeters.MeterKey meterKey;
-    private final String trafficId;
+    private final String tenantId;
     private final String wchKey;
     private final Supplier<Map<String, String>> metadataSupplier;
     private final BluePrint.MethodSemantic<ReqT> semantic;
-    private final MethodDescriptor methodDescriptor;
+    private final MethodDescriptor<ReqT, RespT> methodDescriptor;
     private final BluePrint bluePrint;
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final BehaviorSubject<Long> signal = BehaviorSubject.createDefault(System.nanoTime());
@@ -75,14 +75,14 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     private final AtomicBoolean sending = new AtomicBoolean(false);
 
     ManagedRequestPipeline(
-        String trafficId,
+        String tenantId,
         @Nullable String wchKey,
         @Nullable String targetServerId,
         Supplier<Map<String, String>> metadataSupplier,
         String serviceUniqueName,
         RPCClient.ChannelHolder channelHolder,
         CallOptions callOptions,
-        MethodDescriptor methodDescriptor,
+        MethodDescriptor<ReqT, RespT> methodDescriptor,
         BluePrint bluePrint) {
         assert methodDescriptor.getType() == MethodDescriptor.MethodType.BIDI_STREAMING;
         this.bluePrint = bluePrint;
@@ -94,13 +94,13 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         } else if (semantic instanceof BluePrint.WCHBalanced) {
             assert wchKey != null;
         }
-        this.trafficId = trafficId;
+        this.tenantId = tenantId;
         this.wchKey = wchKey;
         this.metadataSupplier = metadataSupplier;
         this.meterKey = RPCMeters.MeterKey.builder()
             .service(serviceUniqueName)
             .method(methodDescriptor.getBareMethodName())
-            .trafficId(trafficId)
+            .tenantId(tenantId)
             .build();
         preflightTaskQueue = new ConcurrentLinkedDeque<>();
         inflightTaskQueue = new ConcurrentLinkedDeque<>();
@@ -118,7 +118,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                         return;
                     }
                     if (semantic instanceof BluePrint.DDBalanced) {
-                        boolean available = selector.direct(trafficId, desiredServerId.get(),
+                        boolean available = selector.direct(tenantId, desiredServerId.get(),
                             methodDescriptor);
                         if (available) {
                             state.set(State.Normal);
@@ -147,8 +147,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             }
                         }
                     } else if (semantic instanceof BluePrint.WCHBalanced) {
-                        Optional<String> newServer = selector.hashing(trafficId, wchKey, methodDescriptor);
-                        if (!newServer.isPresent()) {
+                        Optional<String> newServer = selector.hashing(tenantId, wchKey, methodDescriptor);
+                        if (newServer.isEmpty()) {
                             state.set(State.ServiceUnavailable);
                             if (selectedServerId.get() != null) {
                                 log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
@@ -163,7 +163,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             } else {
                                 // abort all pending requests
                                 abortFlightRequests(new ServiceUnavailableException(
-                                    "Service unavailable for traffic " + trafficId));
+                                    "Service unavailable for tenant " + tenantId));
                             }
                         } else {
                             state.set(State.Normal);
@@ -184,8 +184,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             }
                         }
                     } else if (semantic instanceof BluePrint.WRBalanced) {
-                        Optional<String> newServer = selector.random(trafficId, methodDescriptor);
-                        if (!newServer.isPresent()) {
+                        Optional<String> newServer = selector.random(tenantId, methodDescriptor);
+                        if (newServer.isEmpty()) {
                             state.set(State.ServiceUnavailable);
                             if (selectedServerId.get() != null) {
                                 log.debug("ReqPipeline@{} stop targeting to server[{}]",
@@ -195,7 +195,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             } else {
                                 // abort all pending requests
                                 abortFlightRequests(new ServiceUnavailableException(
-                                    "Service unavailable for traffic " + trafficId));
+                                    "Service unavailable for tenant " + tenantId));
                             }
                         } else {
                             state.set(State.Normal);
@@ -204,8 +204,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             }
                         }
                     } else if (semantic instanceof BluePrint.WRRBalanced) {
-                        Optional<String> newServer = selector.roundRobin(trafficId, methodDescriptor);
-                        if (!newServer.isPresent()) {
+                        Optional<String> newServer = selector.roundRobin(tenantId, methodDescriptor);
+                        if (newServer.isEmpty()) {
                             state.set(State.ServiceUnavailable);
                             if (selectedServerId.get() != null) {
                                 log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
@@ -217,7 +217,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             } else {
                                 // abort all pending requests
                                 abortFlightRequests(new ServiceUnavailableException(
-                                    "Service unavailable for traffic " + trafficId));
+                                    "Service unavailable for tenant " + tenantId));
                             }
                         } else {
                             state.set(State.Normal);
@@ -290,7 +290,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         // currently, context attributes from caller are not allowed
         // start a new context by forking from ROOT,so no scaring warning should appear in the log
         Context ctx = Context.ROOT.fork()
-            .withValue(RPCContext.TRAFFIC_ID_CTX_KEY, trafficId)
+            .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .withValue(RPCContext.SELECTED_SERVER_ID_CTX_KEY, new RPCContext.ServerSelection())
             .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metadataSupplier.get());
         if (semantic instanceof BluePrint.DDBalanced) {
@@ -371,7 +371,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
 
     private void prepareForReFly() {
         while (!inflightTaskQueue.isEmpty()) {
-            RequestTask refly = inflightTaskQueue.pollLast();
+            RequestTask<ReqT, RespT> refly = inflightTaskQueue.pollLast();
             log.trace("ReqPipeline@{} of {} re-fly task: {}",
                 hashCode(), methodDescriptor.getBareMethodName(), refly.request);
             preflightTaskQueue.addFirst(refly);
@@ -403,12 +403,12 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         }
     }
 
-    private class RequestTask<ReqT, RespT> {
+    private class RequestTask<Req, Resp> {
         final Long enqueueTS = System.nanoTime();
-        final ReqT request;
-        final CompletableFuture<RespT> future;
+        final Req request;
+        final CompletableFuture<Resp> future;
 
-        RequestTask(ReqT request) {
+        RequestTask(Req request) {
             this.request = request;
             taskCount.incrementAndGet();
             this.future = new CompletableFuture<>();
@@ -430,7 +430,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             }
         }
 
-        public void finish(RespT resp) {
+        public void finish(Resp resp) {
             long finishTime = System.nanoTime() - enqueueTS;
             RPCMeters.timer(meterKey, RPCMetric.PipelineReqLatency).record(finishTime, TimeUnit.NANOSECONDS);
             if (future.complete(resp)) {

@@ -37,8 +37,8 @@ public class Constants {
     public static final Attributes.Key<String> SERVER_ID_ATTR_KEY = Attributes.Key.create("ServerId");
     public static final Attributes.Key<Set<String>> SERVER_GROUP_TAG_ATTR_KEY = Attributes.Key.create("ServerGroupTag");
 
-    public static final Metadata.Key<String> TRAFFIC_ID_META_KEY =
-        Metadata.Key.of("traffic_id", Metadata.ASCII_STRING_MARSHALLER);
+    public static final Metadata.Key<String> TENANT_ID_META_KEY =
+        Metadata.Key.of("tenant_id", Metadata.ASCII_STRING_MARSHALLER);
     public static final Metadata.Key<String> DESIRED_SERVER_META_KEY =
         Metadata.Key.of("desired_server_id", Metadata.ASCII_STRING_MARSHALLER);
     public static final Metadata.Key<String> WCH_KEY_META_KEY =

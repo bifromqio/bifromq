@@ -43,24 +43,24 @@ import org.testng.annotations.Test;
 public class BatchDistTest extends DistWorkerTest {
     @Test(groups = "integration")
     public void batchDistWithNoSub() {
-        String trafficId = "trafficA";
+        String tenantId = "tenantA";
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(trafficId,
+        BatchDistReply reply = dist(tenantId,
             List.of(TopicMessagePack.newBuilder()
                     .setTopic("a")
-                    .addMessage(toMsg(trafficId, AT_MOST_ONCE, payload))
+                    .addMessage(toMsg(tenantId, AT_MOST_ONCE, payload))
                     .build(),
                 TopicMessagePack.newBuilder()
                     .setTopic("a/")
-                    .addMessage(toMsg(trafficId, AT_MOST_ONCE, payload))
+                    .addMessage(toMsg(tenantId, AT_MOST_ONCE, payload))
                     .build(),
                 TopicMessagePack.newBuilder()
                     .setTopic("a/b")
-                    .addMessage(toMsg(trafficId, AT_MOST_ONCE, payload))
+                    .addMessage(toMsg(tenantId, AT_MOST_ONCE, payload))
                     .build()), "orderKey1");
-        assertTrue(reply.getResultMap().get(trafficId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
+        assertTrue(reply.getResultMap().get(tenantId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
     }
 
     @Test(groups = "integration")
@@ -118,12 +118,12 @@ public class BatchDistTest extends DistWorkerTest {
         assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/4").intValue(), 1);
     }
 
-    private TopicMessagePack.SenderMessagePack toMsg(String trafficId, QoS qos, ByteString payload) {
+    private TopicMessagePack.SenderMessagePack toMsg(String tenantId, QoS qos, ByteString payload) {
         return TopicMessagePack.SenderMessagePack.newBuilder()
             .setSender(ClientInfo.newBuilder()
-                .setTrafficId(trafficId)
-                .setUserId("testUser")
+                .setTenantId(tenantId)
                 .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                    .setUserId("testUser")
                     .setClientId("testClientId")
                     .setIp("127.0.0.1")
                     .setPort(8080)

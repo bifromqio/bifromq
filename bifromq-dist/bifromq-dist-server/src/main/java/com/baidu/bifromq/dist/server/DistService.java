@@ -56,7 +56,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final ICallScheduler<DistCall> distCallRateScheduler;
     private final IBatchCallScheduler<DistCall, Map<String, Integer>> distCallScheduler;
     private final SubCallScheduler subCallScheduler;
-    private final LoadingCache<String, RunningAverage> trafficFanouts;
+    private final LoadingCache<String, RunningAverage> tenantFanouts;
 
     DistService(IBaseKVStoreClient kvStoreClient,
                 ISettingProvider settingProvider,
@@ -67,7 +67,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
         this.distCallScheduler = new DistCallScheduler(kvStoreClient, this.distCallRateScheduler);
         this.subCallScheduler = new SubCallScheduler(kvStoreClient);
-        trafficFanouts = Caffeine.newBuilder()
+        tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(k -> new RunningAverage(5));
     }
@@ -78,7 +78,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         // in transaction context for data consistency, but that may bring too much complexity. so here is the
         // trade-off: the two sub-tasks are executed atomically but not in transaction, so the subInfo and
         // matchRecord data may inconsistent due to some transient failure, we need a background job for rectification.
-        response(trafficId -> {
+        response(tenantId -> {
             List<CompletableFuture<SubCallResult>> futures = new ArrayList<>();
             futures.add(subCallScheduler.schedule(new SubCall.AddTopicFilter(request)));
             if (TopicUtil.isNormalTopicFilter(request.getTopicFilter())) {
@@ -89,7 +89,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
             return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .handle((v, e) -> {
                     if (e != null) {
-                        log.error("Failed to exec SubRequest, trafficId={}, req={}", trafficId, request, e);
+                        log.error("Failed to exec SubRequest, tenantId={}, req={}", tenantId, request, e);
                         return SubReply.SubResult.Failure;
                     } else {
                         SubCallResult.AddTopicFilterResult atfr =
@@ -115,7 +115,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     }
 
     public void unsub(UnsubRequest request, StreamObserver<UnsubReply> responseObserver) {
-        response(trafficId -> {
+        response(tenantId -> {
             List<CompletableFuture<SubCallResult>> futures = new ArrayList<>();
             futures.add(subCallScheduler.schedule(new SubCall.RemoveTopicFilter(request)));
             if (TopicUtil.isNormalTopicFilter(request.getTopicFilter())) {
@@ -126,7 +126,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
             return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .handle((v, e) -> {
                     if (e != null) {
-                        log.error("Failed to exec UnsubRequest, trafficId={}, req={}", trafficId, request, e);
+                        log.error("Failed to exec UnsubRequest, tenantId={}, req={}", tenantId, request, e);
                         return UnsubReply.Result.ERROR;
                     } else {
                         return UnsubReply.Result.OK;
@@ -138,10 +138,10 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
 
     @Override
     public void clear(ClearRequest request, StreamObserver<ClearReply> responseObserver) {
-        response(trafficId -> subCallScheduler.schedule(new SubCall.Clear(request))
+        response(tenantId -> subCallScheduler.schedule(new SubCall.Clear(request))
             .thenApply(v -> ((SubCallResult.ClearResult) v).subInfo)
             .thenCompose(subInfo -> {
-                List<CompletableFuture> delFutures = subInfo.getTopicFiltersMap()
+                List<CompletableFuture<?>> delFutures = subInfo.getTopicFiltersMap()
                     .keySet()
                     .stream()
                     .map(tf -> {
@@ -171,7 +171,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                 return CompletableFuture.allOf(delFutures.toArray(new CompletableFuture[0]));
             }).handle((result, e) -> {
                 if (e != null) {
-                    log.error("Failed to exec ClearRequest, trafficId={}, req={}", trafficId, request, e);
+                    log.error("Failed to exec ClearRequest, tenantId={}, req={}", tenantId, request, e);
                     return ClearReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(ClearReply.Result.ERROR)
@@ -186,7 +186,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
 
     @Override
     public StreamObserver<DistRequest> dist(StreamObserver<DistReply> responseObserver) {
-        return new DistResponsePipeline(distCallScheduler, responseObserver, eventCollector, trafficFanouts);
+        return new DistResponsePipeline(distCallScheduler, responseObserver, eventCollector, tenantFanouts);
     }
 
     public void stop() {

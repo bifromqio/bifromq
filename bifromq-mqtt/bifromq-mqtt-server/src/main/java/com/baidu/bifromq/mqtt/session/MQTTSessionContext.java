@@ -58,7 +58,7 @@ public final class MQTTSessionContext {
     public final int maxResendTimes;
     public final int resendDelayMillis;
     public final int defaultKeepAliveTimeSeconds;
-    // track under confirming id count per trafficId
+    // track under confirming id count per tenantId
     private final InUseQoS2MessageIds unreleasedQoS2MessageIds;
     // cache for client dist pipeline
     private final LoadingCache<ClientInfo, IRetainServiceClient.IClientPipeline> clientRetainPipelines;
@@ -159,16 +159,16 @@ public final class MQTTSessionContext {
         };
     }
 
-    public void addForConfirming(String trafficId, String channelId, int qos2MessageId) {
-        unreleasedQoS2MessageIds.use(trafficId, channelId, qos2MessageId);
+    public void addForConfirming(String tenantId, String channelId, int qos2MessageId) {
+        unreleasedQoS2MessageIds.use(tenantId, channelId, qos2MessageId);
     }
 
-    public boolean isConfirming(String trafficId, String channelId, int qos2MessageId) {
-        return unreleasedQoS2MessageIds.inUse(trafficId, channelId, qos2MessageId);
+    public boolean isConfirming(String tenantId, String channelId, int qos2MessageId) {
+        return unreleasedQoS2MessageIds.inUse(tenantId, channelId, qos2MessageId);
     }
 
-    public void confirm(String trafficId, String channelId, int qos2MessageId) {
-        unreleasedQoS2MessageIds.release(trafficId, channelId, qos2MessageId);
+    public void confirm(String tenantId, String channelId, int qos2MessageId) {
+        unreleasedQoS2MessageIds.release(tenantId, channelId, qos2MessageId);
     }
 
     public IRetainServiceClient.IClientPipeline getClientRetainPipeline(ClientInfo clientInfo) {

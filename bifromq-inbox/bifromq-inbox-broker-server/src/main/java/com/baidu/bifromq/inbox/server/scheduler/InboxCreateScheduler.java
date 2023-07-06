@@ -68,7 +68,7 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
 
     @Override
     protected ByteString rangeKey(CreateInboxRequest request) {
-        return scopedInboxId(request.getClientInfo().getTrafficId(), request.getInboxId());
+        return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
     }
 
     private class BatchCreateBuilder extends BatchCallBuilder<CreateInboxRequest, CreateInboxReply> {
@@ -88,7 +88,7 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
             @Override
             public CompletableFuture<CreateInboxReply> add(CreateInboxRequest request) {
                 ClientInfo client = request.getClientInfo();
-                String scopedInboxIdUtf8 = scopedInboxId(client.getTrafficId(),
+                String scopedInboxIdUtf8 = scopedInboxId(client.getTenantId(),
                     request.getInboxId()).toStringUtf8();
                 inboxCreates.computeIfAbsent(scopedInboxIdUtf8, k -> CreateParams.newBuilder()
                     .setExpireSeconds(settingProvider.provide(OfflineExpireTimeSeconds, client))

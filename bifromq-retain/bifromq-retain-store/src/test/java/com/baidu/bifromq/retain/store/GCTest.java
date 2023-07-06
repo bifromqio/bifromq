@@ -44,145 +44,145 @@ public class GCTest extends RetainStoreTest {
 
     @Test(groups = "integration")
     public void retainAlreadyExpired() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message = message(topic, "hello", 0, 1);
         // make it expired
         when(clock.millis()).thenReturn(1100L);
 
-        assertEquals(requestRetain(trafficId, 1, message).getResult(), RetainCoProcReply.Result.ERROR);
+        assertEquals(requestRetain(tenantId, 1, message).getResult(), RetainCoProcReply.Result.ERROR);
     }
 
     @Test(groups = "integration")
     public void inlineGCDuringRetain() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic1 = "/a";
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 1);
-        requestRetain(trafficId, 1, message1);
-        MatchCoProcReply matchReply = requestMatch(trafficId, topic1, 10);
+        requestRetain(tenantId, 1, message1);
+        MatchCoProcReply matchReply = requestMatch(tenantId, topic1, 10);
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message1);
 
         when(clock.millis()).thenReturn(1100L);
 
         // message1 has expired
-        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 0);
 
         TopicMessage message2 = message(topic2, "world", 1000, 1);
-        assertEquals(requestRetain(trafficId, 1, message2).getResult(), RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, 1, message2).getResult(), RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 0);
 
-        matchReply = requestMatch(trafficId, topic2, 10);
+        matchReply = requestMatch(tenantId, topic2, 10);
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message2);
     }
 
     @Test(groups = "integration")
     public void inlineGCDuringDelete() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message1 = message(topic, "hello", 0, 1);
-        requestRetain(trafficId, 1, message1);
+        requestRetain(tenantId, 1, message1);
 
         when(clock.millis()).thenReturn(1100L);
 
-        assertEquals(requestRetain(trafficId, 1, message(topic, "")).getResult(),
+        assertEquals(requestRetain(tenantId, 1, message(topic, "")).getResult(),
             RetainCoProcReply.Result.CLEARED);
-        assertEquals(requestMatch(trafficId, topic, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic, 10).getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
     public void inlineGCDuringReplace() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic1 = "/a";
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 1);
         TopicMessage message2 = message(topic2, "world", 0, 1);
         TopicMessage message3 = message(topic2, "world", 1000, 1);
-        requestRetain(trafficId, 2, message1);
-        requestRetain(trafficId, 2, message2);
+        requestRetain(tenantId, 2, message1);
+        requestRetain(tenantId, 2, message2);
 
         when(clock.millis()).thenReturn(1100L);
 
 
-        assertEquals(requestRetain(trafficId, 2, message3).getResult(),
+        assertEquals(requestRetain(tenantId, 2, message3).getResult(),
             RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 0);
-        assertEquals(requestMatch(trafficId, topic2, 10).getMessagesCount(), 1);
-        assertEquals(requestMatch(trafficId, topic2, 10).getMessages(0), message3);
+        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic2, 10).getMessagesCount(), 1);
+        assertEquals(requestMatch(tenantId, topic2, 10).getMessages(0), message3);
 
         // message1 will be removed as well, so retain set size should be 1
-        assertEquals(requestRetain(trafficId, 2, message("/c", "abc")).getResult(),
+        assertEquals(requestRetain(tenantId, 2, message("/c", "abc")).getResult(),
             RetainCoProcReply.Result.RETAINED);
         // no room
-        assertEquals(requestRetain(trafficId, 2, message("/d", "abc")).getResult(),
+        assertEquals(requestRetain(tenantId, 2, message("/d", "abc")).getResult(),
             RetainCoProcReply.Result.ERROR);
     }
 
     @Test(groups = "integration")
     public void estExpiryTimeUpdateByRetainNew() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic1 = "/a";
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 2);
         TopicMessage message2 = message(topic2, "world", 0, 1);
 
-        requestRetain(trafficId, 2, message1);
-        requestRetain(trafficId, 2, message2);
+        requestRetain(tenantId, 2, message1);
+        requestRetain(tenantId, 2, message2);
 
         when(clock.millis()).thenReturn(1100L);
         // message2 expired
-        assertEquals(requestMatch(trafficId, topic1, 10).getMessagesCount(), 1);
-        assertEquals(requestMatch(trafficId, topic2, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 1);
+        assertEquals(requestMatch(tenantId, topic2, 10).getMessagesCount(), 0);
 
-        assertEquals(requestRetain(trafficId, 2,
+        assertEquals(requestRetain(tenantId, 2,
             message("/c", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
-        assertEquals(requestRetain(trafficId, 2,
+        assertEquals(requestRetain(tenantId, 2,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
 
         when(clock.millis()).thenReturn(2100L);
         // now message1 expired
-        assertEquals(requestRetain(trafficId, 2,
+        assertEquals(requestRetain(tenantId, 2,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
     }
 
     @Test(groups = "integration")
     public void estExpiryTimeUpdatedByReplaceNew() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message1 = message(topic, "hello", 0, 2);
         TopicMessage message2 = message(topic, "world", 0, 1);
 
-        requestRetain(trafficId, 1, message1);
-        requestRetain(trafficId, 1, message2);
+        requestRetain(tenantId, 1, message1);
+        requestRetain(tenantId, 1, message2);
 
         // no room for new message
-        assertEquals(requestRetain(trafficId, 1,
+        assertEquals(requestRetain(tenantId, 1,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
         when(clock.millis()).thenReturn(1100L);
-        assertEquals(requestRetain(trafficId, 1,
+        assertEquals(requestRetain(tenantId, 1,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
-        assertEquals(requestMatch(trafficId, topic, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic, 10).getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
     public void gc() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message = message(topic, "hello", 0, 1);
-        requestRetain(trafficId, 1, message);
+        requestRetain(tenantId, 1, message);
 
-        requestGC(trafficId);
-        assertEquals(requestRetain(trafficId, 1,
+        requestGC(tenantId);
+        assertEquals(requestRetain(tenantId, 1,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
 
         when(clock.millis()).thenReturn(1100L);
-        requestGC(trafficId);
+        requestGC(tenantId);
 
-        assertEquals(requestRetain(trafficId, 1,
+        assertEquals(requestRetain(tenantId, 1,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
     }
 }

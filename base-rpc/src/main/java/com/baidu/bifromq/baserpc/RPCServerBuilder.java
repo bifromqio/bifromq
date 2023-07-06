@@ -19,7 +19,7 @@ import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.baserpc.interceptor.TrafficAwareServerInterceptor;
+import com.baidu.bifromq.baserpc.interceptor.TenantAwareServerInterceptor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.google.common.base.Preconditions;
@@ -178,7 +178,7 @@ public abstract class RPCServerBuilder<T extends RPCServerBuilder<T>> {
                 }
                 ServerServiceDefinition serviceDef = serverDefBuilder.build();
                 builder.addService(ServerInterceptors
-                    .intercept(serviceDef, new TrafficAwareServerInterceptor(serviceUniqueName, serviceDef))
+                    .intercept(serviceDef, new TenantAwareServerInterceptor(serviceUniqueName, serviceDef))
                 );
             });
         }

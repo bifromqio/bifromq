@@ -14,6 +14,7 @@
 package com.baidu.bifromq.plugin.settingprovider;
 
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MQTT3ClientInfo;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
@@ -29,11 +30,15 @@ public class SettingTest {
 
     @Test
     public void customClassifier() {
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId("abc").setUserId("123").build();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("abc")
+            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                .setUserId("123")
+                .build())
+            .build();
         Setting.MaxTopicLevels.current(clientInfo, 32);
         assertTrue(Setting.MaxTopicLevels.current(clientInfo).equals(32));
 
-        Setting.MaxTopicLevels.setClientClassifier(c -> c.getTrafficId());
+        Setting.MaxTopicLevels.setClientClassifier(c -> c.getTenantId());
         assertTrue(Setting.MaxTopicLevels.current(clientInfo).equals(16));
 
         Setting.MaxTopicLevels.current(clientInfo, 32);
@@ -42,7 +47,11 @@ public class SettingTest {
 
     @Test
     public void customValueExpiry() {
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId("abc").setUserId("123").build();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("abc")
+            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
+                .setUserId("123")
+                .build())
+            .build();
         Setting.MaxTopicLevels.current(clientInfo, 32);
 
         Setting.MaxTopicLevels.currentVals.invalidateAll();

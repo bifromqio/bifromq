@@ -22,36 +22,36 @@ import org.testng.annotations.Test;
 public class DeleteBehaviorTest extends RetainStoreTest {
     @Test(groups = "integration")
     public void deleteFromEmptyRetainSet() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic = "/a/b/c";
         // empty payload signal deletion
-        RetainCoProcReply reply = requestRetain(trafficId, 10, message(topic, ""));
+        RetainCoProcReply reply = requestRetain(tenantId, 10, message(topic, ""));
         assertEquals(reply.getResult(), RetainCoProcReply.Result.CLEARED);
     }
 
     @Test(groups = "integration")
     public void deleteNonExisting() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         // empty payload signal deletion
-        assertEquals(requestRetain(trafficId, 10, message("/a/b/c", "hello")).getResult(),
+        assertEquals(requestRetain(tenantId, 10, message("/a/b/c", "hello")).getResult(),
             RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(requestRetain(trafficId, 10, message("/a", "")).getResult(),
+        assertEquals(requestRetain(tenantId, 10, message("/a", "")).getResult(),
             RetainCoProcReply.Result.CLEARED);
     }
 
     @Test(groups = "integration")
     public void deleteNonExpired() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String topic = "/a/b/c";
         // empty payload signal deletion
-        assertEquals(requestRetain(trafficId, 10, message(topic, "hello")).getResult(),
+        assertEquals(requestRetain(tenantId, 10, message(topic, "hello")).getResult(),
             RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(requestRetain(trafficId, 10, message(topic, "")).getResult(),
+        assertEquals(requestRetain(tenantId, 10, message(topic, "")).getResult(),
             RetainCoProcReply.Result.CLEARED);
 
-        MatchCoProcReply matchReply = requestMatch(trafficId, topic, 10);
+        MatchCoProcReply matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getMessagesCount(), 0);
     }
 }

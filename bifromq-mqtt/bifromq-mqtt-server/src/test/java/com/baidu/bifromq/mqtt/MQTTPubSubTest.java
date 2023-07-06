@@ -47,7 +47,7 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class MQTTPubSubTest extends MQTTTest {
-    private String trafficId = "ashdsha";
+    private String tenantId = "ashdsha";
     private String deviceKey = "testDevice";
 
     @BeforeMethod(alwaysRun = true)
@@ -57,7 +57,7 @@ public class MQTTPubSubTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId(trafficId)
+                    .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
@@ -161,7 +161,7 @@ public class MQTTPubSubTest extends MQTTTest {
         String topic = "greeting";
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestAsyncClient pubClient = new MqttTestAsyncClient(brokerURI, MqttClient.generateClientId());
         pubClient.connect(connOpts);
@@ -247,7 +247,7 @@ public class MQTTPubSubTest extends MQTTTest {
         String topic = "topic/" + pubQoS + "/" + subQoS;
         MqttConnectOptions subClientOpts = new MqttConnectOptions();
         subClientOpts.setCleanSession(false);
-        subClientOpts.setUserName(trafficId + "/subClient");
+        subClientOpts.setUserName(tenantId + "/subClient");
 
         // make a offline subscription
         MqttTestClient subClient = new MqttTestClient(brokerURI, MqttClient.generateClientId());
@@ -257,7 +257,7 @@ public class MQTTPubSubTest extends MQTTTest {
 
         MqttConnectOptions pubClientOpts = new MqttConnectOptions();
         pubClientOpts.setCleanSession(true);
-        pubClientOpts.setUserName(trafficId + "/pubClient");
+        pubClientOpts.setUserName(tenantId + "/pubClient");
         MqttTestClient pubClient = new MqttTestClient(brokerURI, MqttClient.generateClientId());
         pubClient.connect(pubClientOpts);
         pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
@@ -284,7 +284,7 @@ public class MQTTPubSubTest extends MQTTTest {
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(cleanSession);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient client = new MqttTestClient(brokerURI, MqttClient.generateClientId());
         client.connect(connOpts);
@@ -307,7 +307,7 @@ public class MQTTPubSubTest extends MQTTTest {
         CountDownLatch latch = new CountDownLatch(mqttMessages.length * 2);
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(cleanSession);
-        connOpts.setUserName(trafficId + "/" + deviceKey);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
 
         MqttTestClient client = new MqttTestClient(brokerURI, MqttClient.generateClientId());
         client.connect(connOpts);

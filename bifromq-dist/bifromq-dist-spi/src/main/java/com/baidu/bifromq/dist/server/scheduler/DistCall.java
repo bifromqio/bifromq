@@ -19,7 +19,7 @@ import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public class DistCall {
-    public final String trafficId;
+    public final String tenatId;
     public final List<SenderMessagePack> senderMsgPacks;
     public final Integer callQueueIdx;
     public final int fanout;

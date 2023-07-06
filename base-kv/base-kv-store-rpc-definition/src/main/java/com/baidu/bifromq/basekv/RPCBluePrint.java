@@ -29,14 +29,14 @@ import com.baidu.bifromq.baserpc.BluePrint;
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
         .serviceDescriptor(BaseKVStoreServiceGrpc.getServiceDescriptor())
-        .methodSemantic(getBootstrapMethod(), BluePrint.DDUnaryMethod.INSTANCE)
-        .methodSemantic(getRecoverMethod(), BluePrint.DDUnaryMethod.INSTANCE)
-        .methodSemantic(getChangeReplicaConfigMethod(), BluePrint.DDUnaryMethod.INSTANCE)
-        .methodSemantic(getSplitMethod(), BluePrint.DDUnaryMethod.INSTANCE)
-        .methodSemantic(getMergeMethod(), BluePrint.DDUnaryMethod.INSTANCE)
-        .methodSemantic(getTransferLeadershipMethod(), BluePrint.DDUnaryMethod.INSTANCE)
-        .methodSemantic(getExecuteMethod(), BluePrint.DDPipelineUnaryMethod.INSTANCE)
-        .methodSemantic(getQueryMethod(), BluePrint.DDPipelineUnaryMethod.INSTANCE)
-        .methodSemantic(getLinearizedQueryMethod(), BluePrint.DDPipelineUnaryMethod.INSTANCE)
+        .methodSemantic(getBootstrapMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(getRecoverMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(getChangeReplicaConfigMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(getSplitMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(getMergeMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(getTransferLeadershipMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(getExecuteMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
+        .methodSemantic(getQueryMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
+        .methodSemantic(getLinearizedQueryMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
         .build();
 }

@@ -51,7 +51,7 @@ public class NonSSLPipelineUnaryState {
 
     private BluePrint bluePrint = BluePrint.builder()
         .serviceDescriptor(RPCTestGrpc.getServiceDescriptor())
-        .methodSemantic(RPCTestGrpc.getPipelineReqMethod(), BluePrint.WRPipelineUnaryMethod.INSTANCE)
+        .methodSemantic(RPCTestGrpc.getPipelineReqMethod(), BluePrint.WRPipelineUnaryMethod.getInstance())
         .build();
     private IRPCClient client;
     private IRPCServer server;
@@ -86,7 +86,7 @@ public class NonSSLPipelineUnaryState {
                 public StreamObserver<Request> pipelineReq(StreamObserver<Response> responseObserver) {
                     return new ResponsePipeline<>(responseObserver) {
                         @Override
-                        protected CompletableFuture<Response> handleRequest(String trafficId, Request request) {
+                        protected CompletableFuture<Response> handleRequest(String tenantId, Request request) {
                             return CompletableFuture.completedFuture(Response.newBuilder()
                                 .setId(request.getId())
                                 .setValue(request.getValue())

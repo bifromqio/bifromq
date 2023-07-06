@@ -38,24 +38,24 @@ import lombok.extern.slf4j.Slf4j;
 class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     private final IEventCollector eventCollector;
     private final IBatchCallScheduler<DistCall, Map<String, Integer>> distCallScheduler;
-    private final LoadingCache<String, RunningAverage> trafficFanouts;
+    private final LoadingCache<String, RunningAverage> tenantFanouts;
     private final Integer callQueueIdx;
 
     DistResponsePipeline(IBatchCallScheduler<DistCall, Map<String, Integer>> distCallScheduler,
                          StreamObserver<DistReply> responseObserver,
                          IEventCollector eventCollector,
-                         LoadingCache<String, RunningAverage> trafficFanouts) {
+                         LoadingCache<String, RunningAverage> tenantFanouts) {
         super(responseObserver);
         this.distCallScheduler = distCallScheduler;
         this.eventCollector = eventCollector;
-        this.trafficFanouts = trafficFanouts;
+        this.tenantFanouts = tenantFanouts;
         this.callQueueIdx = DistQueueAllocator.allocate();
     }
 
     @Override
-    protected CompletableFuture<DistReply> handleRequest(String trafficId, DistRequest request) {
-        return distCallScheduler.schedule(new DistCall(trafficId, request.getMessagesList(),
-                callQueueIdx, trafficFanouts.get(trafficId).estimate()))
+    protected CompletableFuture<DistReply> handleRequest(String tenantId, DistRequest request) {
+        return distCallScheduler.schedule(new DistCall(tenantId, request.getMessagesList(),
+                callQueueIdx, tenantFanouts.get(tenantId).estimate()))
             .handle((v, e) -> {
                 if (e != null) {
                     eventCollector.report(getLocal(DistError.class)
@@ -67,7 +67,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                         .setResult(DistReply.Result.ERROR)
                         .build();
                 } else {
-                    trafficFanouts.get(trafficId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
+                    tenantFanouts.get(tenantId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
                     eventCollector.report(getLocal(Disted.class)
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())

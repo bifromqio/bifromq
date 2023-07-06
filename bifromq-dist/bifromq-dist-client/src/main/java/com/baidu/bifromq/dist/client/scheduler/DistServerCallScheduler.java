@@ -52,13 +52,13 @@ public class DistServerCallScheduler
     @Override
     protected BatchCallBuilder<ClientCall, DistResult> newBuilder(String name, int maxInflights, BatchKey batchKey) {
         return new DistServerCallBuilder(name, maxInflights,
-            rpcClient.createRequestPipeline(batchKey.trafficId, null, null, emptyMap(),
+            rpcClient.createRequestPipeline(batchKey.tenantId, null, null, emptyMap(),
                 DistServiceGrpc.getDistMethod()));
     }
 
     @Override
     protected Optional<BatchKey> find(ClientCall message) {
-        return Optional.of(new BatchKey(message.sender.getTrafficId(), Thread.currentThread().getId()));
+        return Optional.of(new BatchKey(message.sender.getTenantId(), Thread.currentThread().getId()));
     }
 
     private class DistServerCallBuilder extends BatchCallBuilder<ClientCall, DistResult> {
@@ -148,7 +148,7 @@ public class DistServerCallScheduler
     @AllArgsConstructor
     @EqualsAndHashCode
     static class BatchKey {
-        final String trafficId;
+        final String tenantId;
         final long threadId;
     }
 }

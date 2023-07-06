@@ -19,7 +19,7 @@ message MQTT3AuthData{
 }
 
 message Ok{
-  string trafficId = 1;
+  string tenantId = 1;
   string userId = 2;
 }
 

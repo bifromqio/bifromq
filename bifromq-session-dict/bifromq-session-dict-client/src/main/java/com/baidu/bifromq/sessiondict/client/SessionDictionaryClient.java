@@ -49,7 +49,7 @@ class SessionDictionaryClient implements ISessionDictionaryClient {
         assert clientInfo.hasMqtt3ClientInfo();
         Map<String, String> metadata = new HashMap<>();
         metadata.put(PipelineUtil.CLIENT_INFO, PipelineUtil.encode(clientInfo));
-        return rpcClient.createMessageStream(clientInfo.getTrafficId(),
+        return rpcClient.createMessageStream(clientInfo.getTenantId(),
             null,
             toWCHKey(clientInfo),
             metadata,
@@ -58,11 +58,11 @@ class SessionDictionaryClient implements ISessionDictionaryClient {
 
     @Override
     public CompletableFuture<KillReply> kill(long reqId,
-                                             String trafficId,
+                                             String tenantId,
                                              String userId,
                                              String clientId,
                                              ClientInfo killer) {
-        return rpcClient.invoke(trafficId, null, KillRequest.newBuilder()
+        return rpcClient.invoke(tenantId, null, KillRequest.newBuilder()
                 .setReqId(reqId)
                 .setUserId(userId)
                 .setClientId(clientId)
@@ -76,7 +76,6 @@ class SessionDictionaryClient implements ISessionDictionaryClient {
 
     @Override
     public void stop() {
-        // close traffic logger and drain logs before closing the dist client
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping session dict client");
             log.debug("Stopping rpc client");

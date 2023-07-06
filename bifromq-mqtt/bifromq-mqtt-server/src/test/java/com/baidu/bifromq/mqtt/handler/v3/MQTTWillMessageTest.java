@@ -68,7 +68,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
 //            Quit.newBuilder()
 //                .setKiller(
 //                    ClientInfo.newBuilder()
-//                        .setTrafficId(trafficId)
+//                        .setTenantId(trafficId)
 //                        .setUserId(userId)
 //                        .setMqtt3ClientInfo(
 //                            MQTT3ClientInfo.newBuilder()
@@ -93,10 +93,10 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
             Quit.newBuilder()
                 .setKiller(
                     ClientInfo.newBuilder()
-                        .setTrafficId("sys")
-                        .setUserId("sys")
+                        .setTenantId("sys")
                         .setMqtt3ClientInfo(
                             MQTT3ClientInfo.newBuilder()
+                                .setUserId("sys")
                                 .setClientId(clientId)
                                 .build()
                         )

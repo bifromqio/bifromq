@@ -53,7 +53,7 @@ public class DemoPlugin extends Plugin {
                     case DISTRIBUTION_SUMMARY:
                         // following config will cause huge performance penalty
                         // don't enable it unless you accept the consequence
-//                        if (id.getTag("trafficId") != null) {
+//                        if (id.getTag("tenantId") != null) {
 //                            return DistributionStatisticConfig.builder()
 //                                .percentiles(0.5, 0.99, 0.999)
 //                                .expiry(Duration.ofSeconds(5))

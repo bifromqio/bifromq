@@ -8,7 +8,7 @@ option java_package = "com.baidu.bifromq.type";
 option java_outer_classname = "SubInfoProtos";
 
 message SubInfo {
-  string trafficId = 1;
+  string tenantId = 1;
   string inboxId = 2;
   QoS subQoS = 3;
   string topicFilter = 4;

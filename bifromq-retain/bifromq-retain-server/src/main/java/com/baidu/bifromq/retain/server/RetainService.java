@@ -16,7 +16,7 @@ package com.baidu.bifromq.retain.server;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.BoostModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
-import static com.baidu.bifromq.retain.utils.KeyUtil.trafficNS;
+import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.retain.utils.MessageUtil.buildMatchRequest;
 import static com.baidu.bifromq.retain.utils.MessageUtil.buildRetainRequest;
 import static com.baidu.bifromq.retain.utils.PipelineUtil.PIPELINE_ATTR_KEY_CLIENT_INFO;
@@ -67,14 +67,14 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
             private final ClientInfo clientInfo = decode(metadata.get(PIPELINE_ATTR_KEY_CLIENT_INFO));
 
             @Override
-            protected CompletableFuture<RetainReply> handleRequest(String trafficId, RetainRequest request) {
-                ByteString trafficNS = trafficNS(trafficId);
-                Optional<KVRangeSetting> s = kvStoreClient.findByKey(trafficNS);
+            protected CompletableFuture<RetainReply> handleRequest(String tenantId, RetainRequest request) {
+                ByteString tenantNS = tenantNS(tenantId);
+                Optional<KVRangeSetting> s = kvStoreClient.findByKey(tenantNS);
                 if (s.isPresent()) {
                     log.trace("Got retain request:\n{}", request);
                     return execCoProc(s.get().leader, request.getReqId(), s.get(),
                         buildRetainRequest(RetainCoProcRequest.newBuilder()
-                            .setTrafficId(trafficId)
+                            .setTenantId(tenantId)
                             .setReqId(request.getReqId())
                             .setQos(request.getQos())
                             .setTopic(request.getTopic())
@@ -92,7 +92,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                             .setResult(RetainReply.Result.forNumber(r.getNumber()))
                             .build());
                 } else {
-                    log.warn("No range covering key: {}", trafficId);
+                    log.warn("No range covering key: {}", tenantId);
                     return CompletableFuture.completedFuture(RetainReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(RetainReply.Result.ERROR)
@@ -105,16 +105,16 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
     @Override
     public void match(MatchRequest request, StreamObserver<MatchReply> responseObserver) {
         log.trace("Handling match request:\n{}", request);
-        response((trafficId, metadata) -> {
-            ByteString trafficNS = trafficNS(trafficId);
+        response((tenantId, metadata) -> {
+            ByteString tenantNS = tenantNS(tenantId);
             ClientInfo clientInfo = decode(metadata.get(PIPELINE_ATTR_KEY_CLIENT_INFO));
-            Optional<KVRangeSetting> s = kvStoreClient.findByKey(trafficNS);
+            Optional<KVRangeSetting> s = kvStoreClient.findByKey(tenantNS);
             if (s.isPresent()) {
                 boolean boostMode = settingProvider.provide(BoostModeEnabled, clientInfo);
                 return execCoProc(request.getReqId(), s.get(),
                     buildMatchRequest(MatchCoProcRequest.newBuilder()
                         .setReqId(request.getReqId())
-                        .setTrafficNS(trafficNS)
+                        .setTenantNS(tenantNS)
                         .setTopicFilter(request.getTopicFilter())
                         .setLimit(request.getLimit())
                         .build()), !boostMode)
@@ -134,7 +134,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                         }
                     });
             } else {
-                log.warn("No range covering key: {}", trafficId);
+                log.warn("No range covering key: {}", tenantId);
                 return CompletableFuture.completedFuture(MatchReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(MatchReply.Result.ERROR)

@@ -39,7 +39,7 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
     @Test(groups = "integration")
     public void updateTrafficDirective() {
         String service = "service";
-        Map<String, Map<String, Integer>> td = singletonMap("traffic", singletonMap("group1", 1));
+        Map<String, Map<String, Integer>> td = singletonMap("tenantA", singletonMap("group1", 1));
         ICRDTService tgCrdtService = newCRDTService();
         IRPCServiceTrafficGovernor trafficGovernor = IRPCServiceTrafficGovernor.newInstance(service, tgCrdtService);
 

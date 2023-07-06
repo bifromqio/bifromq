@@ -238,7 +238,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                     )
                     .setSender(
                         ClientInfo.newBuilder()
-                            .setTrafficId(trafficId)
+                            .setTenantId(tenantId)
                             .setMqtt3ClientInfo(
                                 MQTT3ClientInfo.newBuilder()
                                     .setClientId("client1")
@@ -266,7 +266,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                     )
                     .setSender(
                         ClientInfo.newBuilder()
-                            .setTrafficId(trafficId)
+                            .setTenantId(tenantId)
                             .setMqtt3ClientInfo(
                                 MQTT3ClientInfo.newBuilder()
                                     .setClientId("client2")

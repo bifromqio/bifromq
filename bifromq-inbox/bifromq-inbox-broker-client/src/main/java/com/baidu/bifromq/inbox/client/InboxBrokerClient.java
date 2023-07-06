@@ -29,11 +29,11 @@ class InboxBrokerClient implements IInboxBrokerClient {
 
     @Override
     public CompletableFuture<Boolean> hasInbox(long reqId,
-                                               @NonNull String trafficId,
+                                               @NonNull String tenantId,
                                                @NonNull String inboxId,
                                                @Nullable String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return rpcClient.invoke(trafficId, delivererKey,
+        return rpcClient.invoke(tenantId, delivererKey,
                 HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
                 InboxServiceGrpc.getHasInboxMethod())
             .thenApply(HasInboxReply::getResult);

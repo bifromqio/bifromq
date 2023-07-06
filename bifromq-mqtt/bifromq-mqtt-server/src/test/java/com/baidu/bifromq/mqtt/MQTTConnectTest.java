@@ -65,7 +65,7 @@ public class MQTTConnectTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId("testTraffic")
+                    .setTenantId("testTraffic")
                     .setUserId("testUser")
                     .build()).build()));
 
@@ -84,7 +84,7 @@ public class MQTTConnectTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId("testTraffic")
+                    .setTenantId("testTraffic")
                     .setUserId("testUser")
                     .build()).build()));
 
@@ -103,7 +103,7 @@ public class MQTTConnectTest extends MQTTTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
-                    .setTrafficId("testTraffic")
+                    .setTenantId("testTraffic")
                     .setUserId("testUser")
                     .build()).build()));
 

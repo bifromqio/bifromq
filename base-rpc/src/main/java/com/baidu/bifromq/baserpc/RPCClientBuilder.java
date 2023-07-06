@@ -17,7 +17,7 @@ import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.baserpc.interceptor.TrafficAwareClientInterceptor;
+import com.baidu.bifromq.baserpc.interceptor.TenantAwareClientInterceptor;
 import com.baidu.bifromq.baserpc.loadbalancer.IUpdateListener;
 import com.baidu.bifromq.baserpc.loadbalancer.TrafficDirectiveLoadBalancerProvider;
 import com.baidu.bifromq.baserpc.nameresolver.TrafficGovernorNameResolverProvider;
@@ -129,28 +129,29 @@ public class RPCClientBuilder {
                     serverListSubject = BehaviorSubject.createDefault(singleton(serviceUniqueName));
                     serverSelectorSubject.onNext(new IUpdateListener.IServerSelector() {
                         @Override
-                        public boolean direct(String trafficId, String serverId, MethodDescriptor methodDescriptor) {
+                        public boolean direct(String tenantId, String serverId,
+                                              MethodDescriptor<?, ?> methodDescriptor) {
                             return true;
                         }
 
                         @Override
-                        public Optional<String> hashing(String trafficId, String key,
-                                                        MethodDescriptor methodDescriptor) {
+                        public Optional<String> hashing(String tenantId, String key,
+                                                        MethodDescriptor<?, ?> methodDescriptor) {
                             return Optional.of(serviceUniqueName);
                         }
 
                         @Override
-                        public Optional<String> roundRobin(String trafficId, MethodDescriptor methodDescriptor) {
+                        public Optional<String> roundRobin(String tenantId, MethodDescriptor<?, ?> methodDescriptor) {
                             return Optional.of(serviceUniqueName);
                         }
 
                         @Override
-                        public Optional<String> random(String trafficId, MethodDescriptor methodDescriptor) {
+                        public Optional<String> random(String tenantId, MethodDescriptor<?, ?> methodDescriptor) {
                             return Optional.of(serviceUniqueName);
                         }
                     });
                     channel = InProcessChannelBuilder.forName(serviceUniqueName)
-                        .intercept(new TrafficAwareClientInterceptor(serviceUniqueName))
+                        .intercept(new TenantAwareClientInterceptor(serviceUniqueName))
                         .executor(rpcExecutor)
                         .build();
                 } else {
@@ -181,13 +182,13 @@ public class RPCClientBuilder {
                     if (ncBuilder instanceof SSLChannelBuilder) {
                         channelBuilder
                             .negotiationType(NegotiationType.TLS)
-                            .intercept(new TrafficAwareClientInterceptor())
+                            .intercept(new TenantAwareClientInterceptor())
                             .sslContext(((SSLChannelBuilder) ncBuilder).sslContext())
                             .overrideAuthority(serviceUniqueName);
                     } else {
                         channelBuilder
                             .negotiationType(NegotiationType.PLAINTEXT)
-                            .intercept(new TrafficAwareClientInterceptor());
+                            .intercept(new TenantAwareClientInterceptor());
                     }
                     if (ncBuilder.eventLoopGroup != null) {
                         channelBuilder.eventLoopGroup(ncBuilder.eventLoopGroup)

@@ -21,17 +21,17 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class AbstractStreamObserver<InT, OutT> implements StreamObserver<InT> {
-    protected final String trafficId;
+    protected final String tenantId;
     protected final Map<String, String> metadata;
     protected final ServerCallStreamObserver<OutT> responseObserver;
     protected final RPCMeters.MeterKey meterKey;
 
     protected AbstractStreamObserver(StreamObserver<OutT> responseObserver) {
-        trafficId = RPCContext.TRAFFIC_ID_CTX_KEY.get();
+        tenantId = RPCContext.TENANT_ID_CTX_KEY.get();
         metadata = RPCContext.CUSTOM_METADATA_CTX_KEY.get();
         meterKey = RPCContext.METER_KEY_CTX_KEY.get();
         this.responseObserver = (ServerCallStreamObserver<OutT>) responseObserver;
-        log.trace("Pipeline@{} created: trafficId={}, client={}", hashCode(), trafficId);
+        log.trace("Pipeline@{} created: tenantId={}", hashCode(), tenantId);
     }
 
     public final Map<String, String> metadata() {

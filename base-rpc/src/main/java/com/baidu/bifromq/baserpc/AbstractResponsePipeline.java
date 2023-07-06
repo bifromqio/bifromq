@@ -74,18 +74,18 @@ abstract class AbstractResponsePipeline<RequestT, ResponseT>
      * Handle the request and return the result via completable future, remember always throw exception asynchronously
      * Returned future complete exceptionally will cause pipeline close
      *
-     * @param trafficId
-     * @param request
-     * @return
+     * @param tenantId the tenantId
+     * @param request  the request
+     * @return a future of response
      */
-    protected abstract CompletableFuture<ResponseT> handleRequest(String trafficId, RequestT request);
+    protected abstract CompletableFuture<ResponseT> handleRequest(String tenantId, RequestT request);
 
     // this method is meant to be used in subclass
     final CompletableFuture<ResponseT> startHandlingRequest(RequestT request) {
         log.trace("Start handling request in pipeline@{}: request={}", hashCode(), request);
         RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqReceivedCount);
         Timer.Sample sample = Timer.start();
-        CompletableFuture<ResponseT> respFuture = futureTracker.track(handleRequest(trafficId, request));
+        CompletableFuture<ResponseT> respFuture = futureTracker.track(handleRequest(tenantId, request));
         // track current response future until it's completed normally or exceptionally
         respFuture.whenComplete((resp, e) -> {
             sample.stop(RPCMeters.timer(meterKey, RPCMetric.PipelineReqProcessTime));

@@ -57,7 +57,6 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -162,9 +161,9 @@ abstract class InboxStoreState {
         agentHost.shutdown();
         try {
             Files.walk(dbRootDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }
@@ -172,10 +171,10 @@ abstract class InboxStoreState {
 
     abstract void beforeTeardown();
 
-    protected HasReply requestHas(String trafficId, String inboxId) {
+    protected HasReply requestHas(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             HasRequest request = HasRequest.newBuilder().addScopedInboxId(scopedInboxId).build();
             InboxServiceROCoProcInput input = buildHasRequest(reqId, request);
@@ -196,11 +195,11 @@ abstract class InboxStoreState {
         }
     }
 
-    protected CreateReply requestCreate(String trafficId, String inboxId,
-                                        int limit, int expireSeconds, boolean dropOldest) {
+    protected CreateReply requestCreate(String tenantId, String inboxId, int limit, int expireSeconds,
+                                        boolean dropOldest) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             CreateRequest request = CreateRequest.newBuilder()
                 .putInboxes(scopedInboxId.toStringUtf8(), CreateParams.newBuilder()
@@ -227,10 +226,10 @@ abstract class InboxStoreState {
         }
     }
 
-    protected TouchReply requestDelete(String trafficId, String inboxId) {
+    protected TouchReply requestDelete(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             TouchRequest request = TouchRequest.newBuilder()
                 .putScopedInboxId(scopedInboxId.toStringUtf8(), false)
@@ -253,10 +252,10 @@ abstract class InboxStoreState {
         }
     }
 
-    protected InboxInsertReply requestInsert(String trafficId, String inboxId, InboxInsertRequest request) {
+    protected InboxInsertReply requestInsert(String tenantId, String inboxId, InboxInsertRequest request) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxServiceRWCoProcInput input = buildBatchInboxInsertRequest(reqId, request);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -276,14 +275,14 @@ abstract class InboxStoreState {
         }
     }
 
-    protected InboxInsertReply requestInsert(String trafficId, String inboxId, String topic, Message... messages) {
+    protected InboxInsertReply requestInsert(String tenantId, String inboxId, String topic, Message... messages) {
 
         try {
             InboxInsertRequest.Builder builder = InboxInsertRequest.newBuilder();
             InboxInsertRequest request = builder
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
-                        .setTrafficId(trafficId)
+                        .setTenantId(tenantId)
                         .setInboxId(inboxId)
                         .setSubQoS(messages[0].getPubQoS())
                         .build())
@@ -296,7 +295,7 @@ abstract class InboxStoreState {
                     .build())
                 .build();
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxServiceRWCoProcInput input = buildBatchInboxInsertRequest(reqId, request);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()

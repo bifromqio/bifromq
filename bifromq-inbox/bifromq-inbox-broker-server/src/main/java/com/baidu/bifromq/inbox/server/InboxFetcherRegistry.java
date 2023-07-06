@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.metrics.TrafficMeter.gauging;
-import static com.baidu.bifromq.metrics.TrafficMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TrafficMetric.InboxFetcherGauge;
+import static com.baidu.bifromq.metrics.TenantMeter.gauging;
+import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.TenantMetric.InboxFetcherGauge;
 
 import com.google.common.collect.Iterators;
 import java.util.Collections;
@@ -27,17 +27,17 @@ import java.util.SortedMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
-    // how do we handle multiple fetchers under same (trafficId, inboxId, qos) combination which may happen when
+    // how do we handle multiple fetchers under same (tenantId, inboxId, qos) combination which may happen when
     // "persistent session" clients kicking each other
-    // delivererKey+trafficId -> inboxId -> InboxFetcher
+    // delivererKey+tenantId -> inboxId -> InboxFetcher
     private final NavigableMap<String, Map<String, IInboxQueueFetcher>> fetchers = new ConcurrentSkipListMap<>();
 
     void reg(IInboxQueueFetcher fetcher) {
-        fetchers.compute(fetcher.delivererKey() + fetcher.trafficId(), (key, val) -> {
+        fetchers.compute(fetcher.delivererKey() + fetcher.tenantId(), (key, val) -> {
             if (val == null) {
                 val = new HashMap<>();
-                gauging(fetcher.trafficId(), InboxFetcherGauge,
-                    () -> fetchers.getOrDefault(fetcher.trafficId(), Collections.EMPTY_MAP).size());
+                gauging(fetcher.tenantId(), InboxFetcherGauge,
+                    () -> fetchers.getOrDefault(fetcher.tenantId(), Collections.EMPTY_MAP).size());
             }
             val.put(fetcher.inboxId(), fetcher);
             return val;
@@ -45,11 +45,11 @@ final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
     }
 
     void unreg(IInboxQueueFetcher fetcher) {
-        fetchers.compute(fetcher.delivererKey() + fetcher.trafficId(), (traffic, m) -> {
+        fetchers.compute(fetcher.delivererKey() + fetcher.tenantId(), (tenantId, m) -> {
             if (m != null) {
                 m.remove(fetcher.inboxId(), fetcher);
                 if (m.size() == 0) {
-                    stopGauging(fetcher.trafficId(), InboxFetcherGauge);
+                    stopGauging(fetcher.tenantId(), InboxFetcherGauge);
                     return null;
                 }
             }
@@ -57,12 +57,12 @@ final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
         });
     }
 
-    boolean has(String trafficId, String inboxId, String delivererKey) {
-        return fetchers.getOrDefault(delivererKey + trafficId, Collections.emptyMap()).containsKey(inboxId);
+    boolean has(String tenantId, String inboxId, String delivererKey) {
+        return fetchers.getOrDefault(delivererKey + tenantId, Collections.emptyMap()).containsKey(inboxId);
     }
 
-    IInboxQueueFetcher get(String trafficId, String inboxId, String delivererKey) {
-        return fetchers.getOrDefault(delivererKey + trafficId, Collections.emptyMap()).get(inboxId);
+    IInboxQueueFetcher get(String tenantId, String inboxId, String delivererKey) {
+        return fetchers.getOrDefault(delivererKey + tenantId, Collections.emptyMap()).get(inboxId);
     }
 
     void signalFetch(String delivererKey) {

@@ -56,13 +56,13 @@ final class MonitoredSubBroker implements ISubBroker {
 
     @Override
     public CompletableFuture<Boolean> hasInbox(long reqId,
-                                               @NonNull String trafficId,
+                                               @NonNull String tenantId,
                                                @NonNull String inboxId,
                                                @Nullable String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
         try {
             Timer.Sample start = Timer.start();
-            return delegate.hasInbox(reqId, trafficId, inboxId, delivererKey)
+            return delegate.hasInbox(reqId, tenantId, inboxId, delivererKey)
                 .whenComplete((v, e) -> start.stop(hasInboxCallTimer));
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);

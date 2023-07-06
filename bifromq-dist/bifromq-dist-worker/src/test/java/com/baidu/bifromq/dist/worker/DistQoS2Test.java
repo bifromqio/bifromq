@@ -43,12 +43,12 @@ import org.testng.annotations.Test;
 public class DistQoS2Test extends DistWorkerTest {
     @Test(groups = "integration")
     public void succeedWithNoSub() {
-        String trafficId = "trafficA";
+        String tenantId = "trafficA";
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(trafficId, EXACTLY_ONCE, topic, payload, "orderKey1");
-        assertTrue(reply.getResultMap().get(trafficId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
+        BatchDistReply reply = dist(tenantId, EXACTLY_ONCE, topic, payload, "orderKey1");
+        assertTrue(reply.getResultMap().get(tenantId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
     }
 
     @Test(groups = "integration")
@@ -112,7 +112,7 @@ public class DistQoS2Test extends DistWorkerTest {
         }
 
 //        // '/#' must come first
-//        List<TopicMessage> inbox1Msgs = msgCap.getValue().get("trafficA").get("inbox1");
+//        List<TopicMessage> inbox1Msgs = msgCap.getValue().get("tenantA").get("inbox1");
 //        assertEquals(inbox1Msgs.get(0).getSubQoS(), AT_LEAST_ONCE);
 //        assertEquals(inbox1Msgs.get(1).getSubQoS(), AT_MOST_ONCE);
 

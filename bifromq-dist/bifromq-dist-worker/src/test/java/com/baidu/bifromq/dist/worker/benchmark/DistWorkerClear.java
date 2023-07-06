@@ -47,9 +47,9 @@ public class DistWorkerClear {
     @Threads(4)
     @Fork(1)
     public void testClear(DistWorkerState state, Blackhole blackhole) {
-        String trafficId = "DevOnly";
+        String tenantId = "DevOnly";
         String inboxId = "Inbox_" + ThreadLocalRandom.current().nextInt();
-        ClearSubInfoReply reply = state.requestClearSubInfo(trafficId, DistWorkerState.MqttBroker, inboxId, null);
+        ClearSubInfoReply reply = state.requestClearSubInfo(tenantId, DistWorkerState.MqttBroker, inboxId, null);
         blackhole.consume(reply);
     }
 }

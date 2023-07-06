@@ -16,13 +16,13 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static java.util.Collections.singleton;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
@@ -42,11 +42,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import lombok.SneakyThrows;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class SubscriptionCacheTest {
     private KVRangeId id = KVRangeIdUtil.generate();
@@ -84,11 +84,11 @@ public class SubscriptionCacheTest {
     @Test
     public void cacheHit() {
         ScopedTopic scopedTopic = ScopedTopic.builder()
-            .trafficId("testTraffic")
+            .tenantId("testTenant")
             .topic("/test/user")
             .range(FULL_RANGE)
             .build();
-        ClientInfo sender = ClientInfo.newBuilder().setTrafficId("testTraffic").setUserId("testSender").build();
+        ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(false);
@@ -109,11 +109,11 @@ public class SubscriptionCacheTest {
     @Test
     public void cacheRefreshAndShortcut() {
         ScopedTopic scopedTopic = ScopedTopic.builder()
-            .trafficId("testTraffic")
+            .tenantId("testTenant")
             .topic("/test/user")
             .range(FULL_RANGE)
             .build();
-        ClientInfo sender = ClientInfo.newBuilder().setTrafficId("testTraffic").setUserId("testSender").build();
+        ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
 
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
@@ -133,13 +133,13 @@ public class SubscriptionCacheTest {
     @SneakyThrows
     @Test
     public void cacheExpiredAndMatch() {
-        String trafficId = "testTraffic";
+        String tenantId = "testTenant";
         ScopedTopic scopedTopic = ScopedTopic.builder()
-            .trafficId(trafficId)
+            .tenantId(tenantId)
             .topic("/test/user")
             .range(FULL_RANGE)
             .build();
-        ClientInfo sender = ClientInfo.newBuilder().setTrafficId("testTraffic").setUserId("testSender").build();
+        ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
         when(kvIterator.isValid()).thenReturn(false);
@@ -158,20 +158,20 @@ public class SubscriptionCacheTest {
     @SneakyThrows
     @Test(priority = 0)
     public void cacheTouchAndMatch() {
-        String trafficId = "testTraffic";
+        String tenantId = "testTenant";
         ScopedTopic scopedTopic = ScopedTopic.builder()
-            .trafficId(trafficId)
+            .tenantId(tenantId)
             .topic("/test/user")
             .range(FULL_RANGE)
             .build();
-        ClientInfo sender = ClientInfo.newBuilder().setTrafficId("testTraffic").setUserId("testSender").build();
+        ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
         when(kvIterator.isValid()).thenReturn(false);
         Map<NormalMatching, Set<ClientInfo>> routes = cache.get(scopedTopic, singleton(sender)).join();
         Thread.sleep(500);
         cache.get(scopedTopic, singleton(sender)).join();
-        cache.touch(trafficId);
+        cache.touch(tenantId);
         Thread.sleep(600);
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
@@ -186,13 +186,13 @@ public class SubscriptionCacheTest {
     @SneakyThrows
     @Test
     public void cacheInvalidateAndMatch() {
-        String trafficId = "testTraffic";
+        String tenantId = "testTenant";
         ScopedTopic scopedTopic = ScopedTopic.builder()
-            .trafficId(trafficId)
+            .tenantId(tenantId)
             .topic("/test/user")
             .range(FULL_RANGE)
             .build();
-        ClientInfo sender = ClientInfo.newBuilder().setTrafficId("testTraffic").setUserId("testSender").build();
+        ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
         when(kvIterator.isValid()).thenReturn(false);
@@ -216,11 +216,11 @@ public class SubscriptionCacheTest {
     @Test
     public void groupMatch() {
         ScopedTopic scopedTopic = ScopedTopic.builder()
-            .trafficId("testTraffic")
+            .tenantId("testTenant")
             .topic("/test/user")
             .range(FULL_RANGE)
             .build();
-        ClientInfo sender = ClientInfo.newBuilder().setTrafficId("testTraffic").setUserId("testSender").build();
+        ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
@@ -228,7 +228,7 @@ public class SubscriptionCacheTest {
         String qInboxId = EntityUtil.toQualifiedInboxId(0, "inbox1", "deliverer1");
         String sharedTopicFilter = "$oshare/group/" + scopedTopic.topic;
         when(kvIterator.key())
-            .thenReturn(EntityUtil.matchRecordKey(scopedTopic.trafficId, sharedTopicFilter, qInboxId));
+            .thenReturn(EntityUtil.matchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId));
         when(kvIterator.value())
             .thenReturn(MatchRecord.newBuilder()
                 .setGroup(GroupMatchRecord.newBuilder().putEntry(qInboxId, QoS.AT_MOST_ONCE).build())
@@ -238,7 +238,7 @@ public class SubscriptionCacheTest {
         assertEquals(routes.size(), 1);
         for (Map.Entry<NormalMatching, Set<ClientInfo>> entry : routes.entrySet()) {
             NormalMatching matching = entry.getKey();
-            assertEquals(matching.trafficId, scopedTopic.trafficId);
+            assertEquals(matching.tenantId, scopedTopic.tenantId);
             assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
             assertEquals(matching.subBrokerId, 0);
             assertEquals(matching.subInfo.getInboxId(), "inbox1");
@@ -251,13 +251,13 @@ public class SubscriptionCacheTest {
     @SneakyThrows
     @Test
     public void groupMatchRefresh() {
-        String trafficId = "testTraffic";
+        String tenantId = "testTraffic";
         ScopedTopic scopedTopic = ScopedTopic.builder()
-            .trafficId(trafficId)
+            .tenantId(tenantId)
             .topic("/test/user")
             .range(FULL_RANGE)
             .build();
-        ClientInfo sender = ClientInfo.newBuilder().setTrafficId("testTraffic").setUserId("testSender").build();
+        ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
@@ -266,7 +266,7 @@ public class SubscriptionCacheTest {
         String qInboxId2 = EntityUtil.toQualifiedInboxId(0, "inbox2", "deliverer1");
         String sharedTopicFilter = "$oshare/group/" + scopedTopic.topic;
         when(kvIterator.key())
-            .thenReturn(EntityUtil.matchRecordKey(scopedTopic.trafficId, sharedTopicFilter, qInboxId1));
+            .thenReturn(EntityUtil.matchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId1));
         when(kvIterator.value())
             .thenReturn(
                 MatchRecord.newBuilder()
@@ -277,14 +277,14 @@ public class SubscriptionCacheTest {
                     .build().toByteString());
 
         Map<NormalMatching, Set<ClientInfo>> routes = cache.get(scopedTopic, singleton(sender)).join();
-        cache.touch(trafficId);
+        cache.touch(tenantId);
         Thread.sleep(1100);
         routes = cache.get(scopedTopic, singleton(sender)).join();
 
         assertEquals(routes.size(), 1);
         for (Map.Entry<NormalMatching, Set<ClientInfo>> entry : routes.entrySet()) {
             NormalMatching matching = entry.getKey();
-            assertEquals(matching.trafficId, scopedTopic.trafficId);
+            assertEquals(matching.tenantId, scopedTopic.tenantId);
             assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
             assertEquals(matching.subBrokerId, 0);
             assertEquals(matching.subInfo.getInboxId(), "inbox2");

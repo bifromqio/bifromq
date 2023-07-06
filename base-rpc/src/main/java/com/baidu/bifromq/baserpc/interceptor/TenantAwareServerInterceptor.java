@@ -36,21 +36,19 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class TrafficAwareServerInterceptor implements ServerInterceptor {
-    private static final ServerCall.Listener NOOP_LISTENER = new ServerCall.Listener() {
+public class TenantAwareServerInterceptor implements ServerInterceptor {
+    private static final ServerCall.Listener NOOP_LISTENER = new ServerCall.Listener<>() {
     };
-    private final String serviceUniqueName;
     private final Map<String, LoadingCache<String, RPCMeters.MeterKey>> meterKeys = new HashMap<>();
 
-    public TrafficAwareServerInterceptor(String serviceUniqueName, ServerServiceDefinition serviceDefinition) {
-        this.serviceUniqueName = serviceUniqueName;
-        for (MethodDescriptor methodDesc : serviceDefinition.getServiceDescriptor().getMethods()) {
+    public TenantAwareServerInterceptor(String serviceUniqueName, ServerServiceDefinition serviceDefinition) {
+        for (MethodDescriptor<?, ?> methodDesc : serviceDefinition.getServiceDescriptor().getMethods()) {
             meterKeys.put(methodDesc.getFullMethodName(), Caffeine.newBuilder()
                 .expireAfterAccess(Duration.ofSeconds(30))
-                .build(trafficId -> RPCMeters.MeterKey.builder()
+                .build(tenantId -> RPCMeters.MeterKey.builder()
                     .service(serviceUniqueName)
                     .method(methodDesc.getBareMethodName())
-                    .trafficId(trafficId)
+                    .tenantId(tenantId)
                     .build()));
         }
     }
@@ -60,9 +58,9 @@ public class TrafficAwareServerInterceptor implements ServerInterceptor {
                                                                  ServerCallHandler<ReqT, RespT> next) {
         try {
             Context ctx = Context.current();
-            assert headers.containsKey(Constants.TRAFFIC_ID_META_KEY);
-            String trafficId = headers.get(Constants.TRAFFIC_ID_META_KEY);
-            ctx = ctx.withValue(RPCContext.TRAFFIC_ID_CTX_KEY, trafficId);
+            assert headers.containsKey(Constants.TENANT_ID_META_KEY);
+            String tenantId = headers.get(Constants.TENANT_ID_META_KEY);
+            ctx = ctx.withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId);
 
             if (headers.containsKey(Constants.WCH_KEY_META_KEY)) {
                 ctx = ctx.withValue(RPCContext.WCH_HASH_KEY_CTX_KEY, headers.get(Constants.WCH_KEY_META_KEY));
@@ -75,7 +73,7 @@ public class TrafficAwareServerInterceptor implements ServerInterceptor {
                 ctx = ctx.withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, Collections.emptyMap());
             }
             ctx = ctx.withValue(RPCContext.METER_KEY_CTX_KEY,
-                meterKeys.get(call.getMethodDescriptor().getFullMethodName()).get(trafficId));
+                meterKeys.get(call.getMethodDescriptor().getFullMethodName()).get(tenantId));
 
             ServerCall.Listener<ReqT> listener = Contexts.interceptCall(ctx, call, headers, next);
             return new ForwardingServerCallListener.SimpleForwardingServerCallListener<>(listener) {

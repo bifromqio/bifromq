@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.retain.rpc.util;
 
-import static com.baidu.bifromq.retain.utils.KeyUtil.isTrafficNS;
+import static com.baidu.bifromq.retain.utils.KeyUtil.isTenantNS;
 import static com.baidu.bifromq.retain.utils.KeyUtil.parseTopic;
-import static com.baidu.bifromq.retain.utils.KeyUtil.parseTrafficNS;
+import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantNS;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
-import static com.baidu.bifromq.retain.utils.KeyUtil.trafficNS;
+import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.retain.utils.TopicUtil.parse;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -29,26 +29,26 @@ import org.testng.annotations.Test;
 
 public class KeyUtilTest {
     @Test
-    public void testParseTrafficNS() {
-        ByteString trafficNS = trafficNS("trafficId");
-        assertEquals(parseTrafficNS(trafficNS), trafficNS);
+    public void testParseTenantNS() {
+        ByteString tenantNS = tenantNS("tenantA");
+        assertEquals(parseTenantNS(tenantNS), tenantNS);
 
-        assertEquals(parseTrafficNS(retainKey(trafficNS, "/a/b/c")), trafficNS);
-        assertEquals(parseTrafficNS(retainKeyPrefix(trafficNS, parse("/a/b/c", false))), trafficNS);
+        assertEquals(parseTenantNS(retainKey(tenantNS, "/a/b/c")), tenantNS);
+        assertEquals(parseTenantNS(retainKeyPrefix(tenantNS, parse("/a/b/c", false))), tenantNS);
     }
 
     @Test
-    public void testIsTrafficNS() {
-        ByteString trafficNS = trafficNS("trafficId");
-        assertTrue(isTrafficNS(trafficNS));
-        assertFalse(isTrafficNS(retainKey(trafficNS, "/a/b/c")));
-        assertFalse(isTrafficNS(retainKeyPrefix(trafficNS, parse("/a/b/c", false))));
+    public void testIsTenantNS() {
+        ByteString tenantNS = tenantNS("tenantA");
+        assertTrue(isTenantNS(tenantNS));
+        assertFalse(isTenantNS(retainKey(tenantNS, "/a/b/c")));
+        assertFalse(isTenantNS(retainKeyPrefix(tenantNS, parse("/a/b/c", false))));
     }
 
     @Test
     public void testParseTopic() {
-        ByteString trafficNS = trafficNS("trafficId");
+        ByteString tenantNS = tenantNS("tenantA");
         String topic = "/a/b/c";
-        assertEquals(parse(topic, false), parseTopic(retainKey(trafficNS, topic)));
+        assertEquals(parse(topic, false), parseTopic(retainKey(tenantNS, topic)));
     }
 }

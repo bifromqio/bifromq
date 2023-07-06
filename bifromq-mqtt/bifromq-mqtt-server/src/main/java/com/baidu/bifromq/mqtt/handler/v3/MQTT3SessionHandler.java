@@ -13,25 +13,25 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttChannelLatency;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttConnectCount;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttDisconnectCount;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS0DistBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS0EgressBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS0IngressBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS0InternalLatency;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS1DeliverBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS1DistBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS1EgressBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS1ExternalLatency;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS1IngressBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS1InternalLatency;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS2DeliverBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS2DistBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS2EgressBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS2ExternalLatency;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS2IngressBytes;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttQoS2InternalLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttChannelLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectCount;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttDisconnectCount;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0DistBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0EgressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1DeliverBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1DistBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1EgressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1ExternalLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DeliverBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DistBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2EgressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2ExternalLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
 import static com.baidu.bifromq.mqtt.handler.v3.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildPubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
@@ -55,7 +55,7 @@ import static java.util.concurrent.CompletableFuture.allOf;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.client.UnsubResult;
-import com.baidu.bifromq.metrics.TrafficMeter;
+import com.baidu.bifromq.metrics.TenantMeter;
 import com.baidu.bifromq.mqtt.handler.MPSThrottler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
 import com.baidu.bifromq.mqtt.handler.SendBufferCapacityHinter;
@@ -161,7 +161,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     private final LinkedMap<Integer, QoS2MessageKey> unconfirmedQoS2Indexes = new LinkedMap<>();
     // key: message's original clientInfo and messageId and des topicFilter(for retain messages)
     private final LinkedMap<QoS2MessageKey, UnconfirmedQoS2Message> unconfirmedQoS2Messages = new LinkedMap<>();
-    private final TrafficMeter trafficMeter;
+    private final TenantMeter tenantMeter;
     protected boolean debugMode;
     protected SendBufferCapacityHinter bufferCapacityHinter;
     private ScheduledFuture<?> idleTimeoutTask;
@@ -186,7 +186,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         this.cleanSession = cleanSession;
         this.willMessage = willMessage;
         this.sessionPresent = sessionPresent;
-        this.trafficMeter = TrafficMeter.get(clientInfo.getTrafficId());
+        this.tenantMeter = TenantMeter.get(clientInfo.getTenantId());
     }
 
     @Override
@@ -215,7 +215,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 closeConnectionNow(getLocal(Kicked.class)
                     .kicker(quit.getKiller()).clientInfo(clientInfo));
             });
-        trafficMeter.recordCount(MqttConnectCount);
+        tenantMeter.recordCount(MqttConnectCount);
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.channel().eventLoop()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
@@ -240,7 +240,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         sessionCtx.localSessionRegistry.remove(channelId(), this);
         sessionKickDisposable.dispose();
         sessionDictEntry.close();
-        trafficMeter.recordCount(MqttDisconnectCount);
+        tenantMeter.recordCount(MqttDisconnectCount);
     }
 
     @Override
@@ -485,7 +485,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 return;
             case EXACTLY_ONCE:
             default:
-                if (sessionCtx.isConfirming(clientInfo.getTrafficId(), channelId(),
+                if (sessionCtx.isConfirming(clientInfo.getTenantId(), channelId(),
                     mqttMessage.variableHeader().packetId())) {
                     // duplicated qos2 pub just reply pubrec
                     writeAndFlush(MqttMessageFactory.newMessage(
@@ -507,7 +507,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                         reqId, userSessionId(clientInfo), topic);
                                 }
                                 int packetId = mqttMessage.variableHeader().packetId();
-                                sessionCtx.addForConfirming(clientInfo.getTrafficId(), channelId(), packetId);
+                                sessionCtx.addForConfirming(clientInfo.getTenantId(), channelId(), packetId);
                                 boolean sendPubRec = ctx.channel().isActive() && ctx.channel().isWritable();
                                 if (sendPubRec) {
                                     writeAndFlush(MqttMessageFactory.newMessage(
@@ -658,10 +658,10 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         // boxed integer is needed here to force map remove
         UnconfirmedQoS1Message confirmed = unconfirmedQoS1Messages.remove(messageId);
         if (confirmed != null) {
-            trafficMeter.recordSummary(MqttQoS1DeliverBytes,
+            tenantMeter.recordSummary(MqttQoS1DeliverBytes,
                 MQTTMessageSizer.sizePublishMsg(confirmed.topic, confirmed.message));
             if (!confirmed.isRetain) {
-                trafficMeter.timer(MqttQoS1ExternalLatency)
+                tenantMeter.timer(MqttQoS1ExternalLatency)
                     .record(HLC.INST.getPhysical() - confirmed.message.getTimestamp(), TimeUnit.MILLISECONDS);
                 onDistQoS1MessageConfirmed(messageId, confirmed.seq, confirmed.topic, confirmed.message, true);
             }
@@ -719,7 +719,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
 
     private void handlePubRelMsg(MqttMessage mqttMessage) {
         int messageId = ((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId();
-        sessionCtx.confirm(clientInfo.getTrafficId(), channelId(), messageId);
+        sessionCtx.confirm(clientInfo.getTenantId(), channelId(), messageId);
         writeAndFlush(MqttMessageFactory.newMessage(
             new MqttFixedHeader(MqttMessageType.PUBCOMP, false, MqttQoS.AT_MOST_ONCE, false, 2),
             MqttMessageIdVariableHeader.from(messageId), null));
@@ -737,10 +737,10 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         }
         UnconfirmedQoS2Message confirmed = unconfirmedQoS2Messages.remove(messageKey);
         if (confirmed != null && confirmed.mqttMessage.fixedHeader().messageType() == MqttMessageType.PUBREL) {
-            trafficMeter.recordSummary(MqttQoS2DeliverBytes,
+            tenantMeter.recordSummary(MqttQoS2DeliverBytes,
                 MQTTMessageSizer.sizePublishMsg(confirmed.topic, confirmed.message));
             if (!confirmed.isRetain) {
-                trafficMeter.timer(MqttQoS2ExternalLatency)
+                tenantMeter.timer(MqttQoS2ExternalLatency)
                     .record(HLC.INST.getPhysical() - confirmed.message.getTimestamp(), TimeUnit.MILLISECONDS);
                 onDistQoS2MessageConfirmed(messageId, confirmed.seq, confirmed.topic, confirmed.message, true);
             }
@@ -826,7 +826,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             return CompletableFuture.completedFuture(true);
         }
         return cancelOnInactive(
-            sessionCtx.retainClient.match(reqId, clientInfo.getTrafficId(), topicFilter, retainMatchLimit, clientInfo))
+            sessionCtx.retainClient.match(reqId, clientInfo.getTenantId(), topicFilter, retainMatchLimit, clientInfo))
             .thenApplyAsync(
                 matchReply -> {
                     if (log.isTraceEnabled()) {
@@ -932,7 +932,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                            boolean isRetain,
                                            boolean flush,
                                            long timestamp) {
-        trafficMeter.timer(MqttQoS0InternalLatency).record(timestamp - message.getTimestamp(), TimeUnit.MILLISECONDS);
+        tenantMeter.timer(MqttQoS0InternalLatency).record(timestamp - message.getTimestamp(), TimeUnit.MILLISECONDS);
         if (ctx.channel().isActive()) {
             Timer.Sample start = Timer.start();
             ctx.write(new MqttPublishMessage(
@@ -941,14 +941,14 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     Unpooled.wrappedBuffer(message.getPayload().asReadOnlyByteBuffer())))
                 .addListener(f -> {
                     if (f.isSuccess()) {
-                        start.stop(trafficMeter.timer(MqttChannelLatency));
+                        start.stop(tenantMeter.timer(MqttChannelLatency));
                     }
                 });
             if (flush) {
                 flush(true);
             }
             int msgSize = MQTTMessageSizer.sizePublishMsg(topic, message);
-            trafficMeter.recordSummary(MqttQoS0EgressBytes, msgSize);
+            tenantMeter.recordSummary(MqttQoS0EgressBytes, msgSize);
             // FixedHeaderSize = 2, VariableHeaderSize = 4 + topicBytes
             bufferCapacityHinter.onOneMessageBuffered(msgSize);
             return true;
@@ -989,14 +989,14 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         UnconfirmedQoS1Message msg = new UnconfirmedQoS1Message(seq, messageId, topicFilter,
             topic, message, isRetain, sender, sessionCtx.nanoTime());
         unconfirmedQoS1Messages.put(messageId, msg);
-        trafficMeter.timer(MqttQoS1InternalLatency)
+        tenantMeter.timer(MqttQoS1InternalLatency)
             .record(timestamp - message.getTimestamp(), TimeUnit.MILLISECONDS);
         if (ctx.channel().isActive()) {
             Timer.Sample start = Timer.start();
             ctx.write(msg.buildMQTTMessage(sessionCtx.nanoTime()))
                 .addListener(f -> {
                     if (f.isSuccess()) {
-                        start.stop(trafficMeter.timer(MqttChannelLatency));
+                        start.stop(tenantMeter.timer(MqttChannelLatency));
                     }
                 });
             if (flush) {
@@ -1016,7 +1016,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             }
             // FixedHeaderSize = 2, VariableHeaderSize = 4 + topicBytes
             int msgSize = MQTTMessageSizer.sizePublishMsg(topic, message);
-            trafficMeter.recordSummary(MqttQoS1EgressBytes, msgSize);
+            tenantMeter.recordSummary(MqttQoS1EgressBytes, msgSize);
             bufferCapacityHinter.onOneMessageBuffered(msgSize);
             if (resendUnconfirmedTask == null) {
                 scheduleResend(sessionCtx.resendDelayMillis, TimeUnit.MILLISECONDS);
@@ -1070,14 +1070,14 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             message, isRetain, sender, sessionCtx.nanoTime());
         unconfirmedQoS2Indexes.put(messageId, messageKey);
         unconfirmedQoS2Messages.put(messageKey, msg);
-        trafficMeter.timer(MqttQoS2InternalLatency)
+        tenantMeter.timer(MqttQoS2InternalLatency)
             .record(timestamp - message.getTimestamp(), TimeUnit.MILLISECONDS);
         if (ctx.channel().isActive()) {
             Timer.Sample start = Timer.start();
             ctx.write(msg.buildMQTTMessage(sessionCtx.nanoTime()))
                 .addListener(f -> {
                     if (f.isSuccess()) {
-                        start.stop(trafficMeter.timer(MqttChannelLatency));
+                        start.stop(tenantMeter.timer(MqttChannelLatency));
                     }
                 });
             if (flush) {
@@ -1100,7 +1100,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             }
             int msgSize = MQTTMessageSizer.sizePublishMsg(topic, message);
             // FixedHeaderSize = 2, VariableHeaderSize = 4 + topicBytes
-            trafficMeter.recordSummary(MqttQoS2EgressBytes, msgSize);
+            tenantMeter.recordSummary(MqttQoS2EgressBytes, msgSize);
             bufferCapacityHinter.onOneMessageBuffered(msgSize);
         }
         return messageId;
@@ -1228,7 +1228,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         CompletableFuture<Boolean> retainTask = isRetain ?
             cancelOnInactive(retainMessage(reqId, topic, QoS.AT_MOST_ONCE, payload.duplicate())) :
             CompletableFuture.completedFuture(true);
-        trafficMeter.recordSummary(MqttQoS0IngressBytes,
+        tenantMeter.recordSummary(MqttQoS0IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Void> distTask = cancelOnInactive(
             sessionCtx.distClient.dist(reqId, topic, AT_MOST_ONCE, payload.duplicate().nioBuffer(),
@@ -1247,7 +1247,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                     log.trace("Qos0 msg published: reqId={}, sessionId={}, topic={}, size={}",
                                         reqId, userSessionId(clientInfo), topic, payload.readableBytes());
                                 }
-                                trafficMeter.recordSummary(MqttQoS0DistBytes,
+                                tenantMeter.recordSummary(MqttQoS0DistBytes,
                                     MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
                                 break;
                             case ERROR:
@@ -1271,7 +1271,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             retainMessage(reqId, topic, AT_LEAST_ONCE, payload.duplicate())) : CompletableFuture.completedFuture(
             true);
 
-        trafficMeter.recordSummary(MqttQoS1IngressBytes,
+        tenantMeter.recordSummary(MqttQoS1IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Boolean> distTask = cancelOnInactive(
             sessionCtx.distClient.dist(reqId, topic, AT_LEAST_ONCE, payload.duplicate().nioBuffer(),
@@ -1292,7 +1292,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                     log.trace("Qos1 msg published: reqId={}, sessionId={}, topic={}, size={}",
                                         reqId, userSessionId(clientInfo), topic, payload.readableBytes());
                                 }
-                                trafficMeter.recordSummary(MqttQoS1DistBytes,
+                                tenantMeter.recordSummary(MqttQoS1DistBytes,
                                     MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
 
                                 return true;
@@ -1316,7 +1316,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         CompletableFuture<Boolean> retainTask = isRetain ? cancelOnInactive(
             retainMessage(reqId, topic, EXACTLY_ONCE, payload.duplicate())) : CompletableFuture.completedFuture(
             true);
-        trafficMeter.recordSummary(MqttQoS2IngressBytes,
+        tenantMeter.recordSummary(MqttQoS2IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Boolean> distTask = cancelOnInactive(
             sessionCtx.distClient.dist(reqId, topic, EXACTLY_ONCE, payload.duplicate().nioBuffer(),
@@ -1337,7 +1337,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                     log.trace("Qos2 msg published: reqId={}, sessionId={}, topic={}, size={}",
                                         reqId, userSessionId(clientInfo), topic, payload.readableBytes());
                                 }
-                                trafficMeter.recordSummary(MqttQoS2DistBytes,
+                                tenantMeter.recordSummary(MqttQoS2DistBytes,
                                     MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
                                 return true;
                             case ERROR:
@@ -1532,8 +1532,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         if (!kicker.hasMqtt3ClientInfo()) {
             return false;
         }
-        return kicker.getTrafficId().equals(clientInfo.getTrafficId()) &&
-            kicker.getUserId().equals(clientInfo.getUserId()) &&
+        return kicker.getTenantId().equals(clientInfo.getTenantId()) &&
+            kicker.getMqtt3ClientInfo().getUserId().equals(clientInfo.getMqtt3ClientInfo().getUserId()) &&
             kicker.getMqtt3ClientInfo().getClientId().equals(clientInfo.getMqtt3ClientInfo().getClientId());
     }
 

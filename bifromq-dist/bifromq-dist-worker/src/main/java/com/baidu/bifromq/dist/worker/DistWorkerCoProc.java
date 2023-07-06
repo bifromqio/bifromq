@@ -16,12 +16,13 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.isEmptyRange;
 import static com.baidu.bifromq.dist.entity.EntityUtil.isSubInfoKey;
+import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseInbox;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
+import static com.baidu.bifromq.dist.entity.EntityUtil.parseTenantId;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
-import static com.baidu.bifromq.dist.entity.EntityUtil.parseTrafficId;
-import static com.baidu.bifromq.dist.entity.EntityUtil.trafficPrefix;
-import static com.baidu.bifromq.dist.entity.EntityUtil.trafficUpperBound;
+import static com.baidu.bifromq.dist.entity.EntityUtil.tenantPrefix;
+import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.util.TopicUtil.isWildcardTopicFilter;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_FAN_OUT_PARALLELISM;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_LOAD_TRACKING_SECONDS;
@@ -186,14 +187,14 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         DistServiceRWCoProcInput coProcInput = DistServiceRWCoProcInput.parseFrom(cis);
         log.trace("Receive rw co-proc request\n{}", coProcInput);
         UpdateRequest request = coProcInput.getUpdateRequest();
-        Set<String> touchedTraffics = Sets.newHashSet();
+        Set<String> touchedTenants = Sets.newHashSet();
         Set<ScopedTopic> touchedTopics = Sets.newHashSet();
         ByteString output = DistServiceRWCoProcOutput.newBuilder()
-            .setUpdateReply(batchUpdate(request, reader, writer, touchedTraffics, touchedTopics))
+            .setUpdateReply(batchUpdate(request, reader, writer, touchedTenants, touchedTopics))
             .build().toByteString();
         return () -> {
             touchedTopics.forEach(routeCache::invalidate);
-            touchedTraffics.forEach(routeCache::touch);
+            touchedTenants.forEach(routeCache::touch);
             return output;
         };
     }
@@ -205,7 +206,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     }
 
     private UpdateReply batchUpdate(UpdateRequest request, IKVReader reader, IKVWriter writer,
-                                    Set<String> touchedTraffics, Set<ScopedTopic> touchedTopics) {
+                                    Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
         UpdateReply.Builder replyBuilder = UpdateReply.newBuilder().setReqId(request.getReqId());
         if (request.hasAddTopicFilter()) {
             replyBuilder.setAddTopicFilter(
@@ -217,19 +218,19 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         }
         if (request.hasInsertMatchRecord()) {
             replyBuilder.setInsertMatchRecord(
-                insertMatchRecord(request.getInsertMatchRecord(), reader, writer, touchedTraffics, touchedTopics));
+                insertMatchRecord(request.getInsertMatchRecord(), reader, writer, touchedTenants, touchedTopics));
         }
         if (request.hasDeleteMatchRecord()) {
             replyBuilder.setDeleteMatchRecord(
-                deleteMatchRecord(request.getDeleteMatchRecord(), reader, writer, touchedTraffics, touchedTopics));
+                deleteMatchRecord(request.getDeleteMatchRecord(), reader, writer, touchedTenants, touchedTopics));
         }
         if (request.hasJoinMatchGroup()) {
             replyBuilder.setJoinMatchGroup(
-                joinMatchGroup(request.getJoinMatchGroup(), reader, writer, touchedTraffics, touchedTopics));
+                joinMatchGroup(request.getJoinMatchGroup(), reader, writer, touchedTenants, touchedTopics));
         }
         if (request.hasLeaveMatchGroup()) {
             replyBuilder.setLeaveMatchGroup(
-                leaveMatchGroup(request.getLeaveMatchGroup(), reader, writer, touchedTraffics, touchedTopics));
+                leaveMatchGroup(request.getLeaveMatchGroup(), reader, writer, touchedTenants, touchedTopics));
         }
         if (request.hasClearSubInfo()) {
             replyBuilder.setClearSubInfo(clearSubInfo(request.getClearSubInfo(), reader, writer));
@@ -320,7 +321,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     }
 
     private InsertMatchRecordReply insertMatchRecord(InsertMatchRecord request, IKVReader reader, IKVWriter writer,
-                                                     Set<String> touchedTraffics, Set<ScopedTopic> touchedTopics) {
+                                                     Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
         InsertMatchRecordReply.Builder replyBuilder = InsertMatchRecordReply.newBuilder();
         for (String matchRecordKey : request.getRecordMap().keySet()) {
             ByteString key = ByteString.copyFromUtf8(matchRecordKey);
@@ -333,13 +334,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         writer.put(key, MatchRecord.newBuilder().setNormal(subQoS).build().toByteString());
                         loadEstimator.track(key, LoadUnits.KEY_PUT);
 
-                        String trafficId = parseTrafficId(matchRecordKey);
+                        String tenantId = EntityUtil.parseTenantId(matchRecordKey);
                         String topicFilter = parseTopicFilter(matchRecordKey);
                         if (isWildcardTopicFilter(topicFilter)) {
-                            touchedTraffics.add(parseTrafficId(matchRecordKey));
+                            touchedTenants.add(EntityUtil.parseTenantId(matchRecordKey));
                         } else {
                             touchedTopics.add(ScopedTopic.builder()
-                                .trafficId(trafficId)
+                                .tenantId(tenantId)
                                 .topic(topicFilter)
                                 .range(reader.range())
                                 .build());
@@ -353,7 +354,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     }
 
     private JoinMatchGroupReply joinMatchGroup(JoinMatchGroup request, IKVReader reader, IKVWriter writer,
-                                               Set<String> touchedTraffics, Set<ScopedTopic> touchedTopics) {
+                                               Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
         JoinMatchGroupReply.Builder replyBuilder = JoinMatchGroupReply.newBuilder();
         for (String matchRecordKeyUtf8 : request.getRecordMap().keySet()) {
             ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
@@ -387,13 +388,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 writer.put(matchRecordKey, MatchRecord.newBuilder().setGroup(matchGroup).build().toByteString());
                 loadEstimator.track(matchRecordKey, LoadUnits.KEY_PUT);
 
-                String trafficId = parseTrafficId(matchRecordKey);
+                String tenantId = parseTenantId(matchRecordKey);
                 String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
                 if (isWildcardTopicFilter(topicFilter)) {
-                    touchedTraffics.add(parseTrafficId(matchRecordKey));
+                    touchedTenants.add(parseTenantId(matchRecordKey));
                 } else {
                     touchedTopics.add(ScopedTopic.builder()
-                        .trafficId(trafficId)
+                        .tenantId(tenantId)
                         .topic(topicFilter)
                         .range(reader.range())
                         .build());
@@ -405,7 +406,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     }
 
     private DeleteMatchRecordReply deleteMatchRecord(DeleteMatchRecord request, IKVReader reader, IKVWriter writer,
-                                                     Set<String> touchedTraffics, Set<ScopedTopic> touchedTopics) {
+                                                     Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
         for (String matchRecordKeyUtf8 : request.getMatchRecordKeyList()) {
             ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
             Optional<ByteString> value = reader.get(matchRecordKey);
@@ -415,13 +416,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 writer.delete(matchRecordKey);
                 loadEstimator.track(matchRecordKey, LoadUnits.KEY_DEL);
 
-                String trafficId = parseTrafficId(matchRecordKey);
+                String tenantId = parseTenantId(matchRecordKey);
                 String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
                 if (isWildcardTopicFilter(topicFilter)) {
-                    touchedTraffics.add(parseTrafficId(matchRecordKey));
+                    touchedTenants.add(parseTenantId(matchRecordKey));
                 } else {
                     touchedTopics.add(ScopedTopic.builder()
-                        .trafficId(trafficId)
+                        .tenantId(tenantId)
                         .topic(topicFilter)
                         .range(reader.range())
                         .build());
@@ -432,7 +433,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     }
 
     private LeaveMatchGroupReply leaveMatchGroup(LeaveMatchGroup request, IKVReader reader, IKVWriter writer,
-                                                 Set<String> touchedTraffics, Set<ScopedTopic> touchedTopics) {
+                                                 Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
         for (String matchRecordKeyUtf8 : request.getRecordMap().keySet()) {
             ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
             Optional<ByteString> value = reader.get(matchRecordKey);
@@ -460,13 +461,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             .toByteString());
                         loadEstimator.track(matchRecordKey, LoadUnits.KEY_PUT);
                     }
-                    String trafficId = parseTrafficId(matchRecordKey);
+                    String tenantId = parseTenantId(matchRecordKey);
                     String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
                     if (isWildcardTopicFilter(topicFilter)) {
-                        touchedTraffics.add(parseTrafficId(matchRecordKey));
+                        touchedTenants.add(parseTenantId(matchRecordKey));
                     } else {
                         touchedTopics.add(ScopedTopic.builder()
-                            .trafficId(trafficId)
+                            .tenantId(tenantId)
                             .topic(topicFilter)
                             .range(reader.range())
                             .build());
@@ -504,10 +505,10 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         }
         List<CompletableFuture<Map<String, Map<String, Integer>>>> distFanOutFutures = new ArrayList<>();
         for (DistPack distPack : distPackList) {
-            String trafficId = distPack.getTrafficId();
+            String tenantId = distPack.getTenantId();
             Range range = intersect(Range.newBuilder()
-                .setStartKey(EntityUtil.matchRecordKeyPrefix(trafficId))
-                .setEndKey(trafficUpperBound(trafficId))
+                .setStartKey(matchRecordKeyPrefix(tenantId))
+                .setEndKey(tenantUpperBound(tenantId))
                 .build(), reader.range());
             if (isEmptyRange(range)) {
                 continue;
@@ -515,7 +516,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             for (TopicMessagePack topicMsgPack : distPack.getMsgPackList()) {
                 String topic = topicMsgPack.getTopic();
                 ScopedTopic scopedTopic = ScopedTopic.builder()
-                    .trafficId(trafficId)
+                    .tenantId(tenantId)
                     .topic(topic)
                     .range(reader.range())
                     .build();
@@ -523,22 +524,22 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     .stream().collect(Collectors.toMap(TopicMessagePack.SenderMessagePack::getSender, e -> e));
                 distFanOutFutures.add(routeCache.get(scopedTopic, senderMsgPackMap.keySet())
                     .thenApply(routeMap -> {
-                        fanoutExecutorGroup.submit(Objects.hash(trafficId, topic, request.getOrderKey()), routeMap,
+                        fanoutExecutorGroup.submit(Objects.hash(tenantId, topic, request.getOrderKey()), routeMap,
                             MessagePackWrapper.wrap(topicMsgPack), senderMsgPackMap);
-                        return singletonMap(trafficId, singletonMap(topic, routeMap.size()));
+                        return singletonMap(tenantId, singletonMap(topic, routeMap.size()));
                     }));
             }
         }
         return CompletableFuture.allOf(distFanOutFutures.toArray(CompletableFuture[]::new))
             .thenApply(v -> distFanOutFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
             .thenApply(v -> {
-                // trafficId -> topic -> fanOut
-                Map<String, Map<String, Integer>> trafficFanout = new HashMap<>();
-                v.forEach(fanoutMap -> fanoutMap.forEach((trafficId, topicFanout) ->
-                    trafficFanout.computeIfAbsent(trafficId, k -> new HashMap<>()).putAll(topicFanout)));
+                // tenantId -> topic -> fanOut
+                Map<String, Map<String, Integer>> tenantfanout = new HashMap<>();
+                v.forEach(fanoutMap -> fanoutMap.forEach((tenantId, topicFanout) ->
+                    tenantfanout.computeIfAbsent(tenantId, k -> new HashMap<>()).putAll(topicFanout)));
                 return BatchDistReply.newBuilder()
                     .setReqId(request.getReqId())
-                    .putAllResult(Maps.transformValues(trafficFanout,
+                    .putAllResult(Maps.transformValues(tenantfanout,
                         f -> TopicFanout.newBuilder().putAllFanout(f).build()))
                     .build();
             });
@@ -548,18 +549,17 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         List<CompletableFuture<ClearResult>> clearFutures = new ArrayList<>();
         IKVIterator itr = reader.iterator();
         for (itr.seekToFirst(); itr.isValid(); ) {
-            String trafficId = parseTrafficId(itr.key());
+            String tenantId = parseTenantId(itr.key());
             if (isSubInfoKey(itr.key())) {
                 Inbox inbox = parseInbox(itr.key());
                 clearFutures.add(subBrokerManager.get(inbox.broker)
-                    .hasInbox(request.getReqId(), trafficId, inbox.inboxId, inbox.delivererKey)
+                    .hasInbox(request.getReqId(), tenantId, inbox.inboxId, inbox.delivererKey)
                     .thenCompose(exist -> {
                         if (!exist) {
                             return distClient.clear(request.getReqId(), inbox.inboxId, inbox.delivererKey,
                                 inbox.broker,
                                 ClientInfo.newBuilder()
-                                    .setTrafficId(trafficId)
-                                    .setUserId("dist_gc-" + KVRangeIdUtil.toString(id))
+                                    .setTenantId(tenantId)
                                     .setSysClientInfo(SysClientInfo
                                         .newBuilder()
                                         .setType("distservice")
@@ -569,7 +569,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         return CompletableFuture.completedFuture(ClearResult.OK);
                     }));
             }
-            itr.seek(trafficUpperBound(trafficId));
+            itr.seek(tenantUpperBound(tenantId));
         }
         return allOf(clearFutures.toArray(new CompletableFuture[0]))
             .handle((v, e) -> GCReply.newBuilder().setReqId(request.getReqId()).build());
@@ -579,13 +579,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(reqId);
         IKVIterator itr = reader.iterator();
         for (itr.seekToFirst(); itr.isValid(); ) {
-            String trafficId = parseTrafficId(itr.key());
-            builder.putUsedSpaces(trafficId,
+            String tenantId = parseTenantId(itr.key());
+            builder.putUsedSpaces(tenantId,
                 reader.size(intersect(reader.range(), Range.newBuilder()
-                    .setStartKey(trafficPrefix(trafficId))
-                    .setEndKey(trafficUpperBound(trafficId))
+                    .setStartKey(tenantPrefix(tenantId))
+                    .setEndKey(tenantUpperBound(tenantId))
                     .build())));
-            itr.seek(trafficUpperBound(trafficId));
+            itr.seek(tenantUpperBound(tenantId));
         }
         return CompletableFuture.completedFuture(builder.build());
     }

@@ -101,7 +101,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         long triggerSeq = qos1ConfirmSeqMap.remove(seq);
         if (qos1ConfirmSeqMap.isEmpty() || qos1ConfirmSeqMap.firstKey() > triggerSeq) {
             // all seq < triggerSeq has been confirmed
-            log.trace("Committing qos1 up to seq: trafficId={}, inboxId={}, seq={}", clientInfo().getTrafficId(),
+            log.trace("Committing qos1 up to seq: tenantId={}, inboxId={}, seq={}", clientInfo().getTenantId(),
                 clientInfo().getMqtt3ClientInfo()
                     .getClientId(), triggerSeq);
             qos1ConfirmUpToSeq = triggerSeq;
@@ -120,7 +120,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         long triggerSeq = qos2ConfirmSeqMap.remove(seq);
         if (qos2ConfirmSeqMap.isEmpty() || qos2ConfirmSeqMap.firstKey() > triggerSeq) {
             // all seq < triggerSeq has been confirmed
-            log.trace("Committing qos2 up to seq: trafficId={}, inboxId={}, seq={}", clientInfo().getTrafficId(),
+            log.trace("Committing qos2 up to seq: tenantId={}, inboxId={}, seq={}", clientInfo().getTenantId(),
                 clientInfo().getMqtt3ClientInfo()
                     .getClientId(), triggerSeq);
             qos2ConfirmUpToSeq = triggerSeq;
@@ -198,7 +198,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     }
 
     private void consume(Fetched fetched) {
-        log.trace("Got fetched : trafficId={}, inboxId={}, qos0={}, qos1={}, qos2={}", clientInfo().getTrafficId(),
+        log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, qos1={}, qos2={}", clientInfo().getTenantId(),
             clientInfo().getMqtt3ClientInfo()
                 .getClientId(), fetched.getQos0SeqCount(), fetched.getQos1SeqCount(),
             fetched.getQos2SeqCount());

@@ -210,11 +210,11 @@ abstract class InboxStoreTest {
         return osName != null && osName.startsWith("Mac");
     }
 
-    protected CreateReply requestCreate(String trafficId, String inboxId,
+    protected CreateReply requestCreate(String tenantId, String inboxId,
                                         int limit, int expireSeconds, boolean dropOldest) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             CreateRequest request = CreateRequest.newBuilder()
                 .putInboxes(scopedInboxId.toStringUtf8(), CreateParams.newBuilder()
@@ -241,10 +241,10 @@ abstract class InboxStoreTest {
         }
     }
 
-    protected HasReply requestHas(String trafficId, String inboxId) {
+    protected HasReply requestHas(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             HasRequest request = HasRequest.newBuilder().addScopedInboxId(scopedInboxId).build();
             InboxServiceROCoProcInput input = MessageUtil.buildHasRequest(reqId, request);
@@ -265,10 +265,10 @@ abstract class InboxStoreTest {
         }
     }
 
-    protected TouchReply requestDelete(String trafficId, String inboxId) {
+    protected TouchReply requestDelete(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             TouchRequest request = TouchRequest.newBuilder()
                 .putScopedInboxId(scopedInboxId.toStringUtf8(), false)
@@ -293,7 +293,7 @@ abstract class InboxStoreTest {
 
     protected InboxInsertReply requestInsert(SubInfo subInfo, String topic,
                                              TopicMessagePack.SenderMessagePack... messages) {
-        return requestInsert(subInfo.getTrafficId(), subInfo.getInboxId(), MessagePack.newBuilder()
+        return requestInsert(subInfo.getTenantId(), subInfo.getInboxId(), MessagePack.newBuilder()
             .setSubInfo(subInfo)
             .addMessages(TopicMessagePack.newBuilder()
                 .setTopic(topic)
@@ -302,12 +302,12 @@ abstract class InboxStoreTest {
             .build());
     }
 
-    protected InboxInsertReply requestInsert(String trafficId, String inboxId, MessagePack... subMsgPacks) {
+    protected InboxInsertReply requestInsert(String tenantId, String inboxId, MessagePack... subMsgPacks) {
         try {
             InboxInsertRequest request = InboxInsertRequest.newBuilder()
                 .addAllSubMsgPack(Arrays.stream(subMsgPacks).collect(Collectors.toList()))
                 .build();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             long reqId = ThreadLocalRandom.current().nextInt();
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxServiceRWCoProcInput input = MessageUtil.buildBatchInboxInsertRequest(reqId, request);
@@ -328,13 +328,13 @@ abstract class InboxStoreTest {
         }
     }
 
-    protected InboxFetchReply requestFetchQoS0(String trafficId,
+    protected InboxFetchReply requestFetchQoS0(String tenantId,
                                                String inboxId,
                                                int maxFetch,
                                                Long startAfterSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxFetchRequest.Builder request = InboxFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxId.toStringUtf8(), FetchParams.newBuilder()
@@ -364,15 +364,15 @@ abstract class InboxStoreTest {
         }
     }
 
-    protected InboxFetchReply requestFetchQoS0(String trafficId, String inboxId, int maxFetch) {
-        return requestFetchQoS0(trafficId, inboxId, maxFetch, null);
+    protected InboxFetchReply requestFetchQoS0(String tenantId, String inboxId, int maxFetch) {
+        return requestFetchQoS0(tenantId, inboxId, maxFetch, null);
     }
 
-    protected InboxFetchReply requestFetchQoS1(String trafficId, String inboxId, int maxFetch,
+    protected InboxFetchReply requestFetchQoS1(String tenantId, String inboxId, int maxFetch,
                                                Long startAfterSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxFetchRequest.Builder request = InboxFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxId.toStringUtf8(), FetchParams.newBuilder()
@@ -402,15 +402,15 @@ abstract class InboxStoreTest {
         }
     }
 
-    protected InboxFetchReply requestFetchQoS1(String trafficId, String inboxId, int maxFetch) {
-        return requestFetchQoS1(trafficId, inboxId, maxFetch, null);
+    protected InboxFetchReply requestFetchQoS1(String tenantId, String inboxId, int maxFetch) {
+        return requestFetchQoS1(tenantId, inboxId, maxFetch, null);
     }
 
-    protected InboxFetchReply requestFetchQoS2(String trafficId, String inboxId, int maxFetch,
+    protected InboxFetchReply requestFetchQoS2(String tenantId, String inboxId, int maxFetch,
                                                Long startAfterSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxFetchRequest.Builder request = InboxFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxId.toStringUtf8(), FetchParams.newBuilder()
@@ -440,10 +440,10 @@ abstract class InboxStoreTest {
         }
     }
 
-    protected TouchReply requestTouch(String trafficId, String inboxId) {
+    protected TouchReply requestTouch(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxServiceRWCoProcInput input = MessageUtil.buildTouchRequest(reqId, TouchRequest.newBuilder()
                 .putScopedInboxId(scopedInboxId.toStringUtf8(), true)
@@ -466,10 +466,10 @@ abstract class InboxStoreTest {
 
     }
 
-    protected InboxCommitReply requestCommitQoS0(String trafficId, String inboxId, long upToSeq) {
+    protected InboxCommitReply requestCommitQoS0(String tenantId, String inboxId, long upToSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, InboxCommitRequest.newBuilder()
                 .putInboxCommit(scopedInboxId.toStringUtf8(), InboxCommit.newBuilder()
@@ -496,10 +496,10 @@ abstract class InboxStoreTest {
     }
 
 
-    protected InboxCommitReply requestCommitQoS1(String trafficId, String inboxId, long upToSeq) {
+    protected InboxCommitReply requestCommitQoS1(String tenantId, String inboxId, long upToSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, InboxCommitRequest.newBuilder()
                 .putInboxCommit(scopedInboxId.toStringUtf8(), InboxCommit.newBuilder()
@@ -524,10 +524,10 @@ abstract class InboxStoreTest {
         }
     }
 
-    protected InboxCommitReply requestCommitQoS2(String trafficId, String inboxId, long upToSeq) {
+    protected InboxCommitReply requestCommitQoS2(String tenantId, String inboxId, long upToSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, InboxCommitRequest.newBuilder()
                 .putInboxCommit(scopedInboxId.toStringUtf8(), InboxCommit.newBuilder()

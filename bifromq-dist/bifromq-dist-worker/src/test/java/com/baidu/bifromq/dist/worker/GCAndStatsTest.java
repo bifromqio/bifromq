@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.metrics.TrafficMetric.DistSubInfoSizeGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.DistSubInfoSizeGauge;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;

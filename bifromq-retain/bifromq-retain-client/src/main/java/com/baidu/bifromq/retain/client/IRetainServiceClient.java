@@ -45,7 +45,7 @@ public interface IRetainServiceClient {
 
     IClientPipeline open(ClientInfo clientInfo);
 
-    CompletableFuture<MatchReply> match(long reqId, String trafficId, String topicFilter,
+    CompletableFuture<MatchReply> match(long reqId, String tenantId, String topicFilter,
                                         int limit, ClientInfo clientInfo);
 
     void stop();

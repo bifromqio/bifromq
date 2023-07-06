@@ -20,7 +20,7 @@ import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictionaryServiceGrpc;
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
         .serviceDescriptor(SessionDictionaryServiceGrpc.getServiceDescriptor())
-        .methodSemantic(SessionDictionaryServiceGrpc.getJoinMethod(), BluePrint.WCHStreamingMethod.INSTANCE)
+        .methodSemantic(SessionDictionaryServiceGrpc.getJoinMethod(), BluePrint.WCHStreamingMethod.getInstance())
         .methodSemantic(SessionDictionaryServiceGrpc.getKillMethod(),
             BluePrint.WCHUnaryMethod.<KillRequest>builder()
                 .keyHashFunc(r -> WCHKeyUtil.toWCHKey(r.getUserId(), r.getClientId()))

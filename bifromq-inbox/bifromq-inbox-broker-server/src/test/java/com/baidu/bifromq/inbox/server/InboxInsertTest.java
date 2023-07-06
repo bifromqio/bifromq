@@ -38,10 +38,10 @@ import org.testng.annotations.Test;
 public class InboxInsertTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void insert() throws InterruptedException {
-        String trafficId = "trafficA";
+        String tenantId = "tenantA";
         String inboxId = "inbox1";
         String delivererKey = "deliverer1";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
         assertEquals(createInboxReply.getReqId(), reqId);
@@ -60,7 +60,7 @@ public class InboxInsertTest extends InboxServiceTest {
             .addMessage(senderMsgPack)
             .build();
         SubInfo subInfo = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)
@@ -89,10 +89,10 @@ public class InboxInsertTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void insertMultiMsgPackWithSameInbox() throws InterruptedException {
-        String trafficId = "trafficA";
+        String tenantId = "trafficA";
         String inboxId = "inbox1";
         String delivererKey = "deliverer1";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTrafficId(trafficId).build();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
         assertEquals(createInboxReply.getReqId(), reqId);
@@ -115,7 +115,7 @@ public class InboxInsertTest extends InboxServiceTest {
             .addMessage(senderMsgPack)
             .build();
         SubInfo subInfo = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)

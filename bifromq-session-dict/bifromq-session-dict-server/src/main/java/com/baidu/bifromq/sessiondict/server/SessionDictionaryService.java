@@ -14,9 +14,9 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-import static com.baidu.bifromq.metrics.TrafficMeter.gauging;
-import static com.baidu.bifromq.metrics.TrafficMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TrafficMetric.MqttConnectionGauge;
+import static com.baidu.bifromq.metrics.TenantMeter.gauging;
+import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectionGauge;
 import static com.github.benmanes.caffeine.cache.RemovalCause.EXPIRED;
 import static com.github.benmanes.caffeine.cache.RemovalCause.SIZE;
 
@@ -53,7 +53,7 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
             }
         })
         .build();
-    // trafficId -> userId/clientId -> AckPipeline<Ping, Quit>
+    // tenantId -> userId/clientId -> AckPipeline<Ping, Quit>
     private final Map<String, Map<String, Registration>> registry = new ConcurrentHashMap<>();
 
     @Override
@@ -63,8 +63,8 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
 
     @Override
     public void kill(KillRequest request, StreamObserver<KillReply> responseObserver) {
-        response(trafficId -> {
-            Registration reg = registry.getOrDefault(trafficId, Collections.emptyMap())
+        response(tenantId -> {
+            Registration reg = registry.getOrDefault(tenantId, Collections.emptyMap())
                 .get(toRegKey(request.getUserId(), request.getClientId()));
             if (reg != null) {
                 reg.quit(request.getKiller());
@@ -77,7 +77,7 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
     }
 
     void close() {
-        registry.forEach((trafficId, sessions) ->
+        registry.forEach((tenantId, sessions) ->
             sessions.forEach((sessionId, ackPipeline) -> ackPipeline.onCompleted()));
     }
 
@@ -89,15 +89,16 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
             super(responseObserver);
             clientInfo = PipelineUtil.decode(metadata.get(PipelineUtil.CLIENT_INFO));
             assert clientInfo.hasMqtt3ClientInfo();
-            log.trace("Receive session registering, trafficId={}, userId={}, clientId={}, addr={}:{}",
-                trafficId, clientInfo.getUserId(), clientInfo.getMqtt3ClientInfo().getClientId(),
+            log.trace("Receive session registering, tenantId={}, userId={}, clientId={}, addr={}:{}",
+                tenantId, clientInfo.getMqtt3ClientInfo().getUserId(), clientInfo.getMqtt3ClientInfo().getClientId(),
                 clientInfo.getMqtt3ClientInfo().getIp(), clientInfo.getMqtt3ClientInfo().getPort());
-            regKey = toRegKey(clientInfo.getUserId(), clientInfo.getMqtt3ClientInfo().getClientId());
-            registry.compute(trafficId, (t, m) -> {
+            regKey =
+                toRegKey(clientInfo.getMqtt3ClientInfo().getUserId(), clientInfo.getMqtt3ClientInfo().getClientId());
+            registry.compute(tenantId, (t, m) -> {
                 if (m == null) {
                     m = new HashMap<>();
-                    gauging(trafficId, MqttConnectionGauge,
-                        () -> registry.getOrDefault(trafficId, Collections.EMPTY_MAP).size());
+                    gauging(tenantId, MqttConnectionGauge,
+                        () -> registry.getOrDefault(tenantId, Collections.EMPTY_MAP).size());
                 }
                 m.compute(regKey, (r, oldPipeline) -> {
                     if (oldPipeline != null) {
@@ -115,8 +116,8 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
         public void quit(ClientInfo killer) {
             long reqId = System.nanoTime();
             if (log.isTraceEnabled()) {
-                log.trace("Quit pipeline: reqId={}, trafficId={}, userId={}, clientId={}, address={}:{}",
-                    reqId, trafficId, clientInfo.getUserId(),
+                log.trace("Quit pipeline: reqId={}, tenantId={}, userId={}, clientId={}, address={}:{}",
+                    reqId, tenantId, clientInfo.getMqtt3ClientInfo().getUserId(),
                     clientInfo.getMqtt3ClientInfo().getClientId(),
                     clientInfo.getMqtt3ClientInfo().getIp(),
                     clientInfo.getMqtt3ClientInfo().getPort());
@@ -125,14 +126,14 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
         }
 
         private void leave() {
-            registry.compute(trafficId, (t, m) -> {
+            registry.compute(tenantId, (t, m) -> {
                 if (m == null) {
-                    stopGauging(trafficId, MqttConnectionGauge);
+                    stopGauging(tenantId, MqttConnectionGauge);
                     return null;
                 } else {
                     m.remove(regKey, this);
                     if (m.size() == 0) {
-                        stopGauging(trafficId, MqttConnectionGauge);
+                        stopGauging(tenantId, MqttConnectionGauge);
                         return null;
                     }
                     return m;

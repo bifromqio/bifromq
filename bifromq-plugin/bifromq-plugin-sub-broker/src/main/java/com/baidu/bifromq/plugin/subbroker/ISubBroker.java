@@ -40,12 +40,12 @@ public interface ISubBroker extends ExtensionPoint {
      * Check the existence of an inbox asynchronously.
      *
      * @param reqId        the request id
-     * @param trafficId    the id of the traffic to which the inbox belongs
+     * @param tenantId     the id of the tenant to which the inbox belongs
      * @param inboxId      the inbox id
      * @param delivererKey the key of the deliverer who is responsible for delivering subscribed messages to the inbox
      * @return boolean indicating if the inbox still exists
      */
-    CompletableFuture<Boolean> hasInbox(long reqId, String trafficId, String inboxId, String delivererKey);
+    CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId, String delivererKey);
 
     /**
      * Close the inbox broker

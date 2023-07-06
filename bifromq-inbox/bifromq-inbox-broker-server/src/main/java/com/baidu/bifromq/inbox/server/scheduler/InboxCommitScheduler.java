@@ -57,7 +57,7 @@ public class InboxCommitScheduler extends InboxUpdateScheduler<CommitRequest, Co
 
     @Override
     protected ByteString rangeKey(CommitRequest request) {
-        return scopedInboxId(request.getClientInfo().getTrafficId(), request.getInboxId());
+        return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
     }
 
     @Override
@@ -85,7 +85,7 @@ public class InboxCommitScheduler extends InboxUpdateScheduler<CommitRequest, Co
             @Override
             public CompletableFuture<CommitReply> add(CommitRequest request) {
                 ClientInfo clientInfo = request.getClientInfo();
-                String scopedInboxIdUtf8 = scopedInboxId(clientInfo.getTrafficId(),
+                String scopedInboxIdUtf8 = scopedInboxId(clientInfo.getTenantId(),
                     request.getInboxId()).toStringUtf8();
                 Long[] upToSeqs = inboxCommits.computeIfAbsent(scopedInboxIdUtf8, k -> {
                     inboxCount.incrementAndGet();
@@ -168,7 +168,7 @@ public class InboxCommitScheduler extends InboxUpdateScheduler<CommitRequest, Co
                                         .setReqId(request.getReqId())
                                         .setResult(v.getResultMap()
                                             .get(scopedInboxId(
-                                                request.getClientInfo().getTrafficId(),
+                                                request.getClientInfo().getTenantId(),
                                                 request.getInboxId()).toStringUtf8()) ?
                                             CommitReply.Result.OK : CommitReply.Result.ERROR)
                                         .build());

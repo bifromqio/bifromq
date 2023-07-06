@@ -151,8 +151,7 @@ class FanoutExecutorGroup {
                         SubInfo subInfo = matched.subInfo;
                         distClient.clear(System.nanoTime(), subInfo.getInboxId(), delivererKey, subBrokerId,
                             ClientInfo.newBuilder()
-                                .setTrafficId(subInfo.getTrafficId())
-                                .setUserId("distworker")
+                                .setTenantId(subInfo.getTenantId())
                                 .setSysClientInfo(SysClientInfo
                                     .newBuilder()
                                     .setType("distservice")

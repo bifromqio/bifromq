@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.trafficUpperBound;
+import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
+import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildBatchDistRequest;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_TOPICS_IN_BATCH;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_INFLIGHT_CALLS_PER_QUEUE;
@@ -91,7 +92,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
             private final AtomicInteger msgCount = new AtomicInteger();
             private final AtomicInteger topicCount = new AtomicInteger();
             private final Queue<DistTask> tasks = new MpscUnboundedArrayQueue<>(128);
-            // key: trafficId, subKey: topic
+            // key: tenantId, subKey: topic
             private final Map<String, Map<String, Map<ClientInfo, Iterable<Message>>>> batch =
                 new ConcurrentHashMap<>();
 
@@ -109,7 +110,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
             public CompletableFuture<Map<String, Integer>> add(DistCall dist) {
                 DistTask task = new DistTask(dist);
                 Map<String, Map<ClientInfo, Iterable<Message>>> clientMsgsByTopic =
-                    batch.computeIfAbsent(dist.trafficId, k -> new ConcurrentHashMap<>());
+                    batch.computeIfAbsent(dist.tenatId, k -> new ConcurrentHashMap<>());
                 dist.senderMsgPacks.forEach(senderMsgPack ->
                     senderMsgPack.getMessagePackList().forEach(topicMsgs ->
                         clientMsgsByTopic.computeIfAbsent(topicMsgs.getTopic(), k -> {
@@ -140,10 +141,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
             public CompletableFuture<Void> execute() {
                 Map<String, DistPack> distPackMap = buildDistPack();
                 Map<KVRangeSetting, List<DistPack>> distPacksByRange = new HashMap<>();
-                distPackMap.forEach((trafficId, distPack) -> {
+                distPackMap.forEach((tenantId, distPack) -> {
                     List<KVRangeSetting> ranges = kvStoreClient.findByRange(Range.newBuilder()
-                        .setStartKey(EntityUtil.matchRecordKeyPrefix(trafficId))
-                        .setEndKey(trafficUpperBound(trafficId))
+                        .setStartKey(matchRecordKeyPrefix(tenantId))
+                        .setEndKey(tenantUpperBound(tenantId))
                         .build());
                     ranges.forEach(range ->
                         distPacksByRange.computeIfAbsent(range, k -> new LinkedList<>()).add(distPack));
@@ -197,12 +198,12 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
                             }
                         } else {
                             // aggregate fanout from each reply
-                            Map<String, Map<String, Integer>> topicFanoutByTraffic = new HashMap<>();
+                            Map<String, Map<String, Integer>> topicFanoutByTenant = new HashMap<>();
                             replyList.forEach(reply -> reply.getResultMap()
-                                .forEach((trafficId, topicFanout) -> {
-                                    topicFanoutByTraffic.computeIfAbsent(trafficId, k -> new HashMap<>());
+                                .forEach((tenantId, topicFanout) -> {
+                                    topicFanoutByTenant.computeIfAbsent(tenantId, k -> new HashMap<>());
                                     topicFanout.getFanoutMap()
-                                        .forEach((topic, fanout) -> topicFanoutByTraffic.get(trafficId)
+                                        .forEach((topic, fanout) -> topicFanoutByTenant.get(tenantId)
                                             .compute(topic, (k, v) -> {
                                                 if (v == null) {
                                                     v = 0;
@@ -213,7 +214,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
                                 }));
                             while ((task = tasks.poll()) != null) {
                                 Map<String, Integer> allTopicFanouts =
-                                    topicFanoutByTraffic.get(task.distCall.trafficId);
+                                    topicFanoutByTenant.get(task.distCall.tenatId);
                                 Map<String, Integer> topicFanouts = new HashMap<>();
                                 task.distCall.senderMsgPacks.forEach(clientMessagePack ->
                                     clientMessagePack.getMessagePackList().forEach(topicMessagePack ->
@@ -233,8 +234,8 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
 
             private Map<String, DistPack> buildDistPack() {
                 Map<String, DistPack> distPackMap = new HashMap<>();
-                batch.forEach((trafficId, topicMap) -> {
-                    DistPack.Builder distPackBuilder = DistPack.newBuilder().setTrafficId(trafficId);
+                batch.forEach((tenantId, topicMap) -> {
+                    DistPack.Builder distPackBuilder = DistPack.newBuilder().setTenantId(tenantId);
                     topicMap.forEach((topic, senderMap) -> {
                         TopicMessagePack.Builder topicMsgPackBuilder = TopicMessagePack.newBuilder().setTopic(topic);
                         senderMap.forEach((sender, msgs) ->
@@ -245,7 +246,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
                                 .build()));
                         distPackBuilder.addMsgPack(topicMsgPackBuilder.build());
                     });
-                    distPackMap.put(trafficId, distPackBuilder.build());
+                    distPackMap.put(tenantId, distPackBuilder.build());
                 });
                 return distPackMap;
             }

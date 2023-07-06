@@ -65,7 +65,7 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
         this.fetcher = fetcher;
         this.toucher = toucher;
         this.kvStoreClient = kvStoreClient;
-        scopedInboxId = KeyUtil.scopedInboxId(trafficId, inboxId);
+        scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
         if (limiter.tryAcquire()) {
             if (hasMetadata(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ)) {
                 lastFetchQoS0Seq = Long.parseLong(metadata(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ));
@@ -75,15 +75,16 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
             }
             registry.reg(this);
             ack().doFinally(() -> {
-                touch();
-                registry.unreg(this);
-                closed = true;
-            }).subscribe(fetchHint -> {
-                log.trace("Got hint: trafficId={}, inboxId={}, capacity={}",
-                    trafficId, inboxId, fetchHint.getCapacity());
-                downStreamCapacity.set(Math.max(0, fetchHint.getCapacity()));
-                signalFetch();
-            });
+                    touch();
+                    registry.unreg(this);
+                    closed = true;
+                })
+                .subscribe(fetchHint -> {
+                    log.trace("Got hint: tenantId={}, inboxId={}, capacity={}",
+                        tenantId, inboxId, fetchHint.getCapacity());
+                    downStreamCapacity.set(Math.max(0, fetchHint.getCapacity()));
+                    signalFetch();
+                });
             signalFetch();
         } else {
             close();
@@ -96,8 +97,8 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
     }
 
     @Override
-    public String trafficId() {
-        return trafficId;
+    public String tenantId() {
+        return tenantId;
     }
 
     @Override
@@ -117,8 +118,8 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
 
     @Override
     public void signalFetch() {
-        log.trace("Signal fetch: trafficId={}, inboxId={}, hint={}, fetching={}",
-            trafficId, inboxId, downStreamCapacity.get(), fetchStarted.get());
+        log.trace("Signal fetch: tenantId={}, inboxId={}, hint={}, fetching={}",
+            tenantId, inboxId, downStreamCapacity.get(), fetchStarted.get());
         signalTS = System.nanoTime();
         if (!closed && fetchStarted.compareAndSet(false, true)) {
             int capacity = downStreamCapacity.get();
@@ -150,7 +151,7 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
         }
         fetcher.fetch(new InboxFetchScheduler.InboxFetch(scopedInboxId, fb.build()))
             .whenComplete((reply, e) -> {
-                log.trace("Fetch success: trafficId={}, inboxId={}\n{}", trafficId, inboxId, reply);
+                log.trace("Fetch success: tenantId={}, inboxId={}\n{}", tenantId, inboxId, reply);
                 int fetchedCount = 0;
                 if (reply.getQos0MsgCount() > 0 || reply.getQos1MsgCount() > 0 || reply.getQos2MsgCount() > 0) {
                     if (reply.getQos0MsgCount() > 0) {

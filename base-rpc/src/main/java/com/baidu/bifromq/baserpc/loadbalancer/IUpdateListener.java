@@ -18,13 +18,13 @@ import java.util.Optional;
 
 public interface IUpdateListener {
     interface IServerSelector {
-        boolean direct(String trafficId, String serverId, MethodDescriptor methodDescriptor);
+        boolean direct(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor);
 
-        Optional<String> hashing(String trafficId, String key, MethodDescriptor methodDescriptor);
+        Optional<String> hashing(String tenantId, String key, MethodDescriptor<?, ?> methodDescriptor);
 
-        Optional<String> roundRobin(String trafficId, MethodDescriptor methodDescriptor);
+        Optional<String> roundRobin(String tenantId, MethodDescriptor<?, ?> methodDescriptor);
 
-        Optional<String> random(String trafficId, MethodDescriptor methodDescriptor);
+        Optional<String> random(String tenantId, MethodDescriptor<?, ?> methodDescriptor);
     }
 
     void onUpdate(IServerSelector selector);

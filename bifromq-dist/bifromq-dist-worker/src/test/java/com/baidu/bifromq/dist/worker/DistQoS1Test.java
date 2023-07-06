@@ -49,12 +49,12 @@ import org.testng.annotations.Test;
 public class DistQoS1Test extends DistWorkerTest {
     @Test(groups = "integration")
     public void succeedWithNoSub() {
-        String trafficId = "trafficA";
+        String tenantId = "trafficA";
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(trafficId, AT_LEAST_ONCE, topic, payload, "orderKey1");
-        assertEquals(reply.getResultMap().get(trafficId).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
+        BatchDistReply reply = dist(tenantId, AT_LEAST_ONCE, topic, payload, "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantId).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
     }
 
     @Test(groups = "integration")

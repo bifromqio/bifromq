@@ -28,34 +28,34 @@ public class BatchInsertTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void insertQoS012() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantA";
         String inboxId = "inboxId";
         SubInfo subInfo1 = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setSubQoS(QoS.AT_MOST_ONCE)
             .setTopicFilter("greeting")
             .build();
         SubInfo subInfo2 = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setSubQoS(QoS.AT_LEAST_ONCE)
             .setTopicFilter("greeting")
             .build();
         SubInfo subInfo3 = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setSubQoS(QoS.EXACTLY_ONCE)
             .setTopicFilter("greeting")
             .build();
 
-        String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
+        String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
         TopicMessagePack.SenderMessagePack msg0 = message(QoS.AT_MOST_ONCE, "hello");
         TopicMessagePack.SenderMessagePack msg1 = message(QoS.AT_LEAST_ONCE, "world");
         TopicMessagePack.SenderMessagePack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
-        requestCreate(trafficId, inboxId, 3, 600, false);
-        requestInsert(trafficId, inboxId,
+        requestCreate(tenantId, inboxId, 3, 600, false);
+        requestInsert(tenantId, inboxId,
             MessagePack.newBuilder()
                 .setSubInfo(subInfo1)
                 .addMessages(TopicMessagePack.newBuilder()
@@ -78,14 +78,14 @@ public class BatchInsertTest extends InboxStoreTest {
                     .build())
                 .build());
 
-        InboxFetchReply reply0 = requestFetchQoS0(trafficId, inboxId, 10);
+        InboxFetchReply reply0 = requestFetchQoS0(tenantId, inboxId, 10);
         Assert.assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 1);
 
         Assert.assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount(), 1);
         Assert.assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(0).getMsg().getMessage(),
             msg0.getMessage(0));
 
-        InboxFetchReply reply1 = requestFetchQoS1(trafficId, inboxId, 10);
+        InboxFetchReply reply1 = requestFetchQoS1(tenantId, inboxId, 10);
         Assert.assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1SeqCount(), 1);
         Assert.assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1Seq(0), 0);
 
@@ -93,7 +93,7 @@ public class BatchInsertTest extends InboxStoreTest {
         Assert.assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1Msg(0).getMsg().getMessage(),
             msg1.getMessage(0));
 
-        InboxFetchReply reply2 = requestFetchQoS2(trafficId, inboxId, 10, null);
+        InboxFetchReply reply2 = requestFetchQoS2(tenantId, inboxId, 10, null);
         Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
         Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
 
@@ -104,20 +104,20 @@ public class BatchInsertTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void testInsertSameQoS2MultipleTimes() {
-        String trafficId = "trafficId";
+        String tenantId = "tenantId";
         String inboxId = "inboxId";
         SubInfo subInfo = SubInfo.newBuilder()
-            .setTrafficId(trafficId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setSubQoS(QoS.EXACTLY_ONCE)
             .setTopicFilter("greeting")
             .build();
 
-        String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(trafficId, inboxId).toStringUtf8();
+        String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
         TopicMessagePack.SenderMessagePack msg = message(QoS.EXACTLY_ONCE, "hello world");
-        requestCreate(trafficId, inboxId, 10, 600, false);
-        requestInsert(trafficId, inboxId,
+        requestCreate(tenantId, inboxId, 10, 600, false);
+        requestInsert(tenantId, inboxId,
             MessagePack.newBuilder()
                 .setSubInfo(subInfo)
                 .addMessages(TopicMessagePack.newBuilder()
@@ -140,15 +140,15 @@ public class BatchInsertTest extends InboxStoreTest {
                     .build())
                 .build());
 
-        InboxFetchReply reply0 = requestFetchQoS0(trafficId, inboxId, 10);
+        InboxFetchReply reply0 = requestFetchQoS0(tenantId, inboxId, 10);
         assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 0);
         assertEquals(reply0.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount(), 0);
 
-        InboxFetchReply reply1 = requestFetchQoS1(trafficId, inboxId, 10);
+        InboxFetchReply reply1 = requestFetchQoS1(tenantId, inboxId, 10);
         assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1SeqCount(), 0);
         assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos1MsgCount(), 0);
 
-        InboxFetchReply reply2 = requestFetchQoS2(trafficId, inboxId, 10, null);
+        InboxFetchReply reply2 = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
         assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
         assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage(),
