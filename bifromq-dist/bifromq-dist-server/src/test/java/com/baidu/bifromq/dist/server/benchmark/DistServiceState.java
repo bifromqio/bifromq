@@ -35,7 +35,6 @@ import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.SysClientInfo;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
@@ -56,68 +55,16 @@ public class DistServiceState {
     public static final int InboxService = 1;
     public final ClientInfo clientInfo = ClientInfo.newBuilder()
         .setTenantId("DevOnly")
-        .setSysClientInfo(SysClientInfo.newBuilder()
-            .setType("benchmark")
-            .build())
+        .putMetadata("type", "benchmark")
         .build();
 
-    private IAgentHost agentHost;
-    private ICRDTService crdtService;
-
-    private ISettingProvider settingProvider = Setting::current;
-
-    private IEventCollector eventCollector = event -> {
-
-    };
-    private IDistClient distClient;
-    private ISubBrokerManager subBrokerMgr = new ISubBrokerManager() {
-        public ISubBroker get(int subBrokerId) {
-            return new ISubBroker() {
-                @Override
-                public int id() {
-                    return 0;
-                }
-
-                @Override
-                public IDeliverer open(String delivererKey) {
-                    return new IDeliverer() {
-                        @Override
-                        public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
-                            return CompletableFuture.completedFuture(Collections.emptyMap());
-                        }
-
-                        @Override
-                        public void close() {
-
-                        }
-                    };
-                }
-
-                @Override
-                public CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId,
-                                                           String delivererKey) {
-                    return CompletableFuture.completedFuture(true);
-                }
-
-                @Override
-                public void close() {
-
-                }
-            };
-        }
-
-        @Override
-        public void stop() {
-
-        }
-    };
-
-    private IDistWorker distWorker;
-    private IDistServer distServer;
-
-    private IBaseKVStoreClient storeClient;
-
-    private AtomicLong seqNo = new AtomicLong(10000);
+    private final IAgentHost agentHost;
+    private final ICRDTService crdtService;
+    private final IDistClient distClient;
+    private final IDistWorker distWorker;
+    private final IDistServer distServer;
+    private final IBaseKVStoreClient storeClient;
+    private final AtomicLong seqNo = new AtomicLong(10000);
 
     public DistServiceState() {
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
@@ -141,6 +88,52 @@ public class DistServiceState {
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(crdtService)
             .build();
+        ISettingProvider settingProvider = Setting::current;
+        IEventCollector eventCollector = event -> {
+
+        };
+        ISubBrokerManager subBrokerMgr = new ISubBrokerManager() {
+            public ISubBroker get(int subBrokerId) {
+                return new ISubBroker() {
+                    @Override
+                    public int id() {
+                        return 0;
+                    }
+
+                    @Override
+                    public IDeliverer open(String delivererKey) {
+                        return new IDeliverer() {
+                            @Override
+                            public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(
+                                Iterable<DeliveryPack> packs) {
+                                return CompletableFuture.completedFuture(Collections.emptyMap());
+                            }
+
+                            @Override
+                            public void close() {
+
+                            }
+                        };
+                    }
+
+                    @Override
+                    public CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId,
+                                                               String delivererKey) {
+                        return CompletableFuture.completedFuture(true);
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                };
+            }
+
+            @Override
+            public void stop() {
+
+            }
+        };
         distWorker = IDistWorker
             .inProcBuilder()
             .agentHost(agentHost)
@@ -185,7 +178,7 @@ public class DistServiceState {
 
     public ClearResult requestClear(String inboxId, String delivererKey, int brokerId, ClientInfo clientInfo) {
         long reqId = seqNo.incrementAndGet();
-        return distClient.clear(reqId, inboxId, delivererKey, brokerId, clientInfo)
+        return distClient.clear(reqId, clientInfo.getTenantId(), inboxId, delivererKey, brokerId)
             .join();
     }
 }

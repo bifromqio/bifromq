@@ -14,10 +14,10 @@
 package com.baidu.bifromq.dist.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.ClearReply;
@@ -38,13 +38,16 @@ import com.baidu.bifromq.dist.server.scheduler.SubCallResult;
 import com.baidu.bifromq.dist.server.scheduler.SubCallScheduler;
 import com.baidu.bifromq.dist.util.TopicUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.distservice.SubscribeError;
+import com.baidu.bifromq.plugin.eventcollector.distservice.Subscribed;
+import com.baidu.bifromq.plugin.eventcollector.distservice.UnsubscribeError;
+import com.baidu.bifromq.plugin.eventcollector.distservice.Unsubscribed;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -54,7 +57,7 @@ import lombok.extern.slf4j.Slf4j;
 public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final IEventCollector eventCollector;
     private final ICallScheduler<DistCall> distCallRateScheduler;
-    private final IBatchCallScheduler<DistCall, Map<String, Integer>> distCallScheduler;
+    private final DistCallScheduler distCallScheduler;
     private final SubCallScheduler subCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
 
@@ -75,7 +78,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     @Override
     public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
         // each sub request consists of two async concurrent sub-tasks. Ideally the two sub-tasks need to be executed
-        // in transaction context for data consistency, but that may bring too much complexity. so here is the
+        // in transaction context for data consistency, but that will be too complex. so here is the
         // trade-off: the two sub-tasks are executed atomically but not in transaction, so the subInfo and
         // matchRecord data may inconsistent due to some transient failure, we need a background job for rectification.
         response(tenantId -> {
@@ -110,7 +113,28 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                         }
                     }
                 })
-                .thenApply(v -> SubReply.newBuilder().setReqId(request.getReqId()).setResult(v).build());
+                .thenApply(result -> {
+                    if (result == SubReply.SubResult.Failure) {
+                        eventCollector.report(getLocal(SubscribeError.class)
+                            .reqId(request.getReqId())
+                            .qos(request.getSubQoS())
+                            .topicFilter(request.getTopicFilter())
+                            .tenantId(request.getTenantId())
+                            .inboxId(request.getInboxId())
+                            .subBrokerId(request.getBroker())
+                            .delivererKey(request.getDelivererKey()));
+                    } else {
+                        eventCollector.report(getLocal(Subscribed.class)
+                            .reqId(request.getReqId())
+                            .qos(request.getSubQoS())
+                            .topicFilter(request.getTopicFilter())
+                            .tenantId(request.getTenantId())
+                            .inboxId(request.getInboxId())
+                            .subBrokerId(request.getBroker())
+                            .delivererKey(request.getDelivererKey()));
+                    }
+                    return SubReply.newBuilder().setReqId(request.getReqId()).setResult(result).build();
+                });
         }, responseObserver);
     }
 
@@ -132,7 +156,26 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                         return UnsubReply.Result.OK;
                     }
                 })
-                .thenApply(v -> UnsubReply.newBuilder().setReqId(request.getReqId()).setResult(v).build());
+                .thenApply(result -> {
+                    if (result == UnsubReply.Result.ERROR) {
+                        eventCollector.report(getLocal(Unsubscribed.class)
+                            .reqId(request.getReqId())
+                            .topicFilter(request.getTopicFilter())
+                            .tenantId(request.getTenantId())
+                            .inboxId(request.getInboxId())
+                            .subBrokerId(request.getBroker())
+                            .delivererKey(request.getDelivererKey()));
+                    } else {
+                        eventCollector.report(getLocal(UnsubscribeError.class)
+                            .reqId(request.getReqId())
+                            .topicFilter(request.getTopicFilter())
+                            .tenantId(request.getTenantId())
+                            .inboxId(request.getInboxId())
+                            .subBrokerId(request.getBroker())
+                            .delivererKey(request.getDelivererKey()));
+                    }
+                    return UnsubReply.newBuilder().setReqId(request.getReqId()).setResult(result).build();
+                });
         }, responseObserver);
     }
 
@@ -149,21 +192,21 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                             return subCallScheduler.schedule(
                                 new SubCall.RemoveTopicFilter(UnsubRequest.newBuilder()
                                     .setReqId(request.getReqId())
+                                    .setTenantId(request.getTenantId())
                                     .setInboxId(request.getInboxId())
                                     .setTopicFilter(tf)
                                     .setBroker(request.getBroker())
                                     .setDelivererKey(request.getDelivererKey())
-                                    .setClient(request.getClient())
                                     .build()));
                         } else {
                             return subCallScheduler.schedule(
                                 new SubCall.LeaveJoinGroup(UnsubRequest.newBuilder()
                                     .setReqId(request.getReqId())
+                                    .setTenantId(request.getTenantId())
                                     .setInboxId(request.getInboxId())
                                     .setTopicFilter(tf)
                                     .setBroker(request.getBroker())
                                     .setDelivererKey(request.getDelivererKey())
-                                    .setClient(request.getClient())
                                     .build()));
                         }
                     })

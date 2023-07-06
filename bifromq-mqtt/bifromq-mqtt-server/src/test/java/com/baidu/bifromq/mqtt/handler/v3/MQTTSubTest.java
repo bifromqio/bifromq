@@ -19,7 +19,6 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATI
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_SUBSCRIPTION;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -31,7 +30,6 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
@@ -50,11 +48,11 @@ public class MQTTSubTest extends BaseMQTTTest {
     @AfterMethod
     public void clean() {
         if (shouldCleanSubs) {
-            when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+            when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
                 .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
             channel.close();
             verify(distClient, times(1))
-                .clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+                .clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
         } else {
             channel.close();
         }

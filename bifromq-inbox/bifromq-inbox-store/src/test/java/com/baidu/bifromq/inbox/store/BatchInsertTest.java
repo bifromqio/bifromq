@@ -51,9 +51,9 @@ public class BatchInsertTest extends InboxStoreTest {
 
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(QoS.AT_MOST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(QoS.AT_LEAST_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg0 = message(QoS.AT_MOST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(QoS.AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 3, 600, false);
         requestInsert(tenantId, inboxId,
             MessagePack.newBuilder()
@@ -115,7 +115,7 @@ public class BatchInsertTest extends InboxStoreTest {
 
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg = message(QoS.EXACTLY_ONCE, "hello world");
+        TopicMessagePack.PublisherPack msg = message(QoS.EXACTLY_ONCE, "hello world");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(tenantId, inboxId,
             MessagePack.newBuilder()

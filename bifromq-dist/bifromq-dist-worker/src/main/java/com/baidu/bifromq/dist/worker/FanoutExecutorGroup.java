@@ -15,7 +15,6 @@ import com.baidu.bifromq.plugin.eventcollector.distservice.Delivered;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.SysClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -67,7 +66,7 @@ class FanoutExecutorGroup {
     }
 
     public void submit(int hash, Map<NormalMatching, Set<ClientInfo>> routeMap, MessagePackWrapper msgPackWrapper,
-                       Map<ClientInfo, TopicMessagePack.SenderMessagePack> senderMsgPackMap) {
+                       Map<ClientInfo, TopicMessagePack.PublisherPack> senderMsgPackMap) {
         int idx = hash % phaseOneExecutorGroup.length;
         if (idx < 0) {
             idx += phaseOneExecutorGroup.length;
@@ -81,7 +80,7 @@ class FanoutExecutorGroup {
 
     private void send(Map<NormalMatching, Set<ClientInfo>> routeMap,
                       MessagePackWrapper msgPackWrapper,
-                      Map<ClientInfo, TopicMessagePack.SenderMessagePack> senderMsgPackMap) {
+                      Map<ClientInfo, TopicMessagePack.PublisherPack> senderMsgPackMap) {
         if (routeMap.size() == 1) {
             routeMap.forEach((route, senders) -> send(route, senders, msgPackWrapper, senderMsgPackMap));
         } else {
@@ -112,7 +111,7 @@ class FanoutExecutorGroup {
 
     private void send(NormalMatching route, Set<ClientInfo> senders,
                       MessagePackWrapper msgPackWrapper,
-                      Map<ClientInfo, TopicMessagePack.SenderMessagePack> senderMsgPackMap) {
+                      Map<ClientInfo, TopicMessagePack.PublisherPack> senderMsgPackMap) {
         if (senders.size() == senderMsgPackMap.size()) {
             send(msgPackWrapper, route);
         } else {
@@ -149,14 +148,8 @@ class FanoutExecutorGroup {
                     case NO_INBOX:
                         // clear all subs from the missing inbox
                         SubInfo subInfo = matched.subInfo;
-                        distClient.clear(System.nanoTime(), subInfo.getInboxId(), delivererKey, subBrokerId,
-                            ClientInfo.newBuilder()
-                                .setTenantId(subInfo.getTenantId())
-                                .setSysClientInfo(SysClientInfo
-                                    .newBuilder()
-                                    .setType("distservice")
-                                    .build())
-                                .build());
+                        distClient.clear(System.nanoTime(), subInfo.getTenantId(), subInfo.getInboxId(),
+                            delivererKey, subBrokerId);
                         eventCollector.report(getLocal(DeliverNoInbox.class)
                             .brokerId(subBrokerId)
                             .delivererKey(delivererKey)

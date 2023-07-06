@@ -13,11 +13,15 @@
 
 package com.baidu.bifromq.sessiondict;
 
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+
 import com.baidu.bifromq.type.ClientInfo;
 
 public class WCHKeyUtil {
     public static String toWCHKey(ClientInfo clientInfo) {
-        return toWCHKey(clientInfo.getMqtt3ClientInfo().getUserId(), clientInfo.getMqtt3ClientInfo().getClientId());
+        return toWCHKey(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+            clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
     }
 
     public static String toWCHKey(String userId, String clientId) {

@@ -28,7 +28,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.io.IOException;
@@ -118,8 +117,8 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void fetchWithoutStartAfter() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 2, false);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
@@ -144,8 +143,8 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void fetchWithMaxLimit() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 1, null);
@@ -169,9 +168,9 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void fetchWithStartAfter() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg3 = message(EXACTLY_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg3 = message(EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
 
@@ -203,9 +202,9 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void commit() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg3 = message(EXACTLY_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg3 = message(EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
         requestCommitQoS2(tenantId, inboxId, 1);
@@ -240,9 +239,9 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void insertDuplicated() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "a");
+        TopicMessagePack.PublisherPack msg0 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "a");
         requestCreate(tenantId, inboxId, 10, 600, true);
         requestInsert(subInfo, topic, msg0, msg0, msg1);
         requestInsert(subInfo, topic, msg0, msg2);
@@ -265,17 +264,13 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void insertSameMessageIdFromDifferentClients() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(0, EXACTLY_ONCE, "hello", ClientInfo.newBuilder()
+        TopicMessagePack.PublisherPack msg0 = message(0, EXACTLY_ONCE, "hello", ClientInfo.newBuilder()
             .setTenantId(tenantId)
-            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                .setUserId("user1")
-                .build())
+            .putMetadata("userId", "user1")
             .build());
-        TopicMessagePack.SenderMessagePack msg1 = message(0, EXACTLY_ONCE, "world", ClientInfo.newBuilder()
+        TopicMessagePack.PublisherPack msg1 = message(0, EXACTLY_ONCE, "world", ClientInfo.newBuilder()
             .setTenantId(tenantId)
-            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                .setUserId("user2")
-                .build())
+            .putMetadata("userId", "user2")
             .build());
         requestCreate(tenantId, inboxId, 10, 600, true);
         requestInsert(subInfo, topic, msg0, msg1);
@@ -296,12 +291,12 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void insertDropOldest() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "a");
-        TopicMessagePack.SenderMessagePack msg3 = message(EXACTLY_ONCE, "b");
-        TopicMessagePack.SenderMessagePack msg4 = message(EXACTLY_ONCE, "c");
-        TopicMessagePack.SenderMessagePack msg5 = message(EXACTLY_ONCE, "d");
+        TopicMessagePack.PublisherPack msg0 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "a");
+        TopicMessagePack.PublisherPack msg3 = message(EXACTLY_ONCE, "b");
+        TopicMessagePack.PublisherPack msg4 = message(EXACTLY_ONCE, "c");
+        TopicMessagePack.PublisherPack msg5 = message(EXACTLY_ONCE, "d");
         requestCreate(tenantId, inboxId, 2, 600, true);
         requestInsert(subInfo, topic, msg0, msg1);
         requestInsert(subInfo, topic, msg2);
@@ -344,12 +339,12 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void insertDropYoungest() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "a");
-        TopicMessagePack.SenderMessagePack msg3 = message(EXACTLY_ONCE, "b");
-        TopicMessagePack.SenderMessagePack msg4 = message(EXACTLY_ONCE, "c");
-        TopicMessagePack.SenderMessagePack msg5 = message(EXACTLY_ONCE, "d");
+        TopicMessagePack.PublisherPack msg0 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "a");
+        TopicMessagePack.PublisherPack msg3 = message(EXACTLY_ONCE, "b");
+        TopicMessagePack.PublisherPack msg4 = message(EXACTLY_ONCE, "c");
+        TopicMessagePack.PublisherPack msg5 = message(EXACTLY_ONCE, "d");
 
         requestCreate(tenantId, inboxId, 2, 600, false);
         requestInsert(subInfo, topic, msg0);
@@ -393,9 +388,9 @@ public class QoS2InboxTest extends InboxStoreTest {
     public void insert() {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(EXACTLY_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(EXACTLY_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(EXACTLY_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg0 = message(EXACTLY_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 2, 1, false);
         requestInsert(subInfo, topic, msg1, msg2);
         when(clock.millis()).thenReturn(1100L);

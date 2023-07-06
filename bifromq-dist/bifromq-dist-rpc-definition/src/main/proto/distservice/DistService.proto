@@ -18,12 +18,12 @@ service DistService {
 
 message SubRequest {
   uint64 reqId = 1;
-  string inboxId = 2; // the inbox id defined in calling sub broker service identified by CN field of client cert
-  string topicFilter = 3;
-  commontype.QoS subQoS = 4;
-  uint32 broker = 5;
-  string delivererKey = 6;
-  commontype.ClientInfo client = 7;
+  string tenantId = 2;
+  string inboxId = 3; // the inbox id defined in calling sub broker service identified by CN field of client cert
+  string topicFilter = 4;
+  commontype.QoS subQoS = 5;
+  uint32 broker = 6;
+  string delivererKey = 7;
 }
 
 message SubReply {
@@ -39,11 +39,11 @@ message SubReply {
 
 message UnsubRequest {
   uint64 reqId = 1;
-  string inboxId = 2; // the inbox id defined in calling sub broker service identified by CN field of client cert
-  string topicFilter = 3;
-  uint32 broker = 4;
-  string delivererKey = 5;
-  commontype.ClientInfo client = 6;
+  string tenantId = 2;
+  string inboxId = 3; // the inbox id defined in calling sub broker service identified by CN field of client cert
+  string topicFilter = 4;
+  uint32 broker = 5;
+  string delivererKey = 6;
 }
 
 message UnsubReply {
@@ -57,10 +57,10 @@ message UnsubReply {
 
 message ClearRequest {
   uint64 reqId = 1;
-  string inboxId = 2;
-  uint32 broker = 3;
-  string delivererKey = 4;
-  commontype.ClientInfo client = 5;
+  string tenantId = 2;
+  string inboxId = 3;
+  uint32 broker = 4;
+  string delivererKey = 5;
 }
 
 message ClearReply {
@@ -74,7 +74,7 @@ message ClearReply {
 
 message DistRequest {
   uint64 reqId = 1;
-  repeated commontype.SenderMessagePack messages = 2;
+  repeated commontype.PublisherMessagePack messages = 2;
 }
 
 message DistReply {

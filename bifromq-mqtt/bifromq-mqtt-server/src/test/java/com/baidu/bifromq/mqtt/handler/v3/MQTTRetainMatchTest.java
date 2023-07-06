@@ -53,10 +53,10 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
 
     @AfterMethod
     public void clean() {
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
         channel.close();
-        verify(distClient).clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+        verify(distClient).clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -176,7 +176,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
                                 .setPubQoS(QoS.EXACTLY_ONCE)
                                 .build()
                         )
-                        .setSender(ClientInfo.newBuilder().build())
+                        .setPublisher(ClientInfo.newBuilder().build())
                         .build()
                 );
         }

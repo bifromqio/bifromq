@@ -28,7 +28,6 @@ import com.baidu.bifromq.basescheduler.BatchCallBuilder;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.rpc.proto.BatchDist;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
@@ -111,13 +110,13 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
                 DistTask task = new DistTask(dist);
                 Map<String, Map<ClientInfo, Iterable<Message>>> clientMsgsByTopic =
                     batch.computeIfAbsent(dist.tenatId, k -> new ConcurrentHashMap<>());
-                dist.senderMsgPacks.forEach(senderMsgPack ->
+                dist.publisherMsgPacks.forEach(senderMsgPack ->
                     senderMsgPack.getMessagePackList().forEach(topicMsgs ->
                         clientMsgsByTopic.computeIfAbsent(topicMsgs.getTopic(), k -> {
                                 topicCount.incrementAndGet();
                                 return new ConcurrentHashMap<>();
                             })
-                            .compute(senderMsgPack.getSender(), (k, v) -> {
+                            .compute(senderMsgPack.getPublisher(), (k, v) -> {
                                 if (v == null) {
                                     v = topicMsgs.getMessageList();
                                 } else {
@@ -216,7 +215,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
                                 Map<String, Integer> allTopicFanouts =
                                     topicFanoutByTenant.get(task.distCall.tenatId);
                                 Map<String, Integer> topicFanouts = new HashMap<>();
-                                task.distCall.senderMsgPacks.forEach(clientMessagePack ->
+                                task.distCall.publisherMsgPacks.forEach(clientMessagePack ->
                                     clientMessagePack.getMessagePackList().forEach(topicMessagePack ->
                                         topicFanouts.put(topicMessagePack.getTopic(),
                                             allTopicFanouts.getOrDefault(topicMessagePack.getTopic(), 0))));
@@ -239,9 +238,9 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
                     topicMap.forEach((topic, senderMap) -> {
                         TopicMessagePack.Builder topicMsgPackBuilder = TopicMessagePack.newBuilder().setTopic(topic);
                         senderMap.forEach((sender, msgs) ->
-                            topicMsgPackBuilder.addMessage(TopicMessagePack.SenderMessagePack
+                            topicMsgPackBuilder.addMessage(TopicMessagePack.PublisherPack
                                 .newBuilder()
-                                .setSender(sender)
+                                .setPublisher(sender)
                                 .addAllMessage(msgs)
                                 .build()));
                         distPackBuilder.addMsgPack(topicMsgPackBuilder.build());

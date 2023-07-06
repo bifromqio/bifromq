@@ -14,8 +14,9 @@
 package com.baidu.bifromq.dist.util;
 
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKey;
+import static com.baidu.bifromq.dist.entity.EntityUtil.subInfoKey;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
 
-import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilter;
 import com.baidu.bifromq.dist.rpc.proto.BatchDist;
 import com.baidu.bifromq.dist.rpc.proto.ClearSubInfo;
@@ -43,9 +44,8 @@ public class MessageUtil {
             .setUpdateRequest(UpdateRequest.newBuilder()
                 .setReqId(request.getReqId())
                 .setAddTopicFilter(AddTopicFilter.newBuilder()
-                    .putTopicFilter(
-                        EntityUtil.subInfoKey(request.getClient().getTenantId(),
-                            EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                    .putTopicFilter(subInfoKey(request.getTenantId(),
+                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                                 request.getDelivererKey())).toStringUtf8(),
                         InboxSubInfo.newBuilder()
                             .putTopicFilters(request.getTopicFilter(), request.getSubQoS())
@@ -61,9 +61,8 @@ public class MessageUtil {
             .setUpdateRequest(UpdateRequest.newBuilder()
                 .setReqId(request.getReqId())
                 .setInsertMatchRecord(InsertMatchRecord.newBuilder().putRecord(
-                    matchRecordKey(request.getClient().getTenantId(),
-                        request.getTopicFilter(),
-                        EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                    matchRecordKey(request.getTenantId(), request.getTopicFilter(),
+                        toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                             request.getDelivererKey())).toStringUtf8(),
                     request.getSubQoS()).build())
                 .build())
@@ -77,11 +76,11 @@ public class MessageUtil {
                 .setReqId(request.getReqId())
                 .setJoinMatchGroup(JoinMatchGroup.newBuilder()
                     .putRecord(
-                        matchRecordKey(request.getClient().getTenantId(), request.getTopicFilter(),
-                            EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                        matchRecordKey(request.getTenantId(), request.getTopicFilter(),
+                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                                 request.getDelivererKey())).toStringUtf8(),
                         GroupMatchRecord.newBuilder()
-                            .putEntry(EntityUtil.toQualifiedInboxId(request.getBroker(),
+                            .putEntry(toQualifiedInboxId(request.getBroker(),
                                 request.getInboxId(),
                                 request.getDelivererKey()), request.getSubQoS())
                             .build())
@@ -97,8 +96,8 @@ public class MessageUtil {
                 .setReqId(request.getReqId())
                 .setRemoveTopicFilter(RemoveTopicFilter.newBuilder()
                     .putTopicFilter(
-                        EntityUtil.subInfoKey(request.getClient().getTenantId(),
-                            EntityUtil.toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                        subInfoKey(request.getTenantId(),
+                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                                 request.getDelivererKey())).toStringUtf8(),
                         TopicFilterList.newBuilder().addTopicFilter(request.getTopicFilter()).build())
                     .build())

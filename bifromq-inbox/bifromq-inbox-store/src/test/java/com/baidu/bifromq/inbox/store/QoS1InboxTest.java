@@ -115,8 +115,8 @@ public class QoS1InboxTest extends InboxStoreTest {
     public void fetchWithoutStartAfter() {
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 2, false);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS1(tenantId, inboxId, 10);
@@ -141,8 +141,8 @@ public class QoS1InboxTest extends InboxStoreTest {
     public void fetchWithMaxLimit() {
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS1(tenantId, inboxId, 1);
@@ -166,9 +166,9 @@ public class QoS1InboxTest extends InboxStoreTest {
     public void fetchWithStartAfter() {
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg3 = message(AT_LEAST_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg3 = message(AT_LEAST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
 
@@ -200,9 +200,9 @@ public class QoS1InboxTest extends InboxStoreTest {
     public void commit() {
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg3 = message(AT_LEAST_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg3 = message(AT_LEAST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
         requestCommitQoS1(tenantId, inboxId, 1);
@@ -237,12 +237,12 @@ public class QoS1InboxTest extends InboxStoreTest {
     public void commitAll() {
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "a");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "b");
-        TopicMessagePack.SenderMessagePack msg3 = message(AT_LEAST_ONCE, "c");
-        TopicMessagePack.SenderMessagePack msg4 = message(AT_LEAST_ONCE, "d");
-        TopicMessagePack.SenderMessagePack msg5 = message(AT_LEAST_ONCE, "e");
-        TopicMessagePack.SenderMessagePack msg6 = message(AT_LEAST_ONCE, "f");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "a");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "b");
+        TopicMessagePack.PublisherPack msg3 = message(AT_LEAST_ONCE, "c");
+        TopicMessagePack.PublisherPack msg4 = message(AT_LEAST_ONCE, "d");
+        TopicMessagePack.PublisherPack msg5 = message(AT_LEAST_ONCE, "e");
+        TopicMessagePack.PublisherPack msg6 = message(AT_LEAST_ONCE, "f");
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
         requestInsert(subInfo, topic, msg4, msg5, msg6);
@@ -256,9 +256,9 @@ public class QoS1InboxTest extends InboxStoreTest {
     public void insertDropOldest() {
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(AT_LEAST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg0 = message(AT_LEAST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 2, 600, true);
         requestInsert(subInfo, topic, msg0, msg1);
         requestInsert(subInfo, topic, msg2);
@@ -302,9 +302,9 @@ public class QoS1InboxTest extends InboxStoreTest {
     public void insertDropYoungest() {
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
-        TopicMessagePack.SenderMessagePack msg0 = message(AT_LEAST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg0 = message(AT_LEAST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 2, 600, false);
         requestInsert(subInfo, topic, msg0);
         requestInsert(subInfo, topic, msg1, msg2);
@@ -348,9 +348,9 @@ public class QoS1InboxTest extends InboxStoreTest {
         String tenantId = "tenantId";
         String inboxId = "inboxId";
 
-        TopicMessagePack.SenderMessagePack msg0 = message(AT_LEAST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(AT_LEAST_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(AT_LEAST_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg0 = message(AT_LEAST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(AT_LEAST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 2, 1, false);
         requestInsert(subInfo, topic, msg1, msg2);
         when(clock.millis()).thenReturn(1100L);

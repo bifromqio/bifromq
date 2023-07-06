@@ -22,6 +22,14 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLeng
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
@@ -48,7 +56,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Unauthen
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCheckError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCleanupError;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Strings;
 import io.netty.buffer.Unpooled;
@@ -166,17 +173,15 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                             Optional.ofNullable(ChannelAttrs.socketAddress(ctx.channel()));
                         clientInfo = ClientInfo.newBuilder()
                             .setTenantId(ok.getTenantId())
-                            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                                .setUserId(ok.getUserId())
-                                .setIsMQIsdp(connMsg.variableHeader().version() == 3)
-                                .setClientId(mqttClientId)
-                                .setIp(clientAddr.map(a -> a.getAddress().getHostAddress()).orElse(""))
-                                .setPort(clientAddr.map(InetSocketAddress::getPort).orElse(0))
-                                .setChannelId(ctx.channel().id().asLongText())
-                                .build())
+                            .setType(MQTT_TYPE_VALUE)
+                            .putMetadata(MQTT_PROTOCOL_VER_KEY, connMsg.variableHeader().version() == 3 ?
+                                MQTT_PROTOCOL_VER_3_1_VALUE : MQTT_PROTOCOL_VER_3_1_1_VALUE)
+                            .putMetadata(MQTT_USER_ID_KEY, ok.getUserId())
+                            .putMetadata(MQTT_CLIENT_ID_KEY, mqttClientId)
+                            .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
+                            .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
+                                clientAddr.map(InetSocketAddress::toString).orElse(""))
                             .build();
-
-
                         Long ibbw = settingProvider.provide(InBoundBandWidth, clientInfo);
                         long inBandWidth = Math.max(ibbw, 0);
                         if (inBandWidth > 0) {
@@ -255,8 +260,8 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                 if (exist) {
                     // clear subscription of previous persistent session
                     CompletableFuture<ClearResult> clearSubTask =
-                        cancelOnInactive(distClient.clear(reqId, offlineInboxId,
-                            inboxClient.getDelivererKey(offlineInboxId, clientInfo), 1, clientInfo));
+                        cancelOnInactive(distClient.clear(reqId, clientInfo.getTenantId(), offlineInboxId,
+                            inboxClient.getDelivererKey(offlineInboxId, clientInfo), 1));
                     CompletableFuture<DeleteInboxReply> deleteInboxTask =
                         cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo));
                     return allOf(clearSubTask, deleteInboxTask)

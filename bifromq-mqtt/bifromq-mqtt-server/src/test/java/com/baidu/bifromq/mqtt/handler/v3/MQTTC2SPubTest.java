@@ -67,7 +67,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         verifyEvent(1, CLIENT_CONNECTED);
-        verify(distClient, times(1)).dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        verify(distClient, times(1)).pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class));
     }
 
@@ -154,7 +154,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         connectAndVerify(true);
         mockAuthCheck(true);
         CompletableFuture<DistResult> distResult = new CompletableFuture<>();
-        when(distClient.dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -227,7 +227,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         connectAndVerify(true);
         mockAuthCheck(true);
         CompletableFuture<DistResult> distResult = new CompletableFuture<>();
-        when(distClient.dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
 

@@ -47,6 +47,9 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
@@ -670,7 +673,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     .reqId(confirmed.message.getMessageId())
                     .messageId(messageId)
                     .isRetain(confirmed.isRetain)
-                    .sender(confirmed.sender)
+                    .sender(confirmed.publisher)
                     .delivered(true)
                     .topic(confirmed.topic)
                     .matchedFilter(confirmed.topicFilter)
@@ -850,7 +853,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                                 eventCollector.report(getLocal(QoS0Pushed.class)
                                                     .reqId(reqId)
                                                     .isRetain(true)
-                                                    .sender(topicMsg.getSender())
+                                                    .sender(topicMsg.getPublisher())
                                                     .topic(topic)
                                                     .matchedFilter(topicFilter)
                                                     .size(retained.getPayload().size())
@@ -862,7 +865,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                                     .reason(DropReason.Overflow)
                                                     .reqId(reqId)
                                                     .isRetain(true)
-                                                    .sender(topicMsg.getSender())
+                                                    .sender(topicMsg.getPublisher())
                                                     .topic(topic)
                                                     .matchedFilter(topicFilter)
                                                     .size(retained.getPayload().size())
@@ -873,7 +876,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                         if (bufferCapacityHinter.hasCapacity()) {
                                             // retain message always seq 0
                                             int messageId = sendQoS1TopicMessage(0, topicFilter, topic, retained,
-                                                topicMsg.getSender(), true, true, timestamp);
+                                                topicMsg.getPublisher(), true, true, timestamp);
                                             if (messageId < 0) {
                                                 log.error("Message id exhausted");
                                             }
@@ -883,7 +886,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                                     .reason(DropReason.Overflow)
                                                     .reqId(reqId)
                                                     .isRetain(true)
-                                                    .sender(topicMsg.getSender())
+                                                    .sender(topicMsg.getPublisher())
                                                     .topic(topic)
                                                     .matchedFilter(topicFilter)
                                                     .size(retained.getPayload().size())
@@ -896,7 +899,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                             // retain message always seq 0
                                             int messageId =
                                                 sendQoS2TopicMessage(0, topicFilter, topic, retained,
-                                                    topicMsg.getSender(), true, true, timestamp);
+                                                    topicMsg.getPublisher(), true, true, timestamp);
                                             if (messageId < 0) {
                                                 log.error("Message id exhausted");
                                             }
@@ -906,7 +909,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                                     .reason(DropReason.Overflow)
                                                     .reqId(reqId)
                                                     .isRetain(true)
-                                                    .sender(topicMsg.getSender())
+                                                    .sender(topicMsg.getPublisher())
                                                     .topic(topic)
                                                     .matchedFilter(topicFilter)
                                                     .size(retained.getPayload().size())
@@ -1129,7 +1132,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                         .reqId(unconfirmed.message.getMessageId())
                         .messageId(messageId)
                         .isRetain(unconfirmed.isRetain)
-                        .sender(unconfirmed.sender)
+                        .sender(unconfirmed.publisher)
                         .delivered(false)
                         .topic(unconfirmed.topic)
                         .matchedFilter(unconfirmed.topicFilter)
@@ -1145,7 +1148,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                             .messageId(messageId)
                             .dup(true)
                             .isRetain(unconfirmed.isRetain)
-                            .sender(unconfirmed.sender)
+                            .sender(unconfirmed.publisher)
                             .topic(unconfirmed.topic)
                             .matchedFilter(unconfirmed.topicFilter)
                             .size(unconfirmed.message.getPayload().size())
@@ -1231,7 +1234,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         tenantMeter.recordSummary(MqttQoS0IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Void> distTask = cancelOnInactive(
-            sessionCtx.distClient.dist(reqId, topic, AT_MOST_ONCE, payload.duplicate().nioBuffer(),
+            sessionCtx.distClient.pub(reqId, topic, AT_MOST_ONCE, payload.duplicate().nioBuffer(),
                     Integer.MAX_VALUE, clientInfo)
                 .handleAsync((v, e) -> {
                     if (e != null) {
@@ -1274,7 +1277,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         tenantMeter.recordSummary(MqttQoS1IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Boolean> distTask = cancelOnInactive(
-            sessionCtx.distClient.dist(reqId, topic, AT_LEAST_ONCE, payload.duplicate().nioBuffer(),
+            sessionCtx.distClient.pub(reqId, topic, AT_LEAST_ONCE, payload.duplicate().nioBuffer(),
                     Integer.MAX_VALUE, clientInfo)
                 .handleAsync((v, e) -> {
                     if (e != null) {
@@ -1319,7 +1322,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         tenantMeter.recordSummary(MqttQoS2IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Boolean> distTask = cancelOnInactive(
-            sessionCtx.distClient.dist(reqId, topic, EXACTLY_ONCE, payload.duplicate().nioBuffer(),
+            sessionCtx.distClient.pub(reqId, topic, EXACTLY_ONCE, payload.duplicate().nioBuffer(),
                     Integer.MAX_VALUE, clientInfo)
                 .handleAsync((v, e) -> {
                     if (e != null) {
@@ -1374,7 +1377,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     }
 
     private CompletableFuture<Void> distWillMessage(long reqId, WillMessage willMessage) {
-        return sessionCtx.distClient.dist(reqId, willMessage.topic, willMessage.qos,
+        return sessionCtx.distClient.pub(reqId, willMessage.topic, willMessage.qos,
                 willMessage.payload.duplicate().nioBuffer(), Integer.MAX_VALUE, clientInfo)
             .handleAsync((v, e) -> {
                 if (e != null) {
@@ -1529,12 +1532,13 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
 
     private boolean isSelfKick(Kicked kicked) {
         ClientInfo kicker = kicked.kicker();
-        if (!kicker.hasMqtt3ClientInfo()) {
+        if (!MQTT_TYPE_VALUE.equals(kicker.getType())) {
             return false;
         }
         return kicker.getTenantId().equals(clientInfo.getTenantId()) &&
-            kicker.getMqtt3ClientInfo().getUserId().equals(clientInfo.getMqtt3ClientInfo().getUserId()) &&
-            kicker.getMqtt3ClientInfo().getClientId().equals(clientInfo.getMqtt3ClientInfo().getClientId());
+            kicker.getMetadataOrDefault(MQTT_USER_ID_KEY, "").equals(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, "")) &&
+            kicker.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, "")
+                .equals(clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
     }
 
     @Override
@@ -1561,7 +1565,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         final ByteBuffer payload;
         final boolean isRetain;
         final Message message;
-        final ClientInfo sender;
+        final ClientInfo publisher;
         long lastPubNanos;
         MqttPublishMessage pubMsg;
         int resendTimes;
@@ -1571,7 +1575,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                String topic,
                                Message message,
                                boolean isRetain,
-                               ClientInfo sender,
+                               ClientInfo publisher,
                                long nanoTime) {
             this.seq = seq;
             this.messageId = messageId;
@@ -1580,7 +1584,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             this.message = message;
             this.payload = message.getPayload().asReadOnlyByteBuffer();
             this.isRetain = isRetain;
-            this.sender = sender;
+            this.publisher = publisher;
             this.lastPubNanos = nanoTime;
             resendTimes = 0;
         }

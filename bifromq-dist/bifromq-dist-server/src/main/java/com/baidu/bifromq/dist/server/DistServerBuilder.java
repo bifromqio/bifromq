@@ -33,7 +33,7 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class DistServerBuilder<T extends DistServerBuilder> implements IDistServiceBuilder {
+public abstract class DistServerBuilder<T extends DistServerBuilder<T>> implements IDistServiceBuilder {
     protected Executor executor;
     protected IBaseKVStoreClient storeClient;
     protected ISettingProvider settingProvider;
@@ -41,31 +41,37 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
     protected ICRDTService crdtService;
     protected String distCallPreSchedulerFactoryClass;
 
+    @SuppressWarnings("unchecked")
     public T ioExecutor(Executor executor) {
         this.executor = executor;
         return (T) this;
     }
 
+    @SuppressWarnings("unchecked")
     public T storeClient(IBaseKVStoreClient storeClient) {
         this.storeClient = storeClient;
         return (T) this;
     }
 
+    @SuppressWarnings("unchecked")
     public T settingProvider(ISettingProvider settingProvider) {
         this.settingProvider = settingProvider;
         return (T) this;
     }
 
+    @SuppressWarnings("unchecked")
     public T eventCollector(IEventCollector eventCollector) {
         this.eventCollector = eventCollector;
         return (T) this;
     }
 
+    @SuppressWarnings("unchecked")
     public T crdtService(ICRDTService crdtService) {
         this.crdtService = crdtService;
         return (T) this;
     }
 
+    @SuppressWarnings("unchecked")
     public T distCallPreSchedulerFactoryClass(String factoryClass) {
         this.distCallPreSchedulerFactoryClass = factoryClass;
         return (T) this;
@@ -78,7 +84,8 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
             log.info("DistCallPreBatchSchedulerFactory[DEFAULT] loaded");
             return IGlobalDistCallRateSchedulerFactory.DEFAULT;
         } else {
-            Map<String, IGlobalDistCallRateSchedulerFactory> factoryMap = load(IGlobalDistCallRateSchedulerFactory.class);
+            Map<String, IGlobalDistCallRateSchedulerFactory> factoryMap =
+                load(IGlobalDistCallRateSchedulerFactory.class);
             IGlobalDistCallRateSchedulerFactory factory =
                 factoryMap.getOrDefault(distCallPreSchedulerFactoryClass, IGlobalDistCallRateSchedulerFactory.DEFAULT);
             log.info("DistCallPreBatchSchedulerFactory[{}] loaded",
@@ -109,7 +116,7 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
         }
     }
 
-    abstract static class InterProcDistServerBuilder<T extends InterProcDistServerBuilder>
+    abstract static class InterProcDistServerBuilder<T extends InterProcDistServerBuilder<T>>
         extends DistServerBuilder<T> {
         protected String id;
         protected String host;
@@ -117,27 +124,32 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
         protected EventLoopGroup bossEventLoopGroup;
         protected EventLoopGroup workerEventLoopGroup;
 
+        @SuppressWarnings("unchecked")
         public T id(@NonNull String id) {
             this.id = id;
             return (T) this;
         }
 
+        @SuppressWarnings("unchecked")
         public T host(@NonNull String host) {
             Preconditions.checkArgument(!"0.0.0.0".equals(host), "Invalid host ip");
             this.host = host;
             return (T) this;
         }
 
+        @SuppressWarnings("unchecked")
         public T port(@NonNull Integer port) {
             this.port = port;
             return (T) this;
         }
 
+        @SuppressWarnings("unchecked")
         public T bossEventLoopGroup(EventLoopGroup bossEventLoopGroup) {
             this.bossEventLoopGroup = bossEventLoopGroup;
             return (T) this;
         }
 
+        @SuppressWarnings("unchecked")
         public T workerEventLoopGroup(EventLoopGroup workerEventLoopGroup) {
             this.workerEventLoopGroup = workerEventLoopGroup;
             return (T) this;
@@ -170,9 +182,9 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
     }
 
     public static final class SSLDistServerBuilder extends InterProcDistServerBuilder<SSLDistServerBuilder> {
-        private @NonNull File serviceIdentityCertFile;
-        private @NonNull File privateKeyFile;
-        private @NonNull File trustCertsFile;
+        private File serviceIdentityCertFile;
+        private File privateKeyFile;
+        private File trustCertsFile;
 
         public SSLDistServerBuilder serviceIdentityCertFile(@NonNull File serviceIdentityCertFile) {
             this.serviceIdentityCertFile = serviceIdentityCertFile;
@@ -193,6 +205,9 @@ public abstract class DistServerBuilder<T extends DistServerBuilder> implements 
 
         @Override
         public IDistServer build() {
+            Preconditions.checkNotNull(serviceIdentityCertFile);
+            Preconditions.checkNotNull(privateKeyFile);
+            Preconditions.checkNotNull(trustCertsFile);
             return new DistServer(storeClient, settingProvider, eventCollector, crdtService,
                 distCallPreBatchSchedulerFactory()) {
                 @Override

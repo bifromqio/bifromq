@@ -64,8 +64,8 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
         if (clearOnDisconnect) {
-            submitBgTask(() -> sessionCtx.distClient.clear(System.nanoTime(), channelId(),
-                    toDelivererKey(channelId(), sessionCtx.serverId), 0, clientInfo())
+            submitBgTask(() -> sessionCtx.distClient.clear(System.nanoTime(), clientInfo().getTenantId(), channelId(),
+                    toDelivererKey(channelId(), sessionCtx.serverId), 0)
                 .thenAccept(clearResult -> {
                     switch (clearResult.type()) {
                         case OK:
@@ -92,8 +92,9 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
 
     @Override
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
-        return sessionCtx.distClient.sub(reqId, topicSub.topicName(), QoS.forNumber(topicSub.qualityOfService()
-                .value()), channelId(), toDelivererKey(channelId(), sessionCtx.serverId), 0, clientInfo())
+        return sessionCtx.distClient.sub(reqId, clientInfo().getTenantId(), topicSub.topicName(),
+                QoS.forNumber(topicSub.qualityOfService().value()), channelId(),
+                toDelivererKey(channelId(), sessionCtx.serverId), 0)
             .thenApplyAsync(subResult -> {
                 if (subResult.type() != SubResult.Type.ERROR) {
                     clearOnDisconnect = true;
@@ -115,28 +116,29 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     @Override
     protected CompletableFuture<UnsubResult> doUnsubscribe(long reqId, String topicFilter) {
         return sessionCtx.distClient
-            .unsub(reqId, topicFilter, channelId(), toDelivererKey(channelId(), sessionCtx.serverId), 0, clientInfo());
+            .unsub(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
+                toDelivererKey(channelId(), sessionCtx.serverId), 0);
     }
 
     @Override
     public void publish(SubInfo subInfo, TopicMessagePack topicMsgPack) {
         String topic = topicMsgPack.getTopic();
-        List<TopicMessagePack.SenderMessagePack> senderMsgPacks = topicMsgPack.getMessageList();
+        List<TopicMessagePack.PublisherPack> publisherPacks = topicMsgPack.getMessageList();
         String topicFilter = subInfo.getTopicFilter();
         QoS subQoS = subInfo.getSubQoS();
         cancelOnInactive(authProvider.check(clientInfo(), buildSubAction(topicFilter, subQoS)))
             .thenAcceptAsync(allow -> {
                 if (allow) {
                     long timestamp = HLC.INST.getPhysical();
-                    for (int i = 0; i < senderMsgPacks.size(); i++) {
-                        TopicMessagePack.SenderMessagePack senderMsgPack = senderMsgPacks.get(i);
-                        ClientInfo sender = senderMsgPack.getSender();
+                    for (int i = 0; i < publisherPacks.size(); i++) {
+                        TopicMessagePack.PublisherPack senderMsgPack = publisherPacks.get(i);
+                        ClientInfo publisher = senderMsgPack.getPublisher();
                         List<Message> messages = senderMsgPack.getMessageList();
                         for (int j = 0; j < messages.size(); j++) {
                             Message message = messages.get(j);
                             QoS finalQoS =
                                 QoS.forNumber(Math.min(message.getPubQoS().getNumber(), subQoS.getNumber()));
-                            boolean flush = i + 1 == senderMsgPacks.size() && j + 1 == messages.size();
+                            boolean flush = i + 1 == publisherPacks.size() && j + 1 == messages.size();
                             switch (finalQoS) {
                                 case AT_MOST_ONCE:
                                     if (bufferCapacityHinter.hasCapacity()) {
@@ -146,7 +148,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                                     getLocal(QoS0Pushed.class)
                                                         .reqId(message.getMessageId())
                                                         .isRetain(false)
-                                                        .sender(sender)
+                                                        .sender(publisher)
                                                         .topic(topic)
                                                         .matchedFilter(topicFilter)
                                                         .size(message.getPayload().size())
@@ -158,7 +160,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                                     .reason(DropReason.ChannelClosed)
                                                     .reqId(message.getMessageId())
                                                     .isRetain(false)
-                                                    .sender(sender)
+                                                    .sender(publisher)
                                                     .topic(topic)
                                                     .matchedFilter(topicFilter)
                                                     .size(message.getPayload().size())
@@ -170,7 +172,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                             .reason(DropReason.Overflow)
                                             .reqId(message.getMessageId())
                                             .isRetain(false)
-                                            .sender(sender)
+                                            .sender(publisher)
                                             .topic(topic)
                                             .matchedFilter(topicFilter)
                                             .size(message.getPayload().size())
@@ -180,7 +182,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                 case AT_LEAST_ONCE:
                                     if (bufferCapacityHinter.hasCapacity()) {
                                         int messageId = sendQoS1TopicMessage(seqNum.incrementAndGet(),
-                                            topicFilter, topic, message, sender, false, flush, timestamp);
+                                            topicFilter, topic, message, publisher, false, flush, timestamp);
                                         if (messageId < 0) {
                                             log.error("MessageId exhausted");
                                         }
@@ -190,7 +192,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                             .reason(DropReason.Overflow)
                                             .reqId(message.getMessageId())
                                             .isRetain(false)
-                                            .sender(sender)
+                                            .sender(publisher)
                                             .topic(topic)
                                             .matchedFilter(topicFilter)
                                             .size(message.getPayload().size())
@@ -200,7 +202,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                 case EXACTLY_ONCE:
                                     if (bufferCapacityHinter.hasCapacity()) {
                                         int messageId = sendQoS2TopicMessage(seqNum.incrementAndGet(),
-                                            topicFilter, topic, message, sender, false, flush, timestamp);
+                                            topicFilter, topic, message, publisher, false, flush, timestamp);
                                         if (messageId < 0) {
                                             log.error("MessageId exhausted");
                                         }
@@ -210,7 +212,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                             .reason(DropReason.Overflow)
                                             .reqId(message.getMessageId())
                                             .isRetain(false)
-                                            .sender(sender)
+                                            .sender(publisher)
                                             .topic(topic)
                                             .matchedFilter(topicFilter)
                                             .size(message.getPayload().size())
@@ -221,7 +223,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                         }
                     }
                 } else {
-                    for (TopicMessagePack.SenderMessagePack senderMsgPack : senderMsgPacks) {
+                    for (TopicMessagePack.PublisherPack senderMsgPack : publisherPacks) {
                         for (Message message : senderMsgPack.getMessageList()) {
                             PushEvent<?> dropEvent;
                             switch (message.getPubQoS()) {
@@ -235,7 +237,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                             eventCollector.report(dropEvent
                                 .reqId(message.getMessageId())
                                 .isRetain(false)
-                                .sender(senderMsgPack.getSender())
+                                .sender(senderMsgPack.getPublisher())
                                 .topic(topic)
                                 .matchedFilter(topicFilter)
                                 .size(message.getPayload().size())

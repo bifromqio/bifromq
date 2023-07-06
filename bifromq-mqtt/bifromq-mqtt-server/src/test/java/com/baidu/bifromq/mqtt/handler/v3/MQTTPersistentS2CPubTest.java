@@ -25,10 +25,16 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -45,7 +51,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
@@ -103,7 +108,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
         verify(distClient, times(5)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+            anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -174,7 +179,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(4, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
         verify(distClient, times(messageCount)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+            anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -216,8 +221,8 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
         verifyEvent(4, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
-        verify(distClient, times(messageCount)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+        verify(distClient, times(messageCount))
+            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -236,17 +241,15 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                             .setPubQoS(EXACTLY_ONCE)
                             .build()
                     )
-                    .setSender(
+                    .setPublisher(
                         ClientInfo.newBuilder()
                             .setTenantId(tenantId)
-                            .setMqtt3ClientInfo(
-                                MQTT3ClientInfo.newBuilder()
-                                    .setClientId("client1")
-                                    .setChannelId("channel1")
-                                    .setIp("127.0.0.1")
-                                    .setPort(11111)
-                                    .build()
-                            )
+                            .setType(MQTT_TYPE_VALUE)
+                            .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
+                            .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                            .putMetadata(MQTT_CLIENT_ID_KEY, "client1")
+                            .putMetadata(MQTT_CHANNEL_ID_KEY, "channel1")
+                            .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:11111")
                             .build()
                     )
                     .build()
@@ -264,17 +267,15 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                             .setPubQoS(QoS.EXACTLY_ONCE)
                             .build()
                     )
-                    .setSender(
+                    .setPublisher(
                         ClientInfo.newBuilder()
                             .setTenantId(tenantId)
-                            .setMqtt3ClientInfo(
-                                MQTT3ClientInfo.newBuilder()
-                                    .setClientId("client2")
-                                    .setChannelId("channel2")
-                                    .setIp("127.0.0.1")
-                                    .setPort(22222)
-                                    .build()
-                            )
+                            .setType(MQTT_TYPE_VALUE)
+                            .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
+                            .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                            .putMetadata(MQTT_CLIENT_ID_KEY, "client2")
+                            .putMetadata(MQTT_CHANNEL_ID_KEY, "channel2")
+                            .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:22222")
                             .build()
                     )
                     .build()
@@ -332,8 +333,10 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                                 .setPubQoS(qoS)
                                 .build()
                         )
-                        .setSender(
-                            ClientInfo.newBuilder().build()
+                        .setPublisher(
+                            ClientInfo.newBuilder()
+                                .setType(MQTT_TYPE_VALUE)
+                                .build()
                         )
                         .build()
                 ).build();

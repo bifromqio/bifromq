@@ -24,8 +24,13 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -39,7 +44,6 @@ import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
@@ -103,8 +107,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
-        verify(distClient, times(1)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+        verify(distClient, times(1))
+            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -159,8 +163,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
-        verify(distClient, times(1)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+        verify(distClient, times(1))
+            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -305,8 +309,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
-        verify(distClient, times(1)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+        verify(distClient, times(1))
+            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -423,21 +427,19 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         mockAuthCheck(true);
         int messageCount = 2;
         List<ByteBuffer> payloads = s2cMessagesPayload(messageCount, 1);
-        List<TopicMessagePack.SenderMessagePack> messagesFromClient1 = Lists.newArrayList();
-        List<TopicMessagePack.SenderMessagePack> messagesFromClient2 = Lists.newArrayList();
+        List<TopicMessagePack.PublisherPack> messagesFromClient1 = Lists.newArrayList();
+        List<TopicMessagePack.PublisherPack> messagesFromClient2 = Lists.newArrayList();
         for (ByteBuffer payload : payloads) {
             // messages with duplicated messageId
-            messagesFromClient1.add(TopicMessagePack.SenderMessagePack.newBuilder()
-                .setSender(ClientInfo.newBuilder()
+            messagesFromClient1.add(TopicMessagePack.PublisherPack.newBuilder()
+                .setPublisher(ClientInfo.newBuilder()
                     .setTenantId(tenantId)
-                    .setMqtt3ClientInfo(
-                        MQTT3ClientInfo.newBuilder()
-                            .setClientId("client1")
-                            .setChannelId("channel1")
-                            .setIp("127.0.0.1")
-                            .setPort(11111)
-                            .build()
-                    )
+                    .setType(MQTT_TYPE_VALUE)
+                    .putMetadata(MQTT_PROTOCOL_VER_KEY, "3.1.1")
+                    .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                    .putMetadata(MQTT_CHANNEL_ID_KEY, "client1")
+                    .putMetadata(MQTT_CLIENT_ID_KEY, "channel1")
+                    .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:11111")
                     .build()
                 )
                 .addMessage(Message.newBuilder()
@@ -447,17 +449,15 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
                     .setPubQoS(QoS.EXACTLY_ONCE)
                     .build())
                 .build());
-            messagesFromClient2.add(TopicMessagePack.SenderMessagePack.newBuilder()
-                .setSender(ClientInfo.newBuilder()
+            messagesFromClient2.add(TopicMessagePack.PublisherPack.newBuilder()
+                .setPublisher(ClientInfo.newBuilder()
                     .setTenantId(tenantId)
-                    .setMqtt3ClientInfo(
-                        MQTT3ClientInfo.newBuilder()
-                            .setClientId("client2")
-                            .setChannelId("channel2")
-                            .setIp("127.0.0.1")
-                            .setPort(22222)
-                            .build()
-                    )
+                    .setType(MQTT_TYPE_VALUE)
+                    .putMetadata(MQTT_PROTOCOL_VER_KEY, "3.1.1")
+                    .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                    .putMetadata(MQTT_CHANNEL_ID_KEY, "client2")
+                    .putMetadata(MQTT_CLIENT_ID_KEY, "channel2")
+                    .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:22222")
                     .build()
                 )
                 .addMessage(Message.newBuilder()
@@ -508,8 +508,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 0; i < count; i++) {
             topicMessagePacks.add(TopicMessagePack.newBuilder()
                 .setTopic(topic)
-                .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
-                    .setSender(ClientInfo.newBuilder().build())
+                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                    .setPublisher(ClientInfo.newBuilder().build())
                     .addMessage(Message.newBuilder()
                         .setMessageId(i)
                         .setPayload(ByteString.EMPTY)
@@ -530,8 +530,8 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             .setTopic(topic);
         for (int i = 0; i < payloads.size(); i++) {
             topicMsgPackBuilder
-                .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
-                    .setSender(ClientInfo.newBuilder().build())
+                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                    .setPublisher(ClientInfo.newBuilder().build())
                     .addMessage(Message.newBuilder()
                         .setMessageId(i)
                         .setPayload(ByteString.copyFrom(payloads.get(i).duplicate()))

@@ -36,7 +36,6 @@ import static org.mockito.Mockito.verify;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
@@ -94,12 +93,8 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
                 .setKiller(
                     ClientInfo.newBuilder()
                         .setTenantId("sys")
-                        .setMqtt3ClientInfo(
-                            MQTT3ClientInfo.newBuilder()
-                                .setUserId("sys")
-                                .setClientId(clientId)
-                                .build()
-                        )
+                        .putMetadata("agent", "sys")
+                        .putMetadata("clientId", clientId)
                         .build()
                 )
                 .build()
@@ -118,7 +113,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, PUB_ACTION_DISALLOW);
-        verify(distClient, times(0)).dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        verify(distClient, times(0)).pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class));
     }
 

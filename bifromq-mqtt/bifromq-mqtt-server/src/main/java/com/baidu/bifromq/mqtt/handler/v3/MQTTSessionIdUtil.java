@@ -13,11 +13,13 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+
 import com.baidu.bifromq.type.ClientInfo;
 
 public class MQTTSessionIdUtil {
     public static String userSessionId(ClientInfo info) {
-        assert info.hasMqtt3ClientInfo();
-        return info.getMqtt3ClientInfo().getUserId() + "/" + info.getMqtt3ClientInfo().getClientId();
+        return info.getMetadataOrThrow(MQTT_USER_ID_KEY) + "/" + info.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, "");
     }
 }

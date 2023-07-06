@@ -19,24 +19,24 @@ message Message{
 message TopicMessage {
   string topic = 1;
   Message message = 2;
-  ClientInfo sender = 3;
+  ClientInfo publisher = 3;
 }
 
 message TopicMessagePack {
-  message SenderMessagePack{
-    ClientInfo sender = 1;
+  message PublisherPack{
+    ClientInfo publisher = 1;
     repeated Message message = 2;
   }
   string topic = 1;
-  repeated SenderMessagePack message = 2;
+  repeated PublisherPack message = 2;
 }
 
 
-message SenderMessagePack {
-  message TopicMessagePack {
+message PublisherMessagePack {
+  message TopicPack {
     string topic = 1;
     repeated Message message = 2;
   }
-  ClientInfo sender = 1;
-  repeated TopicMessagePack messagePack = 2;
+  ClientInfo publisher = 1;
+  repeated TopicPack messagePack = 2;
 }

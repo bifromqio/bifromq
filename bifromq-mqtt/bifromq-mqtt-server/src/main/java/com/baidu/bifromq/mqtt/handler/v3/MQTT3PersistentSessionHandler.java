@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.mqtt.handler.v3.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
@@ -102,8 +103,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         if (qos1ConfirmSeqMap.isEmpty() || qos1ConfirmSeqMap.firstKey() > triggerSeq) {
             // all seq < triggerSeq has been confirmed
             log.trace("Committing qos1 up to seq: tenantId={}, inboxId={}, seq={}", clientInfo().getTenantId(),
-                clientInfo().getMqtt3ClientInfo()
-                    .getClientId(), triggerSeq);
+                clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), triggerSeq);
             qos1ConfirmUpToSeq = triggerSeq;
             if (!qos1Confirming) {
                 confirmQoS1();
@@ -121,8 +121,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         if (qos2ConfirmSeqMap.isEmpty() || qos2ConfirmSeqMap.firstKey() > triggerSeq) {
             // all seq < triggerSeq has been confirmed
             log.trace("Committing qos2 up to seq: tenantId={}, inboxId={}, seq={}", clientInfo().getTenantId(),
-                clientInfo().getMqtt3ClientInfo()
-                    .getClientId(), triggerSeq);
+                clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), triggerSeq);
             qos2ConfirmUpToSeq = triggerSeq;
             if (!qos2Confirming) {
                 confirmQoS2();
@@ -133,10 +132,9 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     @Override
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
         String inboxId = userSessionId(clientInfo());
-        return sessionCtx.distClient.sub(reqId, topicSub.topicName(), QoS.forNumber(topicSub.qualityOfService()
-                    .value()), inboxId, sessionCtx.inboxClient.getDelivererKey(inboxId,
-                    clientInfo()), 1,
-                clientInfo())
+        return sessionCtx.distClient.sub(reqId, clientInfo().getTenantId(), topicSub.topicName(),
+                QoS.forNumber(topicSub.qualityOfService().value()), inboxId,
+                sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), 1)
             .thenApply(subResult -> {
                 switch (subResult.type()) {
                     case OK_QoS0:
@@ -155,8 +153,8 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     @Override
     protected CompletableFuture<UnsubResult> doUnsubscribe(long reqId, String topicFilter) {
         String inboxId = userSessionId(clientInfo());
-        return sessionCtx.distClient.unsub(reqId, topicFilter, inboxId, sessionCtx.inboxClient.getDelivererKey(
-            inboxId, clientInfo()), 1, clientInfo());
+        return sessionCtx.distClient.unsub(reqId, clientInfo().getTenantId(), topicFilter, inboxId,
+            sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), 1);
     }
 
     private void confirmQoS1() {
@@ -199,9 +197,8 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
 
     private void consume(Fetched fetched) {
         log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, qos1={}, qos2={}", clientInfo().getTenantId(),
-            clientInfo().getMqtt3ClientInfo()
-                .getClientId(), fetched.getQos0SeqCount(), fetched.getQos1SeqCount(),
-            fetched.getQos2SeqCount());
+            clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0SeqCount(),
+            fetched.getQos1SeqCount(), fetched.getQos2SeqCount());
         ctx.channel().eventLoop().execute(() -> {
             switch (fetched.getResult()) {
                 case OK:
@@ -262,7 +259,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                             eventCollector.report(getLocal(QoS0Pushed.class)
                                 .reqId(message.getMessageId())
                                 .isRetain(false)
-                                .sender(topicMsg.getSender())
+                                .sender(topicMsg.getPublisher())
                                 .topic(topic)
                                 .matchedFilter(topicFilter)
                                 .size(message.getPayload().size())
@@ -273,7 +270,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                             .reason(DropReason.ChannelClosed)
                             .reqId(message.getMessageId())
                             .isRetain(false)
-                            .sender(topicMsg.getSender())
+                            .sender(topicMsg.getPublisher())
                             .topic(topic)
                             .matchedFilter(topicFilter)
                             .size(message.getPayload().size())
@@ -284,7 +281,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         .reason(DropReason.NoSubPermission)
                         .reqId(message.getMessageId())
                         .isRetain(false)
-                        .sender(topicMsg.getSender())
+                        .sender(topicMsg.getPublisher())
                         .topic(topic)
                         .matchedFilter(topicFilter)
                         .size(message.getPayload().size())
@@ -303,7 +300,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         cancelOnInactive(authProvider.check(clientInfo(), AuthUtil.buildSubAction(topicFilter, AT_LEAST_ONCE)))
             .thenAcceptAsync(allow -> {
                 if (allow) {
-                    int messageId = sendQoS1TopicMessage(seq, topicFilter, topic, message, topicMsg.getSender(),
+                    int messageId = sendQoS1TopicMessage(seq, topicFilter, topic, message, topicMsg.getPublisher(),
                         false, flush, timestamp);
                     if (messageId < 0) {
                         log.error("MessageId exhausted");
@@ -313,7 +310,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         .reason(DropReason.NoSubPermission)
                         .reqId(message.getMessageId())
                         .isRetain(false)
-                        .sender(topicMsg.getSender())
+                        .sender(topicMsg.getPublisher())
                         .topic(topic)
                         .matchedFilter(topicFilter)
                         .size(message.getPayload().size())
@@ -335,7 +332,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         cancelOnInactive(authProvider.check(clientInfo(), AuthUtil.buildSubAction(topicFilter, EXACTLY_ONCE)))
             .thenAcceptAsync(allow -> {
                 if (allow) {
-                    int messageId = sendQoS2TopicMessage(seq, topicFilter, topic, message, topicMsg.getSender(),
+                    int messageId = sendQoS2TopicMessage(seq, topicFilter, topic, message, topicMsg.getPublisher(),
                         false, flush, timestamp);
                     if (messageId < 0) {
                         log.error("MessageId exhausted");
@@ -345,7 +342,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         .reason(DropReason.NoSubPermission)
                         .reqId(message.getMessageId())
                         .isRetain(false)
-                        .sender(topicMsg.getSender())
+                        .sender(topicMsg.getPublisher())
                         .topic(topic)
                         .matchedFilter(topicFilter)
                         .size(message.getPayload().size())

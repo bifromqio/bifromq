@@ -17,8 +17,8 @@ import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
-import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
@@ -50,7 +50,7 @@ public class QoS1InsertState extends InboxServiceState {
         inboxWriter = inboxBrokerClient.open("deliverer1");
         TopicMessagePack.Builder builder = TopicMessagePack.newBuilder().setTopic("greeting");
         IntStream.range(0, 10).forEach(j -> builder
-            .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
+            .addMessage(TopicMessagePack.PublisherPack.newBuilder()
                 .addMessage(Message.newBuilder()
                     .setPubQoS(AT_LEAST_ONCE)
                     .setPayload(ByteString.copyFromUtf8("hello"))

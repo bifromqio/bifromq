@@ -34,7 +34,6 @@ import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -109,8 +108,8 @@ public class DistQoS0Test extends DistWorkerTest {
         for (DeliveryPack pack : msgCap.getValue()) {
             TopicMessagePack msgPack = pack.messagePack;
             assertEquals(msgPack.getTopic(), "/你好/hello/😄");
-            for (TopicMessagePack.SenderMessagePack senderMsgPack : msgPack.getMessageList()) {
-                for (Message msg : senderMsgPack.getMessageList()) {
+            for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
+                for (Message msg : publisherPack.getMessageList()) {
                     assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                 }
             }
@@ -121,8 +120,8 @@ public class DistQoS0Test extends DistWorkerTest {
         for (DeliveryPack pack : msgCap.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/你好/hello/😄");
-            for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                for (Message msg : senderMsgPack.getMessageList()) {
+            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                for (Message msg : publisherPack.getMessageList()) {
                     assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                 }
             }
@@ -162,8 +161,8 @@ public class DistQoS0Test extends DistWorkerTest {
         for (DeliveryPack pack : list1.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
-            for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                for (Message msg : senderMsgPack.getMessageList()) {
+            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                for (Message msg : publisherPack.getMessageList()) {
                     assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                 }
             }
@@ -218,8 +217,8 @@ public class DistQoS0Test extends DistWorkerTest {
         for (DeliveryPack pack : list1.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
-            for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                for (Message msg : senderMsgPack.getMessageList()) {
+            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                for (Message msg : publisherPack.getMessageList()) {
                     assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                 }
             }
@@ -231,8 +230,8 @@ public class DistQoS0Test extends DistWorkerTest {
         for (DeliveryPack pack : list2.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
-            for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                for (Message msg : senderMsgPack.getMessageList()) {
+            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                for (Message msg : publisherPack.getMessageList()) {
                     assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                 }
             }
@@ -299,8 +298,8 @@ public class DistQoS0Test extends DistWorkerTest {
             for (DeliveryPack pack : packs) {
                 TopicMessagePack msgs = pack.messagePack;
                 assertEquals(msgs.getTopic(), "/a/b/c");
-                for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                    for (Message msg : senderMsgPack.getMessageList()) {
+                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                    for (Message msg : publisherPack.getMessageList()) {
                         assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                     }
                 }
@@ -360,7 +359,7 @@ public class DistQoS0Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
 
         insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
@@ -377,8 +376,7 @@ public class DistQoS0Test extends DistWorkerTest {
         verify(writer3, timeout(1000).times(1)).deliver(any());
         await().until(() -> {
             try {
-                verify(distClient, times(3))
-                    .clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class));
+                verify(distClient, times(3)).clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
                 return true;
             } catch (Throwable e) {
                 return false;

@@ -19,9 +19,9 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -51,13 +51,13 @@ public class InboxInsertTest extends InboxServiceTest {
         Message msg = Message.newBuilder()
             .setPubQoS(QoS.AT_LEAST_ONCE)
             .build();
-        TopicMessagePack.SenderMessagePack senderMsgPack = TopicMessagePack.SenderMessagePack
+        TopicMessagePack.PublisherPack publisherPack = TopicMessagePack.PublisherPack
             .newBuilder()
             .addMessage(msg)
             .build();
         TopicMessagePack pack = TopicMessagePack.newBuilder()
             .setTopic("topic")
-            .addMessage(senderMsgPack)
+            .addMessage(publisherPack)
             .build();
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)
@@ -102,17 +102,17 @@ public class InboxInsertTest extends InboxServiceTest {
         Message msg = Message.newBuilder()
             .setPubQoS(QoS.AT_LEAST_ONCE)
             .build();
-        TopicMessagePack.SenderMessagePack senderMsgPack = TopicMessagePack.SenderMessagePack
+        TopicMessagePack.PublisherPack publisherPack = TopicMessagePack.PublisherPack
             .newBuilder()
             .addMessage(msg)
             .build();
         TopicMessagePack pack1 = TopicMessagePack.newBuilder()
             .setTopic("topic")
-            .addMessage(senderMsgPack)
+            .addMessage(publisherPack)
             .build();
         TopicMessagePack pack2 = TopicMessagePack.newBuilder()
             .setTopic("topic")
-            .addMessage(senderMsgPack)
+            .addMessage(publisherPack)
             .build();
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)

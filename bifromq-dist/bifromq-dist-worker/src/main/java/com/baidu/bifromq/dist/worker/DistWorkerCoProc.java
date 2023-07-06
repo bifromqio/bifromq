@@ -28,6 +28,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_FAN_OUT_PARALLELISM
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_LOAD_TRACKING_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_RANGE_LOAD;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SPLIT_KEY_EST_THRESHOLD;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_TOPIC_FILTERS_PER_INBOX;
 import static java.util.Collections.singletonMap;
 import static java.util.concurrent.CompletableFuture.allOf;
 
@@ -82,7 +83,6 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SysClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -115,6 +115,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final LoadEstimator loadEstimator;
     private final Gauge loadGauge;
     private final FanoutExecutorGroup fanoutExecutorGroup;
+    private final int maxTopicFiltersPerInbox = MAX_TOPIC_FILTERS_PER_INBOX.get();
 
     public DistWorkerCoProc(KVRangeId id,
                             Supplier<IKVRangeReader> readClientProvider,
@@ -258,8 +259,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             for (String topicFilter : newTopicFilters.getTopicFiltersMap().keySet()) {
                 QoS subQoS = newTopicFilters.getTopicFiltersMap().get(topicFilter);
                 if (subInfo.getTopicFiltersMap().get(topicFilter) != subQoS) {
-                    // TODO: make it configurable?
-                    if (subInfo.getTopicFiltersCount() < 100) {
+                    if (subInfo.getTopicFiltersCount() < maxTopicFiltersPerInbox) {
                         subInfo = subInfo.toBuilder().putTopicFilters(topicFilter, subQoS).build();
                         subResultBuilder.putResults(topicFilter, AddTopicFilterReply.Result.OK);
                         update = true;
@@ -520,8 +520,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     .topic(topic)
                     .range(reader.range())
                     .build();
-                Map<ClientInfo, TopicMessagePack.SenderMessagePack> senderMsgPackMap = topicMsgPack.getMessageList()
-                    .stream().collect(Collectors.toMap(TopicMessagePack.SenderMessagePack::getSender, e -> e));
+                Map<ClientInfo, TopicMessagePack.PublisherPack> senderMsgPackMap = topicMsgPack.getMessageList()
+                    .stream().collect(Collectors.toMap(TopicMessagePack.PublisherPack::getPublisher, e -> e));
                 distFanOutFutures.add(routeCache.get(scopedTopic, senderMsgPackMap.keySet())
                     .thenApply(routeMap -> {
                         fanoutExecutorGroup.submit(Objects.hash(tenantId, topic, request.getOrderKey()), routeMap,
@@ -556,20 +556,15 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     .hasInbox(request.getReqId(), tenantId, inbox.inboxId, inbox.delivererKey)
                     .thenCompose(exist -> {
                         if (!exist) {
-                            return distClient.clear(request.getReqId(), inbox.inboxId, inbox.delivererKey,
-                                inbox.broker,
-                                ClientInfo.newBuilder()
-                                    .setTenantId(tenantId)
-                                    .setSysClientInfo(SysClientInfo
-                                        .newBuilder()
-                                        .setType("distservice")
-                                        .build())
-                                    .build());
+                            return distClient.clear(request.getReqId(),
+                                tenantId, inbox.inboxId, inbox.delivererKey, inbox.broker);
                         }
                         return CompletableFuture.completedFuture(ClearResult.OK);
                     }));
+                itr.next();
+            } else {
+                itr.seek(tenantUpperBound(tenantId));
             }
-            itr.seek(tenantUpperBound(tenantId));
         }
         return allOf(clearFutures.toArray(new CompletableFuture[0]))
             .handle((v, e) -> GCReply.newBuilder().setReqId(request.getReqId()).build());

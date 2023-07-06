@@ -31,7 +31,6 @@ import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -80,7 +79,7 @@ public class DistQoS1Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class))).thenReturn(
+        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
             CompletableFuture.completedFuture(ClearResult.OK));
 
         insertMatchRecord("trafficA", "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
@@ -97,16 +96,16 @@ public class DistQoS1Test extends DistWorkerTest {
             for (DeliveryPack pack : packs) {
                 TopicMessagePack msgs = pack.messagePack;
                 assertEquals(msgs.getTopic(), "/a/b/c");
-                for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                    for (Message msg : senderMsgPack.getMessageList()) {
+                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                    for (Message msg : publisherPack.getMessageList()) {
                         assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                     }
                 }
             }
         }
 
-        verify(distClient, timeout(100).atLeastOnce()).clear(anyLong(), anyString(), anyString(), anyInt(),
-            any(ClientInfo.class));
+        verify(distClient, timeout(100).atLeastOnce())
+            .clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @SneakyThrows
@@ -133,8 +132,8 @@ public class DistQoS1Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class))).thenReturn(
-            CompletableFuture.completedFuture(ClearResult.OK));
+        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
 
         joinMatchGroup("trafficA", "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
 
@@ -151,8 +150,8 @@ public class DistQoS1Test extends DistWorkerTest {
             for (DeliveryPack pack : packs) {
                 TopicMessagePack msgs = pack.messagePack;
                 assertEquals(msgs.getTopic(), "/a/b/c");
-                for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                    for (Message msg : senderMsgPack.getMessageList()) {
+                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                    for (Message msg : publisherPack.getMessageList()) {
                         assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                     }
                 }
@@ -160,8 +159,8 @@ public class DistQoS1Test extends DistWorkerTest {
         }
 
 
-        verify(distClient, timeout(100).atLeastOnce()).clear(anyLong(), anyString(), anyString(), anyInt(),
-            any(ClientInfo.class));
+        verify(distClient, timeout(100).atLeastOnce())
+            .clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
 
         verify(eventCollector, timeout(100).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
     }

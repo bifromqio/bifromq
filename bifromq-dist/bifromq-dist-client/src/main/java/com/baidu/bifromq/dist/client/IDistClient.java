@@ -35,17 +35,17 @@ public interface IDistClient {
 
     Observable<IRPCClient.ConnState> connState();
 
-    CompletableFuture<DistResult> dist(long reqId, String topic, QoS qos, ByteBuffer payload, int expirySeconds,
-                                       ClientInfo sender);
+    CompletableFuture<DistResult> pub(long reqId, String topic, QoS qos, ByteBuffer payload, int expirySeconds,
+                                      ClientInfo publisher);
 
-    CompletableFuture<SubResult> sub(long reqId, String topicFilter, QoS qos, String inbox, String delivererKey,
-                                     int subBrokerId, ClientInfo client);
+    CompletableFuture<SubResult> sub(long reqId, String tenantId, String topicFilter, QoS qos, String inboxId,
+                                     String delivererKey, int subBrokerId);
 
-    CompletableFuture<UnsubResult> unsub(long reqId, String topicFilter, String inbox, String delivererKey,
-                                         int subBrokerId, ClientInfo client);
+    CompletableFuture<UnsubResult> unsub(long reqId, String tenantId, String topicFilter, String inboxId,
+                                         String delivererKey, int subBrokerId);
 
-    CompletableFuture<ClearResult> clear(long reqId, String inboxId, String delivererKey, int subBrokerId,
-                                         ClientInfo client);
+    CompletableFuture<ClearResult> clear(long reqId, String tenantId, String inboxId, String delivererKey,
+                                         int subBrokerId);
 
     void stop();
 }

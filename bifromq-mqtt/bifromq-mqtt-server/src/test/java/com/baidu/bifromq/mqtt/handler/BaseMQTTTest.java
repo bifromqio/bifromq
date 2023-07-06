@@ -272,7 +272,7 @@ public abstract class BaseMQTTTest {
 
     protected void mockDistClear(boolean success) {
         when(inboxClient.getDelivererKey(anyString(), any(ClientInfo.class))).thenReturn(delivererKey);
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(
                 CompletableFuture.completedFuture(
                     success ? ClearResult.OK : ClearResult.INTERNAL_ERROR
@@ -292,8 +292,7 @@ public abstract class BaseMQTTTest {
         } else {
             subResult = SubResult.error(new RuntimeException("InternalError"));
         }
-        when(distClient.sub(anyLong(), anyString(), eq(qos), anyString(), anyString(), anyInt(),
-            any(ClientInfo.class)))
+        when(distClient.sub(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(subResult));
     }
 
@@ -304,8 +303,7 @@ public abstract class BaseMQTTTest {
                 : CompletableFuture.completedFuture(UnsubResult.error(new RuntimeException("InternalError")));
         }
         OngoingStubbing<CompletableFuture<UnsubResult>> ongoingStubbing =
-            when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyInt(),
-                any(ClientInfo.class)));
+            when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
         for (CompletableFuture<UnsubResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }
@@ -313,13 +311,13 @@ public abstract class BaseMQTTTest {
 
     protected void mockDistDist(boolean success) {
         DistResult distResult = success ? DistResult.Succeed : DistResult.error(new RuntimeException("InternalError"));
-        when(distClient.dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(distResult));
     }
 
     protected void mockDistDrop() {
-        when(distClient.dist(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class)))
             .thenReturn(CompletableFuture.failedFuture(DropException.EXCEED_LIMIT));
     }

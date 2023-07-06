@@ -19,17 +19,16 @@ import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.Dist
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_CALL_QUEUES;
 
 import com.baidu.bifromq.baserpc.ResponsePipeline;
-import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 import com.baidu.bifromq.basescheduler.exception.DropException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistCall;
+import com.baidu.bifromq.dist.server.scheduler.DistCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
@@ -37,11 +36,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     private final IEventCollector eventCollector;
-    private final IBatchCallScheduler<DistCall, Map<String, Integer>> distCallScheduler;
+    private final DistCallScheduler distCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
     private final Integer callQueueIdx;
 
-    DistResponsePipeline(IBatchCallScheduler<DistCall, Map<String, Integer>> distCallScheduler,
+    DistResponsePipeline(DistCallScheduler distCallScheduler,
                          StreamObserver<DistReply> responseObserver,
                          IEventCollector eventCollector,
                          LoadingCache<String, RunningAverage> tenantFanouts) {

@@ -288,7 +288,7 @@ abstract class InboxStoreState {
                         .build())
                     .addMessages(TopicMessagePack.newBuilder()
                         .setTopic(topic)
-                        .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
+                        .addMessage(TopicMessagePack.PublisherPack.newBuilder()
                             .addAllMessage(Arrays.stream(messages).collect(Collectors.toList()))
                             .build())
                         .build())

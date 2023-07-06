@@ -13,12 +13,11 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
-import org.testng.annotations.Test;
-
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
+
+import com.baidu.bifromq.type.ClientInfo;
+import org.testng.annotations.Test;
 
 public class SettingTest {
     @Test
@@ -30,10 +29,9 @@ public class SettingTest {
 
     @Test
     public void customClassifier() {
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("abc")
-            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                .setUserId("123")
-                .build())
+        ClientInfo clientInfo = ClientInfo.newBuilder()
+            .setTenantId("abc")
+            .putMetadata("userId", "123")
             .build();
         Setting.MaxTopicLevels.current(clientInfo, 32);
         assertTrue(Setting.MaxTopicLevels.current(clientInfo).equals(32));
@@ -47,10 +45,9 @@ public class SettingTest {
 
     @Test
     public void customValueExpiry() {
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("abc")
-            .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                .setUserId("123")
-                .build())
+        ClientInfo clientInfo = ClientInfo.newBuilder()
+            .setTenantId("abc")
+            .putMetadata("userId", "123")
             .build();
         Setting.MaxTopicLevels.current(clientInfo, 32);
 

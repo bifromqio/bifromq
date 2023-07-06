@@ -26,7 +26,7 @@ import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.SenderMessagePack;
+import com.baidu.bifromq.type.PublisherMessagePack;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -58,12 +58,12 @@ public class DistServerCallScheduler
 
     @Override
     protected Optional<BatchKey> find(ClientCall message) {
-        return Optional.of(new BatchKey(message.sender.getTenantId(), Thread.currentThread().getId()));
+        return Optional.of(new BatchKey(message.publisher.getTenantId(), Thread.currentThread().getId()));
     }
 
     private class DistServerCallBuilder extends BatchCallBuilder<ClientCall, DistResult> {
         private class DistServerCall implements IBatchCall<ClientCall, DistResult> {
-            private final Map<ClientInfo, Map<String, SenderMessagePack.TopicMessagePack.Builder>> clientMsgPack =
+            private final Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack =
                 new HashMap<>(maxBatchedTopics);
             private final List<CompletableFuture<DistResult>> tasks = new ArrayList<>();
 
@@ -81,8 +81,8 @@ public class DistServerCallScheduler
             public CompletableFuture<DistResult> add(ClientCall request) {
                 CompletableFuture<DistResult> onDone = new CompletableFuture<>();
                 tasks.add(onDone);
-                clientMsgPack.computeIfAbsent(request.sender, k -> new HashMap<>())
-                    .computeIfAbsent(request.topic, k -> SenderMessagePack.TopicMessagePack.newBuilder().setTopic(k))
+                clientMsgPack.computeIfAbsent(request.publisher, k -> new HashMap<>())
+                    .computeIfAbsent(request.topic, k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
                     .addMessage(request.message);
                 return onDone;
             }
@@ -97,8 +97,9 @@ public class DistServerCallScheduler
             public CompletableFuture<Void> execute() {
                 DistRequest.Builder requestBuilder = DistRequest.newBuilder().setReqId(System.nanoTime());
                 clientMsgPack.forEach((k, v) -> {
-                    SenderMessagePack.Builder senderMsgPackBuilder = SenderMessagePack.newBuilder().setSender(k);
-                    for (SenderMessagePack.TopicMessagePack.Builder packBuilder : v.values()) {
+                    PublisherMessagePack.Builder senderMsgPackBuilder =
+                        PublisherMessagePack.newBuilder().setPublisher(k);
+                    for (PublisherMessagePack.TopicPack.Builder packBuilder : v.values()) {
                         senderMsgPackBuilder.addMessagePack(packBuilder);
                     }
                     requestBuilder.addMessages(senderMsgPackBuilder.build());

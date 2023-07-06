@@ -204,7 +204,7 @@ public class RetainStoreTest {
                 .setTopic(topic)
                 .setTimestamp(message.getTimestamp())
                 .setExpireTimestamp(message.getExpireTimestamp())
-                .setSender(topicMsg.getSender())
+                .setPublisher(topicMsg.getPublisher())
                 .setMessage(message.getPayload())
                 .setMaxRetainedTopics(maxRetainedTopics)
                 .build();
@@ -291,7 +291,7 @@ public class RetainStoreTest {
                 .setExpireTimestamp(expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE :
                     timestamp + Duration.ofSeconds(expirySeconds).toMillis())
                 .build())
-            .setSender(ClientInfo.getDefaultInstance())
+            .setPublisher(ClientInfo.getDefaultInstance())
             .build();
     }
 }

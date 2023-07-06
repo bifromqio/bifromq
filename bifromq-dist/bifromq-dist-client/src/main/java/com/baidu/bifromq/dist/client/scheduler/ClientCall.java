@@ -19,7 +19,7 @@ import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public class ClientCall {
-    final ClientInfo sender;
+    final ClientInfo publisher;
     final String topic;
     final Message message;
 }

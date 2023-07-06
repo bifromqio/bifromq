@@ -292,7 +292,7 @@ abstract class InboxStoreTest {
     }
 
     protected InboxInsertReply requestInsert(SubInfo subInfo, String topic,
-                                             TopicMessagePack.SenderMessagePack... messages) {
+                                             TopicMessagePack.PublisherPack... messages) {
         return requestInsert(subInfo.getTenantId(), subInfo.getInboxId(), MessagePack.newBuilder()
             .setSubInfo(subInfo)
             .addMessages(TopicMessagePack.newBuilder()
@@ -553,8 +553,8 @@ abstract class InboxStoreTest {
     }
 
 
-    protected TopicMessagePack.SenderMessagePack message(QoS qos, String payload) {
-        return TopicMessagePack.SenderMessagePack.newBuilder()
+    protected TopicMessagePack.PublisherPack message(QoS qos, String payload) {
+        return TopicMessagePack.PublisherPack.newBuilder()
             .addMessage(Message.newBuilder()
                 .setMessageId(System.nanoTime())
                 .setPubQoS(qos)
@@ -563,14 +563,14 @@ abstract class InboxStoreTest {
             .build();
     }
 
-    protected TopicMessagePack.SenderMessagePack message(int messageId, QoS qos, String payload, ClientInfo sender) {
-        return TopicMessagePack.SenderMessagePack.newBuilder()
+    protected TopicMessagePack.PublisherPack message(int messageId, QoS qos, String payload, ClientInfo publisher) {
+        return TopicMessagePack.PublisherPack.newBuilder()
             .addMessage(Message.newBuilder()
                 .setMessageId(messageId)
                 .setPubQoS(qos)
                 .setPayload(ByteString.copyFromUtf8(payload))
                 .build())
-            .setSender(sender)
+            .setPublisher(publisher)
             .build();
     }
 }

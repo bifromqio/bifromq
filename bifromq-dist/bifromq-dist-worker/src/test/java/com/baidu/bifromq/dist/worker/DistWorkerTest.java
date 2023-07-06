@@ -13,7 +13,12 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static org.mockito.ArgumentMatchers.any;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -64,7 +69,6 @@ import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -157,7 +161,7 @@ public abstract class DistWorkerTest {
             .thenReturn(CompletableFuture.completedFuture(true));
         lenient().when(inboxBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
             .thenReturn(CompletableFuture.completedFuture(true));
-        lenient().when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        lenient().when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
 
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
@@ -274,14 +278,12 @@ public abstract class DistWorkerTest {
             KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
             SubRequest request = SubRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setTopicFilter(topicFilter)
                 .setSubQoS(subQoS)
                 .setInboxId(inboxId)
                 .setBroker(subBroker)
                 .setDelivererKey(delivererKey)
-                .setClient(ClientInfo.newBuilder()
-                    .setTenantId(tenantId)
-                    .build())
                 .build();
             DistServiceRWCoProcInput input = MessageUtil.buildAddTopicFilterRequest(request);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -310,13 +312,11 @@ public abstract class DistWorkerTest {
             KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
             UnsubRequest request = UnsubRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setTopicFilter(topicFilter)
                 .setBroker(subBroker)
                 .setInboxId(inboxId)
                 .setDelivererKey(delivererKey)
-                .setClient(ClientInfo.newBuilder()
-                    .setTenantId(tenantId)
-                    .build())
                 .build();
             DistServiceRWCoProcInput input = MessageUtil.buildRemoveTopicFilterRequest(request);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -345,14 +345,12 @@ public abstract class DistWorkerTest {
             KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
             SubRequest.Builder reqBuilder = SubRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setTopicFilter(topicFilter)
                 .setInboxId(inboxId)
                 .setBroker(subBroker)
                 .setSubQoS(subQoS)
-                .setDelivererKey(delivererKey)
-                .setClient(ClientInfo.newBuilder()
-                    .setTenantId(tenantId)
-                    .build());
+                .setDelivererKey(delivererKey);
 
             DistServiceRWCoProcInput input = MessageUtil.buildInsertMatchRecordRequest(reqBuilder.build());
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -407,14 +405,12 @@ public abstract class DistWorkerTest {
             KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
             SubRequest.Builder reqBuilder = SubRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setTopicFilter(topicFilter)
                 .setInboxId(inboxId)
                 .setBroker(subBroker)
                 .setSubQoS(subQoS)
-                .setDelivererKey(delivererKey)
-                .setClient(ClientInfo.newBuilder()
-                    .setTenantId(tenantId)
-                    .build());
+                .setDelivererKey(delivererKey);
 
             DistServiceRWCoProcInput input = MessageUtil.buildJoinMatchGroupRequest(reqBuilder.build());
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -520,15 +516,14 @@ public abstract class DistWorkerTest {
     protected BatchDistReply dist(String tenantId, QoS qos, String topic, ByteString payload, String orderKey) {
         return dist(tenantId, List.of(TopicMessagePack.newBuilder()
             .setTopic(topic)
-            .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
-                .setSender(ClientInfo.newBuilder()
+            .addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                .setPublisher(ClientInfo.newBuilder()
                     .setTenantId(tenantId)
-                    .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                        .setUserId("testUser")
-                        .setClientId("testClientId")
-                        .setIp("127.0.0.1")
-                        .setPort(8080)
-                        .build())
+                    .setType(MQTT_TYPE_VALUE)
+                    .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
+                    .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                    .putMetadata(MQTT_CLIENT_ID_KEY, "testClientId")
+                    .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:8080")
                     .build())
                 .addMessage(Message.newBuilder()
                     .setMessageId(ThreadLocalRandom.current().nextInt())

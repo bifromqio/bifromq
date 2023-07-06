@@ -14,9 +14,9 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
@@ -25,12 +25,11 @@ import com.baidu.bifromq.inbox.storage.proto.HasReply;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-
 import java.io.IOException;
 import java.time.Clock;
+import org.mockito.Mock;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class InboxAdminTest extends InboxStoreTest {
     @Mock
@@ -103,9 +102,9 @@ public class InboxAdminTest extends InboxStoreTest {
         String tenantId = "tenantId";
         String inboxId = "inboxId";
         String topic = "greeting";
-        TopicMessagePack.SenderMessagePack msg0 = message(QoS.AT_MOST_ONCE, "hello");
-        TopicMessagePack.SenderMessagePack msg1 = message(QoS.AT_LEAST_ONCE, "world");
-        TopicMessagePack.SenderMessagePack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
+        TopicMessagePack.PublisherPack msg0 = message(QoS.AT_MOST_ONCE, "hello");
+        TopicMessagePack.PublisherPack msg1 = message(QoS.AT_LEAST_ONCE, "world");
+        TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 3, 1, true);
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)

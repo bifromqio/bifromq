@@ -180,7 +180,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     .setExpireTimestamp(request.getExpireTimestamp())
                     .setPayload(request.getMessage())
                     .build())
-                .setSender(request.getSender())
+                .setPublisher(request.getPublisher())
                 .build();
             ByteString retainKey = KeyUtil.retainKey(tenantNS, topicMessage.getTopic());
             long now = clock.millis();

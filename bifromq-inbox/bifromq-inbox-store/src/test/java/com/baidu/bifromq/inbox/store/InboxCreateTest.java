@@ -21,7 +21,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.google.protobuf.ByteString;
 import java.time.Clock;
 import java.time.Duration;
@@ -51,12 +50,12 @@ public class InboxCreateTest {
     private String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
     private ClientInfo clientInfo = ClientInfo.newBuilder()
         .setTenantId(tenantId)
-        .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-            .setUserId("testUser")
-            .setClientId("clientId")
-            .setPort(8888)
-            .setIp("127.0.0.1")
-            .build())
+        .putMetadata("agent", "mqtt")
+        .putMetadata("protocol", "3.1.1")
+        .putMetadata("userId", "testUser")
+        .putMetadata("clientId", "testClientId")
+        .putMetadata("ip", "127.0.0.1")
+        .putMetadata("port", "8888")
         .build();
     private Clock clock = Clock.systemUTC();
     private AutoCloseable closeable;

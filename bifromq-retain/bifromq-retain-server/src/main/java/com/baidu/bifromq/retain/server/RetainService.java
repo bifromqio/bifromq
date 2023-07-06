@@ -81,7 +81,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                             .setTimestamp(request.getTimestamp())
                             .setExpireTimestamp(request.getExpireTimestamp())
                             .setMessage(request.getPayload())
-                            .setSender(clientInfo)
+                            .setPublisher(clientInfo)
                             .setMaxRetainedTopics(settingProvider.provide(RetainedTopicLimit, clientInfo))
                             .build()))
                         .whenComplete((v, e) -> log.trace("Reply retain request:\n{}", v))

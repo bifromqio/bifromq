@@ -102,8 +102,8 @@ public class DistQoS2Test extends DistWorkerTest {
             TopicMessagePack msgs = pack.messagePack;
             Iterable<SubInfo> subInfos = pack.inboxes;
             assertEquals(msgs.getTopic(), "/a/b/c");
-            for (TopicMessagePack.SenderMessagePack senderMsgPack : msgs.getMessageList()) {
-                for (Message msg : senderMsgPack.getMessageList()) {
+            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                for (Message msg : publisherPack.getMessageList()) {
                     for (SubInfo subInfo : subInfos) {
                         assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                     }
@@ -123,8 +123,8 @@ public class DistQoS2Test extends DistWorkerTest {
         for (DeliveryPack pack : msgCap.getValue()) {
             TopicMessagePack inbox2Msgs = pack.messagePack;
             assertEquals(inbox2Msgs.getTopic(), "/a/b/c");
-            TopicMessagePack.SenderMessagePack senderMsgPack = inbox2Msgs.getMessageList().iterator().next();
-            Message msg = senderMsgPack.getMessage(0);
+            TopicMessagePack.PublisherPack publisherPack = inbox2Msgs.getMessageList().iterator().next();
+            Message msg = publisherPack.getMessage(0);
             assertEquals(msg.getPubQoS(), EXACTLY_ONCE);
             assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
         }

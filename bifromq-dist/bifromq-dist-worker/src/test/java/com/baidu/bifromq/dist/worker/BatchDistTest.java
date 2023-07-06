@@ -13,6 +13,12 @@
 
 package com.baidu.bifromq.dist.worker;
 
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
@@ -24,7 +30,6 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
@@ -118,16 +123,15 @@ public class BatchDistTest extends DistWorkerTest {
         assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/4").intValue(), 1);
     }
 
-    private TopicMessagePack.SenderMessagePack toMsg(String tenantId, QoS qos, ByteString payload) {
-        return TopicMessagePack.SenderMessagePack.newBuilder()
-            .setSender(ClientInfo.newBuilder()
+    private TopicMessagePack.PublisherPack toMsg(String tenantId, QoS qos, ByteString payload) {
+        return TopicMessagePack.PublisherPack.newBuilder()
+            .setPublisher(ClientInfo.newBuilder()
                 .setTenantId(tenantId)
-                .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                    .setUserId("testUser")
-                    .setClientId("testClientId")
-                    .setIp("127.0.0.1")
-                    .setPort(8080)
-                    .build())
+                .setType(MQTT_TYPE_VALUE)
+                .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
+                .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                .putMetadata(MQTT_CLIENT_ID_KEY, "testClientId")
+                .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:8080")
                 .build())
             .addMessage(Message.newBuilder()
                 .setMessageId(ThreadLocalRandom.current().nextInt())

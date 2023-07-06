@@ -21,6 +21,7 @@ import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -175,7 +176,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         String newStore = cluster.addStore();
         log.info("add replica {}", newStore);
 
-        await().ignoreExceptions().until(() -> {
+        await().atMost(Duration.ofSeconds(60)).ignoreExceptions().until(() -> {
             KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
             if (setting.allReplicas.size() == 2) {
                 return true;

@@ -137,7 +137,7 @@ public class KeyUtil {
 
     public static ByteString buildMsgKey(InboxMessage message) {
         TopicMessage userMsg = message.getMsg();
-        return userMsg.getSender().toByteString().concat(toByteString(userMsg.getMessage().getMessageId()));
+        return userMsg.getPublisher().toByteString().concat(toByteString(userMsg.getMessage().getMessageId()));
     }
 
     public static long parseSeq(ByteString scopedInboxId, ByteString inboxMsgKey) {

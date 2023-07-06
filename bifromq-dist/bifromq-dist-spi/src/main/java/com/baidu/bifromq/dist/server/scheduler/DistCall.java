@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import com.baidu.bifromq.type.SenderMessagePack;
+import com.baidu.bifromq.type.PublisherMessagePack;
 import java.util.List;
 import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public class DistCall {
     public final String tenatId;
-    public final List<SenderMessagePack> senderMsgPacks;
+    public final List<PublisherMessagePack> publisherMsgPacks;
     public final Integer callQueueIdx;
     public final int fanout;
 }

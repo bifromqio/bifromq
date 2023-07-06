@@ -22,7 +22,7 @@ message RetainCoProcRequest{
   bytes message = 5; // user payload
   uint64 timestamp = 6; // UTC ts
   uint64 expireTimestamp = 7; // UTC ts
-  commontype.ClientInfo sender = 8;
+  commontype.ClientInfo publisher = 8;
   uint32 maxRetainedTopics = 9;
 }
 

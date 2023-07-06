@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public enum BifroMQSysProp {
+    MAX_TOPIC_FILTERS_PER_INBOX("max_topic_filters_per_inbox", 100, IntegerParser.POSITIVE),
     DIST_CLIENT_MAX_INFLIGHT_CALLS_PER_QUEUE("dist_client_max_calls_per_queue", 1, IntegerParser.POSITIVE),
     DIST_SERVER_MAX_INFLIGHT_CALLS_PER_QUEUE("dist_server_max_calls_per_queue", 1, IntegerParser.POSITIVE),
     DIST_MAX_TOPICS_IN_BATCH("dist_server_max_topics_in_batch", 200, IntegerParser.POSITIVE),

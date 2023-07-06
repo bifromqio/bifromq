@@ -37,7 +37,7 @@ public class QoS0InsertState extends InboxServiceState {
     private static final String tenantId = "testTraffic";
     private final TopicMessagePack msg = TopicMessagePack.newBuilder()
         .setTopic("greeting")
-        .addMessage(TopicMessagePack.SenderMessagePack.newBuilder()
+        .addMessage(TopicMessagePack.PublisherPack.newBuilder()
             .addMessage(Message.newBuilder()
                 .setPubQoS(AT_MOST_ONCE)
                 .setPayload(ByteString.copyFromUtf8("hello"))

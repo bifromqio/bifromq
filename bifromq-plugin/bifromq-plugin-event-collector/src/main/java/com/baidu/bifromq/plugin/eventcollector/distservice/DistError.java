@@ -15,7 +15,7 @@ package com.baidu.bifromq.plugin.eventcollector.distservice;
 
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.type.SenderMessagePack;
+import com.baidu.bifromq.type.PublisherMessagePack;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -31,7 +31,7 @@ public class DistError extends Event<DistError> {
     }
 
     private long reqId;
-    private Iterable<SenderMessagePack> messages;
+    private Iterable<PublisherMessagePack> messages;
     private DistErrorCode code;
 
     @Override

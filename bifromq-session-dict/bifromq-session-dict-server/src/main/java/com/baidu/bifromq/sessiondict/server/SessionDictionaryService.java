@@ -17,6 +17,10 @@ import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectionGauge;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.github.benmanes.caffeine.cache.RemovalCause.EXPIRED;
 import static com.github.benmanes.caffeine.cache.RemovalCause.SIZE;
 
@@ -48,8 +52,10 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
         .maximumSize(1000_000)
         .removalListener((RemovalListener<AckStream<Ping, Quit>, ClientInfo>) (key, value, cause) -> {
             if (cause == EXPIRED || cause == SIZE) {
-                key.send(Quit.newBuilder().setKiller(value).build());
-                key.onCompleted();
+                if (key != null) {
+                    key.send(Quit.newBuilder().setKiller(value).build());
+                    key.onCompleted();
+                }
             }
         })
         .build();
@@ -88,17 +94,19 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
         protected Registration(StreamObserver<Quit> responseObserver) {
             super(responseObserver);
             clientInfo = PipelineUtil.decode(metadata.get(PipelineUtil.CLIENT_INFO));
-            assert clientInfo.hasMqtt3ClientInfo();
-            log.trace("Receive session registering, tenantId={}, userId={}, clientId={}, addr={}:{}",
-                tenantId, clientInfo.getMqtt3ClientInfo().getUserId(), clientInfo.getMqtt3ClientInfo().getClientId(),
-                clientInfo.getMqtt3ClientInfo().getIp(), clientInfo.getMqtt3ClientInfo().getPort());
+            assert MQTT_TYPE_VALUE.equals(clientInfo.getType());
+            log.trace("Receive session registering, tenantId={}, userId={}, clientId={}, addr={}",
+                tenantId, clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+                clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""),
+                clientInfo.getMetadataOrDefault(MQTT_CLIENT_ADDRESS_KEY, ""));
             regKey =
-                toRegKey(clientInfo.getMqtt3ClientInfo().getUserId(), clientInfo.getMqtt3ClientInfo().getClientId());
+                toRegKey(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+                    clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
             registry.compute(tenantId, (t, m) -> {
                 if (m == null) {
                     m = new HashMap<>();
                     gauging(tenantId, MqttConnectionGauge,
-                        () -> registry.getOrDefault(tenantId, Collections.EMPTY_MAP).size());
+                        () -> registry.getOrDefault(tenantId, Collections.emptyMap()).size());
                 }
                 m.compute(regKey, (r, oldPipeline) -> {
                     if (oldPipeline != null) {
@@ -116,11 +124,10 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
         public void quit(ClientInfo killer) {
             long reqId = System.nanoTime();
             if (log.isTraceEnabled()) {
-                log.trace("Quit pipeline: reqId={}, tenantId={}, userId={}, clientId={}, address={}:{}",
-                    reqId, tenantId, clientInfo.getMqtt3ClientInfo().getUserId(),
-                    clientInfo.getMqtt3ClientInfo().getClientId(),
-                    clientInfo.getMqtt3ClientInfo().getIp(),
-                    clientInfo.getMqtt3ClientInfo().getPort());
+                log.trace("Quit pipeline: reqId={}, tenantId={}, userId={}, clientId={}, addr={}",
+                    reqId, tenantId, clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+                    clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""),
+                    clientInfo.getMetadataOrDefault(MQTT_CLIENT_ADDRESS_KEY, ""));
             }
             send(Quit.newBuilder().setKiller(killer).build());
         }

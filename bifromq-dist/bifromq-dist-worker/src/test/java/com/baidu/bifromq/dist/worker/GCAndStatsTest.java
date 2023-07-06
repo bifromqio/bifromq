@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.metrics.TenantMetric.DistSubInfoSizeGauge;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -25,7 +24,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.dist.client.ClearResult;
-import com.baidu.bifromq.type.ClientInfo;
 import io.micrometer.core.instrument.Meter;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
@@ -40,7 +38,7 @@ public class GCAndStatsTest extends DistWorkerTest {
         when(mqttBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
             .thenReturn(CompletableFuture.completedFuture(false));
 
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
 
         addTopicFilter("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
@@ -51,8 +49,7 @@ public class GCAndStatsTest extends DistWorkerTest {
 
         await().until(() -> {
             try {
-                verify(distClient, times(2)).clear(anyLong(), anyString(), anyString(), anyInt(),
-                    any(ClientInfo.class));
+                verify(distClient, times(2)).clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
                 return true;
             } catch (Throwable e) {
                 return false;

@@ -77,7 +77,6 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessage;
 import com.baidu.bifromq.type.TopicMessagePack;
-import com.google.common.collect.Iterables;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Clock;
@@ -94,6 +93,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -423,10 +423,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         }
 
         return InboxInsertReply.newBuilder()
-            .addAllResults(
-                Iterables.transform(
-                    results.entrySet(),
-                    e -> InboxInsertResult.newBuilder().setSubInfo(e.getKey()).setResult(e.getValue()).build()))
+            .addAllResults(results.entrySet().stream()
+                .map(e -> InboxInsertResult.newBuilder().setSubInfo(e.getKey()).setResult(e.getValue()).build())
+                .collect(Collectors.toList()))
             .build();
     }
 
@@ -443,19 +442,20 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             SubInfo subInfo = inboxMsgPack.getSubInfo();
             for (TopicMessagePack topicMsgPack : inboxMsgPack.getMessagesList()) {
                 String topic = topicMsgPack.getTopic();
-                for (TopicMessagePack.SenderMessagePack senderMsgPack : topicMsgPack.getMessageList()) {
-                    for (Message message : senderMsgPack.getMessageList()) {
+                for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
+                    for (Message message : publisherPack.getMessageList()) {
                         InboxMessage inboxMsg =
                             InboxMessage.newBuilder()
                                 .setTopicFilter(subInfo.getTopicFilter())
                                 .setMsg(TopicMessage.newBuilder()
                                     .setTopic(topic)
                                     .setMessage(message)
-                                    .setSender(senderMsgPack.getSender())
+                                    .setPublisher(publisherPack.getPublisher())
                                     .build())
                                 .build();
                         QoS finalQoS =
                             QoS.forNumber(Math.min(message.getPubQoS().getNumber(), subInfo.getSubQoS().getNumber()));
+                        assert finalQoS != null;
                         switch (finalQoS) {
                             case AT_MOST_ONCE:
                                 qos0MsgList.add(inboxMsg);
@@ -504,20 +504,20 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         List<InboxMessage> qos2MsgList = new ArrayList<>();
         for (TopicMessagePack topicMsgPack : msgPack.getMessagesList()) {
             String topic = topicMsgPack.getTopic();
-            for (TopicMessagePack.SenderMessagePack senderMsgPack : topicMsgPack.getMessageList()) {
-                for (Message message : senderMsgPack.getMessageList()) {
+            for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
+                for (Message message : publisherPack.getMessageList()) {
                     InboxMessage inboxMsg =
                         InboxMessage.newBuilder()
                             .setTopicFilter(topicFilter)
                             .setMsg(TopicMessage.newBuilder()
                                 .setTopic(topic)
                                 .setMessage(message)
-                                .setSender(senderMsgPack.getSender())
+                                .setPublisher(publisherPack.getPublisher())
                                 .build())
                             .build();
-                    QoS finalQoS =
-                        QoS.forNumber(
-                            Math.min(message.getPubQoS().getNumber(), msgPack.getSubInfo().getSubQoS().getNumber()));
+                    QoS finalQoS = QoS.forNumber(
+                        Math.min(message.getPubQoS().getNumber(), msgPack.getSubInfo().getSubQoS().getNumber()));
+                    assert finalQoS != null;
                     switch (finalQoS) {
                         case AT_MOST_ONCE:
                             qos0MsgList.add(inboxMsg);
@@ -833,7 +833,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     private InboxCommitReply batchCommit(InboxCommitRequest request, IKVReader reader, IKVWriter writer) {
-        long start = System.nanoTime();
         InboxCommitReply.Builder replyBuilder = InboxCommitReply.newBuilder();
         IKVIterator itr = reader.iterator();
         for (String scopedInboxIdUtf8 : request.getInboxCommitMap().keySet()) {

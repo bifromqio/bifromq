@@ -14,6 +14,7 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import static com.baidu.bifromq.sessiondict.WCHKeyUtil.toWCHKey;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.sessiondict.PipelineUtil;
@@ -46,7 +47,7 @@ class SessionDictionaryClient implements ISessionDictionaryClient {
 
     @Override
     public IRPCClient.IMessageStream<Quit, Ping> reg(ClientInfo clientInfo) {
-        assert clientInfo.hasMqtt3ClientInfo();
+        assert MQTT_TYPE_VALUE.equalsIgnoreCase(clientInfo.getType());
         Map<String, String> metadata = new HashMap<>();
         metadata.put(PipelineUtil.CLIENT_INFO, PipelineUtil.encode(clientInfo));
         return rpcClient.createMessageStream(clientInfo.getTenantId(),

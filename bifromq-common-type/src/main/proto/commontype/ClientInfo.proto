@@ -7,23 +7,8 @@ option java_package = "com.baidu.bifromq.type";
 option java_outer_classname = "ClientInfoProto";
 option optimize_for = SPEED;
 
-message MQTT3ClientInfo{
-  bool isMQIsdp = 1; // MQIsdp is MQTT 3.1
-  string userId = 2;
-  string clientId = 3;
-  string ip = 4;
-  uint32 port = 5;
-  string channelId = 6;
-}
-
-message SysClientInfo{
-  string type = 1;
-}
-
 message ClientInfo{
   string tenantId = 1;
-  oneof client_type{
-    SysClientInfo sysClientInfo = 2;
-    MQTT3ClientInfo mqtt3ClientInfo = 3;
-  }
+  string type = 2; // the type of the calling client could be external user client or internal service
+  map<string, string> metadata = 3; // the metadata of the client
 }

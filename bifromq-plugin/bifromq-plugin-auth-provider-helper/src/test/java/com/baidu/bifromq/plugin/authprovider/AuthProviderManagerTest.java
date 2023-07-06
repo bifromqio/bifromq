@@ -34,7 +34,6 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessControlError;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTT3ClientInfo;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
@@ -202,11 +201,11 @@ public class AuthProviderManagerTest {
         while (i++ < 100) {
             boolean result =
                 manager.check(ClientInfo.newBuilder()
-                    .setMqtt3ClientInfo(MQTT3ClientInfo.newBuilder()
-                        .setUserId("abc" + i)
-                        .build()).build(), MQTTAction.newBuilder()
-                    .setPub(PubAction.getDefaultInstance())
-                    .build()).join();
+                        .putMetadata("userId", "abc" + i)
+                        .build(),
+                    MQTTAction.newBuilder()
+                        .setPub(PubAction.getDefaultInstance())
+                        .build()).join();
             assertTrue(result);
         }
         manager.close();

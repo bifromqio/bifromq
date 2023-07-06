@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.plugin.eventcollector.distservice;
 
-import com.baidu.bifromq.plugin.eventcollector.ClientEvent;
+import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.QoS;
 import lombok.Getter;
@@ -25,10 +25,14 @@ import lombok.experimental.Accessors;
 @Setter
 @Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
-public final class SubscribeError extends ClientEvent<SubscribeError> {
+public final class SubscribeError extends Event<SubscribeError> {
     private long reqId;
     private String topicFilter;
     private QoS qos;
+    private String tenantId;
+    private String inboxId;
+    private int subBrokerId;
+    private String delivererKey;
 
     @Override
     public EventType type() {
@@ -41,5 +45,9 @@ public final class SubscribeError extends ClientEvent<SubscribeError> {
         this.reqId = orig.reqId;
         this.topicFilter = orig.topicFilter;
         this.qos = orig.qos;
+        this.tenantId = orig.tenantId;
+        this.inboxId = orig.inboxId;
+        this.subBrokerId = orig.subBrokerId;
+        this.delivererKey = orig.delivererKey;
     }
 }
