@@ -16,44 +16,25 @@ package com.baidu.bifromq.plugin.settingprovider;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.type.ClientInfo;
 import org.testng.annotations.Test;
 
 public class SettingTest {
+    private final String tenantId = "tenantA";
+
     @Test
     public void enumInitialValue() {
         for (Setting setting : Setting.values()) {
-            assertTrue(setting.isValid(setting.current(ClientInfo.getDefaultInstance())));
+            assertTrue(setting.isValid(setting.current(tenantId)));
         }
     }
 
     @Test
-    public void customClassifier() {
-        ClientInfo clientInfo = ClientInfo.newBuilder()
-            .setTenantId("abc")
-            .putMetadata("userId", "123")
-            .build();
-        Setting.MaxTopicLevels.current(clientInfo, 32);
-        assertTrue(Setting.MaxTopicLevels.current(clientInfo).equals(32));
-
-        Setting.MaxTopicLevels.setClientClassifier(c -> c.getTenantId());
-        assertTrue(Setting.MaxTopicLevels.current(clientInfo).equals(16));
-
-        Setting.MaxTopicLevels.current(clientInfo, 32);
-        assertTrue(Setting.MaxTopicLevels.current(clientInfo).equals(32));
-    }
-
-    @Test
     public void customValueExpiry() {
-        ClientInfo clientInfo = ClientInfo.newBuilder()
-            .setTenantId("abc")
-            .putMetadata("userId", "123")
-            .build();
-        Setting.MaxTopicLevels.current(clientInfo, 32);
+        Setting.MaxTopicLevels.current(tenantId, 32);
 
         Setting.MaxTopicLevels.currentVals.invalidateAll();
 
-        assertTrue(Setting.MaxTopicLevels.current(clientInfo).equals(16));
+        assertTrue(Setting.MaxTopicLevels.current(tenantId).equals(16));
     }
 
     @Test

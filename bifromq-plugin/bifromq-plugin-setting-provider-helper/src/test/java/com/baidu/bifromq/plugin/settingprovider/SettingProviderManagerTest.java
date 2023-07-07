@@ -17,15 +17,14 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
-import com.baidu.bifromq.type.ClientInfo;
+import org.pf4j.DefaultPluginManager;
+import org.pf4j.PluginManager;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.pf4j.DefaultPluginManager;
-import org.pf4j.PluginManager;
 
 public class SettingProviderManagerTest {
-    ClientInfo clientInfo = ClientInfo.getDefaultInstance();
+    private final String tenantId = "tenantA";
     private SettingProviderManager manager;
     private PluginManager pluginManager;
 
@@ -45,7 +44,7 @@ public class SettingProviderManagerTest {
     @Test
     public void devOnlyMode() {
         manager = new SettingProviderManager(null, pluginManager);
-        boolean enabled = manager.provide(Setting.BoostModeEnabled, clientInfo);
+        manager.provide(Setting.BoostModeEnabled, tenantId);
         manager.close();
     }
 
@@ -54,7 +53,7 @@ public class SettingProviderManagerTest {
         manager = new SettingProviderManager(SettingProviderTestStub.class.getName(), pluginManager);
         SettingProviderTestStub stub = (SettingProviderTestStub) manager.get();
         stub.setValue(Setting.MaxTopicLevels, 64);
-        await().until(() -> (int) manager.provide(Setting.MaxTopicLevels, clientInfo) == 64);
+        await().until(() -> (int) manager.provide(Setting.MaxTopicLevels, tenantId) == 64);
         manager.close();
     }
 

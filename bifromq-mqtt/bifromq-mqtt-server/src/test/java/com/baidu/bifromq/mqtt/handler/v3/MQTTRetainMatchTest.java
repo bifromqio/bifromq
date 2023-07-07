@@ -54,7 +54,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     @AfterMethod
     public void clean() {
         when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(null));
         channel.close();
         verify(distClient).clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
     }

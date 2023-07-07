@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt;
 
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
@@ -38,21 +39,18 @@ import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
 import com.baidu.bifromq.retain.server.IRetainServer;
 import com.baidu.bifromq.retain.store.IRetainStore;
 import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
 import com.baidu.bifromq.sessiondict.server.ISessionDictionaryServer;
-import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -128,7 +126,6 @@ abstract class MQTTTest {
             EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
@@ -305,10 +302,11 @@ abstract class MQTTTest {
             })
             .filter(state -> state == IRPCClient.ConnState.READY)
             .blockingFirst();
-        lenient().when(settingProvider.provide(any(), any(ClientInfo.class))).thenAnswer(invocation -> {
-            Setting setting = invocation.getArgument(0);
-            return setting.current(invocation.getArgument(1));
-        });
+        lenient().when(settingProvider.provide(any(), anyString()))
+            .thenAnswer(invocation -> {
+                Setting setting = invocation.getArgument(0);
+                return setting.current(invocation.getArgument(1));
+            });
     }
 
     @AfterMethod(groups = "integration")
@@ -362,14 +360,5 @@ abstract class MQTTTest {
         log.info("Shutdown bg task executor");
         bgTaskExecutor.shutdownNow();
         closeable.close();
-    }
-
-    private int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            socket.setReuseAddress(true);
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 }

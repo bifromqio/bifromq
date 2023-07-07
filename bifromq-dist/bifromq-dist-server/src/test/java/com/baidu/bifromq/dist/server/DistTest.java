@@ -16,10 +16,8 @@ package com.baidu.bifromq.dist.server;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.fail;
 
-import com.baidu.bifromq.dist.client.DistResult;
-import com.baidu.bifromq.dist.client.SubResult;
-import com.baidu.bifromq.dist.client.SubResult.Type;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
@@ -72,14 +70,14 @@ public class DistTest extends DistServiceTest {
                 .setTenantId("trafficA")
                 .putMetadata("userId", "user" + i)
                 .build();
-            distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
-                .whenComplete((v, e) -> {
-                    if (e != null) {
-                        log.info("Error", e);
-                    }
-                    latch.countDown();
-                    assertEquals(v.type(), DistResult.Succeed.type());
-                });
+            try {
+                distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
+                    .join();
+            } catch (Throwable e) {
+                fail();
+            } finally {
+                latch.countDown();
+            }
         }
         latch.await();
     }
@@ -112,14 +110,14 @@ public class DistTest extends DistServiceTest {
                 .setTenantId(tenantId)
                 .putMetadata("userId", "user" + i)
                 .build();
-            distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
-                .whenComplete((v, e) -> {
-                    if (e != null) {
-                        log.info("Error", e);
-                    }
-                    latch.countDown();
-                    assertEquals(v.type(), DistResult.Succeed.type());
-                });
+            try {
+                distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
+                    .join();
+            } catch (Throwable e) {
+                fail();
+            } finally {
+                latch.countDown();
+            }
         }
         latch.await();
     }
@@ -144,24 +142,24 @@ public class DistTest extends DistServiceTest {
         int totalSub = 5;
         int totalMsg = 1;
         for (int i = 0; i < totalSub; i++) {
-            SubResult subResult =
+            int subResult =
                 distClient().sub(reqId, tenantId, "$share/g1/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i,
-                    "server1", 0).get();
-            assertEquals(subResult.type(), Type.OK_QoS1);
+                    "server1", 0).join();
+            assertEquals(subResult, 1);
         }
         CountDownLatch latch = new CountDownLatch(totalMsg);
         for (int i = 0; i < totalMsg; i++) {
             clientInfo = ClientInfo.newBuilder().setTenantId(tenantId)
                 .putMetadata("userId", "user" + i)
                 .build();
-            distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
-                .whenComplete((v, e) -> {
-                    if (e != null) {
-                        log.info("Error", e);
-                    }
-                    latch.countDown();
-                    assertEquals(v.type(), DistResult.Succeed.type());
-                });
+            try {
+                distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
+                    .join();
+            } catch (Throwable e) {
+                fail();
+            } finally {
+                latch.countDown();
+            }
         }
         latch.await();
     }

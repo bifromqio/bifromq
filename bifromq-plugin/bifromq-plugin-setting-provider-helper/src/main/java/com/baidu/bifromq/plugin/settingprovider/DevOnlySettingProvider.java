@@ -13,11 +13,9 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import com.baidu.bifromq.type.ClientInfo;
-
 class DevOnlySettingProvider implements ISettingProvider {
     @Override
-    public <R> R provide(Setting setting, ClientInfo clientInfo) {
-        return setting.current(clientInfo);
+    public <R> R provide(Setting setting, String tenantId) {
+        return setting.current(tenantId);
     }
 }

@@ -146,10 +146,14 @@ class FanoutExecutorGroup {
                             .messages(msgPack.messagePack));
                         break;
                     case NO_INBOX:
-                        // clear all subs from the missing inbox
+                        // unsub as side effect
                         SubInfo subInfo = matched.subInfo;
-                        distClient.clear(System.nanoTime(), subInfo.getTenantId(), subInfo.getInboxId(),
-                            delivererKey, subBrokerId);
+                        distClient.unsub(System.nanoTime(),
+                            subInfo.getTenantId(),
+                            subInfo.getTopicFilter(),
+                            subInfo.getInboxId(),
+                            delivererKey,
+                            subBrokerId);
                         eventCollector.report(getLocal(DeliverNoInbox.class)
                             .brokerId(subBrokerId)
                             .delivererKey(delivererKey)

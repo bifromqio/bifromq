@@ -43,11 +43,7 @@ import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.exception.DropException;
-import com.baidu.bifromq.dist.client.ClearResult;
-import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.SubResult;
-import com.baidu.bifromq.dist.client.UnsubResult;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient.IInboxReader;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -186,26 +182,19 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockSettings() {
-        Mockito.lenient().when(settingProvider.provide(eq(InBoundBandWidth), any(ClientInfo.class)))
-            .thenReturn(51200 * 1024L);
-        Mockito.lenient().when(settingProvider.provide(eq(OutBoundBandWidth), any(ClientInfo.class)))
-            .thenReturn(51200 * 1024L);
-        Mockito.lenient().when(settingProvider.provide(eq(ForceTransient), any(ClientInfo.class))).thenReturn(false);
-        Mockito.lenient().when(settingProvider.provide(eq(MaxUserPayloadBytes), any(ClientInfo.class)))
-            .thenReturn(256 * 1024);
-        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLevelLength), any(ClientInfo.class)))
-            .thenReturn(40);
-        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLevels), any(ClientInfo.class))).thenReturn(16);
-        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLength), any(ClientInfo.class))).thenReturn(255);
-        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), any(ClientInfo.class)))
-            .thenReturn(true);
-        Mockito.lenient().when(settingProvider.provide(eq(MsgPubPerSec), any(ClientInfo.class))).thenReturn(200);
-        Mockito.lenient().when(settingProvider.provide(eq(DebugModeEnabled), any(ClientInfo.class))).thenReturn(true);
-        Mockito.lenient().when(settingProvider.provide(eq(RetainEnabled), any(ClientInfo.class))).thenReturn(true);
-        Mockito.lenient().when(settingProvider.provide(eq(RetainMessageMatchLimit), any(ClientInfo.class)))
-            .thenReturn(10);
-        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicFiltersPerSub), any(ClientInfo.class)))
-            .thenReturn(10);
+        Mockito.lenient().when(settingProvider.provide(eq(InBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
+        Mockito.lenient().when(settingProvider.provide(eq(OutBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
+        Mockito.lenient().when(settingProvider.provide(eq(ForceTransient), anyString())).thenReturn(false);
+        Mockito.lenient().when(settingProvider.provide(eq(MaxUserPayloadBytes), anyString())).thenReturn(256 * 1024);
+        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLevelLength), anyString())).thenReturn(40);
+        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLevels), anyString())).thenReturn(16);
+        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicLength), anyString())).thenReturn(255);
+        Mockito.lenient().when(settingProvider.provide(eq(ByPassPermCheckError), anyString())).thenReturn(true);
+        Mockito.lenient().when(settingProvider.provide(eq(MsgPubPerSec), anyString())).thenReturn(200);
+        Mockito.lenient().when(settingProvider.provide(eq(DebugModeEnabled), anyString())).thenReturn(true);
+        Mockito.lenient().when(settingProvider.provide(eq(RetainEnabled), anyString())).thenReturn(true);
+        Mockito.lenient().when(settingProvider.provide(eq(RetainMessageMatchLimit), anyString())).thenReturn(10);
+        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicFiltersPerSub), anyString())).thenReturn(10);
     }
 
     protected void mockAuthPass() {
@@ -274,46 +263,40 @@ public abstract class BaseMQTTTest {
         when(inboxClient.getDelivererKey(anyString(), any(ClientInfo.class))).thenReturn(delivererKey);
         when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(
-                CompletableFuture.completedFuture(
-                    success ? ClearResult.OK : ClearResult.INTERNAL_ERROR
-                )
+                success ? CompletableFuture.completedFuture(null) :
+                    CompletableFuture.failedFuture(new RuntimeException("Mock error"))
             );
     }
 
     protected void mockDistSub(QoS qos, boolean success) {
-        SubResult subResult;
+        int subResult;
         if (success) {
-            subResult = switch (qos) {
-                case AT_MOST_ONCE -> SubResult.QoS0;
-                case AT_LEAST_ONCE -> SubResult.QoS1;
-                case EXACTLY_ONCE -> SubResult.QoS2;
-                default -> SubResult.error(new RuntimeException("InternalError"));
-            };
+            subResult = qos.getNumber();
         } else {
-            subResult = SubResult.error(new RuntimeException("InternalError"));
+            subResult = 0x80;
         }
         when(distClient.sub(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(subResult));
     }
 
     protected void mockDistUnSub(boolean... success) {
-        CompletableFuture<UnsubResult>[] unsubResults = new CompletableFuture[success.length];
+        CompletableFuture<Boolean>[] unsubResults = new CompletableFuture[success.length];
         for (int i = 0; i < success.length; i++) {
-            unsubResults[i] = success[i] ? CompletableFuture.completedFuture(UnsubResult.OK)
-                : CompletableFuture.completedFuture(UnsubResult.error(new RuntimeException("InternalError")));
+            unsubResults[i] = success[i] ? CompletableFuture.completedFuture(true)
+                : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
-        OngoingStubbing<CompletableFuture<UnsubResult>> ongoingStubbing =
+        OngoingStubbing<CompletableFuture<Boolean>> ongoingStubbing =
             when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
-        for (CompletableFuture<UnsubResult> result : unsubResults) {
+        for (CompletableFuture<Boolean> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }
     }
 
     protected void mockDistDist(boolean success) {
-        DistResult distResult = success ? DistResult.Succeed : DistResult.error(new RuntimeException("InternalError"));
         when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(distResult));
+            .thenReturn(success ? CompletableFuture.completedFuture(null) :
+                CompletableFuture.failedFuture(new RuntimeException("Mock error")));
     }
 
     protected void mockDistDrop() {

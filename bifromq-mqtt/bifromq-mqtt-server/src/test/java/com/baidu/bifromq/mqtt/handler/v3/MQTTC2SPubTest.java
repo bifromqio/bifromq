@@ -40,7 +40,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.ClientInfo;
@@ -153,7 +152,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     public void qoS1PubAckWithUnWritable() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        CompletableFuture<DistResult> distResult = new CompletableFuture<>();
+        CompletableFuture<Void> distResult = new CompletableFuture<>();
         when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
@@ -161,7 +160,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         // make channel unWritable
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
         assertFalse(channel.isWritable());
-        distResult.complete(DistResult.Succeed);
+        distResult.complete(null);
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, PUB_ACK_DROPPED);
     }
@@ -226,7 +225,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     public void qoS2PubAckWithUnWritable() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        CompletableFuture<DistResult> distResult = new CompletableFuture<>();
+        CompletableFuture<Void> distResult = new CompletableFuture<>();
         when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
@@ -234,7 +233,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         // make channel unWritable and drop PubRec
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
         assertFalse(channel.isWritable());
-        distResult.complete(DistResult.Succeed);
+        distResult.complete(null);
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, PUB_REC_DROPPED);
         assertTrue(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
@@ -288,7 +287,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
 
     @Test
     public void pubTooFast() {
-        when(settingProvider.provide(eq(MsgPubPerSec), any(ClientInfo.class))).thenReturn(1);
+        when(settingProvider.provide(eq(MsgPubPerSec), anyString())).thenReturn(1);
         connectAndVerify(true);
         mockAuthCheck(true);
         mockDistDist(true);

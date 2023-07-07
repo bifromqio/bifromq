@@ -65,10 +65,10 @@ if defined PID (
     exit /b 1
 )
 
-if "" == "%ADVERTISE_ADDR%" (
+if "" == "%BIND_ADDR%" (
    for /f "delims=: tokens=2" %%i in ('ipconfig ^| find /i "ipv4"') do (
-         set ADVERTISE_ADDR=%%i
-         set ADVERTISE_ADDR=!ADVERTISE_ADDR: =!
+         set BIND_ADDR=%%i
+         set BIND_ADDR=!BIND_ADDR: =!
    )
 )
 
@@ -168,7 +168,7 @@ if "" == "%JVM_DEBUG%" (
       -DLOG_DIR=%LOG_DIR% ^
       -DCONF_DIR=%CONF_DIR% ^
       -DDATA_DIR=%DATA_DIR% ^
-      -DADVERTISE_ADDR=%ADVERTISE_ADDR% ^
+      -DBIND_ADDR=%BIND_ADDR% ^
       -Dlogback.configurationFile=%LOG_CONFIG_FILE% ^
       -Dpf4j.pluginsDir=%PLUGIN_DIR% ^
        %NAME% ^

@@ -19,7 +19,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RocksDBEngineConfig extends StorageEngineConfig {
-    private String dataPathRoot;
+    private String dataPathRoot = "";
     private int compactMinTombstoneKeys = 50000;
     private double compactTombstonePercent = 0.3; // 30%
 }

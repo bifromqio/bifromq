@@ -49,7 +49,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void clean() {
         if (shouldCleanSubs) {
             when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-                .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
+                .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
             verify(distClient, times(1))
                 .clear(anyLong(), anyString(), anyString(), anyString(), anyInt());

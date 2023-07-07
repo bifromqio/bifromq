@@ -364,7 +364,9 @@ public class SubCallScheduler
                     }
 
                     for (String matchRecordKeyUtf8 : onDelMatchRecord.keySet()) {
-                        onDelMatchRecord.get(matchRecordKeyUtf8).complete(new SubCallResult.DeleteMatchRecordResult());
+                        onDelMatchRecord.get(matchRecordKeyUtf8)
+                            .complete(new SubCallResult.DeleteMatchRecordResult(reply.getDeleteMatchRecord()
+                                .getExistOrDefault(matchRecordKeyUtf8, false)));
                     }
 
                     for (String matchRecordKeyUtf8 : onJoinMatchGroup.keySet()) {
@@ -380,7 +382,8 @@ public class SubCallScheduler
                     }
 
                     for (String matchRecordKeyUtf8 : onLeaveMatchGroup.keySet()) {
-                        onLeaveMatchGroup.get(matchRecordKeyUtf8).complete(new SubCallResult.LeaveJoinGroupResult());
+                        onLeaveMatchGroup.get(matchRecordKeyUtf8)
+                            .complete(new SubCallResult.LeaveJoinGroupResult());
                     }
 
                     for (int i = 0; i < request.getClearSubInfo().getSubInfoKeyCount(); i++) {

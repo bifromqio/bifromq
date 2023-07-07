@@ -15,9 +15,9 @@ package com.baidu.bifromq.starter.config;
 
 public interface StarterConfig {
 
-    String ADVERTISE_ADDR = "ADVERTISE_ADDR";
+    String BIND_ADDR = "BIND_ADDR";
 
     static String getHostFromSysProps() {
-        return System.getProperty(ADVERTISE_ADDR);
+        return System.getProperty(BIND_ADDR);
     }
 }

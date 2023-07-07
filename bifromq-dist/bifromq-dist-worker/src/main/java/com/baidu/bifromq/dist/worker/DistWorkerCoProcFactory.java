@@ -22,8 +22,8 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.ExecutorService;
@@ -68,8 +68,8 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
 
     @Override
     public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider) {
-        return new DistWorkerCoProc(id, rangeReaderProvider, eventCollector, distClient, subBrokerManager, scheduler,
-            matchExecutor);
+        return new DistWorkerCoProc(id, rangeReaderProvider, eventCollector, settingProvider, distClient,
+            subBrokerManager, scheduler, matchExecutor);
     }
 
     public void close() {

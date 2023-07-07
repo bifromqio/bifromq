@@ -63,7 +63,6 @@ public class DistQoS1Test extends DistWorkerTest {
         // sub: inbox1 -> [(/a/b/c, qos1)]
         // subBroker: inbox1 -> NO_INBOX
         // expected behavior: pub succeed with no sub
-
         when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         when(mqttBroker.open("server1")).thenReturn(writer1);
 
@@ -80,13 +79,13 @@ public class DistQoS1Test extends DistWorkerTest {
             });
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
-            CompletableFuture.completedFuture(ClearResult.OK));
+            CompletableFuture.completedFuture(null));
 
-        insertMatchRecord("trafficA", "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
+        insertMatchRecord(tenantA, "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
-            BatchDistReply reply = dist("trafficA", AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
+            BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
@@ -105,7 +104,7 @@ public class DistQoS1Test extends DistWorkerTest {
         }
 
         verify(distClient, timeout(100).atLeastOnce())
-            .clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
+            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @SneakyThrows
@@ -116,7 +115,6 @@ public class DistQoS1Test extends DistWorkerTest {
         // sub: inbox1 -> [($share/group/a/b/c, qos1)]
         // subBroker: inbox1 -> NO_INBOX
         // expected behavior: pub succeed with no sub
-
         when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         when(mqttBroker.open("server1")).thenReturn(writer1);
 
@@ -133,13 +131,13 @@ public class DistQoS1Test extends DistWorkerTest {
             });
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(null));
 
-        joinMatchGroup("trafficA", "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
-            BatchDistReply reply = dist("trafficA", AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
+            BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
 
@@ -160,7 +158,7 @@ public class DistQoS1Test extends DistWorkerTest {
 
 
         verify(distClient, timeout(100).atLeastOnce())
-            .clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
+            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
         verify(eventCollector, timeout(100).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
     }

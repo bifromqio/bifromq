@@ -13,14 +13,13 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.mqtt.handler.v3.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.UnsubResult;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
@@ -135,26 +134,15 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         return sessionCtx.distClient.sub(reqId, clientInfo().getTenantId(), topicSub.topicName(),
                 QoS.forNumber(topicSub.qualityOfService().value()), inboxId,
                 sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), 1)
-            .thenApply(subResult -> {
-                switch (subResult.type()) {
-                    case OK_QoS0:
-                        return MqttQoS.AT_MOST_ONCE;
-                    case OK_QoS1:
-                        return MqttQoS.AT_LEAST_ONCE;
-                    case OK_QoS2:
-                        return MqttQoS.EXACTLY_ONCE;
-                    case ERROR:
-                    default:
-                        return MqttQoS.FAILURE;
-                }
-            });
+            .thenApply(MqttQoS::valueOf);
     }
 
     @Override
-    protected CompletableFuture<UnsubResult> doUnsubscribe(long reqId, String topicFilter) {
+    protected CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
         String inboxId = userSessionId(clientInfo());
         return sessionCtx.distClient.unsub(reqId, clientInfo().getTenantId(), topicFilter, inboxId,
-            sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), 1);
+                sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), 1)
+            .exceptionally(e -> true);
     }
 
     private void confirmQoS1() {

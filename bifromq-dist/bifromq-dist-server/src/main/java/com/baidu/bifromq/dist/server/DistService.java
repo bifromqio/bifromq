@@ -151,21 +151,6 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                 .handle((v, e) -> {
                     if (e != null) {
                         log.error("Failed to exec UnsubRequest, tenantId={}, req={}", tenantId, request, e);
-                        return UnsubReply.Result.ERROR;
-                    } else {
-                        return UnsubReply.Result.OK;
-                    }
-                })
-                .thenApply(result -> {
-                    if (result == UnsubReply.Result.ERROR) {
-                        eventCollector.report(getLocal(Unsubscribed.class)
-                            .reqId(request.getReqId())
-                            .topicFilter(request.getTopicFilter())
-                            .tenantId(request.getTenantId())
-                            .inboxId(request.getInboxId())
-                            .subBrokerId(request.getBroker())
-                            .delivererKey(request.getDelivererKey()));
-                    } else {
                         eventCollector.report(getLocal(UnsubscribeError.class)
                             .reqId(request.getReqId())
                             .topicFilter(request.getTopicFilter())
@@ -173,8 +158,28 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                             .inboxId(request.getInboxId())
                             .subBrokerId(request.getBroker())
                             .delivererKey(request.getDelivererKey()));
+                        return UnsubReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setExist(true)
+                            .build();
+                    } else {
+                        eventCollector.report(getLocal(Unsubscribed.class)
+                            .reqId(request.getReqId())
+                            .topicFilter(request.getTopicFilter())
+                            .tenantId(request.getTenantId())
+                            .inboxId(request.getInboxId())
+                            .subBrokerId(request.getBroker())
+                            .delivererKey(request.getDelivererKey()));
+                        boolean removed = ((SubCallResult.RemoveTopicFilterResult) futures.get(0).join()).exist;
+                        SubCallResult result = futures.get(1).join();
+                        if (result instanceof SubCallResult.DeleteMatchRecordResult) {
+                            removed |= ((SubCallResult.DeleteMatchRecordResult) result).exist;
+                        }
+                        return UnsubReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setExist(removed)
+                            .build();
                     }
-                    return UnsubReply.newBuilder().setReqId(request.getReqId()).setResult(result).build();
                 });
         }, responseObserver);
     }
@@ -215,15 +220,8 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
             }).handle((result, e) -> {
                 if (e != null) {
                     log.error("Failed to exec ClearRequest, tenantId={}, req={}", tenantId, request, e);
-                    return ClearReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(ClearReply.Result.ERROR)
-                        .build();
                 }
-                return ClearReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setResult(ClearReply.Result.OK)
-                    .build();
+                return ClearReply.newBuilder().setReqId(request.getReqId()).build();
             }), responseObserver);
     }
 

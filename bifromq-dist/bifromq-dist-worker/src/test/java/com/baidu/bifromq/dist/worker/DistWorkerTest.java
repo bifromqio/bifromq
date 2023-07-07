@@ -65,6 +65,8 @@ import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -116,6 +118,8 @@ public abstract class DistWorkerTest {
     @Mock
     protected IEventCollector eventCollector;
     @Mock
+    protected ISettingProvider settingProvider;
+    @Mock
     protected IDistClient distClient;
     @Mock
     protected ISubBrokerManager receiverManager;
@@ -134,6 +138,9 @@ public abstract class DistWorkerTest {
     protected SimpleMeterRegistry meterRegistry;
     protected IDistWorker testWorker;
     protected IBaseKVStoreClient storeClient;
+
+    protected String tenantA = "tenantA";
+    protected String tenantB = "tenantB";
     private ExecutorService queryExecutor;
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
@@ -155,6 +162,10 @@ public abstract class DistWorkerTest {
             dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
+        lenient().when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantA)).thenReturn(200);
+        lenient().when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantB)).thenReturn(200);
+        lenient().when(settingProvider.provide(Setting.MaxSharedGroupMembers, tenantA)).thenReturn(200);
+        lenient().when(settingProvider.provide(Setting.MaxSharedGroupMembers, tenantB)).thenReturn(200);
         lenient().when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         lenient().when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
         lenient().when(mqttBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
@@ -162,7 +173,7 @@ public abstract class DistWorkerTest {
         lenient().when(inboxBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
             .thenReturn(CompletableFuture.completedFuture(true));
         lenient().when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(null));
 
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -228,6 +239,7 @@ public abstract class DistWorkerTest {
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollector)
+            .settingProvider(settingProvider)
             .distClient(distClient)
             .storeClient(storeClient)
             .queryExecutor(queryExecutor)

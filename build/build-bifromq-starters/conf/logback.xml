@@ -124,10 +124,6 @@
         </filter>
     </appender>
 
-    <logger name="IoTBrokerEventLogger" level="INFO" additivity="false">
-        <appender-ref ref="eventLogFile"/>
-    </logger>
-
     <logger name="com.baidu.bifromq" level="INFO" additivity="false">
         <appender-ref ref="traceLogFile"/>
         <appender-ref ref="debugLogFile"/>

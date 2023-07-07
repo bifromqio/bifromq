@@ -203,17 +203,17 @@ public class DistQoS0Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        joinMatchGroup("trafficA", "$share/group//a/b/c", AT_MOST_ONCE,
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
-        joinMatchGroup("trafficA", "$share/group//a/b/c", AT_LEAST_ONCE,
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE,
             MqttBroker, "inbox2", "batch2");
         for (int i = 0; i < 10; i++) {
-            BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
+            BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, after(100).atMost(10)).deliver(list1.capture());
+        verify(writer1, after(1000).atMost(10)).deliver(list1.capture());
         for (DeliveryPack pack : list1.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
@@ -245,7 +245,6 @@ public class DistQoS0Test extends DistWorkerTest {
         // topic: "/a/b/c"
         // sub: inbox1 -> [($oshare/group//a/b/c, qos0)], inbox2 -> [($oshare/group//a/b/c, qos1)]
         // expected behavior: total 10 messages, inbox1 gets N messages, inbox2 get M message, either N or M is 10
-
         when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         when(mqttBroker.open("batch1")).thenReturn(writer1);
 
@@ -275,14 +274,14 @@ public class DistQoS0Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        joinMatchGroup("trafficA", "$oshare/group//a/b/c", AT_MOST_ONCE,
+        joinMatchGroup(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
-        joinMatchGroup("trafficA", "$oshare/group//a/b/c", AT_LEAST_ONCE,
+        joinMatchGroup(tenantA, "$oshare/group//a/b/c", AT_LEAST_ONCE,
             MqttBroker, "inbox2", "batch2");
 
         for (int i = 0; i < 10; i++) {
-            BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() == 1);
+            BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() == 1);
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
@@ -360,23 +359,24 @@ public class DistQoS0Test extends DistWorkerTest {
             });
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(null));
 
-        insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
-        joinMatchGroup("trafficA", "$share/group//a/b/c", AT_MOST_ONCE,
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox2", "batch2");
-        joinMatchGroup("trafficA", "$oshare/group//a/b/c", AT_MOST_ONCE,
+        joinMatchGroup(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox3", "batch3");
-        BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
 
         verify(writer1, timeout(1000).times(1)).deliver(any());
         verify(writer2, timeout(1000).times(1)).deliver(any());
         verify(writer3, timeout(1000).times(1)).deliver(any());
         await().until(() -> {
             try {
-                verify(distClient, times(3)).clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
+                verify(distClient, times(3))
+                    .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
                 return true;
             } catch (Throwable e) {
                 return false;

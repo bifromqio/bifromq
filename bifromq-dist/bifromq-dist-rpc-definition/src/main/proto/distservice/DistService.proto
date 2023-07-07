@@ -47,12 +47,8 @@ message UnsubRequest {
 }
 
 message UnsubReply {
-  enum Result{
-    OK = 0;
-    ERROR = 1;
-  }
   uint64 reqId = 1;
-  Result result = 2;
+  bool exist = 2;
 }
 
 message ClearRequest {
@@ -64,12 +60,7 @@ message ClearRequest {
 }
 
 message ClearReply {
-  enum Result{
-    OK = 0;
-    ERROR = 1;
-  }
   uint64 reqId = 1;
-  Result result = 2;
 }
 
 message DistRequest {
@@ -78,10 +69,5 @@ message DistRequest {
 }
 
 message DistReply {
-  enum Result {
-    SUCCEED = 0;
-    ERROR = 1;
-  }
   uint64 reqId = 1;
-  Result result = 2;
 }

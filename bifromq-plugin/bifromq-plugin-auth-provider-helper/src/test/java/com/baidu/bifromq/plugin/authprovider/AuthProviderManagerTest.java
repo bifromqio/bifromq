@@ -214,7 +214,7 @@ public class AuthProviderManagerTest {
 
     @Test
     public void checkReturnErrorAndNoPass() {
-        when(settingProvider.provide(ByPassPermCheckError, clientInfo)).thenReturn(false);
+        when(settingProvider.provide(ByPassPermCheckError, clientInfo.getTenantId())).thenReturn(false);
         manager =
             new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
         when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
@@ -228,7 +228,7 @@ public class AuthProviderManagerTest {
 
     @Test
     public void checkReturnErrorAndPass() {
-        when(settingProvider.provide(ByPassPermCheckError, clientInfo)).thenReturn(true);
+        when(settingProvider.provide(ByPassPermCheckError, clientInfo.getTenantId())).thenReturn(true);
         manager =
             new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
         when(mockProvider.check(any(ClientInfo.class), any(MQTTAction.class)))

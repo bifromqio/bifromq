@@ -17,8 +17,6 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
@@ -32,7 +30,6 @@ abstract class RPCServiceAnnouncerTest {
     public void setup() {
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
-            .port(freePort())
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
@@ -52,14 +49,5 @@ abstract class RPCServiceAnnouncerTest {
         crdtService.start(agentHost);
         log.info("CRDT service started");
         return crdtService;
-    }
-
-    private int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            socket.setReuseAddress(true);
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 }

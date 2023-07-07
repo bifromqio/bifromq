@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import com.baidu.bifromq.type.ClientInfo;
 import java.util.HashMap;
 import java.util.Map;
 import org.pf4j.Extension;
@@ -22,9 +21,10 @@ import org.pf4j.Extension;
 public class SettingProviderTestStub implements ISettingProvider {
     private final Map<Setting, Object> settings = new HashMap<>();
 
+    @SuppressWarnings("unchecked")
     @Override
-    public <R> R provide(Setting setting, ClientInfo clientInfo) {
-        return settings.containsKey(setting) ? (R) settings.get(setting) : setting.current(clientInfo);
+    public <R> R provide(Setting setting, String tenantId) {
+        return settings.containsKey(setting) ? (R) settings.get(setting) : setting.current(tenantId);
     }
 
     public void setValue(Setting setting, Object newVal) {

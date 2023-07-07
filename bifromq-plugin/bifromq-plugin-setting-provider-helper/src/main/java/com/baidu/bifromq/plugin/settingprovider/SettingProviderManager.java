@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.base.Preconditions;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
@@ -58,23 +57,23 @@ public class SettingProviderManager implements ISettingProvider {
             .register(Metrics.globalRegistry);
     }
 
-    public <R> R provide(Setting setting, ClientInfo clientInfo) {
+    public <R> R provide(Setting setting, String tenantId) {
         assert !stopped.get();
-        R current = setting.current(clientInfo);
+        R current = setting.current(tenantId);
         try {
             Timer.Sample sample = Timer.start();
-            R newVal = provider.provide(setting, clientInfo);
+            R newVal = provider.provide(setting, tenantId);
             sample.stop(provideCallTimer);
             if (setting.isValid(newVal)) {
                 // update the value
-                setting.current(clientInfo, newVal);
+                setting.current(tenantId, newVal);
             } else {
                 log.warn("Invalid setting value: setting={}, value={}", setting.name(), newVal);
             }
         } catch (Throwable e) {
             log.error("Setting provider throws exception: setting={}", setting.name(), e);
             // keep current value in case provider throws
-            setting.current(clientInfo, current);
+            setting.current(tenantId, current);
             provideCallErrorCounter.increment();
         }
         return current;

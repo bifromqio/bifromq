@@ -36,7 +36,6 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 import static java.util.concurrent.CompletableFuture.allOf;
 
-import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
@@ -75,11 +74,9 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
 
     private static final int MIN_CLIENT_KEEP_ALIVE_DURATION = 5;
     private static final int MAX_CLIENT_KEEP_ALIVE_DURATION = 2 * 60 * 60;
-
     private IDistClient distClient;
     private IInboxReaderClient inboxClient;
-
-    ClientInfo clientInfo;
+    private ClientInfo clientInfo;
     private boolean isTransient;
     private MQTT3SessionHandler.WillMessage willMessage;
 
@@ -182,28 +179,28 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
                                 clientAddr.map(InetSocketAddress::toString).orElse(""))
                             .build();
-                        Long ibbw = settingProvider.provide(InBoundBandWidth, clientInfo);
+                        Long ibbw = settingProvider.provide(InBoundBandWidth, clientInfo.getTenantId());
                         long inBandWidth = Math.max(ibbw, 0);
                         if (inBandWidth > 0) {
                             ChannelAttrs.trafficShaper(ctx).setReadLimit(inBandWidth);
                         }
-                        Long obbw = settingProvider.provide(OutBoundBandWidth, clientInfo);
+                        Long obbw = settingProvider.provide(OutBoundBandWidth, clientInfo.getTenantId());
 
                         long outBandWidth = Math.max(obbw, 0);
                         if (outBandWidth > 0) {
                             ChannelAttrs.trafficShaper(ctx).setWriteLimit(outBandWidth);
                         }
-                        boolean forceTransient = settingProvider.provide(ForceTransient, clientInfo);
+                        boolean forceTransient = settingProvider.provide(ForceTransient, clientInfo.getTenantId());
                         isTransient = forceTransient || connMsg.variableHeader().isCleanSession();
 
-                        int mupb = settingProvider.provide(MaxUserPayloadBytes, clientInfo);
+                        int mupb = settingProvider.provide(MaxUserPayloadBytes, clientInfo.getTenantId());
                         ChannelAttrs.setMaxPayload(mupb, ctx);
 
                         if (connMsg.variableHeader().isWillFlag()) {
                             if (!TopicUtil.isValidTopic(connMsg.payload().willTopic(),
-                                settingProvider.provide(MaxTopicLevelLength, clientInfo),
-                                settingProvider.provide(MaxTopicLevels, clientInfo),
-                                settingProvider.provide(MaxTopicLength, clientInfo))) {
+                                settingProvider.provide(MaxTopicLevelLength, clientInfo.getTenantId()),
+                                settingProvider.provide(MaxTopicLevels, clientInfo.getTenantId()),
+                                settingProvider.provide(MaxTopicLength, clientInfo.getTenantId()))) {
                                 getLocal(InvalidWillTopic.class).peerAddress(clientAddress);
                                 closeConnectionWithSomeDelay(
                                     getLocal(InvalidWillTopic.class).peerAddress(clientAddress));
@@ -259,24 +256,21 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
             .thenComposeAsync(exist -> {
                 if (exist) {
                     // clear subscription of previous persistent session
-                    CompletableFuture<ClearResult> clearSubTask =
+                    CompletableFuture<Void> clearSubTask =
                         cancelOnInactive(distClient.clear(reqId, clientInfo.getTenantId(), offlineInboxId,
                             inboxClient.getDelivererKey(offlineInboxId, clientInfo), 1));
                     CompletableFuture<DeleteInboxReply> deleteInboxTask =
                         cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo));
                     return allOf(clearSubTask, deleteInboxTask)
-                        .thenAcceptAsync(v -> {
-                            ClearResult clearResult = clearSubTask.join();
-                            DeleteInboxReply deleteInboxReply = deleteInboxTask.join();
-                            if (clearResult.type() == ClearResult.Type.OK &&
-                                deleteInboxReply.getResult() == DeleteInboxReply.Result.OK) {
-                                establishSucceed(mqttConnectMessage, false, true);
-                            } else {
+                        .whenCompleteAsync((v, e) -> {
+                            if (e != null) {
                                 closeConnectionWithSomeDelay(MqttMessageBuilders
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                         .build(),
                                     getLocal(SessionCleanupError.class).clientInfo(clientInfo));
+                            } else {
+                                establishSucceed(mqttConnectMessage, false, true);
                             }
                         }, ctx.channel().eventLoop());
                 } else {

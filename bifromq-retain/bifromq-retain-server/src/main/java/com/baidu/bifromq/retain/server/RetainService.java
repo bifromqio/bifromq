@@ -82,7 +82,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                             .setExpireTimestamp(request.getExpireTimestamp())
                             .setMessage(request.getPayload())
                             .setPublisher(clientInfo)
-                            .setMaxRetainedTopics(settingProvider.provide(RetainedTopicLimit, clientInfo))
+                            .setMaxRetainedTopics(settingProvider.provide(RetainedTopicLimit, clientInfo.getTenantId()))
                             .build()))
                         .whenComplete((v, e) -> log.trace("Reply retain request:\n{}", v))
                         .thenApply(r -> r.getRetainReply().getResult())
@@ -110,7 +110,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
             ClientInfo clientInfo = decode(metadata.get(PIPELINE_ATTR_KEY_CLIENT_INFO));
             Optional<KVRangeSetting> s = kvStoreClient.findByKey(tenantNS);
             if (s.isPresent()) {
-                boolean boostMode = settingProvider.provide(BoostModeEnabled, clientInfo);
+                boolean boostMode = settingProvider.provide(BoostModeEnabled, clientInfo.getTenantId());
                 return execCoProc(request.getReqId(), s.get(),
                     buildMatchRequest(MatchCoProcRequest.newBuilder()
                         .setReqId(request.getReqId())

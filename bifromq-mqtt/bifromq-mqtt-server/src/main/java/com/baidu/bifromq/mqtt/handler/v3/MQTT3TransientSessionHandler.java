@@ -18,8 +18,6 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.SubResult;
-import com.baidu.bifromq.dist.client.UnsubResult;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.PushEvent;
@@ -66,14 +64,11 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
         if (clearOnDisconnect) {
             submitBgTask(() -> sessionCtx.distClient.clear(System.nanoTime(), clientInfo().getTenantId(), channelId(),
                     toDelivererKey(channelId(), sessionCtx.serverId), 0)
-                .thenAccept(clearResult -> {
-                    switch (clearResult.type()) {
-                        case OK:
-                            log.trace("Subscription cleaned for client:\n{}", clientInfo());
-                            break;
-                        case ERROR:
-                            log.warn("Subscription clean error for client:\n{}", clientInfo());
-                        default:
+                .whenComplete((clearResult, e) -> {
+                    if (e != null) {
+                        log.warn("Subscription clean error for client:\n{}", clientInfo());
+                    } else {
+                        log.trace("Subscription cleaned for client:\n{}", clientInfo());
                     }
                 }));
         }
@@ -96,28 +91,19 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                 QoS.forNumber(topicSub.qualityOfService().value()), channelId(),
                 toDelivererKey(channelId(), sessionCtx.serverId), 0)
             .thenApplyAsync(subResult -> {
-                if (subResult.type() != SubResult.Type.ERROR) {
+                MqttQoS qos = MqttQoS.valueOf(subResult);
+                if (qos != MqttQoS.FAILURE) {
                     clearOnDisconnect = true;
                 }
-                switch (subResult.type()) {
-                    case OK_QoS0:
-                        return MqttQoS.AT_MOST_ONCE;
-                    case OK_QoS1:
-                        return MqttQoS.AT_LEAST_ONCE;
-                    case OK_QoS2:
-                        return MqttQoS.EXACTLY_ONCE;
-                    case ERROR:
-                    default:
-                        return MqttQoS.FAILURE;
-                }
+                return qos;
             }, ctx.channel().eventLoop());
     }
 
     @Override
-    protected CompletableFuture<UnsubResult> doUnsubscribe(long reqId, String topicFilter) {
-        return sessionCtx.distClient
-            .unsub(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
-                toDelivererKey(channelId(), sessionCtx.serverId), 0);
+    protected CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
+        return sessionCtx.distClient.unsub(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
+                toDelivererKey(channelId(), sessionCtx.serverId), 0)
+            .exceptionally(e -> true);
     }
 
     @Override

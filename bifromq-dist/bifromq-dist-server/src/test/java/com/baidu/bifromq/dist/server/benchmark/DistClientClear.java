@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.dist.server.benchmark;
 
-import com.baidu.bifromq.dist.client.ClearResult;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.SneakyThrows;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -46,7 +45,6 @@ public class DistClientClear {
     @Fork(1)
     public void testClear(DistServiceState state, Blackhole blackhole) {
         String inboxId = "Inbox_" + ThreadLocalRandom.current().nextInt();
-        ClearResult result = state.requestClear(inboxId, "server1:1", 0, state.clientInfo);
-        blackhole.consume(result);
+        state.requestClear(inboxId, "server1:1", 0, state.clientInfo);
     }
 }

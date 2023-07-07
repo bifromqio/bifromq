@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.server.scheduler;
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.InboxSubInfo;
 import com.baidu.bifromq.dist.rpc.proto.JoinMatchGroupReply;
-import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilterReply;
 
 public abstract class SubCallResult {
     abstract SubCallType type();
@@ -57,10 +56,10 @@ public abstract class SubCallResult {
     }
 
     public static class RemoveTopicFilterResult extends SubCallResult {
-        public final RemoveTopicFilterReply.Result result;
+        public final boolean exist;
 
-        public RemoveTopicFilterResult(RemoveTopicFilterReply.Result result) {
-            this.result = result;
+        public RemoveTopicFilterResult(boolean exist) {
+            this.exist = exist;
         }
 
         @Override
@@ -72,6 +71,12 @@ public abstract class SubCallResult {
     }
 
     public static class DeleteMatchRecordResult extends SubCallResult {
+        public final boolean exist;
+
+        public DeleteMatchRecordResult(boolean exist) {
+            this.exist = exist;
+        }
+
         @Override
         final SubCallType type() {
             return SubCallType.DELETE_MATCH_RECORD;

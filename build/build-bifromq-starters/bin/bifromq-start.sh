@@ -63,8 +63,8 @@ if [ "x$DATA_DIR" = "x" ]; then
 fi
 mkdir -p $DATA_DIR
 
-if [ -z ${ADVERTISE_ADDR} ]; then
-  ADVERTISE_ADDR=$(ifconfig -a | grep inet | grep -v 127.0.0.1 | grep -v inet6 | awk '{print $2}' | tr -d "addr:" | head -1)
+if [ -z ${BIND_ADDR} ]; then
+  BIND_ADDR=$(ifconfig -a | grep inet | grep -v 127.0.0.1 | grep -v inet6 | awk '{print $2}' | tr -d "addr:" | head -1)
 fi
 
 pid() {
@@ -177,7 +177,7 @@ if [ "x$FOREGROUND_MODE" = "xtrue" ]; then
     -DLOG_DIR=$LOG_DIR \
     -DCONF_DIR=$CONF_DIR \
     -DDATA_DIR=$DATA_DIR \
-    -DADVERTISE_ADDR=$ADVERTISE_ADDR \
+    -DBIND_ADDR=$BIND_ADDR \
     -Dlogback.configurationFile=$LOG_CONF_FILE \
     -Dpf4j.pluginsDir=$PLUGIN_DIR \
     $NAME -c $CONF_FILE
@@ -187,7 +187,7 @@ else
     -DLOG_DIR=$LOG_DIR \
     -DCONF_DIR=$CONF_DIR \
     -DDATA_DIR=$DATA_DIR \
-    -DADVERTISE_ADDR=$ADVERTISE_ADDR \
+    -DBIND_ADDR=$BIND_ADDR \
     -Dlogback.configurationFile=$LOG_CONF_FILE \
     -Dpf4j.pluginsDir=$PLUGIN_DIR \
     $NAME -c $CONF_FILE >${LOG_DIR}/stdout.log 2>&1 </dev/null &

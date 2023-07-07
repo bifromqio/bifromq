@@ -61,21 +61,14 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())
                         .code(e.getCause() == DropException.EXCEED_LIMIT ? DROP_EXCEED_LIMIT : RPC_FAILURE));
-                    return DistReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(DistReply.Result.ERROR)
-                        .build();
                 } else {
                     tenantFanouts.get(tenantId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
                     eventCollector.report(getLocal(Disted.class)
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())
                         .fanout(v.values().stream().reduce(0, Integer::sum)));
-                    return DistReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(DistReply.Result.SUCCEED)
-                        .build();
                 }
+                return DistReply.newBuilder().setReqId(request.getReqId()).build();
             });
     }
 

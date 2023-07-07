@@ -21,7 +21,6 @@ import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
@@ -176,9 +175,8 @@ public class DistServiceState {
         agentHost.shutdown();
     }
 
-    public ClearResult requestClear(String inboxId, String delivererKey, int brokerId, ClientInfo clientInfo) {
+    public void requestClear(String inboxId, String delivererKey, int brokerId, ClientInfo clientInfo) {
         long reqId = seqNo.incrementAndGet();
-        return distClient.clear(reqId, clientInfo.getTenantId(), inboxId, delivererKey, brokerId)
-            .join();
+        distClient.clear(reqId, clientInfo.getTenantId(), inboxId, delivererKey, brokerId).join();
     }
 }

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -260,14 +261,7 @@ public class MQTTRetainTest extends MQTTTest {
                 .build()));
         when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
             .thenReturn(CompletableFuture.completedFuture(true));
-        when(settingProvider.provide(any(), any(ClientInfo.class)))
-            .thenAnswer(invocationOnMock -> {
-                Setting setting = invocationOnMock.getArgument(0);
-                if (setting == Setting.RetainMessageMatchLimit) {
-                    return 2;
-                }
-                return setting.current(invocationOnMock.getArgument(1));
-            });
+        when(settingProvider.provide(Setting.RetainMessageMatchLimit, tenantId)).thenReturn(2);
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);

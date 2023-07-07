@@ -39,13 +39,13 @@ public class GCAndStatsTest extends DistWorkerTest {
             .thenReturn(CompletableFuture.completedFuture(false));
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(ClearResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(null));
 
-        addTopicFilter("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        addTopicFilter(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
 
-        addTopicFilter("trafficB", "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
-        insertMatchRecord("trafficB", "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
+        addTopicFilter(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
+        insertMatchRecord(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
 
         await().until(() -> {
             try {
@@ -60,11 +60,11 @@ public class GCAndStatsTest extends DistWorkerTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void reportRangeMetrics() {
-        addTopicFilter("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        addTopicFilter(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
 
-        addTopicFilter("trafficB", "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
-        insertMatchRecord("trafficB", "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
+        addTopicFilter(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
+        insertMatchRecord(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
 
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {

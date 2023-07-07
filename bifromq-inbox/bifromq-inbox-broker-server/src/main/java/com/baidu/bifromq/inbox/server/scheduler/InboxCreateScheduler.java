@@ -88,12 +88,12 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
             @Override
             public CompletableFuture<CreateInboxReply> add(CreateInboxRequest request) {
                 ClientInfo client = request.getClientInfo();
-                String scopedInboxIdUtf8 = scopedInboxId(client.getTenantId(),
-                    request.getInboxId()).toStringUtf8();
+                String tenantId = client.getTenantId();
+                String scopedInboxIdUtf8 = scopedInboxId(tenantId, request.getInboxId()).toStringUtf8();
                 inboxCreates.computeIfAbsent(scopedInboxIdUtf8, k -> CreateParams.newBuilder()
-                    .setExpireSeconds(settingProvider.provide(OfflineExpireTimeSeconds, client))
-                    .setLimit(settingProvider.provide(OfflineQueueSize, client))
-                    .setDropOldest(settingProvider.provide(OfflineOverflowDropOldest, client))
+                    .setExpireSeconds(settingProvider.provide(OfflineExpireTimeSeconds, tenantId))
+                    .setLimit(settingProvider.provide(OfflineQueueSize, tenantId))
+                    .setDropOldest(settingProvider.provide(OfflineOverflowDropOldest, tenantId))
                     .setClient(client)
                     .build());
                 return onInboxCreated.computeIfAbsent(request, k -> new CompletableFuture<>());
@@ -167,7 +167,7 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
         private final Timer batchCreateTimer;
 
         BatchCreateBuilder(String name, int maxInflights, KVRangeSetting range,
-                                   IBaseKVStoreClient kvStoreClient) {
+                           IBaseKVStoreClient kvStoreClient) {
             super(name, maxInflights);
             this.range = range;
             this.kvStoreClient = kvStoreClient;

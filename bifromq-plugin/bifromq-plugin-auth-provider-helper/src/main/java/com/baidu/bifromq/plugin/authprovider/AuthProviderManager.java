@@ -116,7 +116,7 @@ public class AuthProviderManager implements IAuthProvider {
             return delegate.check(client, action)
                 .exceptionally(e -> {
                     eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
-                    return settingProvider.provide(ByPassPermCheckError, client);
+                    return settingProvider.provide(ByPassPermCheckError, client.getTenantId());
                 })
                 .thenApply(v -> {
                     metricMgr.checkCallTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
@@ -125,7 +125,8 @@ public class AuthProviderManager implements IAuthProvider {
         } catch (Throwable e) {
             metricMgr.checkCallErrorCounter.increment();
             eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
-            return CompletableFuture.completedFuture(settingProvider.provide(ByPassPermCheckError, client));
+            return CompletableFuture.completedFuture(
+                settingProvider.provide(ByPassPermCheckError, client.getTenantId()));
         }
     }
 

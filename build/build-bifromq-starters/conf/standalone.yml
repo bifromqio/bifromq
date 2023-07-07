@@ -23,11 +23,9 @@ distWorkerConfig:
     queryPipelinePerServer: 1000
   dataEngineConfig:
     type: rocksdb
-    dataPathRoot: data
     gcIntervalInSec: 300
   walEngineConfig:
     type: rocksdb
-    dataPathRoot: data
     gcIntervalInSec: 3600
 
 inboxStoreConfig:
@@ -36,12 +34,10 @@ inboxStoreConfig:
     queryPipelinePerServer: 1000
   dataEngineConfig:
     type: rocksdb
-    dataPathRoot: data
     gcIntervalInSec: 300
     compactMinTombstoneKeys: 50000
   walEngineConfig:
     type: rocksdb
-    dataPathRoot: data
     gcIntervalInSec: 3600
 
 retainStoreConfig:
@@ -50,9 +46,7 @@ retainStoreConfig:
     queryPipelinePerServer: 1000
   dataEngineConfig:
     type: rocksdb
-    dataPathRoot: data
     gcIntervalInSec: 300
   walEngineConfig:
     type: rocksdb
-    dataPathRoot: data
     gcIntervalInSec: 3600

@@ -21,7 +21,6 @@ import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.BatchCallBuilder;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
@@ -39,7 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class DistServerCallScheduler
-    extends BatchCallScheduler<ClientCall, DistResult, DistServerCallScheduler.BatchKey> {
+    extends BatchCallScheduler<ClientCall, Void, DistServerCallScheduler.BatchKey> {
     private final int maxBatchedTopics;
     private final IRPCClient rpcClient;
 
@@ -50,7 +49,7 @@ public class DistServerCallScheduler
     }
 
     @Override
-    protected BatchCallBuilder<ClientCall, DistResult> newBuilder(String name, int maxInflights, BatchKey batchKey) {
+    protected BatchCallBuilder<ClientCall, Void> newBuilder(String name, int maxInflights, BatchKey batchKey) {
         return new DistServerCallBuilder(name, maxInflights,
             rpcClient.createRequestPipeline(batchKey.tenantId, null, null, emptyMap(),
                 DistServiceGrpc.getDistMethod()));
@@ -61,11 +60,11 @@ public class DistServerCallScheduler
         return Optional.of(new BatchKey(message.publisher.getTenantId(), Thread.currentThread().getId()));
     }
 
-    private class DistServerCallBuilder extends BatchCallBuilder<ClientCall, DistResult> {
-        private class DistServerCall implements IBatchCall<ClientCall, DistResult> {
+    private class DistServerCallBuilder extends BatchCallBuilder<ClientCall, Void> {
+        private class DistServerCall implements IBatchCall<ClientCall, Void> {
             private final Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack =
                 new HashMap<>(maxBatchedTopics);
-            private final List<CompletableFuture<DistResult>> tasks = new ArrayList<>();
+            private final List<CompletableFuture<Void>> tasks = new ArrayList<>();
 
             @Override
             public boolean isEmpty() {
@@ -78,8 +77,8 @@ public class DistServerCallScheduler
             }
 
             @Override
-            public CompletableFuture<DistResult> add(ClientCall request) {
-                CompletableFuture<DistResult> onDone = new CompletableFuture<>();
+            public CompletableFuture<Void> add(ClientCall request) {
+                CompletableFuture<Void> onDone = new CompletableFuture<>();
                 tasks.add(onDone);
                 clientMsgPack.computeIfAbsent(request.publisher, k -> new HashMap<>())
                     .computeIfAbsent(request.topic, k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
@@ -109,18 +108,10 @@ public class DistServerCallScheduler
                 return ppln.invoke(request).handle((v, e) -> {
                     if (e != null) {
                         log.error("Request failed", e);
-                        tasks.forEach(taskOnDone -> taskOnDone.complete(DistResult.error(e)));
+                        tasks.forEach(taskOnDone -> taskOnDone.completeExceptionally(e));
                     } else {
                         log.debug("Got dist reply: reqId={}", v.getReqId());
-                        switch (v.getResult()) {
-                            case SUCCEED:
-                                tasks.forEach(taskOnDone -> taskOnDone.complete(DistResult.Succeed));
-                                break;
-                            case ERROR:
-                            default:
-                                tasks.forEach(taskOnDone -> taskOnDone.complete(DistResult.InternalError));
-                                break;
-                        }
+                        tasks.forEach(taskOnDone -> taskOnDone.complete(null));
                     }
                     return null;
                 });

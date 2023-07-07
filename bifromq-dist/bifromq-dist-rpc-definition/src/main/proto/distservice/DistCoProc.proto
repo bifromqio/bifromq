@@ -37,12 +37,8 @@ message RemoveTopicFilter{
 }
 
 message RemoveTopicFilterReply{
-  enum Result {
-    Exist = 0;
-    NonExist = 1;
-  }
   message Results{
-    map<string, Result> result = 1; // key: Original TopicFilter
+    map<string, bool> result = 1; // key: Original TopicFilter, value: exist or not
   }
   map<string, Results> result = 2; // key: subInfoKeyUtf8
 }
@@ -90,6 +86,7 @@ message DeleteMatchRecord {
 }
 
 message DeleteMatchRecordReply {
+  map<string, bool> exist = 1;
 }
 
 message QInboxIdList{

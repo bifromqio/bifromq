@@ -51,8 +51,8 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         mockDistUnSub(true, false, true);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
-        Assert.assertNull(unsubAckMessage);
-        verifyEvent(1, CLIENT_CONNECTED);
+        Assert.assertNotNull(unsubAckMessage);
+        verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
@@ -73,8 +73,8 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         mockDistUnSub(true, false, true);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
-        Assert.assertNull(unsubAckMessage);
-        verifyEvent(1, CLIENT_CONNECTED);
+        Assert.assertNotNull(unsubAckMessage);
+        verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
@@ -113,7 +113,8 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         mockAuthCheck(false);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
-        Assert.assertNull(unsubAckMessage);
-        verifyEvent(4, CLIENT_CONNECTED, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW);
+        Assert.assertNotNull(unsubAckMessage);
+        verifyEvent(5, CLIENT_CONNECTED, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW,
+            UNSUB_ACKED);
     }
 }
