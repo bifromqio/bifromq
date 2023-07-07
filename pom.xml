@@ -44,9 +44,28 @@
     </modules>
     <packaging>pom</packaging>
 
-    <name>bifromq</name>
+    <name>BifroMQ</name>
     <url>https://github.com/baidu/bifromq</url>
-    <description>The MQTT Broker empowers Baidu IoTCore</description>
+    <description>BifroMQ is a distributed MQTT broker implementation with native multi-tenancy support</description>
+
+    <organization>
+        <name>The BifroMQ Project</name>
+        <url>https://bifromq.io/</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://github.com/baidu/bifromq</url>
+        <connection>scm:git:git://github.com/baidu/bifromq.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/baidu/bifromq.git</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
 
     <properties>
         <javax.annotation.api.version>1.3.2</javax.annotation.api.version>
@@ -822,7 +841,8 @@
                         <configuration>
                             <suiteXmlFiles>
                                 <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
-                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml</suiteXmlFile>
+                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml
+                                </suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>
                     </plugin>

@@ -45,9 +45,9 @@ mvn wrapper:wrapper
 ./mvnw -U clean package
 ```
 
-构建输出包括位于`/build/build-bifromq-starters/target/`下的两个tar.gz文件：
+构建输出包括位于`/build/build-bifromq-starters/target/`下：
 
-* bifromq-xxx-all.tar.gz
+* bifromq-xxx-windows-standalone.zip
 * bifromq-xxx-standalone.tar.gz
 
 ## 运行测试
