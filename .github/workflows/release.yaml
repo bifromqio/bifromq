@@ -2,8 +2,7 @@ name: Release assets
 
 on:
   release:
-    types:
-      published
+    types: [ published ]
 
 jobs:
   prepare:

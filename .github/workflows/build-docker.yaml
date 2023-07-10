@@ -2,8 +2,7 @@ name: Build docker image
 on:
   push:
     tags:
-      - v*
-      - latest-*
+      - v[0-9].[0-9].[0-9]
   workflow_dispatch:
 
 jobs:
