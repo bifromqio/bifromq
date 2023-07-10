@@ -832,7 +832,7 @@
             </build>
         </profile>
         <profile>
-            <id>jacoco</id>
+            <id>build-coverage</id>
             <build>
                 <plugins>
                     <plugin>

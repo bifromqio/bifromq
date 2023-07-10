@@ -1,6 +1,12 @@
-name: Build
+name: Dev-Build
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+      - 'feat-**'
+      - 'hotfix-**'
 jobs:
   build:
     runs-on: ubuntu-latest
