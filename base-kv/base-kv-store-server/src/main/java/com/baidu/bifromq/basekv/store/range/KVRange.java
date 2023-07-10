@@ -101,8 +101,10 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -144,7 +146,7 @@ public class KVRange implements IKVRange {
     private final IKVRangeCoProc coProc;
     private final KVRangeQueryLinearizer linearizer;
     private final IKVRangeQueryRunner queryRunner;
-    private final Map<String, CompletableFuture> cmdFutures = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<?>> cmdFutures = new ConcurrentHashMap<>();
     private final Map<String, KVRangeDumpSession> dumpSessions = Maps.newConcurrentMap();
     private final AtomicInteger taskSeqNo = new AtomicInteger();
     private final Subject<ClusterConfig> clusterConfigSubject = BehaviorSubject.<ClusterConfig>create().toSerialized();
@@ -156,9 +158,9 @@ public class KVRange implements IKVRange {
     private final CompletableFuture<Void> closeSignal = new CompletableFuture<>();
     private final CompletableFuture<State.StateType> quitReason = new CompletableFuture<>();
     private final CompletableFuture<Void> destroySignal = new CompletableFuture<>();
-
     private final KVRangeMetricManager metricManager;
     private IKVRangeMessenger messenger;
+    private volatile CompletableFuture<Void> checkWalSizeTask;
 
     public KVRange(KVRangeId id,
                    String hostStoreId,
@@ -183,7 +185,8 @@ public class KVRange implements IKVRange {
             }
             this.opts = opts;
             this.snapshotChecker = snapshotChecker;
-            this.wal = new KVRangeWAL(id, walStateStorageEngine, opts.getWalRaftConfig());
+            this.wal =
+                new KVRangeWAL(id, walStateStorageEngine, opts.getWalRaftConfig(), opts.getMaxWALFatchBatchSize());
             this.fsmExecutor = fsmExecutor;
             this.bgExecutor = bgExecutor;
             this.mgmtTaskRunner = new AsyncRunner(bgExecutor);
@@ -221,7 +224,7 @@ public class KVRange implements IKVRange {
             return false;
         }
         try {
-            return checkpointId.equals(KVRangeSnapshot.parseFrom(wal.latestSnapshot()).getCheckpointId()) ||
+            return checkpointId.equals(wal.latestSnapshot().getCheckpointId()) ||
                 dumpSessions.values().stream().anyMatch(s -> s.checkpointId().equals(checkpointId));
         } catch (Throwable e) {
             return false;
@@ -267,8 +270,7 @@ public class KVRange implements IKVRange {
                         (meta, role, syncStats, clusterConfig, stats) -> {
                             LoadHint loadHint = coProc.get();
                             assert 0 <= loadHint.getLoad() && loadHint.getLoad() < 1.0 : "load must be in [0.0, 1.0)";
-                            assert loadHint.hasSplitKey() ?
-                                KeyRangeUtil.inRange(loadHint.getSplitKey(), meta.range) : true :
+                            assert !loadHint.hasSplitKey() || KeyRangeUtil.inRange(loadHint.getSplitKey(), meta.range) :
                                 "splitKey must be in provided range";
                             return KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver)
@@ -300,6 +302,7 @@ public class KVRange implements IKVRange {
         wal.tick();
         statsCollector.tick();
         dumpSessions.values().forEach(KVRangeDumpSession::tick);
+        checkWalSize();
     }
 
     @Override
@@ -352,19 +355,16 @@ public class KVRange implements IKVRange {
         }
         return close().thenCompose(v -> mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Closed, Destroying)) {
-                switch (quitReason.join()) {
-                    case Purged:
-                        log.debug("Quit by purging range[{}] from store[{}]",
-                            toShortString(id), hostStoreId);
-                        accessor.destroy(true);
-                        wal.destroy();
-                        break;
-                    default:
-                        log.debug("Quit by removing range[{}] from store[{}]",
-                            toShortString(id), hostStoreId);
-                        accessor.destroy(false);
-                        wal.destroy();
-                        break;
+                if (Objects.requireNonNull(quitReason.join()) == Purged) {
+                    log.debug("Quit by purging range[{}] from store[{}]",
+                        toShortString(id), hostStoreId);
+                    accessor.destroy(true);
+                    wal.destroy();
+                } else {
+                    log.debug("Quit by removing range[{}] from store[{}]",
+                        toShortString(id), hostStoreId);
+                    accessor.destroy(false);
+                    wal.destroy();
                 }
                 lifecycle.set(Destroyed);
                 destroySignal.complete(null);
@@ -496,6 +496,7 @@ public class KVRange implements IKVRange {
         return hostStoreId + "-" + taskSeqNo.getAndIncrement();
     }
 
+    @SuppressWarnings("unchecked")
     private <T> CompletableFuture<T> submitCommand(KVRangeCommand command) {
         if (!isWorking()) {
             return CompletableFuture.failedFuture(
@@ -504,7 +505,7 @@ public class KVRange implements IKVRange {
         CompletableFuture<T> onDone = new CompletableFuture<>();
 
         // add to writeRequests must happen before proposing
-        CompletableFuture<T> prev = cmdFutures.put(command.getTaskId(), onDone);
+        CompletableFuture<T> prev = (CompletableFuture<T>) cmdFutures.put(command.getTaskId(), onDone);
         assert prev == null;
 
         CompletableFuture<Void> proposeFuture = wal.propose(command);
@@ -524,7 +525,7 @@ public class KVRange implements IKVRange {
     }
 
     private void finishCommand(String taskId) {
-        CompletableFuture f = cmdFutures.get(taskId);
+        CompletableFuture<?> f = cmdFutures.get(taskId);
         if (f != null) {
             log.debug("Finish write request: taskId={}", taskId);
             f.complete(null);
@@ -534,8 +535,9 @@ public class KVRange implements IKVRange {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private <T> void finishCommand(String taskId, T result) {
-        CompletableFuture f = cmdFutures.get(taskId);
+        CompletableFuture<T> f = (CompletableFuture<T>) cmdFutures.get(taskId);
         if (f != null) {
             log.trace("Finish write request: taskId={}", taskId);
             f.complete(result);
@@ -545,7 +547,7 @@ public class KVRange implements IKVRange {
     }
 
     private void finishCommand(String taskId, Throwable e) {
-        CompletableFuture f = cmdFutures.get(taskId);
+        CompletableFuture<?> f = cmdFutures.get(taskId);
         if (f != null) {
             log.trace("Finish write request: taskId={}", taskId);
             f.completeExceptionally(e);
@@ -589,7 +591,7 @@ public class KVRange implements IKVRange {
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
-        CompletableFuture onDone = new CompletableFuture();
+        CompletableFuture<Void> onDone = new CompletableFuture<>();
         snapshotChecker.check(ss)
             .toCompletableFuture()
             .whenCompleteAsync((v, e) -> {
@@ -735,7 +737,7 @@ public class KVRange implements IKVRange {
                                     ),
                                     singleton(hostStoreId)
                                 );
-                            List<CompletableFuture> onceFutures = newHostingStoreIds.stream()
+                            List<CompletableFuture<?>> onceFutures = newHostingStoreIds.stream()
                                 .map(storeId -> messenger.once(m -> {
                                     if (m.hasEnsureRangeReply()) {
                                         EnsureRangeReply reply = m.getEnsureRangeReply();
@@ -921,14 +923,10 @@ public class KVRange implements IKVRange {
                                 break;
                             }
 
-                            CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m -> {
-                                if (m.hasPrepareMergeToReply() &&
+                            CompletableFuture<KVRangeMessage> onceFuture =
+                                messenger.once(m -> m.hasPrepareMergeToReply() &&
                                     m.getPrepareMergeToReply().getTaskId().equals(taskId) &&
-                                    m.getPrepareMergeToReply().getAccept()) {
-                                    return true;
-                                }
-                                return false;
-                            });
+                                    m.getPrepareMergeToReply().getAccept());
                             onDone.whenCompleteAsync((v, e) -> {
                                 if (onDone.isCancelled()) {
                                     onceFuture.cancel(true);
@@ -1000,8 +998,8 @@ public class KVRange implements IKVRange {
                                         toShortString(request.getMergerId()));
                                     CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m ->
                                         m.hasCancelMergingReply() &&
-                                        m.getCancelMergingReply().getTaskId().equals(taskId) &&
-                                        m.getCancelMergingReply().getAccept());
+                                            m.getCancelMergingReply().getTaskId().equals(taskId) &&
+                                            m.getCancelMergingReply().getAccept());
                                     // cancel the future
                                     onDone.whenCompleteAsync((v, e) -> {
                                         if (onceFuture.isCancelled()) {
@@ -1034,8 +1032,8 @@ public class KVRange implements IKVRange {
                             // multiple Merge commands targeting to same merger replica
                             CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m ->
                                 m.hasMergeReply() &&
-                                m.getMergeReply().getTaskId().equals(taskId) &&
-                                m.getMergeReply().getAccept());
+                                    m.getMergeReply().getTaskId().equals(taskId) &&
+                                    m.getMergeReply().getAccept());
                             // cancel the future
                             onDone.whenCompleteAsync((v, e) -> {
                                 if (onDone.isCancelled()) {
@@ -1126,7 +1124,7 @@ public class KVRange implements IKVRange {
                                 }
                                 CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m ->
                                     m.hasMergeDoneReply() &&
-                                    m.getMergeDoneReply().getTaskId().equals(taskId));
+                                        m.getMergeDoneReply().getTaskId().equals(taskId));
                                 // cancel the future
                                 onDone.whenCompleteAsync((v, e) -> {
                                     if (onDone.isCancelled()) {
@@ -1343,7 +1341,18 @@ public class KVRange implements IKVRange {
         return onDone;
     }
 
-    private CompletionStage<Void> doCompact(IKVRangeState.KVRangeMeta meta) {
+    private void checkWalSize() {
+        if ((checkWalSizeTask == null || checkWalSizeTask.isDone()) &&
+            wal.logDataSize() > opts.getCompactWALThresholdBytes()) {
+            long lastAppliedIndex = accessor.getReader().lastAppliedIndex();
+            KVRangeSnapshot snapshot = wal.latestSnapshot();
+            if (snapshot.getLastAppliedIndex() < lastAppliedIndex) {
+                checkWalSizeTask = doCompact(accessor.metadata().blockingFirst());
+            }
+        }
+    }
+
+    private CompletableFuture<Void> doCompact(IKVRangeState.KVRangeMeta meta) {
         if (!isSafeToCompact(meta.state)) {
             return CompletableFuture.completedFuture(null);
         }
@@ -1358,7 +1367,7 @@ public class KVRange implements IKVRange {
             }
             log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
                 toShortString(id), hostStoreId, snapshot);
-            return wal.compact(snapshot.toByteString(), snapshot.getLastAppliedIndex());
+            return wal.compact(snapshot);
         });
     }
 
@@ -1380,10 +1389,10 @@ public class KVRange implements IKVRange {
     }
 
     private boolean isCompatible(ClusterConfig config1, ClusterConfig config2) {
-        return config1.getVotersList().containsAll(config2.getVotersList()) &&
-            config1.getLearnersList().containsAll(config2.getLearnersList()) &&
-            config2.getVotersList().containsAll(config1.getVotersList()) &&
-            config2.getLearnersList().containsAll(config1.getLearnersList());
+        return new HashSet<>(config1.getVotersList()).containsAll(config2.getVotersList()) &&
+            new HashSet<>(config1.getLearnersList()).containsAll(config2.getLearnersList()) &&
+            new HashSet<>(config2.getVotersList()).containsAll(config1.getVotersList()) &&
+            new HashSet<>(config2.getLearnersList()).containsAll(config1.getLearnersList());
     }
 
     private void handleMessage(KVRangeMessage message) {

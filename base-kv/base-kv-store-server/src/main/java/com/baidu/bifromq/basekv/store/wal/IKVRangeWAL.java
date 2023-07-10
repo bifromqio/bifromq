@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
+import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -54,7 +55,7 @@ public interface IKVRangeWAL {
 
     ClusterConfig clusterConfig();
 
-    ByteString latestSnapshot();
+    KVRangeSnapshot latestSnapshot();
 
     CompletableFuture<Void> propose(KVRangeCommand command);
 
@@ -78,7 +79,7 @@ public interface IKVRangeWAL {
 
     CompletableFuture<Void> changeClusterConfig(String correlateId, Set<String> voters, Set<String> learners);
 
-    CompletableFuture<Void> compact(ByteString fsmSnapshot, long lastAppliedIndex);
+    CompletableFuture<Void> compact(KVRangeSnapshot snapshot);
 
     Observable<SnapshotInstallTask> snapshotInstallTask();
 

@@ -93,7 +93,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.id()).thenReturn(replicaId);
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
-        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
+        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config, 1024);
         assertEquals(wal.id(), replicaId);
     }
 
@@ -103,7 +103,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.id()).thenReturn(replicaId);
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
-        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
+        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config, 1024);
         TestObserver<ElectionEvent> testObserver = new TestObserver<>();
         wal.election().subscribe(testObserver);
         wal.start();
@@ -126,7 +126,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.id()).thenReturn(replicaId);
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
-        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
+        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config, 1024);
         wal.start();
         TestObserver<Long> testObserver = new TestObserver<>();
         wal.commitIndex().subscribe(testObserver);
@@ -142,7 +142,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.id()).thenReturn(replicaId);
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
-        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
+        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config, 1024);
         wal.start();
 
         TestObserver<IKVRangeWAL.SnapshotInstallTask> testObserver = new TestObserver<>();
@@ -161,7 +161,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.id()).thenReturn(replicaId);
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
-        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
+        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config, 1024);
         wal.start();
         TestObserver<Map<String, List<RaftMessage>>> testObserver = new TestObserver<>();
         wal.peerMessages().subscribe(testObserver);
@@ -177,7 +177,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.id()).thenReturn(replicaId);
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
-        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
+        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config, 1024);
         wal.start();
         ScheduledFuture<?> tickTask = ticker.scheduleAtFixedRate(wal::tick, 0, 100, TimeUnit.MILLISECONDS);
         await().until(() -> wal.currentLeader().isPresent());
@@ -203,7 +203,7 @@ public class KVRangeWALTest {
                 .build())
             .build()));
 
-        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config);
+        KVRangeWAL wal = new KVRangeWAL(id, walStorageEngine, config, 1024);
         wal.start();
         ScheduledFuture tickTask = ticker.scheduleAtFixedRate(wal::tick, 0, 100, TimeUnit.MILLISECONDS);
         await().until(() -> wal.currentState() == RaftNodeStatus.Candidate);

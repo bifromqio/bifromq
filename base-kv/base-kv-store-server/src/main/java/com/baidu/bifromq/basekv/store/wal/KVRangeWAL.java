@@ -51,11 +51,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class KVRangeWAL implements IKVRangeWAL {
-    private static final long MAX_FETCH_BYTES = 1024;
+    private final long maxFetchBytes;
     private final PublishSubject<SnapshotRestoredEvent> snapRestoreEventPublisher = PublishSubject.create();
     private final BehaviorSubject<Long> commitIndexSubject = BehaviorSubject.create();
     private final PublishSubject<SnapshotInstallTask> snapInstallTaskPublisher = PublishSubject.create();
@@ -72,10 +73,12 @@ public class KVRangeWAL implements IKVRangeWAL {
 
     public KVRangeWAL(KVRangeId rangeId,
                       IKVRangeWALStoreEngine stateStoreEngine,
-                      RaftConfig raftConfig) {
+                      RaftConfig raftConfig,
+                      int maxFetchBytes) {
         this.rangeId = rangeId;
         this.stateStoreEngine = stateStoreEngine;
         this.localId = stateStoreEngine.id();
+        this.maxFetchBytes = maxFetchBytes;
         raftNode = new RaftNode(raftConfig, stateStoreEngine.get(rangeId),
             getLogger("raft.logger"),
             EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toShortString(rangeId)),
@@ -129,14 +132,14 @@ public class KVRangeWAL implements IKVRangeWAL {
 
     @Override
     public IKVRangeWALSubscription subscribe(long startIndex, IKVRangeWALSubscriber subscriber, Executor executor) {
-        return new KVRangeWALSubscription(MAX_FETCH_BYTES, this, commitIndexSubject, startIndex, subscriber, executor);
+        return new KVRangeWALSubscription(maxFetchBytes, this, commitIndexSubject, startIndex, subscriber, executor);
     }
 
     @Override
     public CompletableFuture<LogEntry> once(long startIndex, Predicate<LogEntry> condition, Executor executor) {
         CompletableFuture<LogEntry> onDone = new CompletableFuture<>();
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(MAX_FETCH_BYTES, this, commitIndexSubject, startIndex,
+            new KVRangeWALSubscription(maxFetchBytes, this, commitIndexSubject, startIndex,
                 new IKVRangeWALSubscriber() {
                     @Override
                     public CompletableFuture<Void> apply(LogEntry log) {
@@ -200,14 +203,15 @@ public class KVRangeWAL implements IKVRangeWAL {
         return raftNode.changeClusterConfig(correlateId, voters, learners);
     }
 
+    @SneakyThrows
     @Override
-    public ByteString latestSnapshot() {
-        return raftNode.latestSnapshot();
+    public KVRangeSnapshot latestSnapshot() {
+        return KVRangeSnapshot.parseFrom(raftNode.latestSnapshot());
     }
 
     @Override
-    public CompletableFuture<Void> compact(ByteString fsmSnapshot, long lastAppliedIndex) {
-        return raftNode.compact(fsmSnapshot, lastAppliedIndex);
+    public CompletableFuture<Void> compact(KVRangeSnapshot snapshot) {
+        return raftNode.compact(snapshot.toByteString(), snapshot.getLastAppliedIndex());
     }
 
     @Override

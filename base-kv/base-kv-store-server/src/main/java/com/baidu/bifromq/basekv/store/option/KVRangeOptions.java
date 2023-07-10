@@ -30,10 +30,9 @@ import lombok.experimental.Accessors;
 @Builder(toBuilder = true)
 public class KVRangeOptions {
     private int snapshotSyncBytesPerSec = 1024 * 1024;
-    private int walCompactionThresholdBytes = 512 * 1024 * 1024;
+    private int compactWALThresholdBytes = 128 * 1024 * 1024; // 128MB
     private long tickUnitInMS = 100;
-    private long maxRetryDelayInMS = 1000;
-    private long maxWalRetrievalBatchSize = 64 * 1024; // 64KB
+    private int maxWALFatchBatchSize = 64 * 1024; // 64KB
     private int snapshotSyncIdleTimeoutSec = 30;
     private int statsCollectIntervalSec = 5;
     private RaftConfig walRaftConfig = new RaftConfig()
