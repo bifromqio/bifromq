@@ -14,10 +14,9 @@
 package com.baidu.bifromq.plugin.manager;
 
 import java.nio.file.Path;
-import org.pf4j.JarPluginLoader;
-import org.pf4j.PluginClassLoader;
-import org.pf4j.PluginDescriptor;
-import org.pf4j.PluginManager;
+import java.util.Arrays;
+
+import org.pf4j.*;
 
 class BifroMQJarPluginLoader extends JarPluginLoader {
     public BifroMQJarPluginLoader(PluginManager pluginManager) {
@@ -27,7 +26,9 @@ class BifroMQJarPluginLoader extends JarPluginLoader {
     @Override
     public ClassLoader loadPlugin(Path pluginPath, PluginDescriptor pluginDescriptor) {
         PluginClassLoader pluginClassLoader = new BifroMQPluginClassLoader(pluginManager,
-            pluginDescriptor, getClass().getClassLoader());
+            pluginDescriptor, getClass().getClassLoader(),
+                new ClassLoadingStrategy(Arrays.asList(ClassLoadingStrategy.Source.PLUGIN,
+                        ClassLoadingStrategy.Source.DEPENDENCIES)));
         pluginClassLoader.addFile(pluginPath.toFile());
 
         return pluginClassLoader;

@@ -22,6 +22,7 @@ public class ProvidedPackages {
     static {
         PACKAGES.add("com.baidu.bifromq.");
         PACKAGES.add("io.micrometer.core");
+        PACKAGES.add("com.google.protobuf");
         PACKAGES.add("org.slf4j.");
     }
 
