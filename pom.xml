@@ -48,6 +48,15 @@
     <url>https://github.com/baidu/bifromq</url>
     <description>BifroMQ is a distributed MQTT broker implementation with native multi-tenancy support</description>
 
+    <developers>
+        <developer>
+            <name>Yonny Hao</name>
+            <email>haoyu01@baidu.com</email>
+            <organization>baidu</organization>
+            <organizationUrl>https://www.baidu.com/</organizationUrl>
+        </developer>
+    </developers>
+
     <organization>
         <name>The BifroMQ Project</name>
         <url>https://bifromq.io/</url>
