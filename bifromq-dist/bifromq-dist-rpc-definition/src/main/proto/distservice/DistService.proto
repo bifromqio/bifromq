@@ -1,5 +1,4 @@
 syntax = "proto3";
-import "commontype/ClientInfo.proto";
 import "commontype/QoS.proto";
 import "commontype/TopicMessage.proto";
 

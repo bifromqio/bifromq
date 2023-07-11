@@ -93,8 +93,7 @@
         <guava.version>32.0.1-jre</guava.version>
         <rxjava3.version>3.1.5</rxjava3.version>
         <rocksdb.version>7.10.2</rocksdb.version>
-        <netty.version>4.1.89.Final</netty.version>
-        <netty.tcnative.version>2.0.59.Final</netty.tcnative.version>
+        <netty.version>4.1.94.Final</netty.version>
         <micrometer.version>1.11.1</micrometer.version>
         <jctools.version>4.0.1</jctools.version>
 
@@ -448,12 +447,6 @@
                 <type>pom</type>
                 <scope>import</scope>
                 <version>${netty.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-tcnative-boringssl-static</artifactId>
-                <version>${netty.tcnative.version}</version>
-                <scope>runtime</scope>
             </dependency>
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>
