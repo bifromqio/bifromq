@@ -21,18 +21,13 @@ jobs:
           if [[ "${{github.event.created}}" == "false" ]]; then
               NEED_BUILD_DOCKER=false
           else
-            if [[ "$REF" =~ refs/tags/latest-[0-9]+.[0-9]+.[0-9]+ ]]; then
-               MARK_LATEST=true
-               NEED_BUILD_DOCKER=true
-               TAG=${REF:10}
-               VERSION=${REF:17}
-            elif [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+ ]]; then
+            if [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+ ]]; then
                 NEED_BUILD_DOCKER=true
                 MARK_LATEST=false
                 TAG=${REF:10}
                 VERSION=${REF:11}
             else
-              echo "Expected refs of the form 'refs/tags/[v,latest-]<major-version>.<minor-version>.<patch-version>' but got '$REF'"
+              echo "Expected refs of the form 'refs/tags/v<major-version>.<minor-version>.<patch-version>' but got '$REF'"
               NEED_BUILD_DOCKER=false
             fi
           fi

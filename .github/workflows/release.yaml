@@ -2,7 +2,7 @@ name: Release assets
 
 on:
   release:
-    types: [ published ]
+    types: [ prereleased, published ]
 
 jobs:
   prepare:
@@ -14,12 +14,10 @@ jobs:
         id: check
         run: |
           REF=${{ github.ref }}
-          if [[ "$REF" =~ refs/tags/latest-[0-9]+.[0-9]+.[0-9]+ ]]; then
-            IS_VALID_TAG=true
-          elif [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+ ]]; then
+          if [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+ ]]; then
             IS_VALID_TAG=true
           else
-              echo "Expected refs of the form 'refs/tags/[v,latest-]<major-version>.<minor-version>.<patch-version>' but got '$REF'"
+              echo "Expected refs of the form 'refs/tags/v-<major-version>.<minor-version>.<patch-version>' but got '$REF'"
               IS_VALID_TAG=false
           fi
           echo "IS_VALID_TAG=$IS_VALID_TAG"

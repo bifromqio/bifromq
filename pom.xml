@@ -48,6 +48,17 @@
     <url>https://github.com/baidu/bifromq</url>
     <description>BifroMQ is a distributed MQTT broker implementation with native multi-tenancy support</description>
 
+    <developers>
+        <developer>
+            <id>bifromq.io</id>
+            <name>The BifroMQ Project Team</name>
+            <email>bifromq@baidu.com</email>
+            <url>https://bifromq.io/</url>
+            <organization>The BifroMQ Project</organization>
+            <organizationUrl>https://bifromq.io/</organizationUrl>
+        </developer>
+    </developers>
+
     <organization>
         <name>The BifroMQ Project</name>
         <url>https://bifromq.io/</url>
@@ -927,7 +938,7 @@
                         <extensions>true</extensions>
                         <configuration>
                             <serverId>sonatype-nexus-repository</serverId>
-                            <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
+                            <nexusUrl>https://oss.sonatype.org</nexusUrl>
                             <autoReleaseAfterClose>true</autoReleaseAfterClose>
                         </configuration>
                     </plugin>
@@ -936,11 +947,11 @@
             <distributionManagement>
                 <snapshotRepository>
                     <id>sonatype-nexus-repository</id>
-                    <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+                    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
                 </snapshotRepository>
                 <repository>
                     <id>sonatype-nexus-repository</id>
-                    <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2</url>
+                    <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
                 </repository>
             </distributionManagement>
         </profile>
