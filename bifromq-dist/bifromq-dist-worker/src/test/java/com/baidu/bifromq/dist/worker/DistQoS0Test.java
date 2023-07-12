@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
@@ -39,8 +38,10 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
@@ -52,12 +53,11 @@ public class DistQoS0Test extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void succeedWithNoSub() {
-        String tenantId = "trafficA";
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(tenantId, AT_MOST_ONCE, topic, payload, "orderKey1");
-        assertTrue(reply.getResultMap().get(tenantId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, topic, payload, "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
     }
 
     @Test(groups = "integration")
@@ -93,15 +93,12 @@ public class DistQoS0Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        insertMatchRecord("trafficA", "/你好/hello/😄", AT_MOST_ONCE,
-            MqttBroker, "inbox1", "batch1");
-        insertMatchRecord("trafficA", "/#", AT_MOST_ONCE,
-            MqttBroker, "inbox1", "batch1");
-        insertMatchRecord("trafficA", "/#", AT_LEAST_ONCE,
-            InboxService, "inbox2", "batch2");
+        insertMatchRecord(tenantA, "/你好/hello/😄", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        insertMatchRecord(tenantA, "/#", AT_MOST_ONCE, MqttBroker, tenantA, "batch1");
+        insertMatchRecord(tenantA, "/#", AT_LEAST_ONCE, InboxService, "inbox2", "batch2");
 
-        BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/你好/hello/😄", copyFromUtf8("Hello"), "orderKey1");
-        assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/你好/hello/😄").intValue() > 0);
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/你好/hello/😄", copyFromUtf8("Hello"), "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/你好/hello/😄").intValue(), 3);
 
         ArgumentCaptor<Iterable<DeliveryPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);
         verify(writer1, timeout(1000).atLeastOnce()).deliver(msgCap.capture());
@@ -129,10 +126,10 @@ public class DistQoS0Test extends DistWorkerTest {
     }
 
     @Test(groups = "integration")
-    public void testDistCase3() throws InterruptedException {
+    public void testDistCase3() {
         // pub: qos0
         // topic: "/a/b/c"
-        // sub: inbox1 -> [(/a/b/c, qos0),(/a/b/c, qos0)]
+        // sub: inbox1 -> [(/a/b/c, qos0)], inbox2 -> [(/a/b/c, qos0)]
         // expected behavior: inbox1 gets 1 messages
         when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         when(mqttBroker.open("batch1")).thenReturn(writer1);
@@ -149,24 +146,32 @@ public class DistQoS0Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
-        insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
-            MqttBroker, "inbox1", "batch1");
-        BatchDistReply reply = dist("trafficA", AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE,
+            MqttBroker, "inbox2", "batch1");
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 2);
 
         ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, timeout(1000).times(1)).deliver(list1.capture());
-        for (DeliveryPack pack : list1.getValue()) {
-            TopicMessagePack msgs = pack.messagePack;
-            assertEquals(msgs.getTopic(), "/a/b/c");
-            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                for (Message msg : publisherPack.getMessageList()) {
-                    assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        verify(writer1, after(1000).atMost(2)).deliver(list1.capture());
+        int msgCount = 0;
+        Set<SubInfo> subInfos = new HashSet<>();
+        for (Iterable<DeliveryPack> packs : list1.getAllValues()) {
+            for (DeliveryPack pack : packs) {
+                TopicMessagePack msgs = pack.messagePack;
+                pack.inboxes.forEach(subInfos::add);
+                assertEquals(msgs.getTopic(), "/a/b/c");
+                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                    for (Message msg : publisherPack.getMessageList()) {
+                        msgCount++;
+                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                    }
                 }
             }
         }
+        assertEquals(subInfos.size(), 2);
+        assertEquals(msgCount, 2);
     }
 
     @Test(groups = "integration")
@@ -203,13 +208,11 @@ public class DistQoS0Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_MOST_ONCE,
-            MqttBroker, "inbox1", "batch1");
-        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE,
-            MqttBroker, "inbox2", "batch2");
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox2", "batch2");
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
+            assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c"), 1);
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
@@ -368,7 +371,7 @@ public class DistQoS0Test extends DistWorkerTest {
         joinMatchGroup(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox3", "batch3");
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
 
         verify(writer1, timeout(1000).times(1)).deliver(any());
         verify(writer2, timeout(1000).times(1)).deliver(any());
@@ -382,5 +385,49 @@ public class DistQoS0Test extends DistWorkerTest {
                 return false;
             }
         });
+    }
+
+    @Test(groups = "integration")
+    public void testDistCase7() {
+        // pub: qos0
+        // topic: "/a/b/c"
+        // sub: tenantA, inbox1 -> [(/a/b/c, qos0)]; tenantB, inbox2 -> [(#, qos0)]
+        // expected behavior: inbox1 gets 1 messages
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+
+        when(writer1.deliver(any()))
+            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                for (DeliveryPack inboxWrite : inboxPacks) {
+                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                        resultMap.put(subInfo, DeliveryResult.OK);
+                    }
+                }
+                return CompletableFuture.completedFuture(resultMap);
+            });
+
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        insertMatchRecord(tenantB, "#", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
+
+        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        verify(writer1, timeout(1000).times(1)).deliver(list1.capture());
+        int msgCount = 0;
+        for (Iterable<DeliveryPack> packs : list1.getAllValues()) {
+            for (DeliveryPack pack : packs) {
+                TopicMessagePack msgs = pack.messagePack;
+                assertEquals(msgs.getTopic(), "/a/b/c");
+                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                    for (Message msg : publisherPack.getMessageList()) {
+                        msgCount++;
+                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                    }
+                }
+            }
+        }
+        assertEquals(msgCount, 1);
     }
 }

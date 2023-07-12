@@ -47,8 +47,8 @@ mvn wrapper:wrapper
 
 构建输出包括位于`/build/build-bifromq-starters/target/`下：
 
-* bifromq-<VERSION>-windows-standalone.zip
-* bifromq-<VERSION>-standalone.tar.gz
+* `bifromq-<VERSION>-windows-standalone.zip`
+* `bifromq-<VERSION>-standalone.tar.gz`
 
 ## 运行测试
 

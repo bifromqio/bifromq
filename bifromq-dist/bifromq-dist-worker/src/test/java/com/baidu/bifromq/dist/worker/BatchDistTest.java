@@ -25,7 +25,6 @@ import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
@@ -48,24 +47,23 @@ import org.testng.annotations.Test;
 public class BatchDistTest extends DistWorkerTest {
     @Test(groups = "integration")
     public void batchDistWithNoSub() {
-        String tenantId = "tenantA";
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(tenantId,
+        BatchDistReply reply = dist(tenantA,
             List.of(TopicMessagePack.newBuilder()
                     .setTopic("a")
-                    .addMessage(toMsg(tenantId, AT_MOST_ONCE, payload))
+                    .addMessage(toMsg(tenantA, AT_MOST_ONCE, payload))
                     .build(),
                 TopicMessagePack.newBuilder()
                     .setTopic("a/")
-                    .addMessage(toMsg(tenantId, AT_MOST_ONCE, payload))
+                    .addMessage(toMsg(tenantA, AT_MOST_ONCE, payload))
                     .build(),
                 TopicMessagePack.newBuilder()
                     .setTopic("a/b")
-                    .addMessage(toMsg(tenantId, AT_MOST_ONCE, payload))
+                    .addMessage(toMsg(tenantA, AT_MOST_ONCE, payload))
                     .build()), "orderKey1");
-        assertTrue(reply.getResultMap().get(tenantId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
     }
 
     @Test(groups = "integration")
@@ -87,40 +85,40 @@ public class BatchDistTest extends DistWorkerTest {
                     .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
             });
 
-        insertMatchRecord("trafficA", "/a/1", AT_MOST_ONCE,
+        insertMatchRecord(tenantA, "/a/1", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
-        insertMatchRecord("trafficA", "/a/2", AT_MOST_ONCE,
+        insertMatchRecord(tenantA, "/a/2", AT_MOST_ONCE,
             MqttBroker, "inbox1", "batch1");
-        insertMatchRecord("trafficA", "/a/2", AT_MOST_ONCE,
+        insertMatchRecord(tenantA, "/a/2", AT_MOST_ONCE,
             MqttBroker, "inbox3", "batch1");
-        insertMatchRecord("trafficA", "/a/3", AT_LEAST_ONCE,
+        insertMatchRecord(tenantA, "/a/3", AT_LEAST_ONCE,
             InboxService, "inbox2", "batch2");
-        insertMatchRecord("trafficA", "/a/4", AT_LEAST_ONCE,
+        insertMatchRecord(tenantA, "/a/4", AT_LEAST_ONCE,
             InboxService, "inbox2", "batch2");
 
-        BatchDistReply reply = dist("trafficA",
+        BatchDistReply reply = dist(tenantA,
             List.of(
                 TopicMessagePack.newBuilder()
                     .setTopic("/a/1")
-                    .addMessage(toMsg("trafficA", AT_MOST_ONCE, copyFromUtf8("Hello")))
+                    .addMessage(toMsg(tenantA, AT_MOST_ONCE, copyFromUtf8("Hello")))
                     .build(),
                 TopicMessagePack.newBuilder()
                     .setTopic("/a/2")
-                    .addMessage(toMsg("trafficA", AT_MOST_ONCE, copyFromUtf8("Hello")))
+                    .addMessage(toMsg(tenantA, AT_MOST_ONCE, copyFromUtf8("Hello")))
                     .build(),
                 TopicMessagePack.newBuilder()
                     .setTopic("/a/3")
-                    .addMessage(toMsg("trafficA", AT_MOST_ONCE, copyFromUtf8("Hello")))
+                    .addMessage(toMsg(tenantA, AT_MOST_ONCE, copyFromUtf8("Hello")))
                     .build(),
                 TopicMessagePack.newBuilder()
                     .setTopic("/a/4")
-                    .addMessage(toMsg("trafficA", AT_MOST_ONCE, copyFromUtf8("Hello")))
+                    .addMessage(toMsg(tenantA, AT_MOST_ONCE, copyFromUtf8("Hello")))
                     .build()), "orderKey1");
 
-        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/1").intValue(), 1);
-        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/2").intValue(), 2);
-        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/3").intValue(), 1);
-        assertEquals(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/4").intValue(), 1);
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/1").intValue(), 1);
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/2").intValue(), 2);
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/3").intValue(), 1);
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/4").intValue(), 1);
     }
 
     private TopicMessagePack.PublisherPack toMsg(String tenantId, QoS qos, ByteString payload) {

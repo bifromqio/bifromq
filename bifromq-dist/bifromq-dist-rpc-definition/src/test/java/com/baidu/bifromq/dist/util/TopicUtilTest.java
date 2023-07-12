@@ -24,7 +24,6 @@ import static org.testng.Assert.fail;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import java.time.Duration;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.Optional;
@@ -62,18 +61,19 @@ public class TopicUtilTest {
 
     @Test
     public void testExpand() {
-        long s = System.nanoTime();
-        String topic = TestUtil.randomTopic();
-        printExpand(topic);
-        log.debug("{} in {}ms", TopicUtil.expand(topic).size(), Duration.ofNanos(System.nanoTime() - s).toMillis());
+        List<String> topicFilters = TopicUtil.expand(TestUtil.randomTopic());
+        List<String> copy = Lists.newArrayList(topicFilters);
+        topicFilters.sort(String::compareTo);
+        assertEquals(topicFilters, copy);
     }
 
     @Test
     public void testExpandSysTopic() {
-        long s = System.nanoTime();
         String topic = "$sys/a/b/c";
-        printExpand(topic);
-        log.debug("{} in {}ms", TopicUtil.expand(topic).size(), Duration.ofNanos(System.nanoTime() - s).toMillis());
+        List<String> topicFilters = TopicUtil.expand(topic);
+        List<String> copy = Lists.newArrayList(topicFilters);
+        topicFilters.sort(String::compareTo);
+        assertEquals(topicFilters, copy);
     }
 
     @Test
@@ -131,9 +131,5 @@ public class TopicUtilTest {
                 }
             }
         }
-    }
-
-    private void printExpand(String topic) {
-        TopicUtil.expand(topic).forEach(tf -> log.debug("{}", tf));
     }
 }

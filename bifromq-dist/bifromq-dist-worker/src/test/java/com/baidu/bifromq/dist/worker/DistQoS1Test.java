@@ -24,9 +24,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
@@ -48,12 +46,11 @@ import org.testng.annotations.Test;
 public class DistQoS1Test extends DistWorkerTest {
     @Test(groups = "integration")
     public void succeedWithNoSub() {
-        String tenantId = "trafficA";
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(tenantId, AT_LEAST_ONCE, topic, payload, "orderKey1");
-        assertEquals(reply.getResultMap().get(tenantId).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
+        BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, topic, payload, "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
     }
 
     @Test(groups = "integration")
@@ -85,7 +82,7 @@ public class DistQoS1Test extends DistWorkerTest {
 
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
+            assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
@@ -137,7 +134,7 @@ public class DistQoS1Test extends DistWorkerTest {
 
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertTrue(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue() > 0);
+            assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
         }
 
 

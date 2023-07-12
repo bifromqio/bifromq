@@ -22,7 +22,6 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
@@ -43,12 +42,11 @@ import org.testng.annotations.Test;
 public class DistQoS2Test extends DistWorkerTest {
     @Test(groups = "integration")
     public void succeedWithNoSub() {
-        String tenantId = "trafficA";
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(tenantId, EXACTLY_ONCE, topic, payload, "orderKey1");
-        assertTrue(reply.getResultMap().get(tenantId).getFanoutMap().getOrDefault(topic, 0).intValue() == 0);
+        BatchDistReply reply = dist(tenantA, EXACTLY_ONCE, topic, payload, "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
     }
 
     @Test(groups = "integration")
@@ -84,15 +82,14 @@ public class DistQoS2Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        insertMatchRecord("trafficA", "/a/b/c", AT_MOST_ONCE,
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE,
             MqttBroker, "inbox1", "server1");
-        insertMatchRecord("trafficA", "/#", AT_LEAST_ONCE,
+        insertMatchRecord(tenantA, "/#", AT_LEAST_ONCE,
             MqttBroker, "inbox1", "server1");
-        insertMatchRecord("trafficA", "/#", EXACTLY_ONCE,
+        insertMatchRecord(tenantA, "/#", EXACTLY_ONCE,
             MqttBroker, "inbox2", "server2");
-        BatchDistReply reply =
-            dist("trafficA", EXACTLY_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        assertTrue(reply.getResultMap().get("trafficA").getFanoutMap().get("/a/b/c").intValue() > 0);
+        BatchDistReply reply = dist(tenantA, EXACTLY_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
 
 
         ArgumentCaptor<Iterable<DeliveryPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);

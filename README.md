@@ -47,8 +47,8 @@ mvn wrapper:wrapper
 
 The build output consists of several archive files located under `/build/build-bifromq-starters/target/`
 
-* bifromq-<VERSION>-windows-standalone.zip
-* bifromq-<VERSION>-standalone.tar.gz
+* `bifromq-<VERSION>-windows-standalone.zip`
+* `bifromq-<VERSION>-standalone.tar.gz`
 
 ## Running the tests
 
