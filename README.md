@@ -6,7 +6,7 @@ English | [中文简体](./README.zh_Hans.md)
 
 BifroMQ is a high-performance, distributed MQTT broker implementation that seamlessly integrates native multi-tenancy
 support. It is designed to support building large-scale IoT device connections and messaging systems, Currently, it
-serves as the foundational technology for [Baidu IoTCore](https://cloud.baidu.com/product/iot.html), a public serverless
+serves as the foundational technology for Baidu AI Cloud [IoTCore](https://cloud.baidu.com/product/iot.html) , a public serverless
 cloud service.
 
 ## Features
@@ -21,14 +21,28 @@ cloud service.
     * Event
     * System/Tenant-level Monitoring
 
+
+## Documentation
+
+You can view the documentation on the official website [BifroMQ Docs](https://bifromq.io/docs/Readme/) .
+
+And you can contribute to the documentation in the GitHub repository [bifromq-docs](https://github.com/baidu/bifromq-docs).
+
 ## Getting Started
 
-### Prerequisites
+### Docker
+```
+docker run -d --name biformq -p 1883:1883 bifromq/bifromq:latest
+```
+
+### Build from source
+
+#### Prerequisites
 
 * JDK 17+
 * Maven 3.5.0+
 
-### Build from source
+#### Get source & Build
 
 Clone the repository to your local workspace:
 
@@ -50,7 +64,7 @@ The build output consists of several archive files located under `/build/build-b
 * `bifromq-<VERSION>-windows-standalone.zip`
 * `bifromq-<VERSION>-standalone.tar.gz`
 
-## Running the tests
+#### Running the tests
 
 Execute the following command in the project root folder to run all test cases, including unit tests and integration
 tests.
@@ -60,11 +74,11 @@ Note: The tests may take some time to finish
 mvn test
 ```
 
-## Deployment
+#### Deployment
 
 BifroMQ has three deployment modes: `Standalone`, `Standard Cluster`, `Independent Workload Cluster`
 
-### Standalone
+##### Standalone
 
 The standalone deployment mode is ideal for the development stage or production environments that do not require
 immediate recovery from downtime.
@@ -96,14 +110,14 @@ stop server:
 The configuration file, 'standalone.yml', is located in the conf directory. Many of the settings are self-described via
 name. By default, the standalone server will save persistent data in `data` directory.
 
-### Standard Cluster(Will be available publicly soon)
+##### Standard Cluster(Will be available publicly soon)
 
 The standard cluster deployment mode is suitable for small to medium-sized production environments that require
 reliability and scalability. It comprises several fully functional nodes working together as a logical MQTT broker
 instance, ensuring high availability. You can also scale up the concurrent mqtt connection workload by adding more
 nodes, while some types of messaging related workload are not horizontal scalable in this mode.
 
-## Independent Workload Cluster
+##### Independent Workload Cluster
 
 The Independent Workload Cluster deployment mode is designed for building large-scale, multi-tenant serverless clusters.
 In this mode, the cluster consists of several specialized sub-clusters, each focusing on a particular 'independent type'
@@ -113,4 +127,12 @@ support.
 
 ## Discussion
 
+Join our Discord or WeChat group if you are interested in our work.
+
+### Discord
+
 <a href="https://discord.gg/Pfs3QRadRB"><img src="https://img.shields.io/discord/1115542029531885599?logo=discord&logoColor=white" alt="BifroMQ Discord server" /></a>
+
+### WeChat group
+
+<img decoding="async" src="https://bifromq.io/img/qrcode.png" width="30%"/>
