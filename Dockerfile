@@ -23,7 +23,8 @@ COPY --chown=bifromq:bifromq --from=builder /jdk-17.0.2 /usr/share/bifromq/jdk-1
 COPY --chown=bifromq:bifromq bifromq-*-standalone.tar.gz /usr/share/bifromq/
 
 RUN tar -zxvf /usr/share/bifromq/bifromq-*-standalone.tar.gz --strip-components 1 -C /usr/share/bifromq \
-    && rm -rf /usr/share/bifromq/bifromq-*-standalone.tar.gz
+    && rm -rf /usr/share/bifromq/bifromq-*-standalone.tar.gz \
+    && chown -R bifromq:bifromq /usr/share/bifromq
 
 ENV JAVA_HOME /usr/share/bifromq/jdk-17.0.2
 ENV PATH /usr/share/bifromq/jdk-17.0.2/bin:$PATH
