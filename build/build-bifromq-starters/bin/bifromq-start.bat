@@ -37,7 +37,9 @@ if "%1" == "-fg" (
 )
 
 set BIN_DIR=%~dp0
-set BASE_DIR=%BIN_DIR%\..
+for %%i in ("%BIN_DIR%\..") do @(
+  set BASE_DIR=%%~fi
+)
 set CONF_DIR=%BASE_DIR%\conf
 set CONF_FILE=%CONF_DIR%\%FILE_NAME%
 set PLUGIN_DIR=%BASE_DIR%\plugins
@@ -49,14 +51,14 @@ rem Log directory to use
 if "" == "%LOG_DIR%" set LOG_DIR=%BASE_DIR%\logs
 rem create logs directory
 if not exist "%LOG_DIR%" (
-    mkdir %LOG_DIR%
+    mkdir "%LOG_DIR%"
 )
 
 rem data directory to use
 if "" == "%DATA_DIR%" set DATA_DIR=%BASE_DIR%\data
 rem create data directory
 if not exist "%DATA_DIR%" (
-    mkdir %DATA_DIR%
+    mkdir "%DATA_DIR%"
 )
 
 call "%~dp0pid.bat" PID %NAME%
@@ -76,16 +78,16 @@ rem check java version
 if "" == "%JAVA_HOME%" (
     set JAVA_COMMAND=java
     if "true" == "%FOREGROUND_MODE%" (
-        set JAVA=java
+        set JAVA="java"
     ) else (
-        set JAVA=javaw
+        set JAVA="javaw"
     )
 ) else (
     set JAVA_COMMAND=%JAVA_HOME%\bin\java.exe
     if "true" == "%FOREGROUND_MODE%" (
-        set JAVA=%JAVA_HOME%\bin\java.exe
+        set JAVA="%JAVA_HOME%\bin\java.exe"
     ) else (
-        set JAVA=%JAVA_HOME%\bin\javaw.exe
+        set JAVA="%JAVA_HOME%\bin\javaw.exe"
     )
 )
 
@@ -108,16 +110,15 @@ if "" == "%JVM_PERF_OPTS%" set JVM_PERF_OPTS="-server -XX:MaxInlineLevel=15 -Dja
 
 rem GC options
 if "" == "%JVM_GC_OPTS%" (
-    set JVM_GC_OPTS="-XX:+UnlockExperimentalVMOptions" ^
-                    "-XX:+UnlockDiagnosticVMOptions" ^
-                    "-XX:+UseZGC" ^
-                    "-XX:ZAllocationSpikeTolerance=5" ^
-                    "-XX:+HeapDumpOnOutOfMemoryError" ^
-                    "-XX:HeapDumpPath=%LOG_DIR%" ^
-                    "-Xlog:async" ^
-                    "-Xlog:gc:file=%LOG_DIR%\gc.log:time,tid,tags:filecount=5,filesize=50m" ^
-                    "-XX:+HeapDumpOnOutOfMemoryError" ^
-                    "-XX:HeapDumpPath=%LOG_DIR%"
+   set JVM_GC_OPTS='-XX:+UnlockExperimentalVMOptions' ^
+                        '-XX:+UnlockDiagnosticVMOptions' ^
+                        '-XX:+UseZGC' ^
+                        '-XX:ZAllocationSpikeTolerance=5' ^
+                        '-XX:+HeapDumpOnOutOfMemoryError' ^
+                        '-XX:HeapDumpPath="%LOG_DIR%" ^
+                        '-Xlog:async' ^
+                        '-Xlog:gc:file="%LOG_DIR%\gc.log:time,tid,tags:filecount=5,filesize=50m"' ^
+                        '-XX:+HeapDumpOnOutOfMemoryError'
 )
 
 rem Memory options
@@ -162,17 +163,17 @@ if "" == "%JVM_DEBUG%" (
 
 %JAVA% %JVM_HEAP_OPTS:"=% ^
       %JVM_PERF_OPTS:"=% ^
-      %JVM_GC_OPTS:"=% ^
+      %JVM_GC_OPTS:'=% ^
       %EXTRA_JVM_OPTS:"=% ^
       -cp "%CLASSPATH%" ^
-      -DLOG_DIR=%LOG_DIR% ^
-      -DCONF_DIR=%CONF_DIR% ^
-      -DDATA_DIR=%DATA_DIR% ^
+      -DLOG_DIR="%LOG_DIR%" ^
+      -DCONF_DIR="%CONF_DIR%" ^
+      -DDATA_DIR="%DATA_DIR%" ^
       -DBIND_ADDR=%BIND_ADDR% ^
-      -Dlogback.configurationFile=%LOG_CONFIG_FILE% ^
-      -Dpf4j.pluginsDir=%PLUGIN_DIR% ^
+      -Dlogback.configurationFile="%LOG_CONFIG_FILE%" ^
+      -Dpf4j.pluginsDir="%PLUGIN_DIR%" ^
        %NAME% ^
-      -c %CONF_FILE%
+      -c "%CONF_FILE%"
 exit /b 0
 endlocal
 
