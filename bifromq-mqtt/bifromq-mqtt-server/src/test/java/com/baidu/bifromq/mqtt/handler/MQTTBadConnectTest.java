@@ -27,9 +27,9 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.ArgumentCaptor;
 import org.testng.Assert;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
 
 @Slf4j
 public class MQTTBadConnectTest extends BaseMQTTTest {
@@ -80,15 +80,32 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
     }
 
     @Test
-    public void illegalClientId() {
-        MqttMessage connectMessage = MQTTMessageUtils.connectMessageWithBadClientId();
+    public void clientIdContainsNullCharacter() {
+        MqttMessage connectMessage = MQTTMessageUtils.connectMessage("hello\u0000", null, null);
         channel.writeInbound(connectMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        MqttConnAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(CONNECTION_REFUSED_IDENTIFIER_REJECTED, ackMessage.variableHeader().connectReturnCode());
-        verifyEvent(1, EventType.IDENTIFIER_REJECTED);
+        verifyEvent(1, EventType.MALFORMED_CLIENT_IDENTIFIER);
     }
+
+    @Test
+    public void userNameContainsNullCharacter() {
+        MqttMessage connectMessage = MQTTMessageUtils.connectMessage("hello", null, "user\u0000");
+        channel.writeInbound(connectMessage);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        verifyEvent(1, EventType.MALFORMED_USERNAME);
+    }
+
+    @Test
+    public void willTopicContainsNullCharacter() {
+        MqttMessage connectMessage = MQTTMessageUtils.connectMessage("hello", "hello\u0000", null);
+        channel.writeInbound(connectMessage);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        verifyEvent(1, EventType.MALFORMED_WILL_TOPIC);
+    }
+
 
     @Test
     public void firstPacketNotConnect() {
@@ -121,6 +138,6 @@ public class MQTTBadConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         Assert.assertNull(ackMessage);
-        verifyEvent(1, EventType.INVALID_WILL_TOPIC);
+        verifyEvent(1, EventType.INVALID_TOPIC);
     }
 }

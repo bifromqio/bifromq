@@ -14,6 +14,7 @@
 package com.baidu.bifromq.sysprops;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.sysprops.parser.BooleanParser;
 import com.baidu.bifromq.sysprops.parser.DoubleParser;
 import com.baidu.bifromq.sysprops.parser.IntegerParser;
 import com.baidu.bifromq.sysprops.parser.LongParser;
@@ -22,6 +23,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public enum BifroMQSysProp {
+    // further check if utf8 string contains any control character or non character according to [MQTT-1.5.3]
+    MQTT_UTF8_SANITY_CHECK("mqtt_utf8_sanity_check", false, BooleanParser.INSTANCE),
+    MAX_CLIENT_ID_LENGTH("max_client_id_length", 65535, IntegerParser.from(23, 65536)),
     MAX_SHARE_GROUP_MEMBERS("max_shared_group_members", 200, IntegerParser.POSITIVE),
     MAX_TOPIC_FILTERS_PER_INBOX("max_topic_filters_per_inbox", 100, IntegerParser.POSITIVE),
     DIST_CLIENT_MAX_INFLIGHT_CALLS_PER_QUEUE("dist_client_max_calls_per_queue", 1, IntegerParser.POSITIVE),
@@ -61,35 +65,30 @@ public enum BifroMQSysProp {
 
     public final String propKey;
     private final Object propDefValue;
-    private final PropParser parser;
+    private final PropParser<?> parser;
 
-    BifroMQSysProp(String propKey, Object propDefValue, PropParser parser) {
+    BifroMQSysProp(String propKey, Object propDefValue, PropParser<?> parser) {
         this.propKey = propKey;
         this.propDefValue = propDefValue;
         this.parser = parser;
     }
 
-    private String sysPropValue(String key) {
-        return sysPropValue(key, null);
-    }
-
-    private String sysPropValue(final String key, String def) {
+    private String sysPropValue(final String key) {
         String value = null;
         try {
             value = System.getProperty(key);
         } catch (SecurityException e) {
-            log.warn("Failed to retrieve a system property '{}'; use default value '{}'.", key, def, e);
-        }
-        if (value == null) {
-            return def;
+            log.warn("Failed to retrieve a system property '{}'", key, e);
         }
         return value;
     }
 
+    @SuppressWarnings("unchecked")
     public <T> T defVal() {
         return (T) propDefValue;
     }
 
+    @SuppressWarnings("unchecked")
     public <T> T get() {
         String value = sysPropValue(propKey);
         if (value == null) {

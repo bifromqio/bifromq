@@ -56,6 +56,10 @@ public class MQTTMessageUtils {
     }
 
     public static MqttConnectMessage connectMessageWithBadClientId() {
+        return connectMessage("sdsdf$1231&", "willTopic", null);
+    }
+
+    public static MqttConnectMessage connectMessage(String clientId, String willTopic, String username) {
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.CONNECT,
             false,
             MqttQoS.AT_MOST_ONCE,
@@ -63,22 +67,23 @@ public class MQTTMessageUtils {
             0);
         MqttConnectVariableHeader mqttConnectVariableHeader = new MqttConnectVariableHeader(
             "MQTT",
-            (byte) 3,
-            false,
+            (byte) 4,
+            username != null,
             false,
             false,
             1,
-            true,
+            willTopic != null,
             true,
             30);
         MqttConnectPayload mqttConnectPayload = new MqttConnectPayload(
-            "sdsdf$1231&",
-            "willTopic",
+            clientId,
+            willTopic,
             new byte[] {},
-            null,
+            username,
             new byte[] {});
         return new MqttConnectMessage(mqttFixedHeader, mqttConnectVariableHeader, mqttConnectPayload);
     }
+
 
     public static MqttMessage connectMessageWithMqttIdentifierRejected() {
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.CONNECT,
@@ -444,6 +449,10 @@ public class MQTTMessageUtils {
     }
 
     public static MqttSubscribeMessage badTopicMqttSubMessages() {
+        return topicMqttSubMessages("testTopic/#/1");
+    }
+
+    public static MqttSubscribeMessage topicMqttSubMessages(String topicFilter) {
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.SUBSCRIBE,
             false,
             MqttQoS.valueOf(QoS.AT_MOST_ONCE_VALUE),
@@ -452,10 +461,11 @@ public class MQTTMessageUtils {
         MqttMessageIdVariableHeader mqttConnectVariableHeader = MqttMessageIdVariableHeader.from(MSG_ID);
 
         List<MqttTopicSubscription> topicList = new ArrayList<>();
-        topicList.add(new MqttTopicSubscription("testTopic/#/1", MqttQoS.AT_MOST_ONCE));
+        topicList.add(new MqttTopicSubscription(topicFilter, MqttQoS.AT_MOST_ONCE));
         MqttSubscribePayload mqttSubPayload = new MqttSubscribePayload(topicList);
         return new MqttSubscribeMessage(mqttFixedHeader, mqttConnectVariableHeader, mqttSubPayload);
     }
+
 
     public static MqttUnsubscribeMessage qoSMqttUnSubMessages(int count) {
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.UNSUBSCRIBE,
@@ -486,6 +496,10 @@ public class MQTTMessageUtils {
     }
 
     public static MqttUnsubscribeMessage invalidTopicMqttUnSubMessage() {
+        return topicMqttUnSubMessage("a/#/a");
+    }
+
+    public static MqttUnsubscribeMessage topicMqttUnSubMessage(String topicFilter) {
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.UNSUBSCRIBE,
             false,
             MqttQoS.AT_MOST_ONCE,
@@ -494,10 +508,11 @@ public class MQTTMessageUtils {
         MqttMessageIdVariableHeader mqttSubVariableHeader = MqttMessageIdVariableHeader.from(MSG_ID);
 
         MqttUnsubscribePayload mqttSubPayload = new MqttUnsubscribePayload(
-            Lists.newArrayList("a/#/a")
+            Lists.newArrayList(topicFilter)
         );
         return new MqttUnsubscribeMessage(mqttFixedHeader, mqttSubVariableHeader, mqttSubPayload);
     }
+
 
     public static MqttMessage mqttMessage(MqttMessageType type) {
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(type,

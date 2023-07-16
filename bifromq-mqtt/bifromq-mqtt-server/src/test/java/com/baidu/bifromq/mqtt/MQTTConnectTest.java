@@ -33,7 +33,8 @@ import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.InvalidWillTopic;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedWillTopic;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
 import java.io.EOFException;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
@@ -119,7 +120,7 @@ public class MQTTConnectTest extends MQTTTest {
         assertTrue(e.getCause() instanceof EOFException);
 
         verify(eventCollector, times(2))
-            .report(argThat(event -> event instanceof InvalidWillTopic));
+            .report(argThat(event -> event instanceof InvalidTopic));
     }
 
     @Test(groups = "integration")

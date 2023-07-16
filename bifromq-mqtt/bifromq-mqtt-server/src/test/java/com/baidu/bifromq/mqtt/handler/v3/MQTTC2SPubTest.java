@@ -17,6 +17,7 @@ package com.baidu.bifromq.mqtt.handler.v3;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.NO_PUB_PERMISSION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
@@ -272,6 +273,17 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
         assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
+    }
+
+    @Test
+    public void malformedTopic() {
+        connectAndVerify(true);
+        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("topic\u0000", 123);
+        channel.writeInbound(publishMessage);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        assertFalse(channel.isActive());
+        verifyEvent(2, CLIENT_CONNECTED, MALFORMED_TOPIC);
     }
 
     @Test

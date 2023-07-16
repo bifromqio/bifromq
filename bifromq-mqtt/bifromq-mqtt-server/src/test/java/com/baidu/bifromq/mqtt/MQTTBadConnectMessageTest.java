@@ -14,9 +14,9 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_INVALID_CLIENT_ID;
-import static org.testng.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
@@ -40,19 +40,5 @@ public class MQTTBadConnectMessageTest extends MQTTTest {
 
         verify(eventCollector).report(argThat(event -> event instanceof IdentifierRejected));
         mqttClient.close();
-    }
-
-    @Test(groups = "integration")
-    public void testInvalidClientId() {
-        MqttTestClient mqttClient = new MqttTestClient(brokerURI, ",.+!@");
-
-        MqttConnectOptions connOpts = new MqttConnectOptions();
-        connOpts.setMqttVersion(4);
-        connOpts.setCleanSession(false);
-        connOpts.setWill("/abc", new byte[] {}, 0, false);
-        MqttException e = TestUtils.expectThrow(() -> mqttClient.connect(connOpts));
-        assertEquals(e.getReasonCode(), REASON_CODE_INVALID_CLIENT_ID);
-
-        verify(eventCollector).report(argThat(event -> event instanceof IdentifierRejected));
     }
 }

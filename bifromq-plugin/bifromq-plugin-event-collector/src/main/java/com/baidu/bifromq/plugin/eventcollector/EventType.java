@@ -22,10 +22,11 @@ public enum EventType {
     NOT_AUTHORIZED_CLIENT,
     CHANNEL_ERROR,
     CONNECT_TIMEOUT,
-    IDENTIFIER_REJECTED,
-    INVALID_WILL_TOPIC,
+    IDENTIFIER_REJECTED, // exceed max length
+    MALFORMED_CLIENT_IDENTIFIER, // malformed utf8
+    MALFORMED_USERNAME, // malformed utf8
+    MALFORMED_WILL_TOPIC, // malformed utf8
     UNACCEPTED_PROTOCOL_VER,
-
     // client connected
     CLIENT_CONNECTED,
 
@@ -37,7 +38,9 @@ public enum EventType {
     IDLE,
     INBOX_TRANSIENT_ERROR,
     INVALID_TOPIC,
+    MALFORMED_TOPIC, // malformed utf8
     INVALID_TOPIC_FILTER,
+    MALFORMED_TOPIC_FILTER, // malformed utf8
     KICKED,
     NO_PUB_PERMISSION,
     PROTOCOL_VIOLATION,

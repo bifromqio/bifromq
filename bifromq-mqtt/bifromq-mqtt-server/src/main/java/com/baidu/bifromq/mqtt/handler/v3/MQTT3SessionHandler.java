@@ -64,6 +64,7 @@ import com.baidu.bifromq.mqtt.handler.SendBufferCapacityHinter;
 import com.baidu.bifromq.mqtt.handler.event.ConnectionWillClose;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3Session;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
+import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.mqtt.utils.TopicUtil;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.PubActionDisallow;
@@ -78,6 +79,8 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Idle;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Kicked;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopic;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
@@ -111,6 +114,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.UnsubAcked
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
+import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -151,6 +155,7 @@ import org.apache.commons.collections4.map.LinkedMap;
 @Slf4j
 abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3Session {
     public static final String NAME = "MQTT3SessionHandler";
+    private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
     private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
     private final ClientInfo clientInfo;
     private final int keepAliveTimeSeconds;
@@ -370,6 +375,13 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             mqttMessage.release();
             return;
         }
+        if (!MQTTUtf8Util.isWellFormed(topic, SANITY_CHECK)) {
+            closeConnectionWithSomeDelay(getLocal(MalformedTopic.class)
+                .topic(topic)
+                .clientInfo(clientInfo));
+            mqttMessage.release();
+            return;
+        }
         if (!TopicUtil.isValidTopic(topic, maxTopicLevelLength, maxTopicLevels, maxTopicLength)) {
             closeConnectionWithSomeDelay(getLocal(InvalidTopic.class)
                 .topic(topic)
@@ -581,12 +593,19 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             return;
         }
         Optional<MqttTopicSubscription> invalidTopicSub = topicSubscriptions.stream()
-            .filter(s -> !isValidTopicFilter(s.topicName(), maxTopicLevelLength, maxTopicLevels, maxTopicLength))
+            .filter(s -> !MQTTUtf8Util.isWellFormed(s.topicName(), SANITY_CHECK) ||
+                !isValidTopicFilter(s.topicName(), maxTopicLevelLength, maxTopicLevels, maxTopicLength))
             .findFirst();
         if (invalidTopicSub.isPresent()) {
-            closeConnectionWithSomeDelay(getLocal(InvalidTopicFilter.class)
-                .topicFilter(invalidTopicSub.get().topicName())
-                .clientInfo(clientInfo));
+            if (!MQTTUtf8Util.isWellFormed(invalidTopicSub.get().topicName(), SANITY_CHECK)) {
+                closeConnectionWithSomeDelay(getLocal(MalformedTopicFilter.class)
+                    .topicFilter(invalidTopicSub.get().topicName())
+                    .clientInfo(clientInfo));
+            } else {
+                closeConnectionWithSomeDelay(getLocal(InvalidTopicFilter.class)
+                    .topicFilter(invalidTopicSub.get().topicName())
+                    .clientInfo(clientInfo));
+            }
             return;
         }
         List<CompletableFuture<MqttQoS>> subTasks = doSubscribe(messageId, topicSubscriptions);
@@ -629,12 +648,19 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             return;
         }
         Optional<String> invalidTopicFilter = topicFilters.stream()
-            .filter(t -> !isValidTopicFilter(t, maxTopicLevelLength, maxTopicLevels, maxTopicLength))
+            .filter(t -> !MQTTUtf8Util.isWellFormed(t, SANITY_CHECK) ||
+                !isValidTopicFilter(t, maxTopicLevelLength, maxTopicLevels, maxTopicLength))
             .findFirst();
         if (invalidTopicFilter.isPresent()) {
-            closeConnectionWithSomeDelay(getLocal(InvalidTopicFilter.class)
-                .topicFilter(invalidTopicFilter.get())
-                .clientInfo(clientInfo));
+            if (!MQTTUtf8Util.isWellFormed(invalidTopicFilter.get(), SANITY_CHECK)) {
+                closeConnectionWithSomeDelay(getLocal(MalformedTopicFilter.class)
+                    .topicFilter(invalidTopicFilter.get())
+                    .clientInfo(clientInfo));
+            } else {
+                closeConnectionWithSomeDelay(getLocal(InvalidTopicFilter.class)
+                    .topicFilter(invalidTopicFilter.get())
+                    .clientInfo(clientInfo));
+            }
             return;
         }
         // using subMessageId for reqId to thread calls

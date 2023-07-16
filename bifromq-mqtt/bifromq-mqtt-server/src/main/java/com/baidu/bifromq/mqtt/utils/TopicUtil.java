@@ -54,10 +54,7 @@ public class TopicUtil {
                 tlsb.append(c);
             }
         }
-        if (tlsb.length() > maxLevelLength) {
-            return false;
-        }
-        return true;
+        return tlsb.length() <= maxLevelLength;
     }
 
     public static boolean isValidTopicFilter(String topicFilter, int maxLevelLength, int maxLevel, int maxLength) {
@@ -148,17 +145,14 @@ public class TopicUtil {
         if (level > maxLevel) {
             return false;
         }
-        if (tlsb.length() > maxLevelLength) {
-            return false;
-        }
-        return true;
+        return tlsb.length() <= maxLevelLength;
     }
 
     public static String parseTopicFilter(String topicFilter) {
         // must be valid topic filter
         if (topicFilter.startsWith(ORDERED_SHARE) || topicFilter.startsWith(UNORDERED_SHARE)) {
             // validate share name
-            int i = 0;
+            int i;
             for (i = topicFilter.indexOf(TOPIC_SEPARATOR) + 1; i < topicFilter.length(); i++) {
                 char c = topicFilter.charAt(i);
                 if (c == TOPIC_SEPARATOR) {

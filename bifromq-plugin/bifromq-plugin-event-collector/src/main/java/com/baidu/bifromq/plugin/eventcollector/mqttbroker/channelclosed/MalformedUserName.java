@@ -17,9 +17,9 @@ import com.baidu.bifromq.plugin.eventcollector.EventType;
 import lombok.ToString;
 
 @ToString(callSuper = true)
-public class InvalidWillTopic extends ChannelClosedEvent<InvalidWillTopic> {
+public class MalformedUserName extends ChannelClosedEvent<MalformedUserName> {
     @Override
     public EventType type() {
-        return EventType.INVALID_WILL_TOPIC;
+        return EventType.MALFORMED_USERNAME;
     }
 }

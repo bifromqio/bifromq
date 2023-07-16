@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACTION_DISALLOW;
@@ -27,7 +28,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.QoS;
@@ -216,6 +216,16 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, TOO_LARGE_SUBSCRIPTION);
+    }
+
+    @Test
+    public void subWithMalformedTopic() {
+        connectAndVerify(true);
+        MqttSubscribeMessage subMessage = MQTTMessageUtils.topicMqttSubMessages("/topic\u0000");
+        channel.writeInbound(subMessage);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.writeInbound();
+        verifyEvent(2, CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
     }
 
     @Test

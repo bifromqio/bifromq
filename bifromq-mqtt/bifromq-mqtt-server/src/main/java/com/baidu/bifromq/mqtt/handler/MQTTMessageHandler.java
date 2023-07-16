@@ -43,7 +43,7 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
     private final FutureTracker tearDownTasks = new FutureTracker();
     private final Runnable flushTask;
     private ScheduledFuture<?> scheduledClose;
-    private Event closeReason;
+    private Event<?> closeReason;
     private int flushPendingCount;
     private Future<?> nextScheduledFlush;
     protected MQTTSessionContext sessionCtx;
@@ -164,11 +164,11 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
         return scheduledClose == null;
     }
 
-    protected void closeConnectionWithSomeDelay(@NonNull Event reason) {
+    protected void closeConnectionWithSomeDelay(@NonNull Event<?> reason) {
         closeConnectionWithSomeDelay(null, reason);
     }
 
-    protected void closeConnectionWithSomeDelay(MqttMessage farewell, @NonNull Event reason) {
+    protected void closeConnectionWithSomeDelay(MqttMessage farewell, @NonNull Event<?> reason) {
         // must be called in event loop
         assert ctx.channel().eventLoop().inEventLoop();
         if (closeNotScheduled() && ctx.channel().isActive()) {

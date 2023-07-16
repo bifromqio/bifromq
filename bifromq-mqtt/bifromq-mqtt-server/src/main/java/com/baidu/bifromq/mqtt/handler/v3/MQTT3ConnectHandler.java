@@ -42,18 +42,22 @@ import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
-import com.baidu.bifromq.mqtt.utils.ClientIdUtil;
+import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.mqtt.utils.TopicUtil;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.InvalidWillTopic;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedClientIdentifier;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedUserName;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedWillTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCheckError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCleanupError;
+import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Strings;
@@ -71,9 +75,10 @@ import lombok.extern.slf4j.Slf4j;
 public class MQTT3ConnectHandler extends MQTTMessageHandler {
     public static final String NAME = "MQTT3ConnectHandler";
     private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
-
     private static final int MIN_CLIENT_KEEP_ALIVE_DURATION = 5;
     private static final int MAX_CLIENT_KEEP_ALIVE_DURATION = 2 * 60 * 60;
+    private static final int MAX_CLIENT_ID_LEN = BifroMQSysProp.MAX_CLIENT_ID_LENGTH.get();
+    private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
     private IDistClient distClient;
     private IInboxReaderClient inboxClient;
     private ClientInfo clientInfo;
@@ -114,7 +119,11 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                 return;
             }
         }
-        if (!ClientIdUtil.validateClientId(clientIdentifier)) {
+        if (!MQTTUtf8Util.isWellFormed(clientIdentifier, SANITY_CHECK)) {
+            closeConnectionWithSomeDelay(getLocal(MalformedClientIdentifier.class).peerAddress(clientAddress));
+            return;
+        }
+        if (clientIdentifier.length() > MAX_CLIENT_ID_LEN) {
             closeConnectionWithSomeDelay(MqttMessageBuilders
                     .connAck()
                     .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
@@ -122,6 +131,17 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                 getLocal(IdentifierRejected.class).peerAddress(clientAddress));
             return;
         }
+        if (connMsg.variableHeader().hasUserName() &&
+            !MQTTUtf8Util.isWellFormed(connMsg.payload().userName(), SANITY_CHECK)) {
+            closeConnectionWithSomeDelay(getLocal(MalformedUserName.class).peerAddress(clientAddress));
+            return;
+        }
+        if (connMsg.variableHeader().isWillFlag() &&
+            !MQTTUtf8Util.isWellFormed(connMsg.payload().willTopic(), SANITY_CHECK)) {
+            closeConnectionWithSomeDelay(getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
+            return;
+        }
+
         String mqttClientId = clientIdentifier;
         long reqId = System.nanoTime();
         MQTT3AuthData authData = AuthUtil.buildMQTT3AuthData(ctx.channel(), connMsg);
@@ -201,9 +221,9 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                 settingProvider.provide(MaxTopicLevelLength, clientInfo.getTenantId()),
                                 settingProvider.provide(MaxTopicLevels, clientInfo.getTenantId()),
                                 settingProvider.provide(MaxTopicLength, clientInfo.getTenantId()))) {
-                                getLocal(InvalidWillTopic.class).peerAddress(clientAddress);
-                                closeConnectionWithSomeDelay(
-                                    getLocal(InvalidWillTopic.class).peerAddress(clientAddress));
+                                closeConnectionWithSomeDelay(getLocal(InvalidTopic.class)
+                                    .topic(connMsg.payload().willTopic())
+                                    .clientInfo(clientInfo));
                                 return DONE;
                             }
                             // don't do access control check here

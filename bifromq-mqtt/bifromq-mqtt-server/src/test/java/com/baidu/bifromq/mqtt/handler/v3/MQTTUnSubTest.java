@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBSCRIPTION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
@@ -95,6 +96,16 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
         verifyEvent(2, CLIENT_CONNECTED, TOO_LARGE_UNSUBSCRIPTION);
+    }
+
+    @Test
+    public void unSubWithMalformedTopic() {
+        connectAndVerify(true);
+        MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.topicMqttUnSubMessage("/topic\u0000");
+        channel.writeInbound(unSubMessage);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.writeInbound();
+        verifyEvent(2, CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
     }
 
     @Test
