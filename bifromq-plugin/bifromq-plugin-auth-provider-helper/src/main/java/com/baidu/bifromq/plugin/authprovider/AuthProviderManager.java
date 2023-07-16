@@ -62,7 +62,7 @@ public class AuthProviderManager implements IAuthProvider {
             } else {
                 Preconditions.checkArgument(availAuthProviders.containsKey(authProviderFQN),
                     String.format("Auth Provider Plugin '%s' not found", authProviderFQN));
-                log.debug("Auth provider plugin type: {}", authProviderFQN);
+                log.info("Auth provider plugin type: {}", authProviderFQN);
                 delegate = availAuthProviders.get(authProviderFQN);
             }
         }

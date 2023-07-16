@@ -43,7 +43,7 @@ public class SettingProviderManager implements ISettingProvider {
             } else {
                 Preconditions.checkArgument(availSettingProviders.containsKey(settingProviderFQN),
                     String.format("Setting Provider Plugin '%s' not found", settingProviderFQN));
-                log.debug("Setting provider plugin type: {}", settingProviderFQN);
+                log.info("Setting provider plugin type: {}", settingProviderFQN);
                 provider = availSettingProviders.get(settingProviderFQN);
             }
         }

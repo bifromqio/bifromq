@@ -36,6 +36,7 @@ public class EventCollectorManager implements IEventCollector {
     public EventCollectorManager(PluginManager pluginMgr) {
 
         for (IEventCollector eventCollector : pluginMgr.getExtensions(IEventCollector.class)) {
+            log.info("Event collector loaded: {}", eventCollector.getClass().getName());
             eventCollectors.put(eventCollector.getClass().getName(), eventCollector);
             eventCollectorTimers.put(eventCollector.getClass().getName(), Timer.builder("call.exec.timer")
                 .tag("method", "EventCollector/report")
