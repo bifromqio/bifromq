@@ -32,7 +32,7 @@ And you can contribute to the documentation in the GitHub repository [bifromq-do
 
 ### Docker
 ```
-docker run -d --name biformq -p 1883:1883 bifromq/bifromq:latest
+docker run -d --name bifromq -p 1883:1883 bifromq/bifromq:latest
 ```
 
 ### Build from source
