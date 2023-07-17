@@ -31,7 +31,7 @@ BifroMQ 是一个高性能的分布式 MQTT Broker 消息中间件实现，无�
 
 ### Docker
 ```
-docker run -d --name biformq -p 1883:1883 bifromq/bifromq:latest
+docker run -d --name bifromq -p 1883:1883 bifromq/bifromq:latest
 ```
 
 ### 从源码构建
