@@ -134,13 +134,13 @@ if "" == "%JVM_GC_OPTS%" (
 rem Memory options
 if "" == "%JVM_HEAP_OPTS%" (
     set MEMORY_FRACTION=70
-    set /a HEAP_MEMORY=!MEMORY!*!MEMORY_FRACTION!/100
+    set /a HEAP_MEMORY=!MEMORY!/100*!MEMORY_FRACTION!
     set /a MIN_HEAP_MEMORY=!HEAP_MEMORY!/2
 
     rem Calculate max direct memory based on total memory
     rem Percentage of total memory to use for max direct memory
     set MAX_DIRECT_MEMORY_FRACTION=20
-    set /a MAX_DIRECT_MEMORY=!MEMORY!*!MAX_DIRECT_MEMORY_FRACTION!/100
+    set /a MAX_DIRECT_MEMORY=!MEMORY!/100*!MAX_DIRECT_MEMORY_FRACTION!
 
     set META_SPACE_MEMORY=128m
     set MAX_META_SPACE_MEMORY=500m
