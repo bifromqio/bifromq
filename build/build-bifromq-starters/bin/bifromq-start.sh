@@ -148,12 +148,12 @@ eval JVM_GC=("$JVM_GC_OPTS")
 # Memory options
 if [ -z "$JVM_HEAP_OPTS" ]; then
   MEMORY_FRACTION=70 # Percentage of total memory to use
-  HEAP_MEMORY=$(($MEMORY * $MEMORY_FRACTION / 100))
+  HEAP_MEMORY=$(($MEMORY /100 * $MEMORY_FRACTION))
   MIN_HEAP_MEMORY=$(($HEAP_MEMORY / 2))
 
   # Calculate max direct memory based on total memory
   MAX_DIRECT_MEMORY_FRACTION=20 # Percentage of total memory to use for max direct memory
-  MAX_DIRECT_MEMORY=$(($MEMORY * $MAX_DIRECT_MEMORY_FRACTION / 100))
+  MAX_DIRECT_MEMORY=$(($MEMORY /100 * $MAX_DIRECT_MEMORY_FRACTION))
 
   META_SPACE_MEMORY=128m
   MAX_META_SPACE_MEMORY=500m
