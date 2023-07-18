@@ -76,31 +76,41 @@ if "" == "%BIND_ADDR%" (
 
 rem check java version
 if "" == "%JAVA_HOME%" (
-    set JAVA_COMMAND=java
+    set JAVA_COMMAND="java"
     if "true" == "%FOREGROUND_MODE%" (
         set JAVA="java"
     ) else (
         set JAVA="javaw"
     )
 ) else (
-    set JAVA_COMMAND=%JAVA_HOME%\bin\java.exe
+    set JAVA_COMMAND="%JAVA_HOME%\bin\java"
     if "true" == "%FOREGROUND_MODE%" (
-        set JAVA="%JAVA_HOME%\bin\java.exe"
+        set JAVA="%JAVA_HOME%\bin\java"
     ) else (
-        set JAVA="%JAVA_HOME%\bin\javaw.exe"
+        set JAVA="%JAVA_HOME%\bin\javaw"
     )
 )
 
-for /f "tokens=3" %%a in ('%JAVA_COMMAND% -version 2^>^&1 ^| findstr /i "version"') do (
-    set JAVA_VERSION=%%a
-    rem remove ""
-    set JAVA_VERSION=!JAVA_VERSION:"=!
-    echo "Using Java Version !JAVA_VERSION! locating at !JAVA_COMMAND!"
-    if "!JAVA_VERSION!"=="1.*" (
-        echo "Too old Java version, at least Java 11 is required"
-        exit /b 1
-    )
+for /f "usebackq tokens=*" %%a in (`"%JAVA_COMMAND%" -version 2^>^&1 `) do (
+     set CHECK_JAVA_VERSION_OUTPUT=!CHECK_JAVA_VERSION_OUTPUT!%%a
+     for /f "usebackq tokens=3 delims= " %%b in (`echo %%a ^|findstr /i version `) do (
+        set JAVA_VERSION=%%b
+            rem remove ""
+            set JAVA_VERSION=!JAVA_VERSION:~1,-1!
+            for /f "usebackq tokens=1 delims=." %%c in (`echo !JAVA_VERSION!`) do (
+                set /a JAVA_MAJOR_VERSION=%%c
+            )
+     )
 )
+if "" == "%JAVA_MAJOR_VERSION%" (
+    echo "Using %JAVA_COMMAND% check java version failed. %CHECK_JAVA_VERSION_OUTPUT% "
+    exit /b 1
+)
+if %JAVA_MAJOR_VERSION% LSS 17 (
+    echo "Too old Java version %JAVA_MAJOR_VERSION%, at least Java 17 is required"
+    exit /b 1
+)
+echo "Using Java Version %JAVA_VERSION% locating at %JAVA_COMMAND%"
 
 call :total_memory_in_kb MEMORY %MEM_LIMIT%
 echo "Total Memory: %MEMORY% KB"
@@ -115,7 +125,7 @@ if "" == "%JVM_GC_OPTS%" (
                         '-XX:+UseZGC' ^
                         '-XX:ZAllocationSpikeTolerance=5' ^
                         '-XX:+HeapDumpOnOutOfMemoryError' ^
-                        '-XX:HeapDumpPath="%LOG_DIR%" ^
+                        '-XX:HeapDumpPath="%LOG_DIR%"' ^
                         '-Xlog:async' ^
                         '-Xlog:gc:file="%LOG_DIR%\gc.log:time,tid,tags:filecount=5,filesize=50m"' ^
                         '-XX:+HeapDumpOnOutOfMemoryError'
