@@ -49,19 +49,19 @@ CONF_FILE="$CONF_DIR/$FILE_NAME"
 PLUGIN_DIR="$BASE_DIR/plugins"
 LOG_CONF_FILE="$CONF_DIR/logback.xml"
 LIB_DIR="$BASE_DIR/lib"
-CLASSPATH=$(echo $LIB_DIR/*.jar | tr ' ' ':')
+CLASSPATH=$(echo "$LIB_DIR/*")
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
   LOG_DIR="$BASE_DIR/logs"
 fi
-mkdir -p $LOG_DIR
+mkdir -p "$LOG_DIR"
 
 # Data directory to use
 if [ "x$DATA_DIR" = "x" ]; then
   DATA_DIR="$BASE_DIR/data"
 fi
-mkdir -p $DATA_DIR
+mkdir -p "$DATA_DIR"
 
 if [ -z ${BIND_ADDR} ]; then
   BIND_ADDR=$(ifconfig -a | grep inet | grep -v 127.0.0.1 | grep -v inet6 | awk '{print $2}' | tr -d "addr:" | head -1)
@@ -100,14 +100,25 @@ else
   JAVA="$JAVA_HOME/bin/java"
 fi
 
-JAVA_VERSION=$($JAVA -version 2>&1 | awk -F\" '/version/{print $2}')
-echo "Using Java Version ${JAVA_VERSION} locating at '${JAVA}'"
-
-if [[ $JAVA_VERSION == 1.* ]]; then
-  echo "Too old Java version, at least Java 11 is required"
+CHECK_JAVA_VERSION_OUTPUT=$("$JAVA" -version 2>&1)
+JAVA_VERSION=$(echo $CHECK_JAVA_VERSION_OUTPUT | awk -F\" '/version/{print $2}')
+if [ -z "$JAVA_VERSION" ]; then
+  echo "Check Java Version failed. $CHECK_JAVA_VERSION_OUTPUT"
   exit 1
 fi
 
+JAVA_MAJOR_VERSION=$(echo $JAVA_VERSION | awk -F "." '{print $1}')
+if [ -z "$JAVA_MAJOR_VERSION" ]; then
+  echo "Parse java major version failed with java version $JAVA_VERSION"
+  exit 1
+fi
+
+if [[ $(expr $JAVA_MAJOR_VERSION) -lt 17 ]]; then
+  echo "Too old Java version $JAVA_VERSION, at least Java 11 is required"
+  exit 1
+fi
+
+echo "Using Java Version ${JAVA_VERSION} locating at '${JAVA}'"
 MEMORY=$(total_memory)
 echo -e "Total Memory: $(($MEMORY / 1024 / 1024 / 1024)) GB\n"
 
@@ -116,6 +127,10 @@ if [ -z "$JVM_PERF_OPTS" ]; then
   JVM_PERF_OPTS="-server -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
 fi
 
+function evalOpts() {
+   EVAL_JVM_GC_OPTS=("$@")
+}
+
 # GC options
 if [ -z "$JVM_GC_OPTS" ]; then
   JVM_GC_OPTS="-XX:+UnlockExperimentalVMOptions \
@@ -123,11 +138,13 @@ if [ -z "$JVM_GC_OPTS" ]; then
   -XX:+UseZGC \
   -XX:ZAllocationSpikeTolerance=5 \
   -Xlog:async \
-  -Xlog:gc:file=${LOG_DIR}/gc-%t.log:time,tid,tags:filecount=5,filesize=50m \
+  -Xlog:gc:file='${LOG_DIR}/gc-%t.log:time,tid,tags:filecount=5,filesize=50m' \
   -XX:+HeapDumpOnOutOfMemoryError \
-  -XX:HeapDumpPath=${LOG_DIR}"
+  -XX:HeapDumpPath='${LOG_DIR}' \
+"
 fi
 
+eval JVM_GC=("$JVM_GC_OPTS")
 # Memory options
 if [ -z "$JVM_HEAP_OPTS" ]; then
   MEMORY_FRACTION=70 # Percentage of total memory to use
@@ -172,25 +189,25 @@ fi
 
 
 if [ "x$FOREGROUND_MODE" = "xtrue" ]; then
-  exec "$JAVA" $JVM_HEAP_OPTS $JVM_PERF_OPTS $JVM_GC_OPTS $EXTRA_JVM_OPTS \
+  exec "$JAVA" $JVM_HEAP_OPTS $JVM_PERF_OPTS "${JVM_GC[@]}" $EXTRA_JVM_OPTS \
     -cp "$CLASSPATH" \
-    -DLOG_DIR=$LOG_DIR \
-    -DCONF_DIR=$CONF_DIR \
-    -DDATA_DIR=$DATA_DIR \
-    -DBIND_ADDR=$BIND_ADDR \
-    -Dlogback.configurationFile=$LOG_CONF_FILE \
-    -Dpf4j.pluginsDir=$PLUGIN_DIR \
-    $NAME -c $CONF_FILE
+    -DLOG_DIR="$LOG_DIR" \
+    -DCONF_DIR="$CONF_DIR" \
+    -DDATA_DIR="$DATA_DIR" \
+    -DBIND_ADDR="$BIND_ADDR" \
+    -Dlogback.configurationFile="$LOG_CONF_FILE" \
+    -Dpf4j.pluginsDir="$PLUGIN_DIR" \
+    $NAME -c "$CONF_FILE"
 else
-  nohup "$JAVA" $JVM_HEAP_OPTS $JVM_PERF_OPTS $JVM_GC_OPTS $EXTRA_JVM_OPTS \
+  nohup "$JAVA" $JVM_HEAP_OPTS $JVM_PERF_OPTS "${JVM_GC[@]}" $EXTRA_JVM_OPTS \
     -cp "$CLASSPATH" \
-    -DLOG_DIR=$LOG_DIR \
-    -DCONF_DIR=$CONF_DIR \
-    -DDATA_DIR=$DATA_DIR \
-    -DBIND_ADDR=$BIND_ADDR \
-    -Dlogback.configurationFile=$LOG_CONF_FILE \
-    -Dpf4j.pluginsDir=$PLUGIN_DIR \
-    $NAME -c $CONF_FILE >${LOG_DIR}/stdout.log 2>&1 </dev/null &
+    -DLOG_DIR="$LOG_DIR" \
+    -DCONF_DIR="$CONF_DIR" \
+    -DDATA_DIR="$DATA_DIR" \
+    -DBIND_ADDR="$BIND_ADDR" \
+    -Dlogback.configurationFile="$LOG_CONF_FILE" \
+    -Dpf4j.pluginsDir="$PLUGIN_DIR" \
+    $NAME -c "$CONF_FILE" >"${LOG_DIR}/stdout.log" 2>&1 </dev/null &
   PIDS=$(pid)
   echo "$NAME process started: $PIDS"
 fi
