@@ -15,7 +15,9 @@ package com.baidu.bifromq.plugin.manager;
 
 import org.pf4j.CompoundPluginLoader;
 import org.pf4j.DefaultPluginManager;
+import org.pf4j.ExtensionFactory;
 import org.pf4j.PluginLoader;
+import org.pf4j.PluginRuntimeException;
 
 public class BifroMQPluginManager extends DefaultPluginManager {
     @Override
@@ -24,5 +26,23 @@ public class BifroMQPluginManager extends DefaultPluginManager {
             .add(new BifroMQDevelopmentPluginLoader(this), this::isDevelopment)
             .add(new BifroMQJarPluginLoader(this), this::isNotDevelopment)
             .add(new BifroMQDefaultPluginLoader(this), this::isNotDevelopment);
+    }
+
+    @Override
+    protected ExtensionFactory createExtensionFactory() {
+        return new ExtensionFactory() {
+            @Override
+            public <T> T create(Class<T> extensionClass) {
+                try {
+                    ClassLoader originalLoader = Thread.currentThread().getContextClassLoader();
+                    Thread.currentThread().setContextClassLoader(extensionClass.getClassLoader());
+                    T instance = extensionClass.newInstance();
+                    Thread.currentThread().setContextClassLoader(originalLoader);
+                    return instance;
+                } catch (Exception e) {
+                    throw new PluginRuntimeException(e);
+                }
+            }
+        };
     }
 }
