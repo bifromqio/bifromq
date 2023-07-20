@@ -13,12 +13,14 @@
 
 package com.baidu.bifromq.plugin.manager;
 
+import lombok.extern.slf4j.Slf4j;
 import org.pf4j.CompoundPluginLoader;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.ExtensionFactory;
 import org.pf4j.PluginLoader;
 import org.pf4j.PluginRuntimeException;
 
+@Slf4j
 public class BifroMQPluginManager extends DefaultPluginManager {
     @Override
     protected PluginLoader createPluginLoader() {
@@ -35,9 +37,11 @@ public class BifroMQPluginManager extends DefaultPluginManager {
             public <T> T create(Class<T> extensionClass) {
                 try {
                     ClassLoader originalLoader = Thread.currentThread().getContextClassLoader();
-                    Thread.currentThread().setContextClassLoader(extensionClass.getClassLoader());
+                    ClassLoader targetLoader = extensionClass.getClassLoader();
+                    Thread.currentThread().setContextClassLoader(targetLoader);
                     T instance = extensionClass.newInstance();
                     Thread.currentThread().setContextClassLoader(originalLoader);
+                    log.debug("switch from target loader: {} to default loader: {}", targetLoader, originalLoader);
                     return instance;
                 } catch (Exception e) {
                     throw new PluginRuntimeException(e);
