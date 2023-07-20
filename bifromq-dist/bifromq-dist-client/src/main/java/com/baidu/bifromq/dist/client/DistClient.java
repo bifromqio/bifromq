@@ -106,7 +106,7 @@ class DistClient implements IDistClient {
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnsubMethod())
             .thenApply(v -> {
                 log.trace("Finish handling unsub request:\n{}", request);
-                return true;
+                return v.getExist();
             });
     }
 

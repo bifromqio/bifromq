@@ -32,7 +32,7 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder<?>> {
+public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder<T>> {
     protected String host;
     protected MQTTBrokerOptions options = new MQTTBrokerOptions();
     protected EventLoopGroup bossGroup;
@@ -160,28 +160,28 @@ public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder<?>> {
     }
 
     public ConnListenerBuilder.TCPConnListenerBuilder buildTcpConnListener() {
-        if (!tcpListenerBuilder.isPresent()) {
+        if (tcpListenerBuilder.isEmpty()) {
             tcpListenerBuilder = Optional.of(new ConnListenerBuilder.TCPConnListenerBuilder(this));
         }
         return tcpListenerBuilder.get();
     }
 
     public ConnListenerBuilder.TLSConnListenerBuilder buildTLSConnListener() {
-        if (!tlsListenerBuilder.isPresent()) {
+        if (tlsListenerBuilder.isEmpty()) {
             tlsListenerBuilder = Optional.of(new ConnListenerBuilder.TLSConnListenerBuilder(this));
         }
         return tlsListenerBuilder.get();
     }
 
     public ConnListenerBuilder.WSConnListenerBuilder buildWSConnListener() {
-        if (!wsListenerBuilder.isPresent()) {
+        if (wsListenerBuilder.isEmpty()) {
             wsListenerBuilder = Optional.of(new ConnListenerBuilder.WSConnListenerBuilder(this));
         }
         return wsListenerBuilder.get();
     }
 
     public ConnListenerBuilder.WSSConnListenerBuilder buildWSSConnListener() {
-        if (!wssListenerBuilder.isPresent()) {
+        if (wssListenerBuilder.isEmpty()) {
             wssListenerBuilder = Optional.of(new ConnListenerBuilder.WSSConnListenerBuilder(this));
         }
         return wssListenerBuilder.get();
@@ -219,7 +219,7 @@ public abstract class MQTTBrokerBuilder<T extends MQTTBrokerBuilder<?>> {
         }
     }
 
-    abstract static class InterProcBrokerBuilder<T extends InterProcBrokerBuilder<?>> extends MQTTBrokerBuilder<T> {
+    abstract static class InterProcBrokerBuilder<T extends InterProcBrokerBuilder<T>> extends MQTTBrokerBuilder<T> {
         protected String serverId;
         protected String rpcBindAddr;
         protected Integer port;

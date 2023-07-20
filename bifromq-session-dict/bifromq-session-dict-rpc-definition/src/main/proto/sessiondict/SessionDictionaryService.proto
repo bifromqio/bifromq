@@ -30,10 +30,6 @@ message KillRequest {
 }
 
 message KillReply {
-  enum Result{
-    OK = 0;
-    ERROR = 1;
-  }
   uint64 reqId = 1;
-  Result result = 2;
+  bool result = 2; // true for ok, false for not found
 }

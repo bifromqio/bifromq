@@ -59,20 +59,15 @@ class SessionDictionaryClient implements ISessionDictionaryClient {
 
     @Override
     public CompletableFuture<KillReply> kill(long reqId,
-                                             String tenantId,
                                              String userId,
                                              String clientId,
                                              ClientInfo killer) {
-        return rpcClient.invoke(tenantId, null, KillRequest.newBuilder()
-                .setReqId(reqId)
-                .setUserId(userId)
-                .setClientId(clientId)
-                .setKiller(killer)
-                .build(), SessionDictionaryServiceGrpc.getKillMethod())
-            .exceptionally(e -> KillReply.newBuilder()
-                .setReqId(reqId)
-                .setResult(KillReply.Result.ERROR)
-                .build());
+        return rpcClient.invoke(killer.getTenantId(), null, KillRequest.newBuilder()
+            .setReqId(reqId)
+            .setUserId(userId)
+            .setClientId(clientId)
+            .setKiller(killer)
+            .build(), SessionDictionaryServiceGrpc.getKillMethod());
     }
 
     @Override

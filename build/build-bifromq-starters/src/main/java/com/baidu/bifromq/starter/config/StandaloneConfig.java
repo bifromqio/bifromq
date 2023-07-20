@@ -44,6 +44,7 @@ public class StandaloneConfig implements StarterConfig {
     private boolean wsEnabled = true;
     private boolean wssEnabled = false;
     private ServerSSLContextConfig brokerSSLCtxConfig;
+    private APIServerConfig apiServerConfig = new APIServerConfig();
     private String authProviderFQN = null;
     private String settingProviderFQN = null;
     private DistWorkerConfig distWorkerConfig;

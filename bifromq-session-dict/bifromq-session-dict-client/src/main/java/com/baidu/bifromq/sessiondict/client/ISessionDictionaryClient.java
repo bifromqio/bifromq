@@ -44,7 +44,7 @@ public interface ISessionDictionaryClient {
      */
     IRPCClient.IMessageStream<Quit, Ping> reg(ClientInfo clientInfo);
 
-    CompletableFuture<KillReply> kill(long reqId, String tenantId, String userId, String clientId, ClientInfo killer);
+    CompletableFuture<KillReply> kill(long reqId, String userId, String clientId, ClientInfo killer);
 
     void stop();
 }

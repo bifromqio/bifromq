@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.mqtt.client.MqttMsg;
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
@@ -77,8 +77,8 @@ public class MQTTLastWillTest extends MQTTTest {
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
 
         log.info("Kill client");
-        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        sessionDictClient.kill(System.nanoTime(), deviceKey,
+            "lwtPubclient", ClientInfo.newBuilder().setTenantId(tenantId).setType("killer").build()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
         assertEquals(msg.topic, willTopic);
@@ -116,8 +116,8 @@ public class MQTTLastWillTest extends MQTTTest {
         lwtPubConnOpts.setUserName(userName);
         MqttTestClient lwtPubClient = new MqttTestClient(brokerURI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        sessionDictClient.kill(System.nanoTime(), deviceKey,
+            "lwtPubclient", ClientInfo.newBuilder().setTenantId(tenantId).setType("killer").build()).join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);
@@ -172,8 +172,8 @@ public class MQTTLastWillTest extends MQTTTest {
         lwtSubClient.connect(lwtSubConnOpts);
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2);
 
-        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        sessionDictClient.kill(System.nanoTime(), deviceKey,
+            "lwtPubclient", ClientInfo.newBuilder().setTenantId(tenantId).setType("killer").build()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
         assertEquals(msg.topic, willTopic);
@@ -211,8 +211,8 @@ public class MQTTLastWillTest extends MQTTTest {
         lwtPubConnOpts.setUserName(userName);
         MqttTestClient lwtPubClient = new MqttTestClient(brokerURI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        sessionDictClient.kill(System.nanoTime(), deviceKey,
+            "lwtPubclient", ClientInfo.newBuilder().setTenantId(tenantId).setType("killer").build()).join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);

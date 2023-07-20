@@ -27,6 +27,7 @@ import lombok.Setter;
 })
 public abstract class SSLContextConfig {
     private boolean enableSSL;
+    private boolean selfSigned;
     private String certFile;
     private String keyFile;
     private String trustCertsFile;

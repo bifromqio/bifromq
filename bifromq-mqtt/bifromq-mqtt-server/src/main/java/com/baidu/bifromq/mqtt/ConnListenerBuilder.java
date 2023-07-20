@@ -23,13 +23,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.NonNull;
 
-abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
+abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
     protected final Map<ChannelOption<?>, Object> options = new LinkedHashMap<>();
     protected final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<>();
-    private final MQTTBrokerBuilder serverBuilder;
+    private final MQTTBrokerBuilder<?> serverBuilder;
     protected int port;
 
-    ConnListenerBuilder(MQTTBrokerBuilder builder) {
+    ConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
         serverBuilder = builder;
         options.put(ChannelOption.SO_BACKLOG, 128);
         options.put(ChannelOption.SO_REUSEADDR, true);
@@ -37,7 +37,6 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
             options.put(EpollChannelOption.EPOLL_MODE, EpollMode.EDGE_TRIGGERED);
         }
         childOptions.put(ChannelOption.TCP_NODELAY, true);
-
     }
 
     public C port(int port) {
@@ -66,22 +65,22 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
         return (C) this;
     }
 
-    public <M extends MQTTBrokerBuilder> M buildListener() {
+    public <M extends MQTTBrokerBuilder<M>> M buildListener() {
         return (M) serverBuilder;
     }
 
     public static class TCPConnListenerBuilder extends ConnListenerBuilder<TCPConnListenerBuilder> {
-        TCPConnListenerBuilder(MQTTBrokerBuilder builder) {
+        TCPConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
             super(builder);
             port(1883);
         }
     }
 
     private abstract static class SecuredConnListenerBuilder
-        <L extends SecuredConnListenerBuilder> extends ConnListenerBuilder<L> {
+        <L extends SecuredConnListenerBuilder<L>> extends ConnListenerBuilder<L> {
         protected SslContext sslContext;
 
-        SecuredConnListenerBuilder(MQTTBrokerBuilder builder) {
+        SecuredConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
             super(builder);
         }
 
@@ -94,7 +93,7 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
 
     public static final class TLSConnListenerBuilder extends SecuredConnListenerBuilder<TLSConnListenerBuilder> {
 
-        TLSConnListenerBuilder(MQTTBrokerBuilder builder) {
+        TLSConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
             super(builder);
             port(8883);
         }
@@ -103,7 +102,7 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
     public static final class WSConnListenerBuilder extends ConnListenerBuilder<WSConnListenerBuilder> {
         private String path = "mqtt";
 
-        WSConnListenerBuilder(MQTTBrokerBuilder builder) {
+        WSConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
             super(builder);
         }
 
@@ -120,7 +119,7 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
     public static final class WSSConnListenerBuilder extends SecuredConnListenerBuilder<WSSConnListenerBuilder> {
         private String path;
 
-        WSSConnListenerBuilder(MQTTBrokerBuilder builder) {
+        WSSConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
             super(builder);
         }
 

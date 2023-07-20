@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.starter;
 
+import com.baidu.bifromq.apiserver.APIServer;
+import com.baidu.bifromq.apiserver.IAPIServer;
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -34,20 +36,25 @@ import com.baidu.bifromq.mqtt.MQTTBrokerBuilder;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
 import com.baidu.bifromq.retain.server.IRetainServer;
 import com.baidu.bifromq.retain.store.IRetainStore;
 import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
 import com.baidu.bifromq.sessiondict.server.ISessionDictionaryServer;
+import com.baidu.bifromq.starter.config.APIServerConfig;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
+import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import io.netty.channel.EventLoopGroup;
+import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -87,8 +94,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IRetainStore retainStore;
     private IRetainServer retainServer;
     private IMQTTBroker mqttBroker;
-    private ISubBrokerManager inboxBrokerMgr;
-
+    private ISubBrokerManager subBrokerManager;
+    private IAPIServer apiServer;
 
     @Override
     protected void init(StandaloneConfig config) {
@@ -225,7 +232,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .executor(MoreExecutors.directExecutor())
             .build();
 
-        inboxBrokerMgr = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
+        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
 
         distWorkerClient = IBaseKVStoreClient.inProcClientBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
@@ -255,7 +262,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .setWalEngineConfigurator(
                     buildEngineConf(config.getDistWorkerConfig().getWalEngineConfig(), "dist_wal")))
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
-            .subBrokerManager(inboxBrokerMgr)
+            .subBrokerManager(subBrokerManager)
             .build();
 
         distServer = IDistServer.inProcBuilder()
@@ -316,6 +323,27 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         }
 
         mqttBroker = brokerBuilder.build();
+
+        if (config.getApiServerConfig().isEnable()) {
+            apiServer = buildAPIServer(config);
+        }
+    }
+
+    private IAPIServer buildAPIServer(StandaloneConfig config) {
+        APIServerConfig apiServerConfig = config.getApiServerConfig();
+        String apiHost = Strings.isNullOrEmpty(apiServerConfig.getHost()) ?
+            config.getHost() : apiServerConfig.getHost();
+        EventLoopGroup bossELG = NettyUtil.createEventLoopGroup(config.getApiServerConfig().getApiBossThreads(),
+            EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
+        EventLoopGroup workerELG = NettyUtil.createEventLoopGroup(config.getMqttWorkerThreads(),
+            EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
+        SslContext sslContext = null;
+        ServerSSLContextConfig sslContextConfig = apiServerConfig.getServerSSLCtxConfig();
+        if (sslContextConfig.isEnableSSL()) {
+            sslContext = buildServerSslContext(apiServerConfig.getServerSSLCtxConfig());
+        }
+        return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsPort(),
+            bossELG, workerELG, sslContext, distClient, sessionDictClient, settingProviderMgr);
     }
 
     @Override
@@ -340,47 +368,40 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         distWorkerClient.join();
 
         mqttBroker.start();
+        if (apiServer != null) {
+            apiServer.start();
+        }
         log.info("Standalone broker started");
         setupMetrics();
     }
 
     public void stop() {
+        if (apiServer != null) {
+            apiServer.shutdown();
+        }
         mqttBroker.shutdown();
-
         distClient.stop();
         distServer.shutdown();
-
         distWorkerClient.stop();
         distWorker.stop();
-
         inboxReaderClient.stop();
         inboxServer.shutdown();
-
         inboxStoreClient.stop();
         inboxStore.stop();
-
         retainClient.stop();
         retainServer.shutdown();
-
         retainStoreClient.stop();
         retainStore.stop();
-
         sessionDictClient.stop();
         sessionDictServer.shutdown();
-
         clientCrdtService.stop();
         serverCrdtService.stop();
-
         agentHost.shutdown();
-        log.debug("Agent host stopped");
-
         authProviderMgr.close();
 
         eventCollectorMgr.close();
-
         settingProviderMgr.close();
-
-        inboxBrokerMgr.stop();
+        subBrokerManager.stop();
 
         if (ioClientExecutor != null) {
             ioClientExecutor.shutdownNow();

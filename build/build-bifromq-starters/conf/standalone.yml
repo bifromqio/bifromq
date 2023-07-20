@@ -17,6 +17,9 @@ maxConnBandwidth: 5120000 # 512bps
 defaultKeepAliveSec: 300
 qos2ConfirmWindowSec: 5
 
+apiServerConfig:
+  httpPort: 8090
+
 distWorkerConfig:
   distWorkerClientConfig:
     execPipelinePerServer: 1000

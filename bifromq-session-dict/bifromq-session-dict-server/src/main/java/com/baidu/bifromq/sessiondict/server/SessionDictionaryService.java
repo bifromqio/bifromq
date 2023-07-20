@@ -77,7 +77,7 @@ public class SessionDictionaryService extends SessionDictionaryServiceGrpc.Sessi
             }
             return CompletableFuture.completedFuture(KillReply.newBuilder()
                 .setReqId(request.getReqId())
-                .setResult(KillReply.Result.OK)
+                .setResult(reg != null)
                 .build());
         }, responseObserver);
     }

@@ -39,12 +39,14 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.Provider;
 import java.security.Security;
+import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -98,16 +100,39 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
     }
 
     protected SslContext buildServerSslContext(ServerSSLContextConfig config) {
+        if ((Strings.isNullOrEmpty(config.getCertFile()) || Strings.isNullOrEmpty(config.getKeyFile()))) {
+            if (config.isSelfSigned()) {
+                try {
+                    SelfSignedCertificate cert = new SelfSignedCertificate();
+                    return buildServerSslContext(cert.certificate(), cert.privateKey(),
+                        Strings.isNullOrEmpty(config.getTrustCertsFile()) ? null :
+                            loadFromConfDir(config.getTrustCertsFile()),
+                        ClientAuth.valueOf(config.getClientAuth()));
+                } catch (CertificateException e) {
+                    throw new RuntimeException("Fail to generate self-signed certificate", e);
+                }
+            } else {
+                throw new RuntimeException("Fail to initialize server SSLContext, no cert or key file provided");
+            }
+        } else {
+            return buildServerSslContext(loadFromConfDir(config.getCertFile()), loadFromConfDir(config.getKeyFile()),
+                Strings.isNullOrEmpty(config.getTrustCertsFile()) ? null : loadFromConfDir(config.getTrustCertsFile()),
+                ClientAuth.valueOf(config.getClientAuth()));
+        }
+    }
+
+    protected SslContext buildServerSslContext(File certFile, File keyFile, File trustCertsFile,
+                                               ClientAuth clientAuth) {
         try {
             SslProvider sslProvider = defaultSslProvider();
             SslContextBuilder sslCtxBuilder = SslContextBuilder
-                .forServer(loadFromConfDir(config.getCertFile()), loadFromConfDir(config.getKeyFile()))
-                .clientAuth(ClientAuth.valueOf(config.getClientAuth()))
+                .forServer(certFile, keyFile)
+                .clientAuth(clientAuth)
                 .sslProvider(sslProvider);
-            if (Strings.isNullOrEmpty(config.getTrustCertsFile())) {
+            if (trustCertsFile == null) {
                 sslCtxBuilder.trustManager(InsecureTrustManagerFactory.INSTANCE);
             } else {
-                sslCtxBuilder.trustManager(loadFromConfDir(config.getTrustCertsFile()));
+                sslCtxBuilder.trustManager(trustCertsFile);
             }
             if (sslProvider == SslProvider.JDK) {
                 sslCtxBuilder.sslContextProvider(findJdkProvider());
@@ -176,5 +201,4 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
     public static File loadFromConfDir(String fileName) {
         return ResourceUtil.getFile(fileName, CONF_DIR_PROP);
     }
-
 }

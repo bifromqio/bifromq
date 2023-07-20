@@ -109,7 +109,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
             public CompletableFuture<Map<String, Integer>> add(DistCall dist) {
                 DistTask task = new DistTask(dist);
                 Map<String, Map<ClientInfo, Iterable<Message>>> clientMsgsByTopic =
-                    batch.computeIfAbsent(dist.tenatId, k -> new ConcurrentHashMap<>());
+                    batch.computeIfAbsent(dist.tenantId, k -> new ConcurrentHashMap<>());
                 dist.publisherMsgPacks.forEach(senderMsgPack ->
                     senderMsgPack.getMessagePackList().forEach(topicMsgs ->
                         clientMsgsByTopic.computeIfAbsent(topicMsgs.getTopic(), k -> {
@@ -213,7 +213,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistCall, Map<String, 
                                 }));
                             while ((task = tasks.poll()) != null) {
                                 Map<String, Integer> allTopicFanouts =
-                                    topicFanoutByTenant.get(task.distCall.tenatId);
+                                    topicFanoutByTenant.get(task.distCall.tenantId);
                                 Map<String, Integer> topicFanouts = new HashMap<>();
                                 task.distCall.publisherMsgPacks.forEach(clientMessagePack ->
                                     clientMessagePack.getMessagePackList().forEach(topicMessagePack ->

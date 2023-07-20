@@ -93,6 +93,10 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-retain-store</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-apiserver</artifactId>
+        </dependency>
         <!-- plugin helper -->
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

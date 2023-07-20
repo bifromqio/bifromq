@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter.config.model;
 
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import io.netty.handler.ssl.ClientAuth;
 import lombok.Getter;
 import lombok.Setter;

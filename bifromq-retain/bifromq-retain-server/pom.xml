@@ -38,10 +38,6 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-setting-provider-helper</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-retain-rpc-definition</artifactId>
         </dependency>
         <dependency>
