@@ -35,15 +35,16 @@ public class BifroMQPluginManager extends DefaultPluginManager {
         return new ExtensionFactory() {
             @Override
             public <T> T create(Class<T> extensionClass) {
+                log.debug("Create instance for extension '{}'", extensionClass.getName());
+                ClassLoader originalLoader = Thread.currentThread().getContextClassLoader();
                 try {
-                    ClassLoader originalLoader = Thread.currentThread().getContextClassLoader();
                     ClassLoader targetLoader = extensionClass.getClassLoader();
                     Thread.currentThread().setContextClassLoader(targetLoader);
                     T instance = extensionClass.newInstance();
                     Thread.currentThread().setContextClassLoader(originalLoader);
-                    log.debug("switch from target loader: {} to default loader: {}", targetLoader, originalLoader);
                     return instance;
                 } catch (Exception e) {
+                    Thread.currentThread().setContextClassLoader(originalLoader);
                     throw new PluginRuntimeException(e);
                 }
             }
