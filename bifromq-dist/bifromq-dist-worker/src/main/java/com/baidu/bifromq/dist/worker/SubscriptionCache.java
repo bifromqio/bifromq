@@ -68,8 +68,8 @@ import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class SubscriptionCache {
-    // OuterCacheKey: <tenantId><escapedTopicFilter>
-    // InnerCacheKey: <orderKey>
+    // OuterCacheKey: OrderedSharedMatchingKey(<tenantId>, <escapedTopicFilter>, <tenantVer>)
+    // InnerCacheKey: ClientInfo(<tenantId>, <type>, <metadata>)
     private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
@@ -77,9 +77,6 @@ public class SubscriptionCache {
     private final ILoadEstimator loadEstimator;
     private final Timer externalMatchTimer;
     private final Timer internalMatchTimer;
-
-    public record OrderedSharedMatchingKey(String tenantId, String escapedTopicFilter, long tenantVer) {
-    }
 
     SubscriptionCache(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, Executor matchExecutor,
                       ILoadEstimator loadEstimator) {
@@ -312,5 +309,8 @@ public class SubscriptionCache {
     private static class MatchResult {
         final List<Matching> routes = new ArrayList<>();
         final long tenantVer;
+    }
+
+    private record OrderedSharedMatchingKey(String tenantId, String escapedTopicFilter, long tenantVer) {
     }
 }
