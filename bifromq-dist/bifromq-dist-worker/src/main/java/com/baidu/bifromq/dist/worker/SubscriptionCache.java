@@ -16,6 +16,7 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordTopicFilterPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
+import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_CACHED_SUBS_PER_TENANT;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static com.google.common.hash.Hashing.murmur3_128;
@@ -67,9 +68,9 @@ import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class SubscriptionCache {
-    // OuterCacheKey: <tenantId><escapedTopicFilter>
-    // InnerCacheKey: <orderKey>
-    private final LoadingCache<String, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
+    // OuterCacheKey: OrderedSharedMatchingKey(<tenantId>, <escapedTopicFilter>, <tenantVer>)
+    // InnerCacheKey: ClientInfo(<tenantId>, <type>, <metadata>)
+    private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
     private final ThreadLocal<IKVRangeReader> threadLocalReader;
@@ -85,14 +86,14 @@ public class SubscriptionCache {
         orderedSharedMatching = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
-            .removalListener((RemovalListener<String, Cache<ClientInfo, NormalMatching>>)
+            .removalListener((RemovalListener<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>>)
                 (key, value, cause) -> {
                     if (value != null) {
                         value.invalidateAll();
                     }
                 })
             .build(k -> Caffeine.newBuilder()
-                .expireAfterAccess(expirySec, TimeUnit.MINUTES)
+                .expireAfterAccess(expirySec, TimeUnit.SECONDS)
                 .build());
         tenantCache = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 3L, TimeUnit.SECONDS)
@@ -182,9 +183,9 @@ public class SubscriptionCache {
                         if (groupMatching.ordered) {
                             for (ClientInfo sender : senders) {
                                 matchedInbox = orderedSharedMatching
-                                    .get(groupMatching.tenantId +
-                                        groupMatching.escapedTopicFilter +
-                                        matchResult.tenantVer)
+                                    .get(new OrderedSharedMatchingKey(groupMatching.tenantId,
+                                        groupMatching.escapedTopicFilter,
+                                        matchResult.tenantVer))
                                     .get(sender, k -> {
                                         RendezvousHash<ClientInfo, NormalMatching> hash =
                                             new RendezvousHash<>(murmur3_128(),
@@ -217,6 +218,8 @@ public class SubscriptionCache {
         if (routeCache != null) {
             routeCache.synchronous().invalidate(topic);
         }
+        orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(topic.tenantId, escape(topic.topic),
+            tenantVerCache.get(topic.tenantId).get()));
     }
 
     public void close() {
@@ -306,5 +309,8 @@ public class SubscriptionCache {
     private static class MatchResult {
         final List<Matching> routes = new ArrayList<>();
         final long tenantVer;
+    }
+
+    private record OrderedSharedMatchingKey(String tenantId, String escapedTopicFilter, long tenantVer) {
     }
 }
