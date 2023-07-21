@@ -43,7 +43,6 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
-import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
@@ -157,6 +156,7 @@ public abstract class DistWorkerTest {
     @BeforeMethod(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        System.setProperty("dist_worker_topic_match_expiry_seconds", "1");
         meterRegistry = new SimpleMeterRegistry();
         try {
             dbRootDir = Files.createTempDirectory("");
