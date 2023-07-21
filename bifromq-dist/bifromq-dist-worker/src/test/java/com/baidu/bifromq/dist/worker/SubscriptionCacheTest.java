@@ -261,9 +261,10 @@ public class SubscriptionCacheTest {
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
-        when(kvIterator.isValid()).thenReturn(true, false, true, false);
+        when(kvIterator.isValid()).thenReturn(true, false, true, false, true, false);
         String qInboxId1 = EntityUtil.toQualifiedInboxId(0, "inbox1", "deliverer1");
         String qInboxId2 = EntityUtil.toQualifiedInboxId(0, "inbox2", "deliverer1");
+        String qInboxId3 = EntityUtil.toQualifiedInboxId(0, "inbox3", "deliverer1");
         String sharedTopicFilter = "$oshare/group/" + scopedTopic.topic;
         when(kvIterator.key())
             .thenReturn(EntityUtil.matchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId1));
@@ -274,6 +275,9 @@ public class SubscriptionCacheTest {
                     .build().toByteString(),
                 MatchRecord.newBuilder()
                     .setGroup(GroupMatchRecord.newBuilder().putEntry(qInboxId2, QoS.AT_LEAST_ONCE).build())
+                    .build().toByteString(),
+                MatchRecord.newBuilder()
+                    .setGroup(GroupMatchRecord.newBuilder().putEntry(qInboxId3, QoS.EXACTLY_ONCE).build())
                     .build().toByteString());
 
         Map<NormalMatching, Set<ClientInfo>> routes = cache.get(scopedTopic, singleton(sender)).join();
@@ -289,6 +293,21 @@ public class SubscriptionCacheTest {
             assertEquals(matching.subBrokerId, 0);
             assertEquals(matching.subInfo.getInboxId(), "inbox2");
             assertEquals(matching.subInfo.getSubQoS(), QoS.AT_LEAST_ONCE);
+            assertEquals(matching.delivererKey, "deliverer1");
+            assertTrue(entry.getValue().contains(sender));
+        }
+
+        cache.invalidate(scopedTopic);
+        routes = cache.get(scopedTopic, singleton(sender)).join();
+
+        assertEquals(routes.size(), 1);
+        for (Map.Entry<NormalMatching, Set<ClientInfo>> entry : routes.entrySet()) {
+            NormalMatching matching = entry.getKey();
+            assertEquals(matching.tenantId, scopedTopic.tenantId);
+            assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
+            assertEquals(matching.subBrokerId, 0);
+            assertEquals(matching.subInfo.getInboxId(), "inbox3");
+            assertEquals(matching.subInfo.getSubQoS(), QoS.EXACTLY_ONCE);
             assertEquals(matching.delivererKey, "deliverer1");
             assertTrue(entry.getValue().contains(sender));
         }

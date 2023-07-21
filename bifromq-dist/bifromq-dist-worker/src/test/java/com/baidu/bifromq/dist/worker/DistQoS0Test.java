@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -429,5 +430,210 @@ public class DistQoS0Test extends DistWorkerTest {
             }
         }
         assertEquals(msgCount, 1);
+    }
+
+    @Test(groups = "integration")
+    public void testRouteRefresh() {
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+
+        when(writer1.deliver(any()))
+                .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                    Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                    Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                    for (DeliveryPack inboxWrite : inboxPacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, DeliveryResult.NO_INBOX);
+                        }
+                    }
+                    return CompletableFuture.completedFuture(resultMap);
+                });
+
+        when(mqttBroker.open("batch2")).thenReturn(writer2);
+
+        when(writer2.deliver(any()))
+                .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                    Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                    Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                    for (DeliveryPack inboxWrite : inboxPacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, DeliveryResult.NO_INBOX);
+                        }
+                    }
+                    return CompletableFuture.completedFuture(resultMap);
+                });
+
+        when(mqttBroker.open("batch3")).thenReturn(writer3);
+
+        when(writer3.deliver(any()))
+                .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                    Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                    Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                    for (DeliveryPack inboxWrite : inboxPacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, DeliveryResult.NO_INBOX);
+                        }
+                    }
+                    return CompletableFuture.completedFuture(resultMap);
+                });
+
+        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        // pub: qos0
+        // topic: "/a/b/c"
+        // sub: inbox1 -> [(/a/b/c, qos0)]
+        // expected behavior: inbox1 gets 1 message
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE,
+                MqttBroker, "inbox1", "batch1");
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer1, timeout(1000).times(1)).deliver(any());
+        clearInvocations(writer1, writer2, writer3);
+
+        // pub: qos0
+        // topic: "/a/b/c"
+        // action: delete inbox1 match record
+        // sub: no sub
+        // expected behavior: inbox1 gets no messages
+        deleteMatchRecord(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer1, timeout(1000).times(0)).deliver(any());
+        clearInvocations(writer1, writer2, writer3);
+
+        // pub: qos0
+        // topic: "/a/b/c"
+        // action: inbox2 join shared group
+        // sub: inbox2 -> [($share/group/a/b/c, qos0)]
+        // expected behavior: inbox2 gets 1 message
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_MOST_ONCE,
+                MqttBroker, "inbox2", "batch2");
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer2, timeout(1000).times(1)).deliver(any());
+        clearInvocations(writer1, writer2, writer3);
+
+        // pub: qos0
+        // topic: "/a/b/c"
+        // action: inbox2 leaves the shared group and inbox3 joins
+        // sub: inbox3 -> [($share/group/a/b/c, qos0)]
+        // expected behavior: inbox2 gets no messages and inbox3 gets 1
+        leaveMatchGroup(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_MOST_ONCE,
+                MqttBroker, "inbox3", "batch3");
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer2, timeout(1000).times(0)).deliver(any());
+        verify(writer3, timeout(1000).times(1)).deliver(any());
+        clearInvocations(writer1, writer2, writer3);
+
+        // pub: qos0
+        // topic: "/a/b/c"
+        // action: inbox2 joins an ordered shared group and inbox3 leaves the shared group
+        // sub: inbox2 -> [($oshare/group/a/b/c, qos0)]
+        // expected behavior: inbox2 gets 1 message and inbox3 gets none
+        joinMatchGroup(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE,
+                MqttBroker, "inbox2", "batch2");
+        leaveMatchGroup(tenantA, "$share/group//a/b/c", MqttBroker, "inbox3", "batch3");
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer2, timeout(1000).times(1)).deliver(any());
+        verify(writer3, timeout(1000).times(0)).deliver(any());
+        clearInvocations(writer1, writer2, writer3);
+
+        // pub: qos0
+        // topic: "/a/b/c"
+        // action: inbox3 joins the ordered shared group and inbox2 leaves
+        // sub: inbox3 -> [($oshare/group/a/b/c, qos0)]
+        // expected behavior: inbox2 gets no messages and inbox3 gets 1
+        leaveMatchGroup(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        joinMatchGroup(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE,
+                MqttBroker, "inbox3", "batch3");
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer2, timeout(1000).times(0)).deliver(any());
+        verify(writer3, timeout(1000).times(1)).deliver(any());
+    }
+
+    @Test(groups = "integration")
+    public void testRouteRefreshWithWildcardTopic() throws InterruptedException {
+        when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+
+        when(writer1.deliver(any()))
+                .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                    Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                    Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                    for (DeliveryPack inboxWrite : inboxPacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, DeliveryResult.NO_INBOX);
+                        }
+                    }
+                    return CompletableFuture.completedFuture(resultMap);
+                });
+
+        when(mqttBroker.open("batch2")).thenReturn(writer2);
+
+        when(writer2.deliver(any()))
+                .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                    Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                    Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                    for (DeliveryPack inboxWrite : inboxPacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, DeliveryResult.NO_INBOX);
+                        }
+                    }
+                    return CompletableFuture.completedFuture(resultMap);
+                });
+
+        when(mqttBroker.open("batch3")).thenReturn(writer3);
+
+        when(writer3.deliver(any()))
+                .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+                    Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+                    Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                    for (DeliveryPack inboxWrite : inboxPacks) {
+                        for (SubInfo subInfo : inboxWrite.inboxes) {
+                            resultMap.put(subInfo, DeliveryResult.NO_INBOX);
+                        }
+                    }
+                    return CompletableFuture.completedFuture(resultMap);
+                });
+
+        // pub: qos0
+        // topic: "/a/b/c"
+        // sub: inbox1 -> [(/a/b/c, qos0)]
+        // expected behavior: inbox1 gets 1 message
+        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE,
+                MqttBroker, "inbox1", "batch1");
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer1, timeout(1000).times(1)).deliver(any());
+        clearInvocations(writer1, writer2, writer3);
+
+        // pub: qos0
+        // topic: "/a/b/c", "/#"
+        // action: inbox2 sub the wildcard topic "/#"
+        // sub: inbox1 -> [(/a/b/c, qos0)], inbox2 -> [(/#, qos0)]
+        // expected behavior: inbox1 gets 1 message and inbox2 gets 1 either
+        insertMatchRecord(tenantA, "/#", AT_MOST_ONCE,
+                MqttBroker, "inbox2", "batch2");
+        Thread.sleep(1100);
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer1, timeout(1000).times(1)).deliver(any());
+        verify(writer2, timeout(1000).times(1)).deliver(any());
+        clearInvocations(writer1, writer2, writer3);
+
+        // pub: qos0
+        // topic: "/a/b/c", "/#"
+        // action: inbox3 joins the shared and ordered shared wildcard topic "/#"
+        // sub: inbox1 -> [(/a/b/c, qos0)],
+        // inbox2 -> [(/#, qos0)],
+        // inbox3 -> [(#share/group/#, qos0), (#oshare/group/#, qos0)]
+        // expected behavior: inbox1 and inbox2 gets 1 message, inbox3 gets 2
+        joinMatchGroup(tenantA, "$share/group/#", AT_MOST_ONCE,
+                MqttBroker, "inbox3", "batch3");
+        joinMatchGroup(tenantA, "$oshare/group/#", AT_MOST_ONCE,
+                MqttBroker, "inbox3", "batch3");
+        // wait for cache refresh after writing
+        Thread.sleep(1100);
+        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        verify(writer1, timeout(1000).times(1)).deliver(any());
+        verify(writer2, timeout(1000).times(1)).deliver(any());
+        verify(writer3, timeout(1000).times(2)).deliver(any());
     }
 }
