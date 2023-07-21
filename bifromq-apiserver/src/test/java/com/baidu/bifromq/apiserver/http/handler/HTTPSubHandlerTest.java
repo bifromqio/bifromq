@@ -29,13 +29,12 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 
-import com.baidu.bifromq.apiserver.http.annotation.Route;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.type.QoS;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -52,19 +51,14 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
 
     @Test
     public void missingHeaders() {
-        Route route = HTTPUnsubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
-
+        DefaultFullHttpRequest req = buildRequest();
         HTTPSubHandler handler = new HTTPSubHandler(distClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
     @Test
     public void sub() {
-        Route route = HTTPSubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
         req.headers().set(HEADER_SUB_QOS.header, "1");
         req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
@@ -101,9 +95,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
 
     @Test
     public void subSucceed() {
-        Route route = HTTPSubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
         req.headers().set(HEADER_SUB_QOS.header, "1");
         req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
@@ -121,5 +113,9 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         assertEquals(response.status(), HttpResponseStatus.OK);
         assertEquals(response.headers().get(HEADER_SUB_QOS.header), "1");
         assertEquals(response.content().readableBytes(), 0);
+    }
+
+    private DefaultFullHttpRequest buildRequest() {
+        return buildRequest(HttpMethod.PUT);
     }
 }

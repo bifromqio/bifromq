@@ -18,6 +18,7 @@ defaultKeepAliveSec: 300
 qos2ConfirmWindowSec: 5
 
 apiServerConfig:
+  enable: false
   httpPort: 8090
 
 distWorkerConfig:

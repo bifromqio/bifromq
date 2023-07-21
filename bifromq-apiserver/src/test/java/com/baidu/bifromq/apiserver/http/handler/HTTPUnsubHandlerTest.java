@@ -27,12 +27,11 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 
-import com.baidu.bifromq.apiserver.http.annotation.Route;
 import com.baidu.bifromq.dist.client.IDistClient;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -49,19 +48,15 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
 
     @Test
     public void missingHeaders() {
-        Route route = HTTPUnsubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
-
+        DefaultFullHttpRequest req = buildRequest();
         HTTPUnsubHandler handler = new HTTPUnsubHandler(distClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
     @Test
     public void unsub() {
-        Route route = HTTPUnsubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
+
         req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
         req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
         req.headers().set(HEADER_DELIVERER_KEY.header, "postman_no1");
@@ -94,9 +89,8 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
 
     @Test
     public void unsubSucceed() {
-        Route route = HTTPUnsubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
+
         req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
         req.headers().set(HEADER_SUB_QOS.header, "1");
         req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
@@ -117,9 +111,8 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
 
     @Test
     public void unsubNothing() {
-        Route route = HTTPUnsubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
+
         req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
         req.headers().set(HEADER_SUB_QOS.header, "1");
         req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
@@ -136,5 +129,9 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.NOT_FOUND);
         assertEquals(response.content().readableBytes(), 0);
+    }
+
+    private DefaultFullHttpRequest buildRequest() {
+        return buildRequest(HttpMethod.DELETE);
     }
 }

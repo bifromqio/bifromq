@@ -16,7 +16,12 @@ package com.baidu.bifromq.apiserver.http.handler;
 import static org.testng.Assert.assertNotNull;
 
 import com.baidu.bifromq.apiserver.MockableTest;
-import com.baidu.bifromq.apiserver.http.annotation.Route;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
+import javax.ws.rs.Path;
 import org.testng.annotations.Test;
 
 public abstract class AbstractHTTPRequestHandlerTest<T> extends MockableTest {
@@ -24,6 +29,15 @@ public abstract class AbstractHTTPRequestHandlerTest<T> extends MockableTest {
 
     @Test
     public final void annotationAttached() {
-        assertNotNull(handlerClass().getAnnotation(Route.class));
+        assertNotNull(handlerClass().getAnnotation(Path.class));
+    }
+
+    protected DefaultFullHttpRequest buildRequest(HttpMethod method) {
+        return buildRequest(method, Unpooled.EMPTY_BUFFER);
+    }
+
+    protected DefaultFullHttpRequest buildRequest(HttpMethod method, ByteBuf content) {
+        return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, method,
+            handlerClass().getAnnotation(Path.class).value(), content);
     }
 }

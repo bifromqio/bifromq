@@ -15,8 +15,11 @@ package com.baidu.bifromq.apiserver.http;
 
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.info.Info;
 import java.util.concurrent.CompletableFuture;
 
+@OpenAPIDefinition(info = @Info(title = "BifroMQ RESTful API", version = "${project.version}"))
 public interface IHTTPRequestHandler {
     CompletableFuture<FullHttpResponse> handle(long reqId, String tenantId, FullHttpRequest req);
 }

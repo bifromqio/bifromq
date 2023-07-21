@@ -22,20 +22,28 @@ import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.apiserver.http.annotation.Method;
-import com.baidu.bifromq.apiserver.http.annotation.Route;
 import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Route(contextPath = "/kill", method = Method.DELETE)
+@Path("/kill")
 public final class HTTPKickHandler implements IHTTPRequestHandler {
     private final ISessionDictionaryClient sessionDictClient;
 
@@ -43,8 +51,24 @@ public final class HTTPKickHandler implements IHTTPRequestHandler {
         this.sessionDictClient = sessionDictClient;
     }
 
+    @DELETE
+    @Operation(summary = "Disconnect a MQTT client connection")
+    @Parameters({
+        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
+        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true, description = "the user id of the MQTT client connection to be disconnected"),
+        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the client type"),
+        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about the kicker client, must be started with client_meta_"),
+    })
+    @RequestBody(required = false)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Success"),
+        @ApiResponse(responseCode = "404", description = "Not Found")
+    })
     @Override
-    public CompletableFuture<FullHttpResponse> handle(long reqId, String tenantId, FullHttpRequest req) {
+    public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
+                                                      @Parameter(hidden = true) String tenantId,
+                                                      @Parameter(hidden = true) FullHttpRequest req) {
         try {
             String userId = getHeader(HEADER_USER_ID, req, true);
             String clientId = getHeader(HEADER_CLIENT_ID, req, true);

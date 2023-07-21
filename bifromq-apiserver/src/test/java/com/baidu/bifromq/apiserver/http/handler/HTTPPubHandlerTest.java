@@ -25,7 +25,6 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 
-import com.baidu.bifromq.apiserver.http.annotation.Route;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -33,8 +32,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
@@ -52,9 +51,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
 
     @Test
     public void missingHeaders() {
-        Route route = HTTPPubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
 
         HTTPPubHandler handler = new HTTPPubHandler(distClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
@@ -62,12 +59,9 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
 
     @Test
     public void pub() {
-        Route route = HTTPPubHandler.class.getAnnotation(Route.class);
-        ByteBuf conent = Unpooled.wrappedBuffer("Hello BifroMQ".getBytes());
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1,
-            route.method().method,
-            route.contextPath(),
-            conent);
+
+        ByteBuf content = Unpooled.wrappedBuffer("Hello BifroMQ".getBytes());
+        DefaultFullHttpRequest req = buildRequest(HttpMethod.POST, content);
         req.headers().set(HEADER_TOPIC.header, "admin_user");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
@@ -89,7 +83,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         ClientInfo killer = killerCap.getValue();
         assertEquals(killer.getTenantId(), tenantId);
         assertEquals(qosCap.getValue(), QoS.AT_LEAST_ONCE);
-        assertEquals(payloadCap.getValue(), conent.nioBuffer());
+        assertEquals(payloadCap.getValue(), content.nioBuffer());
         assertEquals(expiryCap.getValue(), Integer.MAX_VALUE);
         assertEquals(killer.getType(), req.headers().get(HEADER_CLIENT_TYPE.header));
         assertEquals(killer.getMetadataCount(), 1);
@@ -98,9 +92,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
 
     @Test
     public void pubSucceed() {
-        Route route = HTTPPubHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC.header, "/greeting");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
@@ -115,5 +107,9 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.OK);
         assertEquals(response.content().readableBytes(), 0);
+    }
+
+    private DefaultFullHttpRequest buildRequest() {
+        return buildRequest(HttpMethod.POST);
     }
 }

@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.apiserver.http;
 
+import static com.baidu.bifromq.apiserver.http.AnnotationUtil.getHTTPMethod;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 
-import com.baidu.bifromq.apiserver.http.annotation.Route;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -33,18 +34,23 @@ public class HTTPRouteMap implements IHTTPRouteMap {
     private static final IHTTPRequestHandler NO_ROUTE_HANDLER = (reqId, tenantId, httpRequest) ->
         CompletableFuture.completedFuture(
             new DefaultFullHttpResponse(httpRequest.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
-
     private final Map<String, Map<HttpMethod, IHTTPRequestHandler>> routeMap = new HashMap<>();
+
 
     public HTTPRouteMap(IHTTPRequestHandlersFactory handlersFactory) {
         Collection<? extends IHTTPRequestHandler> handlers = handlersFactory.build();
         for (IHTTPRequestHandler handler : handlers) {
-            Route route = handler.getClass().getAnnotation(Route.class);
+            Path route = handler.getClass().getAnnotation(Path.class);
             if (route != null) {
                 Map<HttpMethod, IHTTPRequestHandler> methodsMap =
-                    routeMap.computeIfAbsent(route.contextPath(), k -> new HashMap<>());
-                IHTTPRequestHandler prev = methodsMap.put(route.method().method, handler);
-                assert prev == null : "Context path conflict: " + route.contextPath();
+                    routeMap.computeIfAbsent(route.value(), k -> new HashMap<>());
+                HttpMethod method = getHTTPMethod(handler.getClass());
+                if (method != null) {
+                    IHTTPRequestHandler prev = methodsMap.put(method, handler);
+                    assert prev == null : "Path conflict: " + route.value();
+                } else {
+                    log.warn("No http method specified for http request handler: {}", handler.getClass().getName());
+                }
             } else {
                 log.warn("No Route annotation found for HTTPRequestHandler: {}", handler.getClass().getName());
             }

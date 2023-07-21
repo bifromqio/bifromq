@@ -23,17 +23,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertThrows;
 
-import com.baidu.bifromq.apiserver.http.annotation.Route;
 import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -50,19 +48,14 @@ public class HTTPKickHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKick
 
     @Test
     public void missingHeaders() {
-        Route route = HTTPKickHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
-
+        DefaultFullHttpRequest req = buildRequest();
         HTTPKickHandler handler = new HTTPKickHandler(sessionDictClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
     @Test
     public void kick() {
-        Route route = HTTPKickHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_USER_ID.header, "admin_user");
         req.headers().set(HEADER_CLIENT_ID.header, "admin_client");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
@@ -90,9 +83,7 @@ public class HTTPKickHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKick
 
     @Test
     public void kickSucceed() {
-        Route route = HTTPKickHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_USER_ID.header, "admin_user");
         req.headers().set(HEADER_CLIENT_ID.header, "admin_client");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
@@ -113,9 +104,7 @@ public class HTTPKickHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKick
 
     @Test
     public void kickNothing() {
-        Route route = HTTPKickHandler.class.getAnnotation(Route.class);
-        DefaultFullHttpRequest req =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, route.method().method, route.contextPath());
+        DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_USER_ID.header, "admin_user");
         req.headers().set(HEADER_CLIENT_ID.header, "admin_client");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
@@ -132,5 +121,9 @@ public class HTTPKickHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKick
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.NOT_FOUND);
         assertEquals(response.content().readableBytes(), 0);
+    }
+
+    private DefaultFullHttpRequest buildRequest() {
+        return buildRequest(HttpMethod.DELETE);
     }
 }

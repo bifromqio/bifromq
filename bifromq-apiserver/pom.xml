@@ -52,6 +52,18 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-jaxrs2</artifactId>
+        </dependency>
         <!-- test dependencies -->
         <dependency>
             <groupId>org.mockito</groupId>
@@ -62,4 +74,50 @@
             <artifactId>testng</artifactId>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-maven-plugin</artifactId>
+                <version>${swagger.version}</version>
+                <configuration>
+                    <outputPath>${session.executionRootDirectory}/target/site/swagger</outputPath>
+                    <outputFileName>BifroMQ-API</outputFileName>
+                    <outputFormat>YAML</outputFormat>
+                    <resourcePackages>
+                        <package>com.baidu.bifromq.apiserver.http.handler</package>
+                    </resourcePackages>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>resolve</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <resources>
+                        <resource>
+                            <directory>${session.executionRootDirectory}/target/site/swagger</directory>
+                            <filtering>true</filtering>
+                        </resource>
+                    </resources>
+                    <outputDirectory>${session.executionRootDirectory}/target/site/swagger</outputDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>resources</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -20,8 +20,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.apiserver.http.annotation.Method;
-import com.baidu.bifromq.apiserver.http.annotation.Route;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -29,12 +27,23 @@ import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Route(contextPath = "/pub", method = Method.POST)
+@Path("/pub")
 public final class HTTPPubHandler implements IHTTPRequestHandler {
     private final IDistClient distClient;
 
@@ -42,8 +51,23 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
         this.distClient = distClient;
     }
 
+    @POST
+    @Operation(summary = "Publish a message to given topic")
+    @Parameters({
+        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
+        @Parameter(name = "topic", in = ParameterIn.HEADER, required = true, description = "the message topic"),
+        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the client type"),
+        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about the kicker client, must be started with client_meta_"),
+    })
+    @RequestBody(required = true, description = "Message payload will be treated as binary", content = @Content(mediaType = "application/octet-stream"))
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Success"),
+    })
     @Override
-    public CompletableFuture<FullHttpResponse> handle(long reqId, String tenantId, FullHttpRequest req) {
+    public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
+                                                      @Parameter(hidden = true) String tenantId,
+                                                      @Parameter(hidden = true) FullHttpRequest req) {
         try {
             String topic = getHeader(Headers.HEADER_TOPIC, req, true);
             String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
