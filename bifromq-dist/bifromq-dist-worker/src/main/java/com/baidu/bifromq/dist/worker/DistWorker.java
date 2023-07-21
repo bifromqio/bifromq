@@ -161,13 +161,13 @@ abstract class DistWorker implements IDistWorker {
                 awaitIfNotCancelled(statsJob);
             }
             jobRunner.awaitDone();
-            log.debug("Stopping KVStore server");
-//            rangeBalanceController.stop();
+            rangeBalanceController.stop();
+            log.info("Stopping KVStore server");
             storeServer.stop();
-            log.debug("Stopping CoProcFactory");
+            log.info("Stopping CoProcFactory");
             coProcFactory.close();
             if (jobExecutorOwner) {
-                log.debug("Stopping Job Executor");
+                log.info("Stopping Job Executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
             log.info("Dist worker stopped");

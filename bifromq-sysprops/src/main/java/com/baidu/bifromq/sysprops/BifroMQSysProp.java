@@ -61,7 +61,13 @@ public enum BifroMQSysProp {
     INBOX_FETCH_QUEUES_PER_RANGE("inbox_fetch_queues_per_range",
         Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4), IntegerParser.POSITIVE),
     INBOX_CHECK_QUEUES_PER_RANGE("inbox_check_queues_per_range", 1, IntegerParser.POSITIVE),
-    MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server", 4, IntegerParser.POSITIVE);
+    INBOX_STORE_VOTER_COUNT("inbox_store_replica_voter_count", 3, IntegerParser.POSITIVE),
+    INBOX_STORE_LEARNER_COUNT("inbox_store_replica_learner_count", 3, IntegerParser.POSITIVE),
+    INBOX_STORE_RECOVERY_TIMEOUT_MILLIS("inbox_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
+    MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server", 4, IntegerParser.POSITIVE),
+    RETAIN_STORE_VOTER_COUNT("retain_store_replica_voter_count", 3, IntegerParser.POSITIVE),
+    RETAIN_STORE_LEARNER_COUNT("retain_store_replica_learner_count", 3, IntegerParser.POSITIVE),
+    RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS("retain_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE);
 
     public final String propKey;
     private final Object propDefValue;

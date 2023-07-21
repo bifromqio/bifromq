@@ -16,6 +16,7 @@ package com.baidu.bifromq.retain.store;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
@@ -37,6 +38,7 @@ public abstract class RetainStoreBuilder<T extends RetainStoreBuilder<?>> {
     protected ICRDTService crdtService;
     protected IBaseKVStoreClient storeClient;
     protected KVRangeStoreOptions kvRangeStoreOptions;
+    protected KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     protected Executor ioExecutor;
     protected Executor queryExecutor;
     protected Executor mutationExecutor;
@@ -78,6 +80,11 @@ public abstract class RetainStoreBuilder<T extends RetainStoreBuilder<?>> {
 
     public T kvRangeStoreOptions(KVRangeStoreOptions kvRangeStoreOptions) {
         this.kvRangeStoreOptions = kvRangeStoreOptions;
+        return (T) this;
+    }
+
+    public T balanceControllerOptions(KVRangeBalanceControllerOptions balanceControllerOptions) {
+        this.balanceControllerOptions = balanceControllerOptions;
         return (T) this;
     }
 
@@ -136,6 +143,7 @@ public abstract class RetainStoreBuilder<T extends RetainStoreBuilder<?>> {
                 gcInterval,
                 clock,
                 kvRangeStoreOptions,
+                balanceControllerOptions,
                 ioExecutor,
                 queryExecutor,
                 mutationExecutor,
@@ -213,6 +221,7 @@ public abstract class RetainStoreBuilder<T extends RetainStoreBuilder<?>> {
                 gcInterval,
                 clock,
                 kvRangeStoreOptions,
+                balanceControllerOptions,
                 ioExecutor,
                 queryExecutor,
                 mutationExecutor,
@@ -286,6 +295,7 @@ public abstract class RetainStoreBuilder<T extends RetainStoreBuilder<?>> {
                 gcInterval,
                 clock,
                 kvRangeStoreOptions,
+                balanceControllerOptions,
                 ioExecutor,
                 queryExecutor,
                 mutationExecutor,

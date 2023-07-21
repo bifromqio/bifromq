@@ -19,8 +19,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class StoreClientConfig {
-    private String clusterName;
     private int execPipelinePerServer = 5;
     private int queryPipelinePerServer = 5;
-    private ClientSSLContextConfig sslContextConfig;
+    private ClientSSLContextConfig sslContextConfig = new ClientSSLContextConfig();
 }

@@ -11,18 +11,19 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.inbox.store.balance;
 
-import com.baidu.bifromq.starter.config.StarterConfig;
-import java.util.UUID;
-import lombok.Getter;
-import lombok.Setter;
 
-@Getter
-@Setter
-public class LocalSessionServerConfig {
-    private String serverId = UUID.randomUUID().toString();
-    private String bindAddress = StarterConfig.getHostFromSysProps();
-    private int port;
-    private ServerSSLContextConfig sslContextConfig = new ServerSSLContextConfig();
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_RECOVERY_TIMEOUT_MILLIS;
+
+import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.basekv.balance.impl.RecoveryBalancer;
+
+public class RecoveryBalancerFactory implements IStoreBalancerFactory {
+
+    @Override
+    public StoreBalancer newBalancer(String localStoreId) {
+        return new RecoveryBalancer(localStoreId, INBOX_STORE_RECOVERY_TIMEOUT_MILLIS.get());
+    }
 }

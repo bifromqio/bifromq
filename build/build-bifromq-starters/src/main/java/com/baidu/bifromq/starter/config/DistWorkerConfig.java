@@ -26,7 +26,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class DistWorkerConfig implements StarterConfig {
-    private String host = StarterConfig.getHostFromSysProps();
+    private String bindAddress = StarterConfig.getHostFromSysProps();
 
     private int port;
 
@@ -42,7 +42,7 @@ public class DistWorkerConfig implements StarterConfig {
 
     private int bgWorkerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4);
 
-    private ServerSSLContextConfig serverSSLCtxConfig;
+    private ServerSSLContextConfig serverSSLCtxConfig = new ServerSSLContextConfig();
 
     private StorageEngineConfig dataEngineConfig;
 
@@ -52,11 +52,11 @@ public class DistWorkerConfig implements StarterConfig {
 
     private AgentHostConfig agentHostConfig;
 
-    private StoreClientConfig distWorkerClientConfig;
+    private StoreClientConfig distWorkerClientConfig = new StoreClientConfig();
 
-    private RPCClientConfig distClientConfig;
+    private RPCClientConfig distClientConfig = new RPCClientConfig();
 
-    private RPCClientConfig mqttBrokerClientConfig;
+    private RPCClientConfig mqttBrokerClientConfig = new RPCClientConfig();
 
-    private RPCClientConfig inboxBrokerClientConfig;
+    private RPCClientConfig inboxBrokerClientConfig = new RPCClientConfig();
 }

@@ -138,6 +138,7 @@
                     <descriptors>
                         <descriptor>assembly/assembly-standalone.xml</descriptor>
                         <descriptor>assembly/assembly-standalone-windows.xml</descriptor>
+                        <descriptor>assembly/assembly-standard.xml</descriptor>
                     </descriptors>
                     <appendAssemblyId>true</appendAssemblyId>
                     <tarLongFileMode>posix</tarLongFileMode>

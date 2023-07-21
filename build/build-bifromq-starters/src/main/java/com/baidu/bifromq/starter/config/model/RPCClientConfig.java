@@ -19,5 +19,5 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RPCClientConfig {
-    private ClientSSLContextConfig sslContextConfig;
+    private ClientSSLContextConfig sslContextConfig = new ClientSSLContextConfig();
 }

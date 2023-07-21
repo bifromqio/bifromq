@@ -16,23 +16,26 @@ package com.baidu.bifromq.starter.config;
 import com.baidu.bifromq.starter.config.model.AgentHostConfig;
 import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
 import com.baidu.bifromq.starter.config.model.StoreClientConfig;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
 public class DistServerConfig implements StarterConfig {
-    private String host = StarterConfig.getHostFromSysProps();
+    private String serverId = UUID.randomUUID().toString();
+
+    private String bindAddress = StarterConfig.getHostFromSysProps();
 
     private int port;
 
     private String settingProviderFQN = null;
 
-    private ServerSSLContextConfig serverSSLCtxConfig;
+    private ServerSSLContextConfig serverSSLCtxConfig = new ServerSSLContextConfig();
 
     private AgentHostConfig agentHostConfig;
 
-    private StoreClientConfig distWorkerStoreClientConfig;
+    private StoreClientConfig distWorkerStoreClientConfig = new StoreClientConfig();
 
     private String distCallPreBatchSchedulerFactoryClass;
 
