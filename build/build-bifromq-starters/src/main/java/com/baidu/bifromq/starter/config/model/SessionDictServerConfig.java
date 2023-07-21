@@ -22,7 +22,7 @@ import lombok.Setter;
 @Setter
 public class SessionDictServerConfig {
     private String serverId = UUID.randomUUID().toString();
-    private String host = StarterConfig.getHostFromSysProps();
+    private String bindAddress = StarterConfig.getHostFromSysProps();
     private int port;
-    private ServerSSLContextConfig sslContextConfig;
+    private ServerSSLContextConfig sslContextConfig = new ServerSSLContextConfig();
 }

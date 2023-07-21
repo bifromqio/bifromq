@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.store;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
@@ -35,6 +36,7 @@ public abstract class InboxStoreBuilder<T extends InboxStoreBuilder> {
     protected IBaseKVStoreClient storeClient;
     protected IEventCollector eventCollector;
     protected KVRangeStoreOptions kvRangeStoreOptions;
+    protected KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     protected Executor ioExecutor;
     protected Executor queryExecutor;
     protected Executor mutationExecutor;
@@ -67,6 +69,11 @@ public abstract class InboxStoreBuilder<T extends InboxStoreBuilder> {
 
     public T kvRangeStoreOptions(KVRangeStoreOptions kvRangeStoreOptions) {
         this.kvRangeStoreOptions = kvRangeStoreOptions;
+        return (T) this;
+    }
+
+    public T balanceControllerOptions(KVRangeBalanceControllerOptions balanceControllerOptions) {
+        this.balanceControllerOptions = balanceControllerOptions;
         return (T) this;
     }
 
@@ -132,6 +139,7 @@ public abstract class InboxStoreBuilder<T extends InboxStoreBuilder> {
                 purgeDelay,
                 clock,
                 kvRangeStoreOptions,
+                balanceControllerOptions,
                 ioExecutor,
                 queryExecutor,
                 mutationExecutor,
@@ -211,6 +219,7 @@ public abstract class InboxStoreBuilder<T extends InboxStoreBuilder> {
                 purgeDelay,
                 clock,
                 kvRangeStoreOptions,
+                balanceControllerOptions,
                 ioExecutor,
                 queryExecutor,
                 mutationExecutor,
@@ -286,6 +295,7 @@ public abstract class InboxStoreBuilder<T extends InboxStoreBuilder> {
                 purgeDelay,
                 clock,
                 kvRangeStoreOptions,
+                balanceControllerOptions,
                 ioExecutor,
                 queryExecutor,
                 mutationExecutor,

@@ -87,15 +87,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IRetainStore retainStore;
     private IRetainServer retainServer;
     private IMQTTBroker mqttBroker;
-    private ISubBrokerManager inboxBrokerMgr;
-
+    private ISubBrokerManager subBrokerManager;
 
     @Override
     protected void init(StandaloneConfig config) {
         pluginMgr = new BifroMQPluginManager();
-
         pluginMgr.loadPlugins();
-
         pluginMgr.startPlugins();
 
         ioClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
@@ -225,7 +222,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .executor(MoreExecutors.directExecutor())
             .build();
 
-        inboxBrokerMgr = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
+        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
 
         distWorkerClient = IBaseKVStoreClient.inProcClientBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
@@ -255,7 +252,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .setWalEngineConfigurator(
                     buildEngineConf(config.getDistWorkerConfig().getWalEngineConfig(), "dist_wal")))
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
-            .subBrokerManager(inboxBrokerMgr)
+            .subBrokerManager(subBrokerManager)
             .build();
 
         distServer = IDistServer.inProcBuilder()
@@ -380,7 +377,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         settingProviderMgr.close();
 
-        inboxBrokerMgr.stop();
+        subBrokerManager.stop();
 
         if (ioClientExecutor != null) {
             ioClientExecutor.shutdownNow();

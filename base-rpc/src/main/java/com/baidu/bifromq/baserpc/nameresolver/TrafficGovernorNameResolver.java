@@ -49,8 +49,11 @@ class TrafficGovernorNameResolver extends NameResolver {
     public void start(Listener listener) {
         log.info("Starting TrafficGovernorNameResolver for service[{}]", serviceUniqueName);
         disposable.add(Observable.combineLatest(trafficDirector.trafficDirective(),
-                trafficDirector.serverList(), (td, sl) ->
-                    (Runnable) () -> listener.onAddresses(toAddressGroup(sl), toAttributes(td)))
+                trafficDirector.serverList(), (td, sl) -> {
+                    log.info("[{}]Update TrafficGovernorNameResolver with \nservers={}, \ntrafficDirective={}",
+                        serviceUniqueName, sl, td);
+                    return (Runnable) () -> listener.onAddresses(toAddressGroup(sl), toAttributes(td));
+                })
             .subscribe(Runnable::run, e -> listener.onError(Status.INTERNAL.withCause(e))));
     }
 

@@ -19,6 +19,8 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
@@ -53,6 +55,7 @@ abstract class RetainStore implements IRetainStore {
     private final AtomicReference<Status> status = new AtomicReference(Status.INIT);
     private final IBaseKVStoreClient storeClient;
     private final RetainStoreCoProcFactory coProcFactory;
+    private final KVRangeBalanceController rangeBalanceController;
     private final IBaseKVStoreServer storeServer;
     private final ScheduledExecutorService jobExecutor;
     private final boolean jobExecutorOwner;
@@ -69,6 +72,7 @@ abstract class RetainStore implements IRetainStore {
                        Duration gcInterval,
                        Clock clock,
                        KVRangeStoreOptions kvRangeStoreOptions,
+                       KVRangeBalanceControllerOptions balanceOptions,
                        Executor ioExecutor,
                        Executor queryExecutor,
                        Executor mutationExecutor,
@@ -88,6 +92,7 @@ abstract class RetainStore implements IRetainStore {
             mutationExecutor,
             tickTaskExecutor,
             bgTaskExecutor);
+        rangeBalanceController = new KVRangeBalanceController(storeClient, balanceOptions, bgTaskExecutor);
         jobExecutorOwner = bgTaskExecutor == null;
         if (jobExecutorOwner) {
             jobExecutor = ExecutorServiceMetrics
@@ -120,6 +125,7 @@ abstract class RetainStore implements IRetainStore {
             log.info("Starting retain store");
             log.debug("Starting KVStore server: bootstrap={}", bootstrap);
             storeServer.start(bootstrap);
+            rangeBalanceController.start(storeServer.id());
             status.compareAndSet(Status.STARTING, Status.STARTED);
             scheduleGC();
             scheduleStats();
@@ -129,8 +135,8 @@ abstract class RetainStore implements IRetainStore {
 
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
+            rangeBalanceController.stop();
             log.info("Stopping retain store");
-            log.debug("Stopping KVStore server");
             storeServer.stop();
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.cancel(true);
@@ -139,7 +145,7 @@ abstract class RetainStore implements IRetainStore {
                 statsJob.cancel(true);
             }
             if (jobExecutorOwner) {
-                log.debug("Shutting down job executor");
+                log.info("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobExecutor, 5, TimeUnit.SECONDS);
             }
             log.info("Retain store shutdown");

@@ -19,6 +19,8 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
@@ -53,6 +55,7 @@ abstract class InboxStore implements IInboxStore {
     private final AtomicReference<Status> status = new AtomicReference(Status.INIT);
     private final IBaseKVStoreClient storeClient;
     private final InboxStoreCoProcFactory coProcFactory;
+    private final KVRangeBalanceController rangeBalanceController;
     private final IBaseKVStoreServer storeServer;
     private final ScheduledExecutorService jobExecutor;
     private final boolean jobExecutorOwner;
@@ -71,6 +74,7 @@ abstract class InboxStore implements IInboxStore {
                       Duration purgeDelay,
                       Clock clock,
                       KVRangeStoreOptions kvRangeStoreOptions,
+                      KVRangeBalanceControllerOptions balanceOptions,
                       Executor ioExecutor,
                       Executor queryExecutor,
                       Executor mutationExecutor,
@@ -90,6 +94,7 @@ abstract class InboxStore implements IInboxStore {
             mutationExecutor,
             tickTaskExecutor,
             bgTaskExecutor);
+        rangeBalanceController = new KVRangeBalanceController(storeClient, balanceOptions, bgTaskExecutor);
         jobExecutorOwner = bgTaskExecutor == null;
         if (jobExecutorOwner) {
             jobExecutor = ExecutorServiceMetrics
@@ -122,6 +127,7 @@ abstract class InboxStore implements IInboxStore {
             log.info("Starting inbox store");
             log.debug("Starting KVStore server: bootstrap={}", bootstrap);
             storeServer.start(bootstrap);
+            rangeBalanceController.start(storeServer.id());
             status.compareAndSet(Status.STARTING, Status.STARTED);
             scheduleGC();
             scheduleStats();
@@ -131,8 +137,8 @@ abstract class InboxStore implements IInboxStore {
 
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
-            log.info("Shutting down inbox store");
-            log.debug("Stopping KVStore server");
+            rangeBalanceController.stop();
+            log.info("Shutting down inbox KVStore server");
             storeServer.stop();
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.cancel(true);
@@ -141,7 +147,7 @@ abstract class InboxStore implements IInboxStore {
                 statsJob.cancel(true);
             }
             if (jobExecutorOwner) {
-                log.debug("Shutting down job executor");
+                log.info("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobExecutor, 5, TimeUnit.SECONDS);
             }
             log.info("Inbox store shutdown");

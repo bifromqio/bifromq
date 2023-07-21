@@ -14,6 +14,7 @@
 package com.baidu.bifromq.starter.config;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.starter.config.model.AgentHostConfig;
 import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
 import com.baidu.bifromq.starter.config.model.StorageEngineConfig;
@@ -24,7 +25,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class InboxStoreConfig implements StarterConfig {
-    private String host = StarterConfig.getHostFromSysProps();
+    private String bindAddress = StarterConfig.getHostFromSysProps();
 
     private int port;
 
@@ -40,10 +41,12 @@ public class InboxStoreConfig implements StarterConfig {
 
     private StorageEngineConfig walEngineConfig;
 
-    private ServerSSLContextConfig serverSSLCtxConfig;
+    private KVRangeBalanceControllerOptions balanceConfig;
+
+    private ServerSSLContextConfig serverSSLCtxConfig = new ServerSSLContextConfig();
 
     private AgentHostConfig agentHostConfig;
 
-    private StoreClientConfig inboxStoreClientConfig;
+    private StoreClientConfig inboxStoreClientConfig = new StoreClientConfig();
 
 }
