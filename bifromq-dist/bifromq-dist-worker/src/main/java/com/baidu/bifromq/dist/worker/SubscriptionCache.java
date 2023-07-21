@@ -70,13 +70,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class SubscriptionCache {
     // OuterCacheKey: <tenantId><escapedTopicFilter>
     // InnerCacheKey: <orderKey>
-    private final LoadingCache<String, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
+    private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
     private final ThreadLocal<IKVRangeReader> threadLocalReader;
     private final ILoadEstimator loadEstimator;
     private final Timer externalMatchTimer;
     private final Timer internalMatchTimer;
+
+    public record OrderedSharedMatchingKey(String tenantId, String escapedTopicFilter, long tenantVer) {
+    }
 
     SubscriptionCache(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, Executor matchExecutor,
                       ILoadEstimator loadEstimator) {
@@ -86,7 +89,7 @@ public class SubscriptionCache {
         orderedSharedMatching = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
-            .removalListener((RemovalListener<String, Cache<ClientInfo, NormalMatching>>)
+            .removalListener((RemovalListener<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>>)
                 (key, value, cause) -> {
                     if (value != null) {
                         value.invalidateAll();
@@ -183,9 +186,9 @@ public class SubscriptionCache {
                         if (groupMatching.ordered) {
                             for (ClientInfo sender : senders) {
                                 matchedInbox = orderedSharedMatching
-                                    .get(groupMatching.tenantId +
-                                        groupMatching.escapedTopicFilter +
-                                        matchResult.tenantVer)
+                                    .get(new OrderedSharedMatchingKey(groupMatching.tenantId,
+                                        groupMatching.escapedTopicFilter,
+                                        matchResult.tenantVer))
                                     .get(sender, k -> {
                                         RendezvousHash<ClientInfo, NormalMatching> hash =
                                             new RendezvousHash<>(murmur3_128(),
@@ -218,7 +221,8 @@ public class SubscriptionCache {
         if (routeCache != null) {
             routeCache.synchronous().invalidate(topic);
         }
-        orderedSharedMatching.invalidate(topic.tenantId + escape(topic.topic) + tenantVerCache.get(topic.tenantId));
+        orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(topic.tenantId, escape(topic.topic),
+            tenantVerCache.get(topic.tenantId).get()));
     }
 
     public void close() {
