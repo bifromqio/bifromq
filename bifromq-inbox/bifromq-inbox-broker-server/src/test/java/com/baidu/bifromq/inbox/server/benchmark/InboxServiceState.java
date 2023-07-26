@@ -28,7 +28,6 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -94,8 +93,8 @@ abstract class InboxServiceState {
         serverCrdtService = ICRDTService.newInstance(crdtServiceOptions);
         serverCrdtService.start(agentHost);
 
-        inboxBrokerClient = IInboxBrokerClient.inProcClientBuilder().build();
-        inboxReaderClient = IInboxReaderClient.inProcClientBuilder().build();
+        inboxBrokerClient = IInboxBrokerClient.newBuilder().crdtService(clientCrdtService).build();
+        inboxReaderClient = IInboxReaderClient.newBuilder().crdtService(clientCrdtService).build();
 
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
@@ -114,19 +113,18 @@ abstract class InboxServiceState {
                 .toString())
             .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
 
-        inboxStoreKVStoreClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+        inboxStoreKVStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
-        inboxStore = IInboxStore.inProcBuilder()
+        inboxStore = IInboxStore.newBuilder()
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(inboxStoreKVStoreClient)
             .eventCollector(eventCollector)
             .kvRangeStoreOptions(kvRangeStoreOptions)
             .build();
-        inboxServer = IInboxServer.inProcBuilder()
+        inboxServer = IInboxServer.newBuilder()
             .settingProvider(settingProvider)
             .storeClient(inboxStoreKVStoreClient)
             .build();
@@ -162,9 +160,9 @@ abstract class InboxServiceState {
         agentHost.shutdown();
         try {
             Files.walk(dbRootDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }

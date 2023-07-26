@@ -14,5 +14,4 @@
 package com.baidu.bifromq.inbox;
 
 public interface IInboxServiceBuilder {
-    String SERVICE_NAME = "inbox.service";
 }

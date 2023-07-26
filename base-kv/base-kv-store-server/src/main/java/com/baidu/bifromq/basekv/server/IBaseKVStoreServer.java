@@ -14,16 +14,8 @@
 package com.baidu.bifromq.basekv.server;
 
 public interface IBaseKVStoreServer {
-    static BaseKVStoreServerBuilder.InProcBaseKVStoreServerBuilder inProcServerBuilder() {
-        return new BaseKVStoreServerBuilder.InProcBaseKVStoreServerBuilder();
-    }
-
-    static BaseKVStoreServerBuilder.NonSSLBaseKVStoreServerBuilder nonSSLServerBuilder() {
-        return new BaseKVStoreServerBuilder.NonSSLBaseKVStoreServerBuilder();
-    }
-
-    static BaseKVStoreServerBuilder.SSLBaseKVStoreServerBuilder sslServerBuilder() {
-        return new BaseKVStoreServerBuilder.SSLBaseKVStoreServerBuilder();
+    static BaseKVStoreServerBuilder newBuilder() {
+        return new BaseKVStoreServerBuilder();
     }
 
     String id();

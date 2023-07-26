@@ -15,165 +15,32 @@ package com.baidu.bifromq.retain.server;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.baserpc.CertInfo;
-import com.baidu.bifromq.baserpc.IRPCServer;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.IRetainServiceBuilder;
-import com.baidu.bifromq.retain.RPCBluePrint;
-import com.google.common.base.Preconditions;
 import io.netty.channel.EventLoopGroup;
-import java.io.File;
+import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
-import lombok.NonNull;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 
-public abstract class RetainServerBuilder<T extends RetainServerBuilder> implements IRetainServiceBuilder {
-    protected ISettingProvider settingProvider;
-    protected Executor executor;
-    protected IBaseKVStoreClient storeClient;
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
+@Accessors(fluent = true)
+@Setter
+public final class RetainServerBuilder implements IRetainServiceBuilder {
+    ISettingProvider settingProvider;
+    Executor executor;
+    IBaseKVStoreClient storeClient;
+    String id;
+    String host;
+    int port;
+    ICRDTService crdtService;
+    EventLoopGroup bossEventLoopGroup;
+    EventLoopGroup workerEventLoopGroup;
+    SslContext sslContext;
 
-    public T settingProvider(ISettingProvider settingProvider) {
-        this.settingProvider = settingProvider;
-        return (T) this;
-    }
-
-    public T ioExecutor(Executor executor) {
-        this.executor = executor;
-        return (T) this;
-    }
-
-    public T storeClient(IBaseKVStoreClient storeClient) {
-        this.storeClient = storeClient;
-        return (T) this;
-    }
-
-    public abstract IRetainServer build();
-
-    public static final class InProcServerBuilder extends RetainServerBuilder<InProcServerBuilder> {
-
-        @Override
-        public IRetainServer build() {
-            return new RetainServer(SERVICE_NAME, settingProvider, storeClient) {
-                @Override
-                protected IRPCServer buildRPCServer(RetainService retainService) {
-                    return IRPCServer.inProcServerBuilder()
-                        .serviceUniqueName(SERVICE_NAME)
-                        .executor(executor)
-                        .bluePrint(RPCBluePrint.INSTANCE)
-                        .bindService(retainService)
-                        .build();
-                }
-            };
-        }
-    }
-
-    abstract static class InterProcBuilder<T extends InterProcBuilder> extends RetainServerBuilder<T> {
-        protected String id;
-        protected String host;
-        protected Integer port;
-        protected ICRDTService crdtService;
-        protected EventLoopGroup bossEventLoopGroup;
-        protected EventLoopGroup workerEventLoopGroup;
-
-        public T id(@NonNull String id) {
-            this.id = id;
-            return (T) this;
-        }
-
-        public T host(@NonNull String host) {
-            Preconditions.checkArgument(!"0.0.0.0".equals(host), "Invalid host ip");
-            this.host = host;
-            return (T) this;
-        }
-
-        public T port(@NonNull Integer port) {
-            this.port = port;
-            return (T) this;
-        }
-
-        public T crdtService(@NonNull ICRDTService crdtService) {
-            this.crdtService = crdtService;
-            return (T) this;
-        }
-
-        public T bossEventLoopGroup(EventLoopGroup bossEventLoopGroup) {
-            this.bossEventLoopGroup = bossEventLoopGroup;
-            return (T) this;
-        }
-
-        public T workerEventLoopGroup(EventLoopGroup workerEventLoopGroup) {
-            this.workerEventLoopGroup = workerEventLoopGroup;
-            return (T) this;
-        }
-    }
-
-    public static final class NonSSLServerBuilder extends InterProcBuilder<NonSSLServerBuilder> {
-        @Override
-        public IRetainServer build() {
-            return new RetainServer(SERVICE_NAME, settingProvider, storeClient) {
-                @Override
-                protected IRPCServer buildRPCServer(RetainService retainService) {
-                    return IRPCServer.nonSSLServerBuilder()
-                        .serviceUniqueName(SERVICE_NAME)
-                        .executor(executor)
-                        .bluePrint(RPCBluePrint.INSTANCE)
-                        .bindService(retainService)
-                        .id(id)
-                        .host(host)
-                        .port(port)
-                        .bossEventLoopGroup(bossEventLoopGroup)
-                        .workerEventLoopGroup(workerEventLoopGroup)
-                        .crdtService(crdtService)
-                        .build();
-                }
-            };
-        }
-    }
-
-    public static final class SSLServerBuilder extends InterProcBuilder<SSLServerBuilder> {
-        private @NonNull File serviceIdentityCertFile;
-        private @NonNull File privateKeyFile;
-        private @NonNull File trustCertsFile;
-        private CertInfo certInfo;
-
-        public SSLServerBuilder serviceIdentityCertFile(@NonNull File serviceIdentityCertFile) {
-            this.serviceIdentityCertFile = serviceIdentityCertFile;
-            certInfo = CertInfo.parse(serviceIdentityCertFile);
-            Preconditions.checkArgument(certInfo.serverAuth, "Not server auth cert");
-            return this;
-        }
-
-        public SSLServerBuilder privateKeyFile(@NonNull File privateKeyFile) {
-            this.privateKeyFile = privateKeyFile;
-            return this;
-        }
-
-        public SSLServerBuilder trustCertsFile(@NonNull File trustCertsFile) {
-            this.trustCertsFile = trustCertsFile;
-            return this;
-        }
-
-        @Override
-        public IRetainServer build() {
-            return new RetainServer(SERVICE_NAME, settingProvider, storeClient) {
-                @Override
-                protected IRPCServer buildRPCServer(RetainService retainService) {
-                    return IRPCServer.sslServerBuilder()
-                        .executor(executor)
-                        .bluePrint(RPCBluePrint.INSTANCE)
-                        .bindService(retainService)
-                        .id(id)
-                        .host(host)
-                        .port(port)
-                        .serviceUniqueName(SERVICE_NAME)
-                        .bossEventLoopGroup(bossEventLoopGroup)
-                        .workerEventLoopGroup(workerEventLoopGroup)
-                        .crdtService(crdtService)
-                        .serviceIdentityCertFile(serviceIdentityCertFile)
-                        .privateKeyFile(privateKeyFile)
-                        .trustCertsFile(trustCertsFile)
-                        .build();
-                }
-            };
-        }
+    public IRetainServer build() {
+        return new RetainServer(this, settingProvider, storeClient);
     }
 }

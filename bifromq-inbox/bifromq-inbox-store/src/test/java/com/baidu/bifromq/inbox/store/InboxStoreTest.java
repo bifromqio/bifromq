@@ -154,12 +154,12 @@ abstract class InboxStoreTest {
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
         storeClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+            .newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
-        testStore = (InboxStore) IInboxStore.
-            inProcBuilder()
+        testStore = (InboxStore) IInboxStore.newBuilder()
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(storeClient)

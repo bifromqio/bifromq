@@ -24,20 +24,9 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
-public interface IRPCClient {
-    enum ConnState {
-        CONNECTING,
+public interface IRPCClient extends IConnectable {
 
-        READY,
-
-        TRANSIENT_FAILURE,
-
-        IDLE,
-
-        SHUTDOWN
-    }
-
-    static RPCClientBuilder builder() {
+    static RPCClientBuilder newBuilder() {
         return new RPCClientBuilder();
     }
 
@@ -62,16 +51,10 @@ public interface IRPCClient {
     /**
      * The observable of live servers
      *
-     * @return
+     * @return an observable of connectable servers
      */
     Observable<Set<String>> serverList();
 
-    /**
-     * The observable of rpc connectivity state
-     *
-     * @return an observable of connection state
-     */
-    Observable<ConnState> connState();
 
     default <ReqT, RespT> CompletableFuture<RespT> invoke(String tenantId,
                                                           @Nullable String desiredServerId,

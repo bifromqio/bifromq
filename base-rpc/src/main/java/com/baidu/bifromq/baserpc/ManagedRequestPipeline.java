@@ -256,7 +256,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     this.hashCode(), methodDescriptor.getBareMethodName(), currentCount, req);
                 preflightTaskQueue.offer(newRequest);
                 if (semantic instanceof BluePrint.DDBalanced) {
-                    abortFlightRequests(new ServerNotFoundException("Server " + desiredServerId.get() + " not found"));
+                    abortFlightRequests(new ServerNotFoundException("Server not found: " + desiredServerId.get()));
                 } else {
                     abortFlightRequests(new ServiceUnavailableException("Service unavailable now"));
                 }
@@ -303,8 +303,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             ResponseObserver observer = new ResponseObserver();
             ClientCallStreamObserver<ReqT> reqStream = (ClientCallStreamObserver<ReqT>)
                 asyncBidiStreamingCall(channelHolder.channel()
-                    .newCall(bluePrint.methodDesc(methodDescriptor.getFullMethodName(), channelHolder.inProc()),
-                        callOptions), observer);
+                    .newCall(bluePrint.methodDesc(methodDescriptor.getFullMethodName()), callOptions), observer);
             // under In-Proc + DirectExecutor setting, asyncBidiStreamingCall will run on calling thread, this may cause
             // problem when client starts first. In that case the returned reqStream is already onError so we need a
             // flag

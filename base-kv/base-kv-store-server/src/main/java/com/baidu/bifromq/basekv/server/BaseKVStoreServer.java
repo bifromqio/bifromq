@@ -13,32 +13,32 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
-import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.baserpc.IRPCServer;
 import com.google.common.base.Preconditions;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class BaseKVStoreServer implements IBaseKVStoreServer {
+final class BaseKVStoreServer implements IBaseKVStoreServer {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
+    private final BaseKVStoreServerBuilder builder;
 
-    BaseKVStoreServer(String clusterId,
-                      IAgentHost agentHost,
-                      ICRDTService crdtService,
-                      IKVRangeCoProcFactory coProcFactory,
-                      KVRangeStoreOptions storeOptions,
-                      Executor queryExecutor,
-                      Executor mutationExecutor,
-                      ScheduledExecutorService tickTaskExecutor,
-                      ScheduledExecutorService bgMgmtTaskExecutor) {
-        kvService = new BaseKVStoreService(clusterId, coProcFactory, storeOptions, agentHost, crdtService,
-            queryExecutor, mutationExecutor, tickTaskExecutor, bgMgmtTaskExecutor);
+    BaseKVStoreServer(BaseKVStoreServerBuilder builder) {
+        // In inproc mode, rpcChannelId = serviceUniqueName = storeId = clusterId
+//        storeOptions.setOverrideIdentity(clusterId),
+        kvService = new BaseKVStoreService(
+            builder.clusterId,
+            builder.coProcFactory,
+            builder.storeOptions,
+            builder.agentHost,
+            builder.crdtService,
+            builder.queryExecutor,
+            builder.mutationExecutor,
+            builder.tickTaskExecutor,
+            builder.bgTaskExecutor
+        );
+        this.builder = builder;
     }
 
     private final BaseKVStoreService kvService;
@@ -83,7 +83,20 @@ abstract class BaseKVStoreServer implements IBaseKVStoreServer {
         }
     }
 
-    protected abstract IRPCServer buildServer(BaseKVStoreService service);
+    private IRPCServer buildServer(BaseKVStoreService service) {
+        return IRPCServer.newBuilder()
+            .id(service.id())
+            .host(builder.host)
+            .port(builder.port)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .crdtService(builder.crdtService)
+            .executor(builder.ioExecutor)
+            .bindService(RPCBluePrint.scope(service.bindService(), builder.clusterId),
+                RPCBluePrint.build(builder.clusterId))
+            .build();
+    }
+
 
     private enum State {
         INIT, STARTING, STARTED, FATALFAILURE, STOPPING, STOPPED

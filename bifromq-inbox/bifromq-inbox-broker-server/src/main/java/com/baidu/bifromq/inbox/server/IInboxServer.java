@@ -14,16 +14,8 @@
 package com.baidu.bifromq.inbox.server;
 
 public interface IInboxServer {
-    static InboxServerBuilder.InProcServerBuilder inProcBuilder() {
-        return new InboxServerBuilder.InProcServerBuilder();
-    }
-
-    static InboxServerBuilder.NonSSLServerBuilder nonSSLBuilder() {
-        return new InboxServerBuilder.NonSSLServerBuilder();
-    }
-
-    static InboxServerBuilder.SSLServerBuilder sslBuilder() {
-        return new InboxServerBuilder.SSLServerBuilder();
+    static InboxServerBuilder newBuilder() {
+        return new InboxServerBuilder();
     }
 
 

@@ -14,21 +14,30 @@
 package com.baidu.bifromq.mqtt.service;
 
 import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.mqtt.inbox.RPCBluePrint;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 
-abstract class LocalSessionBrokerServer implements ILocalSessionBrokerServer {
+final class LocalSessionBrokerServer implements ILocalSessionBrokerServer {
     private final LocalSessionBrokerService service;
     private final IRPCServer server;
 
-    public LocalSessionBrokerServer() {
+    public LocalSessionBrokerServer(LocalSessionBrokerServerBuilder builder) {
         service = new LocalSessionBrokerService();
-        server = buildRPCServer(service);
+        server = IRPCServer.newBuilder()
+            .id(builder.id)
+            .host(builder.host)
+            .port(builder.port)
+            .executor(builder.executor)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .sslContext(builder.sslContext)
+            .crdtService(builder.crdtService)
+            .bindService(service.bindService(), RPCBluePrint.INSTANCE)
+            .build();
     }
-
-    protected abstract IRPCServer buildRPCServer(LocalSessionBrokerService service);
 
     @Override
     public String id() {
@@ -64,6 +73,6 @@ abstract class LocalSessionBrokerServer implements ILocalSessionBrokerServer {
 
     @Override
     public List<IMQTTSession> removeAll() {
-        return null;
+        throw new UnsupportedOperationException("Unimplemented");
     }
 }

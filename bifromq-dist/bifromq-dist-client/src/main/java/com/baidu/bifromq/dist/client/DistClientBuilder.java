@@ -15,112 +15,25 @@ package com.baidu.bifromq.dist.client;
 
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.IDistServiceBuilder;
-import com.baidu.bifromq.dist.RPCBluePrint;
-import com.google.common.base.Preconditions;
 import io.netty.channel.EventLoopGroup;
-import java.io.File;
+import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
-import lombok.NonNull;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 
-public abstract class DistClientBuilder<T extends DistClientBuilder> implements IDistServiceBuilder {
-    protected Executor executor;
-
-    public T executor(Executor executor) {
-        this.executor = executor;
-        return (T) this;
-    }
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
+@Accessors(fluent = true)
+@Setter
+public final class DistClientBuilder implements IDistServiceBuilder {
+    ICRDTService crdtService;
+    EventLoopGroup eventLoopGroup;
+    SslContext sslContext;
+    Executor executor;
 
     public IDistClient build() {
-        return new DistClient(buildRPCClient());
-    }
-
-    protected abstract IRPCClient buildRPCClient();
-
-    public static final class InProcDistClientBuilder extends DistClientBuilder<InProcDistClientBuilder> {
-        @Override
-        protected IRPCClient buildRPCClient() {
-            return IRPCClient.builder()
-                .serviceUniqueName(SERVICE_NAME)
-                .bluePrint(RPCBluePrint.INSTANCE)
-                .executor(executor)
-                .inProcChannel()
-                .buildChannel()
-                .build();
-        }
-    }
-
-    abstract static class InterProcDistClientBuilder<T extends InterProcDistClientBuilder>
-        extends DistClientBuilder<T> {
-        protected ICRDTService crdtService;
-        protected EventLoopGroup eventLoopGroup;
-
-        public T crdtService(@NonNull ICRDTService crdtService) {
-            this.crdtService = crdtService;
-            return (T) this;
-        }
-
-        public T eventLoopGroup(EventLoopGroup eventLoopGroup) {
-            this.eventLoopGroup = eventLoopGroup;
-            return (T) this;
-        }
-    }
-
-    public static final class NonSSLDistClientBuilder extends InterProcDistClientBuilder<NonSSLDistClientBuilder> {
-        @Override
-        protected IRPCClient buildRPCClient() {
-            Preconditions.checkNotNull(crdtService);
-            return IRPCClient.builder()
-                .serviceUniqueName(SERVICE_NAME)
-                .bluePrint(RPCBluePrint.INSTANCE)
-                .executor(executor)
-                .nonSSLChannel()
-                .eventLoopGroup(eventLoopGroup)
-                .crdtService(crdtService)
-                .buildChannel()
-                .build();
-        }
-    }
-
-    public static final class SSLDistClientBuilder extends InterProcDistClientBuilder<SSLDistClientBuilder> {
-        private File serviceIdentityCertFile;
-        private File privateKeyFile;
-        private File trustCertsFile;
-
-        public SSLDistClientBuilder serviceIdentityCertFile(File serviceIdentityCertFile) {
-            this.serviceIdentityCertFile = serviceIdentityCertFile;
-            return this;
-        }
-
-        public SSLDistClientBuilder privateKeyFile(File privateKeyFile) {
-            this.privateKeyFile = privateKeyFile;
-            return this;
-        }
-
-        public SSLDistClientBuilder trustCertsFile(File trustCertsFile) {
-            this.trustCertsFile = trustCertsFile;
-            return this;
-        }
-
-        @Override
-        protected IRPCClient buildRPCClient() {
-            Preconditions.checkNotNull(crdtService);
-            Preconditions.checkNotNull(serviceIdentityCertFile);
-            Preconditions.checkNotNull(privateKeyFile);
-            Preconditions.checkNotNull(trustCertsFile);
-            return IRPCClient.builder()
-                .serviceUniqueName(SERVICE_NAME)
-                .bluePrint(RPCBluePrint.INSTANCE)
-                .executor(executor)
-                .sslChannel()
-                .serviceIdentityCertFile(serviceIdentityCertFile)
-                .privateKeyFile(privateKeyFile)
-                .trustCertsFile(trustCertsFile)
-                .eventLoopGroup(eventLoopGroup)
-                .crdtService(crdtService)
-                .buildChannel()
-                .build();
-        }
+        return new DistClient(this);
     }
 }

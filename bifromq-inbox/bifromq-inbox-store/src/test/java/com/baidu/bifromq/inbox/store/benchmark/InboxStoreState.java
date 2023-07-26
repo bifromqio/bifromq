@@ -124,13 +124,11 @@ abstract class InboxStoreState {
                 .toString())
             .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
 
-        storeClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+        storeClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(crdtService)
             .build();
-        testStore = IInboxStore.
-            inProcBuilder()
+        testStore = IInboxStore.newBuilder()
             .agentHost(agentHost)
             .crdtService(crdtService)
             .storeClient(storeClient)

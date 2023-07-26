@@ -13,28 +13,18 @@
 
 package com.baidu.bifromq.sessiondict.client;
 
+import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.type.ClientInfo;
-import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 
-public interface ISessionDictionaryClient {
-    static SessionDictionaryClientBuilder.InProcClientBuilder inProcBuilder() {
-        return new SessionDictionaryClientBuilder.InProcClientBuilder();
+public interface ISessionDictClient extends IConnectable {
+    static SessionDictClientBuilder newBuilder() {
+        return new SessionDictClientBuilder();
     }
-
-    static SessionDictionaryClientBuilder.NonSSLClientBuilder nonSSLBuilder() {
-        return new SessionDictionaryClientBuilder.NonSSLClientBuilder();
-    }
-
-    static SessionDictionaryClientBuilder.SSLClientBuilder sslBuilder() {
-        return new SessionDictionaryClientBuilder.SSLClientBuilder();
-    }
-
-    Observable<IRPCClient.ConnState> connState();
 
     /**
      * Register an IMessagePipeline for one session

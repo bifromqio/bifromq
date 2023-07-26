@@ -16,16 +16,8 @@ package com.baidu.bifromq.mqtt.service;
 import java.util.concurrent.CompletableFuture;
 
 public interface ILocalSessionBrokerServer extends ILocalSessionRegistry {
-    static LocalSessionBrokerServerBuilder.InProcBrokerBuilder inProcBrokerBuilder() {
-        return new LocalSessionBrokerServerBuilder.InProcBrokerBuilder();
-    }
-
-    static LocalSessionBrokerServerBuilder.NonSSLBrokerBuilder nonSSLBrokerBuilder() {
-        return new LocalSessionBrokerServerBuilder.NonSSLBrokerBuilder();
-    }
-
-    static LocalSessionBrokerServerBuilder.SSLBrokerBuilder sslBrokerBuilder() {
-        return new LocalSessionBrokerServerBuilder.SSLBrokerBuilder();
+    static LocalSessionBrokerServerBuilder newBuilder() {
+        return new LocalSessionBrokerServerBuilder();
     }
 
     String id();

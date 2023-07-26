@@ -18,6 +18,7 @@ import static com.baidu.bifromq.retain.utils.PipelineUtil.encode;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.retain.RPCBluePrint;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
@@ -32,16 +33,21 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class RetainServiceClient implements IRetainServiceClient {
+final class RetainServiceClient implements IRetainServiceClient {
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    RetainServiceClient(@NonNull IRPCClient rpcClient) {
-        this.rpcClient = rpcClient;
+    RetainServiceClient(RetainServiceClientBuilder builder) {
+        this.rpcClient = IRPCClient.newBuilder()
+            .bluePrint(RPCBluePrint.INSTANCE)
+            .executor(builder.executor)
+            .eventLoopGroup(builder.eventLoopGroup)
+            .sslContext(builder.sslContext)
+            .crdtService(builder.crdtService)
+            .build();
     }
 
     @Override

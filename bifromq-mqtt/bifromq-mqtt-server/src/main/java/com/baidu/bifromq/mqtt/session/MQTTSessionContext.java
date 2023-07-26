@@ -25,7 +25,7 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -52,7 +52,7 @@ public final class MQTTSessionContext {
     public final IDistClient distClient;
     public final IInboxReaderClient inboxClient;
     public final IRetainServiceClient retainClient;
-    public final ISessionDictionaryClient sessionDictClient;
+    public final ISessionDictClient sessionDictClient;
     public final String serverId;
 
     public final int maxResendTimes;
@@ -72,7 +72,7 @@ public final class MQTTSessionContext {
                        IDistClient distClient,
                        IInboxReaderClient inboxClient,
                        IRetainServiceClient retainClient,
-                       ISessionDictionaryClient sessionDictClient,
+                       ISessionDictClient sessionDictClient,
                        int maxResendTimes,
                        int resendDelayMillis,
                        int defaultKeepAliveTimeSeconds,

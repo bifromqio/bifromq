@@ -14,21 +14,11 @@
 package com.baidu.bifromq.baserpc;
 
 public interface IRPCServer {
-    static RPCServerBuilder.InProcServerBuilder inProcServerBuilder() {
-        return new RPCServerBuilder.InProcServerBuilder();
-    }
-
-    static RPCServerBuilder.NonSSLServerBuilder nonSSLServerBuilder() {
-        return new RPCServerBuilder.NonSSLServerBuilder();
-    }
-
-    static RPCServerBuilder.SSLServerBuilder sslServerBuilder() {
-        return new RPCServerBuilder.SSLServerBuilder();
+    static RPCServerBuilder newBuilder() {
+        return new RPCServerBuilder();
     }
 
     String id();
-
-    String serviceUniqueName();
 
     void start();
 

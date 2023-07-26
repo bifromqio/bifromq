@@ -120,7 +120,7 @@ public abstract class DistServiceTest {
         serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         serverCrdtService.start(agentHost);
 
-        distClient = IDistClient.inProcClientBuilder().build();
+        distClient = IDistClient.newBuilder().crdtService(clientCrdtService).build();
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
@@ -128,12 +128,13 @@ public abstract class DistServiceTest {
 
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
         workerClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+            .newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
         distWorker = IDistWorker
-            .inProcBuilder()
+            .newBuilder()
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .settingProvider(settingProvider)
@@ -149,7 +150,8 @@ public abstract class DistServiceTest {
             .balanceControllerOptions(balanceControllerOptions)
             .subBrokerManager(subBrokerMgr)
             .build();
-        distServer = IDistServer.inProcBuilder()
+        distServer = IDistServer.newBuilder()
+            .host("127.0.0.1")
             .storeClient(workerClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -173,10 +175,10 @@ public abstract class DistServiceTest {
         clientCrdtService.stop();
         serverCrdtService.stop();
         agentHost.shutdown();
-//        queryExecutor.shutdown();
-//        mutationExecutor.shutdown();
-//        tickTaskExecutor.shutdown();
-//        bgTaskExecutor.shutdown();
+        queryExecutor.shutdown();
+        mutationExecutor.shutdown();
+        tickTaskExecutor.shutdown();
+        bgTaskExecutor.shutdown();
         closeable.close();
     }
 

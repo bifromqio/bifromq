@@ -20,24 +20,15 @@ import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.DistSubInfoSizeGauge;
 
-import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
-import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
-import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
-import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.rpc.proto.CollectMetricsReply;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
@@ -50,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -59,12 +49,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class DistWorker implements IDistWorker {
+final class DistWorker implements IDistWorker {
     private enum Status {
         INIT, STARTING, STARTED, STOPPING, STOPPED
     }
 
-    private final AtomicReference<Status> status = new AtomicReference(Status.INIT);
+    private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
     private final DistWorkerCoProcFactory coProcFactory;
     private final IBaseKVStoreServer storeServer;
@@ -78,59 +68,45 @@ abstract class DistWorker implements IDistWorker {
     private volatile ScheduledFuture<?> statsJob;
     private final Map<String, Long> tenantSubInfoSize = new ConcurrentHashMap<>();
 
-    public DistWorker(IAgentHost agentHost,
-                      ICRDTService crdtService,
-                      ISettingProvider settingProvider,
-                      IEventCollector eventCollector,
-                      IDistClient distClient,
-                      IBaseKVStoreClient storeClient,
-                      ISubBrokerManager subBrokerManager,
-                      Duration statsInterval,
-                      Duration gcInterval,
-                      KVRangeStoreOptions kvRangeStoreOptions,
-                      KVRangeBalanceControllerOptions balanceOptions,
-                      Executor ioExecutor,
-                      Executor queryExecutor,
-                      Executor mutationExecutor,
-                      ScheduledExecutorService tickTaskExecutor,
-                      ScheduledExecutorService bgTaskExecutor) {
-        assert storeClient.clusterId().equals(CLUSTER_NAME);
-        this.storeClient = storeClient;
-        this.gcInterval = gcInterval;
-        this.statsInterval = statsInterval;
-        coProcFactory = new DistWorkerCoProcFactory(distClient, settingProvider, eventCollector, subBrokerManager);
-        storeServer = buildKVStoreServer(CLUSTER_NAME,
-            agentHost,
-            crdtService,
-            coProcFactory,
-            kvRangeStoreOptions,
-            ioExecutor,
-            queryExecutor,
-            mutationExecutor,
-            tickTaskExecutor,
-            bgTaskExecutor);
-        rangeBalanceController = new KVRangeBalanceController(storeClient, balanceOptions, bgTaskExecutor);
-        jobExecutorOwner = bgTaskExecutor == null;
+    public DistWorker(DistWorkerBuilder builder) {
+        this.storeClient = builder.storeClient;
+        this.gcInterval = builder.gcInterval;
+        this.statsInterval = builder.statsInterval;
+        coProcFactory = new DistWorkerCoProcFactory(
+            builder.distClient,
+            builder.settingProvider,
+            builder.eventCollector,
+            builder.subBrokerManager);
+        storeServer = IBaseKVStoreServer
+            .newBuilder()
+            .clusterId(builder.clusterId)
+            .agentHost(builder.agentHost)
+            .crdtService(builder.crdtService)
+            .coProcFactory(coProcFactory)
+            .ioExecutor(builder.ioExecutor)
+            .queryExecutor(builder.queryExecutor)
+            .mutationExecutor(builder.mutationExecutor)
+            .tickTaskExecutor(builder.tickTaskExecutor)
+            .bgTaskExecutor(builder.bgTaskExecutor)
+            .storeOptions(builder.kvRangeStoreOptions)
+            .host(builder.host)
+            .port(builder.port)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .sslContext(builder.sslContext)
+            .build();
+        rangeBalanceController =
+            new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
+        jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
-            jobScheduler = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(1,
-                    EnvProvider.INSTANCE.newThreadFactory("dist-worker-job-executor")),
-                CLUSTER_NAME + "-job-executor");
+            String threadName = String.format("dist-worker[%s]-job-executor", builder.clusterId);
+            jobScheduler = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory(threadName)), threadName);
         } else {
-            jobScheduler = bgTaskExecutor;
+            jobScheduler = builder.bgTaskExecutor;
         }
         jobRunner = new AsyncRunner(jobScheduler);
     }
-
-    protected abstract IBaseKVStoreServer buildKVStoreServer(String clusterId,
-                                                             IAgentHost agentHost,
-                                                             ICRDTService crdtService,
-                                                             IKVRangeCoProcFactory coProcFactory,
-                                                             KVRangeStoreOptions kvRangeStoreOptions,
-                                                             Executor ioExecutor,
-                                                             Executor queryExecutor,
-                                                             Executor mutationExecutor,
-                                                             ScheduledExecutorService tickTaskExecutor,
-                                                             ScheduledExecutorService bgTaskExecutor);
 
     public String id() {
         return storeServer.id();
@@ -161,13 +137,14 @@ abstract class DistWorker implements IDistWorker {
                 awaitIfNotCancelled(statsJob);
             }
             jobRunner.awaitDone();
-            rangeBalanceController.stop();
-            log.info("Stopping KVStore server");
+            log.debug("Stopping KVStore server");
+            // FIXME
+//            rangeBalanceController.stop();
             storeServer.stop();
-            log.info("Stopping CoProcFactory");
+            log.debug("Stopping CoProcFactory");
             coProcFactory.close();
             if (jobExecutorOwner) {
-                log.info("Stopping Job Executor");
+                log.debug("Stopping Job Executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
             log.info("Dist worker stopped");
@@ -186,7 +163,7 @@ abstract class DistWorker implements IDistWorker {
             }
             List<KVRangeSetting> settings = storeClient.findByRange(FULL_RANGE);
             Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
-            List<CompletableFuture> gcFutures = new ArrayList<>();
+            List<CompletableFuture<?>> gcFutures = new ArrayList<>();
             while (itr.hasNext()) {
                 KVRangeSetting leaderReplica = itr.next();
                 gcFutures.add(gcRange(leaderReplica));

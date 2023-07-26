@@ -16,22 +16,35 @@ package com.baidu.bifromq.baserpc.nameresolver;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficDirector;
 import io.grpc.NameResolver;
 import io.grpc.NameResolverProvider;
+import io.grpc.NameResolverRegistry;
 import java.net.URI;
-import lombok.Builder;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Builder
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TrafficGovernorNameResolverProvider extends NameResolverProvider {
     public static final String SCHEME = "tgov";
+    public static final TrafficGovernorNameResolverProvider INSTANCE = new TrafficGovernorNameResolverProvider();
+    private static final Map<String, TrafficGovernorNameResolver> RESOLVERS = new ConcurrentHashMap<>();
 
-    private final String serviceUniqueName;
+    static {
+        NameResolverRegistry.getDefaultRegistry().register(INSTANCE);
+    }
 
-    private final IRPCServiceTrafficDirector trafficDirector;
+    public static void register(String serviceUniqueName, IRPCServiceTrafficDirector trafficDirector) {
+        RESOLVERS.put(serviceUniqueName, new TrafficGovernorNameResolver(serviceUniqueName, trafficDirector));
+    }
 
     @Override
     public NameResolver newNameResolver(URI targetUri, NameResolver.Args args) {
-        return new TrafficGovernorNameResolver(serviceUniqueName, trafficDirector);
+        if (SCHEME.equals(targetUri.getScheme())) {
+            return RESOLVERS.get(targetUri.getAuthority());
+        }
+        return null;
     }
 
     @Override
@@ -41,7 +54,7 @@ public class TrafficGovernorNameResolverProvider extends NameResolverProvider {
 
     @Override
     protected int priority() {
-        return 6;
+        return Integer.MAX_VALUE;
     }
 
     @Override
