@@ -14,116 +14,26 @@
 package com.baidu.bifromq.retain.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.retain.IRetainServiceBuilder;
-import com.baidu.bifromq.retain.RPCBluePrint;
-import com.google.common.base.Preconditions;
 import io.netty.channel.EventLoopGroup;
-import java.io.File;
+import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
-import lombok.NonNull;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 
-public abstract class RetainServiceClientBuilder<T extends RetainServiceClientBuilder>
-    implements IRetainServiceBuilder {
-    protected Executor executor;
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
+@Accessors(fluent = true)
+@Setter
+public final class RetainServiceClientBuilder implements IRetainServiceBuilder {
+    ICRDTService crdtService;
+    EventLoopGroup eventLoopGroup;
 
-    public T executor(Executor executor) {
-        this.executor = executor;
-        return (T) this;
-    }
+    SslContext sslContext;
+    Executor executor;
 
     public IRetainServiceClient build() {
-        return new RetainServiceClient(buildRPCClient());
-    }
-
-    protected abstract IRPCClient buildRPCClient();
-
-    public static final class InProcRetainServiceClientBuilder
-        extends RetainServiceClientBuilder<InProcRetainServiceClientBuilder> {
-        @Override
-        protected IRPCClient buildRPCClient() {
-            return IRPCClient.builder()
-                .serviceUniqueName(SERVICE_NAME)
-                .bluePrint(RPCBluePrint.INSTANCE)
-                .executor(executor)
-                .inProcChannel()
-                .buildChannel()
-                .build();
-        }
-    }
-
-    abstract static class InterProcRetainServiceClientBuilder<T extends InterProcRetainServiceClientBuilder>
-        extends RetainServiceClientBuilder<T> {
-        protected ICRDTService crdtService;
-        protected EventLoopGroup eventLoopGroup;
-
-        public T crdtService(@NonNull ICRDTService crdtService) {
-            this.crdtService = crdtService;
-            return (T) this;
-        }
-
-        public T eventLoopGroup(EventLoopGroup eventLoopGroup) {
-            this.eventLoopGroup = eventLoopGroup;
-            return (T) this;
-        }
-    }
-
-    public static final class NonSSLRetainServiceClientBuilder extends
-        InterProcRetainServiceClientBuilder<NonSSLRetainServiceClientBuilder> {
-        @Override
-        protected IRPCClient buildRPCClient() {
-            Preconditions.checkNotNull(crdtService);
-            return IRPCClient.builder()
-                .serviceUniqueName(SERVICE_NAME)
-                .bluePrint(RPCBluePrint.INSTANCE)
-                .executor(executor)
-                .nonSSLChannel()
-                .eventLoopGroup(eventLoopGroup)
-                .crdtService(crdtService)
-                .buildChannel()
-                .build();
-        }
-    }
-
-    public static final class SSLRetainServiceClientBuilder extends
-        InterProcRetainServiceClientBuilder<SSLRetainServiceClientBuilder> {
-        private File serviceIdentityCertFile;
-        private File privateKeyFile;
-        private File trustCertsFile;
-
-        public SSLRetainServiceClientBuilder serviceIdentityCertFile(File serviceIdentityCertFile) {
-            this.serviceIdentityCertFile = serviceIdentityCertFile;
-            return this;
-        }
-
-        public SSLRetainServiceClientBuilder privateKeyFile(File privateKeyFile) {
-            this.privateKeyFile = privateKeyFile;
-            return this;
-        }
-
-        public SSLRetainServiceClientBuilder trustCertsFile(File trustCertsFile) {
-            this.trustCertsFile = trustCertsFile;
-            return this;
-        }
-
-        @Override
-        protected IRPCClient buildRPCClient() {
-            Preconditions.checkNotNull(crdtService);
-            Preconditions.checkNotNull(serviceIdentityCertFile);
-            Preconditions.checkNotNull(privateKeyFile);
-            Preconditions.checkNotNull(trustCertsFile);
-            return IRPCClient.builder()
-                .serviceUniqueName(SERVICE_NAME)
-                .bluePrint(RPCBluePrint.INSTANCE)
-                .executor(executor)
-                .sslChannel()
-                .serviceIdentityCertFile(serviceIdentityCertFile)
-                .privateKeyFile(privateKeyFile)
-                .trustCertsFile(trustCertsFile)
-                .eventLoopGroup(eventLoopGroup)
-                .crdtService(crdtService)
-                .buildChannel()
-                .build();
-        }
+        return new RetainServiceClient(this);
     }
 }

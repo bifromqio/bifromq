@@ -13,31 +13,43 @@
 
 package com.baidu.bifromq.dist.server;
 
+import static com.baidu.bifromq.basehookloader.BaseHookLoader.load;
+
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.dist.RPCBluePrint;
 import com.baidu.bifromq.dist.server.scheduler.IGlobalDistCallRateSchedulerFactory;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import java.util.Map;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class DistServer implements IDistServer {
+final class DistServer implements IDistServer {
     private final IRPCServer rpcServer;
     private final DistService distService;
 
-    DistServer(IBaseKVStoreClient storeClient,
+    DistServer(DistServerBuilder builder,
+               IBaseKVStoreClient storeClient,
                ISettingProvider settingProvider,
                IEventCollector eventCollector,
-               ICRDTService crdtService,
-               IGlobalDistCallRateSchedulerFactory distCallPreBatchSchedulerFactory) {
+               ICRDTService crdtService) {
         this.distService = new DistService(storeClient, settingProvider, eventCollector, crdtService,
-            distCallPreBatchSchedulerFactory);
-        this.rpcServer = buildRPCServer(distService);
+            distCallPreBatchSchedulerFactory(builder.distCallPreSchedulerFactoryClass));
+        this.rpcServer = IRPCServer.newBuilder()
+            .executor(builder.executor)
+            .bindService(distService.bindService(), RPCBluePrint.INSTANCE)
+            .id(builder.id)
+            .host(builder.host)
+            .port(builder.port)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .crdtService(crdtService)
+            .sslContext(builder.sslContext)
+            .build();
     }
-
-    protected abstract IRPCServer buildRPCServer(DistService distService);
 
     @Override
     public void start() {
@@ -56,5 +68,20 @@ abstract class DistServer implements IDistServer {
         log.debug("Stop dist service");
         distService.stop();
         log.info("Dist server stopped");
+    }
+
+    private IGlobalDistCallRateSchedulerFactory distCallPreBatchSchedulerFactory(String factoryClass) {
+        if (factoryClass == null) {
+            log.info("DistCallPreBatchSchedulerFactory[DEFAULT] loaded");
+            return IGlobalDistCallRateSchedulerFactory.DEFAULT;
+        } else {
+            Map<String, IGlobalDistCallRateSchedulerFactory> factoryMap =
+                load(IGlobalDistCallRateSchedulerFactory.class);
+            IGlobalDistCallRateSchedulerFactory factory =
+                factoryMap.getOrDefault(factoryClass, IGlobalDistCallRateSchedulerFactory.DEFAULT);
+            log.info("DistCallPreBatchSchedulerFactory[{}] loaded",
+                factory != IGlobalDistCallRateSchedulerFactory.DEFAULT ? factoryClass : "DEFAULT");
+            return factory;
+        }
     }
 }

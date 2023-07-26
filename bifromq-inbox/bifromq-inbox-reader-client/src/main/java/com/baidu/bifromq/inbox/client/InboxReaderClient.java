@@ -16,6 +16,7 @@ package com.baidu.bifromq.inbox.client;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_DELIVERERS;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.inbox.RPCBluePrint;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
@@ -27,19 +28,24 @@ import com.baidu.bifromq.type.ClientInfo;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class InboxReaderClient implements IInboxReaderClient {
+final class InboxReaderClient implements IInboxReaderClient {
     private static final int INBOX_GROUPS = INBOX_DELIVERERS.get();
 
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
 
-    InboxReaderClient(@NonNull IRPCClient rpcClient) {
-        this.rpcClient = rpcClient;
+    InboxReaderClient(InboxReaderClientBuilder builder) {
+        this.rpcClient = IRPCClient.newBuilder()
+            .bluePrint(RPCBluePrint.INSTANCE)
+            .executor(builder.executor)
+            .eventLoopGroup(builder.eventLoopGroup)
+            .sslContext(builder.sslContext)
+            .crdtService(builder.crdtService)
+            .build();
     }
 
     @Override

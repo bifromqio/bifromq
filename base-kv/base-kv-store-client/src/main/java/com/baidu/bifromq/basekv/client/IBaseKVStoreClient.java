@@ -30,21 +30,14 @@ import com.baidu.bifromq.basekv.store.proto.RecoverReply;
 import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.baserpc.IConnectable;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-public interface IBaseKVStoreClient extends IKVRangeRouter {
-    static BaseKVStoreClientBuilder.InProcClientBuilder inProcClientBuilder() {
-        return new BaseKVStoreClientBuilder.InProcClientBuilder();
-    }
-
-    static BaseKVStoreClientBuilder.NonSSLClientBuilder nonSSLClientBuilder() {
-        return new BaseKVStoreClientBuilder.NonSSLClientBuilder();
-    }
-
-    static BaseKVStoreClientBuilder.SSLClientBuilder sslClientBuilder() {
-        return new BaseKVStoreClientBuilder.SSLClientBuilder();
+public interface IBaseKVStoreClient extends IKVRangeRouter, IConnectable {
+    static BaseKVStoreClientBuilder newBuilder() {
+        return new BaseKVStoreClientBuilder();
     }
 
     interface IExecutionPipeline {

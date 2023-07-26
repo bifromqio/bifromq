@@ -21,6 +21,7 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
@@ -34,20 +35,23 @@ import com.baidu.bifromq.mqtt.MQTTBrokerBuilder;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
+import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.retain.client.IRetainServiceClient;
 import com.baidu.bifromq.retain.server.IRetainServer;
 import com.baidu.bifromq.retain.store.IRetainStore;
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
-import com.baidu.bifromq.sessiondict.server.ISessionDictionaryServer;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import io.reactivex.rxjava3.core.Observable;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -72,13 +76,14 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
-    private ISessionDictionaryClient sessionDictClient;
-    private ISessionDictionaryServer sessionDictServer;
+    private ISessionDictClient sessionDictClient;
+    private ISessionDictServer sessionDictServer;
     private IDistClient distClient;
     private IBaseKVStoreClient distWorkerClient;
     private IDistWorker distWorker;
     private IDistServer distServer;
     private IInboxReaderClient inboxReaderClient;
+    private IInboxBrokerClient inboxBrokerClient;
     private IBaseKVStoreClient inboxStoreClient;
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
@@ -86,6 +91,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IBaseKVStoreClient retainStoreClient;
     private IRetainStore retainStore;
     private IRetainServer retainServer;
+    private IMqttBrokerClient mqttBrokerClient;
     private IMQTTBroker mqttBroker;
     private ISubBrokerManager inboxBrokerMgr;
 
@@ -138,19 +144,24 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         serverCrdtService.start(agentHost);
         log.debug("CRDT service started");
 
-        sessionDictClient = ISessionDictionaryClient.inProcBuilder()
+        sessionDictClient = ISessionDictClient.newBuilder()
+            .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        sessionDictServer = ISessionDictionaryServer.inProcServerBuilder()
+        sessionDictServer = ISessionDictServer.newBuilder()
+            .host("127.0.0.1")
+            .crdtService(serverCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        inboxReaderClient = IInboxReaderClient.inProcClientBuilder()
+        inboxReaderClient = IInboxReaderClient.newBuilder()
+            .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        IInboxBrokerClient inboxBrokerClient = IInboxBrokerClient.inProcClientBuilder()
+        inboxBrokerClient = IInboxBrokerClient.newBuilder()
+            .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        inboxStoreClient = IBaseKVStoreClient.inProcClientBuilder()
+        inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .executor(ioClientExecutor)
@@ -159,7 +170,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .execPipelinesPerServer(config.getInboxStoreConfig().getInboxStoreClientConfig()
                 .getExecPipelinePerServer())
             .build();
-        inboxStore = IInboxStore.inProcBuilder()
+        inboxStore = IInboxStore.newBuilder()
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(inboxStoreClient)
@@ -175,17 +187,19 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .setWalEngineConfigurator(
                     buildEngineConf(config.getInboxStoreConfig().getWalEngineConfig(), "inbox_wal")))
             .build();
-        inboxServer = IInboxServer.inProcBuilder()
+        inboxServer = IInboxServer.newBuilder()
+            .host("127.0.0.1")
             .settingProvider(settingProviderMgr)
+            .crdtService(serverCrdtService)
             .executor(ioServerExecutor)
             .storeClient(inboxStoreClient)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
-        retainClient = IRetainServiceClient.inProcClientBuilder()
+        retainClient = IRetainServiceClient.newBuilder()
+            .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        retainStoreClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+        retainStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .executor(ioClientExecutor)
@@ -194,8 +208,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .execPipelinesPerServer(config.getRetainStoreConfig().getRetainStoreClientConfig()
                 .getExecPipelinePerServer())
             .build();
-        retainStore = IRetainStore
-            .inProcBuilder()
+        retainStore = IRetainStore.newBuilder()
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(retainStoreClient)
@@ -210,24 +224,27 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .setWalEngineConfigurator(
                     buildEngineConf(config.getRetainStoreConfig().getWalEngineConfig(), "retain_wal")))
             .build();
-        retainServer = IRetainServer
-            .inProcBuilder()
+        retainServer = IRetainServer.newBuilder()
+            .host("127.0.0.1")
+            .crdtService(serverCrdtService)
             .settingProvider(settingProviderMgr)
             .storeClient(retainStoreClient)
-            .ioExecutor(ioServerExecutor)
+            .executor(ioServerExecutor)
             .build();
 
-        distClient = IDistClient.inProcClientBuilder()
+        distClient = IDistClient.newBuilder()
+            .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
 
-        IMqttBrokerClient mqttBrokerClient = IMqttBrokerClient.inProcClientBuilder()
+        mqttBrokerClient = IMqttBrokerClient.newBuilder()
+            .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
 
         inboxBrokerMgr = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
 
-        distWorkerClient = IBaseKVStoreClient.inProcClientBuilder()
+        distWorkerClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .executor(ioClientExecutor)
@@ -237,7 +254,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .getExecPipelinePerServer())
             .build();
 
-        distWorker = IDistWorker.inProcBuilder()
+        distWorker = IDistWorker.newBuilder()
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .settingProvider(settingProviderMgr)
@@ -258,26 +276,30 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .subBrokerManager(inboxBrokerMgr)
             .build();
 
-        distServer = IDistServer.inProcBuilder()
+        distServer = IDistServer.newBuilder()
+            .host("127.0.0.1")
+            .crdtService(serverCrdtService)
             .storeClient(distWorkerClient)
             .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
             .crdtService(clientCrdtService)
-            .ioExecutor(ioServerExecutor)
+            .executor(ioServerExecutor)
             .build();
 
-        MQTTBrokerBuilder.InProcBrokerBuilder brokerBuilder = IMQTTBroker.inProcBrokerBuilder()
-            .host(config.getHost())
+        MQTTBrokerBuilder brokerBuilder = IMQTTBroker.newBuilder()
+            .mqttHost(config.getHost())
+            .rpcHost("127.0.0.1")
             .bossGroup(NettyUtil.createEventLoopGroup(config.getMqttBossThreads(),
                 EnvProvider.INSTANCE.newThreadFactory("mqtt-boss")))
             .workerGroup(NettyUtil.createEventLoopGroup(config.getMqttWorkerThreads(),
                 EnvProvider.INSTANCE.newThreadFactory("mqtt-worker")))
             .ioExecutor(ioServerExecutor)
+            .crdtService(serverCrdtService)
             .authProvider(authProviderMgr)
             .eventCollector(eventCollectorMgr)
             .settingProvider(settingProviderMgr)
             .distClient(distClient)
-            .inboxReader(inboxReaderClient)
+            .inboxClient(inboxReaderClient)
             .sessionDictClient(sessionDictClient)
             .retainClient(retainClient)
             .connectTimeoutSeconds(config.getConnTimeoutSec())
@@ -340,6 +362,25 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         distWorkerClient.join();
 
         mqttBroker.start();
+        Observable.combineLatest(
+                mqttBrokerClient.connState(),
+                inboxBrokerClient.connState(),
+                sessionDictClient.connState(),
+                retainClient.connState(),
+                inboxReaderClient.connState(),
+                distClient.connState(),
+                Sets::newHashSet
+            )
+            .mapOptional(states -> {
+                if (states.size() > 1) {
+                    return Optional.empty();
+                }
+                return states.stream().findFirst();
+            })
+            .filter(state -> state == IRPCClient.ConnState.READY)
+            .firstElement()
+            .blockingSubscribe();
+
         log.info("Standalone broker started");
         setupMetrics();
     }
@@ -372,7 +413,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         serverCrdtService.stop();
 
         agentHost.shutdown();
-        log.debug("Agent host stopped");
 
         authProviderMgr.close();
 

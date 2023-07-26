@@ -77,13 +77,15 @@ public class DistServiceState {
         CRDTServiceOptions crdtServiceOptions = CRDTServiceOptions.builder().build();
         crdtService = ICRDTService.newInstance(crdtServiceOptions);
         crdtService.start(agentHost);
-        distClient = IDistClient.inProcClientBuilder().build();
+        distClient = IDistClient.newBuilder()
+            .crdtService(crdtService)
+            .build();
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
         storeClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+            .newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(crdtService)
             .build();
@@ -133,8 +135,7 @@ public class DistServiceState {
 
             }
         };
-        distWorker = IDistWorker
-            .inProcBuilder()
+        distWorker = IDistWorker.newBuilder()
             .agentHost(agentHost)
             .crdtService(crdtService)
             .settingProvider(settingProvider)
@@ -149,7 +150,7 @@ public class DistServiceState {
             .kvRangeStoreOptions(kvRangeStoreOptions)
             .subBrokerManager(subBrokerMgr)
             .build();
-        distServer = IDistServer.inProcBuilder()
+        distServer = IDistServer.newBuilder()
             .storeClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)

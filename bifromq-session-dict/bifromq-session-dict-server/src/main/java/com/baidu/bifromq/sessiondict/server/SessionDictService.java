@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class SessionDictionaryService extends SessionDictionaryServiceGrpc.SessionDictionaryServiceImplBase {
+public class SessionDictService extends SessionDictionaryServiceGrpc.SessionDictionaryServiceImplBase {
 
     private final Cache<AckStream<Ping, Quit>, ClientInfo> kickedPipelines = Caffeine.newBuilder()
         .expireAfterWrite(5, TimeUnit.SECONDS)

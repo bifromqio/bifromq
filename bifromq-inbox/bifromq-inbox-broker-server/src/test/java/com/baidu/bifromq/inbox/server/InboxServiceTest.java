@@ -96,8 +96,8 @@ public abstract class InboxServiceTest {
 
         serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         serverCrdtService.start(agentHost);
-        inboxBrokerClient = IInboxBrokerClient.inProcClientBuilder().build();
-        inboxReaderClient = IInboxReaderClient.inProcClientBuilder().build();
+        inboxBrokerClient = IInboxBrokerClient.newBuilder().crdtService(clientCrdtService).build();
+        inboxReaderClient = IInboxReaderClient.newBuilder().crdtService(clientCrdtService).build();
 
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
@@ -126,13 +126,12 @@ public abstract class InboxServiceTest {
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
-        inboxStoreClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+        inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
-        inboxStore = IInboxStore
-            .inProcBuilder()
+        inboxStore = IInboxStore.newBuilder()
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(inboxStoreClient)
@@ -143,7 +142,9 @@ public abstract class InboxServiceTest {
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
-        inboxServer = IInboxServer.inProcBuilder()
+        inboxServer = IInboxServer.newBuilder()
+            .host("127.0.0.1")
+            .crdtService(serverCrdtService)
             .settingProvider(settingProvider)
             .storeClient(inboxStoreClient)
             .build();

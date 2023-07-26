@@ -17,6 +17,7 @@ import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.dist.RPCBluePrint;
 import com.baidu.bifromq.dist.client.scheduler.ClientCall;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.ClearRequest;
@@ -32,17 +33,22 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class DistClient implements IDistClient {
+final class DistClient implements IDistClient {
     private final DistServerCallScheduler reqScheduler;
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    DistClient(@NonNull IRPCClient rpcClient) {
-        this.rpcClient = rpcClient;
+    DistClient(DistClientBuilder builder) {
+        this.rpcClient = IRPCClient.newBuilder()
+            .bluePrint(RPCBluePrint.INSTANCE)
+            .executor(builder.executor)
+            .eventLoopGroup(builder.eventLoopGroup)
+            .crdtService(builder.crdtService)
+            .sslContext(builder.sslContext)
+            .build();
         reqScheduler = new DistServerCallScheduler(rpcClient);
     }
 

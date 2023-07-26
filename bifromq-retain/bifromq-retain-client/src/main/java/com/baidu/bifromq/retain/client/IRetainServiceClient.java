@@ -13,26 +13,17 @@
 
 package com.baidu.bifromq.retain.client;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import io.reactivex.rxjava3.core.Observable;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
-public interface IRetainServiceClient {
-    static RetainServiceClientBuilder.InProcRetainServiceClientBuilder inProcClientBuilder() {
-        return new RetainServiceClientBuilder.InProcRetainServiceClientBuilder();
-    }
-
-    static RetainServiceClientBuilder.NonSSLRetainServiceClientBuilder nonSSLClientBuilder() {
-        return new RetainServiceClientBuilder.NonSSLRetainServiceClientBuilder();
-    }
-
-    static RetainServiceClientBuilder.SSLRetainServiceClientBuilder sslClientBuilder() {
-        return new RetainServiceClientBuilder.SSLRetainServiceClientBuilder();
+public interface IRetainServiceClient extends IConnectable {
+    static RetainServiceClientBuilder newBuilder() {
+        return new RetainServiceClientBuilder();
     }
 
     interface IClientPipeline {
@@ -40,8 +31,6 @@ public interface IRetainServiceClient {
 
         void close();
     }
-
-    Observable<IRPCClient.ConnState> connState();
 
     IClientPipeline open(ClientInfo clientInfo);
 

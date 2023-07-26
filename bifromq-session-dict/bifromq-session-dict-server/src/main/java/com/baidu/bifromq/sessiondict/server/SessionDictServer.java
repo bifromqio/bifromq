@@ -14,21 +14,27 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.sessiondict.RPCBluePrint;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class SessionDictServer implements ISessionDictionaryServer {
-    private final String serviceUniqueName;
+final class SessionDictServer implements ISessionDictServer {
     private final IRPCServer rpcServer;
-    private final SessionDictionaryService service = new SessionDictionaryService();
+    private final SessionDictService service = new SessionDictService();
 
-    SessionDictServer(String serviceUniqueName) {
-        this.serviceUniqueName = serviceUniqueName;
-        this.rpcServer = buildRPCServer(service);
+    SessionDictServer(SessionDictServerBuilder builder) {
+        this.rpcServer = IRPCServer.newBuilder()
+            .bindService(service.bindService(), RPCBluePrint.INSTANCE)
+            .id(builder.id)
+            .host(builder.host)
+            .port(builder.port)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .crdtService(builder.crdtService)
+            .executor(builder.executor)
+            .build();
     }
-
-    protected abstract IRPCServer buildRPCServer(SessionDictionaryService distService);
 
     @Override
     public void start() {

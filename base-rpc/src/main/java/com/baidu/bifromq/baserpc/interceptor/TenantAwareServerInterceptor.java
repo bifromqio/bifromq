@@ -28,6 +28,7 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import java.time.Duration;
 import java.util.Collections;
@@ -39,14 +40,17 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantAwareServerInterceptor implements ServerInterceptor {
     private static final ServerCall.Listener NOOP_LISTENER = new ServerCall.Listener<>() {
     };
+    // top key: methodFullName
+    // nest key: tenantId
     private final Map<String, LoadingCache<String, RPCMeters.MeterKey>> meterKeys = new HashMap<>();
 
-    public TenantAwareServerInterceptor(String serviceUniqueName, ServerServiceDefinition serviceDefinition) {
-        for (MethodDescriptor<?, ?> methodDesc : serviceDefinition.getServiceDescriptor().getMethods()) {
+    public TenantAwareServerInterceptor(ServerServiceDefinition serviceDefinition) {
+        ServiceDescriptor serviceDescriptor = serviceDefinition.getServiceDescriptor();
+        for (MethodDescriptor<?, ?> methodDesc : serviceDescriptor.getMethods()) {
             meterKeys.put(methodDesc.getFullMethodName(), Caffeine.newBuilder()
                 .expireAfterAccess(Duration.ofSeconds(30))
                 .build(tenantId -> RPCMeters.MeterKey.builder()
-                    .service(serviceUniqueName)
+                    .service(serviceDescriptor.getName())
                     .method(methodDesc.getBareMethodName())
                     .tenantId(tenantId)
                     .build()));

@@ -14,5 +14,4 @@
 package com.baidu.bifromq.dist;
 
 public interface IDistServiceBuilder {
-    String SERVICE_NAME = "dist.service";
 }

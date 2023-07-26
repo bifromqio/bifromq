@@ -15,42 +15,35 @@ package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 
-import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
-import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
-import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.retain.utils.MessageUtil;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
-import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class RetainStore implements IRetainStore {
+final class RetainStore implements IRetainStore {
     private enum Status {
         INIT, STARTING, STARTED, STOPPING, STOPPED
     }
 
-    private final AtomicReference<Status> status = new AtomicReference(Status.INIT);
+    private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
     private final RetainStoreCoProcFactory coProcFactory;
     private final IBaseKVStoreServer storeServer;
@@ -58,58 +51,41 @@ abstract class RetainStore implements IRetainStore {
     private final boolean jobExecutorOwner;
     private final Duration statsInterval;
     private final Duration gcInterval;
+    private volatile ScheduledFuture<?> gcJob;
+    private volatile ScheduledFuture<?> statsJob;
 
-    private volatile ScheduledFuture gcJob;
-    private volatile ScheduledFuture statsJob;
-
-    public RetainStore(@NonNull IAgentHost agentHost,
-                       @NonNull ICRDTService crdtService,
-                       @NonNull IBaseKVStoreClient storeClient,
-                       Duration statsInterval,
-                       Duration gcInterval,
-                       Clock clock,
-                       KVRangeStoreOptions kvRangeStoreOptions,
-                       Executor ioExecutor,
-                       Executor queryExecutor,
-                       Executor mutationExecutor,
-                       ScheduledExecutorService tickTaskExecutor,
-                       ScheduledExecutorService bgTaskExecutor) {
-        this.storeClient = storeClient;
-        this.gcInterval = gcInterval;
-        this.statsInterval = statsInterval;
-        coProcFactory = new RetainStoreCoProcFactory(clock);
-        storeServer = buildKVStoreServer(CLUSTER_NAME,
-            agentHost,
-            crdtService,
-            coProcFactory,
-            kvRangeStoreOptions,
-            ioExecutor,
-            queryExecutor,
-            mutationExecutor,
-            tickTaskExecutor,
-            bgTaskExecutor);
-        jobExecutorOwner = bgTaskExecutor == null;
+    public RetainStore(RetainStoreBuilder builder) {
+        this.storeClient = builder.storeClient;
+        this.gcInterval = builder.gcInterval;
+        this.statsInterval = builder.statsInterval;
+        coProcFactory = new RetainStoreCoProcFactory(builder.clock);
+        storeServer = IBaseKVStoreServer
+            .newBuilder()
+            .clusterId(builder.clusterId)
+            .agentHost(builder.agentHost)
+            .crdtService(builder.crdtService)
+            .coProcFactory(coProcFactory)
+            .ioExecutor(builder.ioExecutor)
+            .queryExecutor(builder.queryExecutor)
+            .mutationExecutor(builder.mutationExecutor)
+            .tickTaskExecutor(builder.tickTaskExecutor)
+            .bgTaskExecutor(builder.bgTaskExecutor)
+            .storeOptions(builder.kvRangeStoreOptions)
+            .host(builder.host)
+            .port(builder.port)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .sslContext(builder.sslContext)
+            .build();
+        jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
-            jobExecutor = ExecutorServiceMetrics
-                .monitor(Metrics.globalRegistry,
-                    new ScheduledThreadPoolExecutor(1,
-                        EnvProvider.INSTANCE.newThreadFactory("retain-store-job-executor")),
-                    CLUSTER_NAME + "-job-executor");
+            String threadName = String.format("retain-store[%s]-job-executor", builder.clusterId);
+            jobExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory(threadName)), threadName);
         } else {
-            jobExecutor = bgTaskExecutor;
+            jobExecutor = builder.bgTaskExecutor;
         }
     }
-
-    protected abstract IBaseKVStoreServer buildKVStoreServer(String clusterId,
-                                                             IAgentHost agentHost,
-                                                             ICRDTService crdtService,
-                                                             IKVRangeCoProcFactory coProcFactory,
-                                                             KVRangeStoreOptions kvRangeStoreOptions,
-                                                             Executor ioExecutor,
-                                                             Executor queryExecutor,
-                                                             Executor mutationExecutor,
-                                                             ScheduledExecutorService tickTaskExecutor,
-                                                             ScheduledExecutorService bgTaskExecutor);
 
     public String id() {
         return storeServer.id();
@@ -157,7 +133,7 @@ abstract class RetainStore implements IRetainStore {
         }
         Iterator<KVRangeSetting> itr = storeClient.findByRange(FULL_RANGE)
             .stream().filter(k -> k.equals(id())).iterator();
-        List<CompletableFuture> gcFutures = new ArrayList<>();
+        List<CompletableFuture<?>> gcFutures = new ArrayList<>();
         while (itr.hasNext()) {
             KVRangeSetting leaderReplica = itr.next();
             gcFutures.add(gcRange(leaderReplica));

@@ -215,10 +215,7 @@ public final class BluePrint {
     }
 
     @SuppressWarnings("unchecked")
-    public <ReqT, RespT> MethodDescriptor<ReqT, RespT> methodDesc(String fullMethodName, boolean inProc) {
-        if (inProc) {
-            return (MethodDescriptor<ReqT, RespT>) methods.get(fullMethodName);
-        }
+    public <ReqT, RespT> MethodDescriptor<ReqT, RespT> methodDesc(String fullMethodName) {
         return (MethodDescriptor<ReqT, RespT>) wrappedMethods.get(fullMethodName);
     }
 

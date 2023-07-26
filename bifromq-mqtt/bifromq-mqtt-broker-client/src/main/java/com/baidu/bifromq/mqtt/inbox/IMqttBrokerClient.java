@@ -13,19 +13,12 @@
 
 package com.baidu.bifromq.mqtt.inbox;
 
+import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 
-public interface IMqttBrokerClient extends ISubBroker {
-    static MqttBrokerClientBuilder.InProcMqttBrokerClientBuilder inProcClientBuilder() {
-        return new MqttBrokerClientBuilder.InProcMqttBrokerClientBuilder();
-    }
-
-    static MqttBrokerClientBuilder.NonSSLMqttBrokerClientBuilder nonSSLClientBuilder() {
-        return new MqttBrokerClientBuilder.NonSSLMqttBrokerClientBuilder();
-    }
-
-    static MqttBrokerClientBuilder.SSLMqttBrokerClientBuilder sslClientBuilder() {
-        return new MqttBrokerClientBuilder.SSLMqttBrokerClientBuilder();
+public interface IMqttBrokerClient extends ISubBroker, IConnectable {
+    static MqttBrokerClientBuilder newBuilder() {
+        return new MqttBrokerClientBuilder();
     }
 
     @Override

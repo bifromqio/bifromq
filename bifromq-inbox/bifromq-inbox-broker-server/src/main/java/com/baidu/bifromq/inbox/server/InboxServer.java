@@ -15,24 +15,34 @@ package com.baidu.bifromq.inbox.server;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.inbox.RPCBluePrint;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class InboxServer implements IInboxServer {
+final class InboxServer implements IInboxServer {
     private final IRPCServer rpcServer;
     private final InboxService inboxService;
 
-    InboxServer(ISettingProvider settingProvider,
+    InboxServer(InboxServerBuilder builder, ISettingProvider settingProvider,
                 IBaseKVStoreClient inboxStoreClient,
                 ScheduledExecutorService bgTaskExecutor) {
         this.inboxService = new InboxService(settingProvider, inboxStoreClient, bgTaskExecutor);
-        this.rpcServer = buildRPCServer(inboxService);
+        this.rpcServer = IRPCServer.newBuilder()
+            .bindService(inboxService.bindService(), RPCBluePrint.INSTANCE)
+            .id(builder.id)
+            .host(builder.host)
+            .port(builder.port)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .crdtService(builder.crdtService)
+            .executor(builder.executor)
+            .sslContext(builder.sslContext)
+            .build();
+        ;
     }
-
-    protected abstract IRPCServer buildRPCServer(InboxService distService);
 
     @Override
     public void start() {

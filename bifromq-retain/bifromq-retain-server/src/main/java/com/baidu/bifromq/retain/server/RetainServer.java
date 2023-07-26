@@ -16,23 +16,30 @@ package com.baidu.bifromq.retain.server;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.IRPCServer;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.retain.RPCBluePrint;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class RetainServer implements IRetainServer {
-    private final String serviceUniqueName;
+final class RetainServer implements IRetainServer {
     private final IRPCServer rpcServer;
     private final RetainService retainService;
 
-    RetainServer(String serviceUniqueName, ISettingProvider settingProvider,
-                 IBaseKVStoreClient storeClient) {
-        this.serviceUniqueName = serviceUniqueName;
+    RetainServer(RetainServerBuilder builder, ISettingProvider settingProvider, IBaseKVStoreClient storeClient) {
         this.retainService = new RetainService(settingProvider, storeClient);
-        this.rpcServer = buildRPCServer(retainService);
+        this.rpcServer = IRPCServer.newBuilder()
+            .bindService(retainService.bindService(), RPCBluePrint.INSTANCE)
+            .id(builder.id)
+            .host(builder.host)
+            .port(builder.port)
+            .bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .crdtService(builder.crdtService)
+            .executor(builder.executor)
+            .sslContext(builder.sslContext)
+            .build();
+        ;
     }
-
-    protected abstract IRPCServer buildRPCServer(RetainService distService);
 
     @Override
     public void start() {

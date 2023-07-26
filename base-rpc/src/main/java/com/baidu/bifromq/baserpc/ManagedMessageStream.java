@@ -257,8 +257,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
             log.trace("MsgStream@{} creating request stream", hashCode());
             ClientCallStreamObserver<AckT> reqStream = (ClientCallStreamObserver<AckT>)
                 asyncBidiStreamingCall(channelHolder.channel()
-                    .newCall(bluePrint.methodDesc(methodDescriptor.getFullMethodName(),
-                            channelHolder.inProc()),
+                    .newCall(bluePrint.methodDesc(methodDescriptor.getFullMethodName()),
                         callOptions), new ResponseObserver());
             if (RPCContext.SELECTED_SERVER_ID_CTX_KEY.get().getServerId() != null) {
                 requester.set(reqStream);

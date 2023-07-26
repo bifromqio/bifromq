@@ -23,7 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.NonNull;
 
-abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
+abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
     protected final Map<ChannelOption<?>, Object> options = new LinkedHashMap<>();
     protected final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<>();
     private final MQTTBrokerBuilder serverBuilder;
@@ -78,7 +78,7 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder> {
     }
 
     private abstract static class SecuredConnListenerBuilder
-        <L extends SecuredConnListenerBuilder> extends ConnListenerBuilder<L> {
+        <L extends SecuredConnListenerBuilder<L>> extends ConnListenerBuilder<L> {
         protected SslContext sslContext;
 
         SecuredConnListenerBuilder(MQTTBrokerBuilder builder) {

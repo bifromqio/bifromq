@@ -18,6 +18,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.sessiondict.PipelineUtil;
+import com.baidu.bifromq.sessiondict.RPCBluePrint;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
@@ -32,12 +33,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class SessionDictionaryClient implements ISessionDictionaryClient {
+final class SessionDictClient implements ISessionDictClient {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final IRPCClient rpcClient;
 
-    SessionDictionaryClient(IRPCClient rpcClient) {
-        this.rpcClient = rpcClient;
+    SessionDictClient(SessionDictClientBuilder builder) {
+        this.rpcClient = IRPCClient.newBuilder()
+            .bluePrint(RPCBluePrint.INSTANCE)
+            .executor(builder.executor)
+            .eventLoopGroup(builder.eventLoopGroup)
+            .sslContext(builder.sslContext)
+            .crdtService(builder.crdtService)
+            .build();
     }
 
     @Override

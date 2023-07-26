@@ -231,7 +231,9 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     }
 
     public void stop() {
+        log.debug("stop dist call scheduler");
         distCallScheduler.close();
+        log.debug("stop dist call rate limiter");
         distCallRateScheduler.close();
     }
 }

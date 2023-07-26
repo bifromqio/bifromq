@@ -11,22 +11,27 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.sessiondict.server;
+package com.baidu.bifromq.baserpc;
 
-public interface ISessionDictionaryServer {
-    static SessionDictionaryServerBuilder.InProcServerBuilder inProcServerBuilder() {
-        return new SessionDictionaryServerBuilder.InProcServerBuilder();
+import io.reactivex.rxjava3.core.Observable;
+
+public interface IConnectable {
+    enum ConnState {
+        CONNECTING,
+
+        READY,
+
+        TRANSIENT_FAILURE,
+
+        IDLE,
+
+        SHUTDOWN
     }
 
-    static SessionDictionaryServerBuilder.NonSSLServerBuilder nonSSLServerBuilder() {
-        return new SessionDictionaryServerBuilder.NonSSLServerBuilder();
-    }
-
-    static SessionDictionaryServerBuilder.SSLServerBuilder sslServerBuilder() {
-        return new SessionDictionaryServerBuilder.SSLServerBuilder();
-    }
-
-    void start();
-
-    void shutdown();
+    /**
+     * The observable of rpc connectivity state
+     *
+     * @return an observable of connection state
+     */
+    Observable<ConnState> connState();
 }

@@ -34,10 +34,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.Builder;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implements IUpdateListener.IServerSelector {
+    @ToString
     private static class WeightedServerSelector {
         private final SortedMap<String, Integer> weightedServers;
         private final List<String> serverLists;
@@ -260,7 +262,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
     }
 
     @Override
-    public boolean direct(String tenantId, String serverId, MethodDescriptor methodDescriptor) {
+    public boolean direct(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor) {
         assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.DDBalanced;
         WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         return selector.contains(serverId);

@@ -14,8 +14,6 @@
 package com.baidu.bifromq.mqtt;
 
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
-import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.mqtt.handler.ByteBufToWebSocketFrameEncoder;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.ClientAddrHandler;
@@ -25,11 +23,6 @@ import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
 import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
-import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.retain.client.IRetainServiceClient;
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -46,14 +39,13 @@ import io.netty.handler.codec.mqtt.MqttDecoder;
 import io.netty.handler.codec.mqtt.MqttEncoder;
 import io.netty.handler.traffic.ChannelTrafficShapingHandler;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class MQTTBroker implements IMQTTBroker {
+final class MQTTBroker implements IMQTTBroker {
     private static final String MQTT_SUBPROTOCOL_CSV_LIST = "mqtt, mqttv3.1, mqttv3.1.1";
-    private final String host;
-    private final MQTTBrokerOptions options;
+    private final MQTTBrokerBuilder builder;
+    private final String mqttHost;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
     // fields of the returned anonymous MQTTBroker instance
@@ -66,46 +58,40 @@ abstract class MQTTBroker implements IMQTTBroker {
     private final Optional<ChannelFuture> wsChannelF;
     private final Optional<ChannelFuture> wssChannelF;
 
-    public MQTTBroker(String host,
-                      EventLoopGroup bossGroup,
-                      EventLoopGroup workerGroup,
-                      MQTTBrokerOptions options,
-                      IAuthProvider authProvider,
-                      IEventCollector eventCollector,
-                      ISettingProvider settingProvider,
-                      IDistClient distClient,
-                      IInboxReaderClient inboxClient,
-                      IRetainServiceClient retainClient,
-                      ISessionDictionaryClient sessionDictClient,
-                      ConnListenerBuilder.TCPConnListenerBuilder tcpConnListenerBuilder,
-                      ConnListenerBuilder.TLSConnListenerBuilder tlsConnListenerBuilder,
-                      ConnListenerBuilder.WSConnListenerBuilder wsConnListenerBuilder,
-                      ConnListenerBuilder.WSSConnListenerBuilder wssConnListenerBuilder) {
-        this.host = host;
-        this.options = options.toBuilder().build();
-        this.bossGroup = bossGroup;
-        this.workerGroup = workerGroup;
-        connRateLimitHandler = new ConnectionRateLimitHandler(options.connectRateLimit());
+    public MQTTBroker(MQTTBrokerBuilder builder) {
+        this.builder = builder;
+        this.mqttHost = builder.mqttHost;
+        this.bossGroup = builder.bossGroup;
+        this.workerGroup = builder.workerGroup;
+        connRateLimitHandler = new ConnectionRateLimitHandler(builder.connectRateLimit);
         remoteAddrHandler = new ClientAddrHandler();
-        subBroker = buildLocalSessionBroker();
-        sessionContext = MQTTSessionContext.builder()
-            .authProvider(authProvider)
-            .eventCollector(eventCollector)
-            .settingProvider(settingProvider)
-            .distClient(distClient)
-            .inboxClient(inboxClient)
-            .retainClient(retainClient)
-            .sessionDictClient(sessionDictClient)
-            .brokerServer(subBroker)
-            .maxResendTimes(options.maxResendTimes())
-            .resendDelayMillis(options.resendDelayMillis())
-            .defaultKeepAliveTimeSeconds(options.defaultKeepAliveSeconds())
-            .qos2ConfirmWindowSeconds(options.qos2ConfirmWindowSeconds())
+        subBroker = ILocalSessionBrokerServer.newBuilder()
+            .id(builder.serverId)
+            .host(builder.rpcHost)
+            .port(builder.rpcPort)
+            .executor(builder.ioExecutor)
+            .bossEventLoopGroup(bossGroup)
+            .workerEventLoopGroup(builder.rpcWorkerGroup)
+            .crdtService(builder.crdtService)
             .build();
-        tcpChannelF = Optional.ofNullable(tcpConnListenerBuilder).map(this::bindTCPChannel);
-        tlsChannelF = Optional.ofNullable(tlsConnListenerBuilder).map(this::bindTLSChannel);
-        wsChannelF = Optional.ofNullable(wsConnListenerBuilder).map(this::bindWSChannel);
-        wssChannelF = Optional.ofNullable(wssConnListenerBuilder).map(this::bindWSSChannel);
+        sessionContext = MQTTSessionContext.builder()
+            .authProvider(builder.authProvider)
+            .eventCollector(builder.eventCollector)
+            .settingProvider(builder.settingProvider)
+            .distClient(builder.distClient)
+            .inboxClient(builder.inboxClient)
+            .retainClient(builder.retainClient)
+            .sessionDictClient(builder.sessionDictClient)
+            .brokerServer(subBroker)
+            .maxResendTimes(builder.maxResendTimes)
+            .resendDelayMillis(builder.resendDelayMillis)
+            .defaultKeepAliveTimeSeconds(builder.defaultKeepAliveSeconds)
+            .qos2ConfirmWindowSeconds(builder.qos2ConfirmWindowSeconds)
+            .build();
+        tcpChannelF = builder.tcpListenerBuilder.map(this::bindTCPChannel);
+        tlsChannelF = builder.tlsListenerBuilder.map(this::bindTLSChannel);
+        wsChannelF = builder.wsListenerBuilder.map(this::bindWSChannel);
+        wssChannelF = builder.wssListenerBuilder.map(this::bindWSSChannel);
     }
 
     @Override
@@ -156,7 +142,7 @@ abstract class MQTTBroker implements IMQTTBroker {
             wssChannelF.get().channel().close().syncUninterruptibly();
             log.debug("Stopped accepting mqtt connection over wss channel");
         }
-        subBroker.disconnectAll(options.disconnectRate()).join();
+        subBroker.disconnectAll(builder.disconnectRate).join();
         log.debug("All mqtt connection closed");
 
         sessionContext.awaitBgTaskDone();
@@ -172,86 +158,84 @@ abstract class MQTTBroker implements IMQTTBroker {
         log.info("MQTT broker shutdown");
     }
 
-    protected abstract ILocalSessionBrokerServer buildLocalSessionBroker();
-
-    private ChannelFuture bindTCPChannel(ConnListenerBuilder.TCPConnListenerBuilder builder) {
-        return buildChannel(builder, new ChannelInitializer<SocketChannel>() {
+    private ChannelFuture bindTCPChannel(ConnListenerBuilder.TCPConnListenerBuilder connBuilder) {
+        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("connRateLimiter", connRateLimitHandler);
                 pipeline.addLast("trafficShaper",
-                    new ChannelTrafficShapingHandler(options.writeLimit(), options.readLimit()));
-                pipeline.addLast("decoder", new MqttDecoder(options.maxBytesInMessage()));
+                    new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
+                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(options.connectTimeoutSeconds()));
+                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
             }
         });
     }
 
-    private ChannelFuture bindTLSChannel(ConnListenerBuilder.TLSConnListenerBuilder builder) {
-        return buildChannel(builder, new ChannelInitializer<SocketChannel>() {
+    private ChannelFuture bindTLSChannel(ConnListenerBuilder.TLSConnListenerBuilder connBuilder) {
+        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("connRateLimiter", connRateLimitHandler);
-                pipeline.addLast("ssl", builder.sslContext.newHandler(ch.alloc()));
+                pipeline.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
                 pipeline.addLast("trafficShaper",
-                    new ChannelTrafficShapingHandler(options.writeLimit(), options.readLimit()));
-                pipeline.addLast("decoder", new MqttDecoder(options.maxBytesInMessage()));
+                    new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
+                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(options.connectTimeoutSeconds()));
+                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
             }
         });
     }
 
-    private ChannelFuture bindWSChannel(ConnListenerBuilder.WSConnListenerBuilder builder) {
-        return buildChannel(builder, new ChannelInitializer<SocketChannel>() {
+    private ChannelFuture bindWSChannel(ConnListenerBuilder.WSConnListenerBuilder connBuilder) {
+        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("connRateLimiter", connRateLimitHandler);
                 pipeline.addLast("trafficShaper",
-                    new ChannelTrafficShapingHandler(options.writeLimit(), options.readLimit()));
+                    new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                 pipeline.addLast("httpEncoder", new HttpResponseEncoder());
                 pipeline.addLast("httpDecoder", new HttpRequestDecoder());
                 pipeline.addLast("remoteAddr", remoteAddrHandler);
                 pipeline.addLast("aggregator", new HttpObjectAggregator(65536));
-                pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(builder.path(),
+                pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
                     MQTT_SUBPROTOCOL_CSV_LIST));
                 pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
                 pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
-                pipeline.addLast("decoder", new MqttDecoder(options.maxBytesInMessage()));
+                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(options.connectTimeoutSeconds()));
+                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
             }
         });
     }
 
-    private ChannelFuture bindWSSChannel(ConnListenerBuilder.WSSConnListenerBuilder builder) {
-        return buildChannel(builder, new ChannelInitializer<SocketChannel>() {
+    private ChannelFuture bindWSSChannel(ConnListenerBuilder.WSSConnListenerBuilder connBuilder) {
+        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("connRateLimiter", connRateLimitHandler);
-                pipeline.addLast("ssl", builder.sslContext.newHandler(ch.alloc()));
+                pipeline.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
                 pipeline.addLast("trafficShaper",
-                    new ChannelTrafficShapingHandler(options.writeLimit(), options.readLimit()));
+                    new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                 pipeline.addLast("httpEncoder", new HttpResponseEncoder());
                 pipeline.addLast("httpDecoder", new HttpRequestDecoder());
                 pipeline.addLast("remoteAddr", remoteAddrHandler);
                 pipeline.addLast("aggregator", new HttpObjectAggregator(65536));
-                pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(builder.path(),
+                pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
                     MQTT_SUBPROTOCOL_CSV_LIST));
                 pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
                 pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
-                pipeline.addLast("decoder", new MqttDecoder(options.maxBytesInMessage()));
+                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(options.connectTimeoutSeconds()));
+                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
             }
         });
     }
@@ -265,6 +249,6 @@ abstract class MQTTBroker implements IMQTTBroker {
         builder.options.forEach((k, v) -> b.option((ChannelOption<? super Object>) k, v));
         builder.childOptions.forEach((k, v) -> b.childOption((ChannelOption<? super Object>) k, v));
         // Bind and start to accept incoming connections.
-        return b.bind(host, builder.port);
+        return b.bind(mqttHost, builder.port);
     }
 }
