@@ -22,21 +22,67 @@ import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getQue
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getRecoverMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getSplitMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getTransferLeadershipMethod;
+import static io.grpc.MethodDescriptor.generateFullMethodName;
 
 import com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc;
 import com.baidu.bifromq.baserpc.BluePrint;
+import io.grpc.MethodDescriptor;
+import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerServiceDefinition;
+import io.grpc.ServiceDescriptor;
+import java.util.HashMap;
+import java.util.Map;
 
 public class RPCBluePrint {
-    public static final BluePrint INSTANCE = BluePrint.builder()
-        .serviceDescriptor(BaseKVStoreServiceGrpc.getServiceDescriptor())
-        .methodSemantic(getBootstrapMethod(), BluePrint.DDUnaryMethod.getInstance())
-        .methodSemantic(getRecoverMethod(), BluePrint.DDUnaryMethod.getInstance())
-        .methodSemantic(getChangeReplicaConfigMethod(), BluePrint.DDUnaryMethod.getInstance())
-        .methodSemantic(getSplitMethod(), BluePrint.DDUnaryMethod.getInstance())
-        .methodSemantic(getMergeMethod(), BluePrint.DDUnaryMethod.getInstance())
-        .methodSemantic(getTransferLeadershipMethod(), BluePrint.DDUnaryMethod.getInstance())
-        .methodSemantic(getExecuteMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
-        .methodSemantic(getQueryMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
-        .methodSemantic(getLinearizedQueryMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
-        .build();
+    public static ServerServiceDefinition scope(ServerServiceDefinition definition, String clusterId) {
+        String serviceName = toScopedServiceName(clusterId, definition.getServiceDescriptor().getName());
+        ServerServiceDefinition.Builder builder = ServerServiceDefinition.builder(serviceName);
+        for (ServerMethodDefinition origMethodDef : definition.getMethods()) {
+            MethodDescriptor methodDesc = origMethodDef.getMethodDescriptor().toBuilder()
+                .setFullMethodName(generateFullMethodName(serviceName,
+                    origMethodDef.getMethodDescriptor().getBareMethodName()))
+                .build();
+            builder.addMethod(methodDesc, origMethodDef.getServerCallHandler());
+        }
+        return builder.build();
+    }
+
+    public static BluePrint build(String clusterId) {
+        ServiceDescriptor orig = BaseKVStoreServiceGrpc.getServiceDescriptor();
+        String serviceName = toScopedServiceName(clusterId, orig.getName());
+        ServiceDescriptor.Builder builder = ServiceDescriptor.newBuilder(serviceName)
+            .setSchemaDescriptor(orig.getSchemaDescriptor());
+
+        Map<MethodDescriptor<?, ?>, MethodDescriptor<?, ?>> methodMap = new HashMap<>();
+        for (MethodDescriptor<?, ?> origMethodDesc : orig.getMethods()) {
+            MethodDescriptor<?, ?> scopedMethodDesc = origMethodDesc.toBuilder()
+                .setFullMethodName(generateFullMethodName(serviceName, origMethodDesc.getBareMethodName()))
+                .build();
+            builder.addMethod(scopedMethodDesc);
+            methodMap.put(origMethodDesc, scopedMethodDesc);
+        }
+
+        ServiceDescriptor serviceDesc = builder.build();
+
+        return BluePrint.builder()
+            .serviceDescriptor(serviceDesc)
+            .methodSemantic(methodMap.get(getBootstrapMethod()), BluePrint.DDUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getRecoverMethod()), BluePrint.DDUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getChangeReplicaConfigMethod()), BluePrint.DDUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getSplitMethod()), BluePrint.DDUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getMergeMethod()), BluePrint.DDUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getTransferLeadershipMethod()), BluePrint.DDUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getExecuteMethod()), BluePrint.DDPipelineUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getQueryMethod()), BluePrint.DDPipelineUnaryMethod.getInstance())
+            .methodSemantic(methodMap.get(getLinearizedQueryMethod()), BluePrint.DDPipelineUnaryMethod.getInstance())
+            .build();
+    }
+
+    public static String toScopedFullMethodName(String clusterId, String fullMethodName) {
+        return clusterId + "@" + fullMethodName;
+    }
+
+    private static String toScopedServiceName(String clusterId, String serviceName) {
+        return clusterId + "@" + serviceName;
+    }
 }

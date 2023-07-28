@@ -35,7 +35,6 @@ import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.core.Observable;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -63,7 +62,7 @@ final class RPCClient implements IRPCClient {
         this.defaultCallOptions = CallOptions.DEFAULT;
         for (String fullMethodName : bluePrint.allMethods()) {
             if (bluePrint.semantic(fullMethodName) instanceof BluePrint.Unary) {
-                MethodDescriptor<?, ?> methodDesc = bluePrint.methodDesc(fullMethodName, channelHolder.inProc());
+                MethodDescriptor<?, ?> methodDesc = bluePrint.methodDesc(fullMethodName);
                 unaryInflightCounts.put(fullMethodName, new AtomicInteger());
                 unaryMeterKeys.put(fullMethodName, Caffeine.newBuilder()
                     .expireAfterAccess(Duration.ofSeconds(30))
@@ -81,7 +80,7 @@ final class RPCClient implements IRPCClient {
     }
 
     @Override
-    public Observable<Set<String>> serverList() {
+    public Observable<Map<String, Map<String, String>>> serverList() {
         return channelHolder.serverList();
     }
 
@@ -101,7 +100,8 @@ final class RPCClient implements IRPCClient {
         assert !(semantic instanceof BluePrint.DDBalanced) || desiredServerId != null;
         Context ctx = prepareContext(tenantId, desiredServerId, metadata);
         if (semantic instanceof BluePrint.WCHBalancedReq) {
-            String wchKey = ((BluePrint.WCHBalancedReq) semantic).hashKey(req);
+            @SuppressWarnings("unchecked")
+            String wchKey = ((BluePrint.WCHBalancedReq<Req>) semantic).hashKey(req);
             assert wchKey != null;
             ctx = ctx.withValue(WCH_HASH_KEY_CTX_KEY, wchKey);
         }
@@ -114,8 +114,7 @@ final class RPCClient implements IRPCClient {
             int currentCount = counter.incrementAndGet();
             RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqSendCount);
             RPCMeters.recordSummary(meterKey, RPCMetric.UnaryReqDepth, currentCount);
-            MethodDescriptor<Req, Resp> md =
-                bluePrint.methodDesc(methodDesc.getFullMethodName(), channelHolder.inProc());
+            MethodDescriptor<Req, Resp> md = bluePrint.methodDesc(methodDesc.getFullMethodName());
             asyncUnaryCall(this.channelHolder.channel().newCall(md, defaultCallOptions), req,
                 new StreamObserver<>() {
                     @Override
@@ -216,7 +215,6 @@ final class RPCClient implements IRPCClient {
 
 
     interface ChannelHolder {
-        boolean inProc();
 
         Executor rpcExecutor();
 
@@ -224,7 +222,7 @@ final class RPCClient implements IRPCClient {
 
         Observable<ConnState> connState();
 
-        Observable<Set<String>> serverList();
+        Observable<Map<String, Map<String, String>>> serverList();
 
         Observable<IUpdateListener.IServerSelector> serverSelectorObservable();
 

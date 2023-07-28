@@ -14,21 +14,24 @@
 package com.baidu.bifromq.basekv.server;
 
 public interface IBaseKVStoreServer {
-    static BaseKVStoreServerBuilder.InProcBaseKVStoreServerBuilder inProcServerBuilder() {
-        return new BaseKVStoreServerBuilder.InProcBaseKVStoreServerBuilder();
+    static StandaloneBaseKVStoreServerBuilder standaloneServer() {
+        return new StandaloneBaseKVStoreServerBuilder();
     }
 
-    static BaseKVStoreServerBuilder.NonSSLBaseKVStoreServerBuilder nonSSLServerBuilder() {
-        return new BaseKVStoreServerBuilder.NonSSLBaseKVStoreServerBuilder();
+    static NonStandaloneBaseKVStoreServerBuilder nonStandaloneServer() {
+        return new NonStandaloneBaseKVStoreServerBuilder();
     }
 
-    static BaseKVStoreServerBuilder.SSLBaseKVStoreServerBuilder sslServerBuilder() {
-        return new BaseKVStoreServerBuilder.SSLBaseKVStoreServerBuilder();
-    }
+    /**
+     * Get the member store of the provided cluster hosted by current store server
+     *
+     * @param clusterId the id of the cluster
+     * @return the id of the store hosted by the store server
+     * @throws NullPointerException if the store server is not hosting any store for the given cluster
+     */
+    String storeId(String clusterId);
 
-    String id();
-
-    void start(boolean bootstrap);
+    void start();
 
     void stop();
 }

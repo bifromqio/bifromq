@@ -51,6 +51,7 @@ abstract class RPCServiceAnnouncer {
     private static final ByteString SERVER_LIST_KEY = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString TRAFFIC_DIRECTIVE_KEY = ByteString.copyFrom(new byte[] {0x01});
 
+    protected final String serviceUniqueName;
     private final ICRDTService crdtService;
     private final Replica crdtReplica;
     private final IORMap rpcServiceCRDT;
@@ -60,6 +61,7 @@ abstract class RPCServiceAnnouncer {
 
     protected RPCServiceAnnouncer(String serviceUniqueName, ICRDTService crdtService) {
         assert crdtService.isStarted();
+        this.serviceUniqueName = serviceUniqueName;
         this.crdtService = crdtService;
         this.crdtReplica = crdtService.host(CRDTURI.toURI(CausalCRDTType.ormap, "RPC:" + serviceUniqueName));
         this.rpcServiceCRDT = (IORMap) crdtService.get(crdtReplica.getUri()).get();
@@ -152,7 +154,7 @@ abstract class RPCServiceAnnouncer {
                 announced.put(rpcServer.get().getId(), rpcServer.get());
             }
         }
-        log.debug("Build server list at {}:{}", t, announced);
+        log.debug("Build service[{}]'s server list at {}:{}", serviceUniqueName, t, announced);
         return announced;
     }
 

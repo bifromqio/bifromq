@@ -22,26 +22,32 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil;
-import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class MqttBrokerClient implements IMqttBrokerClient {
+final class MqttBrokerClient implements IMqttBrokerClient {
     private final AtomicBoolean hasStopped = new AtomicBoolean();
     private final IRPCClient rpcClient;
 
-    MqttBrokerClient(@NonNull IRPCClient rpcClient) {
-        this.rpcClient = rpcClient;
+    MqttBrokerClient(MqttBrokerClientBuilder builder) {
+        this.rpcClient = IRPCClient.newBuilder()
+            .bluePrint(RPCBluePrint.INSTANCE)
+            .executor(builder.executor)
+            .eventLoopGroup(builder.eventLoopGroup)
+            .sslContext(builder.sslContext)
+            .crdtService(builder.crdtService)
+            .build();
     }
 
     public IDeliverer open(String delivererKey) {
@@ -69,6 +75,11 @@ class MqttBrokerClient implements IMqttBrokerClient {
         }
     }
 
+    @Override
+    public Observable<IRPCClient.ConnState> connState() {
+        return rpcClient.connState();
+    }
+
     private class DeliveryPipeline implements IDeliverer {
         private final IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln;
 
@@ -83,10 +94,11 @@ class MqttBrokerClient implements IMqttBrokerClient {
             long reqId = System.nanoTime();
             return ppln.invoke(WriteRequest.newBuilder()
                     .setReqId(reqId)
-                    .addAllDeliveryPack(Iterables.transform(packs, e -> com.baidu.bifromq.mqtt.inbox.rpc.proto.DeliveryPack.newBuilder()
-                        .setMessagePack(e.messagePack)
-                        .addAllSubscriber(e.inboxes)
-                        .build()))
+                    .addAllDeliveryPack(
+                        Iterables.transform(packs, e -> com.baidu.bifromq.mqtt.inbox.rpc.proto.DeliveryPack.newBuilder()
+                            .setMessagePack(e.messagePack)
+                            .addAllSubscriber(e.inboxes)
+                            .build()))
                     .build())
                 .thenApply(writeReply -> writeReply.getResultList().stream()
                     .collect(Collectors.toMap(e -> e.getSubInfo(), e -> {

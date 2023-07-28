@@ -50,7 +50,8 @@ import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
+import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
+import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.mqtt.utils.TestTicker;
@@ -63,11 +64,11 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.retain.client.IRetainServiceClient;
-import com.baidu.bifromq.retain.client.IRetainServiceClient.IClientPipeline;
+import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.retain.client.IRetainClient.IClientPipeline;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.type.ClientInfo;
@@ -83,7 +84,9 @@ import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.mockito.ArgumentCaptor;
@@ -107,9 +110,9 @@ public abstract class BaseMQTTTest {
     @Mock
     protected IInboxReaderClient inboxClient;
     @Mock
-    protected IRetainServiceClient retainClient;
+    protected IRetainClient retainClient;
     @Mock
-    protected ISessionDictionaryClient sessionDictClient;
+    protected ISessionDictClient sessionDictClient;
     @Mock
     protected IRPCClient.IMessageStream<Quit, Ping> kickStream;
     @Mock
@@ -118,7 +121,32 @@ public abstract class BaseMQTTTest {
     protected IClientPipeline retainPipeline;
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
-    protected ILocalSessionBrokerServer sessionBrokerServer;
+    protected ILocalSessionRegistry sessionRegistry = new ILocalSessionRegistry() {
+        private Map<String, IMQTTSession> sessions = new HashMap<>();
+
+        @Override
+        public CompletableFuture<Void> disconnectAll(int disconnectRate) {
+            return CompletableFuture.allOf(
+                sessions.values().stream().map(IMQTTSession::disconnect).toArray(CompletableFuture[]::new));
+        }
+
+        @Override
+        public void add(String sessionId, IMQTTSession session) {
+            sessions.put(sessionId, session);
+        }
+
+        @Override
+        public boolean remove(String sessionId, IMQTTSession session) {
+            return sessions.remove(sessionId, session);
+        }
+
+        @Override
+        public List<IMQTTSession> removeAll() {
+            List<IMQTTSession> ret = new ArrayList<>(sessions.values());
+            sessions.clear();
+            return ret;
+        }
+    };
     protected EmbeddedChannel channel;
     protected String tenantId = "testTenantA";
     protected String userId = "testDeviceKey";
@@ -136,7 +164,6 @@ public abstract class BaseMQTTTest {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        sessionBrokerServer = ILocalSessionBrokerServer.inProcBrokerBuilder().build();
         testTicker = new TestTicker();
         sessionContext = MQTTSessionContext.builder()
             .authProvider(authProvider)
@@ -146,7 +173,7 @@ public abstract class BaseMQTTTest {
             .inboxClient(inboxClient)
             .retainClient(retainClient)
             .sessionDictClient(sessionDictClient)
-            .brokerServer(sessionBrokerServer)
+            .sessionRegistry(sessionRegistry)
             .maxResendTimes(2)
             .resendDelayMillis(100)
             .defaultKeepAliveTimeSeconds(300)

@@ -22,7 +22,6 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
-import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -70,8 +69,7 @@ class RPCServiceTrafficDirector extends RPCServiceAnnouncer implements IRPCServi
         Set<Server> aliveServers = Sets.newHashSet();
         for (RPCServer server : announcedServers.values()) {
             if (aliveAnnouncers.contains(server.getAnnouncerId())) {
-                aliveServers.add(new Server(server.getId(), new InetSocketAddress(server.getHost(), server.getPort()),
-                    Sets.newHashSet(server.getGroupList()), server.getAttrsMap()));
+                aliveServers.add(new Server(server));
             } else {
                 // this is a side effect: revoke the announcement made by dead announcer
                 log.debug("Remove not alive server announcement: {}", server.getId());

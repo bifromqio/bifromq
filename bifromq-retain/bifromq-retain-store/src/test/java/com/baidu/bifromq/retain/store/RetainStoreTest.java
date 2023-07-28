@@ -135,23 +135,24 @@ public class RetainStoreTest {
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
         storeClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+            .newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
-        testStore = IRetainStore.
-            inProcBuilder()
+        testStore = IRetainStore.standaloneBuilder()
+            .bootstrap(true)
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(storeClient)
             .clock(getClock())
-            .kvRangeStoreOptions(options)
+            .storeOptions(options)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
-        testStore.start(true);
+        testStore.start();
 
         storeClient.join();
         log.info("Setup finished, and start testing");

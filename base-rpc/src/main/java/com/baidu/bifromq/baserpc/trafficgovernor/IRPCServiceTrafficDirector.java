@@ -13,12 +13,17 @@
 
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
+import static com.baidu.bifromq.baserpc.RPCContext.GPID;
+
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.proto.RPCServer;
+import com.google.common.collect.Sets;
+import io.grpc.netty.InProcSocketAddress;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.Map;
 import java.util.Set;
-import lombok.AllArgsConstructor;
 import lombok.ToString;
 
 public interface IRPCServiceTrafficDirector {
@@ -26,26 +31,33 @@ public interface IRPCServiceTrafficDirector {
         return new RPCServiceTrafficDirector(serviceUniqueName, crdtService);
     }
 
-    @AllArgsConstructor
     @ToString
     class Server {
         public final String id;
-        public final InetSocketAddress hostAddr;
+        public final SocketAddress hostAddr;
         public final Set<String> groupTags;
         public final Map<String, String> attrs;
+
+        public Server(RPCServer server) {
+            this.id = server.getId();
+            this.attrs = server.getAttrsMap();
+            this.groupTags = Sets.newHashSet(server.getGroupList());
+            this.hostAddr = GPID.equals(server.getGpid()) ?
+                new InProcSocketAddress(server.getId()) : new InetSocketAddress(server.getHost(), server.getPort());
+        }
     }
 
     /**
      * Current traffic directive of the service
      *
-     * @return
+     * @return an observable of traffic directive
      */
     Observable<Map<String, Map<String, Integer>>> trafficDirective();
 
     /**
      * Watch the ever-updating server list of the service
      *
-     * @return
+     * @return an observable of servers
      */
     Observable<Set<Server>> serverList();
 

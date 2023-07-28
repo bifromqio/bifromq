@@ -21,7 +21,7 @@ public final class CRDTURI {
     private static final Pattern URI;
 
     static {
-        String namePattern = "[\\w-:.]+";
+        String namePattern = "[\\w-:.@]+";
         StringBuilder uriPattern = new StringBuilder("^(");
         for (CausalCRDTType type : CausalCRDTType.values()) {
             uriPattern.append(type.name());
@@ -38,7 +38,7 @@ public final class CRDTURI {
     }
 
     public static String toURI(CausalCRDTType type, String name) {
-        Preconditions.checkArgument(NAME.matcher(name).matches(), "Invalid name");
+        Preconditions.checkArgument(NAME.matcher(name).matches(), "Invalid name " + name);
         return type.name() + ":" + name;
     }
 

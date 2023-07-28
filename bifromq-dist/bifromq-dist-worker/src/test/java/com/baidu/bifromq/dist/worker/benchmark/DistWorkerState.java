@@ -132,32 +132,36 @@ public class DistWorkerState {
         CRDTServiceOptions crdtServiceOptions = CRDTServiceOptions.builder().build();
         crdtService = ICRDTService.newInstance(crdtServiceOptions);
         crdtService.start(agentHost);
-        distClient = IDistClient.inProcClientBuilder().build();
+        distClient = IDistClient.newBuilder()
+            .crdtService(crdtService)
+            .build();
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
         storeClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+            .newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(crdtService)
             .build();
         testWorker = IDistWorker
-            .inProcBuilder()
+            .standaloneBuilder()
+            .bootstrap(true)
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(crdtService)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .distClient(distClient)
             .storeClient(storeClient)
-            .kvRangeStoreOptions(kvRangeStoreOptions)
+            .storeOptions(kvRangeStoreOptions)
             .subBrokerManager(receiverManager)
             .build();
     }
 
     @Setup(Level.Trial)
     public void setup() {
-        testWorker.start(true);
+        testWorker.start();
         storeClient.join();
         log.info("Setup finished, and start testing");
     }

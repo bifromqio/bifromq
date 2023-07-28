@@ -13,27 +13,16 @@
 
 package com.baidu.bifromq.dist.client;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import io.reactivex.rxjava3.core.Observable;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
-public interface IDistClient {
-    static DistClientBuilder.InProcDistClientBuilder inProcClientBuilder() {
-        return new DistClientBuilder.InProcDistClientBuilder();
+public interface IDistClient extends IConnectable {
+    static DistClientBuilder newBuilder() {
+        return new DistClientBuilder();
     }
-
-    static DistClientBuilder.NonSSLDistClientBuilder nonSSLClientBuilder() {
-        return new DistClientBuilder.NonSSLDistClientBuilder();
-    }
-
-    static DistClientBuilder.SSLDistClientBuilder sslClientBuilder() {
-        return new DistClientBuilder.SSLDistClientBuilder();
-    }
-
-    Observable<IRPCClient.ConnState> connState();
 
     /**
      * publish a message at best effort, there are many edge cases that could lead to publish failure, so the normal
@@ -81,7 +70,7 @@ public interface IDistClient {
                                      String delivererKey, int subBrokerId);
 
     CompletableFuture<Void> clear(long reqId, String tenantId, String inboxId, String delivererKey,
-                                         int subBrokerId);
+                                  int subBrokerId);
 
     void stop();
 }

@@ -18,26 +18,14 @@ import static java.util.Collections.emptyMap;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
-public interface IRPCClient {
-    enum ConnState {
-        CONNECTING,
+public interface IRPCClient extends IConnectable {
 
-        READY,
-
-        TRANSIENT_FAILURE,
-
-        IDLE,
-
-        SHUTDOWN
-    }
-
-    static RPCClientBuilder builder() {
+    static RPCClientBuilder newBuilder() {
         return new RPCClientBuilder();
     }
 
@@ -62,16 +50,10 @@ public interface IRPCClient {
     /**
      * The observable of live servers
      *
-     * @return
+     * @return an observable of connectable servers with a map of metadata attached
      */
-    Observable<Set<String>> serverList();
+    Observable<Map<String, Map<String, String>>> serverList();
 
-    /**
-     * The observable of rpc connectivity state
-     *
-     * @return an observable of connection state
-     */
-    Observable<ConnState> connState();
 
     default <ReqT, RespT> CompletableFuture<RespT> invoke(String tenantId,
                                                           @Nullable String desiredServerId,

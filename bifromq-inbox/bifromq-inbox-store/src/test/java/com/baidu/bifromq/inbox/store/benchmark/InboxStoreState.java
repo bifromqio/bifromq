@@ -124,26 +124,26 @@ abstract class InboxStoreState {
                 .toString())
             .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
 
-        storeClient = IBaseKVStoreClient
-            .inProcClientBuilder()
+        storeClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(crdtService)
             .build();
-        testStore = IInboxStore.
-            inProcBuilder()
-            .agentHost(agentHost)
+        testStore = IInboxStore.standaloneBuilder()
+            .host("127.0.0.1")
             .crdtService(crdtService)
+            .bootstrap(true)
+            .agentHost(agentHost)
             .storeClient(storeClient)
+            .storeOptions(options)
             .eventCollector(eventCollector)
             .purgeDelay(Duration.ZERO)
             .clock(Clock.systemUTC())
-            .kvRangeStoreOptions(options)
             .build();
     }
 
     @Setup(Level.Trial)
     public void setup() {
-        testStore.start(true);
+        testStore.start();
         storeClient.join();
         afterSetup();
         log.info("Setup finished, and start testing");

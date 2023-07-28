@@ -70,15 +70,12 @@ public class NonSSLPipelineUnaryState {
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
         executor = Executors.newFixedThreadPool(4);
-        this.server = IRPCServer.nonSSLServerBuilder()
-            .id("NonSSLServer1")
+        this.server = IRPCServer.newBuilder()
             .host("127.0.0.1")
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
-            .serviceUniqueName("PipelineUnaryBenchmark")
             .executor(executor)
             .crdtService(crdtService)
-            .bluePrint(bluePrint)
             .bindService(new RPCTestGrpc.RPCTestImplBase() {
                 private ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -101,19 +98,16 @@ public class NonSSLPipelineUnaryState {
                         }
                     };
                 }
-            })
+            }.bindService(), bluePrint)
             .build();
     }
 
     @Setup(Level.Trial)
     public void setup() {
         server.start();
-        client = IRPCClient.builder()
-            .nonSSLChannel()
+        client = IRPCClient.newBuilder()
             .eventLoopGroup(NettyUtil.createEventLoopGroup())
             .crdtService(crdtService)
-            .buildChannel()
-            .serviceUniqueName("PipelineUnaryBenchmark")
             .bluePrint(bluePrint)
             .executor(MoreExecutors.directExecutor())
             .build();

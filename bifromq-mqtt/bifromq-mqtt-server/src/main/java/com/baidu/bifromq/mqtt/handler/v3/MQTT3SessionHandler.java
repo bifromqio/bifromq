@@ -111,7 +111,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgReta
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.SubAcked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.UnsubAcked;
-import com.baidu.bifromq.retain.client.IRetainServiceClient;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
@@ -1393,7 +1393,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             log.trace("Retaining message: reqId={}, qos={}, topic={}, size={}",
                 reqId, qos, topic, payload.readableBytes());
         }
-        IRetainServiceClient.IClientPipeline pipeline = sessionCtx.getClientRetainPipeline(clientInfo);
+        IRetainClient.IClientPipeline pipeline = sessionCtx.getClientRetainPipeline(clientInfo);
         return cancelOnInactive(pipeline.retain(reqId, topic, qos, payload.duplicate().nioBuffer(), Integer.MAX_VALUE)
             .thenApplyAsync(v -> {
                 if (log.isTraceEnabled()) {
@@ -1442,7 +1442,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         QoS qos = willMessage.qos;
         ByteBuf payload = willMessage.payload;
 
-        IRetainServiceClient.IClientPipeline pipeline = sessionCtx.retainClient.open(clientInfo);
+        IRetainClient.IClientPipeline pipeline = sessionCtx.retainClient.open(clientInfo);
         return pipeline.retain(reqId, topic, willMessage.qos, payload.duplicate().nioBuffer(), Integer.MAX_VALUE)
             .handleAsync((v, e) -> {
                 switch (v.getResult()) {

@@ -13,31 +13,20 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-public interface IInboxReaderClient {
-    static InboxReaderClientBuilder.InProcClientBuilder inProcClientBuilder() {
-        return new InboxReaderClientBuilder.InProcClientBuilder();
+public interface IInboxReaderClient extends IConnectable {
+    static InboxReaderClientBuilder newBuilder() {
+        return new InboxReaderClientBuilder();
     }
-
-    static InboxReaderClientBuilder.NonSSLClientBuilder nonSSLClientBuilder() {
-        return new InboxReaderClientBuilder.NonSSLClientBuilder();
-    }
-
-    static InboxReaderClientBuilder.SSLClientBuilder sslClientBuilder() {
-        return new InboxReaderClientBuilder.SSLClientBuilder();
-    }
-
-    Observable<IRPCClient.ConnState> connState();
 
     CompletableFuture<Boolean> has(long reqId, String inboxId, ClientInfo clientInfo);
 

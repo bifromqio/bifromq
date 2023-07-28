@@ -16,22 +16,17 @@ package com.baidu.bifromq.retain.store;
 public interface IRetainStore {
     String CLUSTER_NAME = "retain.store";
 
-    static RetainStoreBuilder.InProcInboxStore inProcBuilder() {
-        return new RetainStoreBuilder.InProcInboxStore();
+    static StandaloneRetainStoreBuilder standaloneBuilder() {
+        return new StandaloneRetainStoreBuilder();
     }
 
-    static RetainStoreBuilder.NonSSLRetainStoreBuilder nonSSLBuilder() {
-        return new RetainStoreBuilder.NonSSLRetainStoreBuilder();
+    static NonStandaloneRetainStoreBuilder nonStandaloneBuilder() {
+        return new NonStandaloneRetainStoreBuilder();
     }
-
-    static RetainStoreBuilder.SSLRetainStoreBuilder sslBuilder() {
-        return new RetainStoreBuilder.SSLRetainStoreBuilder();
-    }
-
 
     String id();
 
-    void start(boolean bootstrap);
+    void start();
 
     void stop();
 }

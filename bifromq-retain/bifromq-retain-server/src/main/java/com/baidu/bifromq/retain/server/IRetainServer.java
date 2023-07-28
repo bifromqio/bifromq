@@ -14,18 +14,13 @@
 package com.baidu.bifromq.retain.server;
 
 public interface IRetainServer {
-    static RetainServerBuilder.InProcServerBuilder inProcBuilder() {
-        return new RetainServerBuilder.InProcServerBuilder();
+    static StandaloneRetainServerBuilder standaloneBuilder() {
+        return new StandaloneRetainServerBuilder();
     }
 
-    static RetainServerBuilder.NonSSLServerBuilder nonSSLBuilder() {
-        return new RetainServerBuilder.NonSSLServerBuilder();
+    static NonStandaloneRetainServerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneRetainServerBuilder();
     }
-
-    static RetainServerBuilder.SSLServerBuilder sslBuilder() {
-        return new RetainServerBuilder.SSLServerBuilder();
-    }
-
 
     void start();
 

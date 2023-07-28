@@ -13,18 +13,30 @@
 
 package com.baidu.bifromq.basekv.client;
 
+import static com.baidu.bifromq.basekv.RPCBluePrint.toScopedFullMethodName;
+import static com.baidu.bifromq.basekv.RPCServerMetadataUtil.RPC_METADATA_STORE_ID;
 import static com.baidu.bifromq.basekv.store.CRDTUtil.getDescriptorFromCRDT;
 import static com.baidu.bifromq.basekv.store.CRDTUtil.storeDescriptorMapCRDTURI;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getBootstrapMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getChangeReplicaConfigMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getExecuteMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getLinearizedQueryMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getMergeMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getQueryMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getRecoverMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getSplitMethod;
+import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getTransferLeadershipMethod;
+import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.KVRangeRouter;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.exception.BaseKVException;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.Range;
-import com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
 import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigReply;
@@ -42,15 +54,16 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
+import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -62,36 +75,79 @@ import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class BaseKVStoreClient implements IBaseKVStoreClient {
-    protected final String clusterId;
+final class BaseKVStoreClient implements IBaseKVStoreClient {
+    private final String clusterId;
+    private final BluePrint bluePrint;
     private final IRPCClient rpcClient;
     private final ICRDTService crdtService;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final KVRangeRouter router = new KVRangeRouter();
-    private final int execPipelinesPerServer;
-    private final int queryPipelinesPerServer;
+    private final int execPipelinesPerStore;
+    private final int queryPipelinesPerStore;
     private final IORMap storeDescriptorCRDT;
+    private final MethodDescriptor<BootstrapRequest, BootstrapReply> bootstrapMethod;
+    private final MethodDescriptor<RecoverRequest, RecoverReply> recoverMethod;
+    private final MethodDescriptor<TransferLeadershipRequest, TransferLeadershipReply> transferLeadershipMethod;
+    private final MethodDescriptor<ChangeReplicaConfigRequest, ChangeReplicaConfigReply> changeReplicaConfigMethod;
+    private final MethodDescriptor<KVRangeSplitRequest, KVRangeSplitReply> splitMethod;
+    private final MethodDescriptor<KVRangeMergeRequest, KVRangeMergeReply> mergeMethod;
+    private final MethodDescriptor<KVRangeRWRequest, KVRangeRWReply> executeMethod;
+    private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> linearizedQueryMethod;
+    private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> queryMethod;
+    // key: serverId, val: set of storeId
+    private volatile Map<String, String> serverToStoreRoutes = Maps.newHashMap();
+    private volatile Map<String, String> storeToServerRoutes = Maps.newHashMap();
+    // key: storeId
     private volatile Map<String, List<IExecutionPipeline>> execPplns = Maps.newHashMap();
+    // key: storeId
     private volatile Map<String, List<IQueryPipeline>> queryPplns = Maps.newHashMap();
+    // key: storeId
     private volatile Map<String, List<IQueryPipeline>> lnrQueryPplns = Maps.newHashMap();
 
-    BaseKVStoreClient(@lombok.NonNull String clusterId,
-                      @lombok.NonNull ICRDTService crdtService,
-                      @lombok.NonNull IRPCClient rpcClient,
-                      int execPipelinesPerServer,
-                      int queryPipelinesPerServer) {
-        this.clusterId = clusterId;
-        this.crdtService = crdtService;
-        this.execPipelinesPerServer = execPipelinesPerServer <= 0 ? 5 : execPipelinesPerServer;
-        this.queryPipelinesPerServer = queryPipelinesPerServer <= 0 ? 5 : queryPipelinesPerServer;
-        this.rpcClient = rpcClient;
+    BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
+        this.clusterId = builder.clusterId;
+        this.bluePrint = RPCBluePrint.build(clusterId);
+        this.bootstrapMethod = bluePrint.methodDesc(
+            toScopedFullMethodName(clusterId, getBootstrapMethod().getFullMethodName()));
+        this.recoverMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getRecoverMethod().getFullMethodName()));
+        this.transferLeadershipMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getTransferLeadershipMethod().getFullMethodName()));
+        this.changeReplicaConfigMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getChangeReplicaConfigMethod().getFullMethodName()));
+        this.splitMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getSplitMethod().getFullMethodName()));
+        this.mergeMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getMergeMethod().getFullMethodName()));
+        this.executeMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getExecuteMethod().getFullMethodName()));
+        this.linearizedQueryMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getLinearizedQueryMethod().getFullMethodName()));
+        this.queryMethod =
+            bluePrint.methodDesc(toScopedFullMethodName(clusterId, getQueryMethod().getFullMethodName()));
+        this.crdtService = builder.crdtService;
+        this.execPipelinesPerStore = builder.execPipelinesPerStore <= 0 ? 5 : builder.execPipelinesPerStore;
+        this.queryPipelinesPerStore = builder.queryPipelinesPerStore <= 0 ? 5 : builder.queryPipelinesPerStore;
+        this.rpcClient = IRPCClient.newBuilder()
+            .bluePrint(bluePrint)
+            .executor(builder.executor)
+            .eventLoopGroup(builder.eventLoopGroup)
+            .sslContext(builder.sslContext)
+            .idleTimeoutInSec(builder.idleTimeoutInSec)
+            .keepAliveInSec(builder.keepAliveInSec)
+            .crdtService(crdtService)
+            .build();
         crdtService.host(storeDescriptorMapCRDTURI(clusterId));
         storeDescriptorCRDT = (IORMap) crdtService.get(storeDescriptorMapCRDTURI(clusterId)).get();
-
         disposables.add(storeDescriptorCRDT.inflation().subscribe(this::updateRouter));
-        disposables.add(rpcClient.serverList().subscribe(this::refreshPipelinePool));
+        disposables.add(rpcClient.serverList().subscribe(this::refresh));
         updateRouter(System.currentTimeMillis());
+    }
+
+    @Override
+    public Observable<IRPCClient.ConnState> connState() {
+        return rpcClient.connState();
     }
 
     @Override
@@ -100,15 +156,10 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public Observable<Set<String>> storeServers() {
-        return rpcClient.serverList();
-    }
-
-    @Override
     public Observable<Set<KVRangeStoreDescriptor>> describe() {
         return storeDescriptorCRDT.inflation().mapOptional(l -> {
             Set<KVRangeStoreDescriptor> descriptors = Sets.newHashSet();
-            Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), k -> k.key());
+            Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), IORMap.ORMapKey::key);
             while (keyItr.hasNext()) {
                 Optional<KVRangeStoreDescriptor> descriptor = getDescriptorFromCRDT(storeDescriptorCRDT, keyItr.next());
                 if (descriptor.isPresent()) {
@@ -137,19 +188,18 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public CompletableFuture<BootstrapReply> bootstrap(String storeId) {
         return rpcClient.invoke("", storeId,
-            BootstrapRequest.newBuilder().setReqId(System.nanoTime()).build(),
-            BaseKVStoreServiceGrpc.getBootstrapMethod());
+            BootstrapRequest.newBuilder().setReqId(System.nanoTime()).build(), bootstrapMethod);
     }
 
     @Override
     public CompletableFuture<RecoverReply> recover(String storeId, RecoverRequest request) {
-        return rpcClient.invoke("", storeId, request, BaseKVStoreServiceGrpc.getRecoverMethod());
+        return rpcClient.invoke("", storeId, request, recoverMethod);
     }
 
     @Override
     public CompletableFuture<TransferLeadershipReply> transferLeadership(String storeId,
                                                                          TransferLeadershipRequest request) {
-        return rpcClient.invoke("", storeId, request, BaseKVStoreServiceGrpc.getTransferLeadershipMethod())
+        return rpcClient.invoke("", storeId, request, transferLeadershipMethod)
             .exceptionally(e -> TransferLeadershipReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setCode(ReplyCode.InternalError)
@@ -159,7 +209,7 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public CompletableFuture<ChangeReplicaConfigReply> changeReplicaConfig(String storeId,
                                                                            ChangeReplicaConfigRequest request) {
-        return rpcClient.invoke("", storeId, request, BaseKVStoreServiceGrpc.getChangeReplicaConfigMethod())
+        return rpcClient.invoke("", storeId, request, changeReplicaConfigMethod)
             .exceptionally(e -> ChangeReplicaConfigReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setCode(ReplyCode.InternalError)
@@ -168,7 +218,7 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public CompletableFuture<KVRangeSplitReply> splitRange(String storeId, KVRangeSplitRequest request) {
-        return rpcClient.invoke("", storeId, request, BaseKVStoreServiceGrpc.getSplitMethod())
+        return rpcClient.invoke("", storeId, request, splitMethod)
             .exceptionally(e -> KVRangeSplitReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setCode(ReplyCode.InternalError)
@@ -177,7 +227,7 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public CompletableFuture<KVRangeMergeReply> mergeRanges(String storeId, KVRangeMergeRequest request) {
-        return rpcClient.invoke("", storeId, request, BaseKVStoreServiceGrpc.getMergeMethod())
+        return rpcClient.invoke("", storeId, request, mergeMethod)
             .exceptionally(e -> KVRangeMergeReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setCode(ReplyCode.InternalError)
@@ -232,17 +282,30 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public IExecutionPipeline createExecutionPipeline(String storeId) {
-        return new ExecPipeline(storeId);
+        String serverId = storeToServerRoutes.get(storeId);
+        if (serverId == null) {
+            throw new NullPointerException("No hosting server found for store: " + storeId);
+        }
+        return new ExecPipeline(serverId);
     }
 
     @Override
     public IQueryPipeline createQueryPipeline(String storeId) {
-        return new QueryPipeline(storeId, false);
+        String serverId = storeToServerRoutes.get(storeId);
+        if (serverId == null) {
+            throw new NullPointerException("No hosting server found for store: " + storeId);
+        }
+
+        return new QueryPipeline(serverId, false);
     }
 
     @Override
     public IQueryPipeline createLinearizedQueryPipeline(String storeId) {
-        return new QueryPipeline(storeId, true);
+        String serverId = storeToServerRoutes.get(storeId);
+        if (serverId == null) {
+            throw new NullPointerException("No hosting server found for store: " + storeId);
+        }
+        return new QueryPipeline(serverId, true);
     }
 
     @Override
@@ -255,6 +318,7 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
                         this.wait();
                     }
                 } catch (InterruptedException e) {
+                    // nothing to do
                 }
             }
         }
@@ -264,16 +328,16 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public final void stop() {
+    public void stop() {
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping BaseKVStore client: cluster[{}]", clusterId);
             disposables.dispose();
             log.debug("Closing execution pipelines: cluster[{}]", clusterId);
-            execPplns.values().forEach(pplns -> pplns.forEach(p -> p.close()));
+            execPplns.values().forEach(pplns -> pplns.forEach(IExecutionPipeline::close));
             log.debug("Closing query pipelines: cluster[{}]", clusterId);
-            queryPplns.values().forEach(pplns -> pplns.forEach(p -> p.close()));
+            queryPplns.values().forEach(pplns -> pplns.forEach(IQueryPipeline::close));
             log.debug("Closing linearizable query pipelines: cluster[{}]", clusterId);
-            lnrQueryPplns.values().forEach(pplns -> pplns.forEach(p -> p.close()));
+            lnrQueryPplns.values().forEach(pplns -> pplns.forEach(IQueryPipeline::close));
             log.debug("Stopping hosting crdt: cluster[{}]", clusterId);
             crdtService.stopHosting(storeDescriptorMapCRDTURI(clusterId)).join();
             log.debug("Stopping rpc client: cluster[{}]", clusterId);
@@ -283,7 +347,7 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     private void updateRouter(long ts) {
-        Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), k -> k.key());
+        Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), IORMap.ORMapKey::key);
         while (keyItr.hasNext()) {
             Optional<KVRangeStoreDescriptor> storeDescOpt = getDescriptorFromCRDT(storeDescriptorCRDT, keyItr.next());
             if (storeDescOpt.isPresent()) {
@@ -303,37 +367,51 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
         }
     }
 
-    private void refreshPipelinePool(Set<String> serverIds) {
+    private void refresh(Map<String, Map<String, String>> servers) {
+        Map<String, String> oldServerToStoreRoutes = serverToStoreRoutes;
+        Set<String> oldServers = oldServerToStoreRoutes.keySet();
+        Set<String> newServers = servers.keySet();
+
+        // store routes
+        Map<String, String> nextServerToStoreRoutes = Maps.newHashMap(oldServerToStoreRoutes);
+        Map<String, String> nextStoreToServerRoutes = Maps.newHashMap();
+        // execute pipelines
         Map<String, List<IExecutionPipeline>> nextExecPplns = Maps.newHashMap(execPplns);
-        for (String newServer : Sets.difference(serverIds, execPplns.keySet())) {
-            nextExecPplns.put(newServer, new ArrayList<>());
-            IntStream.range(0, execPipelinesPerServer)
-                .forEach(i -> nextExecPplns.get(newServer).add(new ExecPipeline(newServer)));
-        }
-        for (String deadServer : Sets.difference(execPplns.keySet(), serverIds)) {
-            nextExecPplns.remove(deadServer).forEach(IExecutionPipeline::close);
-        }
-
+        // query pipelines
         Map<String, List<IQueryPipeline>> nextQueryPplns = Maps.newHashMap(queryPplns);
-        for (String newServer : Sets.difference(serverIds, queryPplns.keySet())) {
-            nextQueryPplns.put(newServer, new ArrayList<>());
-            IntStream.range(0, queryPipelinesPerServer)
-                .forEach(i -> nextQueryPplns.get(newServer).add(new QueryPipeline(newServer)));
-        }
-        for (String deadServer : Sets.difference(queryPplns.keySet(), serverIds)) {
-            nextQueryPplns.remove(deadServer).forEach(IQueryPipeline::close);
-        }
-
+        // lnr query pipelines
         Map<String, List<IQueryPipeline>> nextLnrQueryPplns = Maps.newHashMap(lnrQueryPplns);
-        for (String newServer : Sets.difference(serverIds, lnrQueryPplns.keySet())) {
-            nextLnrQueryPplns.put(newServer, new ArrayList<>());
-            IntStream.range(0, queryPipelinesPerServer)
-                .forEach(i -> nextLnrQueryPplns.get(newServer).add(new QueryPipeline(newServer, true)));
-        }
-        for (String deadServer : Sets.difference(lnrQueryPplns.keySet(), serverIds)) {
-            nextLnrQueryPplns.remove(deadServer).forEach(IQueryPipeline::close);
-        }
+        for (String newServer : Sets.difference(newServers, oldServers)) {
+            // setup new store pipelines
+            String storeId = servers.get(newServer).get(RPC_METADATA_STORE_ID);
+            List<IExecutionPipeline> storeExecPplns = nextExecPplns.computeIfAbsent(storeId, k -> new ArrayList<>());
+            IntStream.range(0, execPipelinesPerStore)
+                .forEach(i -> storeExecPplns.add(new ExecPipeline(newServer)));
 
+            List<IQueryPipeline> storeQueryPplns = nextQueryPplns.computeIfAbsent(storeId, k -> new ArrayList<>());
+            IntStream.range(0, queryPipelinesPerStore)
+                .forEach(i -> storeQueryPplns.add(new QueryPipeline(newServer)));
+
+            List<IQueryPipeline> storeLnrQueryPplns =
+                nextLnrQueryPplns.computeIfAbsent(storeId, k -> new ArrayList<>());
+            IntStream.range(0, queryPipelinesPerStore)
+                .forEach(i -> storeLnrQueryPplns.add(new QueryPipeline(newServer, true)));
+
+            // add new server route
+            nextServerToStoreRoutes.put(newServer, storeId);
+        }
+        for (String deadServer : Sets.difference(oldServers, newServers)) {
+            // close store pipelines
+            String storeId = oldServerToStoreRoutes.get(deadServer);
+            nextExecPplns.remove(storeId).forEach(IExecutionPipeline::close);
+            nextQueryPplns.remove(storeId).forEach(IQueryPipeline::close);
+            nextLnrQueryPplns.remove(storeId).forEach(IQueryPipeline::close);
+            // remote dead server route
+            nextServerToStoreRoutes.remove(deadServer);
+        }
+        nextServerToStoreRoutes.forEach((serverId, storeId) -> nextStoreToServerRoutes.put(storeId, serverId));
+        serverToStoreRoutes = nextServerToStoreRoutes;
+        storeToServerRoutes = nextStoreToServerRoutes;
         execPplns = nextExecPplns;
         queryPplns = nextQueryPplns;
         lnrQueryPplns = nextLnrQueryPplns;
@@ -343,8 +421,7 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
         private final IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> ppln;
 
         ExecPipeline(String serverId) {
-            ppln = rpcClient.createRequestPipeline("", serverId, null,
-                Collections.emptyMap(), BaseKVStoreServiceGrpc.getExecuteMethod());
+            ppln = rpcClient.createRequestPipeline("", serverId, null, emptyMap(), executeMethod);
         }
 
         @Override
@@ -370,11 +447,10 @@ class BaseKVStoreClient implements IBaseKVStoreClient {
         QueryPipeline(String serverId, boolean linearized) {
             this.linearized = linearized;
             if (linearized) {
-                ppln = rpcClient.createRequestPipeline("", serverId, null,
-                    Collections.emptyMap(), BaseKVStoreServiceGrpc.getLinearizedQueryMethod());
+                ppln = rpcClient.createRequestPipeline("", serverId, null, emptyMap(), linearizedQueryMethod);
             } else {
                 ppln = rpcClient.createRequestPipeline("", serverId, null,
-                    Collections.emptyMap(), BaseKVStoreServiceGrpc.getQueryMethod());
+                    emptyMap(), queryMethod);
             }
         }
 

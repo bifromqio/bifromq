@@ -14,16 +14,12 @@
 package com.baidu.bifromq.mqtt;
 
 public interface IMQTTBroker {
-    static MQTTBrokerBuilder.InProcBrokerBuilder inProcBrokerBuilder() {
-        return new MQTTBrokerBuilder.InProcBrokerBuilder();
+    static StandaloneMQTTBrokerBuilder standaloneBuilder() {
+        return new StandaloneMQTTBrokerBuilder();
     }
 
-    static MQTTBrokerBuilder.NonSSLBrokerBuilder nonSSLBrokerBuilder() {
-        return new MQTTBrokerBuilder.NonSSLBrokerBuilder();
-    }
-
-    static MQTTBrokerBuilder.SSLBrokerBuilder sslBrokerBuilder() {
-        return new MQTTBrokerBuilder.SSLBrokerBuilder();
+    static NonStandaloneMQTTBrokerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneMQTTBrokerBuilder();
     }
 
     void start();

@@ -16,10 +16,13 @@ package com.baidu.bifromq.baserpc;
 import com.baidu.bifromq.baserpc.metrics.RPCMeters;
 import io.grpc.Context;
 import java.util.Map;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
 public class RPCContext {
+    public static final String GPID = UUID.randomUUID().toString();
+
     public static class ServerSelection {
         @Getter
         @Setter

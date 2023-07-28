@@ -221,21 +221,18 @@ public abstract class DistWorkerTest {
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
 
         storeClient = IBaseKVStoreClient
-            .nonSSLClientBuilder()
+            .newBuilder()
             .eventLoopGroup(NettyUtil.createEventLoopGroup())
-//                .inProcClientBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        testWorker = IDistWorker
-            .nonSSLBuilder()
-            .bindAddr("127.0.0.1")
-            .bindPort(8080)
+        testWorker = IDistWorker.standaloneBuilder()
+            .host("127.0.0.1")
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
             .ioExecutor(MoreExecutors.directExecutor())
-//                .inProcBuilder()
+            .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollector)
@@ -249,10 +246,10 @@ public abstract class DistWorkerTest {
             .balanceControllerOptions(balanceControllerOptions)
             .gcInterval(Duration.ofSeconds(1))
             .statsInterval(Duration.ofSeconds(1))
-            .kvRangeStoreOptions(options)
+            .storeOptions(options)
             .subBrokerManager(receiverManager)
             .build();
-        testWorker.start(true);
+        testWorker.start();
 
         storeClient.join();
         log.info("Setup finished, and start testing");
