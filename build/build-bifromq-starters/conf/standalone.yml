@@ -23,8 +23,8 @@ apiServerConfig:
 
 distWorkerConfig:
   distWorkerClientConfig:
-    execPipelinePerServer: 1000
-    queryPipelinePerServer: 1000
+    execPipelinePerStore: 1000
+    queryPipelinePerStore: 1000
   dataEngineConfig:
     type: rocksdb
     gcIntervalInSec: 300
@@ -34,8 +34,8 @@ distWorkerConfig:
 
 inboxStoreConfig:
   inboxStoreClientConfig:
-    execPipelinePerServer: 1000
-    queryPipelinePerServer: 1000
+    execPipelinePerStore: 1000
+    queryPipelinePerStore: 1000
   dataEngineConfig:
     type: rocksdb
     gcIntervalInSec: 300
@@ -46,8 +46,8 @@ inboxStoreConfig:
 
 retainStoreConfig:
   retainStoreClientConfig:
-    execPipelinePerServer: 1000
-    queryPipelinePerServer: 1000
+    execPipelinePerStore: 1000
+    queryPipelinePerStore: 1000
   dataEngineConfig:
     type: rocksdb
     gcIntervalInSec: 300

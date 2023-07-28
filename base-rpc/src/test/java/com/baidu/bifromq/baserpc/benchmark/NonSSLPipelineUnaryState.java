@@ -71,7 +71,6 @@ public class NonSSLPipelineUnaryState {
         crdtService.start(agentHost);
         executor = Executors.newFixedThreadPool(4);
         this.server = IRPCServer.newBuilder()
-            .id("NonSSLServer1")
             .host("127.0.0.1")
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())

@@ -15,7 +15,6 @@ package com.baidu.bifromq.dist.client;
 
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.dist.IDistServiceBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -27,12 +26,13 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class DistClientBuilder implements IDistServiceBuilder {
+public final class DistClientBuilder implements IDistClientBuilder {
     ICRDTService crdtService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;
     Executor executor;
 
+    @Override
     public IDistClient build() {
         return new DistClient(this);
     }

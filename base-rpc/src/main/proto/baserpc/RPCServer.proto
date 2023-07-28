@@ -11,8 +11,9 @@ message RPCServer {
   string id = 1; // the id of the server
   string host = 2;
   uint32 port = 3;
-  repeated string group = 4; // the set of groups that the server belongs to
-  map<string, string> attrs = 5;
-  bytes announcerId = 6;
-  uint64 announcedTS = 7;
+  string gpid = 4; // the global unique process id
+  repeated string group = 5; // the set of groups that the server belongs to
+  map<string, string> attrs = 6;
+  bytes announcerId = 7;
+  uint64 announcedTS = 8;
 }

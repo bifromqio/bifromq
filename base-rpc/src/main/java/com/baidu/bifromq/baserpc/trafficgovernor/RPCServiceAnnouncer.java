@@ -51,7 +51,7 @@ abstract class RPCServiceAnnouncer {
     private static final ByteString SERVER_LIST_KEY = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString TRAFFIC_DIRECTIVE_KEY = ByteString.copyFrom(new byte[] {0x01});
 
-    private final String serviceUniqueName;
+    protected final String serviceUniqueName;
     private final ICRDTService crdtService;
     private final Replica crdtReplica;
     private final IORMap rpcServiceCRDT;

@@ -14,7 +14,6 @@
 package com.baidu.bifromq.inbox.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.inbox.IInboxServiceBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -26,7 +25,7 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class InboxReaderClientBuilder implements IInboxServiceBuilder {
+public final class InboxReaderClientBuilder implements IInboxReaderClientBuilder {
     ICRDTService crdtService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;

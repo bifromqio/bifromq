@@ -104,7 +104,7 @@ abstract class InboxStoreTest {
     public Path dbRootDir;
 
     protected IBaseKVStoreClient storeClient;
-    protected InboxStore testStore;
+    protected StandaloneInboxStore testStore;
 
     private AutoCloseable closeable;
 
@@ -158,7 +158,8 @@ abstract class InboxStoreTest {
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
-        testStore = (InboxStore) IInboxStore.newBuilder()
+        testStore = (StandaloneInboxStore) IInboxStore.standaloneBuilder()
+            .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
@@ -166,13 +167,13 @@ abstract class InboxStoreTest {
             .eventCollector(eventCollector)
             .purgeDelay(Duration.ZERO)
             .clock(getClock())
-            .kvRangeStoreOptions(options)
+            .storeOptions(options)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
-        testStore.start(true);
+        testStore.start();
 
         storeClient.join();
         log.info("Setup finished, and start testing");

@@ -41,8 +41,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
-import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.exception.DropException;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -52,7 +50,7 @@ import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
+import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
@@ -66,8 +64,8 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.retain.client.IRetainServiceClient;
-import com.baidu.bifromq.retain.client.IRetainServiceClient.IClientPipeline;
+import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.retain.client.IRetainClient.IClientPipeline;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -112,7 +110,7 @@ public abstract class BaseMQTTTest {
     @Mock
     protected IInboxReaderClient inboxClient;
     @Mock
-    protected IRetainServiceClient retainClient;
+    protected IRetainClient retainClient;
     @Mock
     protected ISessionDictClient sessionDictClient;
     @Mock
@@ -123,28 +121,13 @@ public abstract class BaseMQTTTest {
     protected IClientPipeline retainPipeline;
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
-    protected ILocalSessionBrokerServer sessionBrokerServer = new ILocalSessionBrokerServer() {
+    protected ILocalSessionRegistry sessionRegistry = new ILocalSessionRegistry() {
         private Map<String, IMQTTSession> sessions = new HashMap<>();
-
-        @Override
-        public String id() {
-            return null;
-        }
-
-        @Override
-        public void start() {
-
-        }
 
         @Override
         public CompletableFuture<Void> disconnectAll(int disconnectRate) {
             return CompletableFuture.allOf(
                 sessions.values().stream().map(IMQTTSession::disconnect).toArray(CompletableFuture[]::new));
-        }
-
-        @Override
-        public void shutdown() {
-
         }
 
         @Override
@@ -190,7 +173,7 @@ public abstract class BaseMQTTTest {
             .inboxClient(inboxClient)
             .retainClient(retainClient)
             .sessionDictClient(sessionDictClient)
-            .brokerServer(sessionBrokerServer)
+            .sessionRegistry(sessionRegistry)
             .maxResendTimes(2)
             .resendDelayMillis(100)
             .defaultKeepAliveTimeSeconds(300)

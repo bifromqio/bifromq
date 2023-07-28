@@ -14,10 +14,13 @@
 package com.baidu.bifromq.inbox.server;
 
 public interface IInboxServer {
-    static InboxServerBuilder newBuilder() {
-        return new InboxServerBuilder();
+    static StandaloneInboxServerBuilder standaloneBuilder() {
+        return new StandaloneInboxServerBuilder();
     }
 
+    static NonStandaloneInboxServerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneInboxServerBuilder();
+    }
 
     void start();
 

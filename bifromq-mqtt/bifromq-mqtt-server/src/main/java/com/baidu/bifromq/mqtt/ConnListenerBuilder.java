@@ -23,13 +23,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.NonNull;
 
-abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
+public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M extends AbstractMQTTBrokerBuilder<M>> {
     protected final Map<ChannelOption<?>, Object> options = new LinkedHashMap<>();
     protected final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<>();
-    private final MQTTBrokerBuilder<?> serverBuilder;
+    private final M serverBuilder;
     protected int port;
 
-    ConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
+    ConnListenerBuilder(M builder) {
         serverBuilder = builder;
         options.put(ChannelOption.SO_BACKLOG, 128);
         options.put(ChannelOption.SO_REUSEADDR, true);
@@ -37,12 +37,18 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
             options.put(EpollChannelOption.EPOLL_MODE, EpollMode.EDGE_TRIGGERED);
         }
         childOptions.put(ChannelOption.TCP_NODELAY, true);
+
+    }
+
+    @SuppressWarnings("unchecked")
+    private C thisT() {
+        return (C) this;
     }
 
     public C port(int port) {
         Preconditions.checkArgument(port > 0, "port");
         this.port = port;
-        return (C) this;
+        return thisT();
     }
 
     public <T> C option(ChannelOption<T> option, T value) {
@@ -52,7 +58,7 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
         } else {
             options.put(option, value);
         }
-        return (C) this;
+        return thisT();
     }
 
     public <T> C childOption(ChannelOption<T> option, T value) {
@@ -62,28 +68,31 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
         } else {
             childOptions.put(option, value);
         }
-        return (C) this;
+        return thisT();
     }
 
-    public <M extends MQTTBrokerBuilder<M>> M buildListener() {
-        return (M) serverBuilder;
+    public M buildListener() {
+        return serverBuilder;
     }
 
-    public static class TCPConnListenerBuilder extends ConnListenerBuilder<TCPConnListenerBuilder> {
-        TCPConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
+    public static class TCPConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
+        extends ConnListenerBuilder<TCPConnListenerBuilder<M>, M> {
+        TCPConnListenerBuilder(M builder) {
             super(builder);
             port(1883);
         }
     }
 
     private abstract static class SecuredConnListenerBuilder
-        <L extends SecuredConnListenerBuilder<L>> extends ConnListenerBuilder<L> {
+        <L extends SecuredConnListenerBuilder<L, M>, M extends AbstractMQTTBrokerBuilder<M>>
+        extends ConnListenerBuilder<L, M> {
         protected SslContext sslContext;
 
-        SecuredConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
+        SecuredConnListenerBuilder(M builder) {
             super(builder);
         }
 
+        @SuppressWarnings("unchecked")
         public L sslContext(@NonNull SslContext sslContext) {
             Preconditions.checkArgument(sslContext.isServer());
             this.sslContext = sslContext;
@@ -91,18 +100,20 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
         }
     }
 
-    public static final class TLSConnListenerBuilder extends SecuredConnListenerBuilder<TLSConnListenerBuilder> {
+    public static final class TLSConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
+        extends SecuredConnListenerBuilder<TLSConnListenerBuilder<M>, M> {
 
-        TLSConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
+        TLSConnListenerBuilder(M builder) {
             super(builder);
             port(8883);
         }
     }
 
-    public static final class WSConnListenerBuilder extends ConnListenerBuilder<WSConnListenerBuilder> {
+    public static final class WSConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
+        extends ConnListenerBuilder<WSConnListenerBuilder<M>, M> {
         private String path = "mqtt";
 
-        WSConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
+        WSConnListenerBuilder(M builder) {
             super(builder);
         }
 
@@ -110,16 +121,17 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
             return path;
         }
 
-        public WSConnListenerBuilder path(String path) {
+        public WSConnListenerBuilder<M> path(String path) {
             this.path = path;
             return this;
         }
     }
 
-    public static final class WSSConnListenerBuilder extends SecuredConnListenerBuilder<WSSConnListenerBuilder> {
+    public static final class WSSConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
+        extends SecuredConnListenerBuilder<WSSConnListenerBuilder<M>, M> {
         private String path;
 
-        WSSConnListenerBuilder(MQTTBrokerBuilder<?> builder) {
+        WSSConnListenerBuilder(M builder) {
             super(builder);
         }
 
@@ -127,7 +139,7 @@ abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
             return path;
         }
 
-        public WSSConnListenerBuilder path(String path) {
+        public WSSConnListenerBuilder<M> path(String path) {
             this.path = path;
             return this;
         }

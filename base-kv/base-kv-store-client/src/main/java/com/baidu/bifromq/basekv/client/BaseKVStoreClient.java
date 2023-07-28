@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.client;
 
 import static com.baidu.bifromq.basekv.RPCBluePrint.toScopedFullMethodName;
+import static com.baidu.bifromq.basekv.RPCServerMetadataUtil.RPC_METADATA_STORE_ID;
 import static com.baidu.bifromq.basekv.store.CRDTUtil.getDescriptorFromCRDT;
 import static com.baidu.bifromq.basekv.store.CRDTUtil.storeDescriptorMapCRDTURI;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getBootstrapMethod;
@@ -82,8 +83,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final KVRangeRouter router = new KVRangeRouter();
-    private final int execPipelinesPerServer;
-    private final int queryPipelinesPerServer;
+    private final int execPipelinesPerStore;
+    private final int queryPipelinesPerStore;
     private final IORMap storeDescriptorCRDT;
     private final MethodDescriptor<BootstrapRequest, BootstrapReply> bootstrapMethod;
     private final MethodDescriptor<RecoverRequest, RecoverReply> recoverMethod;
@@ -94,8 +95,14 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final MethodDescriptor<KVRangeRWRequest, KVRangeRWReply> executeMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> linearizedQueryMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> queryMethod;
+    // key: serverId, val: set of storeId
+    private volatile Map<String, String> serverToStoreRoutes = Maps.newHashMap();
+    private volatile Map<String, String> storeToServerRoutes = Maps.newHashMap();
+    // key: storeId
     private volatile Map<String, List<IExecutionPipeline>> execPplns = Maps.newHashMap();
+    // key: storeId
     private volatile Map<String, List<IQueryPipeline>> queryPplns = Maps.newHashMap();
+    // key: storeId
     private volatile Map<String, List<IQueryPipeline>> lnrQueryPplns = Maps.newHashMap();
 
     BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
@@ -120,8 +127,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         this.queryMethod =
             bluePrint.methodDesc(toScopedFullMethodName(clusterId, getQueryMethod().getFullMethodName()));
         this.crdtService = builder.crdtService;
-        this.execPipelinesPerServer = builder.execPipelinesPerServer <= 0 ? 5 : builder.execPipelinesPerServer;
-        this.queryPipelinesPerServer = builder.queryPipelinesPerServer <= 0 ? 5 : builder.queryPipelinesPerServer;
+        this.execPipelinesPerStore = builder.execPipelinesPerStore <= 0 ? 5 : builder.execPipelinesPerStore;
+        this.queryPipelinesPerStore = builder.queryPipelinesPerStore <= 0 ? 5 : builder.queryPipelinesPerStore;
         this.rpcClient = IRPCClient.newBuilder()
             .bluePrint(bluePrint)
             .executor(builder.executor)
@@ -134,7 +141,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         crdtService.host(storeDescriptorMapCRDTURI(clusterId));
         storeDescriptorCRDT = (IORMap) crdtService.get(storeDescriptorMapCRDTURI(clusterId)).get();
         disposables.add(storeDescriptorCRDT.inflation().subscribe(this::updateRouter));
-        disposables.add(rpcClient.serverList().subscribe(this::refreshPipelinePool));
+        disposables.add(rpcClient.serverList().subscribe(this::refresh));
         updateRouter(System.currentTimeMillis());
     }
 
@@ -146,11 +153,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public String clusterId() {
         return clusterId;
-    }
-
-    @Override
-    public Observable<Set<String>> storeServers() {
-        return rpcClient.serverList();
     }
 
     @Override
@@ -280,17 +282,30 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public IExecutionPipeline createExecutionPipeline(String storeId) {
-        return new ExecPipeline(storeId);
+        String serverId = storeToServerRoutes.get(storeId);
+        if (serverId == null) {
+            throw new NullPointerException("No hosting server found for store: " + storeId);
+        }
+        return new ExecPipeline(serverId);
     }
 
     @Override
     public IQueryPipeline createQueryPipeline(String storeId) {
-        return new QueryPipeline(storeId, false);
+        String serverId = storeToServerRoutes.get(storeId);
+        if (serverId == null) {
+            throw new NullPointerException("No hosting server found for store: " + storeId);
+        }
+
+        return new QueryPipeline(serverId, false);
     }
 
     @Override
     public IQueryPipeline createLinearizedQueryPipeline(String storeId) {
-        return new QueryPipeline(storeId, true);
+        String serverId = storeToServerRoutes.get(storeId);
+        if (serverId == null) {
+            throw new NullPointerException("No hosting server found for store: " + storeId);
+        }
+        return new QueryPipeline(serverId, true);
     }
 
     @Override
@@ -352,37 +367,51 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         }
     }
 
-    private void refreshPipelinePool(Set<String> serverIds) {
+    private void refresh(Map<String, Map<String, String>> servers) {
+        Map<String, String> oldServerToStoreRoutes = serverToStoreRoutes;
+        Set<String> oldServers = oldServerToStoreRoutes.keySet();
+        Set<String> newServers = servers.keySet();
+
+        // store routes
+        Map<String, String> nextServerToStoreRoutes = Maps.newHashMap(oldServerToStoreRoutes);
+        Map<String, String> nextStoreToServerRoutes = Maps.newHashMap();
+        // execute pipelines
         Map<String, List<IExecutionPipeline>> nextExecPplns = Maps.newHashMap(execPplns);
-        for (String newServer : Sets.difference(serverIds, execPplns.keySet())) {
-            nextExecPplns.put(newServer, new ArrayList<>());
-            IntStream.range(0, execPipelinesPerServer)
-                .forEach(i -> nextExecPplns.get(newServer).add(new ExecPipeline(newServer)));
-        }
-        for (String deadServer : Sets.difference(execPplns.keySet(), serverIds)) {
-            nextExecPplns.remove(deadServer).forEach(IExecutionPipeline::close);
-        }
-
+        // query pipelines
         Map<String, List<IQueryPipeline>> nextQueryPplns = Maps.newHashMap(queryPplns);
-        for (String newServer : Sets.difference(serverIds, queryPplns.keySet())) {
-            nextQueryPplns.put(newServer, new ArrayList<>());
-            IntStream.range(0, queryPipelinesPerServer)
-                .forEach(i -> nextQueryPplns.get(newServer).add(new QueryPipeline(newServer)));
-        }
-        for (String deadServer : Sets.difference(queryPplns.keySet(), serverIds)) {
-            nextQueryPplns.remove(deadServer).forEach(IQueryPipeline::close);
-        }
-
+        // lnr query pipelines
         Map<String, List<IQueryPipeline>> nextLnrQueryPplns = Maps.newHashMap(lnrQueryPplns);
-        for (String newServer : Sets.difference(serverIds, lnrQueryPplns.keySet())) {
-            nextLnrQueryPplns.put(newServer, new ArrayList<>());
-            IntStream.range(0, queryPipelinesPerServer)
-                .forEach(i -> nextLnrQueryPplns.get(newServer).add(new QueryPipeline(newServer, true)));
-        }
-        for (String deadServer : Sets.difference(lnrQueryPplns.keySet(), serverIds)) {
-            nextLnrQueryPplns.remove(deadServer).forEach(IQueryPipeline::close);
-        }
+        for (String newServer : Sets.difference(newServers, oldServers)) {
+            // setup new store pipelines
+            String storeId = servers.get(newServer).get(RPC_METADATA_STORE_ID);
+            List<IExecutionPipeline> storeExecPplns = nextExecPplns.computeIfAbsent(storeId, k -> new ArrayList<>());
+            IntStream.range(0, execPipelinesPerStore)
+                .forEach(i -> storeExecPplns.add(new ExecPipeline(newServer)));
 
+            List<IQueryPipeline> storeQueryPplns = nextQueryPplns.computeIfAbsent(storeId, k -> new ArrayList<>());
+            IntStream.range(0, queryPipelinesPerStore)
+                .forEach(i -> storeQueryPplns.add(new QueryPipeline(newServer)));
+
+            List<IQueryPipeline> storeLnrQueryPplns =
+                nextLnrQueryPplns.computeIfAbsent(storeId, k -> new ArrayList<>());
+            IntStream.range(0, queryPipelinesPerStore)
+                .forEach(i -> storeLnrQueryPplns.add(new QueryPipeline(newServer, true)));
+
+            // add new server route
+            nextServerToStoreRoutes.put(newServer, storeId);
+        }
+        for (String deadServer : Sets.difference(oldServers, newServers)) {
+            // close store pipelines
+            String storeId = oldServerToStoreRoutes.get(deadServer);
+            nextExecPplns.remove(storeId).forEach(IExecutionPipeline::close);
+            nextQueryPplns.remove(storeId).forEach(IQueryPipeline::close);
+            nextLnrQueryPplns.remove(storeId).forEach(IQueryPipeline::close);
+            // remote dead server route
+            nextServerToStoreRoutes.remove(deadServer);
+        }
+        nextServerToStoreRoutes.forEach((serverId, storeId) -> nextStoreToServerRoutes.put(storeId, serverId));
+        serverToStoreRoutes = nextServerToStoreRoutes;
+        storeToServerRoutes = nextStoreToServerRoutes;
         execPplns = nextExecPplns;
         queryPplns = nextQueryPplns;
         lnrQueryPplns = nextLnrQueryPplns;
@@ -418,8 +447,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         QueryPipeline(String serverId, boolean linearized) {
             this.linearized = linearized;
             if (linearized) {
-                ppln = rpcClient.createRequestPipeline("", serverId, null,
-                    emptyMap(), linearizedQueryMethod);
+                ppln = rpcClient.createRequestPipeline("", serverId, null, emptyMap(), linearizedQueryMethod);
             } else {
                 ppln = rpcClient.createRequestPipeline("", serverId, null,
                     emptyMap(), queryMethod);

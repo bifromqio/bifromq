@@ -135,7 +135,9 @@ public class DistServiceState {
 
             }
         };
-        distWorker = IDistWorker.newBuilder()
+        distWorker = IDistWorker.standaloneBuilder()
+            .bootstrap(true)
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(crdtService)
             .settingProvider(settingProvider)
@@ -147,11 +149,11 @@ public class DistServiceState {
             .bgTaskExecutor(Executors.newSingleThreadScheduledExecutor())
             .tickTaskExecutor(Executors.newSingleThreadScheduledExecutor())
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
-            .kvRangeStoreOptions(kvRangeStoreOptions)
+            .storeOptions(kvRangeStoreOptions)
             .subBrokerManager(subBrokerMgr)
             .build();
-        distServer = IDistServer.newBuilder()
-            .storeClient(storeClient)
+        distServer = IDistServer.standaloneBuilder()
+            .distWorkerClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .crdtService(crdtService)
@@ -160,7 +162,7 @@ public class DistServiceState {
 
     @Setup(Level.Trial)
     public void setup() {
-        distWorker.start(true);
+        distWorker.start();
         distServer.start();
         storeClient.join();
         log.info("Setup finished, and start testing");

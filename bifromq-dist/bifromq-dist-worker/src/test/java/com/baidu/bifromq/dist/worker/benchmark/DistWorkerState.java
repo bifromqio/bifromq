@@ -145,21 +145,23 @@ public class DistWorkerState {
             .crdtService(crdtService)
             .build();
         testWorker = IDistWorker
-            .newBuilder()
+            .standaloneBuilder()
+            .bootstrap(true)
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(crdtService)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .distClient(distClient)
             .storeClient(storeClient)
-            .kvRangeStoreOptions(kvRangeStoreOptions)
+            .storeOptions(kvRangeStoreOptions)
             .subBrokerManager(receiverManager)
             .build();
     }
 
     @Setup(Level.Trial)
     public void setup() {
-        testWorker.start(true);
+        testWorker.start();
         storeClient.join();
         log.info("Setup finished, and start testing");
     }

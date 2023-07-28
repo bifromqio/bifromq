@@ -16,13 +16,17 @@ package com.baidu.bifromq.retain.store;
 public interface IRetainStore {
     String CLUSTER_NAME = "retain.store";
 
-    static RetainStoreBuilder newBuilder() {
-        return new RetainStoreBuilder();
+    static StandaloneRetainStoreBuilder standaloneBuilder() {
+        return new StandaloneRetainStoreBuilder();
+    }
+
+    static NonStandaloneRetainStoreBuilder nonStandaloneBuilder() {
+        return new NonStandaloneRetainStoreBuilder();
     }
 
     String id();
 
-    void start(boolean bootstrap);
+    void start();
 
     void stop();
 }

@@ -16,13 +16,17 @@ package com.baidu.bifromq.dist.worker;
 public interface IDistWorker {
     String CLUSTER_NAME = "dist.worker";
 
-    static DistWorkerBuilder newBuilder() {
-        return new DistWorkerBuilder();
+    static StandaloneDistWorkerBuilder standaloneBuilder() {
+        return new StandaloneDistWorkerBuilder();
+    }
+
+    static NonStandaloneDistWorkerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneDistWorkerBuilder();
     }
 
     String id();
 
-    void start(boolean bootstrap);
+    void start();
 
     void stop();
 }

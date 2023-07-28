@@ -35,7 +35,6 @@ import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.core.Observable;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -81,7 +80,7 @@ final class RPCClient implements IRPCClient {
     }
 
     @Override
-    public Observable<Set<String>> serverList() {
+    public Observable<Map<String, Map<String, String>>> serverList() {
         return channelHolder.serverList();
     }
 
@@ -223,7 +222,7 @@ final class RPCClient implements IRPCClient {
 
         Observable<ConnState> connState();
 
-        Observable<Set<String>> serverList();
+        Observable<Map<String, Map<String, String>>> serverList();
 
         Observable<IUpdateListener.IServerSelector> serverSelectorObservable();
 

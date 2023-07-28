@@ -16,13 +16,17 @@ package com.baidu.bifromq.inbox.store;
 public interface IInboxStore {
     String CLUSTER_NAME = "inbox.store";
 
-    static InboxStoreBuilder newBuilder() {
-        return new InboxStoreBuilder();
+    static StandaloneInboxStoreBuilder standaloneBuilder() {
+        return new StandaloneInboxStoreBuilder();
+    }
+
+    static NonStandaloneInboxStoreBuilder nonStandaloneBuilder() {
+        return new NonStandaloneInboxStoreBuilder();
     }
 
     String id();
 
-    void start(boolean bootstrap);
+    void start();
 
     void stop();
 }

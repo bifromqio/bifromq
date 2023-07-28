@@ -36,6 +36,7 @@ import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -102,7 +103,7 @@ public final class RPCClientBuilder {
             private final BehaviorSubject<IUpdateListener.IServerSelector> serverSelectorSubject =
                 BehaviorSubject.create();
             private final BehaviorSubject<IRPCClient.ConnState> connStateSubject = BehaviorSubject.create();
-            private final Observable<Set<String>> serverListSubject;
+            private final Observable<Map<String, Map<String, String>>> serverListSubject;
             private final LoadBalancerProvider loadBalancerProvider;
             private final Executor rpcExecutor;
             private final boolean needShutdownExecutor;
@@ -125,7 +126,7 @@ public final class RPCClientBuilder {
                 IRPCServiceTrafficDirector trafficDirector = IRPCServiceTrafficDirector
                     .newInstance(serviceUniqueName, crdtService);
                 serverListSubject = trafficDirector.serverList()
-                    .map(sl -> sl.stream().map(s -> s.id).collect(Collectors.toSet()));
+                    .map(sl -> sl.stream().collect(Collectors.toMap(s -> s.id, s -> s.attrs)));
 
                 LoadBalancerRegistry.getDefaultRegistry().register(loadBalancerProvider);
 
@@ -175,7 +176,7 @@ public final class RPCClientBuilder {
             }
 
             @Override
-            public Observable<Set<String>> serverList() {
+            public Observable<Map<String, Map<String, String>>> serverList() {
                 return serverListSubject;
             }
 

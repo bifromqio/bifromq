@@ -21,7 +21,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 public class RPCContext {
-    public static final String GPID_KEY = "GPID";
     public static final String GPID = UUID.randomUUID().toString();
 
     public static class ServerSelection {

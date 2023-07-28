@@ -14,8 +14,12 @@
 package com.baidu.bifromq.mqtt;
 
 public interface IMQTTBroker {
-    static MQTTBrokerBuilder newBuilder() {
-        return new MQTTBrokerBuilder();
+    static StandaloneMQTTBrokerBuilder standaloneBuilder() {
+        return new StandaloneMQTTBrokerBuilder();
+    }
+
+    static NonStandaloneMQTTBrokerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneMQTTBrokerBuilder();
     }
 
     void start();
