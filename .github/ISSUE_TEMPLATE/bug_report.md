@@ -33,8 +33,8 @@ Steps to reproduce the behavior, Please include necessary information such as(bu
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Logs**
+If applicable, add related logs to help troubleshoot.
 
 **HOST**
 - CPU: [e.g. vCPU number]
