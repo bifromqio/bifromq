@@ -21,16 +21,12 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED
 import static com.baidu.bifromq.plugin.eventcollector.EventType.IDLE;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -110,7 +106,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     @Test
     public void disconnectByServer() {
         connectAndVerify(true, false);
-        sessionBrokerServer.disconnectAll(1000);
+        sessionRegistry.disconnectAll(1000);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, BY_SERVER);

@@ -227,12 +227,12 @@ public abstract class DistWorkerTest {
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        testWorker = IDistWorker
-            .newBuilder()
+        testWorker = IDistWorker.standaloneBuilder()
             .host("127.0.0.1")
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
             .ioExecutor(MoreExecutors.directExecutor())
+            .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollector)
@@ -246,10 +246,10 @@ public abstract class DistWorkerTest {
             .balanceControllerOptions(balanceControllerOptions)
             .gcInterval(Duration.ofSeconds(1))
             .statsInterval(Duration.ofSeconds(1))
-            .kvRangeStoreOptions(options)
+            .storeOptions(options)
             .subBrokerManager(receiverManager)
             .build();
-        testWorker.start(true);
+        testWorker.start();
 
         storeClient.join();
         log.info("Setup finished, and start testing");

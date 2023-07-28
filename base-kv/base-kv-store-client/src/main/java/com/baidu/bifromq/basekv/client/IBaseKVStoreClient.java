@@ -54,8 +54,6 @@ public interface IBaseKVStoreClient extends IKVRangeRouter, IConnectable {
 
     String clusterId();
 
-    Observable<Set<String>> storeServers();
-
     Observable<Set<KVRangeStoreDescriptor>> describe();
 
     CompletableFuture<BootstrapReply> bootstrap(String storeId);

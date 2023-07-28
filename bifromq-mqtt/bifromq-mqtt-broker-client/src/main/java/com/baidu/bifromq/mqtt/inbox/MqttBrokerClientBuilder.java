@@ -25,7 +25,7 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class MqttBrokerClientBuilder implements IMqttBrokerServiceBuilder {
+public final class MqttBrokerClientBuilder implements IMqttBrokerClientBuilder {
     ICRDTService crdtService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;

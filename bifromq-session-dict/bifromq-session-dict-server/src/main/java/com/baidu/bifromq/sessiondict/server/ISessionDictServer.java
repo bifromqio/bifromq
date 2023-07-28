@@ -14,8 +14,12 @@
 package com.baidu.bifromq.sessiondict.server;
 
 public interface ISessionDictServer {
-    static SessionDictServerBuilder newBuilder() {
-        return new SessionDictServerBuilder();
+    static StandaloneSessionDictServerBuilder standaloneBuilder() {
+        return new StandaloneSessionDictServerBuilder();
+    }
+
+    static NonStandaloneSessionDictServerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneSessionDictServerBuilder();
     }
 
     void start();

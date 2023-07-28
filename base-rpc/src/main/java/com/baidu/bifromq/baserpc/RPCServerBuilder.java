@@ -13,37 +13,43 @@
 
 package com.baidu.bifromq.baserpc;
 
+import static com.baidu.bifromq.baserpc.RPCContext.GPID;
+
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.google.common.base.Preconditions;
-import io.grpc.MethodDescriptor;
+import com.google.common.base.Strings;
 import io.grpc.ServerServiceDefinition;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import lombok.Getter;
 import lombok.NonNull;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class RPCServerBuilder {
-    public interface ExecutorSupplier {
-        @NonNull Executor getExecutor(MethodDescriptor<?, ?> call);
-    }
-
-    private String id;
-    private String host;
-    private int port = 0;
-    private ICRDTService crdtService;
-    private EventLoopGroup bossEventLoopGroup;
-    private EventLoopGroup workerEventLoopGroup;
-    private SslContext sslContext;
-    private final Map<ServerServiceDefinition, BluePrint> serviceDefinitions = new HashMap<>();
-    private ExecutorSupplier executorSupplier;
-    private Executor executor;
+    @Accessors(fluent = true)
+    @Getter
+    String id = GPID + "/" + hashCode();
+    String host;
+    int port = 0;
+    ICRDTService crdtService;
+    EventLoopGroup bossEventLoopGroup;
+    EventLoopGroup workerEventLoopGroup;
+    SslContext sslContext;
+    final Map<ServerServiceDefinition, BluePrint> serviceDefinitions = new HashMap<>();
+    final Map<String, Map<String, String>> serviceMetadata = new HashMap<>();
+    RPCServer.ExecutorSupplier executorSupplier;
+    Executor executor;
 
     public RPCServerBuilder id(String id) {
-        this.id = id;
+        if (!Strings.isNullOrEmpty(id)) {
+            this.id = id;
+        }
         return this;
     }
 
@@ -84,11 +90,21 @@ public final class RPCServerBuilder {
 
     public RPCServerBuilder bindService(@NonNull ServerServiceDefinition serviceDefinition,
                                         @NonNull BluePrint bluePrint) {
-        this.serviceDefinitions.put(serviceDefinition, bluePrint);
+        return bindService(serviceDefinition, bluePrint, Collections.emptyMap());
+    }
+
+    public RPCServerBuilder bindService(@NonNull ServerServiceDefinition serviceDefinition,
+                                        @NonNull BluePrint bluePrint,
+                                        Map<String, String> metadata) {
+        BluePrint oldBluePrint = this.serviceDefinitions.put(serviceDefinition, bluePrint);
+        assert oldBluePrint == null;
+        Map<String, String> oldMetadata =
+            this.serviceMetadata.put(serviceDefinition.getServiceDescriptor().getName(), metadata);
+        assert oldMetadata == null;
         return this;
     }
 
-    public RPCServerBuilder executorSupplier(ExecutorSupplier supplier) {
+    public RPCServerBuilder executorSupplier(RPCServer.ExecutorSupplier supplier) {
         this.executorSupplier = supplier;
         return this;
     }
@@ -101,17 +117,6 @@ public final class RPCServerBuilder {
     public IRPCServer build() {
         Preconditions.checkNotNull(crdtService, "a started crdt service must be provided");
         Preconditions.checkArgument(!serviceDefinitions.isEmpty());
-        return RPCServer.builder()
-            .id(id)
-            .host(host)
-            .port(port)
-            .bossEventLoopGroup(bossEventLoopGroup)
-            .workerEventLoopGroup(workerEventLoopGroup)
-            .sslContext(sslContext)
-            .crdtService(crdtService)
-            .serviceDefinitions(serviceDefinitions)
-            .executorSupplier(executorSupplier)
-            .executor(executor)
-            .build();
+        return new RPCServer(this);
     }
 }

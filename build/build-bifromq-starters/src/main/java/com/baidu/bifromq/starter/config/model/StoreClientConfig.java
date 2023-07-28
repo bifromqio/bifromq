@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter.config.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -20,7 +21,9 @@ import lombok.Setter;
 @Setter
 public class StoreClientConfig {
     private String clusterName;
-    private int execPipelinePerServer = 5;
-    private int queryPipelinePerServer = 5;
+    @JsonAlias({"execPipelinePerStore", "execPipelinePerServer"}) // the execPipelinePerServer is deprecated
+    private int execPipelinePerStore = 5;
+    @JsonAlias({"queryPipelinePerStore", "queryPipelinePerServer"}) // the execPipelinePerServer is deprecated
+    private int queryPipelinePerStore = 5;
     private ClientSSLContextConfig sslContextConfig;
 }

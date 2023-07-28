@@ -18,7 +18,6 @@ import static java.util.Collections.emptyMap;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
@@ -51,9 +50,9 @@ public interface IRPCClient extends IConnectable {
     /**
      * The observable of live servers
      *
-     * @return an observable of connectable servers
+     * @return an observable of connectable servers with a map of metadata attached
      */
-    Observable<Set<String>> serverList();
+    Observable<Map<String, Map<String, String>>> serverList();
 
 
     default <ReqT, RespT> CompletableFuture<RespT> invoke(String tenantId,

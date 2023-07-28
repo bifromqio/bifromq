@@ -14,7 +14,6 @@
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
 import static com.baidu.bifromq.baserpc.RPCContext.GPID;
-import static com.baidu.bifromq.baserpc.RPCContext.GPID_KEY;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
@@ -43,7 +42,7 @@ public interface IRPCServiceTrafficDirector {
             this.id = server.getId();
             this.attrs = server.getAttrsMap();
             this.groupTags = Sets.newHashSet(server.getGroupList());
-            this.hostAddr = GPID.equals(attrs.get(GPID_KEY)) ?
+            this.hostAddr = GPID.equals(server.getGpid()) ?
                 new InProcSocketAddress(server.getId()) : new InetSocketAddress(server.getHost(), server.getPort());
         }
     }

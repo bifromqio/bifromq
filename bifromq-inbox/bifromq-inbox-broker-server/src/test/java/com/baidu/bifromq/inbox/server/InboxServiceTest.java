@@ -130,25 +130,26 @@ public abstract class InboxServiceTest {
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
-        inboxStore = IInboxStore.newBuilder()
+        inboxStore = IInboxStore.standaloneBuilder()
+            .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(inboxStoreClient)
             .eventCollector(eventCollector)
-            .kvRangeStoreOptions(kvRangeStoreOptions)
+            .storeOptions(kvRangeStoreOptions)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
-        inboxServer = IInboxServer.newBuilder()
+        inboxServer = IInboxServer.standaloneBuilder()
             .host("127.0.0.1")
             .crdtService(serverCrdtService)
             .settingProvider(settingProvider)
-            .storeClient(inboxStoreClient)
+            .inboxStoreClient(inboxStoreClient)
             .build();
-        inboxStore.start(true);
+        inboxStore.start();
         inboxServer.start();
         inboxStoreClient.join();
         inboxReaderClient.connState().filter(s -> s == IRPCClient.ConnState.READY).blockingFirst();

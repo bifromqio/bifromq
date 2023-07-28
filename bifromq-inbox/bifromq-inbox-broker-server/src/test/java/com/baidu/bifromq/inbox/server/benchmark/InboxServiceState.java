@@ -117,22 +117,24 @@ abstract class InboxServiceState {
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
-        inboxStore = IInboxStore.newBuilder()
+        inboxStore = IInboxStore.standaloneBuilder()
+            .bootstrap(true)
+            .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(inboxStoreKVStoreClient)
             .eventCollector(eventCollector)
-            .kvRangeStoreOptions(kvRangeStoreOptions)
+            .storeOptions(kvRangeStoreOptions)
             .build();
-        inboxServer = IInboxServer.newBuilder()
+        inboxServer = IInboxServer.standaloneBuilder()
             .settingProvider(settingProvider)
-            .storeClient(inboxStoreKVStoreClient)
+            .inboxStoreClient(inboxStoreKVStoreClient)
             .build();
     }
 
     @Setup(Level.Trial)
     public void setup() {
-        inboxStore.start(true);
+        inboxStore.start();
         inboxServer.start();
         inboxStoreKVStoreClient.join();
         afterSetup();

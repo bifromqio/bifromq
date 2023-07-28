@@ -13,12 +13,9 @@
 
 package com.baidu.bifromq.baserpc;
 
-import static com.baidu.bifromq.baserpc.RPCContext.GPID;
-import static com.baidu.bifromq.baserpc.RPCContext.GPID_KEY;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
-import static java.util.Collections.singletonMap;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.interceptor.TenantAwareServerInterceptor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
@@ -38,8 +35,6 @@ import io.grpc.netty.InProcServerBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
@@ -50,11 +45,15 @@ import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.Builder;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class RPCServer implements IRPCServer {
+    public interface ExecutorSupplier {
+        @NonNull Executor getExecutor(MethodDescriptor<?, ?> call);
+    }
+
     private enum State {
         INIT, STARTING, STARTED, STOPPING, STOPPED, FATAL_FAILURE
     }
@@ -63,31 +62,22 @@ class RPCServer implements IRPCServer {
         state = new AtomicReference<>(State.INIT);
 
     private final String id;
-    private final com.baidu.bifromq.baserpc.RPCServerBuilder.ExecutorSupplier executorSupplier;
     private final Executor defaultExecutor;
     private final Map<ServerServiceDefinition, BluePrint> serviceDefinitions;
+    private final Map<String, Map<String, String>> serviceMetadata = new HashMap<>();
     private final Map<String, IRPCServiceServerRegister> serverRegisters = new HashMap<>();
     private final Server inProcServer;
     private final Server interProcServer;
 
     private final boolean needShutdownExecutor;
 
-    @Builder
-    RPCServer(String id,
-              String host,
-              int port,
-              ICRDTService crdtService,
-              SslContext sslContext,
-              EventLoopGroup bossEventLoopGroup,
-              EventLoopGroup workerEventLoopGroup,
-              Map<ServerServiceDefinition, BluePrint> serviceDefinitions,
-              com.baidu.bifromq.baserpc.RPCServerBuilder.ExecutorSupplier executorSupplier,
-              Executor executor) {
-        Preconditions.checkArgument(!Strings.isNullOrEmpty(host) && !"0.0.0.0".equals(host), "Invalid host");
-        this.id = Strings.isNullOrEmpty(id) ? GPID + "/" + hashCode() : id;
-        this.serviceDefinitions = serviceDefinitions;
-        needShutdownExecutor = executor == null;
-        this.executorSupplier = executorSupplier;
+    RPCServer(RPCServerBuilder builder) {
+        Preconditions.checkArgument(!Strings.isNullOrEmpty(builder.host) && !"0.0.0.0".equals(builder.host),
+            "Invalid host");
+        Preconditions.checkArgument(!builder.serviceDefinitions.isEmpty(), "No service defined");
+        this.id = builder.id;
+        this.serviceDefinitions = builder.serviceDefinitions;
+        needShutdownExecutor = builder.executor == null;
 
         if (needShutdownExecutor) {
             int threadNum = Math.max(EnvProvider.INSTANCE.availableProcessors(), 1);
@@ -97,58 +87,59 @@ class RPCServer implements IRPCServer {
                     new LinkedTransferQueue<>(),
                     EnvProvider.INSTANCE.newThreadFactory("rpc_server-executor", true)), "rpc_server-executor");
         } else {
-            this.defaultExecutor = executor;
+            this.defaultExecutor = builder.executor;
         }
 
-        ServerBuilder<?> builder = InProcServerBuilder.forName(this.id).executor(executor);
-        if (executorSupplier != null) {
-            builder.callExecutor(new ServerCallExecutorSupplier() {
+        ServerBuilder<?> serverBuilder = InProcServerBuilder.forName(this.id).executor(builder.executor);
+        if (builder.executorSupplier != null) {
+            serverBuilder.callExecutor(new ServerCallExecutorSupplier() {
                 @Override
                 public <ReqT, RespT> Executor getExecutor(ServerCall<ReqT, RespT> call, Metadata metadata) {
-                    return executorSupplier.getExecutor(call.getMethodDescriptor());
+                    return builder.executorSupplier.getExecutor(call.getMethodDescriptor());
                 }
             });
         }
-        bindServiceToServer(builder);
-        inProcServer = builder.build();
+        bindServiceToServer(serverBuilder);
+        inProcServer = serverBuilder.build();
 
 
         NettyServerBuilder nettyServerBuilder = NettyServerBuilder
-            .forAddress(new InetSocketAddress(host, port))
+            .forAddress(new InetSocketAddress(builder.host, builder.port))
             .permitKeepAliveWithoutCalls(true)
-            .executor(executor);
-        if (executorSupplier != null) {
+            .executor(builder.executor);
+        if (builder.executorSupplier != null) {
             nettyServerBuilder.callExecutor(new ServerCallExecutorSupplier() {
                 @Override
                 public <ReqT, RespT> Executor getExecutor(ServerCall<ReqT, RespT> call, Metadata metadata) {
-                    return executorSupplier.getExecutor(call.getMethodDescriptor());
+                    return builder.executorSupplier.getExecutor(call.getMethodDescriptor());
                 }
             });
         }
-        if (sslContext != null) {
-            nettyServerBuilder.sslContext(sslContext);
+        if (builder.sslContext != null) {
+            nettyServerBuilder.sslContext(builder.sslContext);
         }
-        if (bossEventLoopGroup == null) {
-            bossEventLoopGroup = NettyUtil.createEventLoopGroup(1);
+        if (builder.bossEventLoopGroup == null) {
+            builder.bossEventLoopGroup = NettyUtil.createEventLoopGroup(1);
         }
-        if (workerEventLoopGroup == null) {
-            workerEventLoopGroup = NettyUtil.createEventLoopGroup();
+        if (builder.workerEventLoopGroup == null) {
+            builder.workerEventLoopGroup = NettyUtil.createEventLoopGroup();
         }
         // if null, GRPC managed shared eventloop group will be used
-        nettyServerBuilder.bossEventLoopGroup(bossEventLoopGroup)
-            .workerEventLoopGroup(workerEventLoopGroup)
-            .channelType(NettyUtil.determineServerSocketChannelClass(bossEventLoopGroup));
+        nettyServerBuilder.bossEventLoopGroup(builder.bossEventLoopGroup)
+            .workerEventLoopGroup(builder.workerEventLoopGroup)
+            .channelType(NettyUtil.determineServerSocketChannelClass(builder.bossEventLoopGroup));
         bindServiceToServer(nettyServerBuilder);
         interProcServer = nettyServerBuilder.build();
 
         // the common name of the cert contains service unique name to which the server instance belongs
         serviceDefinitions.forEach((serviceDef, bluePrint) -> {
             String serviceName = serviceDef.getServiceDescriptor().getName();
-            serverRegisters.put(serviceName, IRPCServiceServerRegister.newInstance(serviceName, crdtService));
+            serverRegisters.put(serviceName, IRPCServiceServerRegister.newInstance(serviceName, builder.crdtService));
+            serviceMetadata.put(serviceName, builder.serviceMetadata.getOrDefault(serviceName, emptyMap()));
         });
     }
 
-    private void bindServiceToServer(ServerBuilder builder) {
+    private void bindServiceToServer(ServerBuilder<?> builder) {
         serviceDefinitions.forEach((orig, bluePrint) -> {
             ServerServiceDefinition.Builder serverDefBuilder =
                 ServerServiceDefinition.builder(orig.getServiceDescriptor().getName());
@@ -177,9 +168,11 @@ class RPCServer implements IRPCServer {
             try {
                 inProcServer.start();
                 interProcServer.start();
-                serverRegisters.forEach((serviceName, serverRegister) ->
+                serverRegisters.forEach((serviceName, serverRegister) -> {
+                    log.info("Start server register for service: {}", serviceName);
                     serverRegister.start(id, (InetSocketAddress) interProcServer.getListenSockets().get(0), emptySet(),
-                        singletonMap(GPID_KEY, GPID)));
+                        serviceMetadata.get(serviceName));
+                });
                 state.set(State.STARTED);
             } catch (IOException e) {
                 state.set(State.FATAL_FAILURE);

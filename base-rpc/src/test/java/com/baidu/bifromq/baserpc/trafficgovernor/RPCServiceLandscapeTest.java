@@ -17,6 +17,7 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import io.grpc.netty.InProcSocketAddress;
 import java.net.InetSocketAddress;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +46,7 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         IRPCServiceTrafficDirector trafficDirector = IRPCServiceTrafficDirector.newInstance(service, crdtService);
         await().until(() -> {
             Set<IRPCServiceTrafficDirector.Server> servers = trafficDirector.serverList().blockingFirst();
-            return servers.stream().anyMatch(s -> s.id.equals(server) && s.hostAddr.equals(hostAddr));
+            return servers.stream().anyMatch(s -> s.id.equals(server) && s.hostAddr instanceof InProcSocketAddress);
         });
 
         // stop the server
@@ -78,7 +79,7 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         // new server discovered
         await().until(() -> {
             Set<IRPCServiceTrafficDirector.Server> servers = trafficDirector.serverList().blockingFirst();
-            return servers.stream().anyMatch(s -> s.id.equals(server) && s.hostAddr.equals(hostAddr));
+            return servers.stream().anyMatch(s -> s.id.equals(server) && s.hostAddr instanceof InProcSocketAddress);
         });
         // stop the server
         serverRegister.stop();
@@ -97,7 +98,7 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         // server discovered again
         await().until(() -> {
             Set<IRPCServiceTrafficDirector.Server> servers = trafficDirector.serverList().blockingFirst();
-            return servers.stream().anyMatch(s -> s.id.equals(server) && s.hostAddr.equals(hostAddr));
+            return servers.stream().anyMatch(s -> s.id.equals(server) && s.hostAddr instanceof InProcSocketAddress);
         });
 
         trafficDirector.destroy();

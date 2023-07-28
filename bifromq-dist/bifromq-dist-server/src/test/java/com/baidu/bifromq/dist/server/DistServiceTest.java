@@ -133,7 +133,8 @@ public abstract class DistServiceTest {
             .crdtService(clientCrdtService)
             .build();
         distWorker = IDistWorker
-            .newBuilder()
+            .standaloneBuilder()
+            .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
@@ -146,19 +147,19 @@ public abstract class DistServiceTest {
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
-            .kvRangeStoreOptions(kvRangeStoreOptions)
+            .storeOptions(kvRangeStoreOptions)
             .balanceControllerOptions(balanceControllerOptions)
             .subBrokerManager(subBrokerMgr)
             .build();
-        distServer = IDistServer.newBuilder()
+        distServer = IDistServer.standaloneBuilder()
             .host("127.0.0.1")
-            .storeClient(workerClient)
+            .distWorkerClient(workerClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .crdtService(clientCrdtService)
             .build();
 
-        distWorker.start(true);
+        distWorker.start();
         distServer.start();
         workerClient.join();
         distClient.connState().filter(s -> s == IRPCClient.ConnState.READY).blockingFirst();

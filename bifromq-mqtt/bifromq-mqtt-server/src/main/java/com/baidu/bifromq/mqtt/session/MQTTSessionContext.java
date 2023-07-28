@@ -16,7 +16,6 @@ package com.baidu.bifromq.mqtt.session;
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
-import com.baidu.bifromq.mqtt.service.ILocalSessionBrokerServer;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
@@ -24,7 +23,7 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.retain.client.IRetainServiceClient;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -51,7 +50,7 @@ public final class MQTTSessionContext {
     public final ISettingProvider settingProvider;
     public final IDistClient distClient;
     public final IInboxReaderClient inboxClient;
-    public final IRetainServiceClient retainClient;
+    public final IRetainClient retainClient;
     public final ISessionDictClient sessionDictClient;
     public final String serverId;
 
@@ -61,17 +60,18 @@ public final class MQTTSessionContext {
     // track under confirming id count per tenantId
     private final InUseQoS2MessageIds unreleasedQoS2MessageIds;
     // cache for client dist pipeline
-    private final LoadingCache<ClientInfo, IRetainServiceClient.IClientPipeline> clientRetainPipelines;
+    private final LoadingCache<ClientInfo, IRetainClient.IClientPipeline> clientRetainPipelines;
     private final FutureTracker bgTaskTracker;
     private final Ticker ticker;
     private final Gauge retainPplnNumGauge;
 
     @Builder
-    MQTTSessionContext(ILocalSessionBrokerServer brokerServer,
+    MQTTSessionContext(String serverId,
+                       ILocalSessionRegistry sessionRegistry,
                        IAuthProvider authProvider,
                        IDistClient distClient,
                        IInboxReaderClient inboxClient,
-                       IRetainServiceClient retainClient,
+                       IRetainClient retainClient,
                        ISessionDictClient sessionDictClient,
                        int maxResendTimes,
                        int resendDelayMillis,
@@ -80,8 +80,8 @@ public final class MQTTSessionContext {
                        IEventCollector eventCollector,
                        ISettingProvider settingProvider,
                        Ticker ticker) {
-        this.localSessionRegistry = brokerServer;
-        this.serverId = brokerServer.id();
+        this.serverId = serverId;
+        this.localSessionRegistry = sessionRegistry;
         this.authProvider = authProvider;
         this.eventCollector = eventCollector;
         this.settingProvider = settingProvider;
@@ -96,7 +96,7 @@ public final class MQTTSessionContext {
         this.clientRetainPipelines = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
             .expireAfterAccess(Duration.ofSeconds(30))
-            .removalListener((RemovalListener<ClientInfo, IRetainServiceClient.IClientPipeline>)
+            .removalListener((RemovalListener<ClientInfo, IRetainClient.IClientPipeline>)
                 (key, value, cause) -> {
                     if (value != null) {
                         log.trace("Close client retain pipeline: clientInfo={}, cause={}", key, cause);
@@ -171,7 +171,7 @@ public final class MQTTSessionContext {
         unreleasedQoS2MessageIds.release(tenantId, channelId, qos2MessageId);
     }
 
-    public IRetainServiceClient.IClientPipeline getClientRetainPipeline(ClientInfo clientInfo) {
+    public IRetainClient.IClientPipeline getClientRetainPipeline(ClientInfo clientInfo) {
         return clientRetainPipelines.get(clientInfo);
     }
 

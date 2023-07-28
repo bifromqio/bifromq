@@ -16,14 +16,11 @@ package com.baidu.bifromq.basekv.server;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.IKVRangeStoreDescriptorReporter;
 import com.baidu.bifromq.basekv.store.KVRangeStore;
 import com.baidu.bifromq.basekv.store.KVRangeStoreDescriptorReporter;
-import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
-import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
@@ -47,43 +44,45 @@ import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBase {
     private static final int DEAD_STORE_CLEANUP_TIME_FACTOR = 10;
-
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final IKVRangeStore kvRangeStore;
     private final IKVRangeStoreDescriptorReporter storeDescriptorReporter;
     private final IAgentHost agentHost;
     private final String clusterId;
+    private final boolean bootstrap;
 
-    BaseKVStoreService(String clusterId,
-                       IKVRangeCoProcFactory coProcFactory,
-                       KVRangeStoreOptions options,
-                       IAgentHost agentHost,
-                       ICRDTService crdtService,
-                       Executor queryExecutor,
-                       Executor mutationExecutor,
-                       ScheduledExecutorService tickTaskExecutor,
-                       ScheduledExecutorService bgTaskExecutor) {
-        kvRangeStore =
-            new KVRangeStore(options, coProcFactory, queryExecutor, mutationExecutor, tickTaskExecutor,
-                bgTaskExecutor);
-        this.clusterId = clusterId;
-        this.agentHost = agentHost;
-        storeDescriptorReporter = new KVRangeStoreDescriptorReporter(clusterId, crdtService,
-            Duration.ofSeconds(options.getStatsCollectIntervalSec()).toMillis() * DEAD_STORE_CLEANUP_TIME_FACTOR);
+    BaseKVStoreService(BaseKVStoreServiceBuilder<?> builder) {
+        kvRangeStore = new KVRangeStore(
+            builder.storeOptions,
+            builder.coProcFactory,
+            builder.queryExecutor,
+            builder.mutationExecutor,
+            builder.tickTaskExecutor,
+            builder.bgTaskExecutor);
+        this.bootstrap = builder.bootstrap;
+        this.clusterId = builder.clusterId;
+        this.agentHost = builder.agentHost;
+        storeDescriptorReporter = new KVRangeStoreDescriptorReporter(clusterId, builder.serverBuilder.crdtService,
+            Duration.ofSeconds(builder.storeOptions.getStatsCollectIntervalSec()).toMillis() *
+                DEAD_STORE_CLEANUP_TIME_FACTOR);
     }
 
-    public String id() {
+    public String clusterId() {
+        return clusterId;
+    }
+
+    public String storeId() {
         return kvRangeStore.id();
     }
 
-    public void start(boolean bootstrap) {
+    public void start() {
+        log.debug("Starting BaseKVRangeStore: clusterId={}, storeId={}, bootstrap{}",
+            clusterId, kvRangeStore.id(), bootstrap);
         kvRangeStore.start(new AgentHostStoreMessenger(agentHost, clusterId, kvRangeStore.id()));
         if (bootstrap) {
             kvRangeStore.bootstrap();
@@ -94,6 +93,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     }
 
     public void stop() {
+        log.debug("Stopping BaseKVRangeStore: clusterId={}, storeId={}", clusterId, kvRangeStore.id());
         disposables.dispose();
         kvRangeStore.stop();
         storeDescriptorReporter.stop();
@@ -206,69 +206,67 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     @Override
     public void split(KVRangeSplitRequest request, StreamObserver<KVRangeSplitReply> responseObserver) {
         response(tenantId -> kvRangeStore.split(request.getVer(), request.getKvRangeId(), request.getSplitKey())
-                .thenApply(result -> KVRangeSplitReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(ReplyCode.Ok)
-                    .build())
-                .exceptionally(e -> {
-                    if (e instanceof KVRangeException.BadVersion) {
-                        return KVRangeSplitReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ReplyCode.BadVersion)
-                            .build();
-                    }
-                    if (e instanceof KVRangeException.TryLater) {
-                        return KVRangeSplitReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ReplyCode.TryLater)
-                            .build();
-                    }
-                    if (e instanceof KVRangeException.BadRequest) {
-                        return KVRangeSplitReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ReplyCode.BadRequest)
-                            .build();
-                    }
+            .thenApply(result -> KVRangeSplitReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(ReplyCode.Ok)
+                .build())
+            .exceptionally(e -> {
+                if (e instanceof KVRangeException.BadVersion) {
                     return KVRangeSplitReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(ReplyCode.InternalError)
+                        .setCode(ReplyCode.BadVersion)
                         .build();
-                })
-            , responseObserver);
+                }
+                if (e instanceof KVRangeException.TryLater) {
+                    return KVRangeSplitReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.TryLater)
+                        .build();
+                }
+                if (e instanceof KVRangeException.BadRequest) {
+                    return KVRangeSplitReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.BadRequest)
+                        .build();
+                }
+                return KVRangeSplitReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ReplyCode.InternalError)
+                    .build();
+            }), responseObserver);
     }
 
     @Override
     public void merge(KVRangeMergeRequest request, StreamObserver<KVRangeMergeReply> responseObserver) {
         response(tenantId -> kvRangeStore.merge(request.getVer(), request.getMergerId(), request.getMergeeId())
-                .thenApply(result -> KVRangeMergeReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(ReplyCode.Ok)
-                    .build())
-                .exceptionally(e -> {
-                    if (e instanceof KVRangeException.BadVersion) {
-                        return KVRangeMergeReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ReplyCode.BadVersion)
-                            .build();
-                    }
-                    if (e instanceof KVRangeException.TryLater) {
-                        return KVRangeMergeReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ReplyCode.TryLater)
-                            .build();
-                    }
-                    if (e instanceof KVRangeException.BadRequest) {
-                        return KVRangeMergeReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ReplyCode.BadRequest)
-                            .build();
-                    }
+            .thenApply(result -> KVRangeMergeReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(ReplyCode.Ok)
+                .build())
+            .exceptionally(e -> {
+                if (e instanceof KVRangeException.BadVersion) {
                     return KVRangeMergeReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(ReplyCode.InternalError)
+                        .setCode(ReplyCode.BadVersion)
                         .build();
-                })
-            , responseObserver);
+                }
+                if (e instanceof KVRangeException.TryLater) {
+                    return KVRangeMergeReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.TryLater)
+                        .build();
+                }
+                if (e instanceof KVRangeException.BadRequest) {
+                    return KVRangeMergeReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.BadRequest)
+                        .build();
+                }
+                return KVRangeMergeReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ReplyCode.InternalError)
+                    .build();
+            }), responseObserver);
     }
 
     @Override
@@ -285,6 +283,4 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     public StreamObserver<KVRangeRORequest> linearizedQuery(StreamObserver<KVRangeROReply> responseObserver) {
         return new QueryPipeline(kvRangeStore, true, responseObserver);
     }
-
-
 }

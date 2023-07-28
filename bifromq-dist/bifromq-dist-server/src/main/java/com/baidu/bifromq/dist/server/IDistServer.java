@@ -14,8 +14,12 @@
 package com.baidu.bifromq.dist.server;
 
 public interface IDistServer {
-    static DistServerBuilder newBuilder() {
-        return new DistServerBuilder();
+    static StandaloneDistServerBuilder standaloneBuilder() {
+        return new StandaloneDistServerBuilder();
+    }
+
+    static NonStandaloneDistServerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneDistServerBuilder();
     }
 
     void start();

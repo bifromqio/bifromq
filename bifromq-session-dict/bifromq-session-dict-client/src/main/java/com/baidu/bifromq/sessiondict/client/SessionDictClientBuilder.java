@@ -14,7 +14,6 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.sessiondict.ISessionDictBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -26,12 +25,13 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class SessionDictClientBuilder implements ISessionDictBuilder {
+public final class SessionDictClientBuilder implements ISessionDictClientBuilder {
     ICRDTService crdtService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;
     Executor executor;
 
+    @Override
     public ISessionDictClient build() {
         return new SessionDictClient(this);
     }

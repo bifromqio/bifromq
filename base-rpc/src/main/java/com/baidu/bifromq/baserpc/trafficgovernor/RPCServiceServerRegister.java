@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
+import static com.baidu.bifromq.baserpc.RPCContext.GPID;
+
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -42,6 +44,7 @@ final class RPCServiceServerRegister extends RPCServiceAnnouncer implements IRPC
                 .setId(id)
                 .setHost(hostAddr.getAddress().getHostAddress())
                 .setPort(hostAddr.getPort())
+                .setGpid(GPID)
                 .addAllGroup(groupTags)
                 .putAllAttrs(attrs)
                 .setAnnouncerId(id())
@@ -49,7 +52,7 @@ final class RPCServiceServerRegister extends RPCServiceAnnouncer implements IRPC
                 .build();
 
             // make an announcement via rpcServiceCRDT
-            log.debug("Announce local server:{}", localServer);
+            log.debug("Announce local server[{}]:{}", serviceUniqueName, localServer);
             announce(localServer).join();
 
             // enforce the announcement consistent eventually

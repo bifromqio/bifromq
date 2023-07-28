@@ -14,8 +14,12 @@
 package com.baidu.bifromq.retain.server;
 
 public interface IRetainServer {
-    static RetainServerBuilder newBuilder() {
-        return new RetainServerBuilder();
+    static StandaloneRetainServerBuilder standaloneBuilder() {
+        return new StandaloneRetainServerBuilder();
+    }
+
+    static NonStandaloneRetainServerBuilder nonStandaloneBuilder() {
+        return new NonStandaloneRetainServerBuilder();
     }
 
     void start();
