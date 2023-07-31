@@ -22,7 +22,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
     private final ConcurrentMap<CompletableFuture<Long>, CompletableFuture<Void>> readIndexes = Maps.newConcurrentMap();
     private final ConcurrentLinkedDeque<ToLinearize> toBeLinearized = new ConcurrentLinkedDeque();
@@ -42,13 +44,18 @@ class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
         CompletableFuture<Long> readIndex = readIndexProvider.get();
         readIndexes.put(readIndex, onDone);
         readIndex.whenCompleteAsync((ri, e) -> {
-            if (ri <= lastAppliedIndex) {
-                readIndexes.remove(readIndex).complete(null);
+            if (e != null) {
+                log.error("failed to get readIndex", e);
+                readIndexes.remove(readIndex).completeExceptionally(e);
             } else {
-                readIndexes.remove(readIndex, onDone);
-                if (!onDone.isDone()) {
-                    toBeLinearized.add(new ToLinearize(ri, onDone));
-                    schedule();
+                if (ri <= lastAppliedIndex) {
+                    readIndexes.remove(readIndex).complete(null);
+                } else {
+                    readIndexes.remove(readIndex, onDone);
+                    if (!onDone.isDone()) {
+                        toBeLinearized.add(new ToLinearize(ri, onDone));
+                        schedule();
+                    }
                 }
             }
         }, executor);

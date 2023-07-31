@@ -40,6 +40,7 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.entity.GroupMatching;
@@ -568,7 +569,16 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                                 tenantId, inbox.inboxId, inbox.delivererKey, inbox.broker);
                         }
                         return CompletableFuture.completedFuture(null);
-                    }));
+                    })
+                    .exceptionallyCompose(throwable -> {
+                       if (throwable instanceof ServerNotFoundException
+                           || throwable.getCause() instanceof ServerNotFoundException)  {
+                           return distClient.clear(request.getReqId(),
+                               tenantId, inbox.inboxId, inbox.delivererKey, inbox.broker);
+                       }
+                       return CompletableFuture.completedFuture(null);
+                    })
+                );
                 itr.next();
             } else {
                 itr.seek(tenantUpperBound(tenantId));

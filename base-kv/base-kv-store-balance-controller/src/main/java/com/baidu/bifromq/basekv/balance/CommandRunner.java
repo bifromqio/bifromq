@@ -58,11 +58,11 @@ public class CommandRunner {
         if (command.getExpectedVer() != null) {
             Long historyCommand = historyCommandCache.getIfPresent(command.getKvRangeId());
             if (historyCommand != null && historyCommand >= command.getExpectedVer()) {
-                log.warn("Command version is duplicated with prev one: {}", command);
+                log.warn("[{}]Command version is duplicated with prev one: {}", kvStoreClient.clusterId(), command);
                 return CompletableFuture.completedFuture(Result.Failed);
             }
         }
-        log.debug("Send balanceCommand[{}]", command);
+        log.debug("[{}]Send balanceCommand: {}", kvStoreClient.clusterId(), command);
         switch (command.type()) {
             case CHANGE_CONFIG:
                 ChangeReplicaConfigRequest changeConfigRequest = ChangeReplicaConfigRequest.newBuilder()
@@ -113,7 +113,8 @@ public class CommandRunner {
                 return kvStoreClient.recover(command.getToStore(), recoverRequest)
                     .handle((r, e) -> {
                         if (e != null) {
-                            log.error("Unexpected error when recover, req: {}", recoverRequest, e);
+                            log.error("[{}]Unexpected error when recover, req: {}", kvStoreClient.clusterId(),
+                                recoverRequest, e);
                         }
                         return Result.Succeed;
                     });
@@ -127,26 +128,22 @@ public class CommandRunner {
         CompletableFuture<Result> onDone = new CompletableFuture<>();
         storeReply.whenComplete((code, e) -> {
             if (e != null) {
-                log.error("Unexpected error when run command: {}", command, e);
+                log.error("[{}]Unexpected error when run command: {}", kvStoreClient.clusterId(), command, e);
                 onDone.complete(Result.Failed);
                 return;
             }
             switch (code) {
-                case Ok:
+                case Ok -> {
                     if (command.getExpectedVer() != null) {
                         historyCommandCache.put(command.getKvRangeId(), command.getExpectedVer());
                     }
                     onDone.complete(Result.Succeed);
-                    break;
-                case BadRequest:
-                case BadVersion:
-                case TryLater:
-                case InternalError:
-                    log.warn("Failed with reply: {}, command: {}", code, command);
+                }
+                case BadRequest, BadVersion, TryLater, InternalError -> {
+                    log.warn("[{}]Failed with reply: {}, command: {}", kvStoreClient.clusterId(), code, command);
                     onDone.complete(Result.Failed);
-                    break;
-                default:
-                    onDone.complete(Result.Failed);
+                }
+                default -> onDone.complete(Result.Failed);
             }
         });
         return onDone;
