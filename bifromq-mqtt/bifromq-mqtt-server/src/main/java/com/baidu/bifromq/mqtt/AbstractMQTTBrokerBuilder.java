@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 
 abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>> implements IMQTTBrokerBuilder<T> {
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(AbstractMQTTBrokerBuilder.class);
-    String mqttHost;
     int connectTimeoutSeconds = 20;
     int connectRateLimit = 1000;
     int disconnectRate = 1000;
@@ -90,11 +89,6 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
             wssListenerBuilder = new ConnListenerBuilder.WSSConnListenerBuilder<>(thisT());
         }
         return wssListenerBuilder;
-    }
-
-    public T mqttHost(String mqttHost) {
-        this.mqttHost = mqttHost;
-        return thisT();
     }
 
     public T connectTimeoutSeconds(int connectTimeoutSeconds) {

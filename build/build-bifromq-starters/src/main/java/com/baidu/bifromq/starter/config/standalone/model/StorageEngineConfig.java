@@ -11,15 +11,20 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
-import com.fasterxml.jackson.annotation.JsonTypeName;
-import io.netty.handler.ssl.ClientAuth;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class ServerSSLContextConfig extends SSLContextConfig {
-    private String clientAuth = ClientAuth.OPTIONAL.name();
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = InMemEngineConfig.class, name = "memory"),
+    @JsonSubTypes.Type(value = RocksDBEngineConfig.class, name = "rocksdb")
+})
+public abstract class StorageEngineConfig {
+    private int gcIntervalInSec = 300; // 5min
 }

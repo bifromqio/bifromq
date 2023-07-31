@@ -180,6 +180,7 @@ abstract class MQTTTest {
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemoryKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
@@ -216,6 +217,7 @@ abstract class MQTTTest {
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemoryKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
@@ -248,6 +250,7 @@ abstract class MQTTTest {
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemoryKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
@@ -264,7 +267,6 @@ abstract class MQTTTest {
 
         mqttBroker = IMQTTBroker.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
-            .mqttHost("127.0.0.1")
             .mqttBossGroup(NettyUtil.createEventLoopGroup(1))
             .mqttWorkerGroup(NettyUtil.createEventLoopGroup())
             .authProvider(authProvider)
@@ -275,6 +277,7 @@ abstract class MQTTTest {
             .sessionDictClient(sessionDictClient)
             .retainClient(retainClient)
             .buildTcpConnListener()
+            .host("127.0.0.1")
             .buildListener()
             .build();
 

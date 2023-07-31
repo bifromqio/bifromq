@@ -1,56 +1,19 @@
-host: 0.0.0.0 # bind to all available network interfaces
-tcpPort: 1883
-tlsPort: 1884
-wsPort: 80
-wssPort: 443
-wsPath: /mqtt
-tcpEnabled: true
-tlsEnabled: false
-wsEnabled: false
-wssEnabled: false
-connTimeoutSec: 20
-maxConnPerSec: 5000
-maxDisconnPerSec: 1000
-maxMsgByteSize: 262144 # 256KB
-maxResendTimes: 5
-maxConnBandwidth: 5120000 # 512bps
-defaultKeepAliveSec: 300
-qos2ConfirmWindowSec: 5
+# This configuration file contains overrides for the default values of available configuration options.
+# Please note that configuration options in different versions of BifroMQ may change.
+# Once the BifroMQ service process is started, the consolidated configuration will be output in the info.log,
+# providing a helpful reference for writing and customizing this file.
 
-apiServerConfig:
-  enable: false
-  httpPort: 8090
+# if the node is responsible for cluster bootstrap. NOTE: there must be EXACTLY ONE bootstrap node in cluster deployment
+bootstrap: true
 
-distWorkerConfig:
-  distWorkerClientConfig:
-    execPipelinePerStore: 1000
-    queryPipelinePerStore: 1000
-  dataEngineConfig:
-    type: rocksdb
-    gcIntervalInSec: 300
-  walEngineConfig:
-    type: rocksdb
-    gcIntervalInSec: 3600
-
-inboxStoreConfig:
-  inboxStoreClientConfig:
-    execPipelinePerStore: 1000
-    queryPipelinePerStore: 1000
-  dataEngineConfig:
-    type: rocksdb
-    gcIntervalInSec: 300
-    compactMinTombstoneKeys: 50000
-  walEngineConfig:
-    type: rocksdb
-    gcIntervalInSec: 3600
-
-retainStoreConfig:
-  retainStoreClientConfig:
-    execPipelinePerStore: 1000
-    queryPipelinePerStore: 1000
-  dataEngineConfig:
-    type: rocksdb
-    gcIntervalInSec: 300
-  walEngineConfig:
-    type: rocksdb
-    gcIntervalInSec: 3600
+# config for building BifroMQ cluster
+clusterConfig:
+  # The host address to bind for inter-member communication. If left blank, a site-local address will be used if available
+  host:
+  # This is the port for listening to cluster membership-related messages. If left blank, the operating system will help find an available one automatically.
+  # For seed nodes, it is recommended to specify an explicit port number to simplify the cluster building process.
+  port:
+  # Optionally using DNS to achieve cluster member address discovery
+  clusterDomainName:
+  # comma separated list of <ADDRESS>:<PORT> for joining the cluster
+  seedEndpoints:

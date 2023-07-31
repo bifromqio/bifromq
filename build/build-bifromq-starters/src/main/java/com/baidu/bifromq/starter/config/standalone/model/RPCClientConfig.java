@@ -11,18 +11,17 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
-import com.baidu.bifromq.starter.config.StarterConfig;
-import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class LocalSessionServerConfig {
-    private String serverId = UUID.randomUUID().toString();
-    private String bindAddress = StarterConfig.getHostFromSysProps();
-    private int port;
-    private ServerSSLContextConfig sslContextConfig = new ServerSSLContextConfig();
+public class RPCClientConfig {
+    private int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 3);
+    @JsonSetter(nulls = Nulls.SKIP)
+    private SSLContextConfig sslConfig;
 }

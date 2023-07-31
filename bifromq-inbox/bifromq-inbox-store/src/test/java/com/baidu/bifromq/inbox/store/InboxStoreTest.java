@@ -22,6 +22,7 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
@@ -142,6 +143,7 @@ abstract class InboxStoreTest {
                     .toString())
                 .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         }
+        KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
@@ -168,6 +170,7 @@ abstract class InboxStoreTest {
             .purgeDelay(Duration.ZERO)
             .clock(getClock())
             .storeOptions(options)
+            .balanceControllerOptions(controllerOptions)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)

@@ -11,24 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model.mqttserver.listener;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
-@JsonSubTypes({
-    @JsonSubTypes.Type(value = ClientSSLContextConfig.class, name = "client"),
-    @JsonSubTypes.Type(value = ServerSSLContextConfig.class, name = "server")
-})
-public abstract class SSLContextConfig {
-    private boolean enableSSL;
-    private boolean selfSigned;
-    private String certFile;
-    private String keyFile;
-    private String trustCertsFile;
+public class WSListenerConfig {
+    private boolean enable = true;
+    private String host;
+    private int port = 8080;
+    private String wsPath = "/mqtt";
 }

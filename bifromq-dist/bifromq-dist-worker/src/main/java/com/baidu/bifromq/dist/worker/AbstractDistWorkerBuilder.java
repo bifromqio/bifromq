@@ -124,8 +124,7 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
         return thisT();
     }
 
-    public T balanceControllerOptions(
-        KVRangeBalanceControllerOptions balanceControllerOptions) {
+    public T balanceControllerOptions(KVRangeBalanceControllerOptions balanceControllerOptions) {
         this.balanceControllerOptions = balanceControllerOptions;
         return thisT();
     }

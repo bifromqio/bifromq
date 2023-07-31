@@ -11,18 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
-import com.baidu.bifromq.starter.config.StarterConfig;
-import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class SessionDictServerConfig {
-    private String serverId = UUID.randomUUID().toString();
-    private String bindAddress = StarterConfig.getHostFromSysProps();
-    private int port;
-    private ServerSSLContextConfig sslContextConfig = new ServerSSLContextConfig();
+public class RPCConfig {
+    private int bossELGThreads = 1;
+    private int workerELGThreads = Runtime.getRuntime().availableProcessors();
+    private RPCClientConfig clientConfig = new RPCClientConfig();
+    private RPCServerConfig serverConfig = new RPCServerConfig();
 }

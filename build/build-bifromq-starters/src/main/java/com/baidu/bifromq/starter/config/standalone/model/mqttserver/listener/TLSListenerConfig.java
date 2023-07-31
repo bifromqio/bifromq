@@ -11,13 +11,17 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model.mqttserver.listener;
 
+import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class RPCClientConfig {
-    private ClientSSLContextConfig sslContextConfig = new ClientSSLContextConfig();
+public class TLSListenerConfig {
+    private boolean enable = false;
+    private String host;
+    private int port = 1884;
+    private ServerSSLContextConfig sslConfig;
 }

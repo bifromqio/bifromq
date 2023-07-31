@@ -27,6 +27,7 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M
     protected final Map<ChannelOption<?>, Object> options = new LinkedHashMap<>();
     protected final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<>();
     private final M serverBuilder;
+    protected String host;
     protected int port;
 
     ConnListenerBuilder(M builder) {
@@ -43,6 +44,12 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M
     @SuppressWarnings("unchecked")
     private C thisT() {
         return (C) this;
+    }
+
+    public C host(String host) {
+        Preconditions.checkArgument(host != null, "host can't be null");
+        this.host = host;
+        return thisT();
     }
 
     public C port(int port) {

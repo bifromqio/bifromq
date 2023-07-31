@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
@@ -46,6 +47,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
+    private final KVRangeBalanceController balanceController;
     private final ScheduledExecutorService jobExecutor;
     private final boolean jobExecutorOwner;
     private final Duration statsInterval;
@@ -60,6 +62,8 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
         coProcFactory = new InboxStoreCoProcFactory(builder.eventCollector, builder.clock, builder.purgeDelay);
+        balanceController =
+            new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
             String threadName = String.format("inbox-store[%s]-job-executor", builder.clusterId);
@@ -80,6 +84,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         if (status.compareAndSet(Status.INIT, Status.STARTING)) {
             log.info("Starting inbox store");
             storeServer().start();
+            balanceController.start(id());
             status.compareAndSet(Status.STARTING, Status.STARTED);
             scheduleGC();
             scheduleStats();
@@ -90,6 +95,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Shutting down inbox store");
+            balanceController.stop();
             storeServer().stop();
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.cancel(true);

@@ -11,19 +11,19 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import lombok.Getter;
 import lombok.Setter;
 
-@Getter
 @Setter
-public class StoreClientConfig {
-    private String clusterName;
-    @JsonAlias({"execPipelinePerStore", "execPipelinePerServer"}) // the execPipelinePerServer is deprecated
-    private int execPipelinePerStore = 5;
-    @JsonAlias({"queryPipelinePerStore", "queryPipelinePerServer"}) // the execPipelinePerServer is deprecated
-    private int queryPipelinePerStore = 5;
-    private ClientSSLContextConfig sslContextConfig;
+@Getter
+public class RPCServerConfig {
+    private String host;
+    private int port = 0;
+    private int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 3);
+    @JsonSetter(nulls = Nulls.SKIP)
+    private ServerSSLContextConfig sslConfig;
 }

@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
@@ -46,6 +47,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
+    private final KVRangeBalanceController rangeBalanceController;
     private final ScheduledExecutorService jobExecutor;
     private final boolean jobExecutorOwner;
     private final Duration statsInterval;
@@ -60,6 +62,8 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
         this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
         coProcFactory = new RetainStoreCoProcFactory(builder.clock);
+        rangeBalanceController =
+            new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
             String threadName = String.format("retain-store[%s]-job-executor", builder.clusterId);
@@ -81,6 +85,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
         if (status.compareAndSet(Status.INIT, Status.STARTING)) {
             log.info("Starting retain store");
             storeServer().start();
+            rangeBalanceController.start(id());
             status.compareAndSet(Status.STARTING, Status.STARTED);
             scheduleGC();
             scheduleStats();
@@ -91,6 +96,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping retain store");
+            rangeBalanceController.stop();
             log.debug("Stopping KVStore server");
             storeServer().stop();
             if (gcJob != null && !gcJob.isDone()) {
@@ -117,7 +123,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             return;
         }
         Iterator<KVRangeSetting> itr = storeClient.findByRange(FULL_RANGE)
-            .stream().filter(k -> k.equals(id())).iterator();
+            .stream().filter(k -> k.leader.equals(id())).iterator();
         List<CompletableFuture<?>> gcFutures = new ArrayList<>();
         while (itr.hasNext()) {
             KVRangeSetting leaderReplica = itr.next();

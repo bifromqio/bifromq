@@ -11,7 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
-public class InMemEngineConfig extends StorageEngineConfig {
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class ClusterConfig {
+    private String host;
+    private int port;
+    private String seedEndpoints;
+    private String clusterDomainName;
 }

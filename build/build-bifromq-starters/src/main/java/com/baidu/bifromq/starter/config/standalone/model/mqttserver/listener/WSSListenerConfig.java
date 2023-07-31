@@ -11,23 +11,18 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.balance.option;
+package com.baidu.bifromq.starter.config.standalone.model.mqttserver.listener;
 
-import java.util.ArrayList;
-import java.util.List;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.experimental.Accessors;
+import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
+import lombok.Getter;
+import lombok.Setter;
 
-@Accessors(chain = true)
-@Data
-@NoArgsConstructor
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
-@Builder(toBuilder = true)
-public class KVRangeBalanceControllerOptions {
-    private long scheduleIntervalInMs = 5000;
-    private List<String> balancers = new ArrayList<>();
+@Getter
+@Setter
+public class WSSListenerConfig {
+    private boolean enable = false;
+    private String host;
+    private int port = 8443;
+    private String wsPath = "/mqtt";
+    private ServerSSLContextConfig sslConfig;
 }
