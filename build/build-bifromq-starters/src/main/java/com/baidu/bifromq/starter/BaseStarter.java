@@ -13,16 +13,11 @@
 
 package com.baidu.bifromq.starter;
 
-import com.baidu.bifromq.basecluster.AgentHostOptions;
-import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.starter.config.StarterConfig;
-import com.baidu.bifromq.starter.config.model.AgentHostConfig;
-import com.baidu.bifromq.starter.config.model.ClientSSLContextConfig;
-import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
+import com.baidu.bifromq.starter.config.standalone.model.SSLContextConfig;
+import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
+import com.baidu.bifromq.starter.utils.ConfigUtil;
 import com.baidu.bifromq.starter.utils.ResourceUtil;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Strings;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ClassLoaderMetrics;
@@ -41,13 +36,8 @@ import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import java.io.File;
-import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.security.Provider;
 import java.security.Security;
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -64,37 +54,7 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
     protected abstract Class<T> configClass();
 
     protected T buildConfig(File configFile) {
-        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        try {
-            return mapper.readValue(configFile, configClass());
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to read starter config file: " + configFile, e);
-        }
-    }
-
-    protected IAgentHost initAgentHost(AgentHostConfig config) {
-        IAgentHost agentHost = IAgentHost.newInstance(AgentHostOptions.builder()
-            .addr(config.getHost())
-            .port(config.getPort())
-            .env(config.getEnv())
-            .clusterDomainName(config.getClusterDomainName())
-            .serverSslContext(config.isEnableSSL() ? buildServerSslContext(config.serverSSLContextConfig()) : null)
-            .clientSslContext(config.isEnableSSL() ? buildClientSslContext(config.clientSSLContextConfig()) : null)
-            .build());
-        agentHost.start();
-        if (!Strings.isNullOrEmpty(config.getSeedEndpoints())) {
-            log.debug("AgentHost join seedEndpoints: {}", config.getSeedEndpoints());
-            agentHost.join(convertSeedEndpoints(config.getSeedEndpoints()))
-                .whenComplete((v, e) -> {
-                    if (e != null) {
-                        log.warn("AgentHost failed to join seedEndpoint: {}", config.getSeedEndpoints(), e);
-                    } else {
-                        log.info("AgentHost joined seedEndpoint: {}", config.getSeedEndpoints());
-                    }
-                });
-        }
-        return agentHost;
+        return ConfigUtil.build(configFile, configClass());
     }
 
     protected SslContext buildServerSslContext(ServerSSLContextConfig config) {
@@ -118,7 +78,7 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
         }
     }
 
-    protected SslContext buildClientSslContext(ClientSSLContextConfig config) {
+    protected SslContext buildClientSslContext(SSLContextConfig config) {
         try {
             SslProvider sslProvider = defaultSslProvider();
             SslContextBuilder sslCtxBuilder = SslContextBuilder
@@ -163,14 +123,6 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
             return providers[0];
         }
         return null;
-    }
-
-    private Set<InetSocketAddress> convertSeedEndpoints(String endpoints) {
-        return Arrays.stream(endpoints.split(","))
-            .map(endpoint -> {
-                String[] hostPort = endpoint.trim().split(":");
-                return new InetSocketAddress(hostPort[0], Integer.parseInt(hostPort[1]));
-            }).collect(Collectors.toSet());
     }
 
     public static File loadFromConfDir(String fileName) {

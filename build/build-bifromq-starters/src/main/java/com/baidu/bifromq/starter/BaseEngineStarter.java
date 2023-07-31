@@ -17,9 +17,9 @@ import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.starter.config.StarterConfig;
-import com.baidu.bifromq.starter.config.model.InMemEngineConfig;
-import com.baidu.bifromq.starter.config.model.RocksDBEngineConfig;
-import com.baidu.bifromq.starter.config.model.StorageEngineConfig;
+import com.baidu.bifromq.starter.config.standalone.model.InMemEngineConfig;
+import com.baidu.bifromq.starter.config.standalone.model.RocksDBEngineConfig;
+import com.baidu.bifromq.starter.config.standalone.model.StorageEngineConfig;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,7 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
     public static final String USER_DIR_PROP = "user.dir";
     public static final String DATA_DIR_PROP = "DATA_DIR";
 
-    protected KVEngineConfigurator buildEngineConf(StorageEngineConfig config, String name) {
+    protected KVEngineConfigurator<?> buildEngineConf(StorageEngineConfig config, String name) {
         if (config instanceof InMemEngineConfig) {
             return InMemoryKVEngineConfigurator.builder()
                 .gcInterval(config.getGcIntervalInSec())

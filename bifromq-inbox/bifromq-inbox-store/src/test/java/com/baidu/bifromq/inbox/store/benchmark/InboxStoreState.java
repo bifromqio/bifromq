@@ -26,6 +26,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -135,6 +136,7 @@ abstract class InboxStoreState {
             .agentHost(agentHost)
             .storeClient(storeClient)
             .storeOptions(options)
+            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .eventCollector(eventCollector)
             .purgeDelay(Duration.ZERO)
             .clock(Clock.systemUTC())

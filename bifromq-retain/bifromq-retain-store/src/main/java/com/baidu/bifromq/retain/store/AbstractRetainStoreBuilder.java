@@ -16,6 +16,7 @@ package com.baidu.bifromq.retain.store;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import java.time.Clock;
@@ -33,6 +34,7 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
     ICRDTService crdtService;
     IBaseKVStoreClient storeClient;
     KVRangeStoreOptions storeOptions;
+    KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     Executor queryExecutor;
     Executor mutationExecutor;
     ScheduledExecutorService tickTaskExecutor;
@@ -89,6 +91,11 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
 
     public T storeOptions(KVRangeStoreOptions storeOptions) {
         this.storeOptions = storeOptions;
+        return thisT();
+    }
+
+    public T balanceControllerOptions(KVRangeBalanceControllerOptions controllerOptions) {
+        this.balanceControllerOptions = controllerOptions;
         return thisT();
     }
 

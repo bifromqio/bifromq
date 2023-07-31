@@ -14,10 +14,4 @@
 package com.baidu.bifromq.starter.config;
 
 public interface StarterConfig {
-
-    String BIND_ADDR = "BIND_ADDR";
-
-    static String getHostFromSysProps() {
-        return System.getProperty(BIND_ADDR);
-    }
 }

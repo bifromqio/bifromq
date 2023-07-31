@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
-public class ClientSSLContextConfig extends SSLContextConfig {
+public class InMemEngineConfig extends StorageEngineConfig {
 }

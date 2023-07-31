@@ -11,14 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model.mqttserver.listener;
 
-import io.netty.handler.ssl.ClientAuth;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class ServerSSLContextConfig extends SSLContextConfig {
-    private String clientAuth = ClientAuth.OPTIONAL.name();
+public class WSListenerConfig {
+    private boolean enable = true;
+    private String host;
+    private int port = 8080;
+    private String wsPath = "/mqtt";
 }

@@ -50,6 +50,7 @@ import org.mockito.Mock;
 
 public class KVRangeBalanceControllerTest {
 
+    private static final String CLUSTER_ID = "test_cluster";
     private static final String LOCAL_STORE_ID = "localStoreId";
 
     @Mock
@@ -62,6 +63,7 @@ public class KVRangeBalanceControllerTest {
     @BeforeMethod
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
+        when(storeClient.clusterId()).thenReturn(CLUSTER_ID);
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         File optFile =

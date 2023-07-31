@@ -44,7 +44,6 @@ import lombok.extern.slf4j.Slf4j;
 abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implements IMQTTBroker {
     private static final String MQTT_SUBPROTOCOL_CSV_LIST = "mqtt, mqttv3.1, mqttv3.1.1";
     private final T builder;
-    private final String mqttHost;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
     private final ConnectionRateLimitHandler connRateLimitHandler;
@@ -57,7 +56,6 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
 
     public AbstractMQTTBroker(T builder) {
         this.builder = builder;
-        this.mqttHost = builder.mqttHost;
         this.bossGroup = builder.mqttBossGroup;
         this.workerGroup = builder.mqttWorkerGroup;
         connRateLimitHandler = new ConnectionRateLimitHandler(builder.connectRateLimit);
@@ -246,6 +244,6 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         builder.options.forEach((k, v) -> b.option((ChannelOption<? super Object>) k, v));
         builder.childOptions.forEach((k, v) -> b.childOption((ChannelOption<? super Object>) k, v));
         // Bind and start to accept incoming connections.
-        return b.bind(mqttHost, builder.port);
+        return b.bind(builder.host, builder.port);
     }
 }

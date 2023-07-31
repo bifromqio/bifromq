@@ -22,6 +22,7 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
@@ -147,6 +148,7 @@ public class RetainStoreTest {
             .storeClient(storeClient)
             .clock(getClock())
             .storeOptions(options)
+            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)

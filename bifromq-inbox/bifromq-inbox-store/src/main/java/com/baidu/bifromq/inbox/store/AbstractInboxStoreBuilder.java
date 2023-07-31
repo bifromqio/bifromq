@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.store;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -31,6 +32,7 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     IBaseKVStoreClient storeClient;
     IEventCollector eventCollector;
     KVRangeStoreOptions storeOptions;
+    KVRangeBalanceControllerOptions balanceControllerOptions;
     Executor queryExecutor;
     Executor mutationExecutor;
     ScheduledExecutorService tickTaskExecutor;
@@ -77,6 +79,11 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
 
     public T storeOptions(KVRangeStoreOptions storeOptions) {
         this.storeOptions = storeOptions;
+        return thisT();
+    }
+
+    public T balanceControllerOptions(KVRangeBalanceControllerOptions controllerOptions) {
+        this.balanceControllerOptions = controllerOptions;
         return thisT();
     }
 

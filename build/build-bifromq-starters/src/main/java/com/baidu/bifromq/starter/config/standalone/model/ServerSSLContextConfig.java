@@ -11,15 +11,17 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
+import io.netty.handler.ssl.ClientAuth;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class RocksDBEngineConfig extends StorageEngineConfig {
-    private String dataPathRoot = "";
-    private int compactMinTombstoneKeys = 50000;
-    private double compactTombstonePercent = 0.3; // 30%
+public class ServerSSLContextConfig {
+    private String certFile;
+    private String keyFile;
+    private String trustCertsFile;
+    private String clientAuth = ClientAuth.OPTIONAL.name();
 }

@@ -11,13 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.model;
+package com.baidu.bifromq.starter.config.standalone.model;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class RPCClientConfig {
-    private ClientSSLContextConfig sslContextConfig = new ClientSSLContextConfig();
+public class SSLContextConfig {
+    private String certFile;
+    private String keyFile;
+    private String trustCertsFile;
 }
