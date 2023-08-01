@@ -94,6 +94,7 @@ class FanoutExecutorGroup {
                     idx += phaseTwoExecutorGroup.length;
                 }
                 List<Runnable> fanoutTasks = fanoutTasksPerIdx.get(idx);
+                log.info("Add Send Task: route inboxId is {}", route.subInfo.getInboxId());
                 fanoutTasks.add(() -> send(route, senders, msgPackWrapper, senderMsgPackMap));
             });
             for (int i = 0; i < phaseTwoExecutorGroup.length; i++) {
@@ -128,8 +129,10 @@ class FanoutExecutorGroup {
         String delivererKey = matched.delivererKey;
         SubInfo sub = matched.subInfo;
         DeliveryRequest request = new DeliveryRequest(sub, subBrokerId, delivererKey, msgPack);
+        log.info("send msgPack to {}", sub.getInboxId());
         scheduler.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
+                log.error("send msgPack error: ", e);
                 eventCollector.report(getLocal(DeliverError.class)
                     .brokerId(subBrokerId)
                     .delivererKey(delivererKey)

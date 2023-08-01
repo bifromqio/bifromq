@@ -167,17 +167,20 @@ public class SubscriptionCache {
         Timer.Sample sample = Timer.start();
         return tenantCache.get(topic.tenantId).get(topic)
             .thenApply(matchResult -> {
+                System.out.println("matchResult routes size: " + matchResult.routes.size() + ", tenantVer: " + matchResult.tenantVer);
                 sample.stop(externalMatchTimer);
                 Map<NormalMatching, Set<ClientInfo>> routesMap = new HashMap<>();
                 for (Matching matching : matchResult.routes) {
                     NormalMatching matchedInbox;
                     if (matching instanceof NormalMatching) {
                         matchedInbox = (NormalMatching) matching;
+                        System.out.println("NormalMatch: inbox is " + matchedInbox.subInfo.getInboxId() + ", topicfilter is " + matchedInbox.originalTopicFilter());
                         // track load
                         loadEstimator.track(matchedInbox.key, LoadUnits.KEY_CACHE_HIT);
                         routesMap.put(matchedInbox, senders);
                     } else {
                         GroupMatching groupMatching = (GroupMatching) matching;
+                        System.out.println("GroupMatch: inboxs is " + groupMatching.inboxList.stream().map(match -> match.subInfo.getInboxId()).reduce((re, inbox) -> re + ", " + inbox).orElse("") + ", topicfilter is " + groupMatching.originalTopicFilter());
                         // track load
                         loadEstimator.track(groupMatching.key, LoadUnits.KEY_CACHE_HIT);
                         if (groupMatching.ordered) {
@@ -193,7 +196,9 @@ public class SubscriptionCache {
                                                 (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
                                                 Comparator.comparing(a -> a.scopedInboxId));
                                         groupMatching.inboxList.forEach(hash::add);
-                                        return hash.get(k);
+                                        NormalMatching matched = hash.get(k);
+                                        System.out.println("Create hash and get matching, inboxId = " + matched.subInfo.getInboxId());
+                                        return matched;
                                     });
                                 routesMap.computeIfAbsent(matchedInbox, k -> new HashSet<>()).add(sender);
                             }
@@ -204,6 +209,7 @@ public class SubscriptionCache {
                         }
                     }
                 }
+                System.out.println("matched inboxIds: " + routesMap.keySet().stream().map(match -> match.subInfo.getInboxId()).reduce((re, inbox) -> re + ", " + inbox).orElse(""));
                 return routesMap;
             });
     }
@@ -232,6 +238,7 @@ public class SubscriptionCache {
 
     private Map<ScopedTopic, MatchResult> match(String tenantId, Set<String> topics, Range matchRecordRange) {
         long tenantVer = tenantVerCache.get(tenantId).get();
+        System.out.println("get tenantVer: " + tenantVer);
         return match(tenantId, topics, matchRecordRange, tenantVer);
     }
 

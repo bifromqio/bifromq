@@ -31,8 +31,7 @@ public class GCTest extends RetainStoreTest {
     private Clock clock;
 
     @BeforeMethod(alwaysRun = true)
-    public void setup() throws IOException {
-        super.setup();
+    public void reset() {
         when(clock.millis()).thenReturn(0L);
     }
 
@@ -77,6 +76,8 @@ public class GCTest extends RetainStoreTest {
         matchReply = requestMatch(tenantId, topic2, 10);
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message2);
+
+        clearMessage(tenantId, topic2);
     }
 
     @Test(groups = "integration")
@@ -120,6 +121,9 @@ public class GCTest extends RetainStoreTest {
         // no room
         assertEquals(requestRetain(tenantId, 2, message("/d", "abc")).getResult(),
             RetainCoProcReply.Result.ERROR);
+
+        clearMessage(tenantId, topic2);
+        clearMessage(tenantId, "/c");
     }
 
     @Test(groups = "integration")
@@ -147,6 +151,9 @@ public class GCTest extends RetainStoreTest {
         // now message1 expired
         assertEquals(requestRetain(tenantId, 2,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
+
+        clearMessage(tenantId, "/c");
+        clearMessage(tenantId, "/d");
     }
 
     @Test(groups = "integration")
@@ -166,6 +173,8 @@ public class GCTest extends RetainStoreTest {
         assertEquals(requestRetain(tenantId, 1,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
         assertEquals(requestMatch(tenantId, topic, 10).getMessagesCount(), 0);
+
+        clearMessage(tenantId, "/d");
     }
 
     @Test(groups = "integration")
@@ -184,5 +193,7 @@ public class GCTest extends RetainStoreTest {
 
         assertEquals(requestRetain(tenantId, 1,
             message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
+
+        clearMessage(tenantId, "/d");
     }
 }

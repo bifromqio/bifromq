@@ -14,6 +14,8 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.reset;
 import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -27,16 +29,24 @@ import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Kicked;
 import java.util.concurrent.CompletableFuture;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
+public class MQTTKickTest {
+    private final MQTTTest mqttTest = MQTTTest.getInstance();
+    private final String tenantId = "testKickTraffic";
 
-public class MQTTKickTest extends MQTTTest {
+    @AfterClass(alwaysRun = true)
+    public void resetMocks() {
+        reset(mqttTest.authProvider);
+        clearInvocations(mqttTest.eventCollector);
+    }
+
     @Test(groups = "integration")
     public void testKick() {
-        String tenantId = "ashdsha";
         String deviceKey = "testDevice";
         String clientId = "testClient1";
 
-        when(authProvider.auth(any(MQTT3AuthData.class)))
+        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
@@ -49,17 +59,17 @@ public class MQTTKickTest extends MQTTTest {
         connOpts.setCleanSession(true);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestClient client1 = new MqttTestClient(brokerURI, clientId);
+        MqttTestClient client1 = new MqttTestClient(MQTTTest.brokerURI, clientId);
         client1.connect(connOpts);
         assertTrue(client1.isConnected());
 
-        MqttTestClient client2 = new MqttTestClient(brokerURI, clientId);
+        MqttTestClient client2 = new MqttTestClient(MQTTTest.brokerURI, clientId);
         client2.connect(connOpts);
         assertTrue(client2.isConnected());
         // waiting client1 to be kicked
         await().until(() -> !client1.isConnected());
 
-        verify(eventCollector).report(argThat(event -> event instanceof Kicked));
+        verify(mqttTest.eventCollector).report(argThat(event -> event instanceof Kicked));
 
         client2.disconnect();
         client1.close();

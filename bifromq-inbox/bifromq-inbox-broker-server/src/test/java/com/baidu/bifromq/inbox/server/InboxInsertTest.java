@@ -85,6 +85,7 @@ public class InboxInsertTest extends InboxServiceTest {
 
         reader.close();
         writer.close();
+        inboxReaderClient.delete(reqId, inboxId, clientInfo).join();
     }
 
     @Test(groups = "integration")
@@ -149,5 +150,7 @@ public class InboxInsertTest extends InboxServiceTest {
 
         reader.close();
         writer.close();
+
+        inboxReaderClient.delete(reqId, inboxId, clientInfo).join();
     }
 }

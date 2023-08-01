@@ -64,11 +64,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.PluginManager;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterSuite;
 
 @Slf4j
-abstract class MQTTTest {
+class MQTTTest {
     protected static final String brokerURI = "tcp://127.0.0.1:1883";
     @Mock
     protected IAuthProvider authProvider;
@@ -109,9 +108,22 @@ abstract class MQTTTest {
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
 
-    @BeforeMethod(groups = "integration")
-    public void setup() {
+    private static MQTTTest singleInstance;
+
+    public static MQTTTest getInstance() {
+        if (singleInstance == null) {
+            singleInstance = new MQTTTest();
+            singleInstance.setup();
+        }
+        return singleInstance;
+    }
+
+    private MQTTTest() {
+    }
+
+    private void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        System.setProperty("distservice_topic_match_expiry_seconds", "1");
         pluginMgr = new DefaultPluginManager();
         ioExecutor = newCachedThreadPool(EnvProvider.INSTANCE.newThreadFactory("MQTTTestExecutor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
@@ -309,8 +321,14 @@ abstract class MQTTTest {
             });
     }
 
-    @AfterMethod(groups = "integration")
-    public void teardown() throws Exception {
+    @AfterSuite(groups = "integration")
+    public static void teardown() throws Exception {
+        if (singleInstance != null) {
+            singleInstance.shutdown();
+        }
+    }
+
+    public void shutdown() throws Exception {
         log.info("Start to tearing down");
         mqttBroker.shutdown();
         log.info("Mqtt broker shut down");
@@ -360,5 +378,7 @@ abstract class MQTTTest {
         log.info("Shutdown bg task executor");
         bgTaskExecutor.shutdownNow();
         closeable.close();
+
+        singleInstance = null;
     }
 }

@@ -24,12 +24,14 @@ import org.testng.annotations.Test;
 
 public class InboxCreateTest extends InboxServiceTest {
 
+    private final String tenantId = "trafficA";
+    private final String inboxId = "inbox1";
+    private final long reqId = System.nanoTime();
+    private ClientInfo clientInfo;
+
     @Test(groups = "integration")
     public void create() {
-        String tenantId = "trafficA";
-        String inboxId = "inbox1";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        long reqId = System.nanoTime();
+        clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         assertFalse(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
 
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
@@ -39,17 +41,8 @@ public class InboxCreateTest extends InboxServiceTest {
         assertTrue(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
     }
 
-    @Test(groups = "integration")
+    @Test(groups = "integration", dependsOnMethods = "create")
     public void delete() {
-        String tenantId = "trafficA";
-        String inboxId = "inbox1";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        long reqId = System.nanoTime();
-
-        CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
-        assertEquals(createInboxReply.getReqId(), reqId);
-        assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
-
         DeleteInboxReply deleteInboxReply = inboxReaderClient.delete(reqId, inboxId, clientInfo).join();
         assertEquals(deleteInboxReply.getReqId(), reqId);
         assertEquals(deleteInboxReply.getResult(), DeleteInboxReply.Result.OK);

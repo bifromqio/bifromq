@@ -82,8 +82,8 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 
 @Slf4j
 abstract class InboxStoreTest {
@@ -108,7 +108,7 @@ abstract class InboxStoreTest {
 
     private AutoCloseable closeable;
 
-    @BeforeMethod(groups = "integration")
+    @BeforeClass(groups = "integration")
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
         dbRootDir = Files.createTempDirectory("");
@@ -178,26 +178,28 @@ abstract class InboxStoreTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod(groups = "integration")
+    @AfterClass(groups = "integration")
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();
         testStore.stop();
-        clientCrdtService.stop();
-        serverCrdtService.stop();
-        agentHost.shutdown();
-        try {
-            Files.walk(dbRootDir)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-        } catch (IOException e) {
-            log.error("Failed to delete db root dir", e);
-        }
-        queryExecutor.shutdown();
-        mutationExecutor.shutdown();
-        tickTaskExecutor.shutdown();
-        bgTaskExecutor.shutdown();
+        new Thread(() -> {
+            clientCrdtService.stop();
+            serverCrdtService.stop();
+            agentHost.shutdown();
+            try {
+                Files.walk(dbRootDir)
+                        .sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+            } catch (IOException e) {
+                log.error("Failed to delete db root dir", e);
+            }
+            queryExecutor.shutdown();
+            mutationExecutor.shutdown();
+            tickTaskExecutor.shutdown();
+            bgTaskExecutor.shutdown();
+        }).start();
         closeable.close();
     }
 

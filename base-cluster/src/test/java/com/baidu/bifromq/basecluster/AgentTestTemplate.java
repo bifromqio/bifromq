@@ -17,25 +17,25 @@ import com.baidu.bifromq.basecluster.annotation.StoreCfg;
 import com.baidu.bifromq.basecluster.annotation.StoreCfgs;
 import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.store.CRDTStoreOptions;
-import io.micrometer.core.instrument.Clock;
-import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
-import io.micrometer.core.instrument.logging.LoggingRegistryConfig;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class AgentTestTemplate {
     protected AgentTestCluster storeMgr;
+    private static final AtomicInteger nextPort = new AtomicInteger(19876);
 
     AgentTestTemplate() {
     }
 
     public void createClusterByAnnotation(Method testMethod) {
+        log.info("createClusterByAnnotation");
         StoreCfgs storeCfgs = testMethod.getAnnotation(StoreCfgs.class);
         StoreCfg storeCfg = testMethod.getAnnotation(StoreCfg.class);
         String seedStoreId = null;
@@ -70,14 +70,15 @@ public abstract class AgentTestTemplate {
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");
-            storeMgr.shutdown();
+            // run in a separate thread to avoid blocking the test thread
+            new Thread(() -> storeMgr.shutdown()).start();
         }
     }
 
     private AgentHostOptions build(StoreCfg cfg) {
         return AgentHostOptions.builder()
             .addr(cfg.bindAddr())
-            .port(cfg.bindPort())
+            .port(nextPort.getAndIncrement())
             .udpPacketLimit(1400)
             .maxChannelsPerHost(1)
             .joinRetryInSec(cfg.joinRetryInSec())

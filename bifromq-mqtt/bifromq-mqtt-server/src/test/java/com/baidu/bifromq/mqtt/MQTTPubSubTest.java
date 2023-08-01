@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt;
 
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.reset;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -37,38 +39,46 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class MQTTPubSubTest extends MQTTTest {
-    private String tenantId = "ashdsha";
-    private String deviceKey = "testDevice";
+public class MQTTPubSubTest {
+    private final MQTTTest mqttTest = MQTTTest.getInstance();
+    private final String tenantId = "testPubSubTraffic";
+    private final String deviceKey = "testDevice";
 
-    @BeforeMethod(alwaysRun = true)
-    public void setup() {
-        System.setProperty("distservice_topic_match_expiry_seconds", "1");
-        super.setup();
-        when(authProvider.auth(any(MQTT3AuthData.class)))
+    @BeforeClass(alwaysRun = true)
+    public void mock() {
+        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
             .thenReturn(CompletableFuture.completedFuture(true));
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
             log.debug("event: {}", event);
             return null;
-        }).when(eventCollector).report(any(Event.class));
+        }).when(mqttTest.eventCollector).report(any(Event.class));
+    }
+
+    @AfterClass(alwaysRun = true)
+    public void resetMocks() {
+        reset(mqttTest.authProvider, mqttTest.eventCollector);
+        clearInvocations(mqttTest.eventCollector);
     }
 
     @Test(groups = "integration")
@@ -101,7 +111,7 @@ public class MQTTPubSubTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void multiTopicPubSubCleanSessionTrueQoS1Basic() {
-        String[] topics = new String[] {"/QoS1/1", "/QoS1/2", "/QoS1/3", "/QoS1/4"};
+        String[] topics = new String[] {"/QoS1/5", "/QoS1/6", "/QoS1/7", "/QoS1/8"};
         String[] topicFilters = new String[] {"#"};
         MqttMessage[] mqttMessages = new MqttMessage[topics.length];
         for (int index = 0; index < topics.length; index++) {
@@ -115,7 +125,7 @@ public class MQTTPubSubTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void multiTopicPubSubCleanSessionTrueQoS2Basic() {
-        String[] topics = new String[] {"/QoS2/1", "/QoS2/2", "/QoS2/3", "/QoS2/4"};
+        String[] topics = new String[] {"/QoS2/5", "/QoS2/6", "/QoS2/7", "/QoS2/8"};
         String[] topicFilters = new String[] {"#"};
         MqttMessage[] mqttMessages = new MqttMessage[topics.length];
         for (int index = 0; index < topics.length; index++) {
@@ -143,7 +153,7 @@ public class MQTTPubSubTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void singleTopicPubSubCleanSessionTrueMixQoSBasic() {
-        String[] topics = new String[] {"/MixQoS/1", "/MixQoS/1", "/MixQoS/1", "/MixQoS/1"};
+        String[] topics = new String[] {"/MixQoS/5", "/MixQoS/6", "/MixQoS/7", "/MixQoS/8"};
         String[] topicFilters = new String[] {"#"};
         MqttMessage[] mqttMessages = new MqttMessage[topics.length];
         for (int index = 0; index < topics.length; index++) {
@@ -163,16 +173,16 @@ public class MQTTPubSubTest extends MQTTTest {
         connOpts.setCleanSession(true);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestAsyncClient pubClient = new MqttTestAsyncClient(brokerURI, MqttClient.generateClientId());
+        MqttTestAsyncClient pubClient = new MqttTestAsyncClient(MQTTTest.brokerURI, MqttClient.generateClientId());
         pubClient.connect(connOpts);
 
-        MqttTestClient subClient = new MqttTestClient(brokerURI, MqttClient.generateClientId());
+        MqttTestClient subClient = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
         subClient.connect(connOpts);
         Observable<MqttMsg> topicSub = subClient.subscribe(topic, 1);
 
         // publish qos0 and quick disconnect
         CompletableFuture<Boolean> checkFuture = new CompletableFuture<>();
-        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class))).thenReturn(checkFuture);
+        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class))).thenReturn(checkFuture);
         pubClient.publish(topic, 0, ByteString.copyFromUtf8("hello"), false);
         pubClient.disconnect().join();
         pubClient.close();
@@ -250,7 +260,7 @@ public class MQTTPubSubTest extends MQTTTest {
         subClientOpts.setUserName(tenantId + "/subClient");
 
         // make a offline subscription
-        MqttTestClient subClient = new MqttTestClient(brokerURI, MqttClient.generateClientId());
+        MqttTestClient subClient = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
         subClient.connect(subClientOpts);
         subClient.subscribe(topic, subQoS);
         subClient.disconnect();
@@ -258,7 +268,7 @@ public class MQTTPubSubTest extends MQTTTest {
         MqttConnectOptions pubClientOpts = new MqttConnectOptions();
         pubClientOpts.setCleanSession(true);
         pubClientOpts.setUserName(tenantId + "/pubClient");
-        MqttTestClient pubClient = new MqttTestClient(brokerURI, MqttClient.generateClientId());
+        MqttTestClient pubClient = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
         pubClient.connect(pubClientOpts);
         pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
 
@@ -286,7 +296,7 @@ public class MQTTPubSubTest extends MQTTTest {
         connOpts.setCleanSession(cleanSession);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestClient client = new MqttTestClient(brokerURI, MqttClient.generateClientId());
+        MqttTestClient client = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
         client.connect(connOpts);
         Observable<MqttMsg> topicSub = client.subscribe(topicFilter, subQoS);
         client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
@@ -309,7 +319,7 @@ public class MQTTPubSubTest extends MQTTTest {
         connOpts.setCleanSession(cleanSession);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestClient client = new MqttTestClient(brokerURI, MqttClient.generateClientId());
+        MqttTestClient client = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
         client.connect(connOpts);
         client.messageArrived().subscribe(mqttMsg -> {
             msgList.add(mqttMsg);
@@ -336,7 +346,7 @@ public class MQTTPubSubTest extends MQTTTest {
             }
         }
         try {
-            latch.await();
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
             assertEquals(responseList.size(), msgList.size());
             assertTrue(checkMsgIdConsecutive(msgList, responseList));
             for (int index = 0; index < responseList.size(); index++) {
@@ -352,7 +362,7 @@ public class MQTTPubSubTest extends MQTTTest {
                 assertFalse(mqttMsg.isDup);
                 assertFalse(mqttMsg.isRetain);
                 if (topics.length == 1) {
-                    assertTrue(mqttMsg.payload.toStringUtf8().equals("hello-" + index));
+                    assertEquals(mqttMsg.payload.toStringUtf8(), "hello-" + index);
                 } else {
                     assertTrue(mqttMsg.payload.toStringUtf8().contains("hello"));
                 }

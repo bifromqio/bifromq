@@ -98,6 +98,7 @@ public class DeliveryScheduler
             @Override
             public CompletableFuture<Void> execute() {
                 msgCountSummary.record(msgCount.get());
+                log.info("Deliver {} messages to {} subscribers", msgCount.get(), batch.size());
                 return deliverer.deliver(batch.entrySet().stream()
                         .map(e -> new DeliveryPack(e.getKey().messagePack, e.getValue()))
                         .collect(Collectors.toList()))

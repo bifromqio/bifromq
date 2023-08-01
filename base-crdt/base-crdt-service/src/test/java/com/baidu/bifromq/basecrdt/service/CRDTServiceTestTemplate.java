@@ -20,6 +20,8 @@ import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfg;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfgs;
 import java.lang.reflect.Method;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -27,6 +29,7 @@ import org.testng.annotations.BeforeMethod;
 @Slf4j
 public class CRDTServiceTestTemplate {
     protected CRDTServiceTestCluster testCluster;
+    private static final AtomicInteger nextPort = new AtomicInteger(27645);
 
     public void createClusterByAnnotation(Method testMethod) {
         ServiceCfgs serviceCfgs = testMethod.getAnnotation(ServiceCfgs.class);
@@ -69,7 +72,7 @@ public class CRDTServiceTestTemplate {
     public void teardown() {
         if (testCluster != null) {
             log.info("Shutting down test cluster");
-            testCluster.shutdown();
+            new Thread(() -> testCluster.shutdown()).start();
         }
     }
 
@@ -100,6 +103,6 @@ public class CRDTServiceTestTemplate {
         // expose more options
         return new AgentHostOptions()
             .addr(cfg.bindAddr())
-            .port(cfg.bindPort());
+            .port(nextPort.getAndIncrement());
     }
 }

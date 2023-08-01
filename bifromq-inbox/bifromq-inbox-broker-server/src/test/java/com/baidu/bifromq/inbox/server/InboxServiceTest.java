@@ -29,12 +29,7 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,17 +37,11 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 
 @Slf4j
 public abstract class InboxServiceTest {
-    private static final String DB_NAME = "testDB";
-    private static final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
-
-    private static final String DB_WAL_NAME = "testWAL";
-    private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-
     protected IInboxReaderClient inboxReaderClient;
     protected IInboxBrokerClient inboxBrokerClient;
     private IAgentHost agentHost;
@@ -75,14 +64,9 @@ public abstract class InboxServiceTest {
     private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
-    private Path dbRootDir;
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void setup() {
-        try {
-            dbRootDir = Files.createTempDirectory("");
-        } catch (IOException e) {
-        }
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -103,18 +87,6 @@ public abstract class InboxServiceTest {
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
-//        kvRangeStoreOptions.setDataEngineConfigurator(new RocksDBKVEngineConfigurator());
-//        String uuid = UUID.randomUUID().toString();
-//        ((RocksDBKVEngineConfigurator) kvRangeStoreOptions.getDataEngineConfigurator())
-//                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
-//                        .toString())
-//                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
-//        kvRangeStoreOptions.setWalEngineConfigurator(new RocksDBKVEngineConfigurator());
-//        ((RocksDBKVEngineConfigurator) kvRangeStoreOptions
-//                .getWalEngineConfigurator())
-//                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
-//                        .toString())
-//                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
@@ -154,7 +126,7 @@ public abstract class InboxServiceTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void teardown() {
         log.info("Finish testing, and tearing down");
         inboxBrokerClient.close();
@@ -162,20 +134,14 @@ public abstract class InboxServiceTest {
         inboxServer.shutdown();
         inboxStoreClient.stop();
         inboxStore.stop();
-        clientCrdtService.stop();
-        serverCrdtService.stop();
-        agentHost.shutdown();
-        try {
-            Files.walk(dbRootDir)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-        } catch (IOException e) {
-            log.error("Failed to delete db root dir", e);
-        }
-        queryExecutor.shutdown();
-        mutationExecutor.shutdown();
-        tickTaskExecutor.shutdown();
-        bgTaskExecutor.shutdown();
+        new Thread(() -> {
+            clientCrdtService.stop();
+            serverCrdtService.stop();
+            agentHost.shutdown();
+            queryExecutor.shutdown();
+            mutationExecutor.shutdown();
+            tickTaskExecutor.shutdown();
+            bgTaskExecutor.shutdown();
+        }).start();
     }
 }

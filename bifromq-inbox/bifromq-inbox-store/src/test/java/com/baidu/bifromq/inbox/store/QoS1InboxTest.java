@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,10 +30,10 @@ import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.io.IOException;
 import java.time.Clock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -52,9 +53,13 @@ public class QoS1InboxTest extends InboxStoreTest {
     private Clock clock;
 
     @BeforeMethod(groups = "integration")
-    public void setup() throws IOException {
-        super.setup();
+    public void resetClock() {
         when(clock.millis()).thenReturn(0L);
+    }
+
+    @AfterMethod(groups = "integration")
+    public void clearInbox() {
+        requestDelete(tenantId, inboxId);
     }
 
     @Override
@@ -254,6 +259,7 @@ public class QoS1InboxTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void insertDropOldest() {
+        clearInvocations(eventCollector);
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
         TopicMessagePack.PublisherPack msg0 = message(AT_LEAST_ONCE, "hello");
@@ -300,6 +306,7 @@ public class QoS1InboxTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void insertDropYoungest() {
+        clearInvocations(eventCollector);
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
 
         TopicMessagePack.PublisherPack msg0 = message(AT_LEAST_ONCE, "hello");

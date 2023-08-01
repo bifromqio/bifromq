@@ -33,13 +33,23 @@ import com.google.protobuf.ByteString;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+
+import com.sun.source.tree.ModuleTree;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class DistQoS2Test extends DistWorkerTest {
+    @AfterMethod(groups = "integration")
+    public void clearMock() {
+        Mockito.reset(writer1, writer2, writer3);
+        Mockito.reset(distClient);
+    }
+
     @Test(groups = "integration")
     public void succeedWithNoSub() {
         String topic = "/a/b/c";
@@ -125,5 +135,9 @@ public class DistQoS2Test extends DistWorkerTest {
             assertEquals(msg.getPubQoS(), EXACTLY_ONCE);
             assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
         }
+
+        deleteMatchRecord(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
+        deleteMatchRecord(tenantA, "/#", MqttBroker, "inbox1", "server1");
+        deleteMatchRecord(tenantA, "/#", MqttBroker, "inbox2", "server2");
     }
 }

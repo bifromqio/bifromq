@@ -65,7 +65,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 
 @Slf4j
@@ -90,7 +92,7 @@ public class RetainStoreTest {
     private Path dbRootDir;
     private AutoCloseable closeable;
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
         dbRootDir = Files.createTempDirectory("");
@@ -157,7 +159,7 @@ public class RetainStoreTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
         storeClient.stop();
@@ -275,6 +277,10 @@ public class RetainStoreTest {
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
+    }
+
+    protected void clearMessage(String tenantId, String topic) {
+        requestRetain(tenantId, 10, message(topic, ""));
     }
 
     protected TopicMessage message(String topic, String payload) {
