@@ -51,11 +51,6 @@ public class CRDTStoreTestCluster {
     private final Map<Long, ICRDTStore> storeMap = Maps.newConcurrentMap();
     private final Map<Long, Subject<CRDTStoreMessage>> storeReceiverMap = Maps.newConcurrentMap();
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final String rootDir;
-
-    public CRDTStoreTestCluster(String rootDir) {
-        this.rootDir = rootDir;
-    }
 
     public List<String> stores() {
         return Lists.newArrayList(storeIdMap.keySet());

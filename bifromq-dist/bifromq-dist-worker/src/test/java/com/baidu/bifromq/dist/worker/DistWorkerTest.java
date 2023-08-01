@@ -95,11 +95,13 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 
 @Slf4j
 public abstract class DistWorkerTest {
@@ -145,6 +147,7 @@ public abstract class DistWorkerTest {
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
+    private static final AtomicInteger bindPort = new AtomicInteger(8080);
 
     private static boolean runOnMac() {
         String osName = System.getProperty("os.name");
@@ -153,7 +156,7 @@ public abstract class DistWorkerTest {
 
     private AutoCloseable closeable;
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         System.setProperty("dist_worker_topic_match_expiry_seconds", "1");
@@ -229,6 +232,7 @@ public abstract class DistWorkerTest {
             .build();
         testWorker = IDistWorker.standaloneBuilder()
             .host("127.0.0.1")
+            .port(bindPort.getAndIncrement())
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
             .ioExecutor(MoreExecutors.directExecutor())
@@ -255,26 +259,28 @@ public abstract class DistWorkerTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
-        storeClient.stop();
-        testWorker.stop();
-        clientCrdtService.stop();
-        serverCrdtService.stop();
-        agentHost.shutdown();
-        try {
-            Files.walk(dbRootDir)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-        } catch (IOException e) {
-            log.error("Failed to delete db root dir", e);
-        }
-        queryExecutor.shutdown();
-        mutationExecutor.shutdown();
-        tickTaskExecutor.shutdown();
-        bgTaskExecutor.shutdown();
+        new Thread(() -> {
+            storeClient.stop();
+            testWorker.stop();
+            clientCrdtService.stop();
+            serverCrdtService.stop();
+            agentHost.shutdown();
+            try {
+                Files.walk(dbRootDir)
+                        .sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+            } catch (IOException e) {
+                log.error("Failed to delete db root dir", e);
+            }
+            queryExecutor.shutdown();
+            mutationExecutor.shutdown();
+            tickTaskExecutor.shutdown();
+            bgTaskExecutor.shutdown();
+        }).start();
         closeable.close();
     }
 
