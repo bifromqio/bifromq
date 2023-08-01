@@ -17,13 +17,13 @@ import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_INBOX_
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.AckStream;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
 import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
+import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.ByteString;
@@ -36,15 +36,15 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> implements IInboxQueueFetcher {
+    private static final int MAX_FETCH_COUNT = 100;
     private final Fetcher fetcher;
     private final Function<ByteString, CompletableFuture<Void>> toucher;
-    private final IBaseKVStoreClient kvStoreClient;
     private final AtomicBoolean fetchStarted = new AtomicBoolean(false);
 
     private final String delivererKey;
     private final String inboxId;
-    // indicate downstream free buffer capacity, -1 stands for capacity not known yet
-    private final AtomicInteger downStreamCapacity = new AtomicInteger(-1);
+    // indicate downstream free buffer capacity with MAX_FETCH_COUNT
+    private final AtomicInteger downStreamCapacity = new AtomicInteger(MAX_FETCH_COUNT);
     private final ByteString scopedInboxId;
     private volatile boolean closed = false;
     private volatile long fetchStartTS = 0;
@@ -56,7 +56,6 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
     public InboxFetchPipeline(StreamObserver<Fetched> responseObserver,
                               Fetcher fetcher,
                               Function<ByteString, CompletableFuture<Void>> toucher,
-                              IBaseKVStoreClient kvStoreClient,
                               InboxFetcherRegistry registry,
                               RateLimiter limiter) {
         super(responseObserver);
@@ -64,7 +63,6 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
         this.inboxId = metadata.get(PIPELINE_ATTR_KEY_INBOX_ID);
         this.fetcher = fetcher;
         this.toucher = toucher;
-        this.kvStoreClient = kvStoreClient;
         scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
         if (limiter.tryAcquire()) {
             if (hasMetadata(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ)) {
@@ -122,9 +120,7 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
             tenantId, inboxId, downStreamCapacity.get(), fetchStarted.get());
         signalTS = System.nanoTime();
         if (!closed && fetchStarted.compareAndSet(false, true)) {
-            int capacity = downStreamCapacity.get();
-            // fetch 100 messages if capacity not known yet
-            int batchSize = capacity == -1 ? 100 : downStreamCapacity.get();
+            int batchSize = Math.min(downStreamCapacity.get(), MAX_FETCH_COUNT);
             if (batchSize > 0) {
                 fetch(batchSize);
             } else {
@@ -151,6 +147,14 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
         }
         fetcher.fetch(new InboxFetchScheduler.InboxFetch(scopedInboxId, fb.build()))
             .whenComplete((reply, e) -> {
+                if (e != null) {
+                    log.error("Fetch failed: tenantId={}, inboxId={}", tenantId, inboxId, e);
+                    if (!closed) {
+                        send(Fetched.newBuilder().setResult(Result.ERROR).build());
+                    }
+                    fetchStarted.set(false);
+                    return;
+                }
                 log.trace("Fetch success: tenantId={}, inboxId={}\n{}", tenantId, inboxId, reply);
                 int fetchedCount = 0;
                 if (reply.getQos0MsgCount() > 0 || reply.getQos1MsgCount() > 0 || reply.getQos2MsgCount() > 0) {
