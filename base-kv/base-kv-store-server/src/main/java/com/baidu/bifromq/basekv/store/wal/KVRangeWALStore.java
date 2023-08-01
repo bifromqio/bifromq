@@ -133,7 +133,7 @@ class KVRangeWALStore implements IRaftStateStore {
         long snapLastTerm = snapshot.getTerm();
         Optional<LogEntry> lastEntryInSS = entryAt(snapLastIndex);
         log.debug("Compact logs using snapshot[term={}, index={}]: rangeId={}, storeId={}",
-            snapLastIndex, snapLastTerm, toShortString(rangeId), storeId);
+            snapLastTerm, snapLastIndex, toShortString(rangeId), storeId);
         if (lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) {
             // the snapshot represents partial history, it happens when compacting
             // save snapshot

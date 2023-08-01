@@ -38,6 +38,7 @@ import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -102,7 +103,8 @@ public class KVRangeBalanceController {
                 balancers.add(balancer);
             }
             this.metricsManager = new MetricManager(localStoreId, storeClient.clusterId());
-            log.info("[{}]KVRangeBalanceController start to balance in store: {}", storeClient.clusterId(), localStoreId);
+            log.info("[{}]KVRangeBalanceController start to balance in store: {}", storeClient.clusterId(),
+                localStoreId);
             descriptorSub = this.storeClient.describe()
                 .distinctUntilChanged()
                 .subscribe(sds -> executor.execute(() -> updateStoreDescriptors(sds)));
@@ -132,8 +134,13 @@ public class KVRangeBalanceController {
     private void scheduleLater() {
         if (state.get() == State.Started && scheduling.compareAndSet(false, true)) {
             scheduledFuture =
-                executor.schedule(this::scheduleNow, options.getScheduleIntervalInMs(), TimeUnit.MILLISECONDS);
+                executor.schedule(this::scheduleNow, randomDelay(), TimeUnit.MILLISECONDS);
         }
+    }
+
+    private long randomDelay() {
+        return ThreadLocalRandom.current()
+            .nextLong(options.getScheduleIntervalInMs(), options.getScheduleIntervalInMs() * 2);
     }
 
     private void scheduleNow() {

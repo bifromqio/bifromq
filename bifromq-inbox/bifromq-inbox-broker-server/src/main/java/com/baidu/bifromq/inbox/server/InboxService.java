@@ -162,7 +162,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         return new InboxFetchPipeline(responseObserver,
             fetchScheduler::schedule,
             scopedInboxId -> touchScheduler.schedule(new InboxTouchScheduler.Touch(scopedInboxId)),
-            kvStoreClient, registry,
+            registry,
             fetcherCreationLimiter);
     }
 

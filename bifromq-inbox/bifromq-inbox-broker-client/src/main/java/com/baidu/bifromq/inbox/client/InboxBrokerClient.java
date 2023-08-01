@@ -54,7 +54,7 @@ final class InboxBrokerClient implements IInboxBrokerClient {
                                                @NonNull String inboxId,
                                                @Nullable String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return rpcClient.invoke(tenantId, delivererKey,
+        return rpcClient.invoke(tenantId, null,
                 HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
                 InboxServiceGrpc.getHasInboxMethod())
             .thenApply(HasInboxReply::getResult);

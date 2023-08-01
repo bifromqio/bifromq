@@ -22,7 +22,7 @@ import static com.baidu.bifromq.basekv.proto.State.StateType.PreparedMerging;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Purged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Removed;
 import static com.baidu.bifromq.basekv.proto.State.StateType.WaitingForMerge;
-import static com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException.CONCURRENT_CHANGE;
+import static com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException.NOT_LEADER;
 import static com.baidu.bifromq.basekv.store.range.KVRange.Lifecycle.Closed;
 import static com.baidu.bifromq.basekv.store.range.KVRange.Lifecycle.Destroyed;
 import static com.baidu.bifromq.basekv.store.range.KVRange.Lifecycle.Destroying;
@@ -529,9 +529,6 @@ public class KVRange implements IKVRange {
         if (f != null) {
             log.debug("Finish write request: taskId={}", taskId);
             f.complete(null);
-        } else {
-            log.warn("No request pending for task[{}]: rangeId={}, storeId={}",
-                toShortString(id), hostStoreId, taskId);
         }
     }
 
@@ -541,8 +538,6 @@ public class KVRange implements IKVRange {
         if (f != null) {
             log.trace("Finish write request: taskId={}", taskId);
             f.complete(result);
-        } else {
-            log.warn("No request pending for task[{}]", taskId);
         }
     }
 
@@ -551,8 +546,6 @@ public class KVRange implements IKVRange {
         if (f != null) {
             log.trace("Finish write request: taskId={}", taskId);
             f.completeExceptionally(e);
-        } else {
-            log.warn("No request pending for task[{}]", taskId);
         }
     }
 
@@ -756,16 +749,13 @@ public class KVRange implements IKVRange {
                                             newHashSet(request.getLearnersList()))
                                         .whenCompleteAsync((v, e) -> {
                                             if (e != null) {
-                                                log.debug("Config change aborted[taskId={}] due to {}",
-                                                    taskId, e.getMessage());
-                                                if (e instanceof ClusterConfigChangeException
-                                                    || e.getCause() instanceof ClusterConfigChangeException) {
-                                                    if (e != CONCURRENT_CHANGE && e.getCause() != CONCURRENT_CHANGE) {
-                                                        // only force leader to step down to make progress
-                                                        wal.stepDown();
-                                                    }
-                                                } else {
-                                                    wal.stepDown();
+                                                String errorMessage =
+                                                    String.format("Config change aborted[taskId=%s] due to %s", taskId,
+                                                        e.getMessage());
+                                                log.debug(errorMessage);
+                                                if (e != NOT_LEADER && e.getCause() != NOT_LEADER) {
+                                                    finishCommand(taskId,
+                                                        new KVRangeException.TryLater(errorMessage));
                                                 }
                                                 wal.stepDown();
                                             }
