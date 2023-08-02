@@ -189,9 +189,9 @@ abstract class InboxStoreState {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.getReply().hasHas());
-            assertEquals(output.getReply().getReqId(), reqId);
-            return output.getReply().getHas();
+            assertTrue(output.hasHas());
+            assertEquals(output.getReqId(), reqId);
+            return output.getHas();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
@@ -220,9 +220,9 @@ abstract class InboxStoreState {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.getReply().hasCreateInbox());
-            assertEquals(output.getReply().getReqId(), reqId);
-            return output.getReply().getCreateInbox();
+            assertTrue(output.hasCreateInbox());
+            assertEquals(output.getReqId(), reqId);
+            return output.getCreateInbox();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
@@ -246,9 +246,9 @@ abstract class InboxStoreState {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.getReply().hasTouch());
-            assertEquals(output.getReply().getReqId(), reqId);
-            return output.getReply().getTouch();
+            assertTrue(output.hasTouch());
+            assertEquals(output.getReqId(), reqId);
+            return output.getTouch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
@@ -269,9 +269,9 @@ abstract class InboxStoreState {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.getReply().hasInsert());
-            assertEquals(output.getReply().getInsert(), reqId);
-            return output.getReply().getInsert();
+            assertTrue(output.hasInsert());
+            assertEquals(output.getInsert(), reqId);
+            return output.getInsert();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
@@ -309,9 +309,9 @@ abstract class InboxStoreState {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.getReply().hasInsert());
-            assertEquals(output.getReply().getReqId(), reqId);
-            return output.getReply().getInsert();
+            assertTrue(output.hasInsert());
+            assertEquals(output.getReqId(), reqId);
+            return output.getInsert();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }

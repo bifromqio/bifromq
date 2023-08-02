@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 
 @Extension
 public final class EventLogger implements IEventCollector {
-    private static final Logger LOG = LoggerFactory.getLogger("IoTBrokerEventLogger");
+    private static final Logger LOG = LoggerFactory.getLogger("DemoEventLogger");
 
     @Override
     public void report(Event<?> event) {

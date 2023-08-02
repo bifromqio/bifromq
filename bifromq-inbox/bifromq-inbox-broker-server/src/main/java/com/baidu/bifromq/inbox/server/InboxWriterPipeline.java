@@ -34,8 +34,6 @@ public class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply
         this.registry = registry;
         this.handler = handler;
         this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
-        // ensure fetch triggered when receive pipeline rebalanced
-        registry.signalFetch(delivererKey);
     }
 
     @Override
@@ -45,8 +43,7 @@ public class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply
             for (SendResult result : v.getResultList()) {
                 if (result.getResult() == SendResult.Result.OK) {
                     IInboxQueueFetcher f =
-                        registry.get(result.getSubInfo().getTenantId(), result.getSubInfo().getInboxId(),
-                            delivererKey);
+                        registry.get(result.getSubInfo().getTenantId(), result.getSubInfo().getInboxId());
                     if (f != null) {
                         f.signalFetch();
                     }

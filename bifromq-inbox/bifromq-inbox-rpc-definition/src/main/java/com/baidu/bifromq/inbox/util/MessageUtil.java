@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.util;
 
+import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.HasRequest;
@@ -21,71 +22,62 @@ import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.QueryRequest;
 import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
-import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 
 public class MessageUtil {
     public static InboxServiceRWCoProcInput buildGCRequest(long reqId) {
         return InboxServiceRWCoProcInput.newBuilder()
-            .setRequest(UpdateRequest.newBuilder()
-                .setReqId(reqId)
-                .setGc(GCRequest.newBuilder().build())
-                .build())
+            .setReqId(reqId)
+            .setGc(GCRequest.newBuilder().build())
+            .build();
+    }
+
+    public static InboxServiceROCoProcInput buildCollectMetricsRequest(long reqId) {
+        return InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setCollectMetrics(CollectMetricsRequest.newBuilder().setReqId(reqId).build())
             .build();
     }
 
     public static InboxServiceRWCoProcInput buildCreateRequest(long reqId, CreateRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
-            .setRequest(UpdateRequest.newBuilder()
-                .setReqId(reqId)
-                .setCreateInbox(request)
-                .build())
+            .setReqId(reqId)
+            .setCreateInbox(request)
             .build();
     }
 
     public static InboxServiceROCoProcInput buildHasRequest(long reqId, HasRequest request) {
         return InboxServiceROCoProcInput.newBuilder()
-            .setRequest(QueryRequest.newBuilder()
-                .setReqId(reqId)
-                .setHas(request)
-                .build())
+            .setReqId(reqId)
+            .setHas(request)
             .build();
     }
 
     public static InboxServiceRWCoProcInput buildBatchInboxInsertRequest(long reqId, InboxInsertRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
-            .setRequest(UpdateRequest.newBuilder()
-                .setReqId(reqId)
-                .setInsert(request)
-                .build())
+            .setReqId(reqId)
+            .setInsert(request)
             .build();
     }
 
     public static InboxServiceROCoProcInput buildInboxFetchRequest(long reqId, InboxFetchRequest request) {
         return InboxServiceROCoProcInput.newBuilder()
-            .setRequest(QueryRequest.newBuilder()
-                .setReqId(reqId)
-                .setFetch(request)
-                .build())
+            .setReqId(reqId)
+            .setFetch(request)
             .build();
     }
 
     public static InboxServiceRWCoProcInput buildTouchRequest(long reqId, TouchRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
-            .setRequest(UpdateRequest.newBuilder()
-                .setReqId(reqId)
-                .setTouch(request)
-                .build())
+            .setReqId(reqId)
+            .setTouch(request)
             .build();
     }
 
     public static InboxServiceRWCoProcInput buildBatchCommitRequest(long reqId, InboxCommitRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
-            .setRequest(UpdateRequest.newBuilder()
-                .setReqId(reqId)
-                .setCommit(request)
-                .build())
+            .setReqId(reqId)
+            .setCommit(request)
             .build();
     }
 }

@@ -31,7 +31,6 @@ import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
@@ -107,21 +106,19 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
 
             @Override
             public CompletableFuture<Void> execute() {
-                UpdateRequest updateRequest = UpdateRequest.newBuilder()
-                    .setReqId(System.nanoTime())
-                    .setCreateInbox(CreateRequest.newBuilder()
-                        .putAllInboxes(inboxCreates)
-                        .build())
-                    .build();
+                long reqId = System.nanoTime();
                 batchInboxCount.record(inboxCreates.size());
                 Timer.Sample start = Timer.start();
                 return kvStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
-                            .setReqId(updateRequest.getReqId())
+                            .setReqId(reqId)
                             .setVer(range.ver)
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setRequest(updateRequest)
+                                .setReqId(reqId)
+                                .setCreateInbox(CreateRequest.newBuilder()
+                                    .putAllInboxes(inboxCreates)
+                                    .build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
@@ -130,7 +127,7 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
                             case Ok:
                                 try {
                                     return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                        .getReply().getCreateInbox();
+                                        .getCreateInbox();
                                 } catch (InvalidProtocolBufferException e) {
                                     log.error("Unable to parse rw co-proc output", e);
                                     throw new RuntimeException(e);

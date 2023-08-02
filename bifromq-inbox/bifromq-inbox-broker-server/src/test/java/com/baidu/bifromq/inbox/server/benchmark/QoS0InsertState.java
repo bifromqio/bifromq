@@ -17,9 +17,9 @@ import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
-import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.SubInfo;
@@ -52,7 +52,7 @@ public class QoS0InsertState extends InboxServiceState {
     protected void afterSetup() {
         int i = 0;
         while (i < inboxCount) {
-            inboxReaderClient.create(System.nanoTime(), i + "", ClientInfo.newBuilder()
+            inboxReaderClient.create(System.nanoTime(), String.valueOf(i), ClientInfo.newBuilder()
                 .setTenantId(tenantId)
                 .build()).join();
             i++;
@@ -68,7 +68,7 @@ public class QoS0InsertState extends InboxServiceState {
     public Map<SubInfo, DeliveryResult> insert() {
         return inboxWriter.deliver(singleton(new DeliveryPack(msg, singletonList(SubInfo.newBuilder()
             .setTenantId(tenantId)
-            .setInboxId(ThreadLocalRandom.current().nextInt(0, 100) + "")
+            .setInboxId(String.valueOf(ThreadLocalRandom.current().nextInt(0, 100)))
             .setTopicFilter("greeting")
             .setSubQoS(AT_MOST_ONCE)
             .build())))).join();

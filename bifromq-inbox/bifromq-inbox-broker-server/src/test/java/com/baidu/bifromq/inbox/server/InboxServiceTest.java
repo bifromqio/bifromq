@@ -85,6 +85,7 @@ public abstract class InboxServiceTest {
         inboxReaderClient = IInboxReaderClient.newBuilder().crdtService(clientCrdtService).build();
 
 
+        KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());

@@ -45,4 +45,7 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider) {
         return new InboxStoreCoProc(id, rangeReaderProvider, eventCollector, clock, purgeDelay);
     }
+
+    public void close() {
+    }
 }

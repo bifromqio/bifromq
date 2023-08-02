@@ -30,7 +30,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
-import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
@@ -103,32 +102,29 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
 
             @Override
             public CompletableFuture<Void> execute() {
-                UpdateRequest updateRequest = UpdateRequest.newBuilder()
-                    .setReqId(System.nanoTime())
-                    .setInsert(InboxInsertRequest.newBuilder()
-                        .addAllSubMsgPack(inboxInserts.stream()
-                            .map(t -> t.request)
-                            .collect(Collectors.toList()))
-                        .build())
-                    .build();
+                long reqId = System.nanoTime();
                 batchInboxCount.record(inboxInserts.size());
                 batchMsgCount.record(msgSize.get());
                 Timer.Sample start = Timer.start();
                 return kvStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
-                            .setReqId(updateRequest.getReqId())
+                            .setReqId(reqId)
                             .setVer(range.ver)
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setRequest(updateRequest)
+                                .setReqId(reqId)
+                                .setInsert(InboxInsertRequest.newBuilder()
+                                    .addAllSubMsgPack(inboxInserts.stream()
+                                        .map(t -> t.request)
+                                        .collect(Collectors.toList()))
+                                    .build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
                         start.stop(batchInsertTimer);
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                    .getReply().getInsert();
+                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getInsert();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);
                                 throw new RuntimeException(e);

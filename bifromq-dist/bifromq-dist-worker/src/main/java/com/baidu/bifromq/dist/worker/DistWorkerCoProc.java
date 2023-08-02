@@ -81,6 +81,7 @@ import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -561,22 +562,25 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             String tenantId = parseTenantId(itr.key());
             if (isSubInfoKey(itr.key())) {
                 Inbox inbox = parseInbox(itr.key());
+                ISubBroker subBroker = subBrokerManager.get(inbox.broker);
                 clearFutures.add(subBrokerManager.get(inbox.broker)
                     .hasInbox(request.getReqId(), tenantId, inbox.inboxId, inbox.delivererKey)
+                    .exceptionally(e -> {
+                        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+                            // TODO(mafei): taking MTTR into account when reporting server not found
+                            // ServerNotFoundException is thrown only when DD-semantic is used
+                            // For even-numbered id: the inbox id is bound to server and unrecoverable after crash, so SERVER_NOT_FOUND is highly likely indicating all inboxes on that server are gone and all associated subscriptions have to be cleaned
+                            // For odd-numbered id: the inbox id is bound to server and recoverable after crash
+                            return subBroker.id() % 2 == 0;
+                        }
+                        return false;
+                    })
                     .thenCompose(exist -> {
                         if (!exist) {
-                            return distClient.clear(request.getReqId(),
-                                tenantId, inbox.inboxId, inbox.delivererKey, inbox.broker);
+                            return distClient.clear(request.getReqId(), tenantId, inbox.inboxId, inbox.delivererKey,
+                                inbox.broker);
                         }
                         return CompletableFuture.completedFuture(null);
-                    })
-                    .exceptionallyCompose(throwable -> {
-                       if (throwable instanceof ServerNotFoundException
-                           || throwable.getCause() instanceof ServerNotFoundException)  {
-                           return distClient.clear(request.getReqId(),
-                               tenantId, inbox.inboxId, inbox.delivererKey, inbox.broker);
-                       }
-                       return CompletableFuture.completedFuture(null);
                     })
                 );
                 itr.next();
