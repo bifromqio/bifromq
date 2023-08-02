@@ -27,8 +27,8 @@ import org.testng.annotations.Test;
 public class CCounterTest extends CRDTServiceTestTemplate {
     @ServiceCfgs(services =
         {
-            @ServiceCfg(id = "s1", bindPort = 11111, isSeed = true),
-            @ServiceCfg(id = "s2", bindPort = 22222)
+            @ServiceCfg(id = "s1", isSeed = true),
+            @ServiceCfg(id = "s2")
         })
     @Test(groups = "integration")
     public void testZeroOut() {

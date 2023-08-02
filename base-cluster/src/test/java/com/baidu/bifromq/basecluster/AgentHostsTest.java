@@ -38,7 +38,7 @@ import org.testng.annotations.Test;
 @Slf4j
 @Listeners(AgentHostTestListener.class)
 public class AgentHostsTest extends AgentTestTemplate {
-    @StoreCfgs(stores = {@StoreCfg(id = "s1", bindPort = 11111)})
+    @StoreCfgs(stores = {@StoreCfg(id = "s1")})
     @Test(groups = "integration")
     public void testRegister() {
         IAgent agent = storeMgr.host("s1", "agent1");
@@ -56,7 +56,7 @@ public class AgentHostsTest extends AgentTestTemplate {
         });
     }
 
-    @StoreCfgs(stores = {@StoreCfg(id = "s1", bindPort = 11111)})
+    @StoreCfgs(stores = {@StoreCfg(id = "s1")})
     @Test(groups = "integration")
     public void testUnregister() {
         IAgent agent = storeMgr.host("s1", "agent1");
@@ -79,11 +79,11 @@ public class AgentHostsTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {
-        @StoreCfg(id = "s1", bindPort = 11111, isSeed = true),
-        @StoreCfg(id = "s2", bindPort = 11112),
-        @StoreCfg(id = "s3", bindPort = 11113),
-        @StoreCfg(id = "s4", bindPort = 11114),
-        @StoreCfg(id = "s5", bindPort = 11115),
+        @StoreCfg(id = "s1", isSeed = true),
+        @StoreCfg(id = "s2"),
+        @StoreCfg(id = "s3"),
+        @StoreCfg(id = "s4"),
+        @StoreCfg(id = "s5"),
     })
     @Test(groups = "integration")
     public void testMultipleAgentHosts() {
@@ -95,8 +95,8 @@ public class AgentHostsTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {
-        @StoreCfg(id = "s1", bindPort = 11111, isSeed = true),
-        @StoreCfg(id = "s2", bindPort = 22222),
+        @StoreCfg(id = "s1", isSeed = true),
+        @StoreCfg(id = "s2"),
     })
     @Test(groups = "integration")
     public void testAgentNodesInTwoStores() {
@@ -128,9 +128,9 @@ public class AgentHostsTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {
-        @StoreCfg(id = "s1", bindPort = 11111, isSeed = true),
-        @StoreCfg(id = "s2", bindPort = 22222),
-        @StoreCfg(id = "s3", bindPort = 33333),
+        @StoreCfg(id = "s1", isSeed = true),
+        @StoreCfg(id = "s2"),
+        @StoreCfg(id = "s3"),
     })
     @Test(groups = "integration")
     public void testAgentNodesInThreeStores() {
@@ -204,7 +204,7 @@ public class AgentHostsTest extends AgentTestTemplate {
         await().until(() -> agentOnS3.membership().blockingFirst().isEmpty());
     }
 
-    @StoreCfgs(stores = {@StoreCfg(id = "s1", bindPort = 11111, isSeed = true)})
+    @StoreCfgs(stores = {@StoreCfg(id = "s1", isSeed = true)})
     @Test(groups = "integration")
     public void testRefreshRoute() {
         IAgent agent = storeMgr.host("s1", "agent1");
@@ -231,8 +231,8 @@ public class AgentHostsTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {
-        @StoreCfg(id = "s1", bindPort = 11111, isSeed = true),
-        @StoreCfg(id = "s2", bindPort = 22222),
+        @StoreCfg(id = "s1", isSeed = true),
+        @StoreCfg(id = "s2"),
     })
     @Test(groups = "integration")
     public void testMulticast() {

@@ -147,7 +147,6 @@ public abstract class DistWorkerTest {
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
-    private static final AtomicInteger bindPort = new AtomicInteger(8080);
 
     private static boolean runOnMac() {
         String osName = System.getProperty("os.name");
@@ -232,7 +231,6 @@ public abstract class DistWorkerTest {
             .build();
         testWorker = IDistWorker.standaloneBuilder()
             .host("127.0.0.1")
-            .port(bindPort.getAndIncrement())
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
             .ioExecutor(MoreExecutors.directExecutor())

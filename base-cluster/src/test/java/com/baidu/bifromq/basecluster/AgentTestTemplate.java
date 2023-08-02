@@ -20,7 +20,6 @@ import com.baidu.bifromq.basecrdt.store.CRDTStoreOptions;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
@@ -29,13 +28,11 @@ import org.testng.annotations.BeforeMethod;
 @Slf4j
 public abstract class AgentTestTemplate {
     protected AgentTestCluster storeMgr;
-    private static final AtomicInteger nextPort = new AtomicInteger(19876);
 
     AgentTestTemplate() {
     }
 
     public void createClusterByAnnotation(Method testMethod) {
-        log.info("createClusterByAnnotation");
         StoreCfgs storeCfgs = testMethod.getAnnotation(StoreCfgs.class);
         StoreCfg storeCfg = testMethod.getAnnotation(StoreCfg.class);
         String seedStoreId = null;
@@ -78,7 +75,7 @@ public abstract class AgentTestTemplate {
     private AgentHostOptions build(StoreCfg cfg) {
         return AgentHostOptions.builder()
             .addr(cfg.bindAddr())
-            .port(nextPort.getAndIncrement())
+            .port(cfg.bindPort())
             .udpPacketLimit(1400)
             .maxChannelsPerHost(1)
             .joinRetryInSec(cfg.joinRetryInSec())
