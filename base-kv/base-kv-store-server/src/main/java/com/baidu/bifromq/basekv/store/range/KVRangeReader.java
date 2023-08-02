@@ -20,15 +20,27 @@ import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
+import java.lang.ref.Cleaner;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class KVRangeReader implements IKVRangeReader {
+    private static final Cleaner CLEANER = Cleaner.create();
+
+    private record CleanableState(KVRangeMetadataAccessor metadataAccessor) implements Runnable {
+
+        @Override
+        public void run() {
+            metadataAccessor.close();
+        }
+    }
+
     private final IKVEngine kvEngine;
     private final KVRangeMetadataAccessor metadata;
     private final AtomicReference<IKVEngineIterator[]> engineIterator = new AtomicReference<>();
     private final KVRangeStateAccessor.KVRangeReaderRefresher refresher;
+    private final Cleaner.Cleanable onClose;
 
     public KVRangeReader(KVRangeId rangeId, IKVEngine engine, KVRangeStateAccessor.KVRangeReaderRefresher refresher) {
         this.kvEngine = engine;
@@ -43,6 +55,7 @@ public class KVRangeReader implements IKVRangeReader {
         } finally {
             refresher.unlock();
         }
+        onClose = CLEANER.register(this, new CleanableState(metadata));
     }
 
     @Override
@@ -85,5 +98,10 @@ public class KVRangeReader implements IKVRangeReader {
                 }
             }
         });
+    }
+
+    @Override
+    public void close() {
+        onClose.clean();
     }
 }

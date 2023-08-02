@@ -152,7 +152,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             Files.createDirectories(dbCheckPointRootDir.getAbsoluteFile().toPath());
             boolean isCreation = isEmpty(dbRootDir.toPath());
             openRocksDB(isCreation);
-            log.info("RocksDBKVEngine[{}] initialized at path[{}]", identity, instance.getName());
+            log.info("RocksDBKVEngine[{}] {} at path[{}]", identity, isCreation ? "initialized" : "loaded",
+                instance.getName());
         } catch (Throwable e) {
             throw new KVEngineException("Failed to initialize RocksDB", e);
         }
@@ -880,9 +881,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                 .tags(tags)
                 .baseUnit("ns")
                 .register(Metrics.globalRegistry);
-            checkpointGauge = Gauge.builder("basekv.le.active", () -> openedCheckpoints.estimatedSize())
+            checkpointGauge = Gauge.builder("basekv.le.active.checkpoints", () -> openedCheckpoints.estimatedSize())
                 .tags(tags)
-                .baseUnit("checkpoints")
                 .register(Metrics.globalRegistry);
             compactionTaskGauge = Gauge.builder("basekv.le.rocksdb.compaction", compactionTasks::size)
                 .tags(tags)

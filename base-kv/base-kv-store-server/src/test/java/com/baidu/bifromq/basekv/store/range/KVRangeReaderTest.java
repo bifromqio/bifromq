@@ -110,4 +110,17 @@ public class KVRangeReaderTest {
         verify(engine, times(2)).newIterator(2);
         verify(engineIterator, times(2)).close();
     }
+
+    @Test
+    public void getReader() {
+        int rangeId = 1;
+        KVRangeId id = KVRangeIdUtil.generate();
+        when(engine.get(anyString(), any(ByteString.class))).thenReturn(Optional.empty());
+        when(engine.registerKeyRange(anyString(), any(ByteString.class), any(ByteString.class)))
+            .thenReturn(rangeId);
+        KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher());
+        rangeReader = null;
+        System.gc();
+        verify(engine).unregisterKeyRange(rangeId);
+    }
 }

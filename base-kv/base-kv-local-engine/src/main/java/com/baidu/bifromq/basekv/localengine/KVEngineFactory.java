@@ -20,7 +20,7 @@ public class KVEngineFactory {
     public static IKVEngine create(String overrideIdentity,
                                    List<String> namespaces,
                                    Predicate<String> checkpointInUse,
-                                   KVEngineConfigurator configurator) {
+                                   KVEngineConfigurator<?> configurator) {
         if (configurator instanceof InMemoryKVEngineConfigurator) {
             return new InMemoryKVEngine(overrideIdentity, namespaces, checkpointInUse,
                 (InMemoryKVEngineConfigurator) configurator);

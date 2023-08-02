@@ -22,14 +22,15 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.stateKey;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.verKey;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteString;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteStringNativeOrder;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotEquals;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
@@ -39,13 +40,13 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Maybe;
+import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.Optional;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVRangeMetadataAccessorTest {
     @Mock
@@ -54,6 +55,7 @@ public class KVRangeMetadataAccessorTest {
     @Mock
     IKVEngineIterator itr;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -337,6 +339,7 @@ public class KVRangeMetadataAccessorTest {
         when(engine.get(IKVEngine.DEFAULT_NS, stateKey(id))).thenReturn(Optional.of(state.toByteString()));
 
         KVRangeMetadataAccessor metadata = new KVRangeMetadataAccessor(id, engine);
+        Disposable disposable = metadata.source().subscribe();
 
         int batchId = 1;
         ByteString dataKey = dataKey(ByteString.copyFromUtf8("a"));
@@ -355,6 +358,30 @@ public class KVRangeMetadataAccessorTest {
         verify(itr).seekToFirst();
         verify(itr).next();
         verify(engine).delete(batchId, keyRangeId, dataKey);
+        assertTrue(disposable.isDisposed());
+    }
+
+    @Test
+    public void close() {
+        KVRangeId id = KVRangeIdUtil.generate();
+        int keyRangeId = 1;
+        long ver = 10;
+        Range range = FULL_RANGE;
+        Range dataBound = KVRangeKeys.dataBound(range);
+        State state = State.newBuilder().setType(State.StateType.Normal).build();
+
+        when(engine.registerKeyRange(IKVEngine.DEFAULT_NS, dataBound.getStartKey(), dataBound.getEndKey()))
+            .thenReturn(keyRangeId);
+        when(engine.get(IKVEngine.DEFAULT_NS, verKey(id))).thenReturn(Optional.of(toByteStringNativeOrder(ver)));
+        when(engine.get(IKVEngine.DEFAULT_NS, rangeKey(id))).thenReturn(Optional.of(range.toByteString()));
+        when(engine.get(IKVEngine.DEFAULT_NS, stateKey(id))).thenReturn(Optional.of(state.toByteString()));
+
+        KVRangeMetadataAccessor metadata = new KVRangeMetadataAccessor(id, engine);
+        Disposable disposable = metadata.source().subscribe();
+
+        metadata.close();
+        verify(engine).unregisterKeyRange(keyRangeId);
+        assertTrue(disposable.isDisposed());
     }
 }
 

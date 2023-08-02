@@ -706,13 +706,11 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
 
         MetricManager(String... metricTags) {
             Tags tags = Tags.of(metricTags);
-            activeKeyRangesGauge = Gauge.builder("basekv.le.active", () -> defaultRanges.size() + ranges.size())
+            activeKeyRangesGauge = Gauge.builder("basekv.le.active.ranges", () -> defaultRanges.size() + ranges.size())
                 .tags(tags)
-                .baseUnit("ranges")
                 .register(Metrics.globalRegistry);
-            activeWriteBatchGauge = Gauge.builder("basekv.le.active", writeBatches::size)
+            activeWriteBatchGauge = Gauge.builder("basekv.le.active.batches", writeBatches::size)
                 .tags(tags)
-                .baseUnit("batches")
                 .register(Metrics.globalRegistry);
             sizeCallTimer = Timer.builder("basekv.le.call.time")
                 .tags(tags)

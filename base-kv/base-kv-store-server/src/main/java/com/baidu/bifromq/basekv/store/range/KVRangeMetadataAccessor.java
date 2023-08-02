@@ -163,4 +163,10 @@ class KVRangeMetadataAccessor implements IKVRangeMetadataAccessor {
         kvEngine.unregisterKeyRange(dataBoundId);
         metaSubject.onComplete();
     }
+
+    @Override
+    public void close() {
+        kvEngine.unregisterKeyRange(dataBoundId);
+        metaSubject.onComplete();
+    }
 }

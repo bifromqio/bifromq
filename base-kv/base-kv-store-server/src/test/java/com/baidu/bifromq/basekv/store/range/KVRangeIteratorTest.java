@@ -13,24 +13,28 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.google.protobuf.ByteString;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
 
 public class KVRangeIteratorTest {
     @Mock
     private IKVEngineIterator engineIterator;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -39,6 +43,19 @@ public class KVRangeIteratorTest {
     @AfterMethod
     public void releaseMocks() throws Exception {
         closeable.close();
+    }
+
+    @Test
+    public void close() {
+        ByteString userKey = ByteString.copyFromUtf8("key");
+        when(engineIterator.key()).thenReturn(KVRangeKeys.dataKey(userKey));
+        AtomicBoolean closed = new AtomicBoolean();
+        try (IKVIterator itr = new KVRangeIterator(() -> engineIterator, () -> closed.set(true))) {
+            assertEquals(itr.key(), userKey);
+        } catch (Exception e) {
+            fail();
+        }
+        assertTrue(closed.get());
     }
 
     @Test

@@ -100,7 +100,14 @@ class KVRangeDumpSession {
                     return Optional.empty();
                 })
                 .subscribe(this::handleReply);
-            doneSignal.whenComplete((v, e) -> disposable.dispose());
+            doneSignal.whenComplete((v, e) -> {
+                try {
+                    snapshotItr.close();
+                } catch (Exception ex) {
+                    log.error("Unable to close snapshot iterator", e);
+                }
+                disposable.dispose();
+            });
             nextSaveRequest();
         }
     }
