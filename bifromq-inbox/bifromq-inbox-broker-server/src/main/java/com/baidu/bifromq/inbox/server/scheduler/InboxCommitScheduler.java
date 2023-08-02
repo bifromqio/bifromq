@@ -28,7 +28,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxCommit;
 import com.baidu.bifromq.inbox.storage.proto.InboxCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.collect.Maps;
@@ -106,34 +105,32 @@ public class InboxCommitScheduler extends InboxUpdateScheduler<CommitRequest, Co
 
             @Override
             public CompletableFuture<Void> execute() {
-                UpdateRequest updateRequest = UpdateRequest.newBuilder()
-                    .setReqId(System.nanoTime())
-                    .setCommit(InboxCommitRequest.newBuilder()
-                        .putAllInboxCommit(Maps.transformValues(inboxCommits,
-                            v -> {
-                                InboxCommit.Builder cb = InboxCommit.newBuilder();
-                                if (v[0] != null) {
-                                    cb.setQos0UpToSeq(v[0]);
-                                }
-                                if (v[1] != null) {
-                                    cb.setQos1UpToSeq(v[1]);
-                                }
-                                if (v[2] != null) {
-                                    cb.setQos2UpToSeq(v[2]);
-                                }
-                                return cb.build();
-                            }))
-                        .build())
-                    .build();
+                long reqId = System.nanoTime();
                 batchInboxCount.record(inboxCount.get());
                 Timer.Sample start = Timer.start();
                 return kvStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
-                            .setReqId(updateRequest.getReqId())
+                            .setReqId(reqId)
                             .setVer(range.ver)
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setRequest(updateRequest)
+                                .setReqId(reqId)
+                                .setCommit(InboxCommitRequest.newBuilder()
+                                    .putAllInboxCommit(Maps.transformValues(inboxCommits,
+                                        v -> {
+                                            InboxCommit.Builder cb = InboxCommit.newBuilder();
+                                            if (v[0] != null) {
+                                                cb.setQos0UpToSeq(v[0]);
+                                            }
+                                            if (v[1] != null) {
+                                                cb.setQos1UpToSeq(v[1]);
+                                            }
+                                            if (v[2] != null) {
+                                                cb.setQos2UpToSeq(v[2]);
+                                            }
+                                            return cb.build();
+                                        }))
+                                    .build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
@@ -141,10 +138,8 @@ public class InboxCommitScheduler extends InboxUpdateScheduler<CommitRequest, Co
                         switch (reply.getCode()) {
                             case Ok:
                                 try {
-                                    return InboxServiceRWCoProcOutput
-                                        .parseFrom(
-                                            reply.getRwCoProcResult())
-                                        .getReply().getCommit();
+                                    return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
+                                        .getCommit();
                                 } catch (InvalidProtocolBufferException e) {
                                     log.error("Unable to parse rw co-proc output", e);
                                     throw new RuntimeException(e);
@@ -191,7 +186,7 @@ public class InboxCommitScheduler extends InboxUpdateScheduler<CommitRequest, Co
         private final Timer batchCommitTimer;
 
         BatchCommitBuilder(String name, int maxInflights,
-                                   KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
+                           KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
             super(name, maxInflights);
             this.range = range;
             this.kvStoreClient = kvStoreClient;

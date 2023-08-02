@@ -28,8 +28,6 @@ import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.storage.proto.HasRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.QueryReply;
-import com.baidu.bifromq.inbox.storage.proto.QueryRequest;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -104,21 +102,19 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
 
             @Override
             public CompletableFuture<Void> execute() {
-                QueryRequest request = QueryRequest.newBuilder()
-                    .setReqId(System.nanoTime())
-                    .setHas(HasRequest.newBuilder()
-                        .addAllScopedInboxId(checkInboxes)
-                        .build())
-                    .build();
+                long reqId = System.nanoTime();
                 batchInboxCount.record(checkInboxes.size());
                 Timer.Sample start = Timer.start();
                 return kvStoreClient.linearizedQuery(range.leader,
                         KVRangeRORequest.newBuilder()
-                            .setReqId(request.getReqId())
+                            .setReqId(reqId)
                             .setVer(range.ver)
                             .setKvRangeId(range.id)
                             .setRoCoProcInput(InboxServiceROCoProcInput.newBuilder()
-                                .setRequest(request)
+                                .setReqId(reqId)
+                                .setHas(HasRequest.newBuilder()
+                                    .addAllScopedInboxId(checkInboxes)
+                                    .build())
                                 .build()
                                 .toByteString())
                             .build(), orderKey)
@@ -127,9 +123,9 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
                         switch (v.getCode()) {
                             case Ok:
                                 try {
-                                    QueryReply reply = InboxServiceROCoProcOutput.parseFrom(
-                                        v.getRoCoProcResult()).getReply();
-                                    assert reply.getReqId() == request.getReqId();
+                                    InboxServiceROCoProcOutput reply = InboxServiceROCoProcOutput.parseFrom(
+                                        v.getRoCoProcResult());
+                                    assert reply.getReqId() == reqId;
                                     return reply.getHas();
                                 } catch (InvalidProtocolBufferException e) {
                                     log.error("Unable to parse rw co-proc output", e);

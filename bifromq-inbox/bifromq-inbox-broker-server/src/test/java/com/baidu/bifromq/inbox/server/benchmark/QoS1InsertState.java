@@ -42,7 +42,7 @@ public class QoS1InsertState extends InboxServiceState {
     protected void afterSetup() {
         int i = 0;
         while (i < inboxCount) {
-            inboxReaderClient.create(System.nanoTime(), i + "", ClientInfo.newBuilder()
+            inboxReaderClient.create(System.nanoTime(), String.valueOf(i), ClientInfo.newBuilder()
                 .setTenantId(tenantId)
                 .build()).join();
             i++;
@@ -68,7 +68,7 @@ public class QoS1InsertState extends InboxServiceState {
     public void insert() {
         inboxWriter.deliver(singleton(new DeliveryPack(msgs, singletonList(SubInfo.newBuilder()
             .setTenantId(tenantId)
-            .setInboxId(ThreadLocalRandom.current().nextInt(0, inboxCount) + "")
+            .setInboxId(String.valueOf(ThreadLocalRandom.current().nextInt(0, inboxCount)))
             .setTopicFilter("greeting")
             .setSubQoS(AT_LEAST_ONCE)
             .build())))).join();

@@ -28,14 +28,11 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.QueryReply;
-import com.baidu.bifromq.inbox.storage.proto.QueryRequest;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
@@ -130,33 +127,29 @@ public class InboxFetchScheduler extends InboxQueryScheduler<InboxFetchScheduler
 
             @Override
             public CompletableFuture<Void> execute() {
-                QueryRequest request = QueryRequest.newBuilder()
-                    .setReqId(System.nanoTime())
-                    .setFetch(InboxFetchRequest.newBuilder()
-                        .putAllInboxFetch(inboxFetches)
-                        .build())
-                    .build();
+                long reqId = System.nanoTime();
                 batchInboxCount.record(inboxFetches.size());
-                Timer.Sample start = Timer.start();
                 return kvStoreClient.linearizedQuery(rangeStoreId,
                         KVRangeRORequest.newBuilder()
-                            .setReqId(request.getReqId())
+                            .setReqId(reqId)
                             .setVer(range.ver)
                             .setKvRangeId(range.id)
                             .setRoCoProcInput(InboxServiceROCoProcInput.newBuilder()
-                                .setRequest(request)
+                                .setReqId(reqId)
+                                .setFetch(InboxFetchRequest.newBuilder()
+                                    .putAllInboxFetch(inboxFetches)
+                                    .build())
                                 .build()
                                 .toByteString())
                             .build(), orderKey)
                     .thenApply(v -> {
-                        start.stop(batchFetchTimer);
                         switch (v.getCode()) {
                             case Ok:
                                 try {
-                                    QueryReply reply = InboxServiceROCoProcOutput.parseFrom(
-                                        v.getRoCoProcResult()).getReply();
-                                    assert reply.getReqId() == request.getReqId();
-                                    return reply.getFetch();
+                                    InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(
+                                        v.getRoCoProcResult());
+                                    assert output.getReqId() == reqId;
+                                    return output.getFetch();
                                 } catch (InvalidProtocolBufferException e) {
                                     log.error("Unable to parse rw co-proc output", e);
                                     throw new RuntimeException("Unable to parse rw co-proc output", e);
@@ -192,19 +185,14 @@ public class InboxFetchScheduler extends InboxQueryScheduler<InboxFetchScheduler
 
         private final DistributionSummary batchInboxCount;
 
-        private final Timer batchFetchTimer;
-
         BatchFetchBuilder(String name, int maxInflights, KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
             super(name, maxInflights);
             this.range = range;
             this.kvStoreClient = kvStoreClient;
             rangeStoreId = selectStore(range);
-            orderKey = this.hashCode() + "";
+            orderKey = String.valueOf(this.hashCode());
             Tags tags = Tags.of("rangeId", KVRangeIdUtil.toShortString(range.id));
             batchInboxCount = DistributionSummary.builder("inbox.server.fetch.inboxes")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            batchFetchTimer = Timer.builder("inbox.server.fetch.latency")
                 .tags(tags)
                 .register(Metrics.globalRegistry);
         }
@@ -217,7 +205,6 @@ public class InboxFetchScheduler extends InboxQueryScheduler<InboxFetchScheduler
         @Override
         public void close() {
             Metrics.globalRegistry.remove(batchInboxCount);
-            Metrics.globalRegistry.remove(batchFetchTimer);
         }
 
         private String selectStore(KVRangeSetting setting) {

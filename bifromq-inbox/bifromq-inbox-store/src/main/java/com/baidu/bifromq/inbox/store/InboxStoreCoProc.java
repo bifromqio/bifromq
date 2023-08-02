@@ -14,6 +14,7 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
+import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.inbox.util.KeyUtil.buildMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxMetadataKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isQoS0MessageKey;
@@ -22,6 +23,7 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.isQoS2MessageIndexKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseQoS2Index;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseScopedInboxId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseSeq;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxPrefix;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos1InboxMsgKey;
@@ -29,6 +31,7 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.qos1InboxPrefix;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos2InboxIndex;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos2InboxMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos2InboxPrefix;
+import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -38,6 +41,8 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
+import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateReply;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
@@ -63,12 +68,8 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
-import com.baidu.bifromq.inbox.storage.proto.QueryReply;
-import com.baidu.bifromq.inbox.storage.proto.QueryRequest;
 import com.baidu.bifromq.inbox.storage.proto.TouchReply;
 import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
-import com.baidu.bifromq.inbox.storage.proto.UpdateReply;
-import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
@@ -115,16 +116,15 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     public CompletableFuture<ByteString> query(ByteString input, IKVReader reader) {
         try {
             InboxServiceROCoProcInput coProcInput = InboxServiceROCoProcInput.parseFrom(input);
-            QueryRequest query = coProcInput.getRequest();
-            QueryReply.Builder replyBuilder = QueryReply.newBuilder().setReqId(query.getReqId());
-            if (query.hasHas()) {
-                replyBuilder.setHas(hasInbox(query.getHas(), reader));
+            InboxServiceROCoProcOutput.Builder outputBuilder = InboxServiceROCoProcOutput.newBuilder()
+                .setReqId(coProcInput.getReqId());
+            switch (coProcInput.getInputCase()) {
+                case HAS -> outputBuilder.setHas(hasInbox(coProcInput.getHas(), reader));
+                case FETCH -> outputBuilder.setFetch(fetch(coProcInput.getFetch(), reader));
+                case COLLECTMETRICS ->
+                    outputBuilder.setCollectedMetrics(collect(coProcInput.getCollectMetrics(), reader));
             }
-            if (query.hasFetch()) {
-                replyBuilder.setFetch(fetch(query.getFetch(), reader));
-            }
-            return CompletableFuture.completedFuture(
-                InboxServiceROCoProcOutput.newBuilder().setReply(replyBuilder.build()).build().toByteString());
+            return CompletableFuture.completedFuture(outputBuilder.build().toByteString());
         } catch (Throwable e) {
             log.error("Query co-proc failed", e);
             return CompletableFuture.failedFuture(new IllegalStateException("Query co-proc failed", e));
@@ -135,27 +135,16 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     @Override
     public Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter writer) {
         InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.parseFrom(input);
-        UpdateRequest request = coProcInput.getRequest();
-        UpdateReply.Builder replyBuilder = UpdateReply.newBuilder().setReqId(request.getReqId());
-        switch (request.getTypeCase()) {
-            case CREATEINBOX:
-                replyBuilder.setCreateInbox(createInbox(request.getCreateInbox(), reader, writer));
-                break;
-            case INSERT:
-                replyBuilder.setInsert(batchInsert(request.getInsert(), reader, writer));
-                break;
-            case COMMIT:
-                replyBuilder.setCommit(batchCommit(request.getCommit(), reader, writer));
-                break;
-            case TOUCH:
-                replyBuilder.setTouch(touch(request.getTouch(), reader, writer));
-                break;
+        InboxServiceRWCoProcOutput.Builder replyBuilder =
+            InboxServiceRWCoProcOutput.newBuilder().setReqId(coProcInput.getReqId());
+        switch (coProcInput.getTypeCase()) {
+            case CREATEINBOX -> replyBuilder.setCreateInbox(createInbox(coProcInput.getCreateInbox(), reader, writer));
+            case INSERT -> replyBuilder.setInsert(batchInsert(coProcInput.getInsert(), reader, writer));
+            case COMMIT -> replyBuilder.setCommit(batchCommit(coProcInput.getCommit(), reader, writer));
+            case TOUCH -> replyBuilder.setTouch(touch(coProcInput.getTouch(), reader, writer));
+            case GC -> replyBuilder.setGc(gc(coProcInput.getGc(), reader, writer));
         }
-        if (request.hasGc()) {
-            replyBuilder.setGc(gc(request.getGc(), reader, writer));
-        }
-        ByteString output =
-            InboxServiceRWCoProcOutput.newBuilder().setReply(replyBuilder.build()).build().toByteString();
+        ByteString output = replyBuilder.build().toByteString();
         return () -> output;
     }
 
@@ -382,13 +371,29 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             ByteString scopedInboxId = parseScopedInboxId(itr.key());
             if (isInboxMetadataKey(itr.key())) {
                 InboxMetadata metadata = InboxMetadata.parseFrom(itr.value());
-                if (isGcable(metadata)) {
+                if (isGCable(metadata)) {
                     clearInbox(scopedInboxId, metadata, itr, writeClient);
                 }
             }
             itr.seek(upperBound(scopedInboxId));
         }
-        return GCReply.getDefaultInstance();
+        return GCReply.newBuilder().setReqId(request.getReqId()).build();
+    }
+
+    private CollectMetricsReply collect(CollectMetricsRequest request, IKVReader reader) {
+        CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
+        IKVIterator itr = reader.iterator();
+        for (itr.seekToFirst(); itr.isValid(); ) {
+            String tenantId = parseTenantId(itr.key());
+            ByteString startKey = tenantPrefix(tenantId);
+            ByteString endKey = upperBound(tenantPrefix(tenantId));
+            builder.putUsedSpaces(tenantId, reader.size(intersect(reader.range(), Range.newBuilder()
+                .setStartKey(startKey)
+                .setEndKey(endKey)
+                .build())));
+            itr.seek(endKey);
+        }
+        return builder.build();
     }
 
     @SneakyThrows
@@ -457,15 +462,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                             QoS.forNumber(Math.min(message.getPubQoS().getNumber(), subInfo.getSubQoS().getNumber()));
                         assert finalQoS != null;
                         switch (finalQoS) {
-                            case AT_MOST_ONCE:
-                                qos0MsgList.add(inboxMsg);
-                                break;
-                            case AT_LEAST_ONCE:
-                                qos1MsgList.add(inboxMsg);
-                                break;
-                            case EXACTLY_ONCE:
-                                qos2MsgList.add(inboxMsg);
-                                break;
+                            case AT_MOST_ONCE -> qos0MsgList.add(inboxMsg);
+                            case AT_LEAST_ONCE -> qos1MsgList.add(inboxMsg);
+                            case EXACTLY_ONCE -> qos2MsgList.add(inboxMsg);
                         }
                     }
                 }
@@ -481,69 +480,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             metadata = insertQoS2Inbox(scopedInboxId, metadata, qos2MsgList, itr, reader, writer);
         }
         writer.put(scopedInboxId, metadata.toByteString());
-    }
-
-    @SneakyThrows
-    private InboxInsertResult.Result insertInbox(MessagePack msgPack,
-                                                 IKVIterator itr,
-                                                 IKVReader reader,
-                                                 IKVWriter writer) {
-        SubInfo subInfo = msgPack.getSubInfo();
-        String topicFilter = subInfo.getTopicFilter();
-        ByteString scopedInboxId = KeyUtil.scopedInboxId(subInfo.getTenantId(), subInfo.getInboxId());
-        Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
-        if (metadataBytes.isEmpty()) {
-            return InboxInsertResult.Result.NO_INBOX;
-        }
-        InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
-        if (hasExpired(metadata)) {
-            return InboxInsertResult.Result.NO_INBOX;
-        }
-        List<InboxMessage> qos0MsgList = new ArrayList<>();
-        List<InboxMessage> qos1MsgList = new ArrayList<>();
-        List<InboxMessage> qos2MsgList = new ArrayList<>();
-        for (TopicMessagePack topicMsgPack : msgPack.getMessagesList()) {
-            String topic = topicMsgPack.getTopic();
-            for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
-                for (Message message : publisherPack.getMessageList()) {
-                    InboxMessage inboxMsg =
-                        InboxMessage.newBuilder()
-                            .setTopicFilter(topicFilter)
-                            .setMsg(TopicMessage.newBuilder()
-                                .setTopic(topic)
-                                .setMessage(message)
-                                .setPublisher(publisherPack.getPublisher())
-                                .build())
-                            .build();
-                    QoS finalQoS = QoS.forNumber(
-                        Math.min(message.getPubQoS().getNumber(), msgPack.getSubInfo().getSubQoS().getNumber()));
-                    assert finalQoS != null;
-                    switch (finalQoS) {
-                        case AT_MOST_ONCE:
-                            qos0MsgList.add(inboxMsg);
-                            break;
-                        case AT_LEAST_ONCE:
-                            qos1MsgList.add(inboxMsg);
-                            break;
-                        case EXACTLY_ONCE:
-                            qos2MsgList.add(inboxMsg);
-                            break;
-                    }
-                }
-            }
-        }
-        if (!qos0MsgList.isEmpty()) {
-            metadata = insertQoS0Inbox(scopedInboxId, metadata, qos0MsgList, itr, writer);
-        }
-        if (!qos1MsgList.isEmpty()) {
-            metadata = insertQoS1Inbox(scopedInboxId, metadata, qos1MsgList, itr, writer);
-        }
-        if (!qos2MsgList.isEmpty()) {
-            metadata = insertQoS2Inbox(scopedInboxId, metadata, qos2MsgList, itr, reader, writer);
-        }
-
-        writer.put(scopedInboxId, metadata.toByteString());
-        return InboxInsertResult.Result.OK;
     }
 
     private InboxMetadata insertQoS0Inbox(ByteString scopedInboxId, InboxMetadata metadata,
@@ -932,12 +868,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return now.compareTo(expireAt) > 0;
     }
 
-    private boolean isGcable(InboxMetadata metadata) {
+    private boolean isGCable(InboxMetadata metadata) {
         Duration now = Duration.ofMillis(clock.millis());
-        Duration expireAt =
-            Duration.ofMillis(metadata.getLastFetchTime())
-                .plus(Duration.ofSeconds(metadata.getExpireSeconds()))
-                .plus(purgeDelay);
+        Duration expireAt = Duration.ofMillis(metadata.getLastFetchTime())
+            .plus(Duration.ofSeconds(metadata.getExpireSeconds()))
+            .plus(purgeDelay);
         return now.compareTo(expireAt) > 0;
     }
 }

@@ -74,7 +74,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     }
 
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
-    private final IBaseKVStoreClient kvStoreClient;
     private final ScheduledExecutorService bgTaskExecutor;
     private final boolean bgTaskExecutorOwner;
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
@@ -91,7 +90,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     InboxService(ISettingProvider settingProvider,
                  IBaseKVStoreClient kvStoreClient,
                  ScheduledExecutorService bgTaskExecutor) {
-        this.kvStoreClient = kvStoreClient;
         this.fetchScheduler = new InboxFetchScheduler(kvStoreClient);
         this.checkScheduler = new InboxCheckScheduler(kvStoreClient);
         this.insertScheduler = new InboxInsertScheduler(kvStoreClient);

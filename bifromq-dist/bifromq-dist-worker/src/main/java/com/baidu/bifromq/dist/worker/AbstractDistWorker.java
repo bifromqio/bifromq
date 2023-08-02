@@ -137,6 +137,9 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
     }
 
     private void scheduleGC() {
+        if (status.get() != Status.STARTED) {
+            return;
+        }
         gcJob = jobScheduler.schedule(this::gc, gcInterval.toSeconds(), TimeUnit.SECONDS);
     }
 
@@ -174,6 +177,9 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
     }
 
     private void scheduleStats() {
+        if (status.get() != Status.STARTED) {
+            return;
+        }
         statsJob = jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
@@ -252,7 +258,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             });
     }
 
-    private <T> void awaitIfNotCancelled(ScheduledFuture<T> sf) {
+    private <S> void awaitIfNotCancelled(ScheduledFuture<S> sf) {
         try {
             if (!sf.isCancelled()) {
                 sf.get();

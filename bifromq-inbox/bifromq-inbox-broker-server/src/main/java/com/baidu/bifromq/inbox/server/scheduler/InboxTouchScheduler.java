@@ -26,7 +26,6 @@ import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
-import com.baidu.bifromq.inbox.storage.proto.UpdateRequest;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -91,21 +90,19 @@ public class InboxTouchScheduler extends InboxUpdateScheduler<InboxTouchSchedule
 
             @Override
             public CompletableFuture<Void> execute() {
-                UpdateRequest updateRequest = UpdateRequest.newBuilder()
-                    .setReqId(System.nanoTime())
-                    .setTouch(TouchRequest.newBuilder()
-                        .putAllScopedInboxId(inboxTouches)
-                        .build())
-                    .build();
+                long reqId = System.nanoTime();
                 batchInboxCount.record(inboxTouches.size());
                 Timer.Sample start = Timer.start();
                 return kvStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
-                            .setReqId(updateRequest.getReqId())
+                            .setReqId(reqId)
                             .setVer(range.ver)
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setRequest(updateRequest)
+                                .setReqId(reqId)
+                                .setTouch(TouchRequest.newBuilder()
+                                    .putAllScopedInboxId(inboxTouches)
+                                    .build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
@@ -113,8 +110,7 @@ public class InboxTouchScheduler extends InboxUpdateScheduler<InboxTouchSchedule
                         switch (reply.getCode()) {
                             case Ok:
                                 try {
-                                    return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                        .getReply().getTouch();
+                                    return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getTouch();
                                 } catch (InvalidProtocolBufferException e) {
                                     log.error("Unable to parse rw co-proc output", e);
                                     throw new RuntimeException(e);
@@ -149,7 +145,7 @@ public class InboxTouchScheduler extends InboxUpdateScheduler<InboxTouchSchedule
         private final Timer batchTouchTimer;
 
         BatchTouchBuilder(String name, int maxInflights,
-                                  KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
+                          KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
             super(name, maxInflights);
             this.range = range;
             this.kvStoreClient = kvStoreClient;

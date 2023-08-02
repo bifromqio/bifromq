@@ -38,6 +38,7 @@ public enum TenantMetric {
     MqttQoS2ExternalLatency("mqtt.ex.qos2.latency", Meter.Type.TIMER),
     MqttChannelLatency("mqtt.channel.latency", Meter.Type.TIMER),
     DistSubInfoSizeGauge("dist.sub.size.gauge", Meter.Type.GAUGE),
+    InboxSpaceSizeGauge("inbox.space.size.gauge", Meter.Type.GAUGE),
     InboxFetcherGauge("inbox.fetcher.num.gauge", Meter.Type.GAUGE);
 
     public final String metricName;

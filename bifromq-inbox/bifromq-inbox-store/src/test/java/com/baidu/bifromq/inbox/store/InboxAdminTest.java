@@ -53,7 +53,6 @@ public class InboxAdminTest extends InboxStoreTest {
         requestCreate(tenantId, inboxId, 10, 100, false);
         has = requestHas(tenantId, inboxId);
         assertTrue(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-
         requestDelete(tenantId, inboxId);
     }
 
@@ -69,7 +68,6 @@ public class InboxAdminTest extends InboxStoreTest {
         when(clock.millis()).thenReturn(2100L);
         has = requestHas(tenantId, inboxId);
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-
         requestDelete(tenantId, inboxId);
     }
 
@@ -88,7 +86,6 @@ public class InboxAdminTest extends InboxStoreTest {
             .get(scopedInboxId(tenantId, inboxId1).toStringUtf8()));
         assertTrue(requestHas(tenantId, inboxId2).getExistsMap()
             .get(scopedInboxId(tenantId, inboxId2).toStringUtf8()));
-
         requestDelete(tenantId, inboxId1);
         requestDelete(tenantId, inboxId2);
     }
@@ -100,7 +97,6 @@ public class InboxAdminTest extends InboxStoreTest {
         requestDelete(tenantId, inboxId);
         HasReply has = requestHas(tenantId, inboxId);
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-
         requestDelete(tenantId, inboxId);
     }
 
@@ -132,7 +128,6 @@ public class InboxAdminTest extends InboxStoreTest {
             .setExistKey(scopedInboxId(tenantId, inboxId))
             .build()).join();
         assertFalse(reply.getExistResult());
-
         requestDelete(tenantId, inboxId);
     }
 }

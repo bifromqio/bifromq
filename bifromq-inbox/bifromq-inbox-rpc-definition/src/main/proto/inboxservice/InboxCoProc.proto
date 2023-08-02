@@ -108,57 +108,58 @@ message InboxCommitReply{
 }
 
 message GCRequest {
+  uint64 reqId = 1;
 }
 
 message GCReply {
+  uint64 reqId = 1;
 }
 
-message UpdateRequest{
+message CollectMetricsRequest{
+  uint64 reqId = 1;
+}
+
+message CollectMetricsReply{
+  uint64 reqId = 1;
+  map<string, uint64> usedSpaces = 2;
+}
+
+message InboxServiceRWCoProcInput{
   uint64 reqId = 1;
   oneof type{
     InboxInsertRequest insert = 2;
     InboxCommitRequest commit = 3;
     CreateRequest createInbox = 4;
     TouchRequest touch = 5;
+    GCRequest gc = 6;
   }
-  optional GCRequest gc = 6;
 }
 
-message UpdateReply{
+message InboxServiceRWCoProcOutput{
   uint64 reqId = 1;
   oneof type{
     InboxInsertReply insert = 2;
     InboxCommitReply commit = 3;
     CreateReply createInbox = 4;
     TouchReply touch = 5;
+    GCReply gc = 6;
   }
-  optional GCReply gc = 6;
-}
-
-message QueryRequest{
-  uint64 reqId = 1;
-  optional HasRequest has = 2;
-  optional InboxFetchRequest fetch = 3;
-}
-
-message QueryReply{
-  uint64 reqId = 1;
-  optional HasReply has = 2;
-  optional InboxFetchReply fetch = 3;
-}
-
-message InboxServiceRWCoProcInput{
-  UpdateRequest request = 1;
-}
-
-message InboxServiceRWCoProcOutput{
-  UpdateReply reply = 1;
 }
 
 message InboxServiceROCoProcInput{
-  QueryRequest request = 1;
+  uint64 reqId = 1;
+  oneof input{
+    HasRequest has = 2;
+    InboxFetchRequest fetch = 3;
+    CollectMetricsRequest collectMetrics = 4;
+  }
 }
 
 message InboxServiceROCoProcOutput{
-  QueryReply reply = 1;
+  uint64 reqId = 1;
+  oneof output{
+    HasReply has = 2;
+    InboxFetchReply fetch = 3;
+    CollectMetricsReply collectedMetrics = 4;
+  }
 }

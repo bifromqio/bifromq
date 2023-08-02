@@ -27,26 +27,47 @@ public class KeyUtil {
     private static final ByteString QOS2INDEX = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString QOS2MSG = ByteString.copyFrom(new byte[] {0x01});
 
+    private static int tenantIdLength(ByteString key) {
+        return toInt(key.substring(0, Integer.BYTES));
+    }
+
+    private static int inboxIdLength(ByteString key) {
+        return inboxIdLength(key, tenantIdLength(key));
+    }
+
+    private static int scopedInboxIdLength(ByteString key) {
+        int tenantIdLen = tenantIdLength(key);
+        int inboxIdLen = inboxIdLength(key, tenantIdLen);
+        return Integer.BYTES + tenantIdLen + Integer.BYTES + inboxIdLen;
+    }
+
+    private static int inboxIdLength(ByteString key, int tenantIdLength) {
+        return toInt(key.substring(Integer.BYTES + tenantIdLength, tenantIdLength + 2 * Integer.BYTES));
+    }
+
+    public static ByteString tenantPrefix(String tenantId) {
+        ByteString tenantIdBS = UnsafeByteOperations.unsafeWrap(tenantId.getBytes(StandardCharsets.UTF_8));
+        return toByteString(tenantIdBS.size()).concat(tenantIdBS);
+    }
+
     public static ByteString scopedInboxId(String tenantId, String inboxId) {
+        // scopedInboxId format: <tenantIdLength><tenantId><inboxIdLength><inboxId>
         ByteString tenantIdBS = UnsafeByteOperations.unsafeWrap(tenantId.getBytes(StandardCharsets.UTF_8));
         ByteString inboxIdBS = UnsafeByteOperations.unsafeWrap(inboxId.getBytes(StandardCharsets.UTF_8));
         return toByteString(tenantIdBS.size())
-            .concat(toByteString(inboxIdBS.size()))
             .concat(tenantIdBS)
+            .concat(toByteString(inboxIdBS.size()))
             .concat(inboxIdBS);
     }
 
     public static boolean isInboxMetadataKey(ByteString key) {
-        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
-        int inboxIdLength = toInt(key.substring(Integer.BYTES, 2 * Integer.BYTES));
-        return key.size() == tenantIdLength + inboxIdLength + 2 * Integer.BYTES;
+        int tenantIdLen = tenantIdLength(key);
+        return key.size() == tenantIdLen + inboxIdLength(key, tenantIdLen) + 2 * Integer.BYTES;
     }
 
     public static boolean isQoS0MessageKey(ByteString key) {
-        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
-        int inboxIdLength = toInt(key.substring(Integer.BYTES, 2 * Integer.BYTES));
-        int scopedInboxIdLength = 2 * Integer.BYTES + tenantIdLength + inboxIdLength;
-        return key.size() > scopedInboxIdLength && key.byteAt(scopedInboxIdLength) == QOS0INBOX_SIGN.byteAt(0);
+        int scopedInboxIdLen = scopedInboxIdLength(key);
+        return key.size() > scopedInboxIdLen && key.byteAt(scopedInboxIdLen) == QOS0INBOX_SIGN.byteAt(0);
     }
 
     public static boolean isQoS0MessageKey(ByteString key, ByteString scopedInboxId) {
@@ -54,10 +75,8 @@ public class KeyUtil {
     }
 
     public static boolean isQoS1MessageKey(ByteString key) {
-        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
-        int inboxIdLength = toInt(key.substring(Integer.BYTES, 2 * Integer.BYTES));
-        int scopedInboxIdLength = 2 * Integer.BYTES + tenantIdLength + inboxIdLength;
-        return key.size() > scopedInboxIdLength && key.byteAt(scopedInboxIdLength) == QOS1INBOX_SIGN.byteAt(0);
+        int scopedInboxIdLen = scopedInboxIdLength(key);
+        return key.size() > scopedInboxIdLen && key.byteAt(scopedInboxIdLen) == QOS1INBOX_SIGN.byteAt(0);
     }
 
     public static boolean isQoS1MessageKey(ByteString key, ByteString scopedInboxId) {
@@ -65,12 +84,10 @@ public class KeyUtil {
     }
 
     public static boolean isQoS2MessageIndexKey(ByteString key) {
-        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
-        int inboxIdLength = toInt(key.substring(Integer.BYTES, 2 * Integer.BYTES));
-        int scopedInboxIdLength = 2 * Integer.BYTES + tenantIdLength + inboxIdLength;
-        return key.size() > scopedInboxIdLength + 2 &&
-            key.byteAt(scopedInboxIdLength) == QOS2INBOX_SIGN.byteAt(0) &&
-            key.byteAt(scopedInboxIdLength + 1) == QOS2INDEX.byteAt(0);
+        int scopedInboxIdLen = scopedInboxIdLength(key);
+        return key.size() > scopedInboxIdLen + 2 &&
+            key.byteAt(scopedInboxIdLen) == QOS2INBOX_SIGN.byteAt(0) &&
+            key.byteAt(scopedInboxIdLen + 1) == QOS2INDEX.byteAt(0);
     }
 
     public static boolean isQoS2MessageIndexKey(ByteString key, ByteString scopedInboxId) {
@@ -78,29 +95,27 @@ public class KeyUtil {
     }
 
     public static boolean isQoS2QueueMessageKey(ByteString key) {
-        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
-        int inboxIdLength = toInt(key.substring(Integer.BYTES, 2 * Integer.BYTES));
-        int scopedInboxIdLength = 2 * Integer.BYTES + tenantIdLength + inboxIdLength;
-        return key.size() > scopedInboxIdLength + 2 &&
-            key.byteAt(scopedInboxIdLength) == QOS2INBOX_SIGN.byteAt(0);
+        int scopedInboxIdLen = scopedInboxIdLength(key);
+        return key.size() > scopedInboxIdLen + 2 &&
+            key.byteAt(scopedInboxIdLen) == QOS2INBOX_SIGN.byteAt(0);
     }
 
     public static String parseTenantId(ByteString scopedInboxId) {
         int tenantIdLength = toInt(scopedInboxId.substring(0, Integer.BYTES));
-        return scopedInboxId.substring(2 * Integer.BYTES, 2 * Integer.BYTES + tenantIdLength).toStringUtf8();
+        return scopedInboxId.substring(Integer.BYTES, Integer.BYTES + tenantIdLength).toStringUtf8();
     }
 
     public static String parseInboxId(ByteString scopedInboxId) {
-        int tenantIdLength = toInt(scopedInboxId.substring(0, Integer.BYTES));
-        int inboxIdLength = toInt(scopedInboxId.substring(Integer.BYTES, 2 * Integer.BYTES));
-        return scopedInboxId.substring(2 * Integer.BYTES + tenantIdLength,
-            2 * Integer.BYTES + tenantIdLength + inboxIdLength).toStringUtf8();
+        int tenantIdLen = tenantIdLength(scopedInboxId);
+        int inboxIdLen = inboxIdLength(scopedInboxId, tenantIdLen);
+        return scopedInboxId.substring(2 * Integer.BYTES + tenantIdLen,
+            2 * Integer.BYTES + tenantIdLen + inboxIdLen).toStringUtf8();
     }
 
     public static ByteString parseScopedInboxId(ByteString key) {
-        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
-        int inboxIdLength = toInt(key.substring(Integer.BYTES, 2 * Integer.BYTES));
-        return key.substring(0, tenantIdLength + inboxIdLength + 2 * Integer.BYTES);
+        int tenantIdLen = tenantIdLength(key);
+        int inboxIdLen = inboxIdLength(key, tenantIdLen);
+        return key.substring(0, tenantIdLen + inboxIdLen + 2 * Integer.BYTES);
     }
 
     public static ByteString qos0InboxPrefix(ByteString scopedInboxId) {
@@ -176,5 +191,4 @@ public class KeyUtil {
         ByteBuffer buffer = b.asReadOnlyByteBuffer();
         return buffer.getLong();
     }
-
 }

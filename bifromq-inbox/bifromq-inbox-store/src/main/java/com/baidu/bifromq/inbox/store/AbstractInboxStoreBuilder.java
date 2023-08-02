@@ -38,7 +38,7 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
     Duration statsInterval = Duration.ofSeconds(30);
-    Duration gcInterval = Duration.ofMinutes(60);
+    Duration gcInterval = Duration.ofMinutes(5);
     Duration purgeDelay = Duration.ofMinutes(30);
     Clock clock = Clock.systemUTC();
 
