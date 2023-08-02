@@ -39,11 +39,18 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class DistQoS1Test extends DistWorkerTest {
+    @AfterMethod(groups = "integration")
+    public void clearMock() {
+        Mockito.reset(writer1, writer2, writer3);
+    }
+
     @Test(groups = "integration")
     public void succeedWithNoSub() {
         String topic = "/a/b/c";
@@ -102,6 +109,8 @@ public class DistQoS1Test extends DistWorkerTest {
 
         verify(distClient, timeout(100).atLeastOnce())
             .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+
+        deleteMatchRecord(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
     }
 
     @SneakyThrows
@@ -158,5 +167,7 @@ public class DistQoS1Test extends DistWorkerTest {
             .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
         verify(eventCollector, timeout(100).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
+
+        leaveMatchGroup(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
     }
 }

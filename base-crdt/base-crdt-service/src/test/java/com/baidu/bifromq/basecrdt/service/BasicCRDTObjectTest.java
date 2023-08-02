@@ -31,8 +31,8 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
 
     @ServiceCfgs(services =
         {
-            @ServiceCfg(id = "s1", bindPort = 11111, isSeed = true),
-            @ServiceCfg(id = "s2", bindPort = 22222)
+            @ServiceCfg(id = "s1", isSeed = true),
+            @ServiceCfg(id = "s2")
         })
     @Test(groups = "integration")
     public void testConvergence() {
@@ -57,8 +57,8 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
 
     @ServiceCfgs(services =
         {
-            @ServiceCfg(id = "s1", bindPort = 11111, isSeed = true),
-            @ServiceCfg(id = "s2", bindPort = 22222)
+            @ServiceCfg(id = "s1", isSeed = true),
+            @ServiceCfg(id = "s2")
         })
     @Test(groups = "integration")
     public void testPartition() {

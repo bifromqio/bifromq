@@ -60,8 +60,8 @@ public class CRDTServiceTestCluster {
         serviceHostMap.get(joinerId)
             .join(Sets.newHashSet(
                 new InetSocketAddress(
-                    serviceMetaMap.get(joineeId).hostOptions.addr(),
-                    serviceMetaMap.get(joineeId).hostOptions.port()))
+                    serviceHostMap.get(joineeId).local().getAddress(),
+                    serviceHostMap.get(joineeId).local().getPort()))
             )
             .join();
     }

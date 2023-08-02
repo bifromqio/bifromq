@@ -27,5 +27,5 @@ public @interface ServiceCfg {
 
     String bindAddr() default "127.0.0.1";
 
-    int bindPort();
+    int bindPort() default 0;
 }

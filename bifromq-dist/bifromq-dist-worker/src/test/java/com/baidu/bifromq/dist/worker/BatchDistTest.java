@@ -119,6 +119,12 @@ public class BatchDistTest extends DistWorkerTest {
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/2").intValue(), 2);
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/3").intValue(), 1);
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/4").intValue(), 1);
+
+        deleteMatchRecord(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
+        deleteMatchRecord(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");
+        deleteMatchRecord(tenantA, "/a/2", MqttBroker, "inbox3", "batch1");
+        deleteMatchRecord(tenantA, "/a/3", InboxService, "inbox2", "batch2");
+        deleteMatchRecord(tenantA, "/a/4", InboxService, "inbox2", "batch2");
     }
 
     private TopicMessagePack.PublisherPack toMsg(String tenantId, QoS qos, ByteString payload) {

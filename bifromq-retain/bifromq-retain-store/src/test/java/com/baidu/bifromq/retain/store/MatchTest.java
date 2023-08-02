@@ -50,6 +50,10 @@ public class MatchTest extends RetainStoreTest {
         matchReply = requestMatch(tenantId, "/+/b/#", 10);
         assertEquals(matchReply.getMessagesCount(), 2);
         assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
+
+        clearMessage(tenantId, "/a/b/c");
+        clearMessage(tenantId, "/a/b/");
+        clearMessage(tenantId, "/c/");
     }
 
     @Test(groups = "integration")
@@ -64,5 +68,9 @@ public class MatchTest extends RetainStoreTest {
 
         assertEquals(requestMatch(tenantId, "#", 0).getMessagesCount(), 0);
         assertEquals(requestMatch(tenantId, "#", 1).getMessagesCount(), 1);
+
+        clearMessage(tenantId, "/a/b/c");
+        clearMessage(tenantId, "/a/b/");
+        clearMessage(tenantId, "/c/");
     }
 }

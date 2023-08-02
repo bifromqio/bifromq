@@ -54,6 +54,8 @@ public class SubUnsubTest extends DistWorkerTest {
         reply = addTopicFilter(tenantA, "/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server1");
         assertEquals(reply.getResultMap().get(subInfoKeyUtf8).getResultsMap().get("/a/b/c"),
             AddTopicFilterReply.Result.OK);
+
+        removeTopicFilter(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
     }
 
     @Test(groups = "integration")

@@ -38,6 +38,7 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message1);
 
+        clearMessage(tenantId, topic);
     }
 
     @Test(groups = "integration")
@@ -57,5 +58,8 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
         MatchCoProcReply matchReply = requestMatch(tenantId, "/b", 10);
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message);
+
+        clearMessage(tenantId, "/a");
+        clearMessage(tenantId, "/b");
     }
 }

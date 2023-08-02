@@ -100,6 +100,8 @@ public class BatchInsertTest extends InboxStoreTest {
         Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount(), 1);
         Assert.assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage(),
             msg2.getMessage(0));
+
+        requestDelete(tenantId, inboxId);
     }
 
     @Test(groups = "integration")
@@ -153,5 +155,7 @@ public class BatchInsertTest extends InboxStoreTest {
         assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
         assertEquals(reply2.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(0).getMsg().getMessage(),
             msg.getMessage(0));
+
+        requestDelete(tenantId, inboxId);
     }
 }

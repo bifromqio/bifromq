@@ -33,6 +33,8 @@ public class RetainBehaviorTest extends RetainStoreTest {
         MatchCoProcReply matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getMessagesCount(), 1);
         assertEquals(matchReply.getMessages(0), message);
+
+        clearMessage(tenantId, topic);
     }
 
     @Test(groups = "integration")
@@ -57,5 +59,7 @@ public class RetainBehaviorTest extends RetainStoreTest {
 
         MatchCoProcReply matchReply = requestMatch(tenantId, "/b", 10);
         assertEquals(matchReply.getMessagesCount(), 0);
+
+        clearMessage(tenantId, "/a");
     }
 }

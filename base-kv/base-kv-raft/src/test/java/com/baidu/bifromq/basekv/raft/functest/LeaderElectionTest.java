@@ -495,6 +495,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         assertEquals(group.currentLeader().get(), transferee);
     }
 
+    @Config(preVote = false)
     @Test(groups = "integration")
     public void testNodeWithSmallerTermCanCompleteElection() {
         String leader = group.currentLeader().get();
@@ -522,6 +523,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         this.testNodeWithSmallerTermCanCompleteElection();
     }
 
+    @Config(preVote = false)
     @Test(groups = "integration")
     public void testLeaderStepDown() {
         String leader = group.currentLeader().get();

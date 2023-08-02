@@ -14,6 +14,8 @@
 package com.baidu.bifromq.mqtt;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.reset;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,31 +37,38 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class MQTTFanInTest extends MQTTTest {
-    private String tenantId = "testTraffic";
-    private String deviceKey = "testDevice";
+public class MQTTFanInTest {
+    private final MQTTTest mqttTest = MQTTTest.getInstance();
+    private final String tenantId = "testFanInTraffic";
+    private final String deviceKey = "testDevice";
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void setup() {
-        super.setup();
-        when(authProvider.auth(any(MQTT3AuthData.class)))
+        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
             .thenReturn(CompletableFuture.completedFuture(true));
         doAnswer(invocationOnMock -> {
 //            Event event = invocationOnMock.getArgument(0);
 //            log.info("event: {}", event);
             return null;
-        }).when(eventCollector).report(any(Event.class));
+        }).when(mqttTest.eventCollector).report(any(Event.class));
+    }
+
+    @AfterClass(alwaysRun = true)
+    public void resetMocks() {
+        reset(mqttTest.authProvider, mqttTest.eventCollector);
+        clearInvocations(mqttTest.eventCollector);
     }
 
     @Test(groups = "integration")
@@ -74,16 +83,16 @@ public class MQTTFanInTest extends MQTTTest {
         connOpts.setCleanSession(true);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestClient pubClient1 = new MqttTestClient(brokerURI, "pubClient1");
+        MqttTestClient pubClient1 = new MqttTestClient(MQTTTest.brokerURI, "pubClient1");
         pubClient1.connect(connOpts);
 
-        MqttTestClient pubClient2 = new MqttTestClient(brokerURI, "pubClient2");
+        MqttTestClient pubClient2 = new MqttTestClient(MQTTTest.brokerURI, "pubClient2");
         pubClient2.connect(connOpts);
 
-        MqttTestClient pubClient3 = new MqttTestClient(brokerURI, "pubClient3");
+        MqttTestClient pubClient3 = new MqttTestClient(MQTTTest.brokerURI, "pubClient3");
         pubClient3.connect(connOpts);
 
-        MqttTestClient subClient = new MqttTestClient(brokerURI, "subClient");
+        MqttTestClient subClient = new MqttTestClient(MQTTTest.brokerURI, "subClient");
         subClient.connect(connOpts);
 
         Observable<MqttMsg> topicSub = subClient.subscribe("#", subQoS);
