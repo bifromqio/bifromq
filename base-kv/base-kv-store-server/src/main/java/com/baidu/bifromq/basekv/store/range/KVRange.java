@@ -69,7 +69,6 @@ import com.baidu.bifromq.basekv.proto.SplitRange;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.TransferLeadership;
 import com.baidu.bifromq.basekv.proto.WALRaftMessages;
-import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
@@ -1334,7 +1333,9 @@ public class KVRange implements IKVRange {
     private void checkWalSize() {
         if ((checkWalSizeTask == null || checkWalSizeTask.isDone()) &&
             wal.logDataSize() > opts.getCompactWALThresholdBytes()) {
-            long lastAppliedIndex = accessor.getReader().lastAppliedIndex();
+            IKVRangeReader reader = accessor.borrow();
+            long lastAppliedIndex = reader.lastAppliedIndex();
+            accessor.returnBorrowed(reader);
             KVRangeSnapshot snapshot = wal.latestSnapshot();
             if (snapshot.getLastAppliedIndex() < lastAppliedIndex) {
                 checkWalSizeTask = doCompact(accessor.metadata().blockingFirst());

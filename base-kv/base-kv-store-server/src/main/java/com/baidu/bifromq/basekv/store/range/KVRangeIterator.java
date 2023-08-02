@@ -23,9 +23,17 @@ import java.util.function.Supplier;
 
 class KVRangeIterator implements IKVIterator {
     private final Supplier<IKVEngineIterator> engineIterator;
+    private final Runnable onClose;
 
     KVRangeIterator(Supplier<IKVEngineIterator> engineIterator) {
         this.engineIterator = engineIterator;
+        this.onClose = () -> {
+        };
+    }
+
+    KVRangeIterator(Supplier<IKVEngineIterator> engineIterator, Runnable onClose) {
+        this.engineIterator = engineIterator;
+        this.onClose = onClose;
     }
 
     @Override
@@ -71,5 +79,10 @@ class KVRangeIterator implements IKVIterator {
     @Override
     public void seekForPrev(ByteString key) {
         engineIterator.get().seekForPrev(dataKey(key));
+    }
+
+    @Override
+    public void close() throws Exception {
+        this.onClose.run();
     }
 }

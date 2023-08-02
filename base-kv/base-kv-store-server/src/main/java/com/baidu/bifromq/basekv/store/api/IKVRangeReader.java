@@ -33,4 +33,6 @@ public interface IKVRangeReader {
      * Refresh to access the latest consistent view
      */
     void refresh();
+
+    void close();
 }

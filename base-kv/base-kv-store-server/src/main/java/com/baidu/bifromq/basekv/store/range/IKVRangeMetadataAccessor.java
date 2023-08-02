@@ -35,4 +35,6 @@ interface IKVRangeMetadataAccessor {
     void refresh();
 
     void destroy(boolean includeData);
+
+    void close();
 }

@@ -57,6 +57,7 @@ class KVRangeState implements IKVRangeState {
             .setLastAppliedIndex(metadata.lastAppliedIndex())
             .setState(metadata.state())
             .setRange(metadata.range());
+        metadata.close();
         return builder.build();
     }
 
@@ -74,7 +75,10 @@ class KVRangeState implements IKVRangeState {
         Range dataBound = metadata.dataBound();
         IKVEngineIterator dataIterator = kvEngine.newIterator(checkpoint.getCheckpointId(),
             metadata.dataBoundId(), dataBound.getStartKey(), dataBound.getEndKey());
-        return new KVRangeIterator(() -> dataIterator);
+        return new KVRangeIterator(() -> dataIterator, () -> {
+            dataIterator.close();
+            metadata.close();
+        });
     }
 
     @SneakyThrows
