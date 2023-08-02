@@ -69,8 +69,8 @@ public class AgentTestCluster {
         checkHost(joinerId);
         checkHost(joineeId);
         hostMap.get(hostEndpointMap.get(joinerId))
-            .join(Sets.newHashSet(new InetSocketAddress(hostMetaMap.get(joineeId).options.addr(),
-                hostMetaMap.get(joineeId).options.port())));
+            .join(Sets.newHashSet(new InetSocketAddress(hostEndpointMap.get(joineeId).getAddress(),
+                    hostEndpointMap.get(joineeId).getPort())));
     }
 
     public void stopHost(String hostId) {

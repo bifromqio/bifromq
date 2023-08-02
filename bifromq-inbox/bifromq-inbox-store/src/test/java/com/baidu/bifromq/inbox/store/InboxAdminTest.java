@@ -25,7 +25,6 @@ import com.baidu.bifromq.inbox.storage.proto.HasReply;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.io.IOException;
 import java.time.Clock;
 import org.mockito.Mock;
 import org.testng.annotations.BeforeMethod;
@@ -36,8 +35,7 @@ public class InboxAdminTest extends InboxStoreTest {
     private Clock clock;
 
     @BeforeMethod(groups = "integration")
-    public void setup() throws IOException {
-        super.setup();
+    public void resetClock() {
         when(clock.millis()).thenReturn(0L);
     }
 
@@ -55,6 +53,8 @@ public class InboxAdminTest extends InboxStoreTest {
         requestCreate(tenantId, inboxId, 10, 100, false);
         has = requestHas(tenantId, inboxId);
         assertTrue(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
+
+        requestDelete(tenantId, inboxId);
     }
 
     @Test(groups = "integration")
@@ -69,6 +69,8 @@ public class InboxAdminTest extends InboxStoreTest {
         when(clock.millis()).thenReturn(2100L);
         has = requestHas(tenantId, inboxId);
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
+
+        requestDelete(tenantId, inboxId);
     }
 
     @Test(groups = "integration")
@@ -86,6 +88,9 @@ public class InboxAdminTest extends InboxStoreTest {
             .get(scopedInboxId(tenantId, inboxId1).toStringUtf8()));
         assertTrue(requestHas(tenantId, inboxId2).getExistsMap()
             .get(scopedInboxId(tenantId, inboxId2).toStringUtf8()));
+
+        requestDelete(tenantId, inboxId1);
+        requestDelete(tenantId, inboxId2);
     }
 
     @Test(groups = "integration")
@@ -95,6 +100,8 @@ public class InboxAdminTest extends InboxStoreTest {
         requestDelete(tenantId, inboxId);
         HasReply has = requestHas(tenantId, inboxId);
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
+
+        requestDelete(tenantId, inboxId);
     }
 
     @Test(groups = "integration")
@@ -125,5 +132,7 @@ public class InboxAdminTest extends InboxStoreTest {
             .setExistKey(scopedInboxId(tenantId, inboxId))
             .build()).join();
         assertFalse(reply.getExistResult());
+
+        requestDelete(tenantId, inboxId);
     }
 }

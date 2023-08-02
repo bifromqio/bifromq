@@ -42,13 +42,13 @@ public class InboxCreateTest {
     private IKVIterator kvIterator;
     @Mock
     private IKVWriter writer;
-    private Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
-    private IEventCollector eventCollector = event -> {
+    private final Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
+    private final IEventCollector eventCollector = event -> {
     };
-    private String tenantId = "tenantA";
-    private String inboxId = "inboxId";
-    private String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
-    private ClientInfo clientInfo = ClientInfo.newBuilder()
+    private final String tenantId = "tenantA";
+    private final String inboxId = "inboxId";
+    private final String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
+    private final ClientInfo clientInfo = ClientInfo.newBuilder()
         .setTenantId(tenantId)
         .putMetadata("agent", "mqtt")
         .putMetadata("protocol", "3.1.1")
@@ -57,7 +57,7 @@ public class InboxCreateTest {
         .putMetadata("ip", "127.0.0.1")
         .putMetadata("port", "8888")
         .build();
-    private Clock clock = Clock.systemUTC();
+    private final Clock clock = Clock.systemUTC();
     private AutoCloseable closeable;
 
     @BeforeMethod

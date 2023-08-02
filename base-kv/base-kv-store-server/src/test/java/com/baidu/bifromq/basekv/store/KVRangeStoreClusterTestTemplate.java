@@ -97,7 +97,7 @@ public abstract class KVRangeStoreClusterTestTemplate {
     public void teardown() {
         if (cluster != null) {
             log.info("Shutting down test cluster");
-            cluster.shutdown();
+            new Thread(() -> cluster.shutdown()).start();
         }
     }
 

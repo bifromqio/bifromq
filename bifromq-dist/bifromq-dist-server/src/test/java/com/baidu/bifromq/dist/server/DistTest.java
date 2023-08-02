@@ -39,14 +39,20 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class DistTest extends DistServiceTest {
     private final String tenantId = "tenantA";
 
+    @BeforeMethod(groups = "integration")
+    public void resetMock() {
+        Mockito.reset(inboxDeliverer);
+    }
+
     @SneakyThrows
-    @Test(groups = "integration")
+    @Test(groups = "integration", dependsOnMethods = "distWithFanOutSub")
     public void distWithNoSub() {
         Mockito.lenient().when(inboxDeliverer.deliver(any()))
             .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {

@@ -31,7 +31,7 @@ public @interface StoreCfg {
 
     String bindAddr() default "127.0.0.1";
 
-    int bindPort();
+    int bindPort() default 0;
 
     long purgeDelayInSec() default 1;
 

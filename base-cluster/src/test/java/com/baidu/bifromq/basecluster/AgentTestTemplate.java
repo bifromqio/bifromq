@@ -17,15 +17,12 @@ import com.baidu.bifromq.basecluster.annotation.StoreCfg;
 import com.baidu.bifromq.basecluster.annotation.StoreCfgs;
 import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.store.CRDTStoreOptions;
-import io.micrometer.core.instrument.Clock;
-import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
-import io.micrometer.core.instrument.logging.LoggingRegistryConfig;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
+
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 
 @Slf4j
@@ -70,7 +67,8 @@ public abstract class AgentTestTemplate {
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");
-            storeMgr.shutdown();
+            // run in a separate thread to avoid blocking the test thread
+            new Thread(() -> storeMgr.shutdown()).start();
         }
     }
 

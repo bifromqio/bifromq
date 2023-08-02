@@ -49,8 +49,8 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 
 @Slf4j
 public abstract class DistServiceTest {
@@ -83,7 +83,7 @@ public abstract class DistServiceTest {
 
     private AutoCloseable closeable;
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         when(subBrokerMgr.get(anyInt())).thenReturn(inboxBroker);
@@ -166,20 +166,22 @@ public abstract class DistServiceTest {
         log.info("Setup finished, and start testing");
     }
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
-        workerClient.stop();
-        distWorker.stop();
-        distClient.stop();
-        distServer.shutdown();
-        clientCrdtService.stop();
-        serverCrdtService.stop();
-        agentHost.shutdown();
-        queryExecutor.shutdown();
-        mutationExecutor.shutdown();
-        tickTaskExecutor.shutdown();
-        bgTaskExecutor.shutdown();
+        new Thread(() -> {
+            workerClient.stop();
+            distWorker.stop();
+            distClient.stop();
+            distServer.shutdown();
+            clientCrdtService.stop();
+            serverCrdtService.stop();
+            agentHost.shutdown();
+            queryExecutor.shutdown();
+            mutationExecutor.shutdown();
+            tickTaskExecutor.shutdown();
+            bgTaskExecutor.shutdown();
+        }).start();
         closeable.close();
     }
 
