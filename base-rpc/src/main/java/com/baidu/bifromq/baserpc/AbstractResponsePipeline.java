@@ -91,13 +91,12 @@ abstract class AbstractResponsePipeline<RequestT, ResponseT>
             sample.stop(RPCMeters.timer(meterKey, RPCMetric.PipelineReqProcessTime));
             // untrack current response future
             if (e != null) {
-                log.trace("Finished request handling with error in pipeline@{}: request={}, error={}",
-                    this.hashCode(), request, e.getMessage());
+                log.debug("Request handling with error in pipeline@{}: request={}", this.hashCode(), request, e);
                 RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqFailCount);
                 // any handling exception will cause pipeline close
                 fail(e);
             } else {
-                log.trace("Finished request handling in pipeline@{}: request={}", hashCode(), request);
+                log.trace("Request handling in pipeline@{}: request={}", hashCode(), request);
                 RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqFulfillCount);
             }
         });

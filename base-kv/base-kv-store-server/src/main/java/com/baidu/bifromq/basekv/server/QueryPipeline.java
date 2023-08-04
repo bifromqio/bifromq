@@ -36,7 +36,8 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
     private final boolean linearized;
     private final AtomicBoolean executing = new AtomicBoolean(false);
 
-    public QueryPipeline(IKVRangeStore kvRangeStore, boolean linearized, StreamObserver responseObserver) {
+    public QueryPipeline(IKVRangeStore kvRangeStore, boolean linearized,
+                         StreamObserver<KVRangeROReply> responseObserver) {
         super(responseObserver);
         this.linearized = linearized;
         this.kvRangeStore = kvRangeStore;
@@ -44,18 +45,11 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
 
     @Override
     protected CompletableFuture<KVRangeROReply> handleRequest(String ignore, KVRangeRORequest request) {
-        QueryTask task;
-        switch (request.getTypeCase()) {
-            case GETKEY:
-                task = new QueryTask(request, this::get);
-                break;
-            case EXISTKEY:
-                task = new QueryTask(request, this::exist);
-                break;
-            case ROCOPROCINPUT:
-            default:
-                task = new QueryTask(request, this::roCoproc);
-        }
+        QueryTask task = switch (request.getTypeCase()) {
+            case GETKEY -> new QueryTask(request, this::get);
+            case EXISTKEY -> new QueryTask(request, this::exist);
+            default -> new QueryTask(request, this::roCoproc);
+        };
         log.trace("Submit ro request:\n{}", request);
         requests.add(task);
         submitForExecution();
@@ -72,7 +66,6 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                 }
                 task.queryFn.apply(request)
                     .exceptionally(e -> {
-                        log.error("query range error: reqId={}", request.getReqId(), e);
                         if (e instanceof KVRangeException.BadVersion ||
                             e.getCause() instanceof KVRangeException.BadVersion) {
                             return KVRangeROReply.newBuilder()
@@ -94,6 +87,7 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                                 .setCode(ReplyCode.BadRequest)
                                 .build();
                         }
+                        log.error("query range error: reqId={}", request.getReqId(), e);
                         return KVRangeROReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setCode(ReplyCode.InternalError)

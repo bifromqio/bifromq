@@ -158,6 +158,7 @@ public class KVRange implements IKVRange {
     private final CompletableFuture<State.StateType> quitReason = new CompletableFuture<>();
     private final CompletableFuture<Void> destroySignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
+    private final ILoadEstimator loadEstimator;
     private IKVRangeMessenger messenger;
     private volatile CompletableFuture<Void> checkWalSizeTask;
 
@@ -173,26 +174,31 @@ public class KVRange implements IKVRange {
                    KVRangeOptions opts,
                    @Nullable Snapshot initSnapshot) {
         try {
+            this.opts = opts.toBuilder().build();
             this.id = id;
             this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
+            loadEstimator = new LoadEstimator(opts.getMaxRangeLoad(),
+                opts.getSplitKeyThreshold(),
+                opts.getLoadTrackingWindowSec(),
+                coProcFactory::toSplitKey);
             if (initSnapshot != null) {
                 walStateStorageEngine.destroy(id);
                 walStateStorageEngine.newRaftStateStorage(id, initSnapshot);
-                this.accessor = new KVRangeState(KVRangeSnapshot.parseFrom(initSnapshot.getData()), rangeEngine);
+                this.accessor =
+                    new KVRangeState(KVRangeSnapshot.parseFrom(initSnapshot.getData()), rangeEngine, loadEstimator);
             } else {
-                this.accessor = new KVRangeState(id, rangeEngine);
+                this.accessor = new KVRangeState(id, rangeEngine, loadEstimator);
             }
-            this.opts = opts;
             this.snapshotChecker = snapshotChecker;
             this.wal =
                 new KVRangeWAL(id, walStateStorageEngine, opts.getWalRaftConfig(), opts.getMaxWALFatchBatchSize());
             this.fsmExecutor = fsmExecutor;
             this.bgExecutor = bgExecutor;
             this.mgmtTaskRunner = new AsyncRunner(bgExecutor);
-            this.coProc = coProcFactory.create(id, accessor::getReader);
+            this.coProc = coProcFactory.create(id, () -> accessor.getReader(true), loadEstimator);
             this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor);
             this.queryRunner = new KVRangeQueryRunner(accessor, coProc, queryExecutor, linearizer);
-            this.commitLogSubscription = wal.subscribe(accessor.getReader().lastAppliedIndex() + 1,
+            this.commitLogSubscription = wal.subscribe(accessor.getReader(false).lastAppliedIndex() + 1,
                 new IKVRangeWALSubscriber() {
                     @Override
                     public CompletableFuture<Void> apply(LogEntry log) {
@@ -267,7 +273,7 @@ public class KVRange implements IKVRange {
                         clusterConfigSubject.distinctUntilChanged(),
                         statsCollector.collect().distinctUntilChanged(),
                         (meta, role, syncStats, clusterConfig, stats) -> {
-                            LoadHint loadHint = coProc.get();
+                            LoadHint loadHint = loadEstimator.estimate();
                             assert 0 <= loadHint.getLoad() && loadHint.getLoad() < 1.0 : "load must be in [0.0, 1.0)";
                             assert !loadHint.hasSplitKey() || KeyRangeUtil.inRange(loadHint.getSplitKey(), meta.range) :
                                 "splitKey must be in provided range";
@@ -550,7 +556,7 @@ public class KVRange implements IKVRange {
 
     private CompletableFuture<Void> apply(LogEntry entry) {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
-        IKVRangeWriter rangeWriter = accessor.getWriter();
+        IKVRangeWriter rangeWriter = accessor.getWriter(true);
         IKVRangeReader rangeReader = accessor.borrow();
         applyLog(entry, rangeReader, rangeWriter)
             .whenComplete((callback, e) -> {

@@ -13,22 +13,11 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.google.protobuf.ByteString;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 public interface IKVRangeCoProc {
-
-    /**
-     * Get current load hint
-     *
-     * @return
-     */
-    default LoadHint get() {
-        return LoadHint.newBuilder().setLoad(0.0).build();
-    }
-
     /**
      * Execute a query co-proc
      *

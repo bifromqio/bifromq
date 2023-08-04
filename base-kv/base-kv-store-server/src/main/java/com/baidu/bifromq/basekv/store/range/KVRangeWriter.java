@@ -26,21 +26,26 @@ public class KVRangeWriter implements IKVRangeWriter {
     private final IKVEngine kvEngine;
     private final IKVRangeMetadataAccessor metadata;
     private final IKVWriter writer;
+    private final ILoadTracker loadTracker;
     private final int batchId;
     private final KVRangeStateAccessor.KVRangeWriterMutator mutator;
     private long updatedVersion;
     private State updatedState;
     private volatile boolean done;
 
-    public KVRangeWriter(KVRangeId rangeId, IKVRangeMetadataAccessor metadata, IKVEngine kvEngine,
-                         KVRangeStateAccessor.KVRangeWriterMutator mutator) {
+    public KVRangeWriter(KVRangeId rangeId,
+                         IKVRangeMetadataAccessor metadata,
+                         IKVEngine kvEngine,
+                         KVRangeStateAccessor.KVRangeWriterMutator mutator,
+                         ILoadTracker loadTracker) {
+        this.loadTracker = loadTracker;
         this.rangeId = rangeId;
         this.kvEngine = kvEngine;
         metadata.refresh();
         this.metadata = metadata;
         this.batchId = kvEngine.startBatch();
         this.mutator = mutator;
-        this.writer = new KVWriter(batchId, metadata, kvEngine);
+        this.writer = new KVWriter(batchId, metadata, kvEngine, loadTracker);
         this.updatedVersion = metadata.version();
         this.updatedState = metadata.state();
     }

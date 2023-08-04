@@ -44,7 +44,6 @@ import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -105,6 +104,8 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
                 long reqId = System.nanoTime();
                 batchInboxCount.record(inboxInserts.size());
                 batchMsgCount.record(msgSize.get());
+                InboxInsertRequest.Builder reqBuilder = InboxInsertRequest.newBuilder();
+                inboxInserts.forEach(insertTask -> reqBuilder.addSubMsgPack(insertTask.request));
                 Timer.Sample start = Timer.start();
                 return kvStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
@@ -113,36 +114,30 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setInsert(InboxInsertRequest.newBuilder()
-                                    .addAllSubMsgPack(inboxInserts.stream()
-                                        .map(t -> t.request)
-                                        .collect(Collectors.toList()))
-                                    .build())
+                                .setInsert(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
                         start.stop(batchInsertTimer);
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getInsert();
+                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
                             } catch (InvalidProtocolBufferException e) {
-                                log.error("Unable to parse rw co-proc output", e);
-                                throw new RuntimeException(e);
+                                throw new RuntimeException("Unable to parse rw co-proc output", e);
                             }
                         }
-                        log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
-                        throw new RuntimeException();
+                        throw new RuntimeException(
+                            String.format("Failed to exec rw co-proc[code=%s]", reply.getCode()));
                     })
                     .handle((v, e) -> {
                         if (e != null) {
-                            // TODO: report insert rpc error?
                             while (!inboxInserts.isEmpty()) {
                                 InsertTask task = inboxInserts.poll();
-                                task.onDone.complete(Result.OK);
+                                task.onDone.completeExceptionally(e);
                             }
                         } else {
                             Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-                            for (InboxInsertResult result : v.getResultsList()) {
+                            for (InboxInsertResult result : v.getInsert().getResultsList()) {
                                 if (result.getResult() == InboxInsertResult.Result.NO_INBOX) {
                                     insertResults.put(result.getSubInfo(), Result.NO_INBOX);
                                 } else {

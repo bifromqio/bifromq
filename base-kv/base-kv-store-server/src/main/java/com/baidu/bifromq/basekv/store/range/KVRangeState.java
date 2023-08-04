@@ -27,21 +27,24 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class KVRangeState implements IKVRangeState {
+    private static final ILoadTracker DUMMY_TRACKER = (key, loadUnits) -> {
+    };
     private final KVRangeId rangeId;
     private final IKVEngine kvEngine;
     private final KVRangeMetadataAccessor metadata;
     private final KVRangeStateAccessor accessor;
-    //    private final Set<IKVRangeReader> sharedReaders = new LinkedHashSet<>();
     private final ConcurrentLinkedQueue<IKVRangeReader> sharedReaders = new ConcurrentLinkedQueue<>();
+    private final ILoadTracker loadTracker;
 
-    KVRangeState(KVRangeSnapshot snapshot, IKVEngine kvEngine) {
-        this(snapshot.getId(), kvEngine);
+    KVRangeState(KVRangeSnapshot snapshot, IKVEngine kvEngine, ILoadTracker loadTracker) {
+        this(snapshot.getId(), kvEngine, loadTracker);
         reset(snapshot).close();
     }
 
-    KVRangeState(KVRangeId id, IKVEngine kvEngine) {
+    KVRangeState(KVRangeId id, IKVEngine kvEngine, ILoadTracker loadTracker) {
         this.rangeId = id;
         this.kvEngine = kvEngine;
+        this.loadTracker = loadTracker;
         this.metadata = new KVRangeMetadataAccessor(rangeId, kvEngine);
         this.accessor = new KVRangeStateAccessor();
     }
@@ -75,7 +78,7 @@ class KVRangeState implements IKVRangeState {
         Range dataBound = metadata.dataBound();
         IKVEngineIterator dataIterator = kvEngine.newIterator(checkpoint.getCheckpointId(),
             metadata.dataBoundId(), dataBound.getStartKey(), dataBound.getEndKey());
-        return new KVRangeIterator(() -> dataIterator, () -> {
+        return new KVRangeIterator(DUMMY_TRACKER, () -> dataIterator, () -> {
             dataIterator.close();
             metadata.close();
         });
@@ -86,46 +89,26 @@ class KVRangeState implements IKVRangeState {
     public IKVRangeReader borrow() {
         IKVRangeReader reader = sharedReaders.poll();
         if (reader == null) {
-            return new KVRangeReader(rangeId, kvEngine, accessor.refresher());
+            return new KVRangeReader(rangeId, kvEngine, accessor.refresher(), loadTracker);
         }
         reader.refresh();
         return reader;
-
-//        if (!sharedReaders.isEmpty()) {
-//            synchronized (this) {
-//                Iterator<IKVRangeReader> readerItr = sharedReaders.iterator();
-//                IKVRangeReader reader;
-//                if (readerItr.hasNext()) {
-//                    reader = readerItr.next();
-//                    readerItr.remove();
-//                    reader.refresh();
-//                } else {
-//                    reader = new KVRangeReader(rangeId, kvEngine, accessor.refresher());
-//                }
-//                return reader;
-//            }
-//        } else {
-//            IKVRangeReader reader = new KVRangeReader(rangeId, kvEngine, accessor.refresher());
-//            return reader;
-//        }
     }
 
     @Override
     public void returnBorrowed(IKVRangeReader reader) {
         sharedReaders.add(reader);
-//        synchronized (this) {
-//            sharedReaders.add(reader);
-//        }
     }
 
     @Override
-    public IKVRangeReader getReader() {
-        return new KVRangeReader(rangeId, kvEngine, accessor.refresher());
+    public IKVRangeReader getReader(boolean trackingLoad) {
+        return new KVRangeReader(rangeId, kvEngine, accessor.refresher(), trackingLoad ? loadTracker : DUMMY_TRACKER);
     }
 
     @Override
-    public IKVRangeWriter getWriter() {
-        return new KVRangeWriter(rangeId, metadata, kvEngine, accessor.mutator());
+    public IKVRangeWriter getWriter(boolean trackingLoad) {
+        return new KVRangeWriter(rangeId, metadata, kvEngine, accessor.mutator(),
+            trackingLoad ? loadTracker : DUMMY_TRACKER);
     }
 
     @Override

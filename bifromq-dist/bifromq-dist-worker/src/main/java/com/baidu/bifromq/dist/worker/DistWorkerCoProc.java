@@ -25,21 +25,17 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.tenantPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.util.TopicUtil.isWildcardTopicFilter;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_FAN_OUT_PARALLELISM;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_LOAD_TRACKING_SECONDS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_RANGE_LOAD;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SPLIT_KEY_EST_THRESHOLD;
 import static java.util.Collections.singletonMap;
 import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
@@ -91,8 +87,6 @@ import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Metrics;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -115,8 +109,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final ISubBrokerManager subBrokerManager;
     private final DeliveryScheduler scheduler;
     private final SubscriptionCache routeCache;
-    private final LoadEstimator loadEstimator;
-    private final Gauge loadGauge;
     private final FanoutExecutorGroup fanoutExecutorGroup;
 
     public DistWorkerCoProc(KVRangeId id,
@@ -126,25 +118,16 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             IDistClient distClient,
                             ISubBrokerManager subBrokerManager,
                             DeliveryScheduler scheduler,
-                            Executor matchExecutor) {
+                            Executor matchExecutor,
+                            ILoadTracker loadTracker) {
         this.id = id;
         this.distClient = distClient;
         this.settingProvider = settingProvider;
         this.subBrokerManager = subBrokerManager;
         this.scheduler = scheduler;
-        this.loadEstimator = new LoadEstimator(DIST_MAX_RANGE_LOAD.get(), DIST_SPLIT_KEY_EST_THRESHOLD.get(),
-            DIST_LOAD_TRACKING_SECONDS.get());
-        this.routeCache = new SubscriptionCache(id, readClientProvider, matchExecutor, loadEstimator);
-        loadGauge = Gauge.builder("dist.worker.load", () -> loadEstimator.estimate().getLoad())
-            .tags("id", KVRangeIdUtil.toString(id))
-            .register(Metrics.globalRegistry);
+        this.routeCache = new SubscriptionCache(id, readClientProvider, matchExecutor, loadTracker);
         fanoutExecutorGroup = new FanoutExecutorGroup(this.subBrokerManager, scheduler, eventCollector, distClient,
             DIST_FAN_OUT_PARALLELISM.get());
-    }
-
-    @Override
-    public LoadHint get() {
-        return loadEstimator.estimate();
     }
 
     @Override
@@ -207,7 +190,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     public void close() {
         routeCache.close();
         fanoutExecutorGroup.shutdown();
-        Metrics.globalRegistry.remove(loadGauge);
     }
 
     private UpdateReply batchUpdate(UpdateRequest request, IKVReader reader, IKVWriter writer,
@@ -256,7 +238,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     return InboxSubInfo.getDefaultInstance();
                 }
             }).orElse(InboxSubInfo.getDefaultInstance());
-            loadEstimator.track(key, LoadUnits.KEY_GET);
 
             AddTopicFilterReply.Results.Builder subResultBuilder = AddTopicFilterReply.Results.newBuilder();
             InboxSubInfo newTopicFilters = request.getTopicFilterMap().get(subInfoKeyUtf8);
@@ -277,7 +258,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 }
             }
             if (update) {
-                loadEstimator.track(key, LoadUnits.KEY_PUT);
                 writer.put(key, subInfo.toByteString());
             }
             replyBuilder.putResult(subInfoKeyUtf8, subResultBuilder.build());
@@ -298,7 +278,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     return null;
                 }
             });
-            loadEstimator.track(key, LoadUnits.KEY_GET);
 
             InboxSubInfo.Builder subInfoBuilder = subInfo.orElse(InboxSubInfo.getDefaultInstance()).toBuilder();
             RemoveTopicFilterReply.Results.Builder resultBuilder = RemoveTopicFilterReply.Results.newBuilder();
@@ -314,10 +293,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
             if (ok) {
                 if (subInfoBuilder.getTopicFiltersCount() == 0) {
-                    loadEstimator.track(key, LoadUnits.KEY_DEL);
                     writer.delete(key);
                 } else {
-                    loadEstimator.track(key, LoadUnits.KEY_PUT);
                     writer.put(key, subInfoBuilder.build().toByteString());
                 }
             }
@@ -338,7 +315,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 case EXACTLY_ONCE:
                     if (!reader.exist(key)) {
                         writer.put(key, MatchRecord.newBuilder().setNormal(subQoS).build().toByteString());
-                        loadEstimator.track(key, LoadUnits.KEY_PUT);
 
                         String tenantId = EntityUtil.parseTenantId(matchRecordKey);
                         String topicFilter = parseTopicFilter(matchRecordKey);
@@ -352,7 +328,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                                 .build());
                         }
                     }
-                    loadEstimator.track(key, LoadUnits.KEY_EXIST);
                     break;
             }
         }
@@ -376,7 +351,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     }
                 })
                 .orElse(GroupMatchRecord.getDefaultInstance()).toBuilder();
-            loadEstimator.track(matchRecordKey, LoadUnits.KEY_GET);
 
             JoinMatchGroupReply.Results.Builder resultBuilder = JoinMatchGroupReply.Results.newBuilder();
             boolean updated = false;
@@ -394,7 +368,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             }
             if (updated) {
                 writer.put(matchRecordKey, MatchRecord.newBuilder().setGroup(matchGroup).build().toByteString());
-                loadEstimator.track(matchRecordKey, LoadUnits.KEY_PUT);
                 String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
                 if (isWildcardTopicFilter(topicFilter)) {
                     touchedTenants.add(parseTenantId(matchRecordKey));
@@ -417,11 +390,9 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         for (String matchRecordKeyUtf8 : request.getMatchRecordKeyList()) {
             ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
             Optional<ByteString> value = reader.get(matchRecordKey);
-            loadEstimator.track(matchRecordKey, LoadUnits.KEY_GET);
 
             if (value.isPresent()) {
                 writer.delete(matchRecordKey);
-                loadEstimator.track(matchRecordKey, LoadUnits.KEY_DEL);
 
                 String tenantId = parseTenantId(matchRecordKey);
                 String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
@@ -447,7 +418,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         for (String matchRecordKeyUtf8 : request.getRecordMap().keySet()) {
             ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
             Optional<ByteString> value = reader.get(matchRecordKey);
-            loadEstimator.track(matchRecordKey, LoadUnits.KEY_GET);
 
             if (value.isPresent()) {
                 Matching matching = parseMatchRecord(matchRecordKey, value.get());
@@ -462,14 +432,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 if (existing.size() != groupMatching.inboxMap.size()) {
                     if (existing.isEmpty()) {
                         writer.delete(matchRecordKey);
-                        loadEstimator.track(matchRecordKey, LoadUnits.KEY_DEL);
                     } else {
                         writer.put(matchRecordKey, MatchRecord.newBuilder()
                             .setGroup(GroupMatchRecord.newBuilder()
                                 .putAllEntry(existing)
                                 .build()).build()
                             .toByteString());
-                        loadEstimator.track(matchRecordKey, LoadUnits.KEY_PUT);
                     }
                     String tenantId = parseTenantId(matchRecordKey);
                     String topicFilter = parseTopicFilter(matchRecordKeyUtf8);

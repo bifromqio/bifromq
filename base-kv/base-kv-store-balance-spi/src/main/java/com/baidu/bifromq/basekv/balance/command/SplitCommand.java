@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.balance.command;
 
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
-import java.util.Base64;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
@@ -35,8 +34,7 @@ public class SplitCommand extends BalanceCommand {
     @Override
     public String toString() {
         return String.format("SplitCommand{toStore=%s, kvRangeId=%s, expectedVer=%d, splitKey=%s}",
-            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), getExpectedVer(),
-            Base64.getEncoder().encodeToString(splitKey.toByteArray()));
+            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), getExpectedVer(), splitKey.toStringUtf8());
     }
 
 }

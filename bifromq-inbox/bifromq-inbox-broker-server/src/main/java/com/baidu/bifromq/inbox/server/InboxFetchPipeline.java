@@ -148,7 +148,7 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
         fetcher.fetch(new InboxFetchScheduler.InboxFetch(scopedInboxId, fb.build()))
             .whenComplete((reply, e) -> {
                 if (e != null) {
-                    log.error("Fetch failed: tenantId={}, inboxId={}", tenantId, inboxId, e);
+                    log.debug("Fetch failed: tenantId={}, inboxId={}", tenantId, inboxId, e);
                     if (!closed) {
                         send(Fetched.newBuilder().setResult(Result.ERROR).build());
                     }

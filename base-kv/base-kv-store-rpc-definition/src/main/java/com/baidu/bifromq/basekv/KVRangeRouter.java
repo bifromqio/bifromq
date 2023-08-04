@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv;
 
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
+import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -23,25 +24,33 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.utils.KeyRangeUtil;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.locks.StampedLock;
+import lombok.ToString;
 
+@ToString(onlyExplicitlyIncluded = true)
 public final class KVRangeRouter implements IKVRangeRouter {
     private final StampedLock stampedLock = new StampedLock();
     private final Comparator<ByteString> comparator = unsignedLexicographicalComparator();
+    @ToString.Include
     private final NavigableMap<ByteString, KVRangeSetting> rangeTable = new TreeMap<>(comparator);
+    private final Map<String, Set<KVRangeSetting>> rangesToStoreMap = new HashMap<>();
     private final Map<KVRangeId, KVRangeSetting> rangeMap = new HashMap<>();
 
     public void reset(KVRangeStoreDescriptor storeDescriptor) {
         final long stamp = stampedLock.writeLock();
         try {
             rangeTable.clear();
+            rangesToStoreMap.clear();
             rangeMap.clear();
             storeDescriptor.getRangesList()
                 .forEach(rangeDesc -> this.upsertWithoutLock(storeDescriptor.getId(), rangeDesc));
@@ -50,11 +59,14 @@ public final class KVRangeRouter implements IKVRangeRouter {
         }
     }
 
-    public void upsert(KVRangeStoreDescriptor storeDescriptor) {
+    public boolean upsert(KVRangeStoreDescriptor storeDescriptor) {
         final long stamp = stampedLock.writeLock();
         try {
-            storeDescriptor.getRangesList()
-                .forEach(rangeDesc -> this.upsertWithoutLock(storeDescriptor.getId(), rangeDesc));
+            boolean changed = false;
+            for (KVRangeDescriptor rangeDesc : storeDescriptor.getRangesList()) {
+                changed |= this.upsertWithoutLock(storeDescriptor.getId(), rangeDesc);
+            }
+            return changed;
         } finally {
             stampedLock.unlockWrite(stamp);
         }
@@ -82,6 +94,15 @@ public final class KVRangeRouter implements IKVRangeRouter {
             }
             // the upper bound of the last range is open
             return !rangeTable.lastEntry().getValue().range.hasEndKey();
+        } finally {
+            stampedLock.unlockRead(stamp);
+        }
+    }
+
+    public Set<KVRangeSetting> findByStore(String storeId) {
+        final long stamp = stampedLock.readLock();
+        try {
+            return Collections.unmodifiableSet(rangesToStoreMap.getOrDefault(storeId, emptySet()));
         } finally {
             stampedLock.unlockRead(stamp);
         }
@@ -157,15 +178,18 @@ public final class KVRangeRouter implements IKVRangeRouter {
         List<KVRangeSetting> overlapped = findByRangeWithoutLock(setting.range);
         if (overlapped.isEmpty()) {
             rangeTable.put(setting.range.getStartKey(), setting);
+            rangesToStoreMap.computeIfAbsent(storeId, k -> new HashSet<>()).add(setting);
             rangeMap.put(setting.id, setting);
             return true;
         } else {
             if (overlapped.stream().allMatch(o -> o.ver <= setting.ver)) {
                 overlapped.forEach(o -> {
                     rangeTable.remove(o.range.getStartKey());
+                    rangesToStoreMap.getOrDefault(o.leader, emptySet()).remove(o);
                     rangeMap.remove(o.id);
                 });
                 rangeTable.put(setting.range.getStartKey(), setting);
+                rangesToStoreMap.computeIfAbsent(setting.leader, k -> new HashSet<>()).add(setting);
                 rangeMap.put(setting.id, setting);
                 return true;
             }

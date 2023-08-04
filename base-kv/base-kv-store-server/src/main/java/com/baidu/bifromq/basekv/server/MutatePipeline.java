@@ -81,7 +81,6 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
         CompletionStage<KVRangeRWReply>> mutateFn) {
         return mutateFn.apply(request)
             .exceptionally(e -> {
-                log.error("Handle rw request error: reqId={}", request.getReqId(), e);
                 if (e instanceof KVRangeException.BadVersion || e.getCause() instanceof KVRangeException.BadVersion) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
@@ -100,6 +99,7 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
                         .setCode(ReplyCode.BadRequest)
                         .build();
                 }
+                log.error("Handle rw request error: reqId={}", request.getReqId(), e);
                 return KVRangeRWReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.InternalError)

@@ -11,10 +11,10 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.benchmark;
+package com.baidu.bifromq.basekv.benchmark;
 
-import com.baidu.bifromq.dist.worker.ILoadEstimator;
-import com.baidu.bifromq.dist.worker.LoadEstimator;
+import com.baidu.bifromq.basekv.store.range.ILoadEstimator;
+import com.baidu.bifromq.basekv.store.range.LoadEstimator;
 import com.google.protobuf.ByteString;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.SneakyThrows;

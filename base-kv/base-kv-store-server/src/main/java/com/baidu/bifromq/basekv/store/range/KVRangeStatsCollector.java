@@ -31,7 +31,7 @@ final class KVRangeStatsCollector extends StatsCollector {
                                  Duration interval,
                                  Executor executor) {
         super(interval, executor);
-        this.reader = rangeState.getReader();
+        this.reader = rangeState.getReader(false);
         this.wal = wal;
         tick();
     }

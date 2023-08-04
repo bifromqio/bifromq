@@ -71,14 +71,9 @@ public interface IKVRangeState {
      */
     void returnBorrowed(IKVRangeReader reader);
 
-    IKVRangeReader getReader();
+    IKVRangeReader getReader(boolean trackingLoad);
 
-    /**
-     * Get a state updater
-     *
-     * @return
-     */
-    IKVRangeWriter getWriter();
+    IKVRangeWriter getWriter(boolean trackingLoad);
 
     Observable<KVRangeMeta> metadata();
 

@@ -26,6 +26,7 @@ import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
@@ -54,6 +55,8 @@ public class InboxCreateTest {
     private IKVIterator kvIterator;
     @Mock
     private IKVWriter writer;
+    @Mock
+    private ILoadTracker loadTracker;
     private final Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
     private final IEventCollector eventCollector = event -> {
     };
@@ -100,7 +103,7 @@ public class InboxCreateTest {
         doNothing().when(writer).put(any(), any());
 
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
-            clock, Duration.ofMinutes(30));
+            clock, Duration.ofMinutes(30), loadTracker);
         coProc.mutate(coProcInput.toByteString(), reader, writer);
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
         verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
@@ -143,7 +146,7 @@ public class InboxCreateTest {
         doNothing().when(writer).put(any(), any());
 
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
-            Clock.systemUTC(), Duration.ofMinutes(30));
+            Clock.systemUTC(), Duration.ofMinutes(30), loadTracker);
         coProc.mutate(coProcInput.toByteString(), reader, writer);
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
         verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());

@@ -11,17 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.api;
+package com.baidu.bifromq.inbox.store.balance;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
-import com.google.protobuf.ByteString;
-import java.util.function.Supplier;
+import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.StoreBalancer;
 
-public interface IKVRangeCoProcFactory {
-    default ByteString toSplitKey(ByteString key) {
-        return key;
+public class RangeSplitBalancerFactory implements IStoreBalancerFactory {
+    @Override
+    public StoreBalancer newBalancer(String localStoreId) {
+        return new RangeSplitBalancer(localStoreId);
     }
-
-    IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> readerProvider, ILoadTracker loadTracker);
 }

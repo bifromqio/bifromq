@@ -201,6 +201,27 @@ public class KVRangeRouterTest {
     }
 
     @Test
+    public void testFindByStore() {
+        KVRangeRouter router = new KVRangeRouter();
+        router.upsert(bucket__a);
+        router.upsert(bucket_a_c);
+        router.upsert(bucket_c_e);
+        router.upsert(bucket_e_);
+        assertEquals(router.findByStore(bucket__a.getId()).size(), 1);
+        assertEquals(router.findByStore(bucket_a_c.getId()).size(), 1);
+        assertEquals(router.findByStore(bucket_c_e.getId()).size(), 1);
+        assertEquals(router.findByStore(bucket_e_.getId()).size(), 1);
+        assertTrue(
+            router.findByStore(bucket__a.getId()).contains(router.findById(bucket__a.getRanges(0).getId()).get()));
+        assertTrue(
+            router.findByStore(bucket_a_c.getId()).contains(router.findById(bucket_a_c.getRanges(0).getId()).get()));
+        assertTrue(
+            router.findByStore(bucket_c_e.getId()).contains(router.findById(bucket_c_e.getRanges(0).getId()).get()));
+        assertTrue(
+            router.findByStore(bucket_e_.getId()).contains(router.findById(bucket_e_.getRanges(0).getId()).get()));
+    }
+
+    @Test
     public void testReset() {
         KVRangeRouter router = new KVRangeRouter();
         router.upsert(bucket__a);

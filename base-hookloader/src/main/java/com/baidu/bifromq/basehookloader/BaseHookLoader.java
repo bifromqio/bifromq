@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,20 +25,25 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class BaseHookLoader {
+    private static final Map<Class<?>, Map<String, ?>> LOADED = new ConcurrentHashMap<>();
+
+    @SuppressWarnings("unchecked")
     public static <T> Map<String, T> load(Class<T> hookInterface) {
-        Map<String, T> loadedFactories = new HashMap<>();
-        ServiceLoader<T> serviceLoader = ServiceLoader.load(hookInterface);
-        Iterator<T> iterator = serviceLoader.iterator();
-        iterator.forEachRemaining(factoryImpl -> {
-            String className = factoryImpl.getClass().getName();
-            if (className.trim().equals("")) {
-                throw new IllegalStateException("Anonymous implementation is not allowed");
-            }
-            log.info("Loaded {} implementation: {}", hookInterface.getSimpleName(), className);
-            if (loadedFactories.putIfAbsent(className, factoryImpl) != null) {
-                throw new IllegalStateException("More than one implementations using same name " + className);
-            }
+        return (Map<String, T>) LOADED.computeIfAbsent(hookInterface, k -> {
+            Map<String, T> loadedFactories = new HashMap<>();
+            ServiceLoader<T> serviceLoader = ServiceLoader.load(hookInterface);
+            Iterator<T> iterator = serviceLoader.iterator();
+            iterator.forEachRemaining(factoryImpl -> {
+                String className = factoryImpl.getClass().getName();
+                if (className.trim().equals("")) {
+                    throw new IllegalStateException("Anonymous implementation is not allowed");
+                }
+                log.info("Loaded {} implementation: {}", hookInterface.getSimpleName(), className);
+                if (loadedFactories.putIfAbsent(className, factoryImpl) != null) {
+                    throw new IllegalStateException("More than one implementations using same name " + className);
+                }
+            });
+            return loadedFactories;
         });
-        return loadedFactories;
     }
 }

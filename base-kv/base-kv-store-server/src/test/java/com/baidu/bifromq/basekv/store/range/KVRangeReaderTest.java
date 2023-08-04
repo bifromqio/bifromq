@@ -21,12 +21,13 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.stateKey;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.verKey;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteString;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteStringNativeOrder;
-import static org.testng.Assert.assertEquals;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
@@ -36,20 +37,22 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVRangeReaderTest {
     @Mock
     private IKVEngine engine;
     @Mock
     private IKVEngineIterator engineIterator;
+    @Mock
+    private ILoadTracker loadTracker;
     private KVRangeStateAccessor accessor = new KVRangeStateAccessor();
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -66,7 +69,7 @@ public class KVRangeReaderTest {
         when(engine.get(anyString(), any(ByteString.class))).thenReturn(Optional.empty());
         when(engine.registerKeyRange(anyString(), any(ByteString.class), any(ByteString.class)))
             .thenReturn(1);
-        KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher());
+        KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher(), loadTracker);
         assertEquals(rangeReader.ver(), -1L);
         assertEquals(rangeReader.lastAppliedIndex(), -1L);
         assertEquals(rangeReader.state().getType(), State.StateType.Normal);
@@ -81,7 +84,7 @@ public class KVRangeReaderTest {
         when(engine.registerKeyRange(anyString(), any(ByteString.class), any(ByteString.class)))
             .thenReturn(1);
 
-        KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher());
+        KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher(), loadTracker);
 
         int keyRangeId = 2;
         long ver = 10;
@@ -118,9 +121,12 @@ public class KVRangeReaderTest {
         when(engine.get(anyString(), any(ByteString.class))).thenReturn(Optional.empty());
         when(engine.registerKeyRange(anyString(), any(ByteString.class), any(ByteString.class)))
             .thenReturn(rangeId);
-        KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher());
+        KVRangeReader rangeReader = new KVRangeReader(id, engine, accessor.refresher(), loadTracker);
         rangeReader = null;
-        System.gc();
-        verify(engine).unregisterKeyRange(rangeId);
+        await().ignoreExceptions().until(() -> {
+            System.gc();
+            verify(engine).unregisterKeyRange(rangeId);
+            return true;
+        });
     }
 }

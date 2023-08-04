@@ -37,6 +37,7 @@ class KVRangeMetricManager {
     private final Gauge lastAppliedIndexGauge;
     private final Gauge dataSizeGauge;
     private final Gauge walSizeGauge;
+    private final Gauge loadGauge;
     private final Timer configChangeTimer;
     private final Timer transferLeaderTimer;
     private final Timer splitTimer;
@@ -88,6 +89,15 @@ class KVRangeMetricManager {
                 KVRangeDescriptor desc = currentDesc.get();
                 if (desc != null) {
                     return desc.getStatisticsMap().getOrDefault("walSize", 0.0).longValue();
+                }
+                return 0;
+            })
+            .tags(tags)
+            .register(Metrics.globalRegistry);
+        loadGauge = Gauge.builder("basekv.meta.load", () -> {
+                KVRangeDescriptor desc = currentDesc.get();
+                if (desc != null) {
+                    return desc.getLoadHint().getLoad();
                 }
                 return 0;
             })
@@ -194,6 +204,7 @@ class KVRangeMetricManager {
         Metrics.globalRegistry.removeByPreFilterId(verGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(dataSizeGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(walSizeGauge.getId());
+        Metrics.globalRegistry.removeByPreFilterId(loadGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(configChangeTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(transferLeaderTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(splitTimer.getId());

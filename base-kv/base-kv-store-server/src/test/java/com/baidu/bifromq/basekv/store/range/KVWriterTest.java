@@ -20,18 +20,21 @@ import static org.mockito.Mockito.when;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.google.protobuf.ByteString;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVWriterTest {
     @Mock
     private IKVEngine engine;
     @Mock
     private IKVRangeMetadataAccessor metadata;
+    @Mock
+    private ILoadTracker loadTracker;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -48,7 +51,7 @@ public class KVWriterTest {
         int dataBoundId = 2;
         when(metadata.dataBoundId()).thenReturn(dataBoundId);
         when(metadata.range()).thenReturn(FULL_RANGE);
-        KVWriter writer = new KVWriter(batchId, metadata, engine);
+        KVWriter writer = new KVWriter(batchId, metadata, engine, loadTracker);
 
         // delete
         ByteString delKey = ByteString.copyFromUtf8("delKey");

@@ -41,6 +41,7 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
@@ -94,7 +95,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -106,7 +106,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     InboxStoreCoProc(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, IEventCollector eventCollector,
                      Clock clock,
-                     Duration purgeDelay) {
+                     Duration purgeDelay,
+                     ILoadTracker loadTracker) {
         this.eventCollector = eventCollector;
         this.clock = clock;
         this.purgeDelay = purgeDelay;
@@ -192,10 +193,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 return replyBuilder.build();
             }
             // deal with qos0 queue
-            long startFetchFromSeq =
-                !request.hasQos0StartAfter()
-                    ? metadata.getQos0LastFetchBeforeSeq()
-                    : Math.max(request.getQos0StartAfter() + 1, metadata.getQos0LastFetchBeforeSeq());
+            long startFetchFromSeq = !request.hasQos0StartAfter()
+                ? metadata.getQos0LastFetchBeforeSeq()
+                : Math.max(request.getQos0StartAfter() + 1, metadata.getQos0LastFetchBeforeSeq());
             if (startFetchFromSeq < metadata.getQos0NextSeq()) {
                 itr.seekForPrev(qos0InboxMsgKey(scopedInboxId, startFetchFromSeq));
                 if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
@@ -266,10 +266,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 }
             }
             // deal with qos2 queue
-            startFetchFromSeq =
-                !request.hasQos2StartAfter()
-                    ? metadata.getQos2LastCommitBeforeSeq()
-                    : Math.max(request.getQos2StartAfter() + 1, metadata.getQos2LastCommitBeforeSeq());
+            startFetchFromSeq = !request.hasQos2StartAfter()
+                ? metadata.getQos2LastCommitBeforeSeq()
+                : Math.max(request.getQos2StartAfter() + 1, metadata.getQos2LastCommitBeforeSeq());
             if (startFetchFromSeq < metadata.getQos2NextSeq()) {
                 itr.seek(qos2InboxIndex(scopedInboxId, startFetchFromSeq));
                 while (fetchCount > 0 && itr.isValid() && isQoS2MessageIndexKey(itr.key(), scopedInboxId)) {
@@ -382,21 +381,23 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     private CollectMetricsReply collect(CollectMetricsRequest request, IKVReader reader) {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
-        IKVIterator itr = reader.iterator();
-        for (itr.seekToFirst(); itr.isValid(); ) {
-            String tenantId = parseTenantId(itr.key());
-            ByteString startKey = tenantPrefix(tenantId);
-            ByteString endKey = upperBound(tenantPrefix(tenantId));
-            builder.putUsedSpaces(tenantId, reader.size(intersect(reader.range(), Range.newBuilder()
-                .setStartKey(startKey)
-                .setEndKey(endKey)
-                .build())));
-            itr.seek(endKey);
+        try (IKVIterator itr = reader.iterator()) {
+            for (itr.seekToFirst(); itr.isValid(); ) {
+                String tenantId = parseTenantId(itr.key());
+                ByteString startKey = tenantPrefix(tenantId);
+                ByteString endKey = upperBound(tenantPrefix(tenantId));
+                builder.putUsedSpaces(tenantId, reader.size(intersect(reader.range(), Range.newBuilder()
+                    .setStartKey(startKey)
+                    .setEndKey(endKey)
+                    .build())));
+                itr.seek(endKey);
+            }
+        } catch (Exception e) {
+            // never happens
         }
         return builder.build();
     }
 
-    @SneakyThrows
     private InboxInsertReply batchInsert(InboxInsertRequest request, IKVReader reader, IKVWriter writer) {
         IKVIterator itr = reader.iterator();
 
@@ -418,20 +419,27 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
                 continue;
             }
-            InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
-            if (hasExpired(metadata)) {
+            try {
+                InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
+                if (hasExpired(metadata)) {
+                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                    continue;
+                }
+                insertInbox(scopedInboxId, subMsgPacks, metadata, itr, reader, writer);
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.OK));
+            } catch (Throwable e) {
+                log.error("Error inserting messages to inbox {}", scopedInboxId, e);
                 subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
-                continue;
             }
-            insertInbox(scopedInboxId, subMsgPacks, metadata, itr, reader, writer);
-            subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.OK));
         }
-
-        return InboxInsertReply.newBuilder()
-            .addAllResults(results.entrySet().stream()
-                .map(e -> InboxInsertResult.newBuilder().setSubInfo(e.getKey()).setResult(e.getValue()).build())
-                .collect(Collectors.toList()))
-            .build();
+        InboxInsertReply.Builder replyBuilder = InboxInsertReply.newBuilder();
+        for (Map.Entry<SubInfo, InboxInsertResult.Result> entry : results.entrySet()) {
+            replyBuilder.addResults(InboxInsertResult.newBuilder()
+                .setSubInfo(entry.getKey())
+                .setResult(entry.getValue())
+                .build());
+        }
+        return replyBuilder.build();
     }
 
     private void insertInbox(ByteString scopedInboxId,

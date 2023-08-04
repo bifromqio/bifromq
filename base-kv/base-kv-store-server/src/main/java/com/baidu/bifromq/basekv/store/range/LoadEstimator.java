@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker;
+package com.baidu.bifromq.basekv.store.range;
 
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
 
@@ -26,12 +26,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
-import org.jctools.maps.NonBlockingHashMap;
 
 @Slf4j
-public final class LoadEstimator implements ILoadEstimator {
+public class LoadEstimator implements ILoadEstimator {
     private final Supplier<Long> nanoSource;
     private final double maxUnitLoad;
     private final double splitKeyEstThreshold;
@@ -39,18 +39,40 @@ public final class LoadEstimator implements ILoadEstimator {
     private final long trackWindowSize;
     private final NavigableMap<Long, Map<ByteString, AtomicInteger>> trackedKeySlots = new ConcurrentSkipListMap<>();
     private final NavigableMap<Long, LoadHint> hints = new ConcurrentSkipListMap<>();
+    private final Function<ByteString, ByteString> toSplitKey;
 
-    public LoadEstimator(long maxUnitLoad, double splitKeyEstThreshold, int trackWindow) {
-        this(System::nanoTime, maxUnitLoad, splitKeyEstThreshold, trackWindow);
+    public LoadEstimator(long maxUnitLoad,
+                         double splitKeyEstThreshold,
+                         int trackWindow) {
+        this(System::nanoTime, maxUnitLoad, splitKeyEstThreshold, trackWindow, k -> k);
     }
 
-    public LoadEstimator(Supplier<Long> nanoSource, long maxUnitLoad, double splitKeyEstThreshold, int trackSeconds) {
+    public LoadEstimator(long maxUnitLoad,
+                         double splitKeyEstThreshold,
+                         int trackWindow,
+                         Function<ByteString, ByteString> toSplitKey) {
+        this(System::nanoTime, maxUnitLoad, splitKeyEstThreshold, trackWindow, toSplitKey);
+    }
+
+    public LoadEstimator(Supplier<Long> nanoSource,
+                         long maxUnitLoad,
+                         double splitKeyEstThreshold,
+                         int trackSeconds) {
+        this(nanoSource, maxUnitLoad, splitKeyEstThreshold, trackSeconds, k -> k);
+    }
+
+    public LoadEstimator(Supplier<Long> nanoSource,
+                         long maxUnitLoad,
+                         double splitKeyEstThreshold,
+                         int trackSeconds,
+                         Function<ByteString, ByteString> toSplitKey) {
         Preconditions.checkArgument(0 < maxUnitLoad, "Max unit load must be positive");
         Preconditions.checkArgument(0 < splitKeyEstThreshold && splitKeyEstThreshold < 1,
             "SplitKey estimation threshold must be between 0.0 and 1.0");
         Preconditions.checkArgument(0 < trackSeconds, "Track seconds must be positive");
         this.nanoSource = nanoSource;
         this.maxUnitLoad = maxUnitLoad;
+        this.toSplitKey = toSplitKey;
         this.splitKeyEstThreshold = splitKeyEstThreshold;
         this.trackWindowSize = trackSeconds;
         this.trackWindowLengthInNano = Duration.ofSeconds(trackSeconds).toNanos();
@@ -85,7 +107,7 @@ public final class LoadEstimator implements ILoadEstimator {
         }
         long totalUnitLoad = keysSlot.get(ByteString.EMPTY).get();
         long avgUnitLoad = totalUnitLoad / trackWindowSize;
-        double loadPercent = Math.min(1, avgUnitLoad / maxUnitLoad);
+        double loadPercent = avgUnitLoad / maxUnitLoad;
         LoadHint.Builder loadHintBuilder = LoadHint.newBuilder().setLoad(loadPercent);
         if (loadPercent > splitKeyEstThreshold) {
             long loadSum = 0;
@@ -95,12 +117,12 @@ public final class LoadEstimator implements ILoadEstimator {
             slotDistro.remove(ByteString.EMPTY);
             for (Map.Entry<ByteString, AtomicInteger> e : slotDistro.entrySet()) {
                 if (e.getValue().get() >= halfTotal) {
-                    loadHintBuilder.setSplitKey(e.getKey());
+                    loadHintBuilder.setSplitKey(toSplitKey.apply(e.getKey()));
                     break;
                 } else {
                     loadSum += e.getValue().get();
                     if (loadSum >= halfTotal) {
-                        loadHintBuilder.setSplitKey(e.getKey());
+                        loadHintBuilder.setSplitKey(toSplitKey.apply(e.getKey()));
                         break;
                     }
                 }

@@ -11,23 +11,24 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker;
+package com.baidu.bifromq.basekv.store.range;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotSame;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.function.Supplier;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class LoadEstimatorTest {
     @Mock
@@ -48,7 +49,7 @@ public class LoadEstimatorTest {
     public void noLoad() {
         LoadEstimator estimator = new LoadEstimator(100, 0.5, 5);
         LoadHint hint = estimator.estimate();
-        assertTrue(hint.getLoad() == 0.0d);
+        assertEquals(hint.getLoad(), 0.0d);
     }
 
     @Test
@@ -58,10 +59,10 @@ public class LoadEstimatorTest {
         when(nanoSource.get()).thenReturn(now);
         LoadHint hint1 = estimator.estimate();
         LoadHint hint2 = estimator.estimate();
-        assertTrue(hint1 == hint2);
+        assertSame(hint1, hint2);
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(3).toNanos());
         hint2 = estimator.estimate();
-        assertTrue(hint1 != hint2);
+        assertNotSame(hint1, hint2);
     }
 
     @Test
@@ -76,7 +77,7 @@ public class LoadEstimatorTest {
         assertTrue(loadHint.getLoad() > 0);
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(2).toNanos());
         loadHint = estimator.estimate();
-        assertTrue(loadHint.getLoad() == 0.0d);
+        assertEquals(loadHint.getLoad(), 0.0d);
     }
 
     @Test
@@ -88,7 +89,7 @@ public class LoadEstimatorTest {
             estimator.track(ByteString.copyFrom(new byte[] {(byte) i}), 1);
         }
         LoadHint hint = estimator.estimate();
-        assertTrue(hint.getLoad() == 0.0d);
+        assertEquals(hint.getLoad(), 0.0d);
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(2).toNanos());
         hint = estimator.estimate();
         assertTrue(hint.getLoad() > 0.0d);
@@ -112,10 +113,10 @@ public class LoadEstimatorTest {
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(2).toNanos());
         LoadHint hint = estimator.estimate();
         if (now / trackWindow == nextSecond / trackWindow) {
-            assertTrue(hint.getLoad() == 0.8d);
+            assertEquals(hint.getLoad(), 0.8d);
             assertEquals(hint.getSplitKey(), ByteString.copyFrom(new byte[] {(byte) 79}));
         } else {
-            assertTrue(hint.getLoad() == 0.4d);
+            assertEquals(hint.getLoad(), 0.4d);
             assertFalse(hint.hasSplitKey());
         }
     }
@@ -130,7 +131,7 @@ public class LoadEstimatorTest {
         }
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(1).toNanos());
         LoadHint hint = estimator.estimate();
-        assertTrue(hint.getLoad() == 0.8d);
+        assertEquals(hint.getLoad(), 0.8d);
         assertEquals(hint.getSplitKey(), ByteString.copyFrom(new byte[] {(byte) 39}));
     }
 }
