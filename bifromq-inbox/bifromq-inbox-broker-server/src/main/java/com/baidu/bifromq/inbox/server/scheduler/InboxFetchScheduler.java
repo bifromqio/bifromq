@@ -155,8 +155,8 @@ public class InboxFetchScheduler extends InboxQueryScheduler<InboxFetchScheduler
                                     throw new RuntimeException("Unable to parse rw co-proc output", e);
                                 }
                             default:
-                                log.warn("Failed to exec rw co-proc[code={}]", v.getCode());
-                                throw new RuntimeException("Failed to exec rw co-proc");
+                                throw new RuntimeException(
+                                    String.format("Failed to exec ro co-proc[code=%s]", v.getCode()));
                         }
                     })
                     .handle((v, e) -> {

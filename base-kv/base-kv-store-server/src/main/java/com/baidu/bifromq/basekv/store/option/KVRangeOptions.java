@@ -29,6 +29,9 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder(toBuilder = true)
 public class KVRangeOptions {
+    private int maxRangeLoad = 300_000;
+    private double splitKeyThreshold = 0.6;
+    private int loadTrackingWindowSec = 5;
     private int snapshotSyncBytesPerSec = 1024 * 1024;
     private int compactWALThresholdBytes = 128 * 1024 * 1024; // 128MB
     private long tickUnitInMS = 100;

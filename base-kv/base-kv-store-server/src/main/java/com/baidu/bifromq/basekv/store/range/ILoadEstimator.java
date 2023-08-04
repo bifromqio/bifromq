@@ -11,17 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.api;
+package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
+import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.google.protobuf.ByteString;
-import java.util.function.Supplier;
 
-public interface IKVRangeCoProcFactory {
-    default ByteString toSplitKey(ByteString key) {
-        return key;
-    }
+public interface ILoadEstimator extends ILoadTracker {
 
-    IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> readerProvider, ILoadTracker loadTracker);
+    LoadHint estimate();
 }

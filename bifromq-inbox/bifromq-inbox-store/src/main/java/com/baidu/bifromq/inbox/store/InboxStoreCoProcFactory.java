@@ -13,13 +13,14 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseScopedInboxId;
 
-import com.baidu.bifromq.basekv.localengine.RangeUtil;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.google.protobuf.ByteString;
 import java.time.Clock;
@@ -37,13 +38,14 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
         this.purgeDelay = purgeDelay;
     }
 
-    public ByteString findSplitKey(ByteString key) {
-        return RangeUtil.upperBound(parseScopedInboxId(key));
+    @Override
+    public ByteString toSplitKey(ByteString key) {
+        return upperBound(parseScopedInboxId(key));
     }
 
     @Override
-    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider) {
-        return new InboxStoreCoProc(id, rangeReaderProvider, eventCollector, clock, purgeDelay);
+    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, ILoadTracker loadTracker) {
+        return new InboxStoreCoProc(id, rangeReaderProvider, eventCollector, clock, purgeDelay, loadTracker);
     }
 
     public void close() {

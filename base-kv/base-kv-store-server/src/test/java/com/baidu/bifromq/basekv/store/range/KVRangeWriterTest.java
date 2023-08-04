@@ -20,19 +20,23 @@ import static org.mockito.Mockito.when;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVRangeWriterTest {
     @Mock
     private IKVEngine engine;
     @Mock
     private IKVRangeMetadataAccessor metadataAccessor;
+
+    @Mock
+    private ILoadTracker loadTracker;
     private KVRangeStateAccessor accessor = new KVRangeStateAccessor();
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -49,7 +53,8 @@ public class KVRangeWriterTest {
         when(metadataAccessor.dataBoundId()).thenReturn(1);
         when(metadataAccessor.version()).thenReturn(0L);
         when(engine.startBatch()).thenReturn(1);
-        KVRangeWriter rangeWriter = new KVRangeWriter(rangeId, metadataAccessor, engine, accessor.mutator());
+        KVRangeWriter rangeWriter =
+            new KVRangeWriter(rangeId, metadataAccessor, engine, accessor.mutator(), loadTracker);
 
         rangeWriter.resetVer(2);
         rangeWriter.close();

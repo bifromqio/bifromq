@@ -14,9 +14,9 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -25,12 +25,11 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.time.Duration;
 import java.util.Map;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVRangeStatsCollectorTest {
     @Mock
@@ -42,6 +41,7 @@ public class KVRangeStatsCollectorTest {
     @Mock
     private IKVReader kvReader;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -54,7 +54,7 @@ public class KVRangeStatsCollectorTest {
 
     @Test
     public void testScrap() {
-        when(accessor.getReader()).thenReturn(rangeReader);
+        when(accessor.getReader(false)).thenReturn(rangeReader);
         when(rangeReader.kvReader()).thenReturn(kvReader);
         when(kvReader.range()).thenReturn(FULL_RANGE);
         doNothing().when(rangeReader).refresh();

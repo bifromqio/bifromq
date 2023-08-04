@@ -11,14 +11,10 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker;
+package com.baidu.bifromq.basekv.store.range;
 
-public class LoadUnits {
-    public static final int KEY_CACHE_HIT = 1;
-    public static final int KEY_ITR_SEEK = 10;
-    public static final int KEY_ITR_GET = 10;
-    public static final int KEY_EXIST = 20;
-    public static final int KEY_GET = 20;
-    public static final int KEY_PUT = 40;
-    public static final int KEY_DEL = 40;
+import com.google.protobuf.ByteString;
+
+public interface ILoadTracker {
+    void track(ByteString key, int loadUnits);
 }

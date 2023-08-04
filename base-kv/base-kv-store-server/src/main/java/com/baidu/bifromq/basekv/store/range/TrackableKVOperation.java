@@ -11,13 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker;
+package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.proto.LoadHint;
-import com.google.protobuf.ByteString;
-
-public interface ILoadEstimator {
-    void track(ByteString key, int loadUnit);
-
-    LoadHint estimate();
+class TrackableKVOperation {
+    public static int KEY_ITR_SEEK = 10;
+    public static int KEY_ITR_GET = 10;
+    public static int KEY_INSERT = 40;
+    public static int KEY_PUT = 60;
+    public static int KEY_DEL = 40;
 }

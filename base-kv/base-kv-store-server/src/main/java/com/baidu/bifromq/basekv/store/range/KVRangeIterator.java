@@ -15,6 +15,8 @@ package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.dataKey;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.userKey;
+import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_ITR_GET;
+import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_ITR_SEEK;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
@@ -22,27 +24,31 @@ import com.google.protobuf.ByteString;
 import java.util.function.Supplier;
 
 class KVRangeIterator implements IKVIterator {
+    private final ILoadTracker loadTracker;
     private final Supplier<IKVEngineIterator> engineIterator;
     private final Runnable onClose;
+    private ByteString currentKey;
 
-    KVRangeIterator(Supplier<IKVEngineIterator> engineIterator) {
-        this.engineIterator = engineIterator;
-        this.onClose = () -> {
-        };
+    KVRangeIterator(ILoadTracker loadTracker, Supplier<IKVEngineIterator> engineIterator) {
+        this(loadTracker, engineIterator, () -> {
+        });
     }
 
-    KVRangeIterator(Supplier<IKVEngineIterator> engineIterator, Runnable onClose) {
+    KVRangeIterator(ILoadTracker loadTracker, Supplier<IKVEngineIterator> engineIterator, Runnable onClose) {
+        this.loadTracker = loadTracker;
         this.engineIterator = engineIterator;
         this.onClose = onClose;
     }
 
     @Override
     public ByteString key() {
-        return userKey(engineIterator.get().key());
+        assert currentKey != null : "current key should not be null";
+        return currentKey;
     }
 
     @Override
     public ByteString value() {
+        assert currentKey != null : "current key should not be null";
         return engineIterator.get().value();
     }
 
@@ -54,35 +60,52 @@ class KVRangeIterator implements IKVIterator {
     @Override
     public void next() {
         engineIterator.get().next();
+        loadCurrentKey();
     }
 
     @Override
     public void prev() {
         engineIterator.get().prev();
+        loadCurrentKey();
     }
 
     @Override
     public void seekToFirst() {
         engineIterator.get().seekToFirst();
+        loadCurrentKey();
     }
 
     @Override
     public void seekToLast() {
         engineIterator.get().seekToLast();
+        loadCurrentKey();
     }
 
     @Override
     public void seek(ByteString key) {
         engineIterator.get().seek(dataKey(key));
+        loadTracker.track(key, KEY_ITR_SEEK);
+        loadCurrentKey();
     }
 
     @Override
     public void seekForPrev(ByteString key) {
         engineIterator.get().seekForPrev(dataKey(key));
+        loadTracker.track(key, KEY_ITR_SEEK);
+        loadCurrentKey();
     }
 
     @Override
     public void close() throws Exception {
         this.onClose.run();
+    }
+
+    private void loadCurrentKey() {
+        if (engineIterator.get().isValid()) {
+            currentKey = userKey(engineIterator.get().key());
+            loadTracker.track(key(), KEY_ITR_GET);
+        } else {
+            currentKey = null;
+        }
     }
 }

@@ -48,7 +48,6 @@ public class StateStoreConfig {
     @Getter
     @Setter
     public static class DistWorkerConfig {
-        private int execPipelinePerStore = 500;
         private int queryPipelinePerStore = 1000;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
@@ -66,7 +65,6 @@ public class StateStoreConfig {
     @Getter
     @Setter
     public static class InboxStoreConfig {
-        private int execPipelinePerStore = 100;
         private int queryPipelinePerStore = 100;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
@@ -78,13 +76,13 @@ public class StateStoreConfig {
         public InboxStoreConfig() {
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RecoveryBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.ReplicaCntBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeSplitBalancerFactory");
         }
     }
 
     @Getter
     @Setter
     public static class RetainStoreConfig {
-        private int execPipelinePerStore = 100;
         private int queryPipelinePerStore = 100;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();

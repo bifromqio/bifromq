@@ -136,7 +136,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             request.getInboxMsgPackList().forEach(inboxMsgPack ->
                 inboxMsgPack.getSubInfoList().forEach(subInfo ->
                     msgsByInbox.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(inboxMsgPack.getMessages())));
-            List<CompletableFuture<SendResult>> replyFutures = msgsByInbox.entrySet().stream()
+            List<CompletableFuture<SendResult>> replyFutures = msgsByInbox.entrySet()
+                .stream()
                 .map(e -> insertScheduler.schedule(MessagePack.newBuilder()
                         .setSubInfo(e.getKey())
                         .addAllMessages(e.getValue())
@@ -145,7 +146,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setSubInfo(e.getKey())
                         .setResult(v)
                         .build()))
-                .collect(Collectors.toList());
+                .toList();
             return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
                 .thenApply(v -> replyFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
                 .thenApply(v -> SendReply.newBuilder()

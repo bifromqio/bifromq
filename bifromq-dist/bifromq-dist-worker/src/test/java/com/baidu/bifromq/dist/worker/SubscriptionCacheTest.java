@@ -28,6 +28,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
+import com.baidu.bifromq.basekv.store.range.ILoadEstimator;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.entity.NormalMatching;
@@ -58,7 +59,6 @@ public class SubscriptionCacheTest {
     private IKVIterator kvIterator;
     @Mock
     private Supplier<IKVRangeReader> rangeReaderProvider;
-
     @Mock
     private ILoadEstimator loadTracker;
     private ExecutorService matchExecutor;

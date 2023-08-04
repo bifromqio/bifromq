@@ -99,35 +99,4 @@ public class InboxAdminTest extends InboxStoreTest {
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
         requestDelete(tenantId, inboxId);
     }
-
-    @Test(groups = "integration")
-    public void testGC() {
-        String tenantId = "tenantId";
-        String inboxId = "inboxId";
-        String topic = "greeting";
-        TopicMessagePack.PublisherPack msg0 = message(QoS.AT_MOST_ONCE, "hello");
-        TopicMessagePack.PublisherPack msg1 = message(QoS.AT_LEAST_ONCE, "world");
-        TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
-        requestCreate(tenantId, inboxId, 3, 1, true);
-        SubInfo subInfo = SubInfo.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setSubQoS(QoS.AT_MOST_ONCE)
-            .setTopicFilter("greeting")
-            .build();
-        requestInsert(subInfo, topic, msg0, msg1, msg2);
-        // advance to gc'able
-        when(clock.millis()).thenReturn(1100L);
-        KVRangeSetting s = storeClient.findByKey(scopedInboxId(tenantId, inboxId)).get();
-        testStore.gcRange(s).join();
-
-        KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
-            .setReqId(System.nanoTime())
-            .setKvRangeId(s.id)
-            .setVer(s.ver)
-            .setExistKey(scopedInboxId(tenantId, inboxId))
-            .build()).join();
-        assertFalse(reply.getExistResult());
-        requestDelete(tenantId, inboxId);
-    }
 }

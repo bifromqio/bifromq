@@ -20,6 +20,7 @@ import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.IRPCServer;
@@ -223,8 +224,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .sslContext(clientSslContext)
             .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
                 .getQueryPipelinePerStore())
-            .execPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
-                .getExecPipelinePerStore())
             .build();
         inboxStore = IInboxStore.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
@@ -241,16 +240,15 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
             )
             .storeOptions(new KVRangeStoreOptions()
-                .setDataEngineConfigurator(
-                    buildEngineConf(config
-                        .getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getDataEngineConfig(), "inbox_data"))
-                .setWalEngineConfigurator(
-                    buildEngineConf(config
-                        .getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getWalEngineConfig(), "inbox_wal")))
+                .setKvRangeOptions(new KVRangeOptions().setMaxRangeLoad(3_000_000))
+                .setDataEngineConfigurator(buildEngineConf(config
+                    .getStateStoreConfig()
+                    .getInboxStoreConfig()
+                    .getDataEngineConfig(), "inbox_data"))
+                .setWalEngineConfigurator(buildEngineConf(config
+                    .getStateStoreConfig()
+                    .getInboxStoreConfig()
+                    .getWalEngineConfig(), "inbox_wal")))
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
@@ -272,10 +270,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .getStateStoreConfig()
                 .getRetainStoreConfig()
                 .getQueryPipelinePerStore())
-            .execPipelinesPerStore(config
-                .getStateStoreConfig()
-                .getRetainStoreConfig()
-                .getExecPipelinePerStore())
             .build();
         retainStore = IRetainStore.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
@@ -331,10 +325,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .getStateStoreConfig()
                 .getDistWorkerConfig()
                 .getQueryPipelinePerStore())
-            .execPipelinesPerStore(config
-                .getStateStoreConfig()
-                .getDistWorkerConfig()
-                .getExecPipelinePerStore())
             .build();
 
         distWorker = IDistWorker.nonStandaloneBuilder()

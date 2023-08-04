@@ -14,21 +14,21 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.google.protobuf.ByteString;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVReaderTest {
     @Mock
@@ -40,7 +40,10 @@ public class KVReaderTest {
 
     @Mock
     private IKVEngineIterator engineIteratorForIteration;
+    @Mock
+    private ILoadTracker loadTracker;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -54,7 +57,7 @@ public class KVReaderTest {
     @Test
     public void read() {
         KVReader reader = new KVReader(metadata, engine,
-            () -> new IKVEngineIterator[] {engineIteratorForPointQuery, engineIteratorForIteration});
+            () -> new IKVEngineIterator[] {engineIteratorForPointQuery, engineIteratorForIteration}, loadTracker);
 
         // range
         when(metadata.range()).thenReturn(FULL_RANGE);

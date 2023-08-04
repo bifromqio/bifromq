@@ -26,6 +26,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
@@ -74,15 +75,17 @@ public class SubscriptionCache {
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
     private final ThreadLocal<IKVRangeReader> threadLocalReader;
-    private final ILoadEstimator loadEstimator;
+    private final ILoadTracker loadTracker;
     private final Timer externalMatchTimer;
     private final Timer internalMatchTimer;
 
-    SubscriptionCache(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, Executor matchExecutor,
-                      ILoadEstimator loadEstimator) {
+    SubscriptionCache(KVRangeId id,
+                      Supplier<IKVRangeReader> rangeReaderProvider,
+                      Executor matchExecutor,
+                      ILoadTracker loadTracker) {
         int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
         threadLocalReader = ThreadLocal.withInitial(rangeReaderProvider);
-        this.loadEstimator = loadEstimator;
+        this.loadTracker = loadTracker;
         orderedSharedMatching = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
@@ -174,12 +177,12 @@ public class SubscriptionCache {
                     if (matching instanceof NormalMatching) {
                         matchedInbox = (NormalMatching) matching;
                         // track load
-                        loadEstimator.track(matchedInbox.key, LoadUnits.KEY_CACHE_HIT);
+                        loadTracker.track(matchedInbox.key, 1);
                         routesMap.put(matchedInbox, senders);
                     } else {
                         GroupMatching groupMatching = (GroupMatching) matching;
                         // track load
-                        loadEstimator.track(groupMatching.key, LoadUnits.KEY_CACHE_HIT);
+                        loadTracker.track(groupMatching.key, 1);
                         if (groupMatching.ordered) {
                             for (ClientInfo sender : senders) {
                                 matchedInbox = orderedSharedMatching
@@ -255,53 +258,53 @@ public class SubscriptionCache {
         Map<String, Set<String>> matched = Maps.newHashMap();
         TopicFilterMatcher matcher = new TopicFilterMatcher(topicTrie);
         int probe = 0;
-        IKVIterator itr = rangeReader.kvReader().iterator();
-
-        // track seek
-        loadEstimator.track(matchRecordRange.getStartKey(), LoadUnits.KEY_ITR_SEEK);
-        itr.seek(matchRecordRange.getStartKey());
-        while (itr.isValid() && compare(itr.key(), matchRecordRange.getEndKey()) < 0) {
-            // track itr.key()
-            loadEstimator.track(itr.key(), LoadUnits.KEY_ITR_GET);
-            Matching matching = parseMatchRecord(itr.key(), itr.value());
-            // key: topic
-            Set<String> matchedTopics = matched.get(matching.escapedTopicFilter);
-            if (matchedTopics == null) {
-                Optional<Map<String, Iterable<TopicMessage>>> clientMsgs = matcher.match(matching.escapedTopicFilter);
-                if (clientMsgs.isPresent()) {
-                    matchedTopics = clientMsgs.get().keySet();
-                    matched.put(matching.escapedTopicFilter, matchedTopics);
-                    itr.next();
-                    probe = 0;
-                } else {
-                    Optional<String> higherFilter = matcher.higher(matching.escapedTopicFilter);
-                    if (higherFilter.isPresent()) {
-                        // next() is much cheaper than seek(), we probe following 20 entries
-                        if (probe++ < 20) {
-                            // probe next
-                            itr.next();
-                        } else {
-                            // seek to match next topic filter
-                            ByteString nextMatch = matchRecordTopicFilterPrefix(tenantId, higherFilter.get());
-                            loadEstimator.track(nextMatch, LoadUnits.KEY_ITR_SEEK);
-                            itr.seek(nextMatch);
-                        }
-                        continue;
+        try (IKVIterator itr = rangeReader.kvReader().iterator()) {
+            // track seek
+            itr.seek(matchRecordRange.getStartKey());
+            while (itr.isValid() && compare(itr.key(), matchRecordRange.getEndKey()) < 0) {
+                // track itr.key()
+                Matching matching = parseMatchRecord(itr.key(), itr.value());
+                // key: topic
+                Set<String> matchedTopics = matched.get(matching.escapedTopicFilter);
+                if (matchedTopics == null) {
+                    Optional<Map<String, Iterable<TopicMessage>>> clientMsgs =
+                        matcher.match(matching.escapedTopicFilter);
+                    if (clientMsgs.isPresent()) {
+                        matchedTopics = clientMsgs.get().keySet();
+                        matched.put(matching.escapedTopicFilter, matchedTopics);
+                        itr.next();
+                        probe = 0;
                     } else {
-                        break; // no more topic filter to match, stop here
+                        Optional<String> higherFilter = matcher.higher(matching.escapedTopicFilter);
+                        if (higherFilter.isPresent()) {
+                            // next() is much cheaper than seek(), we probe following 20 entries
+                            if (probe++ < 20) {
+                                // probe next
+                                itr.next();
+                            } else {
+                                // seek to match next topic filter
+                                ByteString nextMatch = matchRecordTopicFilterPrefix(tenantId, higherFilter.get());
+                                itr.seek(nextMatch);
+                            }
+                            continue;
+                        } else {
+                            break; // no more topic filter to match, stop here
+                        }
                     }
+                } else {
+                    itr.next();
                 }
-            } else {
-                itr.next();
+                matchedTopics.forEach(t -> routes.get(ScopedTopic.builder()
+                        .tenantId(tenantId)
+                        .topic(t)
+                        .range(matchRecordRange)
+                        .build())
+                    .routes.add(matching));
             }
-            matchedTopics.forEach(t -> routes.get(ScopedTopic.builder()
-                    .tenantId(tenantId)
-                    .topic(t)
-                    .range(matchRecordRange)
-                    .build())
-                .routes.add(matching));
+            sample.stop(internalMatchTimer);
+        } catch (Exception e) {
+            // never happens
         }
-        sample.stop(internalMatchTimer);
         return routes;
     }
 

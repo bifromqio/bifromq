@@ -56,8 +56,12 @@ public class KVRangeStateTest {
     private String DB_NAME = "testDB";
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private ScheduledExecutorService bgMgmtTaskExecutor;
-    private KVEngineConfigurator configurator = null;
+    private KVEngineConfigurator<?> configurator = null;
     private IKVEngine kvEngine;
+
+    private ILoadTracker loadTracker = (key, loadUnits) -> {
+
+    };
 
     @BeforeMethod
     public void setup() throws IOException {
@@ -96,12 +100,12 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
         IKVRangeState.KVRangeMeta meta = accessor.metadata().blockingFirst();
         assertEquals(meta.ver, snapshot.getVer());
         assertEquals(meta.range, snapshot.getRange());
         assertEquals(meta.state, snapshot.getState());
-        assertEquals(accessor.getReader().lastAppliedIndex(), snapshot.getLastAppliedIndex());
+        assertEquals(accessor.getReader(false).lastAppliedIndex(), snapshot.getLastAppliedIndex());
     }
 
     @Test
@@ -113,14 +117,14 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        new KVRangeState(snapshot, kvEngine);
+        new KVRangeState(snapshot, kvEngine, loadTracker);
 
-        KVRangeState accessor = new KVRangeState(snapshot.getId(), kvEngine);
+        KVRangeState accessor = new KVRangeState(snapshot.getId(), kvEngine, loadTracker);
         IKVRangeState.KVRangeMeta meta = accessor.metadata().blockingFirst();
         assertEquals(meta.ver, snapshot.getVer());
         assertEquals(meta.range, snapshot.getRange());
         assertEquals(meta.state, snapshot.getState());
-        assertEquals(accessor.getReader().lastAppliedIndex(), snapshot.getLastAppliedIndex());
+        assertEquals(accessor.getReader(false).lastAppliedIndex(), snapshot.getLastAppliedIndex());
     }
 
     @Test
@@ -132,8 +136,8 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
-        accessor.getWriter().resetVer(2).close();
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        accessor.getWriter(false).resetVer(2).close();
         IKVRangeState.KVRangeMeta meta = accessor.metadata().blockingFirst();
         assertEquals(meta.ver, 2);
     }
@@ -147,7 +151,7 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
         assertFalse(accessor.hasCheckpoint(snapshot));
 
         KVRangeSnapshot snap = accessor.checkpoint();
@@ -170,12 +174,12 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
         snapshot = accessor.checkpoint();
 
         ByteString key = ByteString.copyFromUtf8("Key");
         ByteString val = ByteString.copyFromUtf8("Value");
-        IKVRangeWriter rangeWriter = accessor.getWriter();
+        IKVRangeWriter rangeWriter = accessor.getWriter(false);
         rangeWriter.kvWriter().put(key, val);
         rangeWriter.close();
 
@@ -206,9 +210,9 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(range)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
-        IKVRangeWriter rangeWriter = accessor.getWriter();
-        IKVRangeReader rangeReader = accessor.getReader();
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        IKVRangeWriter rangeWriter = accessor.getWriter(false);
+        IKVRangeReader rangeReader = accessor.getReader(false);
         ByteString key = ByteString.copyFromUtf8("aKey");
         ByteString val = ByteString.copyFromUtf8("Value");
         rangeWriter.kvWriter().put(key, val);
@@ -219,7 +223,7 @@ public class KVRangeStateTest {
 
         // make a range change
         Range newRange = range.toBuilder().setStartKey(ByteString.copyFromUtf8("b")).build();
-        accessor.getWriter().resetVer(1).setRange(newRange).close();
+        accessor.getWriter(false).resetVer(1).setRange(newRange).close();
         rangeReader.refresh();
         assertEquals(rangeReader.ver(), 1);
         assertEquals(rangeReader.kvReader().range(), newRange);
@@ -241,8 +245,8 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(range)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
-        IKVRangeWriter rangeWriter = accessor.getWriter();
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        IKVRangeWriter rangeWriter = accessor.getWriter(false);
         IKVRangeReader rangeReader1 = accessor.borrow();
         IKVRangeReader rangeReader2 = accessor.borrow();
         assertTrue(rangeReader1 != rangeReader2);
@@ -277,8 +281,8 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(range)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
-        IKVRangeWriter rangeWriter = accessor.getWriter();
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        IKVRangeWriter rangeWriter = accessor.getWriter(false);
         IKVRangeReader rangeReader1 = accessor.borrow();
         IKVRangeReader rangeReader2 = accessor.borrow();
         accessor.returnBorrowed(rangeReader1);
@@ -329,16 +333,16 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
         snapshot = accessor.checkpoint();
-        IKVRangeWriter rangeWriter = accessor.getWriter();
+        IKVRangeWriter rangeWriter = accessor.getWriter(false);
         ByteString key = ByteString.copyFromUtf8("aKey");
         ByteString val = ByteString.copyFromUtf8("Value");
         rangeWriter.kvWriter().put(key, val);
         rangeWriter.close();
 
         accessor.reset(snapshot).close();
-        IKVRangeReader rangeReader = accessor.getReader();
+        IKVRangeReader rangeReader = accessor.getReader(false);
         assertFalse(rangeReader.kvReader().exist(key));
     }
 
@@ -351,8 +355,8 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
-        IKVRangeWriter rangeWriter = accessor.getWriter();
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        IKVRangeWriter rangeWriter = accessor.getWriter(false);
         ByteString key = ByteString.copyFromUtf8("aKey");
         ByteString val = ByteString.copyFromUtf8("Value");
         rangeWriter.kvWriter().put(key, val);
@@ -360,12 +364,12 @@ public class KVRangeStateTest {
 
         accessor.destroy(true);
 
-        accessor = new KVRangeState(snapshot.getId(), kvEngine);
-        IKVRangeReader rangeReader = accessor.getReader();
+        accessor = new KVRangeState(snapshot.getId(), kvEngine, loadTracker);
+        IKVRangeReader rangeReader = accessor.getReader(false);
         assertEquals(rangeReader.ver(), -1);
 
-        accessor = new KVRangeState(snapshot, kvEngine);
-        rangeReader = accessor.getReader();
+        accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        rangeReader = accessor.getReader(false);
         assertEquals(rangeReader.ver(), 0);
         assertFalse(rangeReader.kvReader().exist(key));
     }
@@ -379,8 +383,8 @@ public class KVRangeStateTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setRange(FULL_RANGE)
             .build();
-        KVRangeState accessor = new KVRangeState(snapshot, kvEngine);
-        IKVRangeWriter rangeWriter = accessor.getWriter();
+        KVRangeState accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        IKVRangeWriter rangeWriter = accessor.getWriter(false);
         ByteString key = ByteString.copyFromUtf8("aKey");
         ByteString val = ByteString.copyFromUtf8("Value");
         rangeWriter.kvWriter().put(key, val);
@@ -388,11 +392,11 @@ public class KVRangeStateTest {
 
         accessor.destroy(false);
 
-        accessor = new KVRangeState(snapshot.getId(), kvEngine);
-        IKVRangeReader rangeReader = accessor.getReader();
+        accessor = new KVRangeState(snapshot.getId(), kvEngine, loadTracker);
+        IKVRangeReader rangeReader = accessor.getReader(false);
 
-        accessor = new KVRangeState(snapshot, kvEngine);
-        rangeReader = accessor.getReader();
+        accessor = new KVRangeState(snapshot, kvEngine, loadTracker);
+        rangeReader = accessor.getReader(false);
         assertTrue(rangeReader.kvReader().exist(key));
     }
 }

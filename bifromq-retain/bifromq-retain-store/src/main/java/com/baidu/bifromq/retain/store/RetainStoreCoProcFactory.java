@@ -17,6 +17,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import java.time.Clock;
 import java.util.function.Supplier;
 
@@ -28,7 +29,7 @@ public class RetainStoreCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider) {
+    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, ILoadTracker loadTracker) {
         return new RetainStoreCoProc(id, rangeReaderProvider, clock);
     }
 }

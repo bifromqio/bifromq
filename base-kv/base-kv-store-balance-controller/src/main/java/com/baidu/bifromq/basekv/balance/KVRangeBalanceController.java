@@ -103,7 +103,7 @@ public class KVRangeBalanceController {
                 balancers.add(balancer);
             }
             this.metricsManager = new MetricManager(localStoreId, storeClient.clusterId());
-            log.info("[{}]KVRangeBalanceController start to balance in store: {}", storeClient.clusterId(),
+            log.debug("[{}]KVRangeBalanceController start to balance in store: {}", storeClient.clusterId(),
                 localStoreId);
             descriptorSub = this.storeClient.describe()
                 .distinctUntilChanged()
@@ -146,37 +146,42 @@ public class KVRangeBalanceController {
     private void scheduleNow() {
         metricsManager.scheduleCount.increment();
         for (StoreBalancer fromBalancer : balancers) {
-            Optional<BalanceCommand> commandOpt = fromBalancer.balance();
-            if (commandOpt.isPresent()) {
-                BalanceCommand commandToRun = commandOpt.get();
-                log.debug("[{}]Run command: {}", storeClient.clusterId(), commandToRun);
-                String balancerName = fromBalancer.getClass().getSimpleName();
-                String cmdName = commandToRun.getClass().getSimpleName();
-                Sample start = Timer.start();
-                CommandType commandType = commandToRun.type();
-                commandRunner.run(commandToRun)
-                    .whenCompleteAsync((r, e) -> {
-                        CommandMetrics metrics = metricsManager.getCommandMetrics(balancerName, cmdName);
-                        if (r == CommandRunner.Result.Succeed) {
-                            metrics.cmdSucceedCounter.increment();
-                            start.stop(metrics.cmdRunTimer);
-                            // Always schedule later after recovery command
-                            if (commandType == CommandType.RECOVERY) {
-                                scheduling.set(false);
-                                scheduleLater();
+            try {
+                Optional<BalanceCommand> commandOpt = fromBalancer.balance();
+                if (commandOpt.isPresent()) {
+                    BalanceCommand commandToRun = commandOpt.get();
+                    log.info("[{}]Run command: {}", storeClient.clusterId(), commandToRun);
+                    String balancerName = fromBalancer.getClass().getSimpleName();
+                    String cmdName = commandToRun.getClass().getSimpleName();
+                    Sample start = Timer.start();
+                    CommandType commandType = commandToRun.type();
+                    commandRunner.run(commandToRun)
+                        .whenCompleteAsync((r, e) -> {
+                            CommandMetrics metrics = metricsManager.getCommandMetrics(balancerName, cmdName);
+                            if (r == CommandRunner.Result.Succeed) {
+                                metrics.cmdSucceedCounter.increment();
+                                start.stop(metrics.cmdRunTimer);
+                                // Always schedule later after recovery command
+                                if (commandType == CommandType.RECOVERY) {
+                                    scheduling.set(false);
+                                    scheduleLater();
+                                } else {
+                                    scheduleNow();
+                                }
                             } else {
-                                scheduleNow();
+                                scheduling.set(false);
+                                if (e != null) {
+                                    log.error("[{}]Should not be here, error when run command", storeClient.clusterId(),
+                                        e);
+                                }
+                                metrics.cmdFailedCounter.increment();
+                                scheduleLater();
                             }
-                        } else {
-                            scheduling.set(false);
-                            if (e != null) {
-                                log.error("[{}]Should not be here, error when run command", storeClient.clusterId(), e);
-                            }
-                            metrics.cmdFailedCounter.increment();
-                            scheduleLater();
-                        }
-                    }, executor);
-                return;
+                        }, executor);
+                    return;
+                }
+            } catch (Throwable e) {
+                log.warn("[{}]Run balancer[{}] failed", storeClient.clusterId(), fromBalancer.getClass().getName(), e);
             }
         }
         // no command to run
