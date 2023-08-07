@@ -48,16 +48,13 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@Deprecated
 public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, SendResult.Result> {
-    private final IBaseKVStoreClient kvStoreClient;
-
     private final int maxInboxPerBatch;
-
     private final int maxSizePerBatch;
 
     public InboxInsertScheduler(IBaseKVStoreClient kvStoreClient) {
         super(kvStoreClient, "inbox_server_insert");
-        this.kvStoreClient = kvStoreClient;
         maxInboxPerBatch = INBOX_MAX_INBOXES_PER_INSERT.get();
         maxSizePerBatch = INBOX_MAX_BYTES_PER_INSERT.get();
     }
@@ -169,8 +166,10 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
 
         private final Timer batchInsertTimer;
 
-        BatchInsertBuilder(String name, int maxInflights,
-                           KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
+        BatchInsertBuilder(String name,
+                           int maxInflights,
+                           KVRangeSetting range,
+                           IBaseKVStoreClient kvStoreClient) {
             super(name, maxInflights);
             this.range = range;
             this.kvStoreClient = kvStoreClient;
