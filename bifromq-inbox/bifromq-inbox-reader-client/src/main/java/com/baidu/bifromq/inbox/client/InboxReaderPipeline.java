@@ -27,11 +27,13 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -61,19 +63,45 @@ class InboxReaderPipeline implements IInboxReaderClient.IInboxReader {
     }
 
     @Override
-    public void fetch(Consumer<Fetched> consumer) {
-        consumptions.add(ppln.msg()
-            .doOnNext(fetched -> {
-                if (fetched.getQos0SeqCount() > 0) {
-                    lastFetchQoS0Seq = fetched.getQos0Seq(fetched.getQos0SeqCount() - 1);
-                    // commit immediately
-                    commit(System.nanoTime(), QoS.AT_MOST_ONCE, lastFetchQoS0Seq);
-                }
-                if (fetched.getQos2SeqCount() > 0) {
-                    lastFetchQoS2Seq = fetched.getQos2Seq(fetched.getQos2SeqCount() - 1);
-                }
-            })
-            .subscribe(consumer::accept));
+    public void fetch(BiConsumer<Fetched, Throwable> consumer) {
+        doFetch(consumer);
+    }
+
+    private void doFetch(BiConsumer<Fetched, Throwable> consumer) {
+        if (!ppln.isClosed()) {
+            consumptions.add(ppln.msg()
+                .doOnNext(fetched -> {
+                    if (fetched.getQos0SeqCount() > 0) {
+                        lastFetchQoS0Seq = fetched.getQos0Seq(fetched.getQos0SeqCount() - 1);
+                        // commit immediately
+                        commit(System.nanoTime(), QoS.AT_MOST_ONCE, lastFetchQoS0Seq);
+                    }
+                    if (fetched.getQos2SeqCount() > 0) {
+                        lastFetchQoS2Seq = fetched.getQos2Seq(fetched.getQos2SeqCount() - 1);
+                    }
+                })
+                .subscribeWith(new DisposableObserver<Fetched>() {
+                    @Override
+                    public void onNext(@NonNull Fetched fetched) {
+                        consumer.accept(fetched, null);
+                    }
+
+                    @Override
+                    public void onError(@NonNull Throwable e) {
+                        consumptions.remove(this);
+                        consumer.accept(null, e);
+                        doFetch(consumer);
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        consumptions.remove(this);
+                        consumer.accept(null, new RuntimeException("fetch ppln completed"));
+                        doFetch(consumer);
+                    }
+                })
+            );
+        }
     }
 
     @Override

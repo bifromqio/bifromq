@@ -196,7 +196,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<BootstrapReply> bootstrap(String storeId) {
         String serverId = storeToServerMap.get(storeId);
         if (serverId == null) {
-            return CompletableFuture.failedFuture(new ServerNotFoundException("BaseKVStore Server not available"));
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId,
             BootstrapRequest.newBuilder().setReqId(System.nanoTime()).build(), bootstrapMethod);
@@ -206,7 +207,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<RecoverReply> recover(String storeId, RecoverRequest request) {
         String serverId = storeToServerMap.get(storeId);
         if (serverId == null) {
-            return CompletableFuture.failedFuture(new ServerNotFoundException("BaseKVStore Server not available"));
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, recoverMethod);
     }
@@ -216,7 +218,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                                                                          TransferLeadershipRequest request) {
         String serverId = storeToServerMap.get(storeId);
         if (serverId == null) {
-            return CompletableFuture.failedFuture(new ServerNotFoundException("BaseKVStore Server not available"));
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, transferLeadershipMethod)
             .exceptionally(e -> TransferLeadershipReply.newBuilder()
@@ -230,7 +233,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                                                                            ChangeReplicaConfigRequest request) {
         String serverId = storeToServerMap.get(storeId);
         if (serverId == null) {
-            return CompletableFuture.failedFuture(new ServerNotFoundException("BaseKVStore Server not available"));
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, changeReplicaConfigMethod)
             .exceptionally(e -> ChangeReplicaConfigReply.newBuilder()
@@ -243,7 +247,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<KVRangeSplitReply> splitRange(String storeId, KVRangeSplitRequest request) {
         String serverId = storeToServerMap.get(storeId);
         if (serverId == null) {
-            return CompletableFuture.failedFuture(new ServerNotFoundException("BaseKVStore Server not available"));
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, splitMethod)
             .exceptionally(e -> KVRangeSplitReply.newBuilder()
@@ -256,7 +261,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<KVRangeMergeReply> mergeRanges(String storeId, KVRangeMergeRequest request) {
         String serverId = storeToServerMap.get(storeId);
         if (serverId == null) {
-            return CompletableFuture.failedFuture(new ServerNotFoundException("BaseKVStore Server not available"));
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, mergeMethod)
             .exceptionally(e -> KVRangeMergeReply.newBuilder()

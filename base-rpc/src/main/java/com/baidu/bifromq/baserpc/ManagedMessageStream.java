@@ -52,7 +52,6 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
 
     private final AtomicReference<State> state = new AtomicReference<>(State.Normal);
     private final ConcurrentLinkedQueue<AckT> ackSendingBuffers;
-    private final PublishSubject<MsgT> msgSubject = PublishSubject.create();
     private final RPCMeters.MeterKey meterKey;
     private final String tenantId;
     private final String wchKey;
@@ -69,8 +68,9 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     private final AtomicReference<String> selectedServerId = new AtomicReference<>();
     // traffic control
     private final AtomicBoolean sending = new AtomicBoolean(false);
-
     private final Backoff retargetBackoff = new Backoff(5, 10, 60000);
+
+    private volatile PublishSubject<MsgT> msgSubject = PublishSubject.create();
 
     ManagedMessageStream(
         String tenantId,
@@ -343,10 +343,13 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
             log.trace("MsgStream@{} internal stream@{} completed",
                 ManagedMessageStream.this.hashCode(), requestStream.hashCode());
             synchronized (ManagedMessageStream.this) {
+                PublishSubject<MsgT> oldSubject = msgSubject;
+                msgSubject = PublishSubject.create();
+                oldSubject.onComplete();
                 if (requestStream.isReady()) {
                     requestStream.onCompleted();
                 }
-                if (!requester.compareAndSet(requestStream, null)) {
+                if (requester.get() != null && !requester.compareAndSet(requestStream, null)) {
                     // don't schedule target if the completed one is not the active one
                     return;
                 }

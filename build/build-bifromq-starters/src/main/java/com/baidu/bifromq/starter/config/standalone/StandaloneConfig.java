@@ -40,5 +40,7 @@ public class StandaloneConfig implements StarterConfig {
     @JsonSetter(nulls = Nulls.SKIP)
     private RPCServerConfig rpcServerConfig = new RPCServerConfig();
     @JsonSetter(nulls = Nulls.SKIP)
+    private RPCServerConfig baseKVRpcServerConfig;
+    @JsonSetter(nulls = Nulls.SKIP)
     private StateStoreConfig stateStoreConfig = new StateStoreConfig();
 }

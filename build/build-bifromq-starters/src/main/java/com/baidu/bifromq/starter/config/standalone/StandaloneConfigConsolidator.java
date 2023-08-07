@@ -91,10 +91,17 @@ public class StandaloneConfigConsolidator {
 
     private static void consolidateRPCServerConfig(StandaloneConfig config) {
         RPCServerConfig rpcServerConfig = config.getRpcServerConfig();
+        RPCServerConfig baseKVRpcServerConfig =
+            config.getBaseKVRpcServerConfig() == null ? new RPCServerConfig() : config.getBaseKVRpcServerConfig();
         // fill default host
         if (rpcServerConfig.getHost() == null) {
             rpcServerConfig.setHost(resolveHost(config));
         }
+        // fill null for that these params would not be used
+        baseKVRpcServerConfig.setHost(null);
+        baseKVRpcServerConfig.setWorkerThreads(null);
+        baseKVRpcServerConfig.setSslConfig(null);
+        config.setBaseKVRpcServerConfig(baseKVRpcServerConfig);
     }
 
     @SneakyThrows

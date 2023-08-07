@@ -190,7 +190,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .executor(ioServerExecutor);
         RPCServerBuilder sharedBaseKVRPCServerBuilder = IRPCServer.newBuilder()
             .host(config.getRpcServerConfig().getHost())
-            .port(config.getRpcServerConfig().getPort())
+            .port(config.getBaseKVRpcServerConfig().getPort())
             .crdtService(serverCrdtService)
             .executor(MoreExecutors.directExecutor());
         if (config.getRpcServerConfig().getSslConfig() != null) {
@@ -227,7 +227,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         inboxStore = IInboxStore.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
-            .bootstrap(true)
+            .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(inboxStoreClient)
@@ -273,7 +273,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         retainStore = IRetainStore.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
-            .bootstrap(true)
+            .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(retainStoreClient)
@@ -329,7 +329,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         distWorker = IDistWorker.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
-            .bootstrap(true)
+            .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .settingProvider(settingProviderMgr)
