@@ -90,7 +90,7 @@ message InboxInsertResult{
   Result result = 2;
 }
 message InboxInsertReply{
-  repeated InboxInsertResult results = 2;
+  repeated InboxInsertResult results = 1;
 }
 
 message InboxCommit{
@@ -105,6 +105,16 @@ message InboxCommitRequest{
 
 message InboxCommitReply{
   map<string, bool> result = 1;
+}
+
+message InboxComSertRequest{
+  repeated MessagePack insert = 1;
+  map<string, InboxCommit> commit = 2;
+}
+
+message InboxComSertReply{
+  repeated InboxInsertResult insertResults = 1;
+  map<string, bool> commitResults = 2;
 }
 
 message GCRequest {
@@ -132,6 +142,7 @@ message InboxServiceRWCoProcInput{
     CreateRequest createInbox = 4;
     TouchRequest touch = 5;
     GCRequest gc = 6;
+    InboxComSertRequest insertAndCommit = 7;
   }
 }
 
@@ -143,6 +154,7 @@ message InboxServiceRWCoProcOutput{
     CreateReply createInbox = 4;
     TouchReply touch = 5;
     GCReply gc = 6;
+    InboxComSertReply insertAndCommit = 7;
   }
 }
 

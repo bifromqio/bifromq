@@ -42,14 +42,11 @@ import org.jctools.maps.NonBlockingHashMap;
 
 @Slf4j
 public class InboxFetchScheduler extends InboxQueryScheduler<InboxFetchScheduler.InboxFetch, Fetched> {
-    private final IBaseKVStoreClient kvStoreClient;
     private final int maxInboxesPerFetch;
 
 
     public InboxFetchScheduler(IBaseKVStoreClient kvStoreClient) {
-        super(INBOX_FETCH_QUEUES_PER_RANGE.get(), kvStoreClient,
-            "inbox_server_fetch");
-        this.kvStoreClient = kvStoreClient;
+        super(INBOX_FETCH_QUEUES_PER_RANGE.get(), kvStoreClient, "inbox_server_fetch");
         maxInboxesPerFetch = INBOX_MAX_INBOXES_PER_FETCH.get();
     }
 

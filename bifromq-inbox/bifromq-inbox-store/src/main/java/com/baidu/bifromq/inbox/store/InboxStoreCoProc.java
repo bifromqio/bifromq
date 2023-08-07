@@ -53,6 +53,8 @@ import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.HasReply;
 import com.baidu.bifromq.inbox.storage.proto.HasRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxComSertReply;
+import com.baidu.bifromq.inbox.storage.proto.InboxComSertRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxCommit;
 import com.baidu.bifromq.inbox.storage.proto.InboxCommitReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxCommitRequest;
@@ -104,7 +106,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private final Clock clock;
     private final Duration purgeDelay;
 
-    InboxStoreCoProc(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, IEventCollector eventCollector,
+    InboxStoreCoProc(KVRangeId id,
+                     Supplier<IKVRangeReader> rangeReaderProvider,
+                     IEventCollector eventCollector,
                      Clock clock,
                      Duration purgeDelay,
                      ILoadTracker loadTracker) {
@@ -142,6 +146,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             case CREATEINBOX -> replyBuilder.setCreateInbox(createInbox(coProcInput.getCreateInbox(), reader, writer));
             case INSERT -> replyBuilder.setInsert(batchInsert(coProcInput.getInsert(), reader, writer));
             case COMMIT -> replyBuilder.setCommit(batchCommit(coProcInput.getCommit(), reader, writer));
+            case INSERTANDCOMMIT ->
+                replyBuilder.setInsertAndCommit(batchInsertAndCommit(coProcInput.getInsertAndCommit(), reader, writer));
             case TOUCH -> replyBuilder.setTouch(touch(coProcInput.getTouch(), reader, writer));
             case GC -> replyBuilder.setGc(gc(coProcInput.getGc(), reader, writer));
         }
@@ -398,20 +404,96 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return builder.build();
     }
 
-    private InboxInsertReply batchInsert(InboxInsertRequest request, IKVReader reader, IKVWriter writer) {
+    private InboxComSertReply batchInsertAndCommit(InboxComSertRequest request, IKVReader reader, IKVWriter writer) {
         IKVIterator itr = reader.iterator();
-
         Map<SubInfo, InboxInsertResult.Result> results = new LinkedHashMap<>();
         Map<ByteString, List<MessagePack>> subMsgPacksByInbox = new HashMap<>();
+        List<MessagePack> subMsgPackList = request.getInsertList();
+        Map<ByteString, InboxCommit> commitInboxs = new HashMap<>();
+        request.getCommitMap().forEach((k, v) -> commitInboxs.put(ByteString.copyFromUtf8(k), v));
 
-        for (MessagePack subMsgPack : request.getSubMsgPackList()) {
+
+        InboxComSertReply.Builder replyBuilder = InboxComSertReply.newBuilder();
+        for (MessagePack subMsgPack : subMsgPackList) {
             SubInfo subInfo = subMsgPack.getSubInfo();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(subInfo.getTenantId(), subInfo.getInboxId());
-
             results.put(subInfo, null);
             subMsgPacksByInbox.computeIfAbsent(scopedInboxId, k -> new LinkedList<>()).add(subMsgPack);
         }
+        for (ByteString scopedInboxId : subMsgPacksByInbox.keySet()) {
+            List<MessagePack> subMsgPacks = subMsgPacksByInbox.get(scopedInboxId);
+            InboxCommit inboxCommit = commitInboxs.remove(scopedInboxId);
+            Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
+            if (metadataBytes.isEmpty()) {
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                if (inboxCommit != null) {
+                    replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), false);
+                }
+                continue;
+            }
+            try {
+                InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
+                if (hasExpired(metadata)) {
+                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                    if (inboxCommit != null) {
+                        replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), false);
+                    }
+                    continue;
+                }
+                metadata = insertInbox(scopedInboxId, subMsgPacks, metadata, itr, reader, writer);
+                if (inboxCommit != null) {
+                    // handle insert and commit inbox
+                    metadata = commitInbox(scopedInboxId, inboxCommit, metadata, itr, writer);
+                    replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), true);
+                }
+                writer.put(scopedInboxId, metadata.toByteString());
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.OK));
+            } catch (Throwable e) {
+                log.error("Error inserting messages to inbox {}", scopedInboxId, e);
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+            }
+        }
+        for (Map.Entry<SubInfo, InboxInsertResult.Result> entry : results.entrySet()) {
+            replyBuilder.addInsertResults(InboxInsertResult.newBuilder()
+                .setSubInfo(entry.getKey())
+                .setResult(entry.getValue())
+                .build());
+        }
+        // handle commit only inbox
+        for (ByteString scopedInboxId : commitInboxs.keySet()) {
+            InboxCommit inboxCommit = commitInboxs.get(scopedInboxId);
+            assert inboxCommit.hasQos0UpToSeq() || inboxCommit.hasQos1UpToSeq() || inboxCommit.hasQos2UpToSeq();
+            Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
+            if (metadataBytes.isEmpty()) {
+                replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), false);
+                continue;
+            }
+            try {
+                InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
+                if (hasExpired(metadata)) {
+                    replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), false);
+                    continue;
+                }
+                metadata = commitInbox(scopedInboxId, inboxCommit, metadata, itr, writer);
+                writer.put(scopedInboxId, metadata.toByteString());
+                replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), true);
+            } catch (InvalidProtocolBufferException e) {
+                replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), false);
+            }
+        }
+        return replyBuilder.build();
+    }
 
+    private InboxInsertReply batchInsert(InboxInsertRequest request, IKVReader reader, IKVWriter writer) {
+        IKVIterator itr = reader.iterator();
+        Map<SubInfo, InboxInsertResult.Result> results = new LinkedHashMap<>();
+        Map<ByteString, List<MessagePack>> subMsgPacksByInbox = new HashMap<>();
+        for (MessagePack subMsgPack : request.getSubMsgPackList()) {
+            SubInfo subInfo = subMsgPack.getSubInfo();
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(subInfo.getTenantId(), subInfo.getInboxId());
+            results.put(subInfo, null);
+            subMsgPacksByInbox.computeIfAbsent(scopedInboxId, k -> new LinkedList<>()).add(subMsgPack);
+        }
         for (ByteString scopedInboxId : subMsgPacksByInbox.keySet()) {
             List<MessagePack> subMsgPacks = subMsgPacksByInbox.get(scopedInboxId);
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
@@ -425,13 +507,15 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
                     continue;
                 }
-                insertInbox(scopedInboxId, subMsgPacks, metadata, itr, reader, writer);
+                metadata = insertInbox(scopedInboxId, subMsgPacks, metadata, itr, reader, writer);
+                writer.put(scopedInboxId, metadata.toByteString());
                 subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.OK));
             } catch (Throwable e) {
                 log.error("Error inserting messages to inbox {}", scopedInboxId, e);
                 subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
             }
         }
+
         InboxInsertReply.Builder replyBuilder = InboxInsertReply.newBuilder();
         for (Map.Entry<SubInfo, InboxInsertResult.Result> entry : results.entrySet()) {
             replyBuilder.addResults(InboxInsertResult.newBuilder()
@@ -442,12 +526,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return replyBuilder.build();
     }
 
-    private void insertInbox(ByteString scopedInboxId,
-                             List<MessagePack> msgPacks,
-                             InboxMetadata metadata,
-                             IKVIterator itr,
-                             IKVReader reader,
-                             IKVWriter writer) {
+    private InboxMetadata insertInbox(ByteString scopedInboxId,
+                                      List<MessagePack> msgPacks,
+                                      InboxMetadata metadata,
+                                      IKVIterator itr,
+                                      IKVReader reader,
+                                      IKVWriter writer) {
         List<InboxMessage> qos0MsgList = new ArrayList<>();
         List<InboxMessage> qos1MsgList = new ArrayList<>();
         List<InboxMessage> qos2MsgList = new ArrayList<>();
@@ -487,10 +571,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         if (!qos2MsgList.isEmpty()) {
             metadata = insertQoS2Inbox(scopedInboxId, metadata, qos2MsgList, itr, reader, writer);
         }
-        writer.put(scopedInboxId, metadata.toByteString());
+        return metadata;
     }
 
-    private InboxMetadata insertQoS0Inbox(ByteString scopedInboxId, InboxMetadata metadata,
+    private InboxMetadata insertQoS0Inbox(ByteString scopedInboxId,
+                                          InboxMetadata metadata,
                                           List<InboxMessage> messages,
                                           IKVIterator itr, IKVWriter writeClient) {
         itr.seek(qos0InboxMsgKey(scopedInboxId, 0));
@@ -573,7 +658,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return metadata.toBuilder().setQos0NextSeq(nextSeq).build();
     }
 
-    private InboxMetadata insertQoS1Inbox(ByteString scopedInboxId, InboxMetadata metadata,
+    private InboxMetadata insertQoS1Inbox(ByteString scopedInboxId,
+                                          InboxMetadata metadata,
                                           List<InboxMessage> messages, IKVIterator itr,
                                           IKVWriter writeClient) {
         itr.seek(qos1InboxMsgKey(scopedInboxId, 0));
@@ -656,7 +742,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return metadata.toBuilder().setQos1NextSeq(nextSeq).build();
     }
 
-    private InboxMetadata insertQoS2Inbox(ByteString scopedInboxId, InboxMetadata metadata,
+    private InboxMetadata insertQoS2Inbox(ByteString scopedInboxId,
+                                          InboxMetadata metadata,
                                           List<InboxMessage> messages,
                                           IKVIterator itr,
                                           IKVReader reader,
@@ -783,90 +870,93 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             ByteString scopedInboxId = ByteString.copyFromUtf8(scopedInboxIdUtf8);
             InboxCommit inboxCommit = request.getInboxCommitMap().get(scopedInboxIdUtf8);
             assert inboxCommit.hasQos0UpToSeq() || inboxCommit.hasQos1UpToSeq() || inboxCommit.hasQos2UpToSeq();
-            replyBuilder.putResult(scopedInboxIdUtf8, commitInbox(scopedInboxId, inboxCommit, itr, reader, writer));
+            Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
+            if (metadataBytes.isEmpty()) {
+                replyBuilder.putResult(scopedInboxIdUtf8, false);
+                continue;
+            }
+            try {
+                InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
+                if (hasExpired(metadata)) {
+                    replyBuilder.putResult(scopedInboxIdUtf8, false);
+                    continue;
+                }
+                metadata = commitInbox(scopedInboxId, inboxCommit, metadata, itr, writer);
+                writer.put(scopedInboxId, metadata.toByteString());
+                replyBuilder.putResult(scopedInboxIdUtf8, true);
+            } catch (InvalidProtocolBufferException e) {
+                replyBuilder.putResult(scopedInboxIdUtf8, false);
+            }
         }
         return replyBuilder.build();
     }
 
-    private boolean commitInbox(ByteString scopedInboxId, InboxCommit inboxCommit,
-                                IKVIterator itr,
-                                IKVReader reader,
-                                IKVWriter writer) {
-        try {
-            Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
-            if (metadataBytes.isEmpty()) {
-                return false;
-            }
-            InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
-            if (hasExpired(metadata)) {
-                return false;
-            }
-            if (inboxCommit.hasQos0UpToSeq()) {
-                itr.seek(qos0InboxPrefix(scopedInboxId));
-                if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                    long oldestSeq = parseSeq(scopedInboxId, itr.key());
-                    if (oldestSeq <= inboxCommit.getQos0UpToSeq()) {
-                        ByteString delKey = itr.key();
-                        do {
-                            itr.next();
-                            if (!itr.isValid() || !isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                                if (inboxCommit.getQos0UpToSeq() == metadata.getQos0NextSeq() - 1) {
-                                    writer.delete(delKey);
-                                }
-                                break;
-                            } else {
-                                if (parseSeq(scopedInboxId, itr.key()) <= inboxCommit.getQos0UpToSeq() + 1) {
-                                    writer.delete(delKey);
-                                    delKey = itr.key();
-                                }
+    private InboxMetadata commitInbox(ByteString scopedInboxId,
+                                      InboxCommit inboxCommit,
+                                      InboxMetadata metadata,
+                                      IKVIterator itr,
+                                      IKVWriter writer) {
+        if (inboxCommit.hasQos0UpToSeq()) {
+            itr.seek(qos0InboxPrefix(scopedInboxId));
+            if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
+                long oldestSeq = parseSeq(scopedInboxId, itr.key());
+                if (oldestSeq <= inboxCommit.getQos0UpToSeq()) {
+                    ByteString delKey = itr.key();
+                    do {
+                        itr.next();
+                        if (!itr.isValid() || !isQoS0MessageKey(itr.key(), scopedInboxId)) {
+                            if (inboxCommit.getQos0UpToSeq() == metadata.getQos0NextSeq() - 1) {
+                                writer.delete(delKey);
                             }
-                        } while (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId));
-                    }
-                }
-                metadata = metadata.toBuilder().setQos0LastFetchBeforeSeq(inboxCommit.getQos0UpToSeq() + 1).build();
-            }
-            if (inboxCommit.hasQos1UpToSeq()) {
-                itr.seek(qos1InboxPrefix(scopedInboxId));
-                if (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                    long oldestSeq = parseSeq(scopedInboxId, itr.key());
-                    if (oldestSeq <= inboxCommit.getQos1UpToSeq()) {
-                        ByteString delKey = itr.key();
-                        do {
-                            itr.next();
-                            if (!itr.isValid() || !isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                                if (inboxCommit.getQos1UpToSeq() == metadata.getQos1NextSeq() - 1) {
-                                    writer.delete(delKey);
-                                }
-                                break;
-                            } else {
-                                if (parseSeq(scopedInboxId, itr.key()) <= inboxCommit.getQos1UpToSeq() + 1) {
-                                    writer.delete(delKey);
-                                    delKey = itr.key();
-                                }
+                            break;
+                        } else {
+                            if (parseSeq(scopedInboxId, itr.key()) <= inboxCommit.getQos0UpToSeq() + 1) {
+                                writer.delete(delKey);
+                                delKey = itr.key();
                             }
-                        } while (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId));
-                    }
+                        }
+                    } while (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId));
                 }
-                metadata = metadata.toBuilder().setQos1LastCommitBeforeSeq(inboxCommit.getQos1UpToSeq() + 1).build();
             }
-            if (inboxCommit.hasQos2UpToSeq()) {
-                itr.seek(qos2InboxPrefix(scopedInboxId));
-                while (itr.isValid() && isQoS2MessageIndexKey(itr.key(), scopedInboxId)
-                    && parseQoS2Index(scopedInboxId, itr.key()) <= inboxCommit.getQos2UpToSeq()) {
-                    writer.delete(itr.key());
-                    writer.delete(qos2InboxMsgKey(scopedInboxId, itr.value()));
-                    itr.next();
-                }
-                metadata = metadata.toBuilder().setQos2LastCommitBeforeSeq(inboxCommit.getQos2UpToSeq() + 1).build();
-            }
-
-            metadata = metadata.toBuilder().setLastFetchTime(clock.millis()).build();
-            writer.put(scopedInboxId, metadata.toByteString());
-            return true;
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Cannot parse InboxMetadata");
-            return false;
+            metadata = metadata.toBuilder().setQos0LastFetchBeforeSeq(inboxCommit.getQos0UpToSeq() + 1).build();
         }
+        if (inboxCommit.hasQos1UpToSeq()) {
+            itr.seek(qos1InboxPrefix(scopedInboxId));
+            if (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
+                long oldestSeq = parseSeq(scopedInboxId, itr.key());
+                if (oldestSeq <= inboxCommit.getQos1UpToSeq()) {
+                    ByteString delKey = itr.key();
+                    do {
+                        itr.next();
+                        if (!itr.isValid() || !isQoS1MessageKey(itr.key(), scopedInboxId)) {
+                            if (inboxCommit.getQos1UpToSeq() == metadata.getQos1NextSeq() - 1) {
+                                writer.delete(delKey);
+                            }
+                            break;
+                        } else {
+                            if (parseSeq(scopedInboxId, itr.key()) <= inboxCommit.getQos1UpToSeq() + 1) {
+                                writer.delete(delKey);
+                                delKey = itr.key();
+                            }
+                        }
+                    } while (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId));
+                }
+            }
+            metadata = metadata.toBuilder().setQos1LastCommitBeforeSeq(inboxCommit.getQos1UpToSeq() + 1).build();
+        }
+        if (inboxCommit.hasQos2UpToSeq()) {
+            itr.seek(qos2InboxPrefix(scopedInboxId));
+            while (itr.isValid() && isQoS2MessageIndexKey(itr.key(), scopedInboxId)
+                && parseQoS2Index(scopedInboxId, itr.key()) <= inboxCommit.getQos2UpToSeq()) {
+                writer.delete(itr.key());
+                writer.delete(qos2InboxMsgKey(scopedInboxId, itr.value()));
+                itr.next();
+            }
+            metadata = metadata.toBuilder().setQos2LastCommitBeforeSeq(inboxCommit.getQos2UpToSeq() + 1).build();
+        }
+
+        metadata = metadata.toBuilder().setLastFetchTime(clock.millis()).build();
+        return metadata;
     }
 
     private boolean hasExpired(InboxMetadata metadata) {

@@ -44,15 +44,12 @@ import org.jctools.maps.NonBlockingHashSet;
 
 @Slf4j
 public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, HasInboxReply> {
-    private final IBaseKVStoreClient kvStoreClient;
-
     private final int maxInboxesPerCheck;
 
 
     public InboxCheckScheduler(IBaseKVStoreClient kvStoreClient) {
         super(INBOX_CHECK_QUEUES_PER_RANGE.get(), kvStoreClient,
             "inbox_server_check");
-        this.kvStoreClient = kvStoreClient;
         maxInboxesPerCheck = INBOX_MAX_INBOXES_PER_CHECK.get();
     }
 

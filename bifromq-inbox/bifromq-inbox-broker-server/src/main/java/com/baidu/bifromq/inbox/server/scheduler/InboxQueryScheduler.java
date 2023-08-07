@@ -24,7 +24,7 @@ import lombok.EqualsAndHashCode;
 
 public abstract class InboxQueryScheduler<Req, Resp>
     extends BatchCallScheduler<Req, Resp, InboxQueryScheduler.BatchKey> {
-    private final IBaseKVStoreClient kvStoreClient;
+    protected final IBaseKVStoreClient kvStoreClient;
     private final int queuesPerRange;
 
     public InboxQueryScheduler(int queuesPerRange, IBaseKVStoreClient kvStoreClient, String name) {

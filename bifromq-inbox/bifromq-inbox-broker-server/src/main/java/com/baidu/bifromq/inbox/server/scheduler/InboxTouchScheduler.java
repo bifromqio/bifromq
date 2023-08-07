@@ -39,12 +39,10 @@ import org.jctools.maps.NonBlockingHashMap;
 
 @Slf4j
 public class InboxTouchScheduler extends InboxUpdateScheduler<InboxTouchScheduler.Touch, Void> {
-    private final IBaseKVStoreClient kvStoreClient;
     private final int maxInboxesPerTouch;
 
     public InboxTouchScheduler(IBaseKVStoreClient kvStoreClient) {
         super(kvStoreClient, "inbox_server_touch");
-        this.kvStoreClient = kvStoreClient;
         maxInboxesPerTouch = INBOX_MAX_INBOXES_PER_TOUCH.get();
     }
 

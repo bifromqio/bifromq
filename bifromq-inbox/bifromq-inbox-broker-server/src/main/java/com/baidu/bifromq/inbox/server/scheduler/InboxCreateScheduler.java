@@ -46,14 +46,11 @@ import org.jctools.maps.NonBlockingHashMap;
 
 @Slf4j
 public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxRequest, CreateInboxReply> {
-    private final IBaseKVStoreClient kvStoreClient;
-
     private final ISettingProvider settingProvider;
     private final int maxInboxesPerCreate;
 
     public InboxCreateScheduler(IBaseKVStoreClient kvStoreClient, ISettingProvider settingProvider) {
         super(kvStoreClient, "inbox_server_create");
-        this.kvStoreClient = kvStoreClient;
         this.settingProvider = settingProvider;
         maxInboxesPerCreate = INBOX_MAX_INBOXES_PER_CREATE.get();
 

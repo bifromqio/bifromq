@@ -20,7 +20,7 @@ import com.google.protobuf.ByteString;
 import java.util.Optional;
 
 public abstract class InboxUpdateScheduler<Req, Resp> extends BatchCallScheduler<Req, Resp, KVRangeSetting> {
-    private final IBaseKVStoreClient kvStoreClient;
+    protected final IBaseKVStoreClient kvStoreClient;
 
     public InboxUpdateScheduler(IBaseKVStoreClient kvStoreClient, String name) {
         super(name);
