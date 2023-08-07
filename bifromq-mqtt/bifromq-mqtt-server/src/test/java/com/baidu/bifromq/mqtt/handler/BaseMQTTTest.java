@@ -89,7 +89,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -157,7 +156,7 @@ public abstract class BaseMQTTTest {
     protected int remotePort = 8888;
     protected PublishSubject<Quit> kickSubject = PublishSubject.create();
     protected long disconnectDelay = 5000;
-    protected Consumer<Fetched> inboxFetchConsumer;
+    protected BiConsumer<Fetched, Throwable> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
 
     private AutoCloseable closeable;
