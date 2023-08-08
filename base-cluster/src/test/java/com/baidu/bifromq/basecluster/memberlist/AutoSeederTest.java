@@ -83,6 +83,8 @@ public class AutoSeederTest {
 
     @Test
     public void join() {
+        when(messenger.send(any(ClusterMessage.class), any(InetSocketAddress.class), anyBoolean()))
+            .thenReturn(new CompletableFuture<>());
         AutoSeeder seeder =
             new AutoSeeder(messenger, scheduler, memberList, addressResolver, joinTimeout, joinInterval);
 
@@ -134,6 +136,8 @@ public class AutoSeederTest {
     @SneakyThrows
     @Test
     public void joinDomain() {
+        when(messenger.send(any(ClusterMessage.class), any(InetSocketAddress.class), anyBoolean()))
+            .thenReturn(new CompletableFuture<>());
         String domain = "test.domain";
         InetAddress addr = InetAddress.getByName(REMOTE_HOST_1_ENDPOINT.getAddress());
         try (MockedStatic<InetAddress> mockAgent = mockStatic(InetAddress.class)) {

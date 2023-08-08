@@ -19,33 +19,39 @@ import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_QOS2_L
 
 import com.baidu.bifromq.baserpc.AckStream;
 import com.baidu.bifromq.baserpc.RPCContext;
+import com.baidu.bifromq.baserpc.utils.Backoff;
 import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
 import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> implements IInboxQueueFetcher {
-    private static final int MAX_FETCH_COUNT = 100;
+    private static final int NOT_KNOWN_CAPACITY = -1;
     private final Fetcher fetcher;
     private final Function<ByteString, CompletableFuture<Void>> toucher;
     private final AtomicBoolean fetchStarted = new AtomicBoolean(false);
 
     private final String delivererKey;
     private final String inboxId;
-    // indicate downstream free buffer capacity with MAX_FETCH_COUNT
-    private final AtomicInteger downStreamCapacity = new AtomicInteger(MAX_FETCH_COUNT);
+    // indicate downstream free buffer capacity, -1 stands for capacity not known yet
+    private final AtomicInteger downStreamCapacity = new AtomicInteger(NOT_KNOWN_CAPACITY);
     private final ByteString scopedInboxId;
+    private final Backoff reFetchBackoff = new Backoff(5, 10, 10000);
+    private final AtomicReference<Disposable> delayFetch = new AtomicReference<>();
     private volatile boolean closed = false;
     private volatile long fetchStartTS = 0;
     private volatile long signalTS = 0;
@@ -120,7 +126,9 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
             tenantId, inboxId, downStreamCapacity.get(), fetchStarted.get());
         signalTS = System.nanoTime();
         if (!closed && fetchStarted.compareAndSet(false, true)) {
-            int batchSize = Math.min(downStreamCapacity.get(), MAX_FETCH_COUNT);
+            int capacity = downStreamCapacity.get();
+            // fetch 100 messages if capacity not known yet
+            int batchSize = capacity == NOT_KNOWN_CAPACITY ? 100 : downStreamCapacity.get();
             if (batchSize > 0) {
                 fetch(batchSize);
             } else {
@@ -132,6 +140,24 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
     @Override
     public void touch() {
         toucher.apply(scopedInboxId);
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        Disposable disposable = delayFetch.get();
+        if (disposable != null) {
+            disposable.dispose();
+        }
+    }
+
+    private void delayFetch() {
+        delayFetch.compareAndSet(null,
+            Observable.timer(reFetchBackoff.backoff(), TimeUnit.MILLISECONDS).subscribe(t -> {
+                delayFetch.set(null);
+                signalFetch();
+            })
+        );
     }
 
     private void fetch(int batchSize) {
@@ -148,29 +174,31 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
         fetcher.fetch(new InboxFetchScheduler.InboxFetch(scopedInboxId, fb.build()))
             .whenComplete((reply, e) -> {
                 if (e != null) {
-                    log.debug("Fetch failed: tenantId={}, inboxId={}", tenantId, inboxId, e);
-                    if (!closed) {
-                        send(Fetched.newBuilder().setResult(Result.ERROR).build());
-                    }
+                    log.debug("Fetch failed and retry: tenantId={}, inboxId={}", tenantId, inboxId, e);
                     fetchStarted.set(false);
+                    delayFetch();
                     return;
                 }
+                reFetchBackoff.reset();
                 log.trace("Fetch success: tenantId={}, inboxId={}\n{}", tenantId, inboxId, reply);
                 int fetchedCount = 0;
                 if (reply.getQos0MsgCount() > 0 || reply.getQos1MsgCount() > 0 || reply.getQos2MsgCount() > 0) {
                     if (reply.getQos0MsgCount() > 0) {
                         fetchedCount += reply.getQos0MsgCount();
-                        downStreamCapacity.accumulateAndGet(reply.getQos0MsgCount(), (a, b) -> Math.max(a - b, 0));
+                        downStreamCapacity.accumulateAndGet(reply.getQos0MsgCount(),
+                            (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
                         lastFetchQoS0Seq = reply.getQos0Seq(reply.getQos0SeqCount() - 1);
                     }
                     if (reply.getQos1MsgCount() > 0) {
                         fetchedCount += reply.getQos1MsgCount();
-                        downStreamCapacity.accumulateAndGet(reply.getQos1MsgCount(), (a, b) -> Math.max(a - b, 0));
+                        downStreamCapacity.accumulateAndGet(reply.getQos1MsgCount(),
+                            (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
                         lastFetchQoS1Seq = reply.getQos1Seq(reply.getQos1SeqCount() - 1);
                     }
                     if (reply.getQos2MsgCount() > 0) {
                         fetchedCount += reply.getQos2MsgCount();
-                        downStreamCapacity.accumulateAndGet(reply.getQos2MsgCount(), (a, b) -> Math.max(a - b, 0));
+                        downStreamCapacity.accumulateAndGet(reply.getQos2MsgCount(),
+                            (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
                         lastFetchQoS2Seq = reply.getQos2Seq(reply.getQos2SeqCount() - 1);
                     }
                     if (!closed) {

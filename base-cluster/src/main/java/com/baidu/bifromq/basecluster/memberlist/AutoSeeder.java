@@ -155,10 +155,15 @@ public final class AutoSeeder {
         for (InetSocketAddress seedAddr : toJoinSeeds) {
             log.debug("Send join message to address[{}]", seedAddr);
             messenger.send(ClusterMessage.newBuilder()
-                .setJoin(Join.newBuilder()
-                    .setMember(memberList.local())
-                    .build())
-                .build(), seedAddr, true);
+                    .setJoin(Join.newBuilder()
+                        .setMember(memberList.local())
+                        .build())
+                    .build(), seedAddr, true)
+                .whenComplete((v, e) -> {
+                    if (e != null) {
+                        log.warn("failed to send join message to {}", seedAddr, e);
+                    }
+                });
         }
         scheduled.set(false);
         if (stopped.get()) {

@@ -21,7 +21,7 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 public interface IInboxReaderClient extends IConnectable {
     static InboxReaderClientBuilder newBuilder() {
@@ -39,7 +39,7 @@ public interface IInboxReaderClient extends IConnectable {
     IInboxReader openInboxReader(String inboxId, String delivererKey, ClientInfo clientInfo);
 
     interface IInboxReader {
-        void fetch(Consumer<Fetched> consumer);
+        void fetch(BiConsumer<Fetched, Throwable> consumer);
 
         void hint(int bufferCapacity);
 

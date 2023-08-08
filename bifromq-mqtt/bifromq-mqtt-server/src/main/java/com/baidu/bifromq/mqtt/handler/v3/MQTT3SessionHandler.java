@@ -135,7 +135,9 @@ import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
+import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.observers.DisposableObserver;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -214,15 +216,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
 
         throttler = new MPSThrottler(Math.max(mps, 1));
         sessionDictEntry = sessionCtx.sessionDictClient.reg(clientInfo);
-        sessionKickDisposable = sessionDictEntry.msg()
-            .observeOn(Schedulers.from(ctx.channel().eventLoop()))
-            .subscribe(quit -> {
-                if (log.isTraceEnabled()) {
-                    log.trace("Received quit request:reqId={},killer={}", quit.getReqId(), quit.getKiller());
-                }
-                closeConnectionNow(getLocal(Kicked.class)
-                    .kicker(quit.getKiller()).clientInfo(clientInfo));
-            });
+        handleSessionKick(ctx);
         tenantMeter.recordCount(MqttConnectCount);
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.channel().eventLoop()
@@ -357,6 +351,32 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
 
     public boolean sessionPresent() {
         return sessionPresent;
+    }
+
+    private void handleSessionKick(ChannelHandlerContext ctx) {
+        if (ctx.channel().isActive()) {
+            sessionKickDisposable = sessionDictEntry.msg()
+                .observeOn(Schedulers.from(ctx.channel().eventLoop()))
+                .subscribeWith(new DisposableObserver<Quit>() {
+                    @Override
+                    public void onNext(@NonNull Quit quit) {
+                        if (log.isTraceEnabled()) {
+                            log.trace("Received quit request:reqId={},killer={}", quit.getReqId(), quit.getKiller());
+                        }
+                        closeConnectionNow(getLocal(Kicked.class).kicker(quit.getKiller()).clientInfo(clientInfo));
+                    }
+
+                    @Override
+                    public void onError(@NonNull Throwable e) {
+                        handleSessionKick(ctx);
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        handleSessionKick(ctx);
+                    }
+                });
+        }
     }
 
     private void handlePubMsg(MqttPublishMessage mqttMessage) {
