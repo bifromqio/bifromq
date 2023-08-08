@@ -35,6 +35,12 @@ public final class SendBufferCapacityHinter {
         this.triggerRatio = Math.max(triggerRatio, 0.8f);
     }
 
+    public void reset() {
+        lastHint = -1;
+        lastHintRemaining = -1;
+        lastMsgSize = 0;
+    }
+
     // callback to receive hint update
     public void hint(IntConsumer hintConsumer) {
         this.hintConsumer = hintConsumer;

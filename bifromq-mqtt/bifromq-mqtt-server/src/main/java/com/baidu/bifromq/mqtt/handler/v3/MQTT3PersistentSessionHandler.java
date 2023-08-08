@@ -183,57 +183,63 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         resumeChannelRead();
     }
 
-    private void consume(Fetched fetched) {
-        log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, qos1={}, qos2={}", clientInfo().getTenantId(),
-            clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0SeqCount(),
-            fetched.getQos1SeqCount(), fetched.getQos2SeqCount());
-        ctx.channel().eventLoop().execute(() -> {
-            switch (fetched.getResult()) {
-                case OK:
-                    long timestamp = HLC.INST.getPhysical();
-                    // deal with qos0
-                    assert fetched.getQos0SeqCount() == fetched.getQos0MsgCount();
-                    for (int i = 0; i < fetched.getQos0SeqCount(); i++) {
-                        InboxMessage msg = fetched.getQos0Msg(i);
-                        pubQoS0Message(msg.getTopicFilter(), msg.getMsg(), i + 1 == fetched.getQos0MsgCount(),
-                            timestamp);
-                    }
-                    // deal with qos1
-                    assert fetched.getQos1SeqCount() == fetched.getQos1MsgCount();
-                    if (fetched.getQos1SeqCount() > 0) {
-                        long triggerSeq = fetched.getQos1Seq(fetched.getQos1SeqCount() - 1);
-                        for (int i = 0; i < fetched.getQos1SeqCount(); i++) {
-                            long seq = fetched.getQos1Seq(i);
-                            log.trace("QoS1ConfirmSeqMap: {}-{}", seq, triggerSeq);
-                            qos1ConfirmSeqMap.put(seq, triggerSeq);
-                            InboxMessage distMsg = fetched.getQos1Msg(i);
-                            pubQoS1Message(seq, distMsg.getTopicFilter(), distMsg.getMsg(),
-                                i + 1 == fetched.getQos1SeqCount(), timestamp);
-                        }
-                    }
-                    // deal with qos2
-                    assert fetched.getQos2SeqCount() == fetched.getQos2MsgCount();
-                    if (fetched.getQos2SeqCount() > 0) {
-                        long triggerSeq = fetched.getQos2Seq(fetched.getQos2SeqCount() - 1);
-                        for (int i = 0; i < fetched.getQos2SeqCount(); i++) {
-                            long seq = fetched.getQos2Seq(i);
-                            qos2ConfirmSeqMap.put(seq, triggerSeq);
-                            InboxMessage distMsg = fetched.getQos2Msg(i);
-                            TopicMessage topicMsg = distMsg.getMsg();
-                            pubQoS2Message(seq, distMsg.getTopicFilter(), topicMsg, i + 1 == fetched.getQos2SeqCount(),
+    private void consume(Fetched fetched, Throwable throwable) {
+        if (throwable != null) {
+            log.trace("Got exception when fetch, refresh hinter: tenantId={}, inboxId={}", clientInfo().getTenantId(),
+                clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), throwable);
+            bufferCapacityHinter.reset();
+        } else if (fetched != null) {
+            log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, qos1={}, qos2={}", clientInfo().getTenantId(),
+                clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0SeqCount(),
+                fetched.getQos1SeqCount(), fetched.getQos2SeqCount());
+            ctx.channel().eventLoop().execute(() -> {
+                switch (fetched.getResult()) {
+                    case OK:
+                        long timestamp = HLC.INST.getPhysical();
+                        // deal with qos0
+                        assert fetched.getQos0SeqCount() == fetched.getQos0MsgCount();
+                        for (int i = 0; i < fetched.getQos0SeqCount(); i++) {
+                            InboxMessage msg = fetched.getQos0Msg(i);
+                            pubQoS0Message(msg.getTopicFilter(), msg.getMsg(), i + 1 == fetched.getQos0MsgCount(),
                                 timestamp);
                         }
-                    }
-                    break;
-                case NO_INBOX:
-                    // fall through
-                case ERROR:
-                    // fall through
-                default:
-                    closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
-                    break;
-            }
-        });
+                        // deal with qos1
+                        assert fetched.getQos1SeqCount() == fetched.getQos1MsgCount();
+                        if (fetched.getQos1SeqCount() > 0) {
+                            long triggerSeq = fetched.getQos1Seq(fetched.getQos1SeqCount() - 1);
+                            for (int i = 0; i < fetched.getQos1SeqCount(); i++) {
+                                long seq = fetched.getQos1Seq(i);
+                                log.trace("QoS1ConfirmSeqMap: {}-{}", seq, triggerSeq);
+                                qos1ConfirmSeqMap.put(seq, triggerSeq);
+                                InboxMessage distMsg = fetched.getQos1Msg(i);
+                                pubQoS1Message(seq, distMsg.getTopicFilter(), distMsg.getMsg(),
+                                    i + 1 == fetched.getQos1SeqCount(), timestamp);
+                            }
+                        }
+                        // deal with qos2
+                        assert fetched.getQos2SeqCount() == fetched.getQos2MsgCount();
+                        if (fetched.getQos2SeqCount() > 0) {
+                            long triggerSeq = fetched.getQos2Seq(fetched.getQos2SeqCount() - 1);
+                            for (int i = 0; i < fetched.getQos2SeqCount(); i++) {
+                                long seq = fetched.getQos2Seq(i);
+                                qos2ConfirmSeqMap.put(seq, triggerSeq);
+                                InboxMessage distMsg = fetched.getQos2Msg(i);
+                                TopicMessage topicMsg = distMsg.getMsg();
+                                pubQoS2Message(seq, distMsg.getTopicFilter(), topicMsg, i + 1 == fetched.getQos2SeqCount(),
+                                    timestamp);
+                            }
+                        }
+                        break;
+                    case NO_INBOX:
+                        // fall through
+                    case ERROR:
+                        // fall through
+                    default:
+                        closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
+                        break;
+                }
+            });
+        }
     }
 
     protected void pubQoS0Message(String topicFilter, TopicMessage topicMsg, boolean flush, long timestamp) {

@@ -367,33 +367,6 @@ class RaftNodeStateLeader extends RaftNodeState {
                 case REQUESTPREVOTE:
                     sendRequestPreVoteReply(fromPeer, currentTerm(), false);
                     break;
-//                case APPENDENTRIES:
-//                    // fromPeer is leader too and local is trying to probe fromPeer
-//                    long fromPeerCommitIndex = message.getAppendEntries().getCommitIndex();
-//                    if (peerLogTracker.isTracking(fromPeer)
-//                        && RaftNodeSyncState.Probing.equals(peerLogTracker.status(fromPeer))
-//                        && this.commitIndex < fromPeerCommitIndex
-//                    ) {
-//                        logWarn("Receive APPENDENTRIES from peer[{}] with bigger " + "commitIndex[{}] and " +
-//                                "the same term[{}], stepped down to follower", fromPeer,
-//                            fromPeerCommitIndex, message.getTerm());
-//                        configChanger.abort();
-//                        readProgressTracker.abort();
-//                        return new RaftNodeStateFollower(
-//                            currentTerm(), // update term
-//                            this.commitIndex,
-//                            null,
-//                            config,
-//                            stateStorage,
-//                            log,
-//                            uncommittedProposals,
-//                            sender,
-//                            listener,
-//                            snapshotInstaller,
-//                            onSnapshotInstalled
-//                        ).receive(fromPeer, message);
-//                    }
-//                    break;
                 // ignore other messages
             }
         }

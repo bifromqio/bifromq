@@ -74,7 +74,7 @@ public class InboxInsertTest extends InboxServiceTest {
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
-        reader.fetch(fetched -> {
+        reader.fetch((fetched, throwable) -> {
             fetchedRef.set(fetched);
             latch.countDown();
         });
@@ -139,7 +139,7 @@ public class InboxInsertTest extends InboxServiceTest {
         IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, delivererKey, clientInfo);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
-        reader.fetch(fetched -> {
+        reader.fetch((fetched, throwable) -> {
             fetchedRef.set(fetched);
             latch.countDown();
         });
