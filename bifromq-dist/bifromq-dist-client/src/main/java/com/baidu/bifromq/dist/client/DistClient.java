@@ -18,8 +18,9 @@ import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.RPCBluePrint;
-import com.baidu.bifromq.dist.client.scheduler.ClientCall;
-import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
+import com.baidu.bifromq.dist.client.scheduler.DistServerCall;
+import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler2;
+import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.ClearRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
 import com.baidu.bifromq.dist.rpc.proto.SubReply;
@@ -37,7 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class DistClient implements IDistClient {
-    private final DistServerCallScheduler reqScheduler;
+    private final IDistServerCallScheduler reqScheduler;
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
@@ -49,7 +50,8 @@ final class DistClient implements IDistClient {
             .crdtService(builder.crdtService)
             .sslContext(builder.sslContext)
             .build();
-        reqScheduler = new DistServerCallScheduler(rpcClient);
+//        reqScheduler = new DistServerCallScheduler(rpcClient);
+        reqScheduler = new DistServerCallScheduler2(rpcClient);
     }
 
     @Override
@@ -63,7 +65,7 @@ final class DistClient implements IDistClient {
         long now = HLC.INST.getPhysical();
         long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE :
             now + TimeUnit.MILLISECONDS.convert(expirySeconds, TimeUnit.SECONDS);
-        return reqScheduler.schedule(new ClientCall(publisher, topic, Message.newBuilder()
+        return reqScheduler.schedule(new DistServerCall(publisher, topic, Message.newBuilder()
             .setMessageId(reqId)
             .setPubQoS(qos)
             .setPayload(unsafeWrap(payload))

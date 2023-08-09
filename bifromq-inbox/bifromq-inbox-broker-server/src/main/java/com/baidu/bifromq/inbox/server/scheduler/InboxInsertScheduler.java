@@ -48,8 +48,8 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Deprecated
-public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, SendResult.Result> {
+public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, SendResult.Result>
+    implements IInboxInsertScheduler {
     private final int maxInboxPerBatch;
     private final int maxSizePerBatch;
 

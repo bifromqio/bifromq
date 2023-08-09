@@ -342,12 +342,8 @@ public final class RaftNode implements IRaftNode {
 
     @Override
     public CompletableFuture<Void> compact(ByteString fsmSnapshot, long compactIndex) {
-        return submit(onDone -> {
-            Timer.Sample sample = Timer.start();
-            stateRef.get()
-                .compact(fsmSnapshot, compactIndex, sampleLatency(onDone, metricMgr.compactTimer));
-            sample.stop(metricMgr.compactTimer);
-        });
+        return submit(onDone -> stateRef.get()
+            .compact(fsmSnapshot, compactIndex, sampleLatency(onDone, metricMgr.compactTimer)));
     }
 
     @Override

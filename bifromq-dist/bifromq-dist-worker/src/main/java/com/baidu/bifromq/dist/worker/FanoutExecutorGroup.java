@@ -19,7 +19,7 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.dist.worker.scheduler.DeliveryRequest;
-import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
+import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
@@ -45,12 +45,12 @@ import org.jctools.queues.MpscBlockingConsumerArrayQueue;
 class FanoutExecutorGroup {
     private final IEventCollector eventCollector;
     private final IDistClient distClient;
-    private final DeliveryScheduler scheduler;
+    private final IDeliveryScheduler scheduler;
     private final ExecutorService[] phaseOneExecutorGroup;
     private final ExecutorService[] phaseTwoExecutorGroup;
 
     FanoutExecutorGroup(ISubBrokerManager subBrokerMgr,
-                        DeliveryScheduler scheduler,
+                        IDeliveryScheduler scheduler,
                         IEventCollector eventCollector,
                         IDistClient distClient,
                         int groupSize) {

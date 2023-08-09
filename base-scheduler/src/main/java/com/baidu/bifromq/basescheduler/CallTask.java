@@ -11,16 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.basescheduler;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import java.util.concurrent.CompletableFuture;
 
-public interface IGlobalDistCallRateSchedulerFactory {
-    IGlobalDistCallRateSchedulerFactory DEFAULT = (settingProvider, crdtService) -> new ICallScheduler<>() {
-    };
+public class CallTask<Call, CallResult> {
+    public final Call call;
+    public final CompletableFuture<CallResult> callResult = new CompletableFuture<>();
+    public final long ts = System.nanoTime();
 
-    ICallScheduler<DistWorkerCall> createScheduler(ISettingProvider settingProvider, ICRDTService crdtService);
-
+    CallTask(Call call) {
+        this.call = call;
+    }
 }

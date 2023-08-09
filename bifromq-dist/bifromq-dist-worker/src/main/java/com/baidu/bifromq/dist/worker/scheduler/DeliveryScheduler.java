@@ -40,8 +40,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.jctools.queues.MpscUnboundedArrayQueue;
 
 @Slf4j
-public class DeliveryScheduler
-    extends BatchCallScheduler<DeliveryRequest, DeliveryResult, DeliveryRequest.DelivererKey> {
+public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, DeliveryResult, DelivererKey>
+    implements IDeliveryScheduler {
     private static final int MAX_BATCH_MESSAGES = DIST_MAX_BATCH_SEND_MESSAGES.get();
     private final ISubBrokerManager subBrokerManager;
 
@@ -52,12 +52,12 @@ public class DeliveryScheduler
 
     @Override
     protected BatchCallBuilder<DeliveryRequest, DeliveryResult> newBuilder(String name, int maxInflights,
-                                                                           DeliveryRequest.DelivererKey inboxWriterKey) {
+                                                                           DelivererKey inboxWriterKey) {
         return new DeliveryCallBuilder(name, maxInflights, inboxWriterKey);
     }
 
     @Override
-    protected Optional<DeliveryRequest.DelivererKey> find(DeliveryRequest request) {
+    protected Optional<DelivererKey> find(DeliveryRequest request) {
         return Optional.of(request.writerKey);
     }
 
@@ -127,7 +127,7 @@ public class DeliveryScheduler
         private final IDeliverer deliverer;
         private final DistributionSummary msgCountSummary;
 
-        DeliveryCallBuilder(String name, int maxInflights, DeliveryRequest.DelivererKey key) {
+        DeliveryCallBuilder(String name, int maxInflights, DelivererKey key) {
             super(name, maxInflights);
             int brokerId = key.subBrokerId();
             this.deliverer = subBrokerManager.get(brokerId).open(key.delivererKey());

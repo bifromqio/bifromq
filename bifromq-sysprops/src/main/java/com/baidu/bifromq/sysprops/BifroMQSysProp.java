@@ -28,6 +28,7 @@ public enum BifroMQSysProp {
     MAX_CLIENT_ID_LENGTH("max_client_id_length", 65535, IntegerParser.from(23, 65536)),
     MAX_SHARE_GROUP_MEMBERS("max_shared_group_members", 200, IntegerParser.POSITIVE),
     MAX_TOPIC_FILTERS_PER_INBOX("max_topic_filters_per_inbox", 100, IntegerParser.POSITIVE),
+    DIST_SERVER_MAX_TOLERANT_LATENCY_MS("dist_server_max_tolerant_latency_ms", 1000L, LongParser.POSITIVE),
     DIST_CLIENT_MAX_INFLIGHT_CALLS_PER_QUEUE("dist_client_max_calls_per_queue", 1, IntegerParser.POSITIVE),
     DIST_SERVER_MAX_INFLIGHT_CALLS_PER_QUEUE("dist_server_max_calls_per_queue", 1, IntegerParser.POSITIVE),
     DIST_MAX_TOPICS_IN_BATCH("dist_server_max_topics_in_batch", 200, IntegerParser.POSITIVE),

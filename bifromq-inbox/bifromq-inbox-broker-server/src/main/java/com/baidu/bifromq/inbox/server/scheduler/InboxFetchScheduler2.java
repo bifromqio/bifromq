@@ -13,16 +13,14 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_QUEUES_PER_RANGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_INBOXES_PER_FETCH;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.basescheduler.BatchCallBuilder;
-import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.basescheduler.BatchCall2;
+import com.baidu.bifromq.basescheduler.Batcher;
+import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
@@ -30,9 +28,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tags;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
@@ -40,18 +35,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.jctools.maps.NonBlockingHashMap;
 
 @Slf4j
-public class InboxFetchScheduler extends InboxQueryScheduler<IInboxFetchScheduler.InboxFetch, Fetched>
+public class InboxFetchScheduler2 extends InboxReadScheduler<IInboxFetchScheduler.InboxFetch, Fetched>
     implements IInboxFetchScheduler {
-    private final int maxInboxesPerFetch;
-
-
-    public InboxFetchScheduler(IBaseKVStoreClient kvStoreClient) {
+    public InboxFetchScheduler2(IBaseKVStoreClient kvStoreClient) {
         super(INBOX_FETCH_QUEUES_PER_RANGE.get(), kvStoreClient, "inbox_server_fetch");
-        maxInboxesPerFetch = INBOX_MAX_INBOXES_PER_FETCH.get();
     }
 
     @Override
-    protected int selectQueue(int queueNum, InboxFetch request) {
+    protected Batcher<IInboxFetchScheduler.InboxFetch, Fetched, InboxReadBatcherKey> newBatcher(String name,
+                                                                                                long maxTolerantLatencyNanos,
+                                                                                                InboxReadBatcherKey inboxReadBatcherKey) {
+        return new InboxFetchBatcher(inboxReadBatcherKey, name, maxTolerantLatencyNanos, inboxStoreClient);
+    }
+
+    @Override
+    protected int selectQueue(int queueNum, IInboxFetchScheduler.InboxFetch request) {
         int idx = request.scopedInboxId.hashCode() % queueNum;
         if (idx < 0) {
             idx += queueNum;
@@ -60,17 +58,12 @@ public class InboxFetchScheduler extends InboxQueryScheduler<IInboxFetchSchedule
     }
 
     @Override
-    protected ByteString rangeKey(InboxFetch request) {
+    protected ByteString rangeKey(IInboxFetchScheduler.InboxFetch request) {
         return request.scopedInboxId;
     }
 
-    @Override
-    protected BatchCallBuilder<InboxFetch, Fetched> newBuilder(String name, int maxInflights, BatchKey batchKey) {
-        return new BatchFetchBuilder(name, maxInflights, batchKey.rangeSetting, kvStoreClient);
-    }
-
-    private class BatchFetchBuilder extends BatchCallBuilder<InboxFetch, Fetched> {
-        private class BatchFetch implements IBatchCall<InboxFetch, Fetched> {
+    private class InboxFetchBatcher extends Batcher<IInboxFetchScheduler.InboxFetch, Fetched, InboxReadBatcherKey> {
+        private class InboxFetchBatch extends BatchCall2<IInboxFetchScheduler.InboxFetch, Fetched> {
             // key: scopedInboxIdUtf8
             private final Map<String, FetchParams> inboxFetches = new NonBlockingHashMap<>();
 
@@ -78,17 +71,8 @@ public class InboxFetchScheduler extends InboxQueryScheduler<IInboxFetchSchedule
             private final Map<String, CompletableFuture<Fetched>> onInboxFetched = new NonBlockingHashMap<>();
 
             @Override
-            public boolean isEmpty() {
-                return inboxFetches.isEmpty();
-            }
-
-            @Override
-            public boolean isEnough() {
-                return inboxFetches.size() > maxInboxesPerFetch;
-            }
-
-            @Override
-            public CompletableFuture<Fetched> add(InboxFetch request) {
+            public void add(CallTask<InboxFetch, Fetched> callTask) {
+                InboxFetch request = callTask.call;
                 inboxFetches.compute(request.scopedInboxId.toStringUtf8(), (k, v) -> {
                     if (v == null) {
                         return request.params;
@@ -106,21 +90,13 @@ public class InboxFetchScheduler extends InboxQueryScheduler<IInboxFetchSchedule
                     b.setMaxFetch(request.params.getMaxFetch());
                     return b.build();
                 });
-                return onInboxFetched.computeIfAbsent(request.scopedInboxId.toStringUtf8(),
-                    k -> new CompletableFuture<>());
-            }
-
-            @Override
-            public void reset() {
-                inboxFetches.clear();
-                onInboxFetched.clear();
+                onInboxFetched.put(request.scopedInboxId.toStringUtf8(), callTask.callResult);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                batchInboxCount.record(inboxFetches.size());
-                return kvStoreClient.linearizedQuery(rangeStoreId,
+                return inboxStoreClient.linearizedQuery(rangeStoreId,
                         KVRangeRORequest.newBuilder()
                             .setReqId(reqId)
                             .setVer(range.ver)
@@ -167,35 +143,24 @@ public class InboxFetchScheduler extends InboxQueryScheduler<IInboxFetchSchedule
         }
 
         private final String rangeStoreId;
-
         private final String orderKey;
-
         private final KVRangeSetting range;
+        private final IBaseKVStoreClient inboxStoreClient;
 
-        private final IBaseKVStoreClient kvStoreClient;
-
-        private final DistributionSummary batchInboxCount;
-
-        BatchFetchBuilder(String name, int maxInflights, KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
-            super(name, maxInflights);
-            this.range = range;
-            this.kvStoreClient = kvStoreClient;
+        InboxFetchBatcher(InboxReadBatcherKey batcherKey,
+                          String name,
+                          long maxTolerantLatencyNanos,
+                          IBaseKVStoreClient inboxStoreClient) {
+            super(batcherKey, name, maxTolerantLatencyNanos);
+            this.range = batcherKey.range;
+            this.inboxStoreClient = inboxStoreClient;
             rangeStoreId = selectStore(range);
             orderKey = String.valueOf(this.hashCode());
-            Tags tags = Tags.of("rangeId", KVRangeIdUtil.toShortString(range.id));
-            batchInboxCount = DistributionSummary.builder("inbox.server.fetch.inboxes")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
         }
 
         @Override
-        public BatchFetch newBatch() {
-            return new BatchFetch();
-        }
-
-        @Override
-        public void close() {
-            Metrics.globalRegistry.remove(batchInboxCount);
+        protected BatchCall2<InboxFetch, Fetched> newBatch() {
+            return new InboxFetchBatch();
         }
 
         private String selectStore(KVRangeSetting setting) {

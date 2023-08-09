@@ -31,10 +31,14 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCheckScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxCommitScheduler2;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCreateScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.InboxComSertScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler2;
+import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler2;
 import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
@@ -76,9 +80,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final ScheduledExecutorService bgTaskExecutor;
     private final boolean bgTaskExecutorOwner;
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
-    private final InboxFetchScheduler fetchScheduler;
+    private final IInboxFetchScheduler fetchScheduler;
     private final InboxCheckScheduler checkScheduler;
-    private final InboxComSertScheduler insertOrCommitScheduler;
+    private final IInboxInsertScheduler insertScheduler;
+    private final IInboxCommitScheduler commitScheduler;
     private final InboxTouchScheduler touchScheduler;
     private final InboxCreateScheduler createScheduler;
     private final RateLimiter fetcherCreationLimiter;
@@ -88,9 +93,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     InboxService(ISettingProvider settingProvider,
                  IBaseKVStoreClient kvStoreClient,
                  ScheduledExecutorService bgTaskExecutor) {
-        this.fetchScheduler = new InboxFetchScheduler(kvStoreClient);
         this.checkScheduler = new InboxCheckScheduler(kvStoreClient);
-        this.insertOrCommitScheduler = new InboxComSertScheduler(kvStoreClient);
+        this.fetchScheduler = new InboxFetchScheduler2(kvStoreClient);
+        this.insertScheduler = new InboxInsertScheduler2(kvStoreClient);
+        this.commitScheduler = new InboxCommitScheduler2(kvStoreClient);
         this.touchScheduler = new InboxTouchScheduler(kvStoreClient);
         this.createScheduler = new InboxCreateScheduler(kvStoreClient, settingProvider);
         fetcherCreationLimiter = RateLimiter.create(INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT.get());
@@ -128,29 +134,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Override
     public StreamObserver<SendRequest> receive(StreamObserver<SendReply> responseObserver) {
-//        return new InboxWriterPipeline(registry, request -> {
-//            Map<SubInfo, List<TopicMessagePack>> msgsByInbox = new HashMap<>();
-//            request.getInboxMsgPackList().forEach(inboxMsgPack ->
-//                inboxMsgPack.getSubInfoList().forEach(subInfo ->
-//                    msgsByInbox.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(inboxMsgPack.getMessages())));
-//            List<CompletableFuture<SendResult>> replyFutures = msgsByInbox.entrySet()
-//                .stream()
-//                .map(e -> insertScheduler.schedule(MessagePack.newBuilder()
-//                        .setSubInfo(e.getKey())
-//                        .addAllMessages(e.getValue())
-//                        .build())
-//                    .thenApply(v -> SendResult.newBuilder()
-//                        .setSubInfo(e.getKey())
-//                        .setResult(v)
-//                        .build()))
-//                .toList();
-//            return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
-//                .thenApply(v -> replyFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
-//                .thenApply(v -> SendReply.newBuilder()
-//                    .setReqId(request.getReqId())
-//                    .addAllResult(v)
-//                    .build());
-//        }, responseObserver);
         return new InboxWriterPipeline(registry, request -> {
             Map<SubInfo, List<TopicMessagePack>> msgsByInbox = new HashMap<>();
             request.getInboxMsgPackList().forEach(inboxMsgPack ->
@@ -158,14 +141,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     msgsByInbox.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(inboxMsgPack.getMessages())));
             List<CompletableFuture<SendResult>> replyFutures = msgsByInbox.entrySet()
                 .stream()
-                .map(e -> insertOrCommitScheduler.schedule(
-                        new InboxComSertScheduler.InsertCall(MessagePack.newBuilder()
-                            .setSubInfo(e.getKey())
-                            .addAllMessages(e.getValue())
-                            .build()))
+                .map(e -> insertScheduler.schedule(MessagePack.newBuilder()
+                        .setSubInfo(e.getKey())
+                        .addAllMessages(e.getValue())
+                        .build())
                     .thenApply(v -> SendResult.newBuilder()
                         .setSubInfo(e.getKey())
-                        .setResult(((InboxComSertScheduler.InsertResult) v).result)
+                        .setResult(v)
                         .build()))
                 .toList();
             return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
@@ -175,7 +157,30 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     .addAllResult(v)
                     .build());
         }, responseObserver);
-
+//        return new InboxWriterPipeline(registry, request -> {
+//            Map<SubInfo, List<TopicMessagePack>> msgsByInbox = new HashMap<>();
+//            request.getInboxMsgPackList().forEach(inboxMsgPack ->
+//                inboxMsgPack.getSubInfoList().forEach(subInfo ->
+//                    msgsByInbox.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(inboxMsgPack.getMessages())));
+//            List<CompletableFuture<SendResult>> replyFutures = msgsByInbox.entrySet()
+//                .stream()
+//                .map(e -> insertOrCommitScheduler.schedule(
+//                        new InboxComSertScheduler.InsertCall(MessagePack.newBuilder()
+//                            .setSubInfo(e.getKey())
+//                            .addAllMessages(e.getValue())
+//                            .build()))
+//                    .thenApply(v -> SendResult.newBuilder()
+//                        .setSubInfo(e.getKey())
+//                        .setResult(((InboxComSertScheduler.InsertResult) v).result)
+//                        .build()))
+//                .toList();
+//            return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
+//                .thenApply(v -> replyFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
+//                .thenApply(v -> SendReply.newBuilder()
+//                    .setReqId(request.getReqId())
+//                    .addAllResult(v)
+//                    .build());
+//        }, responseObserver);
     }
 
     @Override
@@ -189,17 +194,17 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Override
     public void commit(CommitRequest request, StreamObserver<CommitReply> responseObserver) {
-//        response(tenantId -> commitScheduler.schedule(request)
-//            .exceptionally(e -> CommitReply.newBuilder()
-//                .setReqId(request.getReqId())
-//                .setResult(CommitReply.Result.ERROR)
-//                .build()), responseObserver);
-        response(tenantId -> insertOrCommitScheduler.schedule(new InboxComSertScheduler.CommitCall(request))
-            .thenApply(v -> ((InboxComSertScheduler.CommitResult) v).result)
+        response(tenantId -> commitScheduler.schedule(request)
             .exceptionally(e -> CommitReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setResult(CommitReply.Result.ERROR)
                 .build()), responseObserver);
+//        response(tenantId -> insertOrCommitScheduler.schedule(new InboxComSertScheduler.CommitCall(request))
+//            .thenApply(v -> ((InboxComSertScheduler.CommitResult) v).result)
+//            .exceptionally(e -> CommitReply.newBuilder()
+//                .setReqId(request.getReqId())
+//                .setResult(CommitReply.Result.ERROR)
+//                .build()), responseObserver);
     }
 
     public void start() {

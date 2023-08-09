@@ -240,7 +240,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
             )
             .storeOptions(new KVRangeStoreOptions()
-                .setKvRangeOptions(new KVRangeOptions().setMaxRangeLoad(3_000_000))
+                .setKvRangeOptions(new KVRangeOptions().setMaxRangeLoad(2_000_000))
                 .setDataEngineConfigurator(buildEngineConf(config
                     .getStateStoreConfig()
                     .getInboxStoreConfig()

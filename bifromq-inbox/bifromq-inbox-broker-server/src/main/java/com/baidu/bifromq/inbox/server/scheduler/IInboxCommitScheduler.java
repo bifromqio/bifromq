@@ -11,16 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
+import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 
-public interface IGlobalDistCallRateSchedulerFactory {
-    IGlobalDistCallRateSchedulerFactory DEFAULT = (settingProvider, crdtService) -> new ICallScheduler<>() {
-    };
-
-    ICallScheduler<DistWorkerCall> createScheduler(ISettingProvider settingProvider, ICRDTService crdtService);
-
+public interface IInboxCommitScheduler extends IBatchCallScheduler<CommitRequest, CommitReply> {
 }
