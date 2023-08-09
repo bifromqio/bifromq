@@ -111,8 +111,8 @@ public class InboxComSertScheduler extends
 
             @Override
             public boolean isEnough() {
-                return inboxInserts.size() > maxInboxPerBatch ||
-                    msgSize.get() > maxSizePerBatch ||
+                return (inboxInserts.size() > maxInboxPerBatch ||
+                    msgSize.get() > maxSizePerBatch) ||
                     inboxCount.get() > maxInboxesPerCommit;
             }
 

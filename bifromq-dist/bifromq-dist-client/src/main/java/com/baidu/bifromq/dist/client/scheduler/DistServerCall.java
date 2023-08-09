@@ -11,16 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.dist.client.scheduler;
 
-import com.baidu.bifromq.type.PublisherMessagePack;
-import java.util.List;
+import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
 import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
-public class DistCall {
-    public final String tenantId;
-    public final List<PublisherMessagePack> publisherMsgPacks;
-    public final Integer callQueueIdx;
-    public final int fanout;
+public class DistServerCall {
+    final ClientInfo publisher;
+    final String topic;
+    final Message message;
 }

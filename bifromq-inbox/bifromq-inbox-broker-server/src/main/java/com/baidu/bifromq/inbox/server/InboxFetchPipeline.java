@@ -21,7 +21,7 @@ import com.baidu.bifromq.baserpc.AckStream;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.utils.Backoff;
 import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
-import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.util.KeyUtil;
@@ -171,7 +171,7 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
         if (lastFetchQoS2Seq >= 0) {
             fb.setQos2StartAfter(lastFetchQoS2Seq);
         }
-        fetcher.fetch(new InboxFetchScheduler.InboxFetch(scopedInboxId, fb.build()))
+        fetcher.fetch(new IInboxFetchScheduler.InboxFetch(scopedInboxId, fb.build()))
             .whenComplete((reply, e) -> {
                 if (e != null) {
                     log.debug("Fetch failed and retry: tenantId={}, inboxId={}", tenantId, inboxId, e);
@@ -219,6 +219,6 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
     }
 
     interface Fetcher {
-        CompletableFuture<Fetched> fetch(InboxFetchScheduler.InboxFetch fetch);
+        CompletableFuture<Fetched> fetch(IInboxFetchScheduler.InboxFetch fetch);
     }
 }

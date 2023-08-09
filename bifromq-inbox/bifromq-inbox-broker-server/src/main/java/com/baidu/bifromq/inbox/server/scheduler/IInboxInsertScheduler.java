@@ -11,15 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.client.scheduler;
+package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.Message;
-import lombok.AllArgsConstructor;
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.inbox.rpc.proto.SendResult;
+import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 
-@AllArgsConstructor
-public class ClientCall {
-    final ClientInfo publisher;
-    final String topic;
-    final Message message;
+public interface IInboxInsertScheduler extends IBatchCallScheduler<MessagePack, SendResult.Result> {
 }

@@ -11,16 +11,20 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.inbox.storage.proto.FetchParams;
+import com.baidu.bifromq.inbox.storage.proto.Fetched;
+import com.google.protobuf.ByteString;
+import lombok.AllArgsConstructor;
 
-public interface IGlobalDistCallRateSchedulerFactory {
-    IGlobalDistCallRateSchedulerFactory DEFAULT = (settingProvider, crdtService) -> new ICallScheduler<>() {
-    };
+public interface IInboxFetchScheduler extends IBatchCallScheduler<IInboxFetchScheduler.InboxFetch, Fetched> {
 
-    ICallScheduler<DistWorkerCall> createScheduler(ISettingProvider settingProvider, ICRDTService crdtService);
 
+    @AllArgsConstructor
+    class InboxFetch {
+        final ByteString scopedInboxId;
+        final FetchParams params;
+    }
 }

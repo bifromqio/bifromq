@@ -30,8 +30,9 @@ import com.baidu.bifromq.dist.rpc.proto.SubReply;
 import com.baidu.bifromq.dist.rpc.proto.SubRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnsubReply;
 import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
-import com.baidu.bifromq.dist.server.scheduler.DistCall;
-import com.baidu.bifromq.dist.server.scheduler.DistCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
+import com.baidu.bifromq.dist.server.scheduler.DistWorkerCallScheduler2;
+import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.IGlobalDistCallRateSchedulerFactory;
 import com.baidu.bifromq.dist.server.scheduler.SubCall;
 import com.baidu.bifromq.dist.server.scheduler.SubCallResult;
@@ -56,8 +57,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final IEventCollector eventCollector;
-    private final ICallScheduler<DistCall> distCallRateScheduler;
-    private final DistCallScheduler distCallScheduler;
+    private final ICallScheduler<DistWorkerCall> distCallRateScheduler;
+    private final IDistWorkerCallScheduler distCallScheduler;
     private final SubCallScheduler subCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
 
@@ -68,7 +69,8 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                 IGlobalDistCallRateSchedulerFactory distCallRateScheduler) {
         this.eventCollector = eventCollector;
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
-        this.distCallScheduler = new DistCallScheduler(kvStoreClient, this.distCallRateScheduler);
+//        this.distCallScheduler = new DistWorkerCallScheduler(this.distCallRateScheduler, kvStoreClient);
+        this.distCallScheduler = new DistWorkerCallScheduler2(this.distCallRateScheduler, kvStoreClient);
         this.subCallScheduler = new SubCallScheduler(kvStoreClient);
         tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)

@@ -72,7 +72,7 @@ import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.rpc.proto.UpdateRequest;
-import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
+import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -107,7 +107,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final IDistClient distClient;
     private final ISettingProvider settingProvider;
     private final ISubBrokerManager subBrokerManager;
-    private final DeliveryScheduler scheduler;
+    private final IDeliveryScheduler scheduler;
     private final SubscriptionCache routeCache;
     private final FanoutExecutorGroup fanoutExecutorGroup;
 
@@ -117,7 +117,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             ISettingProvider settingProvider,
                             IDistClient distClient,
                             ISubBrokerManager subBrokerManager,
-                            DeliveryScheduler scheduler,
+                            IDeliveryScheduler scheduler,
                             Executor matchExecutor,
                             ILoadTracker loadTracker) {
         this.id = id;

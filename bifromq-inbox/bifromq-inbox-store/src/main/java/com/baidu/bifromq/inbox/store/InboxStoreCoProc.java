@@ -732,8 +732,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
                 if (hasExpired(metadata) || !request.getScopedInboxIdMap().get(scopedInboxIdUtf8)) {
                     clearInbox(scopedInboxId, metadata, reader.iterator(), writer);
-
-                }else {
+                } else {
                     metadata = metadata.toBuilder().setLastFetchTime(clock.millis()).build();
                     writer.put(scopedInboxId, metadata.toByteString());
                 }

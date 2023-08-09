@@ -25,7 +25,4 @@ public class DeliveryRequest {
         this.msgPackWrapper = msgPackWrapper;
         writerKey = new DelivererKey(brokerId, delivererKey);
     }
-
-    public record DelivererKey(int subBrokerId, String delivererKey) {
-    }
 }

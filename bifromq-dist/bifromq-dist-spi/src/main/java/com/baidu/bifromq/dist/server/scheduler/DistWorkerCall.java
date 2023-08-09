@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.type.PublisherMessagePack;
+import java.util.List;
+import lombok.AllArgsConstructor;
 
-public interface IGlobalDistCallRateSchedulerFactory {
-    IGlobalDistCallRateSchedulerFactory DEFAULT = (settingProvider, crdtService) -> new ICallScheduler<>() {
-    };
-
-    ICallScheduler<DistWorkerCall> createScheduler(ISettingProvider settingProvider, ICRDTService crdtService);
-
+@AllArgsConstructor
+public class DistWorkerCall {
+    public final String tenantId;
+    public final List<PublisherMessagePack> publisherMsgPacks;
+    public final Integer callQueueIdx;
+    public final int fanout;
 }
