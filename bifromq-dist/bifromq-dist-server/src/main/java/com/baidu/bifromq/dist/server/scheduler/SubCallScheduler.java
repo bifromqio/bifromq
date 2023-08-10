@@ -16,14 +16,14 @@ package com.baidu.bifromq.dist.server.scheduler;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.subInfoKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_UPDATES_IN_BATCH;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basescheduler.BatchCallBuilder;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
+import com.baidu.bifromq.basescheduler.Batcher;
+import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.rpc.proto.ClearRequest;
 import com.baidu.bifromq.dist.rpc.proto.ClearSubInfo;
@@ -41,225 +41,137 @@ import com.baidu.bifromq.type.QoS;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.jctools.maps.NonBlockingHashMap;
 import org.jctools.maps.NonBlockingHashSet;
 
 @Slf4j
-public class SubCallScheduler
-    extends BatchCallScheduler<SubCall, SubCallResult, KVRangeSetting> {
-    private final int maxBatchUpdates;
-    private final IBaseKVStoreClient kvStoreClient;
+public class SubCallScheduler extends BatchCallScheduler<SubCall, SubCallResult, KVRangeSetting>
+    implements ISubCallScheduler {
+    private final IBaseKVStoreClient distWorkerClient;
 
-    public SubCallScheduler(IBaseKVStoreClient kvStoreClient) {
-        super("dist_server_update_batcher");
-        maxBatchUpdates = DIST_MAX_UPDATES_IN_BATCH.get();
-        this.kvStoreClient = kvStoreClient;
+    public SubCallScheduler(IBaseKVStoreClient distWorkerClient) {
+        super("dist_server_update_batcher", Duration.ofMillis(100L), Duration.ofSeconds(60));
+        this.distWorkerClient = distWorkerClient;
     }
 
     @Override
-    protected BatchCallBuilder<SubCall, SubCallResult> newBuilder(String name, int maxInflights,
-                                                                  KVRangeSetting batchKey) {
-        return new BatchSubRequestBuilder(name, maxInflights, kvStoreClient, batchKey);
+    protected Batcher<SubCall, SubCallResult, KVRangeSetting> newBatcher(String name,
+                                                                         long expectLatencyNanos,
+                                                                         long maxTolerantLatencyNanos,
+                                                                         KVRangeSetting range) {
+        return new SubCallBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, distWorkerClient);
     }
 
     @Override
-    protected Optional<KVRangeSetting> find(SubCall request) {
-        return kvStoreClient.findByKey(rangeKey(request));
+    protected Optional<KVRangeSetting> find(SubCall subCall) {
+        return distWorkerClient.findByKey(rangeKey(subCall));
     }
 
     private ByteString rangeKey(SubCall call) {
         switch (call.type()) {
-            case ADD_TOPIC_FILTER: {
+            case ADD_TOPIC_FILTER -> {
                 SubRequest request = ((SubCall.AddTopicFilter) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                     request.getDelivererKey());
                 return subInfoKey(request.getTenantId(), qInboxId);
             }
-            case INSERT_MATCH_RECORD: {
+            case INSERT_MATCH_RECORD -> {
                 SubRequest request = ((SubCall.InsertMatchRecord) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                     request.getDelivererKey());
                 return matchRecordKey(request.getTenantId(), request.getTopicFilter(), qInboxId);
             }
-            case JOIN_MATCH_GROUP: {
+            case JOIN_MATCH_GROUP -> {
                 SubRequest request = ((SubCall.JoinMatchGroup) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                     request.getDelivererKey());
                 return matchRecordKey(request.getTenantId(), request.getTopicFilter(), qInboxId);
             }
-            case REMOVE_TOPIC_FILTER: {
+            case REMOVE_TOPIC_FILTER -> {
                 UnsubRequest request = ((SubCall.RemoveTopicFilter) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                     request.getDelivererKey());
                 return subInfoKey(request.getTenantId(), qInboxId);
             }
-            case DELETE_MATCH_RECORD: {
+            case DELETE_MATCH_RECORD -> {
                 UnsubRequest request = ((SubCall.DeleteMatchRecord) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                     request.getDelivererKey());
                 return matchRecordKey(request.getTenantId(), request.getTopicFilter(), qInboxId);
             }
-            case LEAVE_JOIN_GROUP: {
+            case LEAVE_JOIN_GROUP -> {
                 UnsubRequest request = ((SubCall.LeaveJoinGroup) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                     request.getDelivererKey());
                 return matchRecordKey(request.getTenantId(), request.getTopicFilter(), qInboxId);
             }
-            case CLEAR: {
+            case CLEAR -> {
                 ClearRequest request = ((SubCall.Clear) call).request;
                 String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
                     request.getDelivererKey());
                 return subInfoKey(request.getTenantId(), qInboxId);
             }
-            default:
-                throw new UnsupportedOperationException("Unsupported request type: " + call.type());
+            default -> throw new UnsupportedOperationException("Unsupported request type: " + call.type());
         }
     }
 
-    private class BatchSubRequestBuilder extends BatchCallBuilder<SubCall, SubCallResult> {
-        private class BatchSubRequest implements IBatchCall<SubCall, SubCallResult> {
-            private final AtomicInteger callCount = new AtomicInteger();
+    private static class SubCallBatcher extends Batcher<SubCall, SubCallResult, KVRangeSetting> {
+
+        private class SubCallBatch implements IBatchCall<SubCall, SubCallResult> {
 
             // key: subInfoKeyUtf8, subKey: topicFilter
-            private final Map<String, Map<String, QoS>> addTopicFilter = new NonBlockingHashMap<>();
+            private final Map<String, Map<String, QoS>> addTopicFilter = new HashMap<>();
 
             // key: subInfoKeyUtf8, subKey: topicFilter
-            private final Map<String, Map<String, CompletableFuture<SubCallResult>>> onAddTopicFilter =
-                new NonBlockingHashMap<>();
+            private final Map<String, Map<String, CompletableFuture<SubCallResult>>> onAddTopicFilter = new HashMap<>();
 
             // key: subInfoKeyUtf8, subKey: topicFilter
-            private final Map<String, Set<String>> remTopicFilter = new NonBlockingHashMap<>();
+            private final Map<String, Set<String>> remTopicFilter = new HashMap<>();
 
             // key: subInfoKeyUtf8, subKey: topicFilter
-            private final Map<String, Map<String, CompletableFuture<SubCallResult>>> onRemTopicFilter =
-                new NonBlockingHashMap<>();
+            private final Map<String, Map<String, CompletableFuture<SubCallResult>>> onRemTopicFilter = new HashMap<>();
 
             // key: normal matchRecordKey
-            private final Map<String, QoS> insertMatchRecord = new NonBlockingHashMap<>();
+            private final Map<String, QoS> insertMatchRecord = new HashMap<>();
 
             // key: normal matchRecordKey
             private final Map<String, CompletableFuture<SubCallResult>> onInsertMatchRecord =
-                new NonBlockingHashMap<>();
+                new HashMap<>();
 
             // key: group matchRecordKey
-            private final Map<String, Map<String, QoS>> joinMatchGroup = new NonBlockingHashMap<>();
+            private final Map<String, Map<String, QoS>> joinMatchGroup = new HashMap<>();
 
             // key: group matchRecordKey, subKey: qInboxId
-            private final Map<String, Map<String, CompletableFuture<SubCallResult>>> onJoinMatchGroup =
-                new NonBlockingHashMap<>();
+            private final Map<String, Map<String, CompletableFuture<SubCallResult>>> onJoinMatchGroup = new HashMap<>();
 
             // elem: normal matchRecordKey
-            private final Set<String> delMatchRecord = new NonBlockingHashSet<>();
+            private final Set<String> delMatchRecord = new HashSet<>();
 
             // key: normal matchRecordKey
-            private final Map<String, CompletableFuture<SubCallResult>> onDelMatchRecord = new NonBlockingHashMap<>();
+            private final Map<String, CompletableFuture<SubCallResult>> onDelMatchRecord = new HashMap<>();
 
             // key: group matchRecordKey value: set of qualified inboxId
-            private final Map<String, Set<String>> leaveMatchGroup = new NonBlockingHashMap<>();
+            private final Map<String, Set<String>> leaveMatchGroup = new HashMap<>();
 
             // key: group matchRecordKey
-            private final Map<String, CompletableFuture<SubCallResult>> onLeaveMatchGroup = new NonBlockingHashMap<>();
+            private final Map<String, CompletableFuture<SubCallResult>> onLeaveMatchGroup = new HashMap<>();
 
             // key: subInfoKey
-            private final Set<ByteString> clearSubInfo = new NonBlockingHashSet<>();
+            private final Set<ByteString> clearSubInfo = new HashSet<>();
 
             // key: subInfoKey
-            private final Map<ByteString, CompletableFuture<SubCallResult>> onClearSubInfo = new NonBlockingHashMap<>();
-
-            @Override
-            public boolean isEmpty() {
-                return callCount.get() == 0;
-            }
-
-            @Override
-            public boolean isEnough() {
-                return callCount.get() > maxBatchUpdates;
-            }
-
-            @Override
-            public CompletableFuture<SubCallResult> add(SubCall subCall) {
-                callCount.incrementAndGet();
-                switch (subCall.type()) {
-                    case ADD_TOPIC_FILTER: {
-                        SubRequest request = ((SubCall.AddTopicFilter) subCall).request;
-                        String subInfoKeyUtf8 = subInfoKey(request.getTenantId(),
-                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getDelivererKey())).toStringUtf8();
-                        addTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
-                            .putIfAbsent(request.getTopicFilter(), request.getSubQoS());
-                        return onAddTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
-                            .computeIfAbsent(request.getTopicFilter(), k -> new CompletableFuture<>());
-                    }
-                    case INSERT_MATCH_RECORD: {
-                        SubRequest request = ((SubCall.InsertMatchRecord) subCall).request;
-                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getDelivererKey());
-                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
-                            request.getTopicFilter(), qInboxId).toStringUtf8();
-                        insertMatchRecord.put(matchRecordKeyUtf8, request.getSubQoS());
-                        return onInsertMatchRecord.computeIfAbsent(matchRecordKeyUtf8, k -> new CompletableFuture<>());
-                    }
-                    case JOIN_MATCH_GROUP: {
-                        SubRequest request = ((SubCall.JoinMatchGroup) subCall).request;
-                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getDelivererKey());
-                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
-                            request.getTopicFilter(), qInboxId).toStringUtf8();
-                        joinMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashMap<>())
-                            .put(qInboxId, request.getSubQoS());
-                        return onJoinMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashMap<>())
-                            .computeIfAbsent(qInboxId, k -> new CompletableFuture<>());
-                    }
-                    case REMOVE_TOPIC_FILTER: {
-                        UnsubRequest request = ((SubCall.RemoveTopicFilter) subCall).request;
-                        String subInfoKeyUtf8 = subInfoKey(request.getTenantId(),
-                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                                request.getDelivererKey())).toStringUtf8();
-                        remTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashSet<>())
-                            .add(request.getTopicFilter());
-                        return onRemTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
-                            .computeIfAbsent(request.getTopicFilter(), k -> new CompletableFuture<>());
-                    }
-                    case DELETE_MATCH_RECORD: {
-                        UnsubRequest request = ((SubCall.DeleteMatchRecord) subCall).request;
-                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getDelivererKey());
-                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
-                            request.getTopicFilter(), qInboxId).toStringUtf8();
-                        delMatchRecord.add(matchRecordKeyUtf8);
-                        return onDelMatchRecord.computeIfAbsent(matchRecordKeyUtf8, k -> new CompletableFuture<>());
-                    }
-                    case LEAVE_JOIN_GROUP: {
-                        UnsubRequest request = ((SubCall.LeaveJoinGroup) subCall).request;
-                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
-                            request.getDelivererKey());
-                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
-                            request.getTopicFilter(), qInboxId).toStringUtf8();
-                        leaveMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashSet<>())
-                            .add(qInboxId);
-                        return onLeaveMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new CompletableFuture<>());
-                    }
-                    case CLEAR: {
-                        ClearRequest request = ((SubCall.Clear) subCall).request;
-                        ByteString subInfoKey = subInfoKey(request.getTenantId(),
-                            toQualifiedInboxId(request.getBroker(), request.getInboxId(), request.getDelivererKey()));
-                        clearSubInfo.add(subInfoKey);
-                        return onClearSubInfo.computeIfAbsent(subInfoKey, k -> new CompletableFuture<>());
-                    }
-                    default:
-                        throw new UnsupportedOperationException("Unsupported request type: " + subCall.type());
-                }
-            }
+            private final Map<ByteString, CompletableFuture<SubCallResult>> onClearSubInfo = new HashMap<>();
 
             @Override
             public void reset() {
-                callCount.set(0);
                 addTopicFilter.clear();
                 onAddTopicFilter.clear();
                 remTopicFilter.clear();
@@ -274,6 +186,80 @@ public class SubCallScheduler
                 onLeaveMatchGroup.clear();
                 clearSubInfo.clear();
                 onClearSubInfo.clear();
+            }
+
+            @Override
+            public void add(CallTask<SubCall, SubCallResult> callTask) {
+                SubCall subCall = callTask.call;
+                switch (subCall.type()) {
+                    case ADD_TOPIC_FILTER -> {
+                        SubRequest request = ((SubCall.AddTopicFilter) subCall).request;
+                        String subInfoKeyUtf8 = subInfoKey(request.getTenantId(),
+                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                                request.getDelivererKey())).toStringUtf8();
+                        addTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
+                            .putIfAbsent(request.getTopicFilter(), request.getSubQoS());
+                        onAddTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
+                            .put(request.getTopicFilter(), callTask.callResult);
+                    }
+                    case INSERT_MATCH_RECORD -> {
+                        SubRequest request = ((SubCall.InsertMatchRecord) subCall).request;
+                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                            request.getDelivererKey());
+                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
+                            request.getTopicFilter(), qInboxId).toStringUtf8();
+                        insertMatchRecord.put(matchRecordKeyUtf8, request.getSubQoS());
+                        onInsertMatchRecord.put(matchRecordKeyUtf8, callTask.callResult);
+                    }
+                    case JOIN_MATCH_GROUP -> {
+                        SubRequest request = ((SubCall.JoinMatchGroup) subCall).request;
+                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                            request.getDelivererKey());
+                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
+                            request.getTopicFilter(), qInboxId).toStringUtf8();
+                        joinMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashMap<>())
+                            .put(qInboxId, request.getSubQoS());
+                        onJoinMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashMap<>())
+                            .put(qInboxId, callTask.callResult);
+                    }
+                    case REMOVE_TOPIC_FILTER -> {
+                        UnsubRequest request = ((SubCall.RemoveTopicFilter) subCall).request;
+                        String subInfoKeyUtf8 = subInfoKey(request.getTenantId(),
+                            toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                                request.getDelivererKey())).toStringUtf8();
+                        remTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashSet<>())
+                            .add(request.getTopicFilter());
+                        onRemTopicFilter.computeIfAbsent(subInfoKeyUtf8, k -> new NonBlockingHashMap<>())
+                            .put(request.getTopicFilter(), callTask.callResult);
+                    }
+                    case DELETE_MATCH_RECORD -> {
+                        UnsubRequest request = ((SubCall.DeleteMatchRecord) subCall).request;
+                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                            request.getDelivererKey());
+                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
+                            request.getTopicFilter(), qInboxId).toStringUtf8();
+                        delMatchRecord.add(matchRecordKeyUtf8);
+                        onDelMatchRecord.put(matchRecordKeyUtf8, callTask.callResult);
+                    }
+                    case LEAVE_JOIN_GROUP -> {
+                        UnsubRequest request = ((SubCall.LeaveJoinGroup) subCall).request;
+                        String qInboxId = toQualifiedInboxId(request.getBroker(), request.getInboxId(),
+                            request.getDelivererKey());
+                        String matchRecordKeyUtf8 = matchRecordKey(request.getTenantId(),
+                            request.getTopicFilter(), qInboxId).toStringUtf8();
+                        leaveMatchGroup.computeIfAbsent(matchRecordKeyUtf8, k -> new NonBlockingHashSet<>())
+                            .add(qInboxId);
+                        onLeaveMatchGroup.put(matchRecordKeyUtf8, callTask.callResult);
+                    }
+                    case CLEAR -> {
+                        ClearRequest request = ((SubCall.Clear) subCall).request;
+                        ByteString subInfoKey = subInfoKey(request.getTenantId(),
+                            toQualifiedInboxId(request.getBroker(), request.getInboxId(), request.getDelivererKey()));
+                        clearSubInfo.add(subInfoKey);
+                        onClearSubInfo.put(subInfoKey, callTask.callResult);
+                    }
+                    default -> throw new UnsupportedOperationException("Unsupported request type: " + subCall.type());
+                }
             }
 
             @Override
@@ -317,7 +303,7 @@ public class SubCallScheduler
                     reqBuilder.setClearSubInfo(ClearSubInfo.newBuilder().addAllSubInfoKey(clearSubInfo).build());
                 }
                 UpdateRequest request = reqBuilder.build();
-                return kvStoreClient.execute(range.leader, KVRangeRWRequest.newBuilder()
+                return distWorkerClient.execute(range.leader, KVRangeRWRequest.newBuilder()
                     .setReqId(request.getReqId())
                     .setVer(range.ver)
                     .setKvRangeId(range.id)
@@ -431,23 +417,22 @@ public class SubCallScheduler
             }
         }
 
-        private final IBaseKVStoreClient kvStoreClient;
+        private final IBaseKVStoreClient distWorkerClient;
         private final KVRangeSetting range;
 
-        private BatchSubRequestBuilder(String name, int maxInflights,
-                                       IBaseKVStoreClient kvStoreClient, KVRangeSetting range) {
-            super(name, maxInflights);
-            this.kvStoreClient = kvStoreClient;
+        private SubCallBatcher(String name,
+                               long expectLatencyNanos,
+                               long maxTolerantLatencyNanos,
+                               KVRangeSetting range,
+                               IBaseKVStoreClient distWorkerClient) {
+            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            this.distWorkerClient = distWorkerClient;
             this.range = range;
         }
 
         @Override
-        public BatchSubRequest newBatch() {
-            return new BatchSubRequest();
-        }
-
-        @Override
-        public void close() {
+        protected IBatchCall<SubCall, SubCallResult> newBatch() {
+            return new SubCallBatch();
         }
     }
 }

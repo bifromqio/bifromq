@@ -143,23 +143,19 @@ class FanoutExecutorGroup {
         DeliveryRequest request = new DeliveryRequest(sub, subBrokerId, delivererKey, msgPack);
         scheduler.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
-                log.debug("DeliverError", e);
                 eventCollector.report(getLocal(DeliverError.class)
                     .brokerId(subBrokerId)
                     .delivererKey(delivererKey)
                     .subInfo(sub)
                     .messages(msgPack.messagePack));
-
             } else {
                 switch (result) {
-                    case OK:
-                        eventCollector.report(getLocal(Delivered.class)
-                            .brokerId(subBrokerId)
-                            .delivererKey(delivererKey)
-                            .subInfo(sub)
-                            .messages(msgPack.messagePack));
-                        break;
-                    case NO_INBOX:
+                    case OK -> eventCollector.report(getLocal(Delivered.class)
+                        .brokerId(subBrokerId)
+                        .delivererKey(delivererKey)
+                        .subInfo(sub)
+                        .messages(msgPack.messagePack));
+                    case NO_INBOX -> {
                         // unsub as side effect
                         SubInfo subInfo = matched.subInfo;
                         distClient.unsub(System.nanoTime(),
@@ -173,7 +169,12 @@ class FanoutExecutorGroup {
                             .delivererKey(delivererKey)
                             .subInfo(sub)
                             .messages(msgPack.messagePack));
-                        break;
+                    }
+                    case FAILED -> eventCollector.report(getLocal(DeliverError.class)
+                        .brokerId(subBrokerId)
+                        .delivererKey(delivererKey)
+                        .subInfo(sub)
+                        .messages(msgPack.messagePack));
                 }
             }
         });

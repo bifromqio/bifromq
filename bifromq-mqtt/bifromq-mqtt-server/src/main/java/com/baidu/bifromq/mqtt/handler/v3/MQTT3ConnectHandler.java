@@ -38,6 +38,7 @@ import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.InboxCheckResult;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
@@ -273,8 +274,8 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                     getLocal(SessionCheckError.class).clientInfo(clientInfo));
                 return null;
             }, ctx.channel().eventLoop())
-            .thenComposeAsync(exist -> {
-                if (exist) {
+            .thenComposeAsync(checkResult -> {
+                if (checkResult == InboxCheckResult.EXIST) {
                     // clear subscription of previous persistent session
                     CompletableFuture<Void> clearSubTask =
                         cancelOnInactive(distClient.clear(reqId, clientInfo.getTenantId(), offlineInboxId,
@@ -310,7 +311,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
      */
     private CompletableFuture<Void> establishPersistentSession(long reqId, MqttConnectMessage mqttConnectMessage) {
         return cancelOnInactive(inboxClient.has(reqId, userSessionId(clientInfo), clientInfo))
-            .handleAsync((exist, e) -> {
+            .handleAsync((checkResult, e) -> {
                 if (e != null) {
                     closeConnectionWithSomeDelay(MqttMessageBuilders
                             .connAck()
@@ -319,7 +320,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                         getLocal(SessionCheckError.class).clientInfo(clientInfo));
                     return null;
                 }
-                if (exist) {
+                if (checkResult == InboxCheckResult.EXIST) {
                     establishSucceed(mqttConnectMessage, true, false);
                 } else {
                     establishSucceed(mqttConnectMessage, false, false);

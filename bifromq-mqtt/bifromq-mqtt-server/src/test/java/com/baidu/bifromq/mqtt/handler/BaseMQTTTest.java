@@ -46,6 +46,7 @@ import com.baidu.bifromq.basescheduler.exception.DropException;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient.IInboxReader;
+import com.baidu.bifromq.inbox.client.InboxCheckResult;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
@@ -256,7 +257,8 @@ public abstract class BaseMQTTTest {
 
     protected void mockInboxHas(boolean success) {
         when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(success));
+            .thenReturn(CompletableFuture.completedFuture(
+                success ? InboxCheckResult.EXIST : InboxCheckResult.NO_INBOX));
     }
 
     protected void mockInboxCreate(boolean success) {

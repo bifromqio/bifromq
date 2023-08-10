@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.benchmark;
 
+import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.SneakyThrows;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -47,7 +48,7 @@ public class HasInbox {
         String tenantId = "DevOnly";
         String inboxId = "Inbox_" + ThreadLocalRandom.current().nextInt();
         long reqId = System.nanoTime();
-        boolean reply = state.inboxBrokerClient.hasInbox(reqId, tenantId, inboxId, null).join();
+        CheckResult reply = state.inboxBrokerClient.hasInbox(reqId, tenantId, inboxId, null).join();
         blackhole.consume(reply);
     }
 }

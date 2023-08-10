@@ -15,13 +15,12 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_CHECK_QUEUES_PER_RANGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_INBOXES_PER_CHECK;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.basescheduler.BatchCallBuilder;
+import com.baidu.bifromq.basescheduler.Batcher;
+import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
@@ -30,27 +29,27 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
-import org.jctools.maps.NonBlockingHashMap;
-import org.jctools.maps.NonBlockingHashSet;
 
 @Slf4j
-public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, HasInboxReply> {
-    private final int maxInboxesPerCheck;
+public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, HasInboxReply>
+    implements IInboxCheckScheduler {
+    public InboxCheckScheduler(IBaseKVStoreClient inboxStoreClient) {
+        super(INBOX_CHECK_QUEUES_PER_RANGE.get(), inboxStoreClient, "inbox_server_check");
+    }
 
-
-    public InboxCheckScheduler(IBaseKVStoreClient kvStoreClient) {
-        super(INBOX_CHECK_QUEUES_PER_RANGE.get(), kvStoreClient,
-            "inbox_server_check");
-        maxInboxesPerCheck = INBOX_MAX_INBOXES_PER_CHECK.get();
+    @Override
+    protected Batcher<HasInboxRequest, HasInboxReply, InboxReadBatcherKey> newBatcher(String name,
+                                                                                      long expectLatency,
+                                                                                      long maxTolerantLatencyNanos,
+                                                                                      InboxReadBatcherKey batcherKey) {
+        return new InboxCheckBatcher(batcherKey, name, expectLatency, maxTolerantLatencyNanos, inboxStoreClient);
     }
 
     @Override
@@ -63,46 +62,28 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
         return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
     }
 
-    @Override
-    protected BatchCallBuilder<HasInboxRequest, HasInboxReply> newBuilder(String name, int maxInflights,
-                                                                          BatchKey batchKey) {
-        return new BatchCheckBuilder(name, maxInflights, batchKey.rangeSetting, kvStoreClient);
-    }
-
-    private class BatchCheckBuilder extends BatchCallBuilder<HasInboxRequest, HasInboxReply> {
-        private class BatchCheck implements IBatchCall<HasInboxRequest, HasInboxReply> {
-            private final Set<ByteString> checkInboxes = new NonBlockingHashSet<>();
-            private final Map<HasInboxRequest, CompletableFuture<HasInboxReply>> onInboxChecked =
-                new NonBlockingHashMap<>();
-
-            @Override
-            public boolean isEmpty() {
-                return checkInboxes.isEmpty();
-            }
-
-            @Override
-            public boolean isEnough() {
-                return checkInboxes.size() > maxInboxesPerCheck;
-            }
-
-            @Override
-            public CompletableFuture<HasInboxReply> add(HasInboxRequest request) {
-                checkInboxes.add(scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId()));
-                return onInboxChecked.computeIfAbsent(request, k -> new CompletableFuture<>());
-            }
+    private static class InboxCheckBatcher extends Batcher<HasInboxRequest, HasInboxReply, InboxReadBatcherKey> {
+        private class BatchInboxCheck implements IBatchCall<HasInboxRequest, HasInboxReply> {
+            private Set<ByteString> checkInboxes = new HashSet<>();
+            private Map<HasInboxRequest, CompletableFuture<HasInboxReply>> onInboxChecked = new HashMap<>();
 
             @Override
             public void reset() {
-                checkInboxes.clear();
-                onInboxChecked.clear();
+                checkInboxes = new HashSet<>();
+                onInboxChecked = new HashMap<>();
+            }
+
+            @Override
+            public void add(CallTask<HasInboxRequest, HasInboxReply> callTask) {
+                checkInboxes.add(
+                    scopedInboxId(callTask.call.getClientInfo().getTenantId(), callTask.call.getInboxId()));
+                onInboxChecked.put(callTask.call, callTask.callResult);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                batchInboxCount.record(checkInboxes.size());
-                Timer.Sample start = Timer.start();
-                return kvStoreClient.linearizedQuery(range.leader,
+                return inboxStoreClient.linearizedQuery(range.leader,
                         KVRangeRORequest.newBuilder()
                             .setReqId(reqId)
                             .setVer(range.ver)
@@ -116,7 +97,6 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
                                 .toByteString())
                             .build(), orderKey)
                     .thenApply(v -> {
-                        start.stop(batchCheckTimer);
                         switch (v.getCode()) {
                             case Ok:
                                 try {
@@ -135,6 +115,7 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
                     })
                     .handle((v, e) -> {
                         if (e != null) {
+                            log.error("Inbox Check failed", e);
                             onInboxChecked.forEach((req, f) -> f.completeExceptionally(e));
                         } else {
                             onInboxChecked.forEach((req, f) -> {
@@ -147,7 +128,7 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
                                 } else {
                                     f.complete(HasInboxReply.newBuilder()
                                         .setReqId(req.getReqId())
-                                        .setResult(exists)
+                                        .setResult(exists ? HasInboxReply.Result.EXIST : HasInboxReply.Result.NO_INBOX)
                                         .build());
                                 }
                             });
@@ -161,35 +142,22 @@ public class InboxCheckScheduler extends InboxQueryScheduler<HasInboxRequest, Ha
 
         private final KVRangeSetting range;
 
-        private final IBaseKVStoreClient kvStoreClient;
+        private final IBaseKVStoreClient inboxStoreClient;
 
-        private final DistributionSummary batchInboxCount;
-
-        private final Timer batchCheckTimer;
-
-        BatchCheckBuilder(String name, int maxInflights, KVRangeSetting range, IBaseKVStoreClient kvStoreClient) {
-            super(name, maxInflights);
-            this.range = range;
-            this.kvStoreClient = kvStoreClient;
+        InboxCheckBatcher(InboxReadBatcherKey batcherKey,
+                          String name,
+                          long expectLatencyNanos,
+                          long maxTolerantLatencyNanos,
+                          IBaseKVStoreClient inboxStoreClient) {
+            super(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            this.range = batcherKey.range;
+            this.inboxStoreClient = inboxStoreClient;
             orderKey = this.hashCode() + "";
-            Tags tags = Tags.of("rangeId", KVRangeIdUtil.toShortString(range.id));
-            batchInboxCount = DistributionSummary.builder("inbox.server.check.inboxes")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            batchCheckTimer = Timer.builder("inbox.server.check.latency")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
         }
 
         @Override
-        public BatchCheck newBatch() {
-            return new BatchCheck();
-        }
-
-        @Override
-        public void close() {
-            Metrics.globalRegistry.remove(batchInboxCount);
-            Metrics.globalRegistry.remove(batchCheckTimer);
+        protected IBatchCall<HasInboxRequest, HasInboxReply> newBatch() {
+            return new BatchInboxCheck();
         }
     }
 }

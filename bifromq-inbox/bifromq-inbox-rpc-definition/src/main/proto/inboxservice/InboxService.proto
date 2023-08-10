@@ -62,8 +62,13 @@ message HasInboxRequest {
 }
 
 message HasInboxReply {
+  enum Result{
+    EXIST = 0;
+    NO_INBOX = 1;
+    ERROR = 2;
+  }
   uint64 reqId = 1;
-  bool result = 2;
+  Result result = 2;
 }
 
 message InboxMessagePack{
@@ -80,6 +85,7 @@ message SendResult{
   enum Result {
     OK = 0;
     NO_INBOX = 1;
+    ERROR = 2;
   }
   commontype.SubInfo subInfo = 1;
   Result result = 2;

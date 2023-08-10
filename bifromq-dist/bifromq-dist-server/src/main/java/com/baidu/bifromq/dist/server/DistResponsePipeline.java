@@ -23,7 +23,7 @@ import com.baidu.bifromq.basescheduler.exception.DropException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
-import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
@@ -36,11 +36,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     private final IEventCollector eventCollector;
-    private final IDistWorkerCallScheduler distCallScheduler;
+    private final IDistCallScheduler distCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
     private final Integer callQueueIdx;
 
-    DistResponsePipeline(IDistWorkerCallScheduler distCallScheduler,
+    DistResponsePipeline(IDistCallScheduler distCallScheduler,
                          StreamObserver<DistReply> responseObserver,
                          IEventCollector eventCollector,
                          LoadingCache<String, RunningAverage> tenantFanouts) {

@@ -13,47 +13,46 @@
 
 package com.baidu.bifromq.dist.worker.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_BATCH_SEND_MESSAGES;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_MAX_INFLIGHT_CALLS_PER_QUEUE;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_TOLERANT_LATENCY_MS;
 
-import com.baidu.bifromq.basescheduler.BatchCallBuilder;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
+import com.baidu.bifromq.basescheduler.Batcher;
+import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.SubInfo;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tags;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jctools.queues.MpscUnboundedArrayQueue;
 
 @Slf4j
 public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, DeliveryResult, DelivererKey>
     implements IDeliveryScheduler {
-    private static final int MAX_BATCH_MESSAGES = DIST_MAX_BATCH_SEND_MESSAGES.get();
     private final ISubBrokerManager subBrokerManager;
 
     public DeliveryScheduler(ISubBrokerManager subBrokerManager) {
-        super("dist_worker_deliver_batcher", DIST_WORKER_MAX_INFLIGHT_CALLS_PER_QUEUE.get());
+        super("dist_worker_deliver_batcher", Duration.ofMillis(100L),
+            Duration.ofMillis(DIST_SERVER_MAX_TOLERANT_LATENCY_MS.get()));
         this.subBrokerManager = subBrokerManager;
     }
 
     @Override
-    protected BatchCallBuilder<DeliveryRequest, DeliveryResult> newBuilder(String name, int maxInflights,
-                                                                           DelivererKey inboxWriterKey) {
-        return new DeliveryCallBuilder(name, maxInflights, inboxWriterKey);
+    protected Batcher<DeliveryRequest, DeliveryResult, DelivererKey> newBatcher(String name,
+                                                                                long expectLatencyNanos,
+                                                                                long maxTolerantLatencyNanos,
+                                                                                DelivererKey delivererKey) {
+        return new DeliveryCallBatcher(delivererKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
     }
 
     @Override
@@ -61,61 +60,45 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
         return Optional.of(request.writerKey);
     }
 
-    private class DeliveryCallBuilder extends BatchCallBuilder<DeliveryRequest, DeliveryResult> {
-        private class BatchInboxWriteCall implements IBatchCall<DeliveryRequest, DeliveryResult> {
-            private final AtomicInteger msgCount = new AtomicInteger();
-            private final Map<MessagePackWrapper, Set<SubInfo>> batch = new ConcurrentHashMap<>();
-            private final Queue<DeliveryTask> tasks = new MpscUnboundedArrayQueue<>(128);
+    private class DeliveryCallBatcher extends Batcher<DeliveryRequest, DeliveryResult, DelivererKey> {
+        private final IDeliverer deliverer;
 
-            @Override
-            public boolean isEmpty() {
-                return batch.isEmpty();
-            }
-
-            @Override
-            public boolean isEnough() {
-                return msgCount.get() > MAX_BATCH_MESSAGES;
-            }
-
-            @Override
-            public CompletableFuture<DeliveryResult> add(DeliveryRequest request) {
-                if (batch.computeIfAbsent(request.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
-                    .add(request.subInfo)) {
-                    request.msgPackWrapper.messagePack.getMessageList()
-                        .forEach(senderMsgPack -> msgCount.addAndGet(senderMsgPack.getMessageCount()));
-                }
-                DeliveryTask task = new DeliveryTask(request.subInfo);
-                tasks.add(task);
-                return task.onDone;
-            }
+        private class DeliveryBatchCall implements IBatchCall<DeliveryRequest, DeliveryResult> {
+            private final Queue<CallTask<DeliveryRequest, DeliveryResult>> tasks = new ArrayDeque<>(128);
+            private Map<MessagePackWrapper, Set<SubInfo>> batch = new HashMap<>(128);
 
             @Override
             public void reset() {
-                msgCount.set(0);
-                batch.clear();
+                batch = new HashMap<>(128);
+            }
+
+            @Override
+            public void add(CallTask<DeliveryRequest, DeliveryResult> callTask) {
+                batch.computeIfAbsent(callTask.call.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
+                    .add(callTask.call.subInfo);
+                tasks.add(callTask);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
-                msgCountSummary.record(msgCount.get());
                 return deliverer.deliver(batch.entrySet().stream()
                         .map(e -> new DeliveryPack(e.getKey().messagePack, e.getValue()))
                         .collect(Collectors.toList()))
                     .handle((reply, e) -> {
                         if (e != null) {
-                            DeliveryTask task;
+                            CallTask<DeliveryRequest, DeliveryResult> task;
                             while ((task = tasks.poll()) != null) {
-                                task.onDone.completeExceptionally(e);
+                                task.callResult.completeExceptionally(e);
                             }
                         } else {
-                            DeliveryTask task;
+                            CallTask<DeliveryRequest, DeliveryResult> task;
                             while ((task = tasks.poll()) != null) {
-                                DeliveryResult result = reply.get(task.subInfo);
+                                DeliveryResult result = reply.get(task.call.subInfo);
                                 if (result != null) {
-                                    task.onDone.complete(result);
+                                    task.callResult.complete(result);
                                 } else {
-                                    log.warn("No write result for sub: {}", task.subInfo);
-                                    task.onDone.complete(DeliveryResult.OK);
+                                    log.warn("No write result for sub: {}", task.call.subInfo);
+                                    task.callResult.complete(DeliveryResult.OK);
                                 }
                             }
                         }
@@ -124,34 +107,22 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
             }
         }
 
-        private final IDeliverer deliverer;
-        private final DistributionSummary msgCountSummary;
-
-        DeliveryCallBuilder(String name, int maxInflights, DelivererKey key) {
-            super(name, maxInflights);
-            int brokerId = key.subBrokerId();
-            this.deliverer = subBrokerManager.get(brokerId).open(key.delivererKey());
-            Tags tags = Tags.of("subBrokerId", String.valueOf(brokerId));
-            msgCountSummary = DistributionSummary.builder("dist.server.send.messages")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
+        DeliveryCallBatcher(DelivererKey batcherKey, String name, long expectLatencyNanos,
+                            long maxTolerantLatencyNanos) {
+            super(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            int brokerId = batcherKey.subBrokerId();
+            this.deliverer = subBrokerManager.get(brokerId).open(batcherKey.delivererKey());
         }
 
         @Override
-        public BatchInboxWriteCall newBatch() {
-            return new BatchInboxWriteCall();
+        protected IBatchCall<DeliveryRequest, DeliveryResult> newBatch() {
+            return new DeliveryBatchCall();
         }
 
         @Override
         public void close() {
+            super.close();
             deliverer.close();
-            Metrics.globalRegistry.remove(msgCountSummary);
         }
-    }
-
-    @AllArgsConstructor
-    private static class DeliveryTask {
-        final SubInfo subInfo;
-        final CompletableFuture<DeliveryResult> onDone = new CompletableFuture<>();
     }
 }

@@ -21,7 +21,6 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
@@ -59,13 +58,13 @@ final class InboxReaderClient implements IInboxReaderClient {
     }
 
     @Override
-    public CompletableFuture<Boolean> has(long reqId, String inboxId, ClientInfo clientInfo) {
+    public CompletableFuture<InboxCheckResult> has(long reqId, String inboxId, ClientInfo clientInfo) {
         return rpcClient.invoke(clientInfo.getTenantId(), null, HasInboxRequest.newBuilder()
                 .setReqId(reqId)
                 .setInboxId(inboxId)
                 .setClientInfo(clientInfo)
                 .build(), InboxServiceGrpc.getHasInboxMethod())
-            .thenApply(HasInboxReply::getResult);
+            .thenApply(v -> InboxCheckResult.values()[v.getResult().ordinal()]);
     }
 
     @Override
@@ -87,12 +86,10 @@ final class InboxReaderClient implements IInboxReaderClient {
                 .setInboxId(inboxId)
                 .setClientInfo(clientInfo)
                 .build(), InboxServiceGrpc.getDeleteInboxMethod())
-            .exceptionally(e -> {
-                return DeleteInboxReply.newBuilder()
-                    .setReqId(reqId)
-                    .setResult(DeleteInboxReply.Result.ERROR)
-                    .build();
-            });
+            .exceptionally(e -> DeleteInboxReply.newBuilder()
+                .setReqId(reqId)
+                .setResult(DeleteInboxReply.Result.ERROR)
+                .build());
     }
 
     @Override

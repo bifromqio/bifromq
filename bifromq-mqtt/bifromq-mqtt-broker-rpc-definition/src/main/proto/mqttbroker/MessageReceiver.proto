@@ -14,20 +14,21 @@ service OnlineInboxBroker {
   rpc hasInbox (HasInboxRequest) returns (HasInboxReply);
 }
 
-message DeliveryPack{
+message WritePack{
   commontype.TopicMessagePack messagePack = 1;
   repeated commontype.SubInfo subscriber = 2;
 }
 
 message WriteRequest {
   uint64 reqId = 1;
-  repeated DeliveryPack deliveryPack = 2;
+  repeated WritePack pack = 2;
 }
 
 message WriteResult{
   enum Result {
     OK = 0;
     NO_INBOX = 1;
+    ERROR = 2;
   }
   commontype.SubInfo subInfo = 1;
   Result result = 2;

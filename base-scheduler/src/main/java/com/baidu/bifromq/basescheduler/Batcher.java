@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -32,41 +33,48 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class Batcher<Call, CallResult, BatcherKey> {
+    private final Queue<IBatchCall<Call, CallResult>> batchPool;
     private final Queue<CallTask<Call, CallResult>> callTaskBuffers = new ConcurrentLinkedQueue<>();
     protected final String name;
     protected final BatcherKey batcherKey;
     private final AtomicBoolean triggering = new AtomicBoolean();
     private final MovingAverage avgLatencyNanos;
+    private final long expectedLatencyNanos;
     private final long maxTolerantLatencyNanos;
     private final AtomicInteger pipelineDepth = new AtomicInteger();
-    private final AtomicInteger maxSaturation = new AtomicInteger(1);
     private final AtomicLong maxPipelineDepth;
     private final Counter dropCounter;
-    private final Gauge avgLatencyGauge;
-    private final Gauge pipelineDepthGauge;
     private final Gauge batchSaturationGauge;
+    private final Timer batchCallTimer;
     private final Timer batchExecTimer;
     private final DistributionSummary batchBuildTimeSummary;
     private final DistributionSummary batchSizeSummary;
     private final DistributionSummary queueingTimeSummary;
+    private volatile int maxBatchSize = Integer.MAX_VALUE;
 
-    protected Batcher(BatcherKey batcherKey, String name, long maxTolerantLatencyNanos) {
+    protected Batcher(BatcherKey batcherKey, String name, long expectedLatencyNanos, long maxTolerantLatencyNanos) {
+        this(batcherKey, name, expectedLatencyNanos, maxTolerantLatencyNanos, 1);
+    }
+
+    protected Batcher(BatcherKey batcherKey,
+                      String name,
+                      long expectedLatencyNanos,
+                      long maxTolerantLatencyNanos,
+                      int pipelineDepth) {
         this.name = name;
         this.batcherKey = batcherKey;
+        this.expectedLatencyNanos = expectedLatencyNanos;
         this.maxTolerantLatencyNanos = maxTolerantLatencyNanos;
-        this.maxPipelineDepth = new AtomicLong(1);
+        this.maxPipelineDepth = new AtomicLong(pipelineDepth);
         avgLatencyNanos = new MovingAverage(100, Duration.ofSeconds(1));
-
+        this.batchPool = new ArrayDeque<>(pipelineDepth);
         dropCounter = Counter.builder("batcher.call.drop.count")
             .tags("name", name)
             .register(Metrics.globalRegistry);
-        avgLatencyGauge = Gauge.builder("batcher.call.avglatency", avgLatencyNanos::estimate)
+        batchSaturationGauge = Gauge.builder("batcher.saturation", () -> maxBatchSize)
             .tags("name", name)
             .register(Metrics.globalRegistry);
-        pipelineDepthGauge = Gauge.builder("batcher.pipeline.depth", pipelineDepth::get)
-            .tags("name", name)
-            .register(Metrics.globalRegistry);
-        batchSaturationGauge = Gauge.builder("batcher.saturation", maxSaturation::get)
+        batchCallTimer = Timer.builder("batcher.call.time")
             .tags("name", name)
             .register(Metrics.globalRegistry);
         batchExecTimer = Timer.builder("batcher.exec.time")
@@ -83,6 +91,12 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
             .register(Metrics.globalRegistry);
     }
 
+    Batcher<Call, CallResult, BatcherKey> init() {
+        for (int i = 0; i < maxPipelineDepth.get(); i++) {
+            batchPool.offer(newBatch());
+        }
+        return this;
+    }
 
     public final CompletableFuture<CallResult> submit(Call request) {
         if (avgLatencyNanos.estimate() < maxTolerantLatencyNanos) {
@@ -99,16 +113,15 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
 
     public void close() {
         Metrics.globalRegistry.remove(dropCounter);
-        Metrics.globalRegistry.remove(avgLatencyGauge);
-        Metrics.globalRegistry.remove(pipelineDepthGauge);
         Metrics.globalRegistry.remove(batchSaturationGauge);
+        Metrics.globalRegistry.remove(batchCallTimer);
         Metrics.globalRegistry.remove(batchExecTimer);
         Metrics.globalRegistry.remove(batchBuildTimeSummary);
         Metrics.globalRegistry.remove(batchSizeSummary);
         Metrics.globalRegistry.remove(queueingTimeSummary);
     }
 
-    protected abstract BatchCall2<Call, CallResult> newBatch();
+    protected abstract IBatchCall<Call, CallResult> newBatch();
 
     private void trigger() {
         if (triggering.compareAndSet(false, true)) {
@@ -128,13 +141,14 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     }
 
     private void batchAndEmit() {
-        long buildStart = System.nanoTime();
-        BatchCall2<Call, CallResult> batchCall = newBatch();
         pipelineDepth.incrementAndGet();
+        long buildStart = System.nanoTime();
+        IBatchCall<Call, CallResult> batchCall = batchPool.poll();
+        assert batchCall != null;
         int batchSize = 0;
         LinkedList<CallTask<Call, CallResult>> batchedTasks = new LinkedList<>();
         CallTask<Call, CallResult> callTask;
-        while ((callTask = callTaskBuffers.poll()) != null) {
+        while (batchSize < maxBatchSize && (callTask = callTaskBuffers.poll()) != null) {
             batchCall.add(callTask);
             batchedTasks.add(callTask);
             batchSize++;
@@ -143,15 +157,39 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         batchSizeSummary.record(batchSize);
         long execStart = System.nanoTime();
         batchBuildTimeSummary.record((execStart - buildStart));
+        final int finalBatchSize = batchSize;
         batchCall.execute()
             .whenComplete((v, e) -> {
                 long execEnd = System.nanoTime();
-                batchedTasks.forEach(t -> avgLatencyNanos.observe(execEnd - t.ts));
-                batchExecTimer.record(execEnd - execStart, TimeUnit.NANOSECONDS);
+                if (e != null) {
+                    // reset max batch size
+                    maxBatchSize = 1;
+                } else {
+                    long thisLatency = execEnd - execStart;
+                    if (thisLatency > 0) {
+                        updateMaxBatchSize(finalBatchSize, thisLatency);
+                    }
+                    batchExecTimer.record(thisLatency, TimeUnit.NANOSECONDS);
+                }
+                batchedTasks.forEach(t -> {
+                    long callLatency = execEnd - t.ts;
+                    avgLatencyNanos.observe(callLatency);
+                    batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
+                });
+                batchCall.reset();
+                batchPool.offer(batchCall);
                 pipelineDepth.getAndDecrement();
                 if (!callTaskBuffers.isEmpty()) {
                     trigger();
                 }
             });
+    }
+
+    private void updateMaxBatchSize(int batchSize, long latency) {
+        if (latency == expectedLatencyNanos) {
+            maxBatchSize = batchSize;
+        } else {
+            maxBatchSize = Math.max(1, (int) (batchSize * expectedLatencyNanos * 1.0 / latency));
+        }
     }
 }

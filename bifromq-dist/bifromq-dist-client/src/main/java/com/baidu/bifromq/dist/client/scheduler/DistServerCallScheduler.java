@@ -13,85 +13,73 @@
 
 package com.baidu.bifromq.dist.client.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_CLIENT_MAX_INFLIGHT_CALLS_PER_QUEUE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_TOPICS_IN_BATCH;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_TOLERANT_LATENCY_MS;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.basescheduler.BatchCallBuilder;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
+import com.baidu.bifromq.basescheduler.Batcher;
+import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.PublisherMessagePack;
-import java.util.ArrayList;
+import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class DistServerCallScheduler
-    extends BatchCallScheduler<DistServerCall, Void, DistServerCallScheduler.BatchKey>
+public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, Void, BatcherKey>
     implements IDistServerCallScheduler {
-    private final int maxBatchedTopics;
     private final IRPCClient rpcClient;
 
     public DistServerCallScheduler(IRPCClient rpcClient) {
-        super("dist_client_send_batcher", DIST_CLIENT_MAX_INFLIGHT_CALLS_PER_QUEUE.get());
-        maxBatchedTopics = DIST_MAX_TOPICS_IN_BATCH.get();
+        super("dist_client_send_batcher", Duration.ofMillis(2L),
+            Duration.ofMillis(DIST_SERVER_MAX_TOLERANT_LATENCY_MS.get()));
         this.rpcClient = rpcClient;
     }
 
     @Override
-    protected BatchCallBuilder<DistServerCall, Void> newBuilder(String name, int maxInflights, BatchKey batchKey) {
-        return new DistServerCallBuilder(name, maxInflights,
-            rpcClient.createRequestPipeline(batchKey.tenantId, null, null, emptyMap(),
+    protected Batcher<DistServerCall, Void, BatcherKey> newBatcher(String name,
+                                                                   long expectLatencyNanos,
+                                                                   long maxTolerantLatencyNanos,
+                                                                   BatcherKey batcherKey) {
+        return new DistServerCallBatcher(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos,
+            rpcClient.createRequestPipeline(batcherKey.tenantId, null, null, emptyMap(),
                 DistServiceGrpc.getDistMethod()));
     }
 
     @Override
-    protected Optional<BatchKey> find(DistServerCall message) {
-        return Optional.of(new BatchKey(message.publisher.getTenantId(), Thread.currentThread().getId()));
+    protected Optional<BatcherKey> find(DistServerCall clientCall) {
+        return Optional.of(new BatcherKey(clientCall.publisher.getTenantId(), Thread.currentThread().getId()));
     }
 
-    private class DistServerCallBuilder extends BatchCallBuilder<DistServerCall, Void> {
-        private class DistServerCall
-            implements IBatchCall<com.baidu.bifromq.dist.client.scheduler.DistServerCall, Void> {
-            private final Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack =
-                new HashMap<>(maxBatchedTopics);
-            private final List<CompletableFuture<Void>> tasks = new ArrayList<>();
+    private static class DistServerCallBatcher extends Batcher<DistServerCall, Void, BatcherKey> {
+        private final IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln;
 
-            @Override
-            public boolean isEmpty() {
-                return tasks.isEmpty();
-            }
-
-            @Override
-            public boolean isEnough() {
-                return clientMsgPack.size() > maxBatchedTopics;
-            }
-
-            @Override
-            public CompletableFuture<Void> add(com.baidu.bifromq.dist.client.scheduler.DistServerCall request) {
-                CompletableFuture<Void> onDone = new CompletableFuture<>();
-                tasks.add(onDone);
-                clientMsgPack.computeIfAbsent(request.publisher, k -> new HashMap<>())
-                    .computeIfAbsent(request.topic, k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
-                    .addMessage(request.message);
-                return onDone;
-            }
+        private class DistServerBatchCall implements IBatchCall<DistServerCall, Void> {
+            private final Queue<CompletableFuture<Void>> tasks = new ArrayDeque<>(64);
+            private Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack =
+                new HashMap<>(128);
 
             @Override
             public void reset() {
-                clientMsgPack.clear();
-                tasks.clear();
+                clientMsgPack = new HashMap<>(128);
+            }
+
+            @Override
+            public void add(CallTask<DistServerCall, Void> callTask) {
+                tasks.add(callTask.callResult);
+                clientMsgPack.computeIfAbsent(callTask.call.publisher, k -> new HashMap<>())
+                    .computeIfAbsent(callTask.call.topic, k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
+                    .addMessage(callTask.call.message);
             }
 
             @Override
@@ -106,43 +94,40 @@ public class DistServerCallScheduler
                     requestBuilder.addMessages(senderMsgPackBuilder.build());
                 });
                 DistRequest request = requestBuilder.build();
-                log.debug("Sending dist request: reqId={}", request.getReqId());
                 return ppln.invoke(request).handle((v, e) -> {
                     if (e != null) {
-                        log.error("Request failed", e);
-                        tasks.forEach(taskOnDone -> taskOnDone.completeExceptionally(e));
+                        CompletableFuture<Void> onDone;
+                        while ((onDone = tasks.poll()) != null) {
+                            onDone.completeExceptionally(e);
+                        }
                     } else {
-                        log.debug("Got dist reply: reqId={}", v.getReqId());
-                        tasks.forEach(taskOnDone -> taskOnDone.complete(null));
+                        CompletableFuture<Void> onDone;
+                        while ((onDone = tasks.poll()) != null) {
+                            onDone.complete(null);
+                        }
                     }
                     return null;
                 });
             }
         }
 
-        private final IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln;
-
-        DistServerCallBuilder(String name, int maxInflights,
+        DistServerCallBatcher(BatcherKey batcherKey, String name,
+                              long expectedLatencyNanos,
+                              long maxTolerantLatencyNanos,
                               IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln) {
-            super(name, maxInflights);
+            super(batcherKey, name, expectedLatencyNanos, maxTolerantLatencyNanos);
             this.ppln = ppln;
         }
 
         @Override
-        public DistServerCall newBatch() {
-            return new DistServerCall();
+        protected IBatchCall<DistServerCall, Void> newBatch() {
+            return new DistServerBatchCall();
         }
 
         @Override
         public void close() {
+            super.close();
             ppln.close();
         }
-    }
-
-    @AllArgsConstructor
-    @EqualsAndHashCode
-    static class BatchKey {
-        final String tenantId;
-        final long threadId;
     }
 }

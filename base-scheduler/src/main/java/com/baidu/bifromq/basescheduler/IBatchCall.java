@@ -17,26 +17,11 @@ import java.util.concurrent.CompletableFuture;
 
 public interface IBatchCall<Req, Resp> {
     /**
-     * If no task batched so far
+     * Add a call task to the batch
      *
-     * @return boolean indicating if the batch is empty
+     * @param task the task to be fulfilled in the batch
      */
-    boolean isEmpty();
-
-    /**
-     * If there are enough requests batched return a new builder, otherwise returns empty
-     *
-     * @return boolean indicating if the batch is full
-     */
-    boolean isEnough();
-
-    /**
-     * Add an async request to this batch
-     *
-     * @param request add request to the batch for executing
-     * @return a future to receive response asynchronously
-     */
-    CompletableFuture<Resp> add(Req request);
+    void add(CallTask<Req, Resp> task);
 
     /**
      * Reset the batch call object to initial state to be reused again

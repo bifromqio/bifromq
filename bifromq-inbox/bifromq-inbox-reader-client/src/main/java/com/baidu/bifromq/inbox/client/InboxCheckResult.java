@@ -11,8 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.plugin.subbroker;
+package com.baidu.bifromq.inbox.client;
 
-public enum DeliveryResult {
-    OK, NO_INBOX, FAILED
+public enum InboxCheckResult {
+    EXIST, NO_INBOX, FAILED
 }

@@ -24,67 +24,75 @@ import io.micrometer.core.instrument.Metrics;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import lombok.extern.slf4j.Slf4j;
 
-public abstract class BatchCallScheduler<Req, Resp, BatchCallBuilderKey> implements IBatchCallScheduler<Req, Resp> {
-    private static final int BUILDER_EXPIRY_SECONDS = 30;
-    private final LoadingCache<BatchCallBuilderKey, BatchCallBuilder<Req, Resp>> callQueues;
-    private final ICallScheduler<Req> reqScheduler;
-    private final Gauge queueNumGauge;
+@Slf4j
+public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
+    implements IBatchCallScheduler<Call, CallResult> {
+    private static final int BATCHER_EXPIRY_SECONDS = 3000;
+    private final ICallScheduler<Call> callScheduler;
+    private final long expectLatencyNanos;
+    private final long maxTolerantLatencyNanos;
+    private final LoadingCache<BatcherKey, Batcher<Call, CallResult, BatcherKey>> batchers;
+    private final Gauge batcherNumGauge;
     private final Counter callSchedCounter;
-    private final Counter callEmitCounter;
-    private final Counter dropCounter;
+    private final Counter callSubmitCounter;
 
-
-    public BatchCallScheduler(String name) {
-        this(name, 1);
+    public BatchCallScheduler(String name, Duration expectLatency, Duration maxTolerantLatency) {
+        this(name, new ICallScheduler<>() {
+        }, expectLatency, maxTolerantLatency);
     }
 
-    public BatchCallScheduler(String name, int maxInflights) {
-        this(name, maxInflights, new ICallScheduler<>() {
-        });
-    }
-
-    public BatchCallScheduler(String name, int maxInflights, ICallScheduler<Req> reqScheduler) {
-        this.reqScheduler = reqScheduler;
-        callQueues = Caffeine.newBuilder()
+    public BatchCallScheduler(String name,
+                              ICallScheduler<Call> reqScheduler,
+                              Duration expectLatency,
+                              Duration maxTolerantLatency) {
+        this.callScheduler = reqScheduler;
+        this.expectLatencyNanos = expectLatency.toNanos();
+        this.maxTolerantLatencyNanos = maxTolerantLatency.toNanos();
+        batchers = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
-            .expireAfterAccess(Duration.ofSeconds(BUILDER_EXPIRY_SECONDS))
-            .removalListener((RemovalListener<BatchCallBuilderKey, BatchCallBuilder<Req, Resp>>)
+            .expireAfterAccess(Duration.ofSeconds(BATCHER_EXPIRY_SECONDS))
+            .removalListener((RemovalListener<BatcherKey, Batcher<Call, CallResult, BatcherKey>>)
                 (key, value, removalCause) -> {
                     if (value != null) {
                         value.close();
                     }
                 })
-            .build(k -> newBuilder(name, maxInflights, k));
-        queueNumGauge = Gauge.builder("batch.queue.num", callQueues::estimatedSize)
+            .build(k -> newBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, k).init());
+        batcherNumGauge = Gauge.builder("batcher.num", batchers::estimatedSize)
             .tags("name", name)
             .register(Metrics.globalRegistry);
-        callSchedCounter = Counter.builder("batch.task.sched.count")
+        callSchedCounter = Counter.builder("batcher.call.sched.count")
             .tags("name", name)
             .register(Metrics.globalRegistry);
-        callEmitCounter = Counter.builder("batch.task.emit.count")
-            .tags("name", name)
-            .register(Metrics.globalRegistry);
-        dropCounter = Counter.builder("batch.task.drop.count")
+        callSubmitCounter = Counter.builder("batcher.call.submit.count")
             .tags("name", name)
             .register(Metrics.globalRegistry);
     }
 
-    protected abstract BatchCallBuilder<Req, Resp> newBuilder(String name, int maxInflights, BatchCallBuilderKey key);
+    protected abstract Batcher<Call, CallResult, BatcherKey> newBatcher(String name,
+                                                                        long expectLatencyNanos,
+                                                                        long maxTolerantLatencyNanos,
+                                                                        BatcherKey key);
 
-    protected abstract Optional<BatchCallBuilderKey> find(Req request);
+    protected abstract Optional<BatcherKey> find(Call call);
 
     @Override
-    public CompletableFuture<Resp> schedule(Req request) {
+    public CompletableFuture<CallResult> schedule(Call request) {
         callSchedCounter.increment();
-        return reqScheduler.submit(request)
+        return callScheduler.submit(request)
             .thenCompose(req -> {
-                Optional<BatchCallBuilder<Req, Resp>> builderOpt = find(req).map(callQueues::get);
-                if (builderOpt.isPresent()) {
-                    callEmitCounter.increment();
-                    return builderOpt.get().submit(req);
-                } else {
-                    dropCounter.increment();
+                try {
+                    Optional<Batcher<Call, CallResult, BatcherKey>> builderOpt = find(req).map(batchers::get);
+                    if (builderOpt.isPresent()) {
+                        callSubmitCounter.increment();
+                        return builderOpt.get().submit(req);
+                    } else {
+                        return CompletableFuture.failedFuture(DropException.BATCH_NOT_AVAILABLE);
+                    }
+                } catch (Throwable e) {
+                    log.error("Error", e);
                     return CompletableFuture.failedFuture(DropException.BATCH_NOT_AVAILABLE);
                 }
             });
@@ -92,10 +100,9 @@ public abstract class BatchCallScheduler<Req, Resp, BatchCallBuilderKey> impleme
 
     @Override
     public void close() {
-        callQueues.invalidateAll();
-        Metrics.globalRegistry.remove(queueNumGauge);
-        Metrics.globalRegistry.remove(callEmitCounter);
+        batchers.invalidateAll();
+        Metrics.globalRegistry.remove(batcherNumGauge);
+        Metrics.globalRegistry.remove(callSubmitCounter);
         Metrics.globalRegistry.remove(callSchedCounter);
-        Metrics.globalRegistry.remove(dropCounter);
     }
 }

@@ -19,7 +19,7 @@ import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.RPCBluePrint;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCall;
-import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler2;
+import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.ClearRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
@@ -51,7 +51,7 @@ final class DistClient implements IDistClient {
             .sslContext(builder.sslContext)
             .build();
 //        reqScheduler = new DistServerCallScheduler(rpcClient);
-        reqScheduler = new DistServerCallScheduler2(rpcClient);
+        reqScheduler = new DistServerCallScheduler(rpcClient);
     }
 
     @Override

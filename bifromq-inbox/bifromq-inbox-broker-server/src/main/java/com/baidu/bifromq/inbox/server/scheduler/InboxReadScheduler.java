@@ -13,22 +13,20 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_TOLERANT_LATENCY_MS;
-
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basescheduler.BatchCallScheduler2;
+import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Optional;
 
-public abstract class InboxReadScheduler<Req, Resp> extends BatchCallScheduler2<Req, Resp, InboxReadBatcherKey> {
+public abstract class InboxReadScheduler<Req, Resp> extends BatchCallScheduler<Req, Resp, InboxReadBatcherKey> {
     protected final IBaseKVStoreClient inboxStoreClient;
     private final int queuesPerRange;
 
     public InboxReadScheduler(int queuesPerRange, IBaseKVStoreClient inboxStoreClient, String name) {
-        super(name, Duration.ofSeconds(300));
+        super(name, Duration.ofMillis(10L), Duration.ofSeconds(300));
         Preconditions.checkArgument(queuesPerRange > 0, "Queues per range must be positive");
         this.inboxStoreClient = inboxStoreClient;
         this.queuesPerRange = queuesPerRange;

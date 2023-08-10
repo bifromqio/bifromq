@@ -33,6 +33,7 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -89,7 +90,7 @@ public abstract class DistServiceTest {
         when(subBrokerMgr.get(anyInt())).thenReturn(inboxBroker);
         when(inboxBroker.open(anyString())).thenReturn(inboxDeliverer);
         when(inboxBroker.hasInbox(anyInt(), anyString(), anyString(), anyString())).thenReturn(
-            CompletableFuture.completedFuture(true));
+            CompletableFuture.completedFuture(CheckResult.EXIST));
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(2, 2, 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),

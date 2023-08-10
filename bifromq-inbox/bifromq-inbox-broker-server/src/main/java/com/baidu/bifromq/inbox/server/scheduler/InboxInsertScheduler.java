@@ -13,18 +13,14 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_BYTES_PER_INSERT;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_INBOXES_PER_INSERT;
-
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.basescheduler.BatchCallBuilder;
+import com.baidu.bifromq.basescheduler.Batcher;
+import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
-import com.baidu.bifromq.inbox.rpc.proto.SendResult.Result;
 import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
@@ -34,29 +30,26 @@ import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, SendResult.Result>
+public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, SendResult.Result>
     implements IInboxInsertScheduler {
-    private final int maxInboxPerBatch;
-    private final int maxSizePerBatch;
+    public InboxInsertScheduler(IBaseKVStoreClient inboxStoreClient) {
+        super(inboxStoreClient, "inbox_server_insert");
+    }
 
-    public InboxInsertScheduler(IBaseKVStoreClient kvStoreClient) {
-        super(kvStoreClient, "inbox_server_insert");
-        maxInboxPerBatch = INBOX_MAX_INBOXES_PER_INSERT.get();
-        maxSizePerBatch = INBOX_MAX_BYTES_PER_INSERT.get();
+    @Override
+    protected Batcher<MessagePack, SendResult.Result, KVRangeSetting> newBatcher(String name,
+                                                                                 long expectLatencyNanos,
+                                                                                 long maxTolerantLatencyNanos,
+                                                                                 KVRangeSetting range) {
+        return new InboxInsertBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, inboxStoreClient);
     }
 
     @Override
@@ -64,47 +57,26 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
         return KeyUtil.scopedInboxId(request.getSubInfo().getTenantId(), request.getSubInfo().getInboxId());
     }
 
-    @Override
-    protected BatchCallBuilder<MessagePack, Result> newBuilder(String name, int maxInflights,
-                                                               KVRangeSetting rangeSetting) {
-        return new BatchInsertBuilder(name, maxInflights, rangeSetting, kvStoreClient);
-    }
-
-    private final class BatchInsertBuilder extends BatchCallBuilder<MessagePack, Result> {
-        private class BatchInsert implements IBatchCall<MessagePack, Result> {
-            private final AtomicInteger msgSize = new AtomicInteger();
-
+    private static class InboxInsertBatcher extends Batcher<MessagePack, SendResult.Result, KVRangeSetting> {
+        private class InboxBatchInsert implements IBatchCall<MessagePack, SendResult.Result> {
             // key: scopedInboxIdUtf8
-            private final Queue<InsertTask> inboxInserts = new ConcurrentLinkedQueue<>();
-
-            @Override
-            public boolean isEmpty() {
-                return inboxInserts.isEmpty();
-            }
-
-            @Override
-            public CompletableFuture<SendResult.Result> add(MessagePack request) {
-                InsertTask task = new InsertTask(request);
-                inboxInserts.add(task);
-                msgSize.addAndGet(request.getSerializedSize());
-                return task.onDone;
-            }
+            private final Queue<CallTask<MessagePack, SendResult.Result>> inboxInserts = new ArrayDeque<>(128);
 
             @Override
             public void reset() {
-                msgSize.set(0);
-                inboxInserts.clear();
+            }
+
+            @Override
+            public void add(CallTask<MessagePack, SendResult.Result> callTask) {
+                inboxInserts.add(callTask);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                batchInboxCount.record(inboxInserts.size());
-                batchMsgCount.record(msgSize.get());
                 InboxInsertRequest.Builder reqBuilder = InboxInsertRequest.newBuilder();
-                inboxInserts.forEach(insertTask -> reqBuilder.addSubMsgPack(insertTask.request));
-                Timer.Sample start = Timer.start();
-                return kvStoreClient.execute(range.leader,
+                inboxInserts.forEach(insertTask -> reqBuilder.addSubMsgPack(insertTask.call));
+                return inboxStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
                             .setReqId(reqId)
                             .setVer(range.ver)
@@ -115,7 +87,6 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
-                        start.stop(batchInsertTimer);
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
                                 return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
@@ -128,79 +99,43 @@ public class InboxInsertScheduler extends InboxUpdateScheduler<MessagePack, Send
                     })
                     .handle((v, e) -> {
                         if (e != null) {
-                            while (!inboxInserts.isEmpty()) {
-                                InsertTask task = inboxInserts.poll();
-                                task.onDone.completeExceptionally(e);
+                            CallTask<MessagePack, SendResult.Result> task;
+                            while ((task = inboxInserts.poll()) != null) {
+                                task.callResult.complete(SendResult.Result.ERROR);
                             }
                         } else {
                             Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
                             for (InboxInsertResult result : v.getInsert().getResultsList()) {
                                 if (result.getResult() == InboxInsertResult.Result.NO_INBOX) {
-                                    insertResults.put(result.getSubInfo(), Result.NO_INBOX);
+                                    insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
                                 } else {
-                                    insertResults.put(result.getSubInfo(), Result.OK);
+                                    insertResults.put(result.getSubInfo(),
+                                        com.baidu.bifromq.inbox.rpc.proto.SendResult.Result.OK);
                                 }
                             }
-                            while (!inboxInserts.isEmpty()) {
-                                InsertTask task = inboxInserts.poll();
-                                task.onDone.complete(insertResults.get(task.request.getSubInfo()));
+                            CallTask<MessagePack, SendResult.Result> task;
+                            while ((task = inboxInserts.poll()) != null) {
+                                task.callResult.complete(insertResults.get(task.call.getSubInfo()));
                             }
                         }
                         return null;
                     });
             }
-
-            @Override
-            public boolean isEnough() {
-                return inboxInserts.size() > maxInboxPerBatch || msgSize.get() > maxSizePerBatch;
-            }
         }
 
-        private final IBaseKVStoreClient kvStoreClient;
-
+        private final IBaseKVStoreClient inboxStoreClient;
         private final KVRangeSetting range;
 
-        private final DistributionSummary batchInboxCount;
-
-        private final DistributionSummary batchMsgCount;
-
-        private final Timer batchInsertTimer;
-
-        BatchInsertBuilder(String name,
-                           int maxInflights,
-                           KVRangeSetting range,
-                           IBaseKVStoreClient kvStoreClient) {
-            super(name, maxInflights);
+        InboxInsertBatcher(String name, long expectLatencyNanos, long maxTolerantLatencyNanos, KVRangeSetting range,
+                           IBaseKVStoreClient inboxStoreClient) {
+            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
             this.range = range;
-            this.kvStoreClient = kvStoreClient;
-            Tags tags = Tags.of("rangeId", KVRangeIdUtil.toShortString(range.id));
-            batchInboxCount = DistributionSummary.builder("inbox.server.insert.inboxes")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            batchMsgCount = DistributionSummary.builder("inbox.server.insert.msgs")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            batchInsertTimer = Timer.builder("inbox.server.insert.latency")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
+            this.inboxStoreClient = inboxStoreClient;
         }
 
         @Override
-        public BatchInsert newBatch() {
-            return new BatchInsert();
+        protected IBatchCall<MessagePack, SendResult.Result> newBatch() {
+            return new InboxBatchInsert();
         }
-
-        @Override
-        public void close() {
-            Metrics.globalRegistry.remove(batchInboxCount);
-            Metrics.globalRegistry.remove(batchMsgCount);
-            Metrics.globalRegistry.remove(batchInsertTimer);
-        }
-    }
-
-    @AllArgsConstructor
-    public static final class InsertTask {
-        final MessagePack request;
-        final CompletableFuture<SendResult.Result> onDone = new CompletableFuture<>();
     }
 }

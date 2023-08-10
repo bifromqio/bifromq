@@ -24,11 +24,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
 public interface IInboxReaderClient extends IConnectable {
+
     static InboxReaderClientBuilder newBuilder() {
         return new InboxReaderClientBuilder();
     }
 
-    CompletableFuture<Boolean> has(long reqId, String inboxId, ClientInfo clientInfo);
+    CompletableFuture<InboxCheckResult> has(long reqId, String inboxId, ClientInfo clientInfo);
 
     CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo clientInfo);
 

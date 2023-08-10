@@ -13,20 +13,18 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_TOLERANT_LATENCY_MS;
-
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basescheduler.BatchCallScheduler2;
+import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Optional;
 
-public abstract class InboxMutateScheduler<Req, Resp> extends BatchCallScheduler2<Req, Resp, KVRangeSetting> {
+public abstract class InboxMutateScheduler<Req, Resp> extends BatchCallScheduler<Req, Resp, KVRangeSetting> {
     protected final IBaseKVStoreClient inboxStoreClient;
 
     public InboxMutateScheduler(IBaseKVStoreClient inboxStoreClient, String name) {
-        super(name, Duration.ofSeconds(300));
+        super(name, Duration.ofMillis(50L), Duration.ofSeconds(1));
         this.inboxStoreClient = inboxStoreClient;
     }
 

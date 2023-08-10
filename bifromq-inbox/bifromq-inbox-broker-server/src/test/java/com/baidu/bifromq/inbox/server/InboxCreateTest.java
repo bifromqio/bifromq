@@ -14,9 +14,8 @@
 package com.baidu.bifromq.inbox.server;
 
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.inbox.client.InboxCheckResult;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.type.ClientInfo;
@@ -32,13 +31,13 @@ public class InboxCreateTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void create() {
         clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        assertFalse(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
+        assertEquals(inboxReaderClient.has(reqId, inboxId, clientInfo).join(), InboxCheckResult.NO_INBOX);
 
         CreateInboxReply createInboxReply = inboxReaderClient.create(reqId, inboxId, clientInfo).join();
         assertEquals(createInboxReply.getReqId(), reqId);
         assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
-        assertTrue(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
+        assertEquals(inboxReaderClient.has(reqId, inboxId, clientInfo).join(), InboxCheckResult.EXIST);
     }
 
     @Test(groups = "integration", dependsOnMethods = "create")
@@ -47,6 +46,6 @@ public class InboxCreateTest extends InboxServiceTest {
         assertEquals(deleteInboxReply.getReqId(), reqId);
         assertEquals(deleteInboxReply.getResult(), DeleteInboxReply.Result.OK);
 
-        assertFalse(inboxReaderClient.has(reqId, inboxId, clientInfo).join());
+        assertEquals(inboxReaderClient.has(reqId, inboxId, clientInfo).join(), InboxCheckResult.NO_INBOX);
     }
 }

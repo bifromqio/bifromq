@@ -114,6 +114,10 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-auth-provider-helper</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-sysprops</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
