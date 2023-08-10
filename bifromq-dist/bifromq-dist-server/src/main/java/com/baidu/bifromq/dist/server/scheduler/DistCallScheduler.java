@@ -23,10 +23,10 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basescheduler.BatchCall2;
-import com.baidu.bifromq.basescheduler.BatchCallScheduler2;
+import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.BatchDist;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
@@ -37,6 +37,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Iterables;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -45,28 +46,28 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.jctools.queues.MpscUnboundedArrayQueue;
 
 @Slf4j
-public class DistWorkerCallScheduler2 extends BatchCallScheduler2<DistWorkerCall, Map<String, Integer>, Integer>
-    implements IDistWorkerCallScheduler {
+public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<String, Integer>, Integer>
+    implements IDistCallScheduler {
     private final IBaseKVStoreClient distWorkerClient;
 
-    public DistWorkerCallScheduler2(ICallScheduler<DistWorkerCall> reqScheduler,
-                                    IBaseKVStoreClient distWorkerClient) {
-        super("dist_server_dist_batcher", reqScheduler, Duration.ofMillis(DIST_SERVER_MAX_TOLERANT_LATENCY_MS.get()));
+    public DistCallScheduler(ICallScheduler<DistWorkerCall> reqScheduler,
+                             IBaseKVStoreClient distWorkerClient) {
+        super("dist_server_dist_batcher", reqScheduler, Duration.ofMillis(5L),
+            Duration.ofMillis(DIST_SERVER_MAX_TOLERANT_LATENCY_MS.get()));
         this.distWorkerClient = distWorkerClient;
     }
 
     @Override
     protected Batcher<DistWorkerCall, Map<String, Integer>, Integer> newBatcher(String name,
+                                                                                long expectLatencyNanos,
                                                                                 long maxTolerantLatencyNanos,
                                                                                 Integer batchKey) {
-        return new DistWorkerCallBatcher(batchKey, name, maxTolerantLatencyNanos, distWorkerClient);
+        return new DistWorkerCallBatcher(batchKey, name, expectLatencyNanos, maxTolerantLatencyNanos, distWorkerClient);
     }
 
     @Override
@@ -79,35 +80,34 @@ public class DistWorkerCallScheduler2 extends BatchCallScheduler2<DistWorkerCall
         private final String orderKey = UUID.randomUUID().toString();
 
         protected DistWorkerCallBatcher(Integer batcherKey, String name,
+                                        long expectLatencyNanos,
                                         long maxTolerantLatencyNanos,
                                         IBaseKVStoreClient distWorkerClient) {
-            super(batcherKey, name, maxTolerantLatencyNanos);
+            super(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
             this.distWorkerClient = distWorkerClient;
         }
 
         @Override
-        protected BatchCall2<DistWorkerCall, Map<String, Integer>> newBatch() {
+        protected IBatchCall<DistWorkerCall, Map<String, Integer>> newBatch() {
             return new BatchDistCall();
         }
 
-        private class BatchDistCall extends BatchCall2<DistWorkerCall, Map<String, Integer>> {
-            private final Queue<CallTask<DistWorkerCall, Map<String, Integer>>> tasks =
-                new MpscUnboundedArrayQueue<>(128);
-            private final Map<String, Map<String, Map<ClientInfo, Iterable<Message>>>> batch =
-                new ConcurrentHashMap<>();
+        private class BatchDistCall implements IBatchCall<DistWorkerCall, Map<String, Integer>> {
+            private final Queue<CallTask<DistWorkerCall, Map<String, Integer>>> tasks = new ArrayDeque<>(128);
+            private Map<String, Map<String, Map<ClientInfo, Iterable<Message>>>> batch = new HashMap<>(128);
 
             @Override
-            public int weight(DistWorkerCall distCall) {
-                return 1;
+            public void reset() {
+                batch = new HashMap<>(128);
             }
 
             @Override
             public void add(CallTask<DistWorkerCall, Map<String, Integer>> callTask) {
                 Map<String, Map<ClientInfo, Iterable<Message>>> clientMsgsByTopic =
-                    batch.computeIfAbsent(callTask.call.tenantId, k -> new ConcurrentHashMap<>());
+                    batch.computeIfAbsent(callTask.call.tenantId, k -> new HashMap<>());
                 callTask.call.publisherMsgPacks.forEach(senderMsgPack ->
                     senderMsgPack.getMessagePackList().forEach(topicMsgs ->
-                        clientMsgsByTopic.computeIfAbsent(topicMsgs.getTopic(), k -> new ConcurrentHashMap<>())
+                        clientMsgsByTopic.computeIfAbsent(topicMsgs.getTopic(), k -> new HashMap<>())
                             .compute(senderMsgPack.getPublisher(), (k, v) -> {
                                 if (v == null) {
                                     v = topicMsgs.getMessageList();

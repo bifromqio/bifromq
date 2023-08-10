@@ -16,12 +16,14 @@ package com.baidu.bifromq.mqtt.inbox;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
 import com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil;
+import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
@@ -56,12 +58,12 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     }
 
     @Override
-    public CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId, String delivererKey) {
+    public CompletableFuture<CheckResult> hasInbox(long reqId, String tenantId, String inboxId, String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
         return rpcClient.invoke(tenantId, DeliveryGroupKeyUtil.parseServerId(delivererKey),
                 HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
                 OnlineInboxBrokerGrpc.getHasInboxMethod())
-            .thenApply(HasInboxReply::getResult);
+            .thenApply(v -> v.getResult() ? CheckResult.EXIST : CheckResult.NO_INBOX);
     }
 
 
@@ -94,22 +96,18 @@ final class MqttBrokerClient implements IMqttBrokerClient {
             long reqId = System.nanoTime();
             return ppln.invoke(WriteRequest.newBuilder()
                     .setReqId(reqId)
-                    .addAllDeliveryPack(
-                        Iterables.transform(packs, e -> com.baidu.bifromq.mqtt.inbox.rpc.proto.DeliveryPack.newBuilder()
-                            .setMessagePack(e.messagePack)
-                            .addAllSubscriber(e.inboxes)
-                            .build()))
+                    .addAllPack(Iterables.transform(packs, e -> WritePack.newBuilder()
+                        .setMessagePack(e.messagePack)
+                        .addAllSubscriber(e.inboxes)
+                        .build()))
                     .build())
                 .thenApply(writeReply -> writeReply.getResultList().stream()
-                    .collect(Collectors.toMap(e -> e.getSubInfo(), e -> {
-                        switch (e.getResult()) {
-                            case NO_INBOX:
-                                return DeliveryResult.NO_INBOX;
-                            case OK:
-                            default:
-                                return DeliveryResult.OK;
-                        }
-                    })));
+                    .collect(Collectors.toMap(WriteResult::getSubInfo, entry ->
+                        switch (entry.getResult()) {
+                            case OK -> DeliveryResult.OK;
+                            case NO_INBOX -> DeliveryResult.NO_INBOX;
+                            default -> DeliveryResult.FAILED;
+                        })));
         }
 
         @Override

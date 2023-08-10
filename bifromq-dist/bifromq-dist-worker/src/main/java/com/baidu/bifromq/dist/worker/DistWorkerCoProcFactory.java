@@ -21,7 +21,7 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler2;
+import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -53,7 +53,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
         this.eventCollector = eventCollector;
         this.subBrokerManager = subBrokerManager;
 //        scheduler = new DeliveryScheduler(subBrokerManager);
-        scheduler = new DeliveryScheduler2(subBrokerManager);
+        scheduler = new DeliveryScheduler(subBrokerManager);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ForkJoinPool(DIST_MATCH_PARALLELISM.get(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {

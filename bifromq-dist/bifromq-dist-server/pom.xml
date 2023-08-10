@@ -63,10 +63,6 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-dist-rpc-definition</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.jctools</groupId>
-            <artifactId>jctools-core</artifactId>
-        </dependency>
         <!-- for testing -->
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

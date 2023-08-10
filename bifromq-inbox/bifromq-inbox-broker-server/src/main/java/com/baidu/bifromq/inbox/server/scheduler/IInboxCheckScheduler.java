@@ -11,10 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import java.util.Map;
+import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 
-public interface IDistWorkerCallScheduler extends IBatchCallScheduler<DistWorkerCall, Map<String, Integer>> {
+public interface IInboxCheckScheduler extends IBatchCallScheduler<HasInboxRequest, HasInboxReply> {
 }

@@ -30,10 +30,11 @@ import com.baidu.bifromq.dist.rpc.proto.SubReply;
 import com.baidu.bifromq.dist.rpc.proto.SubRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnsubReply;
 import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.dist.server.scheduler.DistCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
-import com.baidu.bifromq.dist.server.scheduler.DistWorkerCallScheduler2;
-import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.IGlobalDistCallRateSchedulerFactory;
+import com.baidu.bifromq.dist.server.scheduler.ISubCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.SubCall;
 import com.baidu.bifromq.dist.server.scheduler.SubCallResult;
 import com.baidu.bifromq.dist.server.scheduler.SubCallScheduler;
@@ -58,20 +59,20 @@ import lombok.extern.slf4j.Slf4j;
 public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final IEventCollector eventCollector;
     private final ICallScheduler<DistWorkerCall> distCallRateScheduler;
-    private final IDistWorkerCallScheduler distCallScheduler;
-    private final SubCallScheduler subCallScheduler;
+    private final IDistCallScheduler distCallScheduler;
+    private final ISubCallScheduler subCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
 
-    DistService(IBaseKVStoreClient kvStoreClient,
+    DistService(IBaseKVStoreClient distWorkerClient,
                 ISettingProvider settingProvider,
                 IEventCollector eventCollector,
                 ICRDTService crdtService,
                 IGlobalDistCallRateSchedulerFactory distCallRateScheduler) {
         this.eventCollector = eventCollector;
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
-//        this.distCallScheduler = new DistWorkerCallScheduler(this.distCallRateScheduler, kvStoreClient);
-        this.distCallScheduler = new DistWorkerCallScheduler2(this.distCallRateScheduler, kvStoreClient);
-        this.subCallScheduler = new SubCallScheduler(kvStoreClient);
+//        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient);
+        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient);
+        this.subCallScheduler = new SubCallScheduler(distWorkerClient);
         tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(k -> new RunningAverage(5));

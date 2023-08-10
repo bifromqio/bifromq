@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.starter;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_LOAD_TRACKING_SECONDS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_RANGE_LOAD;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_SPLIT_KEY_EST_THRESHOLD;
+
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -240,7 +244,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
             )
             .storeOptions(new KVRangeStoreOptions()
-                .setKvRangeOptions(new KVRangeOptions().setMaxRangeLoad(2_000_000))
+                .setKvRangeOptions(new KVRangeOptions()
+                    .setMaxRangeLoad(INBOX_MAX_RANGE_LOAD.get())
+                    .setSplitKeyThreshold(INBOX_SPLIT_KEY_EST_THRESHOLD.get())
+                    .setLoadTrackingWindowSec(INBOX_LOAD_TRACKING_SECONDS.get()))
                 .setDataEngineConfigurator(buildEngineConf(config
                     .getStateStoreConfig()
                     .getInboxStoreConfig()

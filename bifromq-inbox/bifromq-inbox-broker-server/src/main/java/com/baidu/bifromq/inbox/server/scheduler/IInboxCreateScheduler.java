@@ -11,8 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.plugin.subbroker;
+package com.baidu.bifromq.inbox.server.scheduler;
 
-public enum DeliveryResult {
-    OK, NO_INBOX, FAILED
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
+
+public interface IInboxCreateScheduler extends IBatchCallScheduler<CreateInboxRequest, CreateInboxReply> {
 }

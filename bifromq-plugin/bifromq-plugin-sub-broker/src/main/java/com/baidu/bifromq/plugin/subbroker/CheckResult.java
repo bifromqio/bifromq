@@ -11,16 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basescheduler;
+package com.baidu.bifromq.plugin.subbroker;
 
-import java.util.concurrent.CompletableFuture;
-
-public abstract class BatchCall2<Call, CallResult> {
-    public int weight(Call call) {
-        return 1;
-    }
-
-    public abstract void add(CallTask<Call, CallResult> callTask);
-
-    public abstract CompletableFuture<Void> execute();
+public enum CheckResult {
+    EXIST, NO_INBOX, FAILED
 }

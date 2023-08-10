@@ -23,7 +23,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.dist.client.ClearResult;
+import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import io.micrometer.core.instrument.Meter;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
@@ -36,7 +36,7 @@ public class GCAndStatsTest extends DistWorkerTest {
     public void gc() {
         when(receiverManager.get(anyInt())).thenReturn(mqttBroker);
         when(mqttBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(false));
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.NO_INBOX));
 
         when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));

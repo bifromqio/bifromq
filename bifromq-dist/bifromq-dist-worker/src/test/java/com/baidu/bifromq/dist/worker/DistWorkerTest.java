@@ -66,6 +66,7 @@ import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -95,8 +96,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -171,9 +170,9 @@ public abstract class DistWorkerTest {
         lenient().when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         lenient().when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
         lenient().when(mqttBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(true));
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.EXIST));
         lenient().when(inboxBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(true));
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.EXIST));
         lenient().when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
@@ -268,9 +267,9 @@ public abstract class DistWorkerTest {
             agentHost.shutdown();
             try {
                 Files.walk(dbRootDir)
-                        .sorted(Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
             } catch (IOException e) {
                 log.error("Failed to delete db root dir", e);
             }

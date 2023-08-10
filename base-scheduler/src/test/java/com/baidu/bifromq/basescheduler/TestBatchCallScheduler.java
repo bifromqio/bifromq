@@ -24,7 +24,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -33,14 +32,24 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
     private final Duration callDelay;
 
     public TestBatchCallScheduler(int queues, Duration callDelay) {
-        super("test_batch_call");
+        this(queues, callDelay, callDelay, callDelay.multipliedBy(2));
+    }
+
+    public TestBatchCallScheduler(int queues,
+                                  Duration callDelay,
+                                  Duration expectLatency,
+                                  Duration maxTolerantLatency) {
+        super("test_batch_call", expectLatency, maxTolerantLatency);
         this.queueNum = queues;
         this.callDelay = callDelay;
     }
 
     @Override
-    protected BatchCallBuilder<Integer, Integer> newBuilder(String name, int maxInflights, Integer batchKey) {
-        return new TestBatchCallerBuilder(name, maxInflights);
+    protected Batcher<Integer, Integer, Integer> newBatcher(String name,
+                                                            long expectLatencyNanos,
+                                                            long maxTolerantLatencyNanos,
+                                                            Integer integer) {
+        return new TestBatcher(integer, name, maxTolerantLatencyNanos);
     }
 
     @Override
@@ -48,41 +57,23 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
         return Optional.of(ThreadLocalRandom.current().nextInt(queueNum));
     }
 
-    public class TestBatchCallerBuilder extends BatchCallBuilder<Integer, Integer> {
-        @AllArgsConstructor
-        public class Task {
-            final int req;
-            final CompletableFuture<Integer> onDone = new CompletableFuture<>();
-        }
-
+    public class TestBatcher extends Batcher<Integer, Integer, Integer> {
         public class TestBatchCall implements IBatchCall<Integer, Integer> {
             private final AtomicInteger count = new AtomicInteger();
-            private final Queue<Task> batch = new ConcurrentLinkedQueue<>();
+            private final Queue<CallTask<Integer, Integer>> batch = new ConcurrentLinkedQueue<>();
             private CompletableFuture<Void> onBatchDone = new CompletableFuture<>();
-
-            @Override
-            public boolean isEmpty() {
-                return batch.isEmpty();
-            }
-
-            @Override
-            public boolean isEnough() {
-                return count.get() >= 10;
-            }
-
-            @Override
-            public CompletableFuture<Integer> add(Integer request) {
-                Task task = new Task(request);
-                batch.add(task);
-                count.incrementAndGet();
-                return task.onDone;
-            }
 
             @Override
             public void reset() {
                 count.set(0);
                 batch.clear();
                 onBatchDone = new CompletableFuture<>();
+            }
+
+            @Override
+            public void add(CallTask<Integer, Integer> callTask) {
+                batch.add(callTask);
+                count.incrementAndGet();
             }
 
             @Override
@@ -95,21 +86,23 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
 
         private final AtomicBoolean executing = new AtomicBoolean();
         private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        private final ScheduledExecutorService executor1 = Executors.newSingleThreadScheduledExecutor();
         private final ConcurrentLinkedQueue<TestBatchCall> calls;
 
 
-        public TestBatchCallerBuilder(String name, int maxInflights) {
-            super(name, maxInflights);
+        protected TestBatcher(Integer integer, String name, long maxTolerantLatencyNanos) {
+            super(integer, name, maxTolerantLatencyNanos / 2, maxTolerantLatencyNanos);
             this.calls = new ConcurrentLinkedQueue<>();
         }
 
         @Override
-        public IBatchCall newBatch() {
+        public IBatchCall<Integer, Integer> newBatch() {
             return new TestBatchCall();
         }
 
         @Override
         public void close() {
+            super.close();
             executor.shutdown();
         }
 
@@ -123,10 +116,12 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
             TestBatchCall call = calls.poll();
             if (call != null) {
                 executor.schedule(() -> {
-                    for (Task task : call.batch) {
-                        task.onDone.complete(task.req);
+                    for (CallTask<Integer, Integer> task : call.batch) {
+                        task.callResult.complete(task.call);
                     }
-                    call.onBatchDone.complete(null);
+                    executor1.execute(() -> {
+                        call.onBatchDone.complete(null);
+                    });
                     executing.set(false);
                     if (!calls.isEmpty()) {
                         exec();

@@ -17,13 +17,13 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineExpireTimeSeconds;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineOverflowDropOldest;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineQueueSize;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_INBOXES_PER_CREATE;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.basescheduler.BatchCallBuilder;
+import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.basescheduler.Batcher;
+import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
@@ -35,31 +35,29 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
-import org.jctools.maps.NonBlockingHashMap;
 
 @Slf4j
-public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxRequest, CreateInboxReply> {
+public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxRequest, CreateInboxReply>
+    implements IInboxCreateScheduler {
     private final ISettingProvider settingProvider;
-    private final int maxInboxesPerCreate;
 
-    public InboxCreateScheduler(IBaseKVStoreClient kvStoreClient, ISettingProvider settingProvider) {
-        super(kvStoreClient, "inbox_server_create");
+    public InboxCreateScheduler(IBaseKVStoreClient inboxStoreClient, ISettingProvider settingProvider) {
+        super(inboxStoreClient, "inbox_server_create");
         this.settingProvider = settingProvider;
-        maxInboxesPerCreate = INBOX_MAX_INBOXES_PER_CREATE.get();
-
     }
 
     @Override
-    protected BatchCallBuilder<CreateInboxRequest, CreateInboxReply> newBuilder(String name, int maxInflights,
-                                                                                KVRangeSetting rangeSetting) {
-        return new BatchCreateBuilder(name, maxInflights, rangeSetting, kvStoreClient);
+    protected Batcher<CreateInboxRequest, CreateInboxReply, KVRangeSetting> newBatcher(String name,
+                                                                                       long expectLatencyNanos,
+                                                                                       long maxTolerantLatencyNanos,
+                                                                                       KVRangeSetting range) {
+        return new InboxCreateBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, inboxStoreClient,
+            settingProvider);
     }
 
     @Override
@@ -67,22 +65,23 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
         return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
     }
 
-    private class BatchCreateBuilder extends BatchCallBuilder<CreateInboxRequest, CreateInboxReply> {
-        private class BatchCreate implements IBatchCall<CreateInboxRequest, CreateInboxReply> {
+    private static class InboxCreateBatcher extends Batcher<CreateInboxRequest, CreateInboxReply, KVRangeSetting> {
+        private class InboxCreateBatch implements IBatchCall<CreateInboxRequest, CreateInboxReply> {
             // key: scopedInboxIdUtf8
-            private final Map<String, CreateParams> inboxCreates = new NonBlockingHashMap<>();
+            private final Map<String, CreateParams> inboxCreates = new HashMap<>();
 
             // key: scopedInboxIdUtf8
-            private final Map<CreateInboxRequest, CompletableFuture<CreateInboxReply>> onInboxCreated =
-                new NonBlockingHashMap<>();
+            private final Map<CreateInboxRequest, CompletableFuture<CreateInboxReply>> onInboxCreated = new HashMap<>();
 
             @Override
-            public boolean isEmpty() {
-                return inboxCreates.isEmpty();
+            public void reset() {
+                inboxCreates.clear();
+                onInboxCreated.clear();
             }
 
             @Override
-            public CompletableFuture<CreateInboxReply> add(CreateInboxRequest request) {
+            public void add(CallTask<CreateInboxRequest, CreateInboxReply> callTask) {
+                CreateInboxRequest request = callTask.call;
                 ClientInfo client = request.getClientInfo();
                 String tenantId = client.getTenantId();
                 String scopedInboxIdUtf8 = scopedInboxId(tenantId, request.getInboxId()).toStringUtf8();
@@ -92,21 +91,14 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
                     .setDropOldest(settingProvider.provide(OfflineOverflowDropOldest, tenantId))
                     .setClient(client)
                     .build());
-                return onInboxCreated.computeIfAbsent(request, k -> new CompletableFuture<>());
-            }
-
-            @Override
-            public void reset() {
-                inboxCreates.clear();
-                onInboxCreated.clear();
+                onInboxCreated.put(request, callTask.callResult);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                batchInboxCount.record(inboxCreates.size());
                 Timer.Sample start = Timer.start();
-                return kvStoreClient.execute(range.leader,
+                return inboxStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
                             .setReqId(reqId)
                             .setVer(range.ver)
@@ -119,70 +111,49 @@ public class InboxCreateScheduler extends InboxUpdateScheduler<CreateInboxReques
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
-                        start.stop(batchCreateTimer);
-                        switch (reply.getCode()) {
-                            case Ok:
-                                try {
-                                    return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                        .getCreateInbox();
-                                } catch (InvalidProtocolBufferException e) {
-                                    log.error("Unable to parse rw co-proc output", e);
-                                    throw new RuntimeException(e);
-                                }
-                            default:
-                                log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
-                                throw new RuntimeException();
+                        if (reply.getCode() == ReplyCode.Ok) {
+                            try {
+                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
+                                    .getCreateInbox();
+                            } catch (InvalidProtocolBufferException e) {
+                                log.error("Unable to parse rw co-proc output", e);
+                                throw new RuntimeException(e);
+                            }
                         }
+                        log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
+                        throw new RuntimeException();
                     })
                     .handle((v, e) -> {
                         for (CreateInboxRequest request : onInboxCreated.keySet()) {
                             onInboxCreated.get(request).complete(CreateInboxReply.newBuilder()
                                 .setReqId(request.getReqId())
-                                .setResult(e == null ? CreateInboxReply.Result.OK :
-                                    CreateInboxReply.Result.ERROR)
+                                .setResult(e == null ? CreateInboxReply.Result.OK : CreateInboxReply.Result.ERROR)
                                 .build());
                         }
                         return null;
                     });
-
-            }
-
-            @Override
-            public boolean isEnough() {
-                return inboxCreates.size() > maxInboxesPerCreate;
             }
         }
 
-        private final IBaseKVStoreClient kvStoreClient;
-
+        private final IBaseKVStoreClient inboxStoreClient;
+        private final ISettingProvider settingProvider;
         private final KVRangeSetting range;
 
-        private final DistributionSummary batchInboxCount;
-        private final Timer batchCreateTimer;
-
-        BatchCreateBuilder(String name, int maxInflights, KVRangeSetting range,
-                           IBaseKVStoreClient kvStoreClient) {
-            super(name, maxInflights);
+        private InboxCreateBatcher(String name,
+                                   long expectLatencyNanos,
+                                   long maxTolerantLatencyNanos,
+                                   KVRangeSetting range,
+                                   IBaseKVStoreClient inboxStoreClient,
+                                   ISettingProvider settingProvider) {
+            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
             this.range = range;
-            this.kvStoreClient = kvStoreClient;
-            Tags tags = Tags.of("rangeId", KVRangeIdUtil.toShortString(range.id));
-            batchInboxCount = DistributionSummary.builder("inbox.server.create.inboxes")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            batchCreateTimer = Timer.builder("inbox.server.create.latency")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
+            this.inboxStoreClient = inboxStoreClient;
+            this.settingProvider = settingProvider;
         }
 
         @Override
-        public BatchCreate newBatch() {
-            return new BatchCreate();
-        }
-
-        @Override
-        public void close() {
-            Metrics.globalRegistry.remove(batchInboxCount);
-            Metrics.globalRegistry.remove(batchCreateTimer);
+        protected IBatchCall<CreateInboxRequest, CreateInboxReply> newBatch() {
+            return new InboxCreateBatch();
         }
     }
 }

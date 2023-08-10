@@ -27,6 +27,7 @@ import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
@@ -118,9 +119,9 @@ public class DistServiceState {
                     }
 
                     @Override
-                    public CompletableFuture<Boolean> hasInbox(long reqId, String tenantId, String inboxId,
-                                                               String delivererKey) {
-                        return CompletableFuture.completedFuture(true);
+                    public CompletableFuture<CheckResult> hasInbox(long reqId, String tenantId, String inboxId,
+                                                                   String delivererKey) {
+                        return CompletableFuture.completedFuture(CheckResult.EXIST);
                     }
 
                     @Override

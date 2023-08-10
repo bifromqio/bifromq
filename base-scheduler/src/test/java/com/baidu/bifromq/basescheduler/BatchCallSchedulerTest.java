@@ -47,13 +47,18 @@ public class BatchCallSchedulerTest {
     @SneakyThrows
     @Test
     public void batchCall() {
-        TestBatchCallScheduler scheduler = new TestBatchCallScheduler(4, Duration.ofMillis(10));
+        TestBatchCallScheduler scheduler =
+            new TestBatchCallScheduler(1, Duration.ofNanos(100), Duration.ofMillis(1), Duration.ofMillis(1));
         AtomicInteger count = new AtomicInteger(1000);
         CountDownLatch latch = new CountDownLatch(count.get());
         executor.submit(() -> {
             int i;
             while ((i = count.decrementAndGet()) >= 0) {
-                scheduler.schedule(i).whenComplete((v, e) -> latch.countDown());
+                int req = i;
+                scheduler.schedule(i).whenComplete((v, e) -> {
+                    log.info("{}: {}", req, e == null);
+                    latch.countDown();
+                });
             }
         });
         latch.await();
@@ -77,6 +82,7 @@ public class BatchCallSchedulerTest {
             });
         }
         try {
+            log.info("Waiting for  {}", respFutures.size());
             CompletableFuture.allOf(respFutures.toArray(CompletableFuture[]::new)).join();
         } catch (Throwable e) {
             Assert.assertEquals(DropException.EXCEED_LIMIT, e.getCause());

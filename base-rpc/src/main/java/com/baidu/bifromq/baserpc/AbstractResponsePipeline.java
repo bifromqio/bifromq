@@ -91,7 +91,7 @@ abstract class AbstractResponsePipeline<RequestT, ResponseT>
             sample.stop(RPCMeters.timer(meterKey, RPCMetric.PipelineReqProcessTime));
             // untrack current response future
             if (e != null) {
-                log.debug("Request handling with error in pipeline@{}: request={}", this.hashCode(), request, e);
+                log.error("Request handling with error in pipeline@{}: request={}", this.hashCode(), request, e);
                 RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqFailCount);
                 // any handling exception will cause pipeline close
                 fail(e);
