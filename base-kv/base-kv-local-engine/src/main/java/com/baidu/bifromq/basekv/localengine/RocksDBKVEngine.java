@@ -113,7 +113,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                     List<String> namespaces,
                     Predicate<String> checkpointInUse,
                     RocksDBKVEngineConfigurator c) {
-        this(overrideIdentity, namespaces, checkpointInUse, c, Duration.ofMinutes(5));
+        this(overrideIdentity, namespaces, checkpointInUse, c, Duration.ofSeconds(c.getGcIntervalInSec() * 2));
     }
 
     RocksDBKVEngine(String overrideIdentity,
@@ -388,6 +388,11 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     }
 
     @Override
+    protected void afterStart() {
+        scheduleGC();
+    }
+
+    @Override
     protected void doStop() {
         log.info("Stopping RocksDBKVEngine[{}]", identity);
         metricMgr.close();
@@ -422,8 +427,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         gcTask = this.bgTaskExecutor.schedule(this::gc, configurator.getGcIntervalInSec(), TimeUnit.MILLISECONDS);
     }
 
-    @VisibleForTesting
-    void gc() {
+    private void gc() {
         if (state() != State.STARTED) {
             return;
         }
@@ -438,6 +442,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                         .map(Path::toFile)
                         .forEach(File::delete);
                     cpPath.delete();
+                } else {
+                    log.debug("Checkpoint[{}] is in used", checkpointId);
                 }
             }
         } catch (Throwable e) {
@@ -867,6 +873,10 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
 
     private class MetricManager {
         private final DistributionSummary iterLatencySummary;
+        private final Gauge dataTotalSpaceGauge;
+        private final Gauge checkpointTotalSpaceGauge;
+        private final Gauge dataUsedSpaceGauge;
+        private final Gauge checkpointsUsedSpaceGauge;
         private final Gauge checkpointGauge;
         private final Gauge compactionTaskGauge;
         private final Timer compactionTimer;
@@ -881,7 +891,21 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                 .tags(tags)
                 .baseUnit("ns")
                 .register(Metrics.globalRegistry);
-            checkpointGauge = Gauge.builder("basekv.le.active.checkpoints", () -> openedCheckpoints.estimatedSize())
+            dataTotalSpaceGauge = Gauge.builder("basekv.le.total.data", dbRootDir::getTotalSpace)
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            checkpointTotalSpaceGauge = Gauge.builder("basekv.le.total.checkpoints", dbCheckPointRootDir::getTotalSpace)
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            dataUsedSpaceGauge = Gauge.builder("basekv.le.used.data",
+                    () -> dbRootDir.getTotalSpace() - dbRootDir.getUsableSpace())
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            checkpointsUsedSpaceGauge = Gauge.builder("basekv.le.used.checkpoints", () ->
+                    dbCheckPointRootDir.getTotalSpace() - dbCheckPointRootDir.getUsableSpace())
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            checkpointGauge = Gauge.builder("basekv.le.active.checkpoints", openedCheckpoints::estimatedSize)
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             compactionTaskGauge = Gauge.builder("basekv.le.rocksdb.compaction", compactionTasks::size)
@@ -945,6 +969,10 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
 
         void close() {
             Metrics.globalRegistry.remove(iterLatencySummary);
+            Metrics.globalRegistry.remove(dataTotalSpaceGauge);
+            Metrics.globalRegistry.remove(checkpointTotalSpaceGauge);
+            Metrics.globalRegistry.remove(dataUsedSpaceGauge);
+            Metrics.globalRegistry.remove(checkpointsUsedSpaceGauge);
             Metrics.globalRegistry.remove(checkpointGauge);
             Metrics.globalRegistry.remove(compactionTaskGauge);
             Metrics.globalRegistry.remove(compactionTimer);

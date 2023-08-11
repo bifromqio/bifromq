@@ -33,7 +33,7 @@ public class InMemoryKVEngineTest extends AbstractKVEngineTest {
     public void setup() {
         maintenanceTaskExecutor =
             newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
-        InMemoryKVEngineConfigurator configurator = new InMemoryKVEngineConfigurator().setGcIntervalInSec(60000);
+        InMemoryKVEngineConfigurator configurator = new InMemoryKVEngineConfigurator().setGcIntervalInSec(1);
         kvEngine = new InMemoryKVEngine(null, singletonList(NS), this::isUsed, configurator,
             Duration.ofSeconds(-1));
         kvEngine.start(maintenanceTaskExecutor);

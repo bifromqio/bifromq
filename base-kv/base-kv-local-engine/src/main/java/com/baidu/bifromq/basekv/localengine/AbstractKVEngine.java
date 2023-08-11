@@ -62,6 +62,7 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
                 doStart(bgTaskExecutor, metricTags);
                 metricMgr = new MetricManager(metricTags);
                 state.set(State.STARTED);
+                afterStart();
             } catch (Throwable e) {
                 state.set(State.FATAL_FAILURE);
                 throw e;
@@ -70,6 +71,10 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     }
 
     protected abstract void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags);
+
+    protected void afterStart() {
+
+    }
 
     @Override
     public final void stop() {
