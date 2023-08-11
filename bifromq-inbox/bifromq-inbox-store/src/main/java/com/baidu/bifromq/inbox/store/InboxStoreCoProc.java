@@ -96,6 +96,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -531,7 +532,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                       InboxMetadata metadata,
                                       IKVIterator itr,
                                       IKVReader reader,
-                                      IKVWriter writer) {
+                                      IKVWriter writer) throws InvalidProtocolBufferException {
         List<InboxMessage> qos0MsgList = new ArrayList<>();
         List<InboxMessage> qos1MsgList = new ArrayList<>();
         List<InboxMessage> qos2MsgList = new ArrayList<>();
@@ -563,10 +564,14 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             }
         }
         if (!qos0MsgList.isEmpty()) {
-            metadata = insertQoS0Inbox(scopedInboxId, metadata, qos0MsgList, itr, writer);
+            long nextSeq = insertToInbox(scopedInboxId, QoS.AT_MOST_ONCE, metadata.getQos0NextSeq(),
+                    KeyUtil::isQoS0MessageKey, KeyUtil::qos0InboxMsgKey, metadata, qos0MsgList, itr, writer);
+            metadata = metadata.toBuilder().setQos0NextSeq(nextSeq).build();
         }
         if (!qos1MsgList.isEmpty()) {
-            metadata = insertQoS1Inbox(scopedInboxId, metadata, qos1MsgList, itr, writer);
+            long nextSeq = insertToInbox(scopedInboxId, QoS.AT_LEAST_ONCE, metadata.getQos1NextSeq(),
+                    KeyUtil::isQoS1MessageKey, KeyUtil::qos1InboxMsgKey, metadata, qos1MsgList, itr, writer);
+            metadata = metadata.toBuilder().setQos1NextSeq(nextSeq).build();
         }
         if (!qos2MsgList.isEmpty()) {
             metadata = insertQoS2Inbox(scopedInboxId, metadata, qos2MsgList, itr, reader, writer);
@@ -574,14 +579,18 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return metadata;
     }
 
-    private InboxMetadata insertQoS0Inbox(ByteString scopedInboxId,
-                                          InboxMetadata metadata,
-                                          List<InboxMessage> messages,
-                                          IKVIterator itr, IKVWriter writeClient) {
-        itr.seek(qos0InboxMsgKey(scopedInboxId, 0));
-        long nextSeq = metadata.getQos0NextSeq();
-        long oldestSeq =
-            itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId) ? parseSeq(scopedInboxId, itr.key()) : nextSeq;
+    private long insertToInbox(ByteString scopedInboxId,
+                               QoS qos,
+                               long nextSeq,
+                               BiFunction<ByteString, ByteString, Boolean> keyChecker,
+                               BiFunction<ByteString, Long, ByteString> keyGenerator,
+                               InboxMetadata metadata,
+                               List<InboxMessage> messages,
+                               IKVIterator itr,
+                               IKVWriter writeClient) throws InvalidProtocolBufferException {
+        itr.seek(keyGenerator.apply(scopedInboxId, 0L));
+        long oldestSeq = itr.isValid() && keyChecker.apply(itr.key(), scopedInboxId) ?
+                parseSeq(scopedInboxId, itr.key()) : nextSeq;
         int current = (int) (nextSeq - oldestSeq);
         int dropCount = current + messages.size() - metadata.getLimit();
         int actualDropped = 0;
@@ -590,54 +599,64 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 if (current > 0) {
                     // drop all messages in the queue
                     writeClient.deleteRange(
-                        Range.newBuilder()
-                            .setStartKey(qos0InboxMsgKey(scopedInboxId, oldestSeq))
-                            .setEndKey(qos0InboxMsgKey(scopedInboxId, nextSeq))
-                            .build());
+                            Range.newBuilder()
+                                    .setStartKey(keyGenerator.apply(scopedInboxId, oldestSeq))
+                                    .setEndKey(keyGenerator.apply(scopedInboxId, nextSeq))
+                                    .build());
                     actualDropped += current;
                 }
                 // TODO: put a limit on value size?
                 InboxMessageList messageList =
-                    InboxMessageList.newBuilder()
-                        .addAllMessage(
-                            messages.size() > metadata.getLimit()
-                                ? messages.subList(messages.size() - metadata.getLimit(), messages.size())
-                                : messages)
-                        .build();
+                        InboxMessageList.newBuilder()
+                                .addAllMessage(
+                                    messages.size() > metadata.getLimit()
+                                            ? messages.subList(messages.size() - metadata.getLimit(), messages.size())
+                                            : messages)
+                                .build();
                 actualDropped += messages.size() - metadata.getLimit();
-                writeClient.insert(qos0InboxMsgKey(scopedInboxId, nextSeq), messageList.toByteString());
+                writeClient.insert(keyGenerator.apply(scopedInboxId, nextSeq), messageList.toByteString());
                 nextSeq += metadata.getLimit();
             } else {
                 if (dropCount > 0) {
                     long delBeforeSeq = dropCount + oldestSeq;
-                    // keep current key and move to next one
-                    ByteString delKey = itr.key();
-                    for (itr.next(); itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId); itr.next()) {
-                        long seq = parseSeq(scopedInboxId, itr.key());
-                        if (seq >= delBeforeSeq) {
-                            // all messages in delKey's value should be dropped
-                            writeClient.delete(delKey);
-                            actualDropped += seq - parseSeq(scopedInboxId, delKey);
-                            delKey = itr.key();
-                        } else {
-                            break;
-                        }
+                    itr.seekForPrev(keyGenerator.apply(scopedInboxId, delBeforeSeq));
+                    ByteString delKeyEntryKey = itr.key();
+                    long deleteEntryKeySeq = parseSeq(scopedInboxId, delKeyEntryKey);
+                    if (deleteEntryKeySeq < delBeforeSeq) {
+                        // entry value need to be partially deleted
+                        InboxMessageList inboxMessageList = InboxMessageList.parseFrom(itr.value());
+                        int listLength = inboxMessageList.getMessageCount();
+                        InboxMessageList trimList = InboxMessageList.newBuilder()
+                                .addAllMessage(inboxMessageList.getMessageList()
+                                        .subList((int) (delBeforeSeq - deleteEntryKeySeq), listLength))
+                                .build();
+                        writeClient.delete(delKeyEntryKey);
+                        writeClient.insert(keyGenerator.apply(scopedInboxId, delBeforeSeq), trimList.toByteString());
                     }
+                    if (deleteEntryKeySeq > oldestSeq) {
+                        // fully delete entries before the delKeyEntryKey
+                        itr.seekForPrev(keyGenerator.apply(scopedInboxId, deleteEntryKeySeq - 1));
+                        writeClient.deleteRange(Range.newBuilder()
+                                .setStartKey(keyGenerator.apply(scopedInboxId, oldestSeq))
+                                .setEndKey(itr.key())
+                                .build());
+                    }
+                    actualDropped += dropCount;
                 }
                 // TODO: put a limit on value size?
                 writeClient.insert(
-                    qos0InboxMsgKey(scopedInboxId, nextSeq),
-                    InboxMessageList.newBuilder().addAllMessage(messages).build().toByteString());
+                        keyGenerator.apply(scopedInboxId, nextSeq),
+                        InboxMessageList.newBuilder().addAllMessage(messages).build().toByteString());
                 nextSeq += messages.size();
             }
         } else {
             if (dropCount < messages.size()) {
                 // TODO: put a limit on value size?
                 InboxMessageList messageList =
-                    InboxMessageList.newBuilder()
-                        .addAllMessage(dropCount > 0 ? messages.subList(0, messages.size() - dropCount) : messages)
-                        .build();
-                writeClient.insert(qos0InboxMsgKey(scopedInboxId, nextSeq), messageList.toByteString());
+                        InboxMessageList.newBuilder()
+                                .addAllMessage(dropCount > 0 ? messages.subList(0, messages.size() - dropCount) : messages)
+                                .build();
+                writeClient.insert(keyGenerator.apply(scopedInboxId, nextSeq), messageList.toByteString());
                 if (dropCount > 0) {
                     actualDropped += dropCount;
                     nextSeq += messages.size() - dropCount;
@@ -650,96 +669,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         }
         if (actualDropped > 0) {
             eventCollector.report(getLocal(Overflowed.class)
-                .oldest(metadata.getDropOldest())
-                .qos(QoS.AT_MOST_ONCE)
-                .clientInfo(metadata.getClient())
-                .dropCount(actualDropped));
+                    .oldest(metadata.getDropOldest())
+                    .qos(qos)
+                    .clientInfo(metadata.getClient())
+                    .dropCount(actualDropped));
         }
-        return metadata.toBuilder().setQos0NextSeq(nextSeq).build();
-    }
-
-    private InboxMetadata insertQoS1Inbox(ByteString scopedInboxId,
-                                          InboxMetadata metadata,
-                                          List<InboxMessage> messages, IKVIterator itr,
-                                          IKVWriter writeClient) {
-        itr.seek(qos1InboxMsgKey(scopedInboxId, 0));
-        long nextSeq = metadata.getQos1NextSeq();
-        long oldestSeq =
-            itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId) ? parseSeq(scopedInboxId, itr.key()) : nextSeq;
-        int current = (int) (nextSeq - oldestSeq);
-        int dropCount = current + messages.size() - metadata.getLimit();
-        int actualDropped = 0;
-        if (metadata.getDropOldest()) {
-            if (messages.size() >= metadata.getLimit()) {
-                if (current > 0) {
-                    // drop all messages in the queue
-                    writeClient.deleteRange(
-                        Range.newBuilder()
-                            .setStartKey(qos1InboxMsgKey(scopedInboxId, oldestSeq))
-                            .setEndKey(qos1InboxMsgKey(scopedInboxId, nextSeq))
-                            .build());
-                    actualDropped += current;
-                }
-                // TODO: put a limit on value size?
-                InboxMessageList messageList =
-                    InboxMessageList.newBuilder()
-                        .addAllMessage(
-                            messages.size() > metadata.getLimit()
-                                ? messages.subList(messages.size() - metadata.getLimit(), messages.size())
-                                : messages)
-                        .build();
-                actualDropped += messages.size() - metadata.getLimit();
-                writeClient.insert(qos1InboxMsgKey(scopedInboxId, nextSeq), messageList.toByteString());
-                nextSeq += metadata.getLimit();
-            } else {
-                if (dropCount > 0) {
-                    long delBeforeSeq = dropCount + oldestSeq;
-                    // keep current key and move to next one
-                    ByteString delKey = itr.key();
-                    for (itr.next(); itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId); itr.next()) {
-                        long seq = parseSeq(scopedInboxId, itr.key());
-                        if (seq >= delBeforeSeq) {
-                            // all messages in delKey's value should be dropped
-                            writeClient.delete(delKey);
-                            actualDropped += seq - parseSeq(scopedInboxId, delKey);
-                            delKey = itr.key();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                // TODO: put a limit on value size?
-                writeClient.insert(
-                    qos1InboxMsgKey(scopedInboxId, nextSeq),
-                    InboxMessageList.newBuilder().addAllMessage(messages).build().toByteString());
-                nextSeq += messages.size();
-            }
-        } else {
-            if (dropCount < messages.size()) {
-                // TODO: put a limit on value size?
-                InboxMessageList messageList =
-                    InboxMessageList.newBuilder()
-                        .addAllMessage(dropCount > 0 ? messages.subList(0, messages.size() - dropCount) : messages)
-                        .build();
-                writeClient.insert(qos1InboxMsgKey(scopedInboxId, nextSeq), messageList.toByteString());
-                if (dropCount > 0) {
-                    actualDropped += dropCount;
-                    nextSeq += messages.size() - dropCount;
-                } else {
-                    nextSeq += messages.size();
-                }
-            } else {
-                actualDropped += dropCount;
-            }
-        }
-        if (actualDropped > 0) {
-            eventCollector.report(getLocal(Overflowed.class)
-                .oldest(metadata.getDropOldest())
-                .qos(QoS.AT_LEAST_ONCE)
-                .clientInfo(metadata.getClient())
-                .dropCount(actualDropped));
-        }
-        return metadata.toBuilder().setQos1NextSeq(nextSeq).build();
+        return nextSeq;
     }
 
     private InboxMetadata insertQoS2Inbox(ByteString scopedInboxId,
@@ -854,10 +789,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
                 if (hasExpired(metadata) || !request.getScopedInboxIdMap().get(scopedInboxIdUtf8)) {
                     clearInbox(scopedInboxId, metadata, reader.iterator(), writer);
-                    break;
+
+                }else {
+                    metadata = metadata.toBuilder().setLastFetchTime(clock.millis()).build();
+                    writer.put(scopedInboxId, metadata.toByteString());
                 }
-                metadata = metadata.toBuilder().setLastFetchTime(clock.millis()).build();
-                writer.put(scopedInboxId, metadata.toByteString());
             }
         }
         return TouchReply.getDefaultInstance();
@@ -895,54 +831,72 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                       InboxCommit inboxCommit,
                                       InboxMetadata metadata,
                                       IKVIterator itr,
-                                      IKVWriter writer) {
+                                      IKVWriter writer) throws InvalidProtocolBufferException {
         if (inboxCommit.hasQos0UpToSeq()) {
+            long oldestSeq = 0;
             itr.seek(qos0InboxPrefix(scopedInboxId));
             if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                long oldestSeq = parseSeq(scopedInboxId, itr.key());
-                if (oldestSeq <= inboxCommit.getQos0UpToSeq()) {
-                    ByteString delKey = itr.key();
-                    do {
-                        itr.next();
-                        if (!itr.isValid() || !isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                            if (inboxCommit.getQos0UpToSeq() == metadata.getQos0NextSeq() - 1) {
-                                writer.delete(delKey);
-                            }
-                            break;
-                        } else {
-                            if (parseSeq(scopedInboxId, itr.key()) <= inboxCommit.getQos0UpToSeq() + 1) {
-                                writer.delete(delKey);
-                                delKey = itr.key();
-                            }
-                        }
-                    } while (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId));
+                oldestSeq = parseSeq(scopedInboxId, itr.key());
+            }
+            itr.seekForPrev(qos0InboxMsgKey(scopedInboxId, inboxCommit.getQos0UpToSeq()));
+            if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
+                long currentEntrySeq = parseSeq(scopedInboxId, itr.key());
+                if (currentEntrySeq <= inboxCommit.getQos0UpToSeq()) {
+                    InboxMessageList inboxMessageList = InboxMessageList.parseFrom(itr.value());
+                    long deletedRange = inboxCommit.getQos0UpToSeq() - currentEntrySeq + 1;
+                    int messageCount = inboxMessageList.getMessageCount();
+                    writer.delete(itr.key());
+                    if (deletedRange < messageCount) {
+                        writer.put(qos0InboxMsgKey(scopedInboxId, inboxCommit.getQos0UpToSeq() + 1),
+                                InboxMessageList.newBuilder()
+                                        .addAllMessage(inboxMessageList.getMessageList()
+                                                .subList((int) deletedRange, messageCount))
+                                        .build().toByteString());
+                    }
+                    if (currentEntrySeq > oldestSeq) {
+                        itr.seekForPrev(qos0InboxMsgKey(scopedInboxId, currentEntrySeq - 1));
+                        writer.deleteRange(Range.newBuilder()
+                                .setStartKey(qos0InboxMsgKey(scopedInboxId, oldestSeq))
+                                .setEndKey(itr.key())
+                                .build());
+                    }
+                    oldestSeq = inboxCommit.getQos0UpToSeq() + 1;
                 }
             }
-            metadata = metadata.toBuilder().setQos0LastFetchBeforeSeq(inboxCommit.getQos0UpToSeq() + 1).build();
+            metadata = metadata.toBuilder().setQos0LastFetchBeforeSeq(oldestSeq).build();
         }
         if (inboxCommit.hasQos1UpToSeq()) {
+            long oldestSeq = 0;
             itr.seek(qos1InboxPrefix(scopedInboxId));
             if (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                long oldestSeq = parseSeq(scopedInboxId, itr.key());
-                if (oldestSeq <= inboxCommit.getQos1UpToSeq()) {
-                    ByteString delKey = itr.key();
-                    do {
-                        itr.next();
-                        if (!itr.isValid() || !isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                            if (inboxCommit.getQos1UpToSeq() == metadata.getQos1NextSeq() - 1) {
-                                writer.delete(delKey);
-                            }
-                            break;
-                        } else {
-                            if (parseSeq(scopedInboxId, itr.key()) <= inboxCommit.getQos1UpToSeq() + 1) {
-                                writer.delete(delKey);
-                                delKey = itr.key();
-                            }
-                        }
-                    } while (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId));
+                oldestSeq = parseSeq(scopedInboxId, itr.key());
+            }
+            itr.seekForPrev(qos1InboxMsgKey(scopedInboxId, inboxCommit.getQos1UpToSeq()));
+            if (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
+                long currentEntrySeq = parseSeq(scopedInboxId, itr.key());
+                if (currentEntrySeq <= inboxCommit.getQos1UpToSeq()) {
+                    InboxMessageList inboxMessageList = InboxMessageList.parseFrom(itr.value());
+                    long deletedRange = inboxCommit.getQos1UpToSeq() - currentEntrySeq + 1;
+                    int messageCount = inboxMessageList.getMessageCount();
+                    writer.delete(itr.key());
+                    if (deletedRange < messageCount) {
+                        writer.put(qos1InboxMsgKey(scopedInboxId, inboxCommit.getQos1UpToSeq() + 1),
+                                InboxMessageList.newBuilder()
+                                        .addAllMessage(inboxMessageList.getMessageList()
+                                                .subList((int) deletedRange, messageCount))
+                                        .build().toByteString());
+                    }
+                    if (currentEntrySeq > oldestSeq) {
+                        itr.seekForPrev(qos1InboxMsgKey(scopedInboxId, currentEntrySeq - 1));
+                        writer.deleteRange(Range.newBuilder()
+                                .setStartKey(qos1InboxMsgKey(scopedInboxId, oldestSeq))
+                                .setEndKey(itr.key())
+                                .build());
+                    }
+                    oldestSeq = inboxCommit.getQos1UpToSeq() + 1;
                 }
             }
-            metadata = metadata.toBuilder().setQos1LastCommitBeforeSeq(inboxCommit.getQos1UpToSeq() + 1).build();
+            metadata = metadata.toBuilder().setQos1LastCommitBeforeSeq(oldestSeq).build();
         }
         if (inboxCommit.hasQos2UpToSeq()) {
             itr.seek(qos2InboxPrefix(scopedInboxId));
