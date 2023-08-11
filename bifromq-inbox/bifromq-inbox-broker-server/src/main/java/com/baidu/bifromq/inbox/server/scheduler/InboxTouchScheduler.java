@@ -39,10 +39,10 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
 
     @Override
     protected Batcher<Touch, Void, KVRangeSetting> newBatcher(String name,
-                                                              long expectLatencyNanos,
-                                                              long maxTolerantLatencyNanos,
+                                                              long tolerableLatencyNanos,
+                                                              long burstLatencyNanos,
                                                               KVRangeSetting range) {
-        return new InboxTouchBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, inboxStoreClient);
+        return new InboxTouchBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
     }
 
     @Override
@@ -120,11 +120,11 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
         private final KVRangeSetting range;
 
         InboxTouchBatcher(String name,
-                          long expectLatencyNanos,
-                          long maxTolerantLatencyNanos,
+                          long tolerableLatencyNanos,
+                          long burstLatencyNanos,
                           KVRangeSetting range,
                           IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
             this.range = range;
             this.inboxStoreClient = inboxStoreClient;
         }

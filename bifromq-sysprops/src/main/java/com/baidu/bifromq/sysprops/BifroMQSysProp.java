@@ -26,8 +26,10 @@ public enum BifroMQSysProp {
     // further check if utf8 string contains any control character or non character according to [MQTT-1.5.3]
     MQTT_UTF8_SANITY_CHECK("mqtt_utf8_sanity_check", false, BooleanParser.INSTANCE),
     MAX_CLIENT_ID_LENGTH("max_client_id_length", 65535, IntegerParser.from(23, 65536)),
-    MAX_SHARE_GROUP_MEMBERS("max_shared_group_members", 200, IntegerParser.POSITIVE),
-    DIST_SERVER_MAX_TOLERANT_LATENCY_MS("dist_server_max_tolerant_latency_ms", 1000L, LongParser.POSITIVE),
+    DATA_PLANE_TOLERABLE_LATENCY_MS("data_plane_tolerable_latency_ms", 50L, LongParser.POSITIVE),
+    DATA_PLANE_BURST_LATENCY_MS("data_plane_burst_latency_ms", 1000L, LongParser.POSITIVE),
+    CONTROL_PLANE_TOLERABLE_LATENCY_MS("control_plane_tolerant_latency_ms", 100L, LongParser.POSITIVE),
+    CONTROL_PLANE_BURST_LATENCY_MS("control_plane_burst_latency_ms", 5000L, LongParser.POSITIVE),
     DIST_WORKER_CALL_QUEUES("dist_server_dist_worker_call_queues", 16, IntegerParser.POSITIVE),
     DIST_FAN_OUT_PARALLELISM("dist_worker_fanout_parallelism",
         Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 2), IntegerParser.POSITIVE),

@@ -50,10 +50,10 @@ public class InboxComSertScheduler
 
     @Override
     protected Batcher<ComSertCall, ComSertResult, KVRangeSetting> newBatcher(String name,
-                                                                             long expectLatencyNanos,
-                                                                             long maxTolerantLatencyNanos,
+                                                                             long tolerableLatencyNanos,
+                                                                             long burstLatencyNanos,
                                                                              KVRangeSetting range) {
-        return new InboxComSertBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, inboxStoreClient);
+        return new InboxComSertBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
     }
 
     @Override
@@ -195,11 +195,11 @@ public class InboxComSertScheduler
         private final KVRangeSetting range;
 
         private InboxComSertBatcher(String name,
-                                    long expectLatencyNanos,
-                                    long maxTolerantLatencyNanos,
+                                    long tolerableLatencyNanos,
+                                    long burstLatencyNanos,
                                     KVRangeSetting range,
                                     IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
             this.inboxStoreClient = inboxStoreClient;
             this.range = range;
         }

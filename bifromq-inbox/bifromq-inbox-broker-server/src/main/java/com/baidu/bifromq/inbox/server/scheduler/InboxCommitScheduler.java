@@ -47,10 +47,10 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
 
     @Override
     protected Batcher<CommitRequest, CommitReply, KVRangeSetting> newBatcher(String name,
-                                                                             long expectLatencyNanos,
-                                                                             long maxTolerantLatencyNanos,
+                                                                             long tolerableLatencyNanos,
+                                                                             long burstLatencyNanos,
                                                                              KVRangeSetting range) {
-        return new InboxCommitBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, inboxStoreClient);
+        return new InboxCommitBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
     }
 
     @Override
@@ -153,11 +153,11 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
         private final KVRangeSetting range;
 
         InboxCommitBatcher(String name,
-                           long expectLatencyNanos,
-                           long maxTolerantLatencyNanos,
+                           long tolerableLatencyNanos,
+                           long burstLatencyNanos,
                            KVRangeSetting range,
                            IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
             this.range = range;
             this.inboxStoreClient = inboxStoreClient;
         }

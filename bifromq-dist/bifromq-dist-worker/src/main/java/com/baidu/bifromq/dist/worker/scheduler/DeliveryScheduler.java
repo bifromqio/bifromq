@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.dist.worker.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_TOLERANT_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
@@ -42,17 +43,17 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
     private final ISubBrokerManager subBrokerManager;
 
     public DeliveryScheduler(ISubBrokerManager subBrokerManager) {
-        super("dist_worker_deliver_batcher", Duration.ofMillis(100L),
-            Duration.ofMillis(DIST_SERVER_MAX_TOLERANT_LATENCY_MS.get()));
+        super("dist_worker_deliver_batcher", Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
         this.subBrokerManager = subBrokerManager;
     }
 
     @Override
     protected Batcher<DeliveryRequest, DeliveryResult, DelivererKey> newBatcher(String name,
-                                                                                long expectLatencyNanos,
-                                                                                long maxTolerantLatencyNanos,
+                                                                                long tolerableLatencyNanos,
+                                                                                long burstLatencyNanos,
                                                                                 DelivererKey delivererKey) {
-        return new DeliveryCallBatcher(delivererKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
+        return new DeliveryCallBatcher(delivererKey, name, tolerableLatencyNanos, burstLatencyNanos);
     }
 
     @Override
@@ -107,9 +108,11 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
             }
         }
 
-        DeliveryCallBatcher(DelivererKey batcherKey, String name, long expectLatencyNanos,
-                            long maxTolerantLatencyNanos) {
-            super(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
+        DeliveryCallBatcher(DelivererKey batcherKey,
+                            String name,
+                            long tolerableLatencyNanos,
+                            long burstLatencyNanos) {
+            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
             int brokerId = batcherKey.subBrokerId();
             this.deliverer = subBrokerManager.get(brokerId).open(batcherKey.delivererKey());
         }

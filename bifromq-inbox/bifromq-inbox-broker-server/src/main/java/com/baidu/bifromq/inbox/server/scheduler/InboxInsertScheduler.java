@@ -46,10 +46,10 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
 
     @Override
     protected Batcher<MessagePack, SendResult.Result, KVRangeSetting> newBatcher(String name,
-                                                                                 long expectLatencyNanos,
-                                                                                 long maxTolerantLatencyNanos,
+                                                                                 long tolerableLatencyNanos,
+                                                                                 long burstLatencyNanos,
                                                                                  KVRangeSetting range) {
-        return new InboxInsertBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, inboxStoreClient);
+        return new InboxInsertBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
     }
 
     @Override
@@ -126,9 +126,12 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
         private final IBaseKVStoreClient inboxStoreClient;
         private final KVRangeSetting range;
 
-        InboxInsertBatcher(String name, long expectLatencyNanos, long maxTolerantLatencyNanos, KVRangeSetting range,
+        InboxInsertBatcher(String name,
+                           long tolerableLatencyNanos,
+                           long burstLatencyNanos,
+                           KVRangeSetting range,
                            IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
             this.range = range;
             this.inboxStoreClient = inboxStoreClient;
         }

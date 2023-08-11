@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.dist.client.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_TOLERANT_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
@@ -41,17 +42,17 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
     private final IRPCClient rpcClient;
 
     public DistServerCallScheduler(IRPCClient rpcClient) {
-        super("dist_client_send_batcher", Duration.ofMillis(2L),
-            Duration.ofMillis(DIST_SERVER_MAX_TOLERANT_LATENCY_MS.get()));
+        super("dist_client_send_batcher", Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
         this.rpcClient = rpcClient;
     }
 
     @Override
     protected Batcher<DistServerCall, Void, BatcherKey> newBatcher(String name,
-                                                                   long expectLatencyNanos,
-                                                                   long maxTolerantLatencyNanos,
+                                                                   long tolerableLatencyNanos,
+                                                                   long burstLatencyNanos,
                                                                    BatcherKey batcherKey) {
-        return new DistServerCallBatcher(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos,
+        return new DistServerCallBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
             rpcClient.createRequestPipeline(batcherKey.tenantId, null, null, emptyMap(),
                 DistServiceGrpc.getDistMethod()));
     }
@@ -112,10 +113,10 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
         }
 
         DistServerCallBatcher(BatcherKey batcherKey, String name,
-                              long expectedLatencyNanos,
-                              long maxTolerantLatencyNanos,
+                              long tolerableLatencyNanos,
+                              long burstLatencyNanos,
                               IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln) {
-            super(batcherKey, name, expectedLatencyNanos, maxTolerantLatencyNanos);
+            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
             this.ppln = ppln;
         }
 

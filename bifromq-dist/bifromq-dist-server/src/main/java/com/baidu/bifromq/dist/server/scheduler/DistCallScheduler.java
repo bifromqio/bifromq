@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.server.scheduler;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildBatchDistRequest;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_SERVER_MAX_TOLERANT_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -58,16 +58,16 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
     public DistCallScheduler(ICallScheduler<DistWorkerCall> reqScheduler,
                              IBaseKVStoreClient distWorkerClient) {
         super("dist_server_dist_batcher", reqScheduler, Duration.ofMillis(5L),
-            Duration.ofMillis(DIST_SERVER_MAX_TOLERANT_LATENCY_MS.get()));
+            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
         this.distWorkerClient = distWorkerClient;
     }
 
     @Override
     protected Batcher<DistWorkerCall, Map<String, Integer>, Integer> newBatcher(String name,
-                                                                                long expectLatencyNanos,
-                                                                                long maxTolerantLatencyNanos,
+                                                                                long tolerableLatencyNanos,
+                                                                                long burstLatencyNanos,
                                                                                 Integer batchKey) {
-        return new DistWorkerCallBatcher(batchKey, name, expectLatencyNanos, maxTolerantLatencyNanos, distWorkerClient);
+        return new DistWorkerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, distWorkerClient);
     }
 
     @Override
@@ -80,10 +80,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
         private final String orderKey = UUID.randomUUID().toString();
 
         protected DistWorkerCallBatcher(Integer batcherKey, String name,
-                                        long expectLatencyNanos,
-                                        long maxTolerantLatencyNanos,
+                                        long tolerableLatencyNanos,
+                                        long burstLatencyNanos,
                                         IBaseKVStoreClient distWorkerClient) {
-            super(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
             this.distWorkerClient = distWorkerClient;
         }
 

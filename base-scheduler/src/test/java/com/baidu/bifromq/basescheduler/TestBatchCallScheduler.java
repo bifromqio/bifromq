@@ -37,19 +37,19 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
 
     public TestBatchCallScheduler(int queues,
                                   Duration callDelay,
-                                  Duration expectLatency,
-                                  Duration maxTolerantLatency) {
-        super("test_batch_call", expectLatency, maxTolerantLatency);
+                                  Duration tolerableLatency,
+                                  Duration burstLatency) {
+        super("test_batch_call", tolerableLatency, burstLatency);
         this.queueNum = queues;
         this.callDelay = callDelay;
     }
 
     @Override
     protected Batcher<Integer, Integer, Integer> newBatcher(String name,
-                                                            long expectLatencyNanos,
-                                                            long maxTolerantLatencyNanos,
+                                                            long tolerableLatencyNanos,
+                                                            long burstLatencyNanos,
                                                             Integer integer) {
-        return new TestBatcher(integer, name, maxTolerantLatencyNanos);
+        return new TestBatcher(integer, name, burstLatencyNanos);
     }
 
     @Override
@@ -90,8 +90,8 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
         private final ConcurrentLinkedQueue<TestBatchCall> calls;
 
 
-        protected TestBatcher(Integer integer, String name, long maxTolerantLatencyNanos) {
-            super(integer, name, maxTolerantLatencyNanos / 2, maxTolerantLatencyNanos);
+        protected TestBatcher(Integer integer, String name, long burstLatencyNanos) {
+            super(integer, name, burstLatencyNanos / 2, burstLatencyNanos);
             this.calls = new ConcurrentLinkedQueue<>();
         }
 

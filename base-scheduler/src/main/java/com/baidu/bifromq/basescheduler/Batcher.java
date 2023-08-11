@@ -39,8 +39,8 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     protected final BatcherKey batcherKey;
     private final AtomicBoolean triggering = new AtomicBoolean();
     private final MovingAverage avgLatencyNanos;
-    private final long expectedLatencyNanos;
-    private final long maxTolerantLatencyNanos;
+    private final long tolerableLatencyNanos;
+    private final long burstLatencyNanos;
     private final AtomicInteger pipelineDepth = new AtomicInteger();
     private final AtomicLong maxPipelineDepth;
     private final Counter dropCounter;
@@ -52,19 +52,19 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     private final DistributionSummary queueingTimeSummary;
     private volatile int maxBatchSize = Integer.MAX_VALUE;
 
-    protected Batcher(BatcherKey batcherKey, String name, long expectedLatencyNanos, long maxTolerantLatencyNanos) {
-        this(batcherKey, name, expectedLatencyNanos, maxTolerantLatencyNanos, 1);
+    protected Batcher(BatcherKey batcherKey, String name, long tolerableLatencyNanos, long burstLatencyNanos) {
+        this(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, 1);
     }
 
     protected Batcher(BatcherKey batcherKey,
                       String name,
-                      long expectedLatencyNanos,
-                      long maxTolerantLatencyNanos,
+                      long tolerableLatencyNanos,
+                      long burstLatencyNanos,
                       int pipelineDepth) {
         this.name = name;
         this.batcherKey = batcherKey;
-        this.expectedLatencyNanos = expectedLatencyNanos;
-        this.maxTolerantLatencyNanos = maxTolerantLatencyNanos;
+        this.tolerableLatencyNanos = tolerableLatencyNanos;
+        this.burstLatencyNanos = burstLatencyNanos;
         this.maxPipelineDepth = new AtomicLong(pipelineDepth);
         avgLatencyNanos = new MovingAverage(100, Duration.ofSeconds(1));
         this.batchPool = new ArrayDeque<>(pipelineDepth);
@@ -99,7 +99,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     }
 
     public final CompletableFuture<CallResult> submit(Call request) {
-        if (avgLatencyNanos.estimate() < maxTolerantLatencyNanos) {
+        if (avgLatencyNanos.estimate() < burstLatencyNanos) {
             CallTask<Call, CallResult> callTask = new CallTask<>(request);
             boolean offered = callTaskBuffers.offer(callTask);
             assert offered;
@@ -186,10 +186,10 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     }
 
     private void updateMaxBatchSize(int batchSize, long latency) {
-        if (latency == expectedLatencyNanos) {
+        if (latency == tolerableLatencyNanos) {
             maxBatchSize = batchSize;
         } else {
-            maxBatchSize = Math.max(1, (int) (batchSize * expectedLatencyNanos * 1.0 / latency));
+            maxBatchSize = Math.max(1, (int) (batchSize * tolerableLatencyNanos * 1.0 / latency));
         }
     }
 }

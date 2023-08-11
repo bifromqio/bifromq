@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
+
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
@@ -26,7 +29,8 @@ public abstract class InboxReadScheduler<Req, Resp> extends BatchCallScheduler<R
     private final int queuesPerRange;
 
     public InboxReadScheduler(int queuesPerRange, IBaseKVStoreClient inboxStoreClient, String name) {
-        super(name, Duration.ofMillis(10L), Duration.ofSeconds(300));
+        super(name, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofSeconds(DATA_PLANE_BURST_LATENCY_MS.get()));
         Preconditions.checkArgument(queuesPerRange > 0, "Queues per range must be positive");
         this.inboxStoreClient = inboxStoreClient;
         this.queuesPerRange = queuesPerRange;
