@@ -66,7 +66,7 @@ public class KVRangeBalanceController {
 
     private MetricManager metricsManager;
     private Disposable descriptorSub;
-    private ScheduledFuture scheduledFuture;
+    private ScheduledFuture<?> scheduledFuture;
 
     public KVRangeBalanceController(IBaseKVStoreClient storeClient,
                                     KVRangeBalanceControllerOptions balancerOptions,
@@ -150,7 +150,7 @@ public class KVRangeBalanceController {
                 Optional<BalanceCommand> commandOpt = fromBalancer.balance();
                 if (commandOpt.isPresent()) {
                     BalanceCommand commandToRun = commandOpt.get();
-                    log.info("[{}]Run command: {}", storeClient.clusterId(), commandToRun);
+                    log.debug("[{}]Run command: {}", storeClient.clusterId(), commandToRun);
                     String balancerName = fromBalancer.getClass().getSimpleName();
                     String cmdName = commandToRun.getClass().getSimpleName();
                     Sample start = Timer.start();
@@ -244,7 +244,5 @@ public class KVRangeBalanceController {
                 Metrics.globalRegistry.remove(cmdRunTimer);
             }
         }
-
-
     }
 }

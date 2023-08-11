@@ -118,8 +118,7 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
                                     throw new RuntimeException(e);
                                 }
                             default:
-                                log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
-                                throw new RuntimeException();
+                                throw new RuntimeException(reply.getCode().name());
                         }
                     })
                     .handle((v, e) -> {
