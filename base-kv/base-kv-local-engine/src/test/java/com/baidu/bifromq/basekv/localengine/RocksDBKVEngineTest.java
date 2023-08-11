@@ -71,9 +71,10 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
         String DB_CHECKPOINT_DIR = "testDB_cp";
         RocksDBKVEngineConfigurator configurator = new RocksDBKVEngineConfigurator()
             .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .setGcIntervalInSec(1);
         kvEngine = new RocksDBKVEngine(null, List.of(IKVEngine.DEFAULT_NS, NS),
-            this::isUsed, configurator, Duration.ofSeconds(-1));
+            this::isUsed, configurator, Duration.ofSeconds(1));
         kvEngine.start(bgTaskExecutor);
     }
 

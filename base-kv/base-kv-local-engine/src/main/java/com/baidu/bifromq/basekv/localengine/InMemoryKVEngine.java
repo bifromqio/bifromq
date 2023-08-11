@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.localengine;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Comparator;
@@ -97,8 +96,12 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
     @Override
     protected void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
         this.gcExecutor = bgTaskExecutor;
-        scheduleNextGC();
         log.debug("InMemoryKVEngine[{}] initialized", id());
+    }
+
+    @Override
+    protected void afterStart() {
+        scheduleNextGC();
     }
 
     @SneakyThrows
@@ -335,8 +338,7 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
         gcFuture = gcExecutor.schedule(this::gc, configurator.getGcIntervalInSec(), TimeUnit.SECONDS);
     }
 
-    @VisibleForTesting
-    void gc() {
+    private void gc() {
         if (state() != State.STARTED) {
             return;
         }

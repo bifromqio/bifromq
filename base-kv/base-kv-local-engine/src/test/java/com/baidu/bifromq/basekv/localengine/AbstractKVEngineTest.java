@@ -17,13 +17,13 @@ import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import com.google.protobuf.ByteString;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
@@ -332,13 +332,7 @@ public abstract class AbstractKVEngineTest {
         String cpId1 = kvEngine.checkpoint();
         String cpId2 = kvEngine.checkpoint();
         cp.set(cpId1);
-        if (kvEngine instanceof InMemoryKVEngine) {
-            ((InMemoryKVEngine) kvEngine).gc();
-        } else if (kvEngine instanceof RocksDBKVEngine) {
-            ((RocksDBKVEngine) kvEngine).gc();
-        }
-        assertTrue(kvEngine.hasCheckpoint(cpId1));
-        assertFalse(kvEngine.hasCheckpoint(cpId2));
+        await().until(() -> kvEngine.hasCheckpoint(cpId1) && !kvEngine.hasCheckpoint(cpId2));
     }
 
     @Test

@@ -205,7 +205,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     private int compactMinTombstoneKeys = 50000;
 
     private double compactTombstonePercent = 0.3;
-    private long gcIntervalInSec = 300; // ms
+    private long gcIntervalInSec = 30;
 
     public RocksDBKVEngineConfigurator() {
         this.dbOptionsConfigurator = new BaseDBOptionConfigurator();
