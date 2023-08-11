@@ -30,6 +30,7 @@ public enum RPCMetric {
 
     ReqPipelineCreateCount("ppln.create.count", Meter.Type.COUNTER),
     ReqPipelineErrorCount("ppln.error.count", Meter.Type.COUNTER),
+    ReqPipelineCompleteCount("ppln.complete.count", Meter.Type.COUNTER),
     ReqPipelineDepth("ppln.depth.summary", Meter.Type.DISTRIBUTION_SUMMARY),
 
     PipelineReqAcceptCount("ppln.req.enqueue.count", Meter.Type.COUNTER),

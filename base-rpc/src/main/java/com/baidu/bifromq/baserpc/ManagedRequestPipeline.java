@@ -20,6 +20,7 @@ import com.baidu.bifromq.baserpc.exception.RequestRejectedException;
 import com.baidu.bifromq.baserpc.exception.RequestThrottledException;
 import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.baserpc.exception.ServiceUnavailableException;
+import com.baidu.bifromq.baserpc.exception.TransientFailureException;
 import com.baidu.bifromq.baserpc.loadbalancer.Constants;
 import com.baidu.bifromq.baserpc.metrics.RPCMeters;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
@@ -306,8 +307,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     .newCall(bluePrint.methodDesc(methodDescriptor.getFullMethodName()), callOptions), observer);
             // under In-Proc + DirectExecutor setting, asyncBidiStreamingCall will run on calling thread, this may cause
             // problem when client starts first. In that case the returned reqStream is already onError so we need a
-            // flag
-            // to distinguish this situation
+            // flag to distinguish this situation
             if (RPCContext.SELECTED_SERVER_ID_CTX_KEY.get().getServerId() != null && !observer.hasTerminated()) {
                 requester.set(reqStream);
                 log.trace("ReqPipeline@{} request stream@{} created",
@@ -366,15 +366,6 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             inflightTaskQueue.offer(requestTask);
         }
         return Optional.ofNullable(requestTask);
-    }
-
-    private void prepareForReFly() {
-        while (!inflightTaskQueue.isEmpty()) {
-            RequestTask<ReqT, RespT> refly = inflightTaskQueue.pollLast();
-            log.trace("ReqPipeline@{} of {} re-fly task: {}",
-                hashCode(), methodDescriptor.getBareMethodName(), refly.request);
-            preflightTaskQueue.addFirst(refly);
-        }
     }
 
     private Optional<RequestTask<ReqT, RespT>> prepareForAbort() {
@@ -546,8 +537,9 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 ManagedRequestPipeline.this.hashCode(),
                 methodDescriptor.getBareMethodName(),
                 requestStream.hashCode());
+            RPCMeters.recordCount(meterKey, RPCMetric.ReqPipelineCompleteCount);
             synchronized (ManagedRequestPipeline.this) {
-                prepareForReFly();
+                abortFlightRequests(new TransientFailureException("Abort inflight requests"));
                 requester.set(null);
                 if (state.get() == State.Closed) {
                     return;

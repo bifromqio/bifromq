@@ -14,6 +14,10 @@
 package com.baidu.bifromq.baserpc.exception;
 
 public class TransientFailureException extends RuntimeException {
+    public TransientFailureException(String message) {
+        super(message);
+    }
+
     public TransientFailureException(Throwable e) {
         super(e);
     }

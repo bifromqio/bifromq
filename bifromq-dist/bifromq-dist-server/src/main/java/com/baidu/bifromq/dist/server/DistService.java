@@ -70,7 +70,6 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                 IGlobalDistCallRateSchedulerFactory distCallRateScheduler) {
         this.eventCollector = eventCollector;
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
-//        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient);
         this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient);
         this.subCallScheduler = new SubCallScheduler(distWorkerClient);
         tenantFanouts = Caffeine.newBuilder()
