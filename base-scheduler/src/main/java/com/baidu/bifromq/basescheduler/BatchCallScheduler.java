@@ -18,6 +18,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import com.netflix.concurrency.limits.internal.Preconditions;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -31,25 +32,31 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
     implements IBatchCallScheduler<Call, CallResult> {
     private static final int BATCHER_EXPIRY_SECONDS = 3000;
     private final ICallScheduler<Call> callScheduler;
-    private final long expectLatencyNanos;
-    private final long maxTolerantLatencyNanos;
+    private final long tolerableLatencyNanos;
+    private final long burstLatencyNanos;
     private final LoadingCache<BatcherKey, Batcher<Call, CallResult, BatcherKey>> batchers;
     private final Gauge batcherNumGauge;
     private final Counter callSchedCounter;
     private final Counter callSubmitCounter;
 
-    public BatchCallScheduler(String name, Duration expectLatency, Duration maxTolerantLatency) {
+    public BatchCallScheduler(String name, Duration tolerableLatency, Duration burstLatency) {
         this(name, new ICallScheduler<>() {
-        }, expectLatency, maxTolerantLatency);
+        }, tolerableLatency, burstLatency);
     }
 
     public BatchCallScheduler(String name,
                               ICallScheduler<Call> reqScheduler,
-                              Duration expectLatency,
-                              Duration maxTolerantLatency) {
+                              Duration tolerableLatency,
+                              Duration burstLatency) {
+        Preconditions.checkArgument(!tolerableLatency.isNegative() && !tolerableLatency.isZero(),
+            "latency must be positive");
+        Preconditions.checkArgument(!burstLatency.isNegative() && !burstLatency.isZero(),
+            "latency must be positive");
+        Preconditions.checkArgument(tolerableLatency.compareTo(burstLatency) <= 0,
+            "tolerant latency must be shorter than burst latency");
         this.callScheduler = reqScheduler;
-        this.expectLatencyNanos = expectLatency.toNanos();
-        this.maxTolerantLatencyNanos = maxTolerantLatency.toNanos();
+        this.tolerableLatencyNanos = tolerableLatency.toNanos();
+        this.burstLatencyNanos = burstLatency.toNanos();
         batchers = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
             .expireAfterAccess(Duration.ofSeconds(BATCHER_EXPIRY_SECONDS))
@@ -59,7 +66,7 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
                         value.close();
                     }
                 })
-            .build(k -> newBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, k).init());
+            .build(k -> newBatcher(name, this.tolerableLatencyNanos, burstLatencyNanos, k).init());
         batcherNumGauge = Gauge.builder("batcher.num", batchers::estimatedSize)
             .tags("name", name)
             .register(Metrics.globalRegistry);
@@ -72,8 +79,8 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
     }
 
     protected abstract Batcher<Call, CallResult, BatcherKey> newBatcher(String name,
-                                                                        long expectLatencyNanos,
-                                                                        long maxTolerantLatencyNanos,
+                                                                        long tolerableLatencyNanos,
+                                                                        long burstLatencyNanos,
                                                                         BatcherKey key);
 
     protected abstract Optional<BatcherKey> find(Call call);

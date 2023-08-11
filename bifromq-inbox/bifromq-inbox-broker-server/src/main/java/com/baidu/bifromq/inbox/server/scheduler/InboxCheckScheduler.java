@@ -46,10 +46,10 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
 
     @Override
     protected Batcher<HasInboxRequest, HasInboxReply, InboxReadBatcherKey> newBatcher(String name,
-                                                                                      long expectLatency,
-                                                                                      long maxTolerantLatencyNanos,
+                                                                                      long tolerableLatencyNanos,
+                                                                                      long burstLatencyNanos,
                                                                                       InboxReadBatcherKey batcherKey) {
-        return new InboxCheckBatcher(batcherKey, name, expectLatency, maxTolerantLatencyNanos, inboxStoreClient);
+        return new InboxCheckBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, inboxStoreClient);
     }
 
     @Override
@@ -146,10 +146,10 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
 
         InboxCheckBatcher(InboxReadBatcherKey batcherKey,
                           String name,
-                          long expectLatencyNanos,
-                          long maxTolerantLatencyNanos,
+                          long tolerableLatencyNanos,
+                          long burstLatencyNanos,
                           IBaseKVStoreClient inboxStoreClient) {
-            super(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
             this.range = batcherKey.range;
             this.inboxStoreClient = inboxStoreClient;
             orderKey = this.hashCode() + "";

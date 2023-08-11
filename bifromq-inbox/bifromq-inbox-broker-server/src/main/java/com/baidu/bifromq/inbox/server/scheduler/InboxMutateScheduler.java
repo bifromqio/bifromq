@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
+
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
@@ -24,7 +27,8 @@ public abstract class InboxMutateScheduler<Req, Resp> extends BatchCallScheduler
     protected final IBaseKVStoreClient inboxStoreClient;
 
     public InboxMutateScheduler(IBaseKVStoreClient inboxStoreClient, String name) {
-        super(name, Duration.ofMillis(50L), Duration.ofSeconds(1));
+        super(name, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()), Duration.ofMillis(
+            DATA_PLANE_BURST_LATENCY_MS.get()));
         this.inboxStoreClient = inboxStoreClient;
     }
 

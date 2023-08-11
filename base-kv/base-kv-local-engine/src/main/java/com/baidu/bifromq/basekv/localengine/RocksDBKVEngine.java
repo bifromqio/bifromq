@@ -875,8 +875,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         private final DistributionSummary iterLatencySummary;
         private final Gauge dataTotalSpaceGauge;
         private final Gauge checkpointTotalSpaceGauge;
-        private final Gauge dataUsedSpaceGauge;
-        private final Gauge checkpointsUsedSpaceGauge;
+        private final Gauge dataUsableSpaceGauge;
+        private final Gauge checkpointsUsableSpaceGauge;
         private final Gauge checkpointGauge;
         private final Gauge compactionTaskGauge;
         private final Timer compactionTimer;
@@ -891,18 +891,18 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                 .tags(tags)
                 .baseUnit("ns")
                 .register(Metrics.globalRegistry);
-            dataTotalSpaceGauge = Gauge.builder("basekv.le.total.data", dbRootDir::getTotalSpace)
+            dataTotalSpaceGauge = Gauge.builder("basekv.le.rocksdb.total.data", dbRootDir::getTotalSpace)
                 .tags(tags)
                 .register(Metrics.globalRegistry);
-            checkpointTotalSpaceGauge = Gauge.builder("basekv.le.total.checkpoints", dbCheckPointRootDir::getTotalSpace)
+            checkpointTotalSpaceGauge =
+                Gauge.builder("basekv.le.rocksdb.total.checkpoints", dbCheckPointRootDir::getTotalSpace)
+                    .tags(tags)
+                    .register(Metrics.globalRegistry);
+            dataUsableSpaceGauge = Gauge.builder("basekv.le.rocksdb.usable.data", dbRootDir::getUsableSpace)
                 .tags(tags)
                 .register(Metrics.globalRegistry);
-            dataUsedSpaceGauge = Gauge.builder("basekv.le.used.data",
-                    () -> dbRootDir.getTotalSpace() - dbRootDir.getUsableSpace())
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            checkpointsUsedSpaceGauge = Gauge.builder("basekv.le.used.checkpoints", () ->
-                    dbCheckPointRootDir.getTotalSpace() - dbCheckPointRootDir.getUsableSpace())
+            checkpointsUsableSpaceGauge = Gauge.builder("basekv.le.rocksdb.usable.checkpoints",
+                    dbCheckPointRootDir::getUsableSpace)
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             checkpointGauge = Gauge.builder("basekv.le.active.checkpoints", openedCheckpoints::estimatedSize)
@@ -971,8 +971,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             Metrics.globalRegistry.remove(iterLatencySummary);
             Metrics.globalRegistry.remove(dataTotalSpaceGauge);
             Metrics.globalRegistry.remove(checkpointTotalSpaceGauge);
-            Metrics.globalRegistry.remove(dataUsedSpaceGauge);
-            Metrics.globalRegistry.remove(checkpointsUsedSpaceGauge);
+            Metrics.globalRegistry.remove(dataUsableSpaceGauge);
+            Metrics.globalRegistry.remove(checkpointsUsableSpaceGauge);
             Metrics.globalRegistry.remove(checkpointGauge);
             Metrics.globalRegistry.remove(compactionTaskGauge);
             Metrics.globalRegistry.remove(compactionTimer);

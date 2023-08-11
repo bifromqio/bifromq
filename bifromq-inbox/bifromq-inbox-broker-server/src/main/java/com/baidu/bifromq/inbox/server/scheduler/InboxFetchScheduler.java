@@ -43,10 +43,10 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
 
     @Override
     protected Batcher<IInboxFetchScheduler.InboxFetch, Fetched, InboxReadBatcherKey> newBatcher(String name,
-                                                                                                long expectLatencyNanos,
-                                                                                                long maxTolerantLatencyNanos,
+                                                                                                long tolerableLatencyNanos,
+                                                                                                long burstLatencyNanos,
                                                                                                 InboxReadBatcherKey inboxReadBatcherKey) {
-        return new InboxFetchBatcher(inboxReadBatcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos,
+        return new InboxFetchBatcher(inboxReadBatcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
             inboxStoreClient);
     }
 
@@ -158,10 +158,10 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
 
         InboxFetchBatcher(InboxReadBatcherKey batcherKey,
                           String name,
-                          long expectLatencyNanos,
-                          long maxTolerantLatencyNanos,
+                          long tolerableLatencyNanos,
+                          long burstLatencyNanos,
                           IBaseKVStoreClient inboxStoreClient) {
-            super(batcherKey, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
             this.range = batcherKey.range;
             this.inboxStoreClient = inboxStoreClient;
             rangeStoreId = selectStore(range);

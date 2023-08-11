@@ -53,10 +53,10 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
 
     @Override
     protected Batcher<CreateInboxRequest, CreateInboxReply, KVRangeSetting> newBatcher(String name,
-                                                                                       long expectLatencyNanos,
-                                                                                       long maxTolerantLatencyNanos,
+                                                                                       long tolerableLatencyNanos,
+                                                                                       long burstLatencyNanos,
                                                                                        KVRangeSetting range) {
-        return new InboxCreateBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, inboxStoreClient,
+        return new InboxCreateBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient,
             settingProvider);
     }
 
@@ -141,11 +141,11 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
 
         private InboxCreateBatcher(String name,
                                    long expectLatencyNanos,
-                                   long maxTolerantLatencyNanos,
+                                   long maxTolerableLatencyNanos,
                                    KVRangeSetting range,
                                    IBaseKVStoreClient inboxStoreClient,
                                    ISettingProvider settingProvider) {
-            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(range, name, expectLatencyNanos, maxTolerableLatencyNanos);
             this.range = range;
             this.inboxStoreClient = inboxStoreClient;
             this.settingProvider = settingProvider;

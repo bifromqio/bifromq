@@ -16,6 +16,8 @@ package com.baidu.bifromq.dist.server.scheduler;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.subInfoKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_TOLERABLE_LATENCY_MS;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -58,16 +60,17 @@ public class SubCallScheduler extends BatchCallScheduler<SubCall, SubCallResult,
     private final IBaseKVStoreClient distWorkerClient;
 
     public SubCallScheduler(IBaseKVStoreClient distWorkerClient) {
-        super("dist_server_update_batcher", Duration.ofMillis(100L), Duration.ofSeconds(60));
+        super("dist_server_update_batcher", Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
         this.distWorkerClient = distWorkerClient;
     }
 
     @Override
     protected Batcher<SubCall, SubCallResult, KVRangeSetting> newBatcher(String name,
-                                                                         long expectLatencyNanos,
-                                                                         long maxTolerantLatencyNanos,
+                                                                         long tolerableLatencyNanos,
+                                                                         long burstLatencyNanos,
                                                                          KVRangeSetting range) {
-        return new SubCallBatcher(name, expectLatencyNanos, maxTolerantLatencyNanos, range, distWorkerClient);
+        return new SubCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, distWorkerClient);
     }
 
     @Override
@@ -421,11 +424,11 @@ public class SubCallScheduler extends BatchCallScheduler<SubCall, SubCallResult,
         private final KVRangeSetting range;
 
         private SubCallBatcher(String name,
-                               long expectLatencyNanos,
-                               long maxTolerantLatencyNanos,
+                               long tolerableLatencyNanos,
+                               long burstLatencyNanos,
                                KVRangeSetting range,
                                IBaseKVStoreClient distWorkerClient) {
-            super(range, name, expectLatencyNanos, maxTolerantLatencyNanos);
+            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
             this.distWorkerClient = distWorkerClient;
             this.range = range;
         }
