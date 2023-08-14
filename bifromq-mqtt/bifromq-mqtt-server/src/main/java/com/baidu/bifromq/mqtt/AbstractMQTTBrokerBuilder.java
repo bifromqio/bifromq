@@ -22,10 +22,11 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.netty.channel.EventLoopGroup;
 import java.util.concurrent.Executor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 
+@Slf4j
 abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>> implements IMQTTBrokerBuilder<T> {
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(AbstractMQTTBrokerBuilder.class);
     int connectTimeoutSeconds = 20;
     int connectRateLimit = 1000;
     int disconnectRate = 1000;

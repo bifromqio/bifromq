@@ -26,13 +26,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalListener;
-import com.github.benmanes.caffeine.cache.Scheduler;
 import com.google.common.base.Ticker;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Metrics;
 import io.netty.channel.ChannelHandlerContext;
 import java.time.Duration;
 import java.util.Iterator;
@@ -53,17 +47,13 @@ public final class MQTTSessionContext {
     public final IRetainClient retainClient;
     public final ISessionDictClient sessionDictClient;
     public final String serverId;
-
     public final int maxResendTimes;
     public final int resendDelayMillis;
     public final int defaultKeepAliveTimeSeconds;
     // track under confirming id count per tenantId
     private final InUseQoS2MessageIds unreleasedQoS2MessageIds;
-    // cache for client dist pipeline
-    private final LoadingCache<ClientInfo, IRetainClient.IClientPipeline> clientRetainPipelines;
     private final FutureTracker bgTaskTracker;
     private final Ticker ticker;
-    private final Gauge retainPplnNumGauge;
 
     @Builder
     MQTTSessionContext(String serverId,
@@ -93,19 +83,6 @@ public final class MQTTSessionContext {
         this.maxResendTimes = maxResendTimes;
         this.resendDelayMillis = resendDelayMillis;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
-        this.clientRetainPipelines = Caffeine.newBuilder()
-            .scheduler(Scheduler.systemScheduler())
-            .expireAfterAccess(Duration.ofSeconds(30))
-            .removalListener((RemovalListener<ClientInfo, IRetainClient.IClientPipeline>)
-                (key, value, cause) -> {
-                    if (value != null) {
-                        log.trace("Close client retain pipeline: clientInfo={}, cause={}", key, cause);
-                        value.close();
-                    }
-                })
-            .build(retainClient::open);
-        retainPplnNumGauge = Gauge.builder("mqtt.server.ppln.retain.gauge", clientRetainPipelines::estimatedSize)
-            .register(Metrics.globalRegistry);
         this.bgTaskTracker = new FutureTracker();
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
     }
@@ -169,14 +146,6 @@ public final class MQTTSessionContext {
 
     public void confirm(String tenantId, String channelId, int qos2MessageId) {
         unreleasedQoS2MessageIds.release(tenantId, channelId, qos2MessageId);
-    }
-
-    public IRetainClient.IClientPipeline getClientRetainPipeline(ClientInfo clientInfo) {
-        return clientRetainPipelines.get(clientInfo);
-    }
-
-    public void closeClientRetainPipeline(ClientInfo clientInfo) {
-        clientRetainPipelines.invalidate(clientInfo);
     }
 
     public void addBgTask(Supplier<CompletableFuture<Void>> taskSupplier) {

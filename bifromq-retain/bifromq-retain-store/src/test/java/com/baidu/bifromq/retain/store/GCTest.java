@@ -13,18 +13,18 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
-import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.rpc.proto.MatchResult;
+import com.baidu.bifromq.retain.rpc.proto.Matched;
+import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.type.TopicMessage;
-
-import java.io.IOException;
 import java.time.Clock;
+import org.mockito.Mock;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class GCTest extends RetainStoreTest {
     @Mock
@@ -48,8 +48,9 @@ public class GCTest extends RetainStoreTest {
         TopicMessage message = message(topic, "hello", 0, 1);
         // make it expired
         when(clock.millis()).thenReturn(1100L);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
 
-        assertEquals(requestRetain(tenantId, 1, message).getResult(), RetainCoProcReply.Result.ERROR);
+        assertEquals(requestRetain(tenantId, message), RetainResult.ERROR);
     }
 
     @Test(groups = "integration")
@@ -58,24 +59,28 @@ public class GCTest extends RetainStoreTest {
         String topic1 = "/a";
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 1);
-        requestRetain(tenantId, 1, message1);
-        MatchCoProcReply matchReply = requestMatch(tenantId, topic1, 10);
-        assertEquals(matchReply.getMessagesCount(), 1);
-        assertEquals(matchReply.getMessages(0), message1);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
+
+        requestRetain(tenantId, message1);
+        MatchResult matchReply = requestMatch(tenantId, topic1, 10);
+        Matched matched = matchReply.getOk();
+        assertEquals(matched.getMessagesCount(), 1);
+        assertEquals(matched.getMessages(0), message1);
 
         when(clock.millis()).thenReturn(1100L);
 
         // message1 has expired
-        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 0);
 
         TopicMessage message2 = message(topic2, "world", 1000, 1);
-        assertEquals(requestRetain(tenantId, 1, message2).getResult(), RetainCoProcReply.Result.RETAINED);
 
-        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 0);
+        assertEquals(requestRetain(tenantId, message2), RetainResult.RETAINED);
+
+        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 0);
 
         matchReply = requestMatch(tenantId, topic2, 10);
-        assertEquals(matchReply.getMessagesCount(), 1);
-        assertEquals(matchReply.getMessages(0), message2);
+        assertEquals(matchReply.getOk().getMessagesCount(), 1);
+        assertEquals(matchReply.getOk().getMessages(0), message2);
 
         clearMessage(tenantId, topic2);
     }
@@ -85,13 +90,14 @@ public class GCTest extends RetainStoreTest {
         String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message1 = message(topic, "hello", 0, 1);
-        requestRetain(tenantId, 1, message1);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
+
+        requestRetain(tenantId, message1);
 
         when(clock.millis()).thenReturn(1100L);
 
-        assertEquals(requestRetain(tenantId, 1, message(topic, "")).getResult(),
-            RetainCoProcReply.Result.CLEARED);
-        assertEquals(requestMatch(tenantId, topic, 10).getMessagesCount(), 0);
+        assertEquals(requestRetain(tenantId, message(topic, "")), RetainResult.CLEARED);
+        assertEquals(requestMatch(tenantId, topic, 10).getOk().getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
@@ -102,25 +108,24 @@ public class GCTest extends RetainStoreTest {
         TopicMessage message1 = message(topic1, "hello", 0, 1);
         TopicMessage message2 = message(topic2, "world", 0, 1);
         TopicMessage message3 = message(topic2, "world", 1000, 1);
-        requestRetain(tenantId, 2, message1);
-        requestRetain(tenantId, 2, message2);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(2);
+
+        requestRetain(tenantId, message1);
+        requestRetain(tenantId, message2);
 
         when(clock.millis()).thenReturn(1100L);
 
 
-        assertEquals(requestRetain(tenantId, 2, message3).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message3), RetainResult.RETAINED);
 
-        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 0);
-        assertEquals(requestMatch(tenantId, topic2, 10).getMessagesCount(), 1);
-        assertEquals(requestMatch(tenantId, topic2, 10).getMessages(0), message3);
+        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic2, 10).getOk().getMessagesCount(), 1);
+        assertEquals(requestMatch(tenantId, topic2, 10).getOk().getMessages(0), message3);
 
         // message1 will be removed as well, so retain set size should be 1
-        assertEquals(requestRetain(tenantId, 2, message("/c", "abc")).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/c", "abc")), RetainResult.RETAINED);
         // no room
-        assertEquals(requestRetain(tenantId, 2, message("/d", "abc")).getResult(),
-            RetainCoProcReply.Result.ERROR);
+        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
 
         clearMessage(tenantId, topic2);
         clearMessage(tenantId, "/c");
@@ -133,24 +138,23 @@ public class GCTest extends RetainStoreTest {
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 2);
         TopicMessage message2 = message(topic2, "world", 0, 1);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(2);
 
-        requestRetain(tenantId, 2, message1);
-        requestRetain(tenantId, 2, message2);
+
+        requestRetain(tenantId, message1);
+        requestRetain(tenantId, message2);
 
         when(clock.millis()).thenReturn(1100L);
         // message2 expired
-        assertEquals(requestMatch(tenantId, topic1, 10).getMessagesCount(), 1);
-        assertEquals(requestMatch(tenantId, topic2, 10).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 1);
+        assertEquals(requestMatch(tenantId, topic2, 10).getOk().getMessagesCount(), 0);
 
-        assertEquals(requestRetain(tenantId, 2,
-            message("/c", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
-        assertEquals(requestRetain(tenantId, 2,
-            message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
+        assertEquals(requestRetain(tenantId, message("/c", "abc")), RetainResult.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
 
         when(clock.millis()).thenReturn(2100L);
         // now message1 expired
-        assertEquals(requestRetain(tenantId, 2,
-            message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.RETAINED);
 
         clearMessage(tenantId, "/c");
         clearMessage(tenantId, "/d");
@@ -162,17 +166,17 @@ public class GCTest extends RetainStoreTest {
         String topic = "/a";
         TopicMessage message1 = message(topic, "hello", 0, 2);
         TopicMessage message2 = message(topic, "world", 0, 1);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
 
-        requestRetain(tenantId, 1, message1);
-        requestRetain(tenantId, 1, message2);
+
+        requestRetain(tenantId, message1);
+        requestRetain(tenantId, message2);
 
         // no room for new message
-        assertEquals(requestRetain(tenantId, 1,
-            message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
+        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
         when(clock.millis()).thenReturn(1100L);
-        assertEquals(requestRetain(tenantId, 1,
-            message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
-        assertEquals(requestMatch(tenantId, topic, 10).getMessagesCount(), 0);
+        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.RETAINED);
+        assertEquals(requestMatch(tenantId, topic, 10).getOk().getMessagesCount(), 0);
 
         clearMessage(tenantId, "/d");
     }
@@ -182,17 +186,17 @@ public class GCTest extends RetainStoreTest {
         String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message = message(topic, "hello", 0, 1);
-        requestRetain(tenantId, 1, message);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
+
+        requestRetain(tenantId, message);
 
         requestGC(tenantId);
-        assertEquals(requestRetain(tenantId, 1,
-            message("/d", "abc")).getResult(), RetainCoProcReply.Result.ERROR);
+        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
 
         when(clock.millis()).thenReturn(1100L);
         requestGC(tenantId);
 
-        assertEquals(requestRetain(tenantId, 1,
-            message("/d", "abc")).getResult(), RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.RETAINED);
 
         clearMessage(tenantId, "/d");
     }

@@ -17,6 +17,7 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildBatchDistRequest;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -57,7 +58,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
 
     public DistCallScheduler(ICallScheduler<DistWorkerCall> reqScheduler,
                              IBaseKVStoreClient distWorkerClient) {
-        super("dist_server_dist_batcher", reqScheduler, Duration.ofMillis(5L),
+        super("dist_server_dist_batcher", reqScheduler, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
         this.distWorkerClient = distWorkerClient;
     }

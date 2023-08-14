@@ -13,10 +13,12 @@
 
 package com.baidu.bifromq.retain.store;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
-import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.rpc.proto.MatchResult;
+import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import org.testng.annotations.Test;
 
 public class DeleteBehaviorTest extends RetainStoreTest {
@@ -24,34 +26,34 @@ public class DeleteBehaviorTest extends RetainStoreTest {
     public void deleteFromEmptyRetainSet() {
         String tenantId = "tenantA";
         String topic = "/a/b/c";
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
         // empty payload signal deletion
-        RetainCoProcReply reply = requestRetain(tenantId, 10, message(topic, ""));
-        assertEquals(reply.getResult(), RetainCoProcReply.Result.CLEARED);
+        RetainResult reply = requestRetain(tenantId, message(topic, ""));
+        assertEquals(reply, RetainResult.CLEARED);
     }
 
     @Test(groups = "integration")
     public void deleteNonExisting() {
         String tenantId = "tenantA";
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
         // empty payload signal deletion
-        assertEquals(requestRetain(tenantId, 10, message("/a/b/c", "hello")).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/a/b/c", "hello")), RetainResult.RETAINED);
 
-        assertEquals(requestRetain(tenantId, 10, message("/a", "")).getResult(),
-            RetainCoProcReply.Result.CLEARED);
+        assertEquals(requestRetain(tenantId, message("/a", "")), RetainResult.CLEARED);
     }
 
     @Test(groups = "integration")
     public void deleteNonExpired() {
         String tenantId = "tenantA";
         String topic = "/a/b/c";
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
+
         // empty payload signal deletion
-        assertEquals(requestRetain(tenantId, 10, message(topic, "hello")).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message(topic, "hello")), RetainResult.RETAINED);
 
-        assertEquals(requestRetain(tenantId, 10, message(topic, "")).getResult(),
-            RetainCoProcReply.Result.CLEARED);
+        assertEquals(requestRetain(tenantId, message(topic, "")), RetainResult.CLEARED);
 
-        MatchCoProcReply matchReply = requestMatch(tenantId, topic, 10);
-        assertEquals(matchReply.getMessagesCount(), 0);
+        MatchResult matchReply = requestMatch(tenantId, topic, 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 0);
     }
 }

@@ -42,7 +42,7 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.basescheduler.exception.DropException;
+import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient.IInboxReader;
@@ -66,7 +66,6 @@ import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
-import com.baidu.bifromq.retain.client.IRetainClient.IClientPipeline;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -118,8 +117,6 @@ public abstract class BaseMQTTTest {
     protected IRPCClient.IMessageStream<Quit, Ping> kickStream;
     @Mock
     protected IInboxReader inboxReader;
-    @Mock
-    protected IClientPipeline retainPipeline;
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
     protected ILocalSessionRegistry sessionRegistry = new ILocalSessionRegistry() {
@@ -331,7 +328,7 @@ public abstract class BaseMQTTTest {
     protected void mockDistDrop() {
         when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class)))
-            .thenReturn(CompletableFuture.failedFuture(DropException.EXCEED_LIMIT));
+            .thenReturn(CompletableFuture.failedFuture(new ExceedLimitException("Mock exceed limit exception")));
     }
 
     protected void mockSessionReg() {
@@ -360,8 +357,8 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockRetainPipeline(RetainReply.Result result) {
-        when(retainClient.open(any(ClientInfo.class))).thenReturn(retainPipeline);
-        when(retainPipeline.retain(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt()))
+        when(retainClient.retain(anyLong(), anyString(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+            any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(result).build()));
     }
 

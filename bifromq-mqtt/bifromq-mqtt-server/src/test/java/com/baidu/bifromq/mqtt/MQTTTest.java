@@ -224,6 +224,7 @@ class MQTTTest {
             .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
+            .settingProvider(settingProvider)
             .storeClient(retainStoreKVStoreClient)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
@@ -236,7 +237,6 @@ class MQTTTest {
             .build();
         retainServer = IRetainServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
-            .settingProvider(settingProvider)
             .retainStoreClient(retainStoreKVStoreClient)
             .build();
 

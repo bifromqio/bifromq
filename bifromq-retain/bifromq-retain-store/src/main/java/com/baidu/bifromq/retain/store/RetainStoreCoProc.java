@@ -14,7 +14,11 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
+import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.retain.utils.TopicUtil.isWildcardTopicFilter;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.basekv.localengine.RangeUtil;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -24,12 +28,19 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchCoProcReply;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchCoProcRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainCoProcReply;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainCoProcRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
-import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
-import com.baidu.bifromq.retain.rpc.proto.MatchCoProcRequest;
-import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
-import com.baidu.bifromq.retain.rpc.proto.RetainCoProcRequest;
+import com.baidu.bifromq.retain.rpc.proto.MatchError;
+import com.baidu.bifromq.retain.rpc.proto.MatchResult;
+import com.baidu.bifromq.retain.rpc.proto.MatchResultPack;
+import com.baidu.bifromq.retain.rpc.proto.Matched;
+import com.baidu.bifromq.retain.rpc.proto.RetainResult;
+import com.baidu.bifromq.retain.rpc.proto.RetainResultPack;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
@@ -37,11 +48,13 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcOutput;
 import com.baidu.bifromq.retain.rpc.proto.RetainSetMetadata;
 import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.retain.utils.TopicUtil;
+import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Clock;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -52,10 +65,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class RetainStoreCoProc implements IKVRangeCoProc {
     private final Supplier<IKVRangeReader> rangeReaderProvider;
+    private final ISettingProvider settingProvider;
     private final Clock clock;
 
-    RetainStoreCoProc(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, Clock clock) {
+    RetainStoreCoProc(KVRangeId id,
+                      Supplier<IKVRangeReader> rangeReaderProvider,
+                      ISettingProvider settingProvider,
+                      Clock clock) {
         this.rangeReaderProvider = rangeReaderProvider;
+        this.settingProvider = settingProvider;
         this.clock = clock;
     }
 
@@ -64,10 +82,10 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         try {
             RetainServiceROCoProcInput coProcInput = RetainServiceROCoProcInput.parseFrom(input);
             switch (coProcInput.getTypeCase()) {
-                case MATCHREQUEST:
-                    return match(coProcInput.getMatchRequest(), reader)
+                case MATCH:
+                    return batchMatch(coProcInput.getMatch(), reader)
                         .thenApply(v -> RetainServiceROCoProcOutput.newBuilder()
-                            .setMatchReply(v).build().toByteString());
+                            .setMatch(v).build().toByteString());
                 default:
                     log.error("Unknown co proc type {}", coProcInput.getTypeCase());
                     return CompletableFuture.failedFuture(
@@ -84,21 +102,17 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     @Override
     public Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter writer) {
         RetainServiceRWCoProcInput coProcInput = RetainServiceRWCoProcInput.parseFrom(input);
-        final ByteString output;
-        switch (coProcInput.getTypeCase()) {
-            case RETAINREQUEST:
-                output = RetainServiceRWCoProcOutput.newBuilder()
-                    .setRetainReply(retain(coProcInput.getRetainRequest(), reader, writer)).build()
-                    .toByteString();
-                break;
-            case GCREQUEST:
-                output = RetainServiceRWCoProcOutput.newBuilder()
-                    .setGcReply(gc(coProcInput.getGcRequest(), reader, writer)).build().toByteString();
-                break;
-            default:
+        final ByteString output = switch (coProcInput.getTypeCase()) {
+            case RETAIN -> RetainServiceRWCoProcOutput.newBuilder()
+                .setRetain(batchRetain(coProcInput.getRetain(), reader, writer)).build()
+                .toByteString();
+            case GCREQUEST -> RetainServiceRWCoProcOutput.newBuilder()
+                .setGcReply(gc(coProcInput.getGcRequest(), reader, writer)).build().toByteString();
+            default -> {
                 log.error("Unknown co proc type {}", coProcInput.getTypeCase());
                 throw new IllegalStateException("Unknown co proc type " + coProcInput.getTypeCase());
-        }
+            }
+        };
         return () -> output;
     }
 
@@ -107,92 +121,108 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     }
 
-    @SneakyThrows
-    private CompletableFuture<MatchCoProcReply> match(MatchCoProcRequest request, IKVReader reader) {
-        log.trace("Handling match request:\n{}", request);
-        if (request.getLimit() == 0) {
+    private CompletableFuture<BatchMatchCoProcReply> batchMatch(BatchMatchCoProcRequest request, IKVReader reader) {
+        BatchMatchCoProcReply.Builder replyBuilder = BatchMatchCoProcReply.newBuilder().setReqId(request.getReqId());
+        request.getMatchParamsMap().forEach((tenantId, matchParams) -> {
+            MatchResultPack.Builder resultPackBuilder = MatchResultPack.newBuilder();
+            matchParams.getTopicFiltersMap().forEach((topicFilter, limit) -> {
+                MatchResult.Builder resultBuilder = MatchResult.newBuilder();
+                try {
+                    resultBuilder.setOk(Matched.newBuilder()
+                        .addAllMessages(match(tenantNS(tenantId), topicFilter, limit, reader)));
+                } catch (Throwable e) {
+                    resultBuilder.setError(MatchError.getDefaultInstance());
+                }
+                resultPackBuilder.putResults(topicFilter, resultBuilder.build());
+            });
+            replyBuilder.putResultPack(tenantId, resultPackBuilder.build());
+        });
+        return CompletableFuture.completedFuture(replyBuilder.build());
+    }
+
+    private List<TopicMessage> match(ByteString tenantNS,
+                                     String topicFilter,
+                                     int limit,
+                                     IKVReader reader) throws Exception {
+        if (limit == 0) {
             // TODO: report event: nothing to match
-            return CompletableFuture.completedFuture(MatchCoProcReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setResult(MatchCoProcReply.Result.OK)
-                .build());
+            return emptyList();
         }
-        ByteString tenantNS = request.getTenantNS();
         Range range = Range.newBuilder()
             .setStartKey(tenantNS)
             .setEndKey(RangeUtil.upperBound(tenantNS))
             .build();
-        IKVIterator itr = reader.iterator();
-        itr.seek(range.getStartKey());
-        if (!itr.isValid()) {
-            return CompletableFuture.completedFuture(MatchCoProcReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setResult(MatchCoProcReply.Result.OK)
-                .build());
-        }
-        if (!isWildcardTopicFilter(request.getTopicFilter())) {
-            Optional<ByteString> val = reader.get(KeyUtil.retainKey(tenantNS, request.getTopicFilter()));
-            if (val.isPresent()) {
-                TopicMessage message = TopicMessage.parseFrom(val.get());
-                if (message.getMessage().getExpireTimestamp() > clock.millis()) {
-                    return CompletableFuture.completedFuture(MatchCoProcReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(MatchCoProcReply.Result.OK)
-                        .addMessages(message)
-                        .build());
-                }
+        try (IKVIterator itr = reader.iterator()) {
+            itr.seek(range.getStartKey());
+            if (!itr.isValid()) {
+                return emptyList();
             }
-            return CompletableFuture.completedFuture(MatchCoProcReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setResult(MatchCoProcReply.Result.OK)
-                .build());
-        }
-        // deal with wildcard topic filter
-        List<String> matchLevels = TopicUtil.parse(request.getTopicFilter(), false);
-        MatchCoProcReply.Builder replyBuilder = MatchCoProcReply.newBuilder()
-            .setReqId(request.getReqId()).setResult(MatchCoProcReply.Result.OK);
-        itr.seek(KeyUtil.retainKeyPrefix(tenantNS, matchLevels));
-        while (itr.isValid() &&
-            compare(itr.key(), range.getEndKey()) < 0 &&
-            replyBuilder.getMessagesCount() < request.getLimit()) {
-            List<String> topicLevels = KeyUtil.parseTopic(itr.key());
-            if (TopicUtil.match(topicLevels, matchLevels)) {
-                TopicMessage message = TopicMessage.parseFrom(itr.value());
-                if (message.getMessage().getExpireTimestamp() > clock.millis()) {
-                    replyBuilder.addMessages(message);
+            if (!isWildcardTopicFilter(topicFilter)) {
+                Optional<ByteString> val = reader.get(KeyUtil.retainKey(tenantNS, topicFilter));
+                if (val.isPresent()) {
+                    TopicMessage message = TopicMessage.parseFrom(val.get());
+                    if (message.getMessage().getExpireTimestamp() > clock.millis()) {
+                        return singletonList(message);
+                    }
                 }
+                return emptyList();
             }
-            itr.next();
+            // deal with wildcard topic filter
+            List<String> matchLevels = TopicUtil.parse(topicFilter, false);
+            List<TopicMessage> messages = new LinkedList<>();
+            itr.seek(KeyUtil.retainKeyPrefix(tenantNS, matchLevels));
+            while (itr.isValid() && compare(itr.key(), range.getEndKey()) < 0 && messages.size() < limit) {
+                List<String> topicLevels = KeyUtil.parseTopic(itr.key());
+                if (TopicUtil.match(topicLevels, matchLevels)) {
+                    TopicMessage message = TopicMessage.parseFrom(itr.value());
+                    if (message.getMessage().getExpireTimestamp() > clock.millis()) {
+                        messages.add(message);
+                    }
+                }
+                itr.next();
+            }
+            return messages;
         }
-        return CompletableFuture.completedFuture(replyBuilder.build());
     }
 
-    private RetainCoProcReply retain(RetainCoProcRequest request, IKVReader reader, IKVWriter writer) {
+    private BatchRetainCoProcReply batchRetain(BatchRetainCoProcRequest request, IKVReader reader, IKVWriter writer) {
+        BatchRetainCoProcReply.Builder replyBuilder =
+            BatchRetainCoProcReply.newBuilder().setReqId(request.getReqId());
+        request.getRetainMessagePackMap().forEach((tenantId, retainMsgPack) -> {
+            int maxRetainTopics = settingProvider.provide(RetainedTopicLimit, tenantId);
+            RetainResultPack.Builder resultBuilder = RetainResultPack.newBuilder();
+            retainMsgPack.getTopicMessagesMap().forEach((topic, retainMsg) -> {
+                resultBuilder.putResults(topic, retain(tenantId, topic, retainMsg.getMessage(),
+                    retainMsg.getPublisher(), maxRetainTopics, reader, writer));
+            });
+            replyBuilder.putResults(tenantId, resultBuilder.build());
+        });
+        return replyBuilder.build();
+    }
+
+    private RetainResult retain(String tenantId,
+                                String topic,
+                                Message message,
+                                ClientInfo publisher,
+                                int maxRetainTopics,
+                                IKVReader reader,
+                                IKVWriter writer) {
         try {
-            ByteString tenantNS = KeyUtil.tenantNS(request.getTenantId());
+            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
             Optional<ByteString> metaBytes = reader.get(tenantNS);
             TopicMessage topicMessage = TopicMessage.newBuilder()
-                .setTopic(request.getTopic())
-                .setMessage(Message.newBuilder()
-                    .setMessageId(request.getReqId())
-                    .setPubQoS(request.getQos())
-                    .setTimestamp(request.getTimestamp())
-                    .setExpireTimestamp(request.getExpireTimestamp())
-                    .setPayload(request.getMessage())
-                    .build())
-                .setPublisher(request.getPublisher())
+                .setTopic(topic)
+                .setMessage(message)
+                .setPublisher(publisher)
                 .build();
             ByteString retainKey = KeyUtil.retainKey(tenantNS, topicMessage.getTopic());
             long now = clock.millis();
             if (topicMessage.getMessage().getExpireTimestamp() <= now) {
                 // already expired
-                return RetainCoProcReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setResult(RetainCoProcReply.Result.ERROR)
-                    .build();
+                return RetainResult.ERROR;
             }
             if (!metaBytes.isPresent()) {
-                if (request.getMaxRetainedTopics() > 0 && !topicMessage.getMessage().getPayload().isEmpty()) {
+                if (maxRetainTopics > 0 && !topicMessage.getMessage().getPayload().isEmpty()) {
                     // this is the first message to be retained
                     RetainSetMetadata metadata = RetainSetMetadata.newBuilder()
                         .setCount(1)
@@ -200,21 +230,12 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         .build();
                     writer.put(tenantNS, metadata.toByteString());
                     writer.put(retainKey, topicMessage.toByteString());
-                    return RetainCoProcReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(RetainCoProcReply.Result.RETAINED)
-                        .build();
+                    return RetainResult.RETAINED;
                 } else {
                     if (topicMessage.getMessage().getPayload().isEmpty()) {
-                        return RetainCoProcReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(RetainCoProcReply.Result.CLEARED)
-                            .build();
+                        return RetainResult.CLEARED;
                     } else {
-                        return RetainCoProcReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(RetainCoProcReply.Result.ERROR)
-                            .build();
+                        return RetainResult.ERROR;
                     }
                 }
             } else {
@@ -242,43 +263,31 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         }
 
                     }
-                    return RetainCoProcReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(RetainCoProcReply.Result.CLEARED)
-                        .build();
+                    return RetainResult.CLEARED;
                 }
                 if (!val.isPresent()) {
                     // retain new message
-                    if (metadata.getCount() >= request.getMaxRetainedTopics()) {
+                    if (metadata.getCount() >= maxRetainTopics) {
                         if (metadata.getEstExpire() <= now) {
                             // try to make some room via gc
                             metadata = gc(now, tenantNS, metadata, reader, writer);
-                            if (metadata.getCount() < request.getMaxRetainedTopics()) {
+                            if (metadata.getCount() < maxRetainTopics) {
                                 metadata = metadata.toBuilder()
                                     .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
                                         metadata.getEstExpire()))
                                     .setCount(metadata.getCount() + 1).build();
                                 writer.put(retainKey, topicMessage.toByteString());
                                 writer.put(tenantNS, metadata.toByteString());
-                                return RetainCoProcReply.newBuilder()
-                                    .setReqId(request.getReqId())
-                                    .setResult(RetainCoProcReply.Result.RETAINED)
-                                    .build();
+                                return RetainResult.RETAINED;
                             } else {
                                 // still no enough room
                                 writer.put(tenantNS, metadata.toByteString());
-                                return RetainCoProcReply.newBuilder()
-                                    .setReqId(request.getReqId())
-                                    .setResult(RetainCoProcReply.Result.ERROR)
-                                    .build();
+                                return RetainResult.ERROR;
                             }
                         } else {
                             // no enough room
                             // TODO: report event: exceed limit
-                            return RetainCoProcReply.newBuilder()
-                                .setReqId(request.getReqId())
-                                .setResult(RetainCoProcReply.Result.ERROR)
-                                .build();
+                            return RetainResult.ERROR;
                         }
                     } else {
                         metadata = metadata.toBuilder()
@@ -287,18 +296,15 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                             .setCount(metadata.getCount() + 1).build();
                         writer.put(retainKey, topicMessage.toByteString());
                         writer.put(tenantNS, metadata.toByteString());
-                        return RetainCoProcReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(RetainCoProcReply.Result.RETAINED)
-                            .build();
+                        return RetainResult.RETAINED;
                     }
                 } else {
                     // replace existing
                     TopicMessage existing = TopicMessage.parseFrom(val.get());
                     if (existing.getMessage().getExpireTimestamp() <= now &&
-                        metadata.getCount() >= request.getMaxRetainedTopics()) {
+                        metadata.getCount() >= maxRetainTopics) {
                         metadata = gc(now, tenantNS, metadata, reader, writer);
-                        if (metadata.getCount() < request.getMaxRetainedTopics()) {
+                        if (metadata.getCount() < maxRetainTopics) {
                             metadata = metadata.toBuilder()
                                 .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
                                     metadata.getEstExpire()))
@@ -306,48 +312,34 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                                 .build();
                             writer.put(retainKey, topicMessage.toByteString());
                             writer.put(tenantNS, metadata.toByteString());
-                            return RetainCoProcReply.newBuilder()
-                                .setReqId(request.getReqId())
-                                .setResult(RetainCoProcReply.Result.RETAINED)
-                                .build();
+                            return RetainResult.RETAINED;
                         } else {
                             if (metadata.getCount() > 0) {
                                 writer.put(tenantNS, metadata.toByteString());
                             }
                             // no enough room
                             // TODO: report event: exceed limit
-                            return RetainCoProcReply.newBuilder()
-                                .setReqId(request.getReqId())
-                                .setResult(RetainCoProcReply.Result.ERROR)
-                                .build();
+                            return RetainResult.ERROR;
                         }
                     }
-                    if (metadata.getCount() <= request.getMaxRetainedTopics()) {
+                    if (metadata.getCount() <= maxRetainTopics) {
                         metadata = metadata.toBuilder()
                             .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
                                 metadata.getEstExpire()))
                             .build();
                         writer.put(retainKey, topicMessage.toByteString());
                         writer.put(tenantNS, metadata.toByteString());
-                        return RetainCoProcReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(RetainCoProcReply.Result.RETAINED)
-                            .build();
+                        return RetainResult.RETAINED;
                     } else {
                         // no enough room
                         // TODO: report event: exceed limit
-                        return RetainCoProcReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(RetainCoProcReply.Result.ERROR)
-                            .build();
+                        return RetainResult.ERROR;
                     }
                 }
             }
         } catch (Throwable e) {
-            return RetainCoProcReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setResult(RetainCoProcReply.Result.ERROR)
-                .build();
+            log.error("Retain failed", e);
+            return RetainResult.ERROR;
         }
     }
 
