@@ -17,7 +17,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
