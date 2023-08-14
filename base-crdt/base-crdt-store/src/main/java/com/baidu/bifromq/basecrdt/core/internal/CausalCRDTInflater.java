@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basecrdt.core.util.Log.error;
 
 import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
+import com.baidu.bifromq.basecrdt.core.exception.CRDTCloseException;
 import com.baidu.bifromq.basecrdt.core.exception.CRDTEngineException;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.baidu.bifromq.basecrdt.proto.Replica;
@@ -153,7 +154,7 @@ abstract class CausalCRDTInflater<T extends IDotStore, O extends ICRDTOperation,
     private CompletableFuture<Void> execute(O op) {
         if (stopSignal.get() != null) {
             // silently drop the request
-            return CompletableFuture.failedFuture(CRDTEngineException.CRDT_IS_CLOSE);
+            return CompletableFuture.failedFuture(new CRDTCloseException());
         }
         CompletableFuture<Void> ret;
         synchronized (this) {

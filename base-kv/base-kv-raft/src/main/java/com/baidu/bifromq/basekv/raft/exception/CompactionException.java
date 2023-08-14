@@ -14,7 +14,9 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class CompactionException extends RuntimeException {
-    public static final CompactionException STALE_SNAPSHOT = new CompactionException("Stale Snapshot");
+    public static StaleSnapshotException staleSnapshot() {
+        return new StaleSnapshotException();
+    }
 
     public CompactionException(String message, Throwable cause) {
         super(message, cause);
@@ -22,5 +24,11 @@ public class CompactionException extends RuntimeException {
 
     private CompactionException(String message) {
         super(message);
+    }
+
+    public static class StaleSnapshotException extends CompactionException {
+        private StaleSnapshotException() {
+            super("Stale Snapshot");
+        }
     }
 }

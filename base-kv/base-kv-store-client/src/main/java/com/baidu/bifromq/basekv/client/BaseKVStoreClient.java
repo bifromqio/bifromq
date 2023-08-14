@@ -280,7 +280,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<KVRangeRWReply> execute(String storeId, KVRangeRWRequest request, String orderKey) {
         IExecutionPipeline execPpln = execPplns.getOrDefault(storeId, emptyMap()).get(request.getKvRangeId());
         if (execPpln == null) {
-            return CompletableFuture.failedFuture(BaseKVException.SERVER_NOT_FOUND);
+            return CompletableFuture.failedFuture(BaseKVException.serverNotFound());
         }
         return execPpln.execute(request);
     }
@@ -294,7 +294,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<KVRangeROReply> query(String storeId, KVRangeRORequest request, String orderKey) {
         List<IQueryPipeline> pipelines = queryPplns.get(storeId);
         if (pipelines == null) {
-            return CompletableFuture.failedFuture(BaseKVException.SERVER_NOT_FOUND);
+            return CompletableFuture.failedFuture(BaseKVException.serverNotFound());
         }
         return pipelines.get((orderKey.hashCode() % pipelines.size() + pipelines.size()) % pipelines.size())
             .query(request);
@@ -310,7 +310,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                                                              String orderKey) {
         List<IQueryPipeline> pipelines = lnrQueryPplns.get(storeId);
         if (pipelines == null) {
-            return CompletableFuture.failedFuture(BaseKVException.SERVER_NOT_FOUND);
+            return CompletableFuture.failedFuture(BaseKVException.serverNotFound());
         }
         return pipelines.get((orderKey.hashCode() % pipelines.size() + pipelines.size()) % pipelines.size())
             .query(request);

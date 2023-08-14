@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basescheduler;
 
-import com.baidu.bifromq.basescheduler.exception.DropException;
+import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,7 +85,7 @@ public class BatchCallSchedulerTest {
             log.info("Waiting for  {}", respFutures.size());
             CompletableFuture.allOf(respFutures.toArray(CompletableFuture[]::new)).join();
         } catch (Throwable e) {
-            Assert.assertEquals(DropException.EXCEED_LIMIT, e.getCause());
+            Assert.assertEquals(ExceedLimitException.class, e.getCause().getClass());
         }
     }
 }

@@ -14,17 +14,57 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class RecoveryException extends RuntimeException {
-    public static final RecoveryException NOT_LOST_QUORUM = new RecoveryException("Not lost quorum");
+    public static RecoveryException notLostQuorum() {
+        return new NotLostQuorumException();
+    }
 
-    public static final RecoveryException ABORT = new RecoveryException("Aborted");
+    public static RecoveryException abort() {
+        return new AbortException();
+    }
 
-    public static final RecoveryException NOT_VOTER = new RecoveryException("Not voter");
+    public static RecoveryException notVoter() {
+        return new NotVoterException();
+    }
 
-    public static final RecoveryException NOT_QUALIFY = new RecoveryException("Not qualify");
+    public static RecoveryException notQualify() {
+        return new NotQualifyException();
+    }
 
-    public static final RecoveryException RECOVERY_IN_PROGRESS = new RecoveryException("There is recovery in progress");
+    public static RecoveryException recoveryInProgress() {
+        return new RecoveryInProgressException();
+    }
 
     private RecoveryException(String message) {
         super(message);
+    }
+
+    public static class NotLostQuorumException extends RecoveryException {
+        private NotLostQuorumException() {
+            super("Not lost quorum");
+        }
+    }
+
+    public static class AbortException extends RecoveryException {
+        private AbortException() {
+            super("Aborted");
+        }
+    }
+
+    public static class NotVoterException extends RecoveryException {
+        private NotVoterException() {
+            super("Not voter");
+        }
+    }
+
+    public static class NotQualifyException extends RecoveryException {
+        private NotQualifyException() {
+            super("Not qualify");
+        }
+    }
+
+    public static class RecoveryInProgressException extends RecoveryException {
+        private RecoveryInProgressException() {
+            super("There is recovery in progress");
+        }
     }
 }

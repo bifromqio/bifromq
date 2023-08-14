@@ -13,8 +13,12 @@
 
 package com.baidu.bifromq.basecrdt.core.exception;
 
-public abstract class CRDTEngineException extends RuntimeException {
-    CRDTEngineException(String message) {
+public class CRDTNotFoundException extends CRDTEngineException {
+    public CRDTNotFoundException() {
+        this("CRDT NotFound");
+    }
+
+    public CRDTNotFoundException(String message) {
         super(message);
     }
 }

@@ -134,7 +134,7 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     @Override
     RaftNodeState recover(CompletableFuture<Void> onDone) {
-        onDone.completeExceptionally(RecoveryException.NOT_LOST_QUORUM);
+        onDone.completeExceptionally(RecoveryException.notLostQuorum());
         return this;
     }
 
@@ -153,7 +153,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                     if (pendingOnDone != null && !pendingOnDone.isDone()) {
                         // if not finished by requestReadIndexReply then abort it
                         logDebug("Aborted forwarded timed-out ReadIndex request[{}]", pendingReadId);
-                        pendingOnDone.completeExceptionally(ReadIndexException.FORWARD_TIMEOUT);
+                        pendingOnDone.completeExceptionally(ReadIndexException.forwardTimeout());
                     }
                 });
             } else {
@@ -171,7 +171,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                     if (pendingOnDone != null && !pendingOnDone.isDone()) {
                         // if not finished by proposeReply then abort it
                         logDebug("Aborted forwarded timed-out Propose request[{}]", pendingProposalId);
-                        pendingOnDone.completeExceptionally(DropProposalException.FORWARD_TIMEOUT);
+                        pendingOnDone.completeExceptionally(DropProposalException.forwardTimeout());
                     }
                 });
             } else {
@@ -202,19 +202,19 @@ class RaftNodeStateFollower extends RaftNodeState {
     void propose(ByteString fsmCmd, CompletableFuture<Void> onDone) {
         if (config.isDisableForwardProposal()) {
             logDebug("Forward proposal to leader is disabled");
-            onDone.completeExceptionally(DropProposalException.LEADER_FORWARD_DISABLED);
+            onDone.completeExceptionally(DropProposalException.leaderForwardDisabled());
             return;
         }
         if (currentLeader == null) {
             logDebug("Dropped proposal due to no leader elected in current term");
-            onDone.completeExceptionally(DropProposalException.NO_LEADER);
+            onDone.completeExceptionally(DropProposalException.NoLeader());
             return;
         }
         if (isProposeThrottled()) {
             logDebug("Dropped proposal due to log growing[uncommittedProposals:{}] "
                     + "exceeds threshold[maxUncommittedProposals:{}]",
                 uncommittedProposals.size(), maxUncommittedProposals);
-            onDone.completeExceptionally(DropProposalException.THROTTLED_BY_THRESHOLD);
+            onDone.completeExceptionally(DropProposalException.throttledByThreshold());
             return;
         }
         int forwardProposalId = nextForwardReqId();
@@ -276,7 +276,7 @@ class RaftNodeStateFollower extends RaftNodeState {
     void readIndex(CompletableFuture<Long> onDone) {
         if (currentLeader == null) {
             logDebug("Dropped ReadIndex forwarding due to no leader elected in current term");
-            onDone.completeExceptionally(ReadIndexException.NO_LEADER);
+            onDone.completeExceptionally(ReadIndexException.noLeader());
         } else {
             int forwardReadId = nextForwardReqId();
             tickToReadRequestsMap.compute(currentTick, (k, v) -> {
@@ -368,7 +368,7 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     @Override
     void transferLeadership(String newLeader, CompletableFuture<Void> onDone) {
-        onDone.completeExceptionally(LeaderTransferException.NOT_LEADER);
+        onDone.completeExceptionally(LeaderTransferException.notLeader());
     }
 
     @Override
@@ -377,7 +377,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                              Set<String> newLearners,
                              CompletableFuture<Void> onDone) {
         // TODO: support leader forward
-        onDone.completeExceptionally(ClusterConfigChangeException.NOT_LEADER);
+        onDone.completeExceptionally(ClusterConfigChangeException.notLeader());
     }
 
     @Override
@@ -604,10 +604,10 @@ class RaftNodeStateFollower extends RaftNodeState {
                     pendingOnDone.complete(null);
                     break;
                 case DropByLeaderTransferring:
-                    pendingOnDone.completeExceptionally(DropProposalException.TRANSFERRING_LEADER);
+                    pendingOnDone.completeExceptionally(DropProposalException.transferringLeader());
                     break;
                 case DropByMaxUnappliedEntries:
-                    pendingOnDone.completeExceptionally(DropProposalException.THROTTLED_BY_THRESHOLD);
+                    pendingOnDone.completeExceptionally(DropProposalException.throttledByThreshold());
                     break;
             }
         }
@@ -660,7 +660,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                 CompletableFuture<Long> pendingOnDone = idToReadRequestMap.remove(pendingReadId);
                 if (pendingOnDone != null && !pendingOnDone.isDone()) {
                     // if not finished by requestReadIndexReply then abort it
-                    pendingOnDone.completeExceptionally(ReadIndexException.FORWARD_TIMEOUT);
+                    pendingOnDone.completeExceptionally(ReadIndexException.forwardTimeout());
                 }
             });
         }
@@ -672,7 +672,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                 CompletableFuture<Void> pendingOnDone = idToForwardedProposeMap.remove(pendingProposalId);
                 if (pendingOnDone != null && !pendingOnDone.isDone()) {
                     // if not finished by requestReadIndexReply then abort it
-                    pendingOnDone.completeExceptionally(DropProposalException.FORWARD_TIMEOUT);
+                    pendingOnDone.completeExceptionally(DropProposalException.forwardTimeout());
                 }
             });
         }

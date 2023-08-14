@@ -14,11 +14,11 @@
 package com.baidu.bifromq.basekv.raft.functest;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertSame;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
 import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
@@ -253,7 +253,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
             log.info("Transfer leader to {}", follower);
             group.transferLeadership(leader, follower).join();
         } catch (Throwable e) {
-            assertSame(e.getCause(), LeaderTransferException.LEADER_NOT_READY);
+            assertSame(e.getCause().getClass(), LeaderTransferException.LeaderNotReadyException.class);
         }
     }
 
@@ -288,7 +288,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         String follower = group.currentFollowers().get(1);
         group.transferLeadership(follower, transferee)
             .handle((r, e) -> {
-                assertSame(e, LeaderTransferException.NOT_LEADER);
+                assertSame(e.getClass(), LeaderTransferException.NotLeaderException.class);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }
@@ -353,7 +353,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
         group.transferLeadership(leader, leader)
             .handle((r, e) -> {
-                assertSame(e, LeaderTransferException.SELF_TRANSFER);
+                assertSame(e.getClass(), LeaderTransferException.SelfTransferException.class);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }
@@ -366,7 +366,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
         group.transferLeadership(leader, "nonExistingNode")
             .handle((r, e) -> {
-                assertSame(e, LeaderTransferException.NOT_FOUND_OR_QUALIFIED);
+                assertSame(e.getClass(), LeaderTransferException.NotFoundOrQualifiedException.class);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }
@@ -378,7 +378,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
         group.transferLeadership(leader, "l1")
             .handle((r, e) -> {
-                assertSame(e, LeaderTransferException.NOT_FOUND_OR_QUALIFIED);
+                assertSame(e.getClass(), LeaderTransferException.NotFoundOrQualifiedException.class);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }
@@ -396,7 +396,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
         log.info("Transfer leadership to {} from {}", transferee, leader);
         group.transferLeadership(leader, transferee)
             .handle((v, e) -> {
-                assertSame(e, LeaderTransferException.TRANSFER_TIMEOUT);
+                assertSame(e.getClass(), LeaderTransferException.TransferTimeoutException.class);
                 return CompletableFuture.completedFuture(null);
             }).join();
         group.await(ticks(5));
@@ -412,7 +412,7 @@ public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
         group.propose(leader, ByteString.copyFromUtf8("appCommand"))
             .handle((r, e) -> {
-                assertSame(e, DropProposalException.TRANSFERRING_LEADER);
+                assertSame(e.getClass(), DropProposalException.TransferringLeaderException.class);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }

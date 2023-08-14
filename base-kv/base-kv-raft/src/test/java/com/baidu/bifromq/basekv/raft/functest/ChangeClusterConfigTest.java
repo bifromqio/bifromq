@@ -14,14 +14,13 @@
 package com.baidu.bifromq.basekv.raft.functest;
 
 
-import static com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException.LEADER_STEP_DOWN;
-import static com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException.NOT_LEADER;
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
+import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Ticker;
@@ -52,7 +51,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         try {
             group.changeClusterConfig(follower, newVoters, Collections.emptySet()).join();
         } catch (Throwable e) {
-            assertSame(e.getCause(), NOT_LEADER);
+            assertEquals(e.getCause().getClass(), ClusterConfigChangeException.NotLeaderException.class);
         }
     }
 
@@ -337,17 +336,21 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         }
 
         assertTrue(group.awaitIndexCommitted("V4", 9));
-        assertEquals(group.syncStateLogs("V4"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating));
+        assertEquals(group.syncStateLogs("V4"),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+                RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted("V5", 9));
-        assertEquals(group.syncStateLogs("V5"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating));
+        assertEquals(group.syncStateLogs("V5"),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+                RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted("L1", 9));
-        assertEquals(group.syncStateLogs("L1"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating));
+        assertEquals(group.syncStateLogs("L1"),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+                RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted("L2", 9));
-        assertEquals(group.syncStateLogs("L2"), Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
-            RaftNodeSyncState.Replicating));
+        assertEquals(group.syncStateLogs("L2"),
+            Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.SnapshotSyncing,
+                RaftNodeSyncState.Replicating));
         assertTrue(done.isDone());
     }
 
@@ -512,7 +515,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         newVoters.remove(follower);
         group.changeClusterConfig(leader, newVoters, Collections.emptySet())
             .handle((r, e) -> {
-                assertSame(e, LEADER_STEP_DOWN);
+                assertSame(e.getClass(), ClusterConfigChangeException.LeaderStepDownException.class);
                 return CompletableFuture.completedFuture(null);
             }).join();
     }

@@ -182,7 +182,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
                 onDone.completeExceptionally(new CompactionException("Failed to apply snapshot", e));
             }
         } else {
-            onDone.completeExceptionally(CompactionException.STALE_SNAPSHOT);
+            onDone.completeExceptionally(CompactionException.staleSnapshot());
         }
     }
 
@@ -255,12 +255,12 @@ abstract class RaftNodeState implements IRaftNodeLogger {
                         task.future.complete(null);
                     } else {
                         // proposal has been overridden
-                        task.future.completeExceptionally(DropProposalException.OVERRIDDEN);
+                        task.future.completeExceptionally(DropProposalException.overridden());
                     }
                 } else if (proposalTerm < currentTerm()) {
                     // current committed entry has newer term and less index, proposal will be overridden in the future
                     it.remove();
-                    task.future.completeExceptionally(DropProposalException.OVERRIDDEN);
+                    task.future.completeExceptionally(DropProposalException.overridden());
                 } else {
                     // wait for commit index advancing
                     break;
@@ -268,7 +268,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
             } else {
                 // proposal not in logs
                 it.remove();
-                task.future.completeExceptionally(DropProposalException.OVERRIDDEN);
+                task.future.completeExceptionally(DropProposalException.overridden());
             }
         }
         listener.onEvent(new CommitEvent(id, commitIndex));

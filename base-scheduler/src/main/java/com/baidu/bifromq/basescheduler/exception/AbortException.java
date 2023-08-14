@@ -11,10 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basecrdt.core.exception;
+package com.baidu.bifromq.basescheduler.exception;
 
-public abstract class CRDTEngineException extends RuntimeException {
-    CRDTEngineException(String message) {
+public class AbortException extends DropException {
+    public AbortException(String message) {
         super(message);
+    }
+
+    public AbortException(String message, Throwable cause) {
+        super(message, cause);
     }
 }

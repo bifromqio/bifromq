@@ -14,29 +14,87 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class LeaderTransferException extends RuntimeException {
-    public static final LeaderTransferException LEADER_NOT_READY =
-        new LeaderTransferException("Leader has not been ready " +
-            "due to commit index of its term has not been confirmed");
+    public static LeaderNotReadyException leaderNotReady() {
+        return new LeaderNotReadyException();
+    }
 
-    public static final LeaderTransferException TRANSFERRING_IN_PROGRESS =
-        new LeaderTransferException("There is transferring in progress");
+    public static TransferringInProgressException transferringInProgress() {
+        return new TransferringInProgressException();
+    }
 
-    public static final LeaderTransferException SELF_TRANSFER = new LeaderTransferException("Cannot transfer to self");
+    public static SelfTransferException selfTransfer() {
+        return new SelfTransferException();
+    }
 
-    public static final LeaderTransferException STEP_DOWN_BY_OTHER =
-        new LeaderTransferException("Step down by another candidate");
+    public static StepDownByOtherException stepDownByOther() {
+        return new StepDownByOtherException();
+    }
 
-    public static final LeaderTransferException NOT_FOUND_OR_QUALIFIED =
-        new LeaderTransferException("Transferee not found or not qualified");
+    public static NotFoundOrQualifiedException notFoundOrQualified() {
+        return new NotFoundOrQualifiedException();
+    }
 
-    public static final LeaderTransferException TRANSFER_TIMEOUT =
-        new LeaderTransferException("Cannot finish transfer within one election timeout");
+    public static TransferTimeoutException transferTimeout() {
+        return new TransferTimeoutException();
+    }
 
-    public static final LeaderTransferException NOT_LEADER = new LeaderTransferException("Only leader can do transfer");
+    public static NotLeaderException notLeader() {
+        return new NotLeaderException();
+    }
 
-    public static final LeaderTransferException NO_LEADER = new LeaderTransferException("No leader elected");
+    public static NoLeaderException noLeader() {
+        return new NoLeaderException();
+    }
 
-    private LeaderTransferException(String message) {
+    protected LeaderTransferException(String message) {
         super(message);
+    }
+
+    public static class LeaderNotReadyException extends LeaderTransferException {
+        private LeaderNotReadyException() {
+            super("Leader has not been ready due to commit index of its term has not been confirmed");
+        }
+    }
+
+    public static class TransferringInProgressException extends LeaderTransferException {
+        private TransferringInProgressException() {
+            super("There is transferring in progress");
+        }
+    }
+
+    public static class SelfTransferException extends LeaderTransferException {
+        private SelfTransferException() {
+            super("Cannot transfer to self");
+        }
+    }
+
+    public static class StepDownByOtherException extends LeaderTransferException {
+        private StepDownByOtherException() {
+            super("Step down by another candidate");
+        }
+    }
+
+    public static class NotFoundOrQualifiedException extends LeaderTransferException {
+        private NotFoundOrQualifiedException() {
+            super("Transferee not found or not qualified");
+        }
+    }
+
+    public static class TransferTimeoutException extends LeaderTransferException {
+        private TransferTimeoutException() {
+            super("Cannot finish transfer within one election timeout");
+        }
+    }
+
+    public static class NotLeaderException extends LeaderTransferException {
+        private NotLeaderException() {
+            super("Only leader can do transfer");
+        }
+    }
+
+    public static class NoLeaderException extends LeaderTransferException {
+        private NoLeaderException() {
+            super("No leader elected");
+        }
     }
 }

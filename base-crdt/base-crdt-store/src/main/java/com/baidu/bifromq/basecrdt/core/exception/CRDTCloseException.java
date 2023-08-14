@@ -13,8 +13,12 @@
 
 package com.baidu.bifromq.basecrdt.core.exception;
 
-public abstract class CRDTEngineException extends RuntimeException {
-    CRDTEngineException(String message) {
+public class CRDTCloseException extends CRDTEngineException {
+    public CRDTCloseException() {
+        this("CRDT is closed");
+    }
+
+    public CRDTCloseException(String message) {
         super(message);
     }
 }

@@ -14,24 +14,67 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class DropProposalException extends RuntimeException {
-    public static final DropProposalException TRANSFERRING_LEADER =
-        new DropProposalException("Proposal dropped due to on-going transferring leader");
+    public static TransferringLeaderException transferringLeader() {
+        return new TransferringLeaderException();
+    }
 
-    public static final DropProposalException THROTTLED_BY_THRESHOLD =
-        new DropProposalException("Proposal dropped due to too many uncommitted logs");
+    public static ThrottleByThresholdException throttledByThreshold() {
+        return new ThrottleByThresholdException();
+    }
 
-    public static final DropProposalException NO_LEADER = new DropProposalException("No leader elected");
+    public static NoLeaderException NoLeader() {
+        return new NoLeaderException();
+    }
 
-    public static final DropProposalException LEADER_FORWARD_DISABLED
-        = new DropProposalException("Proposal forward feature is disabled");
+    public static LeaderForwardDisabledException leaderForwardDisabled() {
+        return new LeaderForwardDisabledException();
+    }
 
-    public static final DropProposalException FORWARD_TIMEOUT =
-        new DropProposalException("Doesn't receive propose reply from leader within timeout");
+    public static ForwardTimeoutException forwardTimeout() {
+        return new ForwardTimeoutException();
+    }
 
-    public static final DropProposalException OVERRIDDEN
-        = new DropProposalException("Proposal dropped due to overridden by proposal from newer leader");
+    public static OverriddenException overridden() {
+        return new OverriddenException();
+    }
 
-    private DropProposalException(String message) {
+    protected DropProposalException(String message) {
         super(message);
+    }
+
+    public static class TransferringLeaderException extends DropProposalException {
+        private TransferringLeaderException() {
+            super("Proposal dropped due to on-going transferring leader");
+        }
+    }
+
+    public static class ThrottleByThresholdException extends DropProposalException {
+        private ThrottleByThresholdException() {
+            super("Proposal dropped due to too many uncommitted logs");
+        }
+    }
+
+    public static class NoLeaderException extends DropProposalException {
+        private NoLeaderException() {
+            super("No leader elected");
+        }
+    }
+
+    public static class LeaderForwardDisabledException extends DropProposalException {
+        private LeaderForwardDisabledException() {
+            super("Proposal forward feature is disabled");
+        }
+    }
+
+    public static class ForwardTimeoutException extends DropProposalException {
+        private ForwardTimeoutException() {
+            super("Doesn't receive propose reply from leader within timeout");
+        }
+    }
+
+    public static class OverriddenException extends DropProposalException {
+        private OverriddenException() {
+            super("Proposal dropped due to overridden by proposal from newer leader");
+        }
     }
 }
