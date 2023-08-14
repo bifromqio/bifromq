@@ -31,7 +31,6 @@ import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.io.IOException;
 import java.time.Clock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -281,28 +280,32 @@ public class QoS0InboxTest extends InboxStoreTest {
         requestInsert(subInfo, topic, msg0, msg1);
         requestInsert(subInfo, topic, msg2);
 
-        InboxFetchReply reply = requestFetchQoS0(tenantId, inboxId, 10);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 3);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(0), 0);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(1), 1);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(2), 2);
+        ArgumentCaptor<Overflowed> argCap = ArgumentCaptor.forClass(Overflowed.class);
+        verify(eventCollector).report(argCap.capture());
+        Overflowed event = argCap.getValue();
+        assertTrue(event.oldest());
+        assertEquals(event.qos(), AT_MOST_ONCE);
+        assertEquals(event.dropCount(), 1);
 
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount(), 3);
+        InboxFetchReply reply = requestFetchQoS0(tenantId, inboxId, 10);
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 2);
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(0), 1);
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(1), 2);
+
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount(), 2);
+
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(0).getMsg().getMessage(),
-            msg0.getMessage(0));
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(1).getMsg().getMessage(),
             msg1.getMessage(0));
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(2).getMsg().getMessage(),
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(1).getMsg().getMessage(),
             msg2.getMessage(0));
 
         requestInsert(subInfo, topic, msg0, msg1, msg2);
 
-        ArgumentCaptor<Overflowed> argCap = ArgumentCaptor.forClass(Overflowed.class);
-        verify(eventCollector, times(1)).report(argCap.capture());
-        Overflowed event = argCap.getValue();
+        verify(eventCollector, times(2)).report(argCap.capture());
+        event = argCap.getValue();
         assertTrue(event.oldest());
         assertEquals(event.qos(), AT_MOST_ONCE);
-        assertEquals(event.dropCount(), 4);
+        assertEquals(event.dropCount(), 3);
 
         reply = requestFetchQoS0(tenantId, inboxId, 10);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 2);
