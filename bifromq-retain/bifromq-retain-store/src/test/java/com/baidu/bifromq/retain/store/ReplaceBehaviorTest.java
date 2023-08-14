@@ -13,10 +13,12 @@
 
 package com.baidu.bifromq.retain.store;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.retain.rpc.proto.MatchCoProcReply;
-import com.baidu.bifromq.retain.rpc.proto.RetainCoProcReply;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.rpc.proto.MatchResult;
+import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.type.TopicMessage;
 import org.testng.annotations.Test;
 
@@ -28,15 +30,14 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
         String topic = "/a";
         TopicMessage message = message(topic, "hello");
         TopicMessage message1 = message(topic, "world");
-        assertEquals(requestRetain(tenantId, 1, message).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
 
-        assertEquals(requestRetain(tenantId, 1, message1).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message), RetainResult.RETAINED);
+        assertEquals(requestRetain(tenantId, message1), RetainResult.RETAINED);
 
-        MatchCoProcReply matchReply = requestMatch(tenantId, topic, 10);
-        assertEquals(matchReply.getMessagesCount(), 1);
-        assertEquals(matchReply.getMessages(0), message1);
+        MatchResult matchReply = requestMatch(tenantId, topic, 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 1);
+        assertEquals(matchReply.getOk().getMessages(0), message1);
 
         clearMessage(tenantId, topic);
     }
@@ -44,20 +45,19 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
     @Test(groups = "integration")
     public void replaceButExceedLimit() {
         String tenantId = "tenantId";
-        assertEquals(requestRetain(tenantId, 2, message("/a", "hello")).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(2);
+        assertEquals(requestRetain(tenantId, message("/a", "hello")), RetainResult.RETAINED);
 
         TopicMessage message = message("/b", "world");
-        assertEquals(requestRetain(tenantId, 2, message).getResult(),
-            RetainCoProcReply.Result.RETAINED);
+        assertEquals(requestRetain(tenantId, message), RetainResult.RETAINED);
 
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
         // limit now shrink to 1
-        assertEquals(requestRetain(tenantId, 1, message("/b", "!!!")).getResult(),
-            RetainCoProcReply.Result.ERROR);
+        assertEquals(requestRetain(tenantId, message("/b", "!!!")), RetainResult.ERROR);
 
-        MatchCoProcReply matchReply = requestMatch(tenantId, "/b", 10);
-        assertEquals(matchReply.getMessagesCount(), 1);
-        assertEquals(matchReply.getMessages(0), message);
+        MatchResult matchReply = requestMatch(tenantId, "/b", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 1);
+        assertEquals(matchReply.getOk().getMessages(0), message);
 
         clearMessage(tenantId, "/a");
         clearMessage(tenantId, "/b");

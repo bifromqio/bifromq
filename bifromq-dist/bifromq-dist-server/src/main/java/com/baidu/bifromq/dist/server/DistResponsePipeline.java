@@ -19,7 +19,7 @@ import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.Dist
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_CALL_QUEUES;
 
 import com.baidu.bifromq.baserpc.ResponsePipeline;
-import com.baidu.bifromq.basescheduler.exception.DropException;
+import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
@@ -60,7 +60,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                     eventCollector.report(getLocal(DistError.class)
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())
-                        .code(e.getCause() == DropException.EXCEED_LIMIT ? DROP_EXCEED_LIMIT : RPC_FAILURE));
+                        .code(e.getCause().getClass() == ExceedLimitException.class ? DROP_EXCEED_LIMIT : RPC_FAILURE));
                 } else {
                     tenantFanouts.get(tenantId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
                     eventCollector.report(getLocal(Disted.class)

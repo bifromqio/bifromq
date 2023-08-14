@@ -283,6 +283,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
+            .settingProvider(settingProviderMgr)
             .storeClient(retainStoreClient)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
@@ -305,7 +306,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         retainServer = IRetainServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
-            .settingProvider(settingProviderMgr)
             .retainStoreClient(retainStoreClient)
             .build();
 

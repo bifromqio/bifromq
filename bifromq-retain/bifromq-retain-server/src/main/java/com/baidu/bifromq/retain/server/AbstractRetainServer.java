@@ -20,7 +20,7 @@ abstract class AbstractRetainServer implements IRetainServer {
     protected final RetainService retainService;
 
     AbstractRetainServer(AbstractRetainServerBuilder<?> builder) {
-        this.retainService = new RetainService(builder.settingProvider, builder.retainStoreClient);
+        this.retainService = new RetainService(builder.retainStoreClient);
     }
 
     @Override

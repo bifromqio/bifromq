@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.retain.client;
 
-import static com.baidu.bifromq.retain.utils.PipelineUtil.PIPELINE_ATTR_KEY_CLIENT_INFO;
-import static com.baidu.bifromq.retain.utils.PipelineUtil.encode;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
@@ -25,11 +23,10 @@ import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import io.reactivex.rxjava3.core.Observable;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -66,62 +63,40 @@ final class RetainClient implements IRetainClient {
     }
 
     @Override
-    public IClientPipeline open(ClientInfo clientInfo) {
-        Map<String, String> pipelineAttrs = new HashMap<>() {{
-            put(PIPELINE_ATTR_KEY_CLIENT_INFO, encode(clientInfo));
-        }};
-        return new IClientPipeline() {
-            private final IRPCClient.IRequestPipeline<RetainRequest, RetainReply> ppln =
-                rpcClient.createRequestPipeline(clientInfo.getTenantId(), null,
-                    null, pipelineAttrs, RetainServiceGrpc.getRetainMethod());
-
-            @Override
-            public CompletableFuture<RetainReply> retain(long reqId, String topic,
-                                                         QoS qos, ByteBuffer payload, int expirySeconds) {
-                long now = System.currentTimeMillis();
-                long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE : now +
-                    TimeUnit.MILLISECONDS.convert(expirySeconds, TimeUnit.SECONDS);
-                return ppln.invoke(RetainRequest.newBuilder()
-                        .setReqId(reqId)
-                        .setQos(qos)
-                        .setTopic(topic)
-                        .setTimestamp(now)
-                        .setExpireTimestamp(expiry)
-                        .setPayload(unsafeWrap(payload))
-                        .build())
-                    .exceptionally(e -> RetainReply.newBuilder()
-                        .setReqId(reqId)
-                        .setResult(RetainReply.Result.ERROR)
-                        .build());
-            }
-
-            @Override
-            public void close() {
-                ppln.close();
-            }
-        };
+    public CompletableFuture<MatchReply> match(long reqId,
+                                               String tenantId,
+                                               String topicFilter,
+                                               int limit,
+                                               ClientInfo subscriber) {
+        log.trace("Handling match request: reqId={}, topicFilter={}", reqId, topicFilter);
+        return rpcClient.invoke(tenantId, null, MatchRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setTopicFilter(topicFilter)
+            .setLimit(limit)
+            .setSubscriber(subscriber)
+            .build(), RetainServiceGrpc.getMatchMethod());
     }
 
     @Override
-    public CompletableFuture<MatchReply> match(long reqId, String tenantId,
-                                               String topicFilter, int limit, ClientInfo clientInfo) {
-        Map<String, String> pipelineAttrs = new HashMap<>() {{
-            put(PIPELINE_ATTR_KEY_CLIENT_INFO, encode(clientInfo));
-        }};
-        log.trace("Handling match request: reqId={}, topicFilter={}", reqId, topicFilter);
-        return rpcClient.invoke(tenantId, null, MatchRequest.newBuilder()
-                .setReqId(reqId)
-                .setTopicFilter(topicFilter)
-                .setLimit(limit)
-                .build(), pipelineAttrs, RetainServiceGrpc.getMatchMethod())
-            .whenComplete((v, e) -> {
-                if (e != null) {
-                    log.trace("Finish handling match request with error: reqId={}, topicFilter={}",
-                        reqId, topicFilter, e);
-                } else {
-                    log.trace("Finish handling match request: reqId={}, topicFilter={}, reply={}",
-                        reqId, topicFilter, v);
-                }
-            });
+    public CompletableFuture<RetainReply> retain(long reqId, String tenantId,
+                                                 String topic, QoS qos, ByteBuffer payload,
+                                                 int expirySeconds, ClientInfo publisher) {
+        long now = System.currentTimeMillis();
+        long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE : now +
+            TimeUnit.MILLISECONDS.convert(expirySeconds, TimeUnit.SECONDS);
+        return rpcClient.invoke(tenantId, null, RetainRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setTopic(topic)
+            .setMessage(Message.newBuilder()
+                .setMessageId(reqId)
+                .setPubQoS(qos)
+                .setPayload(unsafeWrap(payload))
+                .setTimestamp(now)
+                .setExpireTimestamp(expiry)
+                .build())
+            .setPublisher(publisher)
+            .build(), RetainServiceGrpc.getRetainMethod());
     }
 }

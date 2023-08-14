@@ -14,16 +14,9 @@
 package com.baidu.bifromq.retain.server;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 
 abstract class AbstractRetainServerBuilder<T extends AbstractRetainServerBuilder<T>> implements IRetainServerBuilder {
-    ISettingProvider settingProvider;
     IBaseKVStoreClient retainStoreClient;
-
-    public T settingProvider(ISettingProvider settingProvider) {
-        this.settingProvider = settingProvider;
-        return thisT();
-    }
 
     public T retainStoreClient(IBaseKVStoreClient retainStoreClient) {
         this.retainStoreClient = retainStoreClient;

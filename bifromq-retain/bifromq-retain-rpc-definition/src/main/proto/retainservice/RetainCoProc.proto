@@ -14,43 +14,67 @@ message RetainSetMetadata{
   uint64 estExpire = 2;
 }
 
-message RetainCoProcRequest{
-  string tenantId = 1;
-  uint64 reqId = 2;
-  commontype.QoS qos = 3; // the qos the sender specified
-  string topic = 4;
-  bytes message = 5; // user payload
-  uint64 timestamp = 6; // UTC ts
-  uint64 expireTimestamp = 7; // UTC ts
-  commontype.ClientInfo publisher = 8;
-  uint32 maxRetainedTopics = 9;
+message RetainMessage{
+  commontype.Message message = 1;
+  commontype.ClientInfo publisher = 2;
 }
 
-message RetainCoProcReply {
-  enum Result {
-    RETAINED = 0;
-    CLEARED = 1;
-    ERROR = 2;
+message RetainMessagePack{
+  map<string, RetainMessage> topicMessages = 1; // key: topic
+}
+
+message BatchRetainCoProcRequest{
+  uint64 reqId = 1;
+  map<string, RetainMessagePack> retainMessagePack = 2; // key: tenantId
+}
+
+enum RetainResult {
+  RETAINED = 0;
+  CLEARED = 1;
+  ERROR = 2;
+}
+
+message RetainResultPack{
+  map<string, RetainResult> results = 2; // key: topic
+}
+
+message BatchRetainCoProcReply{
+  uint64 reqId = 1;
+  map<string, RetainResultPack> results = 2;
+}
+
+message MatchParam{
+  map<string, uint32> topicFilters = 1; // key: topicFilters value: limit
+}
+
+message BatchMatchCoProcRequest{
+  uint64 reqId = 1;
+  map<string, MatchParam> matchParams = 2; // key: tenantId
+
+}
+
+message MatchError{
+
+}
+
+message Matched{
+  repeated commontype.TopicMessage messages = 1;
+}
+
+message MatchResult{
+  oneof Type{
+    Matched ok = 1;
+    MatchError error = 2;
   }
-  uint64 reqId = 1;
-  Result result = 2;
 }
 
-message MatchCoProcRequest{
-  uint64 reqId = 1;
-  bytes tenantNS = 2;
-  string topicFilter = 3;
-  uint32 limit = 4;
+message MatchResultPack{
+  map<string, MatchResult> results = 1; // key: topic filter
 }
 
-message MatchCoProcReply{
-  enum Result {
-    OK = 0;
-    ERROR = 1;
-  }
+message BatchMatchCoProcReply{
   uint64 reqId = 1;
-  Result result = 2;
-  repeated commontype.TopicMessage messages = 3;
+  map<string, MatchResultPack> resultPack = 2;// key: tenantId
 }
 
 message GCRequest {
@@ -63,27 +87,27 @@ message GCReply {
 
 message RetainServiceRWCoProcInput{
   oneof type{
-    RetainCoProcRequest retainRequest = 1;
+    BatchRetainCoProcRequest retain = 1;
     GCRequest gcRequest = 2;
   }
 }
 
 message RetainServiceRWCoProcOutput{
   oneof type{
-    RetainCoProcReply retainReply = 1;
+    BatchRetainCoProcReply retain = 1;
     GCReply gcReply = 2;
   }
 }
 
 message RetainServiceROCoProcInput{
   oneof type{
-    MatchCoProcRequest matchRequest = 1;
+    BatchMatchCoProcRequest match = 1;
   }
 }
 
 message RetainServiceROCoProcOutput{
   oneof type{
-    MatchCoProcReply matchReply = 1;
+    BatchMatchCoProcReply match = 1;
   }
 }
 

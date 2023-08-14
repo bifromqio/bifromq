@@ -61,7 +61,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
         this.storeClient = builder.storeClient;
         this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
-        coProcFactory = new RetainStoreCoProcFactory(builder.clock);
+        coProcFactory = new RetainStoreCoProcFactory(builder.settingProvider, builder.clock);
         rangeBalanceController =
             new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;

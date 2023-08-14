@@ -1,5 +1,6 @@
 syntax = "proto3";
 import "commontype/QoS.proto";
+import "commontype/ClientInfo.proto";
 import "commontype/TopicMessage.proto";
 
 option java_multiple_files = true;
@@ -9,17 +10,16 @@ option java_outer_classname = "RetainServiceProtos";
 package retainservice;
 
 service RetainService {
-  rpc retain (stream RetainRequest) returns (stream RetainReply);
+  rpc retain (RetainRequest) returns (RetainReply);
   rpc match (MatchRequest) returns (MatchReply);
 }
 
 message RetainRequest {
   uint64 reqId = 1; // message id
-  commontype.QoS qos = 2;
+  string tenantId = 2;
   string topic = 3;
-  uint64 timestamp = 4;
-  uint64 expireTimestamp = 5;
-  bytes payload = 6;
+  commontype.Message message = 4;
+  commontype.ClientInfo publisher = 5;
 }
 
 message RetainReply {
@@ -34,8 +34,10 @@ message RetainReply {
 
 message MatchRequest {
   uint64 reqId = 1;
-  string topicFilter = 2;
-  uint32 limit = 3;
+  string tenantId = 2;
+  string topicFilter = 3;
+  uint32 limit = 4;
+  commontype.ClientInfo subscriber = 5;
 }
 
 message MatchReply {

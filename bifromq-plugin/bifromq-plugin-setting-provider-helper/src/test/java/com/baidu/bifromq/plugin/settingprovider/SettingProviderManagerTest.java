@@ -44,7 +44,7 @@ public class SettingProviderManagerTest {
     @Test
     public void devOnlyMode() {
         manager = new SettingProviderManager(null, pluginManager);
-        manager.provide(Setting.BoostModeEnabled, tenantId);
+        manager.provide(Setting.DebugModeEnabled, tenantId);
         manager.close();
     }
 

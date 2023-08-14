@@ -27,11 +27,13 @@ public final class EventLogger implements IEventCollector {
     public void report(Event<?> event) {
         if (LOG.isWarnEnabled()) {
             switch (event.type()) {
-                case DIST_ERROR:
-                case OVERFLOWED:
-                case QOS1_DROPPED:
-                case DELIVER_ERROR:
-                    LOG.warn("Message dropped due to {}", event.type());
+                case QOS0_DIST_ERROR,
+                    QOS1_DIST_ERROR,
+                    QOS2_DIST_ERROR,
+                    DIST_ERROR,
+                    OVERFLOWED,
+                    QOS1_DROPPED,
+                    DELIVER_ERROR -> LOG.warn("Message dropped due to {}", event.type());
             }
         }
     }

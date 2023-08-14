@@ -138,31 +138,32 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             cis.enableAliasing(true);
             DistServiceROCoProcInput coProcInput = DistServiceROCoProcInput.parseFrom(cis);
             switch (coProcInput.getInputCase()) {
-                case DIST: {
+                case DIST -> {
                     return dist(coProcInput.getDist(), reader)
                         .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
                             .setDistReply(v).build().toByteString());
                 }
-                case GCREQUEST: {
+                case GCREQUEST -> {
                     return gc(coProcInput.getGcRequest(), reader)
                         .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
                             .setGcReply(v).build().toByteString());
                 }
-                case COLLECTMETRICSREQUEST: {
+                case COLLECTMETRICSREQUEST -> {
                     return collect(coProcInput.getCollectMetricsRequest().getReqId(), reader)
                         .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
                             .setCollectMetricsReply(v).build().toByteString());
                 }
-                default:
+                default -> {
                     log.error("Unknown co proc type {}", coProcInput.getInputCase());
-                    CompletableFuture<ByteString> f = new CompletableFuture();
+                    CompletableFuture<ByteString> f = new CompletableFuture<>();
                     f.completeExceptionally(
                         new IllegalStateException("Unknown co proc type " + coProcInput.getInputCase()));
                     return f;
+                }
             }
         } catch (Throwable e) {
             log.error("Unable to parse ro co-proc", e);
-            CompletableFuture<ByteString> f = new CompletableFuture();
+            CompletableFuture<ByteString> f = new CompletableFuture<>();
             f.completeExceptionally(new IllegalStateException("Unable to parse ro co-proc", e));
             return f;
         }
@@ -537,7 +538,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         .exceptionally(e -> {
                             if (e instanceof ServerNotFoundException ||
                                 e.getCause() instanceof ServerNotFoundException) {
-                                // TODO(mafei): taking MTTR into account when reporting server not found
+                                // TODO: taking MTTR into account when reporting server not found
                                 // ServerNotFoundException is thrown only when DD-semantic is used
                                 // For even-numbered id: the inbox id is bound to server and unrecoverable after crash, so SERVER_NOT_FOUND is highly likely indicating all inboxes on that server are gone and all associated subscriptions have to be cleaned
                                 // For odd-numbered id: the inbox id is bound to server and recoverable after crash
@@ -551,6 +552,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                                     inbox.broker);
                             }
                             return CompletableFuture.completedFuture(null);
+                        })
+                        .exceptionally(e -> {
+                            log.warn(
+                                "[GC]Clear subscription failed: tenantId={}, inboxId={}, delivererKey={}, brokerId={}",
+                                tenantId, inbox.inboxId, inbox.delivererKey, inbox.broker, e);
+                            return null;
                         })
                     );
                     itr.next();

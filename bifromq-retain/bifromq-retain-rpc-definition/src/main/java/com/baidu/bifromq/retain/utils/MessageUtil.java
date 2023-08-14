@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.retain.utils;
 
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchCoProcRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainCoProcRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
-import com.baidu.bifromq.retain.rpc.proto.MatchCoProcRequest;
-import com.baidu.bifromq.retain.rpc.proto.RetainCoProcRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 
@@ -26,15 +26,15 @@ public class MessageUtil {
             .build();
     }
 
-    public static RetainServiceRWCoProcInput buildRetainRequest(RetainCoProcRequest request) {
+    public static RetainServiceRWCoProcInput buildRetainRequest(BatchRetainCoProcRequest request) {
         return RetainServiceRWCoProcInput.newBuilder()
-            .setRetainRequest(request)
+            .setRetain(request)
             .build();
     }
 
-    public static RetainServiceROCoProcInput buildMatchRequest(MatchCoProcRequest request) {
+    public static RetainServiceROCoProcInput buildMatchRequest(BatchMatchCoProcRequest request) {
         return RetainServiceROCoProcInput.newBuilder()
-            .setMatchRequest(request)
+            .setMatch(request)
             .build();
     }
 }

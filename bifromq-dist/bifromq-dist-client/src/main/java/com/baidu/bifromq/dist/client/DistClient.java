@@ -50,7 +50,6 @@ final class DistClient implements IDistClient {
             .crdtService(builder.crdtService)
             .sslContext(builder.sslContext)
             .build();
-//        reqScheduler = new DistServerCallScheduler(rpcClient);
         reqScheduler = new DistServerCallScheduler(rpcClient);
     }
 

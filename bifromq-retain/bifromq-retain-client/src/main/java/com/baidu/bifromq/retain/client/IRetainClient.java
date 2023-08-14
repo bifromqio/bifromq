@@ -26,16 +26,19 @@ public interface IRetainClient extends IConnectable {
         return new RetainClientBuilder();
     }
 
-    interface IClientPipeline {
-        CompletableFuture<RetainReply> retain(long reqId, String topic, QoS qos, ByteBuffer payload, int expirySeconds);
+    CompletableFuture<MatchReply> match(long reqId,
+                                        String tenantId,
+                                        String topicFilter,
+                                        int limit,
+                                        ClientInfo subscriber);
 
-        void close();
-    }
-
-    IClientPipeline open(ClientInfo clientInfo);
-
-    CompletableFuture<MatchReply> match(long reqId, String tenantId, String topicFilter,
-                                        int limit, ClientInfo clientInfo);
+    CompletableFuture<RetainReply> retain(long reqId,
+                                          String tenantId,
+                                          String topic,
+                                          QoS qos,
+                                          ByteBuffer payload,
+                                          int expirySeconds,
+                                          ClientInfo publisher);
 
     void stop();
 }

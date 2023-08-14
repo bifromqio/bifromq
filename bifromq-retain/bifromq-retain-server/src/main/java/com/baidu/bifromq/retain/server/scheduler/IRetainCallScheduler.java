@@ -11,15 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.retain;
+package com.baidu.bifromq.retain.server.scheduler;
 
-import com.baidu.bifromq.baserpc.BluePrint;
-import com.baidu.bifromq.retain.rpc.proto.RetainServiceGrpc;
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.retain.rpc.proto.RetainReply;
+import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 
-public class RPCBluePrint {
-    public static final BluePrint INSTANCE = BluePrint.builder()
-        .serviceDescriptor(RetainServiceGrpc.getServiceDescriptor())
-        .methodSemantic(RetainServiceGrpc.getRetainMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(RetainServiceGrpc.getMatchMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .build();
+public interface IRetainCallScheduler extends IBatchCallScheduler<RetainRequest, RetainReply> {
 }
