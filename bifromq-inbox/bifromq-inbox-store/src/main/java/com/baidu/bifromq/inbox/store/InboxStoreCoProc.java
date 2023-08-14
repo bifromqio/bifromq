@@ -96,6 +96,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import lombok.SneakyThrows;
@@ -203,75 +204,17 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             long startFetchFromSeq = !request.hasQos0StartAfter()
                 ? metadata.getQos0LastFetchBeforeSeq()
                 : Math.max(request.getQos0StartAfter() + 1, metadata.getQos0LastFetchBeforeSeq());
-            if (startFetchFromSeq < metadata.getQos0NextSeq()) {
-                itr.seekForPrev(qos0InboxMsgKey(scopedInboxId, startFetchFromSeq));
-                if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                    long startSeq = parseSeq(scopedInboxId, itr.key());
-                    InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
-                    for (int i = (int) (startFetchFromSeq - startSeq); i < messageList.getMessageCount(); i++) {
-                        if (fetchCount > 0) {
-                            replyBuilder.addQos0Seq(startSeq + i);
-                            replyBuilder.addQos0Msg(messageList.getMessage(i));
-                            fetchCount--;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                itr.next();
-                outer:
-                while (fetchCount > 0 && itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                    long startSeq = parseSeq(scopedInboxId, itr.key());
-                    InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
-                    for (int i = 0; i < messageList.getMessageCount(); i++) {
-                        if (fetchCount > 0) {
-                            replyBuilder.addQos0Seq(startSeq + i);
-                            replyBuilder.addQos0Msg(messageList.getMessage(i));
-                            fetchCount--;
-                        } else {
-                            break outer;
-                        }
-                    }
-                    itr.next();
-                }
-            }
+            fetchCount = fetchFromInbox(scopedInboxId, fetchCount, startFetchFromSeq, metadata.getQos0NextSeq(),
+                    KeyUtil::isQoS0MessageKey, KeyUtil::qos0InboxMsgKey, (reply, seq) -> reply.addQos0Seq(seq),
+                    (reply, msg) -> reply.addQos0Msg(msg), itr, replyBuilder);
             // deal with qos1 queue
             startFetchFromSeq =
                 !request.hasQos1StartAfter()
                     ? metadata.getQos1LastCommitBeforeSeq()
                     : Math.max(request.getQos1StartAfter() + 1, metadata.getQos1LastCommitBeforeSeq());
-            if (startFetchFromSeq < metadata.getQos1NextSeq()) {
-                itr.seekForPrev(qos1InboxMsgKey(scopedInboxId, startFetchFromSeq));
-                if (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                    long startSeq = parseSeq(scopedInboxId, itr.key());
-                    InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
-                    for (int i = (int) (startFetchFromSeq - startSeq); i < messageList.getMessageCount(); i++) {
-                        if (fetchCount > 0) {
-                            replyBuilder.addQos1Seq(startSeq + i);
-                            replyBuilder.addQos1Msg(messageList.getMessage(i));
-                            fetchCount--;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                itr.next();
-                outer:
-                while (fetchCount > 0 && itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                    long startSeq = parseSeq(scopedInboxId, itr.key());
-                    InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
-                    for (int i = 0; i < messageList.getMessageCount(); i++) {
-                        if (fetchCount > 0) {
-                            replyBuilder.addQos1Seq(startSeq + i);
-                            replyBuilder.addQos1Msg(messageList.getMessage(i));
-                            fetchCount--;
-                        } else {
-                            break outer;
-                        }
-                    }
-                    itr.next();
-                }
-            }
+            fetchCount = fetchFromInbox(scopedInboxId, fetchCount, startFetchFromSeq, metadata.getQos1NextSeq(),
+                    KeyUtil::isQoS1MessageKey, KeyUtil::qos1InboxMsgKey, (reply, seq) -> reply.addQos1Seq(seq),
+                    (reply, msg) -> reply.addQos1Msg(msg), itr, replyBuilder);
             // deal with qos2 queue
             startFetchFromSeq = !request.hasQos2StartAfter()
                 ? metadata.getQos2LastCommitBeforeSeq()
@@ -833,70 +776,16 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                       IKVIterator itr,
                                       IKVWriter writer) throws InvalidProtocolBufferException {
         if (inboxCommit.hasQos0UpToSeq()) {
-            long oldestSeq = 0;
-            itr.seek(qos0InboxPrefix(scopedInboxId));
-            if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                oldestSeq = parseSeq(scopedInboxId, itr.key());
-            }
-            itr.seekForPrev(qos0InboxMsgKey(scopedInboxId, inboxCommit.getQos0UpToSeq()));
-            if (itr.isValid() && isQoS0MessageKey(itr.key(), scopedInboxId)) {
-                long currentEntrySeq = parseSeq(scopedInboxId, itr.key());
-                if (currentEntrySeq <= inboxCommit.getQos0UpToSeq()) {
-                    InboxMessageList inboxMessageList = InboxMessageList.parseFrom(itr.value());
-                    long deletedRange = inboxCommit.getQos0UpToSeq() - currentEntrySeq + 1;
-                    int messageCount = inboxMessageList.getMessageCount();
-                    writer.delete(itr.key());
-                    if (deletedRange < messageCount) {
-                        writer.put(qos0InboxMsgKey(scopedInboxId, inboxCommit.getQos0UpToSeq() + 1),
-                                InboxMessageList.newBuilder()
-                                        .addAllMessage(inboxMessageList.getMessageList()
-                                                .subList((int) deletedRange, messageCount))
-                                        .build().toByteString());
-                    }
-                    if (currentEntrySeq > oldestSeq) {
-                        itr.seekForPrev(qos0InboxMsgKey(scopedInboxId, currentEntrySeq - 1));
-                        writer.deleteRange(Range.newBuilder()
-                                .setStartKey(qos0InboxMsgKey(scopedInboxId, oldestSeq))
-                                .setEndKey(itr.key())
-                                .build());
-                    }
-                    oldestSeq = inboxCommit.getQos0UpToSeq() + 1;
-                }
-            }
-            metadata = metadata.toBuilder().setQos0LastFetchBeforeSeq(oldestSeq).build();
+            metadata = commitToInbox(scopedInboxId, inboxCommit.getQos0UpToSeq(),
+                    KeyUtil::isQoS0MessageKey, KeyUtil::qos0InboxMsgKey,
+                    (inboxMetadata, seq) -> inboxMetadata.toBuilder().setQos0LastFetchBeforeSeq(seq).build(),
+                    metadata, itr, writer);
         }
         if (inboxCommit.hasQos1UpToSeq()) {
-            long oldestSeq = 0;
-            itr.seek(qos1InboxPrefix(scopedInboxId));
-            if (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                oldestSeq = parseSeq(scopedInboxId, itr.key());
-            }
-            itr.seekForPrev(qos1InboxMsgKey(scopedInboxId, inboxCommit.getQos1UpToSeq()));
-            if (itr.isValid() && isQoS1MessageKey(itr.key(), scopedInboxId)) {
-                long currentEntrySeq = parseSeq(scopedInboxId, itr.key());
-                if (currentEntrySeq <= inboxCommit.getQos1UpToSeq()) {
-                    InboxMessageList inboxMessageList = InboxMessageList.parseFrom(itr.value());
-                    long deletedRange = inboxCommit.getQos1UpToSeq() - currentEntrySeq + 1;
-                    int messageCount = inboxMessageList.getMessageCount();
-                    writer.delete(itr.key());
-                    if (deletedRange < messageCount) {
-                        writer.put(qos1InboxMsgKey(scopedInboxId, inboxCommit.getQos1UpToSeq() + 1),
-                                InboxMessageList.newBuilder()
-                                        .addAllMessage(inboxMessageList.getMessageList()
-                                                .subList((int) deletedRange, messageCount))
-                                        .build().toByteString());
-                    }
-                    if (currentEntrySeq > oldestSeq) {
-                        itr.seekForPrev(qos1InboxMsgKey(scopedInboxId, currentEntrySeq - 1));
-                        writer.deleteRange(Range.newBuilder()
-                                .setStartKey(qos1InboxMsgKey(scopedInboxId, oldestSeq))
-                                .setEndKey(itr.key())
-                                .build());
-                    }
-                    oldestSeq = inboxCommit.getQos1UpToSeq() + 1;
-                }
-            }
-            metadata = metadata.toBuilder().setQos1LastCommitBeforeSeq(oldestSeq).build();
+            metadata = commitToInbox(scopedInboxId, inboxCommit.getQos1UpToSeq(),
+                    KeyUtil::isQoS1MessageKey, KeyUtil::qos1InboxMsgKey,
+                    (inboxMetadata, seq) -> inboxMetadata.toBuilder().setQos1LastCommitBeforeSeq(seq).build(),
+                    metadata, itr, writer);
         }
         if (inboxCommit.hasQos2UpToSeq()) {
             itr.seek(qos2InboxPrefix(scopedInboxId));
@@ -911,6 +800,92 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
         metadata = metadata.toBuilder().setLastFetchTime(clock.millis()).build();
         return metadata;
+    }
+
+    private InboxMetadata commitToInbox(ByteString scopedInboxId,
+                                        long upToSeq,
+                                        BiFunction<ByteString, ByteString, Boolean> keyChecker,
+                                        BiFunction<ByteString, Long, ByteString> keyGenerator,
+                                        BiFunction<InboxMetadata, Long, InboxMetadata> metaDataMapper,
+                                        InboxMetadata metadata,
+                                        IKVIterator itr,
+                                        IKVWriter writer) throws InvalidProtocolBufferException {
+        long oldestSeq = 0;
+        itr.seek(keyGenerator.apply(scopedInboxId, 0L));
+        if (itr.isValid() && keyChecker.apply(itr.key(), scopedInboxId)) {
+            oldestSeq = parseSeq(scopedInboxId, itr.key());
+        }
+        itr.seekForPrev(keyGenerator.apply(scopedInboxId, upToSeq));
+        if (itr.isValid() && keyChecker.apply(itr.key(), scopedInboxId)) {
+            long currentEntrySeq = parseSeq(scopedInboxId, itr.key());
+            if (currentEntrySeq <= upToSeq) {
+                InboxMessageList inboxMessageList = InboxMessageList.parseFrom(itr.value());
+                long deletedRange = upToSeq - currentEntrySeq + 1;
+                int messageCount = inboxMessageList.getMessageCount();
+                writer.delete(itr.key());
+                if (deletedRange < messageCount) {
+                    writer.put(keyGenerator.apply(scopedInboxId, upToSeq + 1),
+                            InboxMessageList.newBuilder()
+                                    .addAllMessage(inboxMessageList.getMessageList()
+                                            .subList((int) deletedRange, messageCount))
+                                    .build().toByteString());
+                }
+                if (currentEntrySeq > oldestSeq) {
+                    itr.seekForPrev(keyGenerator.apply(scopedInboxId, currentEntrySeq - 1));
+                    writer.deleteRange(Range.newBuilder()
+                            .setStartKey(keyGenerator.apply(scopedInboxId, oldestSeq))
+                            .setEndKey(itr.key())
+                            .build());
+                }
+                oldestSeq = upToSeq + 1;
+            }
+        }
+        return metaDataMapper.apply(metadata, oldestSeq);
+    }
+
+    private int fetchFromInbox(ByteString scopedInboxId,
+                               int fetchCount,
+                               long startFetchFromSeq,
+                               long nextSeq,
+                               BiFunction<ByteString, ByteString, Boolean> keyChecker,
+                               BiFunction<ByteString, Long, ByteString> keyGenerator,
+                               BiConsumer<Fetched.Builder, Long> seqConsumer,
+                               BiConsumer<Fetched.Builder, InboxMessage> messageConsumer,
+                               IKVIterator itr,
+                               Fetched.Builder replyBuilder) throws InvalidProtocolBufferException {
+        if (startFetchFromSeq < nextSeq) {
+            itr.seekForPrev(keyGenerator.apply(scopedInboxId, startFetchFromSeq));
+            if (itr.isValid() && keyChecker.apply(itr.key(), scopedInboxId)) {
+                long startSeq = parseSeq(scopedInboxId, itr.key());
+                InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
+                for (int i = (int) (startFetchFromSeq - startSeq); i < messageList.getMessageCount(); i++) {
+                    if (fetchCount > 0) {
+                        seqConsumer.accept(replyBuilder, startSeq + i);
+                        messageConsumer.accept(replyBuilder, messageList.getMessage(i));
+                        fetchCount--;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            itr.next();
+            outer:
+            while (fetchCount > 0 && itr.isValid() && keyChecker.apply(itr.key(), scopedInboxId)) {
+                long startSeq = parseSeq(scopedInboxId, itr.key());
+                InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
+                for (int i = 0; i < messageList.getMessageCount(); i++) {
+                    if (fetchCount > 0) {
+                        seqConsumer.accept(replyBuilder, startSeq + i);
+                        messageConsumer.accept(replyBuilder, messageList.getMessage(i));
+                        fetchCount--;
+                    } else {
+                        break outer;
+                    }
+                }
+                itr.next();
+            }
+        }
+        return fetchCount;
     }
 
     private boolean hasExpired(InboxMetadata metadata) {
