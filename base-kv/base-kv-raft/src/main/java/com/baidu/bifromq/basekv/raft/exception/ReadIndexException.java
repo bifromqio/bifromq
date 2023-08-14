@@ -14,18 +14,47 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class ReadIndexException extends RuntimeException {
-    public static final ReadIndexException COMMIT_INDEX_NOT_CONFIRMED =
-        new ReadIndexException("Leader has not confirmed the commit index of its term");
+    public static ReadIndexException commitIndexNotConfirmed() {
+        return new CommitIndexNotConfirmedException();
+    }
 
-    public static final ReadIndexException LEADER_STEP_DOWN =
-        new ReadIndexException("Leader has been stepped down");
+    public static ReadIndexException leaderStepDown() {
+        return new LeaderStepDownException();
+    }
 
-    public static final ReadIndexException NO_LEADER = new ReadIndexException("No leader elected");
+    public static ReadIndexException noLeader() {
+        return new NoLeaderException();
+    }
 
-    public static final ReadIndexException FORWARD_TIMEOUT =
-        new ReadIndexException("Doesn't receive read index from leader within timeout");
+    public static ReadIndexException forwardTimeout() {
+        return new ForwardTimeoutException();
+    }
 
     private ReadIndexException(String message) {
         super(message);
+    }
+
+    public static class CommitIndexNotConfirmedException extends ReadIndexException {
+        private CommitIndexNotConfirmedException() {
+            super("Leader has not confirmed the commit index of its term");
+        }
+    }
+
+    public static class LeaderStepDownException extends ReadIndexException {
+        private LeaderStepDownException() {
+            super("Leader has been stepped down");
+        }
+    }
+
+    public static class NoLeaderException extends ReadIndexException {
+        private NoLeaderException() {
+            super("No leader elected");
+        }
+    }
+
+    public static class ForwardTimeoutException extends ReadIndexException {
+        private ForwardTimeoutException() {
+            super("Doesn't receive read index from leader within timeout");
+        }
     }
 }

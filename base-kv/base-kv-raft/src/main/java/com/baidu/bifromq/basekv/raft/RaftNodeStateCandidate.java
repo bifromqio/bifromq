@@ -88,12 +88,12 @@ class RaftNodeStateCandidate extends RaftNodeState {
     @Override
     RaftNodeState recover(CompletableFuture<Void> onDone) {
         if (!promotable()) {
-            onDone.completeExceptionally(RecoveryException.NOT_VOTER);
+            onDone.completeExceptionally(RecoveryException.notVoter());
         } else if (recoveryTask == null) {
             checkRecoverable = false;
             recoveryTask = onDone;
         } else {
-            onDone.completeExceptionally(RecoveryException.RECOVERY_IN_PROGRESS);
+            onDone.completeExceptionally(RecoveryException.recoveryInProgress());
         }
         return this;
     }
@@ -114,7 +114,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
 
     @Override
     void propose(ByteString fsmCmd, CompletableFuture<Void> onDone) {
-        onDone.completeExceptionally(DropProposalException.NO_LEADER);
+        onDone.completeExceptionally(DropProposalException.NoLeader());
     }
 
     @Override
@@ -124,7 +124,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
 
     @Override
     void readIndex(CompletableFuture<Long> onDone) {
-        onDone.completeExceptionally(ReadIndexException.NO_LEADER);
+        onDone.completeExceptionally(ReadIndexException.noLeader());
     }
 
     @Override
@@ -143,12 +143,12 @@ class RaftNodeStateCandidate extends RaftNodeState {
                     switch (preVoteResult.result) {
                         case Won:
                             // initiate formal campaign
-                            finishRecoveryTask(RecoveryException.NOT_LOST_QUORUM);
+                            finishRecoveryTask(RecoveryException.notLostQuorum());
                             logDebug("Pre-Election won[{}] and started formal campaign", preVoteResult);
                             nextState = campaign(false, false);
                             break;
                         case Lost:
-                            finishRecoveryTask(RecoveryException.NOT_LOST_QUORUM);
+                            finishRecoveryTask(RecoveryException.notLostQuorum());
                             logDebug("Pre-Election lost[{}] and stay as candidate", preVoteResult);
                             break;
                     }
@@ -157,7 +157,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
                 default:
                     // higher term found and transition to follower according to $3.3 in raft paper
                     logDebug("Transited to follower due to higher term[{}] found", message.getTerm());
-                    finishRecoveryTask(RecoveryException.ABORT);
+                    finishRecoveryTask(RecoveryException.abort());
                     nextState = new RaftNodeStateFollower(
                         message.getTerm(), // update term
                         commitIndex,
@@ -184,7 +184,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
                     String leader = message.getMessageTypeCase() == RaftMessage.MessageTypeCase.APPENDENTRIES ?
                         message.getAppendEntries().getLeaderId() : message.getInstallSnapshot().getLeaderId();
                     logDebug("Transited to follower to handle request from newly elected leader[{}]", leader);
-                    finishRecoveryTask(RecoveryException.NOT_LOST_QUORUM);
+                    finishRecoveryTask(RecoveryException.notLostQuorum());
                     nextState = new RaftNodeStateFollower(
                         message.getTerm(),
                         commitIndex,
@@ -217,7 +217,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
 
     @Override
     void transferLeadership(String newLeader, CompletableFuture<Void> onDone) {
-        onDone.completeExceptionally(LeaderTransferException.NO_LEADER);
+        onDone.completeExceptionally(LeaderTransferException.noLeader());
     }
 
     @Override
@@ -225,7 +225,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
                              Set<String> newVoters,
                              Set<String> newLearners,
                              CompletableFuture<Void> onDone) {
-        onDone.completeExceptionally(ClusterConfigChangeException.NO_LEADER);
+        onDone.completeExceptionally(ClusterConfigChangeException.noLeader());
     }
 
     @Override
@@ -293,11 +293,11 @@ class RaftNodeStateCandidate extends RaftNodeState {
                 case Won:
                     // initiate formal campaign
                     logDebug("Pre-Election won[{}] and started formal campaign", preVoteResult);
-                    finishRecoveryTask(RecoveryException.NOT_LOST_QUORUM);
+                    finishRecoveryTask(RecoveryException.notLostQuorum());
                     return campaign(false, false);
                 case Lost:
                     logDebug("Pre-Election lost[{}] and transited to follower", preVoteResult);
-                    finishRecoveryTask(RecoveryException.NOT_LOST_QUORUM);
+                    finishRecoveryTask(RecoveryException.notLostQuorum());
                     return new RaftNodeStateFollower(
                         currentTerm(), // same term
                         commitIndex,
@@ -348,7 +348,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
             voteTracker.refresh(recoveryConfig);
             finishRecoveryTask(null);
         } else {
-            finishRecoveryTask(RecoveryException.NOT_QUALIFY);
+            finishRecoveryTask(RecoveryException.notQualify());
         }
     }
 
@@ -370,7 +370,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
             case Won:
                 // win election
                 logDebug("Election won[{}] and stepped up to leader", voteResult);
-                finishRecoveryTask(RecoveryException.NOT_LOST_QUORUM);
+                finishRecoveryTask(RecoveryException.notLostQuorum());
                 return new RaftNodeStateLeader(
                     currentTerm(),
                     commitIndex,
@@ -386,7 +386,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
             case Lost:
                 // lost election
                 logDebug("Election lost[{}] and transited to follower", voteResult);
-                finishRecoveryTask(RecoveryException.NOT_LOST_QUORUM);
+                finishRecoveryTask(RecoveryException.notLostQuorum());
                 return new RaftNodeStateFollower(
                     currentTerm(),
                     commitIndex,

@@ -14,22 +14,78 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class ClusterConfigChangeException extends RuntimeException {
-    public static final ClusterConfigChangeException CONCURRENT_CHANGE =
-        new ClusterConfigChangeException("Only one on-going change is allowed");
-    public static final ClusterConfigChangeException EMPTY_VOTERS =
-        new ClusterConfigChangeException("Voters can not be empty");
-    public static final ClusterConfigChangeException LEARNERS_OVERLAP =
-        new ClusterConfigChangeException("Learners must not overlap voters");
-    public static final ClusterConfigChangeException SLOW_LEARNER =
-        new ClusterConfigChangeException("Some new added servers are too slow to catch up leader's progress");
-    public static final ClusterConfigChangeException LEADER_STEP_DOWN =
-        new ClusterConfigChangeException("Leader has stepped down");
-    public static final ClusterConfigChangeException NOT_LEADER =
-        new ClusterConfigChangeException("Cluster change can only do via leader");
-    public static final ClusterConfigChangeException NO_LEADER =
-        new ClusterConfigChangeException("No leader elected");
+    public static ConcurrentChangeException concurrentChange() {
+        return new ConcurrentChangeException();
+    }
 
-    private ClusterConfigChangeException(String message) {
+    public static EmptyVotersException emptyVoters() {
+        return new EmptyVotersException();
+    }
+
+    public static LearnersOverlapException learnersOverlap() {
+        return new LearnersOverlapException();
+    }
+
+    public static SlowLearnerException slowLearner() {
+        return new SlowLearnerException();
+    }
+
+    public static LeaderStepDownException leaderStepDown() {
+        return new LeaderStepDownException();
+    }
+
+    public static NotLeaderException notLeader() {
+        return new NotLeaderException();
+    }
+
+    public static NoLeaderException noLeader() {
+        return new NoLeaderException();
+    }
+
+    protected ClusterConfigChangeException(String message) {
         super(message);
+    }
+
+    public static class ConcurrentChangeException extends ClusterConfigChangeException {
+        private ConcurrentChangeException() {
+            super("Only one on-going change is allowed");
+        }
+    }
+
+    public static class LeaderStepDownException extends ClusterConfigChangeException {
+        private LeaderStepDownException() {
+            super("Leader has stepped down");
+        }
+    }
+
+    public static class EmptyVotersException extends ClusterConfigChangeException {
+        private EmptyVotersException() {
+            super("Voters can not be empty");
+        }
+    }
+
+    public static class LearnersOverlapException extends ClusterConfigChangeException {
+        private LearnersOverlapException() {
+            super("Learners must not overlap voters");
+        }
+    }
+
+    public static class SlowLearnerException extends ClusterConfigChangeException {
+        private SlowLearnerException() {
+            super("Some new added servers are too slow to catch up leader's progress");
+        }
+    }
+
+    public static class NotLeaderException extends ClusterConfigChangeException {
+
+        private NotLeaderException() {
+            super("Cluster change can only do via leader");
+        }
+    }
+
+    public static class NoLeaderException extends ClusterConfigChangeException {
+        private NoLeaderException() {
+            super("No leader elected");
+        }
     }
 }

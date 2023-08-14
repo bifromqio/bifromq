@@ -22,7 +22,6 @@ import static com.baidu.bifromq.basekv.proto.State.StateType.PreparedMerging;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Purged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Removed;
 import static com.baidu.bifromq.basekv.proto.State.StateType.WaitingForMerge;
-import static com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException.NOT_LEADER;
 import static com.baidu.bifromq.basekv.store.range.KVRange.Lifecycle.Closed;
 import static com.baidu.bifromq.basekv.store.range.KVRange.Lifecycle.Destroyed;
 import static com.baidu.bifromq.basekv.store.range.KVRange.Lifecycle.Destroying;
@@ -69,6 +68,7 @@ import com.baidu.bifromq.basekv.proto.SplitRange;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.TransferLeadership;
 import com.baidu.bifromq.basekv.proto.WALRaftMessages;
+import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
@@ -758,7 +758,10 @@ public class KVRange implements IKVRange {
                                                     String.format("Config change aborted[taskId=%s] due to %s", taskId,
                                                         e.getMessage());
                                                 log.debug(errorMessage);
-                                                if (e != NOT_LEADER && e.getCause() != NOT_LEADER) {
+                                                if (e.getClass() !=
+                                                    ClusterConfigChangeException.NotLeaderException.class &&
+                                                    e.getCause().getClass() !=
+                                                        ClusterConfigChangeException.NotLeaderException.class) {
                                                     finishCommand(taskId,
                                                         new KVRangeException.TryLater(errorMessage));
                                                 }

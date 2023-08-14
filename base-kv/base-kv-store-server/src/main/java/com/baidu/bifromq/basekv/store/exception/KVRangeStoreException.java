@@ -14,7 +14,9 @@
 package com.baidu.bifromq.basekv.store.exception;
 
 public class KVRangeStoreException extends RuntimeException {
-    public static final KVRangeStoreException RANGE_NOT_FOUND = new KVRangeStoreException("Range not found");
+    public static KVRangeStoreException rangeNotFound() {
+        return new KVRangeStoreException("Range not found");
+    }
 
     public KVRangeStoreException(String message) {
         super(message);

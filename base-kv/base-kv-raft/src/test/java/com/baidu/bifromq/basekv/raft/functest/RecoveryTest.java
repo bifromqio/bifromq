@@ -54,8 +54,8 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
             group.recover(follower).join();
             fail();
         } catch (CompletionException e) {
-            assertTrue(e.getCause() == RecoveryException.NOT_QUALIFY
-                || e.getCause() == RecoveryException.NOT_LOST_QUORUM);
+            assertTrue(e.getCause().getClass() == RecoveryException.NotQualifyException.class
+                || e.getCause().getClass() == RecoveryException.NotLostQuorumException.class);
         }
     }
 
@@ -102,7 +102,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
             fail();
         } catch (CompletionException e) {
             log.info("{}", e.getCause().getMessage());
-            assertTrue(e.getCause() == RecoveryException.NOT_VOTER);
+            assertTrue(e.getCause().getClass() == RecoveryException.NotVoterException.class);
         }
     }
 
@@ -114,14 +114,14 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
             group.recover(leader).join();
             fail();
         } catch (CompletionException e) {
-            assertTrue(e.getCause() == RecoveryException.NOT_LOST_QUORUM);
+            assertTrue(e.getCause().getClass() == RecoveryException.NotLostQuorumException.class);
         }
         for (String follower : group.currentFollowers()) {
             try {
                 group.recover(follower).join();
                 fail();
             } catch (CompletionException e) {
-                assertTrue(e.getCause() == RecoveryException.NOT_LOST_QUORUM);
+                assertTrue(e.getCause().getClass() == RecoveryException.NotLostQuorumException.class);
             }
         }
     }
@@ -141,7 +141,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
             recoverTask.join();
             fail();
         } catch (CompletionException e) {
-            assertTrue(e.getCause() == RecoveryException.NOT_LOST_QUORUM);
+            assertTrue(e.getCause().getClass() == RecoveryException.NotLostQuorumException.class);
         }
     }
 
@@ -175,7 +175,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
             recoverTask.join();
             fail();
         } catch (CompletionException e) {
-            assertTrue(e.getCause() == RecoveryException.NOT_LOST_QUORUM);
+            assertTrue(e.getCause().getClass() == RecoveryException.NotLostQuorumException.class);
         }
     }
 
@@ -251,9 +251,10 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
                 group.recover(leader).join();
                 break;
             } catch (CompletionException e) {
-                if (RecoveryException.NOT_QUALIFY != e.getCause()
-                    && RecoveryException.ABORT != e.getCause() &&
-                    RecoveryException.NOT_LOST_QUORUM != e.getCause()) {
+                if (RecoveryException.NotQualifyException.class != e.getCause().getClass()
+                    && RecoveryException.AbortException.class != e.getCause().getClass() &&
+                    RecoveryException.NotLostQuorumException.class != e.getCause().getClass()) {
+
                     fail(e.getCause().getMessage());
                 } else {
                     log.info("Retry recover due to {}", e.getCause().getMessage());
@@ -293,7 +294,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
             group.recover(remain).join();
             fail();
         } catch (CompletionException e) {
-            assertEquals(e.getCause(), RecoveryException.NOT_QUALIFY);
+            assertEquals(e.getCause().getClass(), RecoveryException.NotQualifyException.class);
         }
 
         log.info("Recover {}", leader);
@@ -339,9 +340,9 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
                 group.recover(leader).join();
                 break;
             } catch (CompletionException e) {
-                if (RecoveryException.NOT_QUALIFY != e.getCause()
-                    && RecoveryException.ABORT != e.getCause() &&
-                    RecoveryException.NOT_LOST_QUORUM != e.getCause()) {
+                if (RecoveryException.NotQualifyException.class != e.getCause().getClass()
+                    && RecoveryException.AbortException.class != e.getCause().getClass() &&
+                    RecoveryException.NotLostQuorumException.class != e.getCause().getClass()) {
                     fail(e.getCause().getMessage());
                 } else {
                     log.info("Retry recover due to {}", e.getCause().getMessage());
@@ -366,7 +367,7 @@ public class RecoveryTest extends SharedRaftConfigTestTemplate {
         try {
             group.recover(leader).join();
         } catch (Exception e) {
-            assertEquals(e.getCause(), RecoveryException.RECOVERY_IN_PROGRESS);
+            assertEquals(e.getCause().getClass(), RecoveryException.RecoveryInProgressException.class);
         }
         await().until(() -> group.nodeState(leader) == RaftNodeStatus.Leader);
     }

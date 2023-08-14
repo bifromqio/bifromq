@@ -160,7 +160,7 @@ class RaftNodeStateLeader extends RaftNodeState {
 
     @Override
     RaftNodeState recover(CompletableFuture<Void> onDone) {
-        onDone.completeExceptionally(RecoveryException.NOT_LOST_QUORUM);
+        onDone.completeExceptionally(RecoveryException.notLostQuorum());
         return this;
     }
 
@@ -181,7 +181,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                         && !clusterConfig.getNextVotersList().contains(leaderTransferTask.nextLeader)) {
                         logDebug("Abort leadership transfer, new leader[{}] has been removed from new cluster config",
                             leaderTransferTask.nextLeader);
-                        leaderTransferTask.abort(LeaderTransferException.NOT_FOUND_OR_QUALIFIED);
+                        leaderTransferTask.abort(LeaderTransferException.notFoundOrQualified());
                         leaderTransferTask = null;
                     }
                 }
@@ -192,7 +192,7 @@ class RaftNodeStateLeader extends RaftNodeState {
             if (leaderTransferTask != null) {
                 logDebug("Leadership cannot be transferred to {} in electionTimeoutTicks[{}]",
                     leaderTransferTask.nextLeader, config.getElectionTimeoutTick());
-                leaderTransferTask.abort(LeaderTransferException.TRANSFER_TIMEOUT);
+                leaderTransferTask.abort(LeaderTransferException.transferTimeout());
                 leaderTransferTask = null;
             }
             // local always active
@@ -234,14 +234,14 @@ class RaftNodeStateLeader extends RaftNodeState {
     void propose(ByteString fsmCmd, CompletableFuture<Void> onDone) {
         if (leaderTransferTask != null) {
             logDebug("Dropped proposal due to transferring leadership");
-            onDone.completeExceptionally(DropProposalException.TRANSFERRING_LEADER);
+            onDone.completeExceptionally(DropProposalException.transferringLeader());
             return;
         }
         if (isProposeThrottled()) {
             logDebug("Dropped proposal due to log growing[uncommittedProposals:{}] "
                     + "exceeds threshold[maxUncommittedProposals:{}]",
                 uncommittedProposals.size(), maxUncommittedProposals);
-            onDone.completeExceptionally(DropProposalException.THROTTLED_BY_THRESHOLD);
+            onDone.completeExceptionally(DropProposalException.throttledByThreshold());
             return;
         }
         LogEntry entry = LogEntry.newBuilder()
@@ -275,7 +275,7 @@ class RaftNodeStateLeader extends RaftNodeState {
         // if no commit in current term
         if (commitIndexNotConfirmed()) {
             logDebug("No log entry of current term committed");
-            onDone.completeExceptionally(ReadIndexException.COMMIT_INDEX_NOT_CONFIRMED);
+            onDone.completeExceptionally(ReadIndexException.commitIndexNotConfirmed());
             return;
         }
 
@@ -324,7 +324,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                             leaderTransferTask.done();
                         } else {
                             // leader step down by another candidate
-                            leaderTransferTask.abort(LeaderTransferException.STEP_DOWN_BY_OTHER);
+                            leaderTransferTask.abort(LeaderTransferException.stepDownByOther());
                         }
                         leaderTransferTask = null;
                     }
@@ -376,22 +376,22 @@ class RaftNodeStateLeader extends RaftNodeState {
     @Override
     void transferLeadership(String newLeader, CompletableFuture<Void> onDone) {
         if (commitIndexNotConfirmed()) {
-            onDone.completeExceptionally(LeaderTransferException.LEADER_NOT_READY);
+            onDone.completeExceptionally(LeaderTransferException.leaderNotReady());
             return;
         }
         if (leaderTransferTask != null) {
-            onDone.completeExceptionally(LeaderTransferException.TRANSFERRING_IN_PROGRESS);
+            onDone.completeExceptionally(LeaderTransferException.transferringInProgress());
             return;
         }
         if (newLeader.equals(stateStorage.local())) {
-            onDone.completeExceptionally(LeaderTransferException.SELF_TRANSFER);
+            onDone.completeExceptionally(LeaderTransferException.selfTransfer());
             return;
         }
         ClusterConfig clusterConfig = stateStorage.latestClusterConfig();
         if (clusterConfig.getLearnersList().contains(newLeader)
             || (!clusterConfig.getVotersList().contains(newLeader)
             && !clusterConfig.getNextVotersList().contains(newLeader))) {
-            onDone.completeExceptionally(LeaderTransferException.NOT_FOUND_OR_QUALIFIED);
+            onDone.completeExceptionally(LeaderTransferException.notFoundOrQualified());
             return;
         }
         // reset tick since leader transfer is expected to finish in one election timeout
@@ -715,7 +715,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                         // abort the transfer
                         logInfo("Aborted transfer leadership to follower[{}], it's removed from target cluster config",
                             leaderTransferTask.nextLeader);
-                        leaderTransferTask.abort(LeaderTransferException.NOT_FOUND_OR_QUALIFIED);
+                        leaderTransferTask.abort(LeaderTransferException.notFoundOrQualified());
                         leaderTransferTask = null;
                     }
                     break;
@@ -760,7 +760,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                     .setProposeReply(ProposeReply.newBuilder()
                         .setId(propose.getId())
                         // only two exceptions available now
-                        .setCode(e == DropProposalException.TRANSFERRING_LEADER ?
+                        .setCode(e.getClass() == DropProposalException.TransferringLeaderException.class ?
                             ProposeReply.Code.DropByLeaderTransferring :
                             ProposeReply.Code.DropByMaxUnappliedEntries
                         )

@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basekv.Constants.EMPTY_RANGE;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
-import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.RANGE_NOT_FOUND;
+import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.rangeNotFound;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static java.util.Collections.emptyList;
 
@@ -289,7 +289,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.transferLeadership(ver, newLeader);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -301,7 +301,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.changeReplicaConfig(ver, newVoters, newLearners);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -311,7 +311,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.split(ver, splitKey);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -321,7 +321,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.merge(ver, mergeeId);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -331,7 +331,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.exist(ver, key, linearized);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -342,7 +342,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.get(ver, key, linearized);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -353,7 +353,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.queryCoProc(ver, query, linearized);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -363,7 +363,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.put(ver, key, value);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -373,7 +373,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.delete(ver, key);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override
@@ -383,7 +383,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRange != null) {
             return kvRange.mutateCoProc(ver, mutate);
         }
-        return CompletableFuture.failedFuture(RANGE_NOT_FOUND);
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     private void scheduleTick(long delayInMS) {

@@ -13,18 +13,17 @@
 
 package com.baidu.bifromq.basekv.raft.functest;
 
-import static com.baidu.bifromq.basekv.raft.exception.DropProposalException.OVERRIDDEN;
-import static com.baidu.bifromq.basekv.raft.exception.DropProposalException.THROTTLED_BY_THRESHOLD;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.raft.exception.CompactionException;
+import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
 import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
@@ -106,12 +105,12 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         try {
             propose5Future.get();
         } catch (Exception e) {
-            assertEquals(e.getCause(), OVERRIDDEN);
+            assertEquals(e.getCause().getClass(), DropProposalException.OverriddenException.class);
         }
         try {
             propose6Future.get();
         } catch (Exception e) {
-            assertEquals(e.getCause(), OVERRIDDEN);
+            assertEquals(e.getCause().getClass(), DropProposalException.OverriddenException.class);
         }
     }
 
@@ -209,7 +208,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         try {
             group.propose(leader, copyFromUtf8("appCommand-10")).join();
         } catch (Exception e) {
-            assertSame(e.getCause(), THROTTLED_BY_THRESHOLD);
+            assertSame(e.getCause().getClass(), DropProposalException.ThrottleByThresholdException.class);
         }
     }
 
@@ -235,12 +234,12 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         try {
             group.compact(leader, ByteString.EMPTY, 12).join();
         } catch (Exception e) {
-            assertTrue(e.getCause() == CompactionException.STALE_SNAPSHOT);
+            assertSame(e.getCause().getClass(), CompactionException.StaleSnapshotException.class);
         }
         try {
             group.compact(leader, ByteString.EMPTY, 4).join();
         } catch (Exception e) {
-            assertTrue(e.getCause() == CompactionException.STALE_SNAPSHOT);
+            assertSame(e.getCause().getClass(), CompactionException.StaleSnapshotException.class);
         }
     }
 }

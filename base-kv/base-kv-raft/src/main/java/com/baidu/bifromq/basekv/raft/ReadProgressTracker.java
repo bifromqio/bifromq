@@ -40,7 +40,7 @@ class ReadProgressTracker {
         }
 
         void abort() {
-            pendingFutures.forEach(future -> future.completeExceptionally(ReadIndexException.LEADER_STEP_DOWN));
+            pendingFutures.forEach(future -> future.completeExceptionally(ReadIndexException.leaderStepDown()));
         }
 
         int count() {

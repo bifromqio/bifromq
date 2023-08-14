@@ -100,13 +100,13 @@ class RaftConfigChanger {
         assert state != Abort;
         try {
             if (state != Waiting) {
-                throw ClusterConfigChangeException.CONCURRENT_CHANGE;
+                throw ClusterConfigChangeException.concurrentChange();
             }
             if (nextVoters.isEmpty()) {
-                throw ClusterConfigChangeException.EMPTY_VOTERS;
+                throw ClusterConfigChangeException.emptyVoters();
             }
             if (isIntersect(nextVoters, nextLearners)) {
-                throw ClusterConfigChangeException.LEARNERS_OVERLAP;
+                throw ClusterConfigChangeException.learnersOverlap();
             }
             this.onDone = onDone;
 
@@ -158,7 +158,7 @@ class RaftConfigChanger {
 
                 peerLogTracker.stopTracking(peersToStopTracking);
                 state = Waiting;
-                onDone.completeExceptionally(ClusterConfigChangeException.SLOW_LEARNER);
+                onDone.completeExceptionally(ClusterConfigChangeException.slowLearner());
                 return true;
             } else {
                 if (peersCatchUp()) {
@@ -299,7 +299,7 @@ class RaftConfigChanger {
             case JointConfigCommitting:
                 logger.logDebug("Abort on-going cluster config change");
                 state = Abort;
-                onDone.completeExceptionally(ClusterConfigChangeException.LEADER_STEP_DOWN);
+                onDone.completeExceptionally(ClusterConfigChangeException.leaderStepDown());
         }
     }
 

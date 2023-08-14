@@ -20,7 +20,7 @@ import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.core.api.CRDTURI;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
-import com.baidu.bifromq.basecrdt.core.exception.CRDTEngineException;
+import com.baidu.bifromq.basecrdt.core.exception.CRDTNotFoundException;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.google.common.base.Preconditions;
@@ -159,7 +159,7 @@ public final class InMemCRDTEngine implements ICRDTEngine {
         if (crdt != null) {
             return crdt.join(delta);
         }
-        return CompletableFuture.failedFuture(CRDTEngineException.CRDT_NOT_FOUND);
+        return CompletableFuture.failedFuture(new CRDTNotFoundException());
     }
 
     @Override

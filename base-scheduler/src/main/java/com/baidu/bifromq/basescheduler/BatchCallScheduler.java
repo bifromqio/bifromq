@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.basescheduler;
 
-import com.baidu.bifromq.basescheduler.exception.DropException;
+import com.baidu.bifromq.basescheduler.exception.AbortException;
+import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
@@ -96,11 +97,11 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
                         callSubmitCounter.increment();
                         return builderOpt.get().submit(req);
                     } else {
-                        return CompletableFuture.failedFuture(DropException.BATCH_NOT_AVAILABLE);
+                        return CompletableFuture.failedFuture(new BatcherUnavailableException("Batcher not found"));
                     }
                 } catch (Throwable e) {
                     log.error("Error", e);
-                    return CompletableFuture.failedFuture(DropException.BATCH_NOT_AVAILABLE);
+                    return CompletableFuture.failedFuture(new AbortException("Failed to submit request", e));
                 }
             });
     }
