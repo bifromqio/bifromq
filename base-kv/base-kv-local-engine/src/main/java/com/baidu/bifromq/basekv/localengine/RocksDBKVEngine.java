@@ -424,7 +424,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         if (state() != State.STARTED) {
             return;
         }
-        gcTask = this.bgTaskExecutor.schedule(this::gc, configurator.getGcIntervalInSec(), TimeUnit.MILLISECONDS);
+        gcTask = this.bgTaskExecutor.schedule(this::gc, configurator.getGcIntervalInSec(), TimeUnit.SECONDS);
     }
 
     private void gc() {

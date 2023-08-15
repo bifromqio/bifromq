@@ -440,7 +440,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         for (String existingStoreId : Sets.intersection(newStoreToServerMap.keySet(), oldStoreIds)) {
             Set<KVRangeId> newRangeIds = router.findByStore(existingStoreId).stream()
                 .map(setting -> setting.id).collect(Collectors.toSet());
-            Set<KVRangeId> oldRangeIds = nextExecPplns.get(existingStoreId).keySet();
+            Set<KVRangeId> oldRangeIds = Sets.newHashSet(nextExecPplns.get(existingStoreId).keySet());
             for (KVRangeId newRangeId : Sets.difference(newRangeIds, oldRangeIds)) {
                 nextExecPplns.get(existingStoreId)
                     .put(newRangeId, new ExecPipeline(newStoreToServerMap.get(existingStoreId)));
