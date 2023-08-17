@@ -33,8 +33,7 @@ import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
-import com.baidu.bifromq.inbox.client.IInboxBrokerClient;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.IInboxServer;
 import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.mqtt.IMQTTBroker;
@@ -100,8 +99,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IBaseKVStoreClient distWorkerClient;
     private IDistWorker distWorker;
     private IDistServer distServer;
-    private IInboxReaderClient inboxReaderClient;
-    private IInboxBrokerClient inboxBrokerClient;
+    private IInboxClient inboxClient;
     private IBaseKVStoreClient inboxStoreClient;
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
@@ -211,12 +209,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .build();
-        inboxReaderClient = IInboxReaderClient.newBuilder()
-            .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
-            .sslContext(clientSslContext)
-            .build();
-        inboxBrokerClient = IInboxBrokerClient.newBuilder()
+        inboxClient = IInboxClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .sslContext(clientSslContext)
@@ -234,7 +227,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .inboxReaderClient(inboxReaderClient)
+            .inboxClient(inboxClient)
             .storeClient(inboxStoreClient)
             .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
@@ -324,7 +317,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .sslContext(clientSslContext)
             .build();
 
-        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxBrokerClient);
+        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient);
 
         distWorkerClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
@@ -385,7 +378,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .eventCollector(eventCollectorMgr)
             .settingProvider(settingProviderMgr)
             .distClient(distClient)
-            .inboxClient(inboxReaderClient)
+            .inboxClient(inboxClient)
             .sessionDictClient(sessionDictClient)
             .retainClient(retainClient)
             .connectTimeoutSeconds(mqttServerConfig.getConnTimeoutSec())
@@ -461,13 +454,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         Observable.combineLatest(
                 distWorkerClient.connState(),
-                inboxBrokerClient.connState(),
+                inboxClient.connState(),
                 retainStoreClient.connState(),
                 mqttBrokerClient.connState(),
-                inboxBrokerClient.connState(),
+                inboxClient.connState(),
                 sessionDictClient.connState(),
                 retainClient.connState(),
-                inboxReaderClient.connState(),
                 distClient.connState(),
                 Sets::newHashSet
             )
@@ -499,7 +491,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         distWorkerClient.stop();
         distWorker.stop();
 
-        inboxReaderClient.stop();
         inboxServer.shutdown();
 
         inboxStoreClient.stop();

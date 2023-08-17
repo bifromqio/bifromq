@@ -312,12 +312,7 @@
             <!-- offline inbox -->
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
-                <artifactId>bifromq-inbox-reader-client</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.baidu.bifromq</groupId>
-                <artifactId>bifromq-inbox-broker-client</artifactId>
+                <artifactId>bifromq-inbox-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -332,7 +327,7 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
-                <artifactId>bifromq-inbox-broker-server</artifactId>
+                <artifactId>bifromq-inbox-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- dist -->

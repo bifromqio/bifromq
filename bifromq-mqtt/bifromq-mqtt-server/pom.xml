@@ -59,7 +59,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-reader-client</artifactId>
+            <artifactId>bifromq-inbox-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -109,17 +109,12 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-broker-client</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-inbox-store</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-broker-server</artifactId>
+            <artifactId>bifromq-inbox-server</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

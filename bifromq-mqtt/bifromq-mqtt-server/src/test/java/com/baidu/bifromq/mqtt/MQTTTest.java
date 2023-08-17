@@ -33,8 +33,7 @@ import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
-import com.baidu.bifromq.inbox.client.IInboxBrokerClient;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.IInboxServer;
 import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
@@ -89,8 +88,7 @@ class MQTTTest {
     private IBaseKVStoreClient distWorkerStoreClient;
     private IDistWorker distWorker;
     private IDistServer distServer;
-    private IInboxReaderClient inboxReaderClient;
-    private IInboxBrokerClient inboxWriterClient;
+    private IInboxClient inboxClient;
     private IBaseKVStoreClient inboxStoreKVStoreClient;
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
@@ -167,11 +165,7 @@ class MQTTTest {
         sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .build();
-        inboxReaderClient = IInboxReaderClient.newBuilder()
-            .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
-            .build();
-        inboxWriterClient = IInboxBrokerClient.newBuilder()
+        inboxClient = IInboxClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
@@ -185,7 +179,7 @@ class MQTTTest {
             .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .inboxReaderClient(inboxReaderClient)
+            .inboxClient(inboxClient)
             .storeClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -246,7 +240,7 @@ class MQTTTest {
             .executor(MoreExecutors.directExecutor())
             .build();
 
-        inboxBrokerMgr = new SubBrokerManager(pluginMgr, onlineInboxBrokerClient, inboxWriterClient);
+        inboxBrokerMgr = new SubBrokerManager(pluginMgr, onlineInboxBrokerClient, inboxClient);
 
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
         distWorker = IDistWorker.nonStandaloneBuilder()
@@ -285,7 +279,7 @@ class MQTTTest {
             .eventCollector(eventCollector)
             .settingProvider(settingProvider)
             .distClient(distClient)
-            .inboxClient(inboxReaderClient)
+            .inboxClient(inboxClient)
             .sessionDictClient(sessionDictClient)
             .retainClient(retainClient)
             .buildTcpConnListener()
@@ -320,10 +314,9 @@ class MQTTTest {
                 inboxStoreKVStoreClient.connState(),
                 retainStoreKVStoreClient.connState(),
                 onlineInboxBrokerClient.connState(),
-                inboxWriterClient.connState(),
+                inboxClient.connState(),
                 sessionDictClient.connState(),
                 retainClient.connState(),
-                inboxReaderClient.connState(),
                 distClient.connState(),
                 Sets::newHashSet
             )
@@ -369,8 +362,8 @@ class MQTTTest {
         distWorker.stop();
 
         inboxBrokerMgr.stop();
-        inboxReaderClient.stop();
-        log.info("Inbox reader client stopped");
+        inboxClient.close();
+        log.info("Inbox client stopped");
         inboxServer.shutdown();
         log.info("Inbox server shut down");
 

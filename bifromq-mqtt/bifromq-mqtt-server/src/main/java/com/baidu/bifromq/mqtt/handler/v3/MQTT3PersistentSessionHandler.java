@@ -20,7 +20,7 @@ import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxSubResult;
 import com.baidu.bifromq.inbox.client.InboxUnsubResult;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -57,7 +57,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     private boolean qos2Confirming = false;
     private long qos1ConfirmUpToSeq;
     private long qos2ConfirmUpToSeq;
-    private IInboxReaderClient.IInboxReader inboxReader;
+    private IInboxClient.IInboxReader inboxReader;
 
     @Builder
     public MQTT3PersistentSessionHandler(ClientInfo clientInfo, int keepAliveTimeSeconds, WillMessage willMessage,

@@ -87,7 +87,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-broker-client</artifactId>
+            <artifactId>bifromq-inbox-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -95,7 +95,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-broker-server</artifactId>
+            <artifactId>bifromq-inbox-server</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

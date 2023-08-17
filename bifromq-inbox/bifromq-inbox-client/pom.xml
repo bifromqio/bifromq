@@ -17,18 +17,29 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <artifactId>bifromq-parent</artifactId>
         <groupId>com.baidu.bifromq</groupId>
+        <artifactId>bifromq-inbox</artifactId>
         <version>1.0.2</version>
     </parent>
-    <packaging>pom</packaging>
 
-    <artifactId>bifromq-inbox</artifactId>
+    <artifactId>bifromq-inbox-client</artifactId>
 
-    <modules>
-        <module>bifromq-inbox-client</module>
-        <module>bifromq-inbox-rpc-definition</module>
-        <module>bifromq-inbox-store</module>
-        <module>bifromq-inbox-server</module>
-    </modules>
+    <dependencies>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-sub-broker</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-inbox-rpc-definition</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+    </dependencies>
 </project>

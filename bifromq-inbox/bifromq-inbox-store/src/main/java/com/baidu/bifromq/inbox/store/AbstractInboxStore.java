@@ -30,7 +30,7 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.IConnectable;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.util.MessageUtil;
@@ -62,7 +62,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
 
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
-    private final IInboxReaderClient inboxReaderClient;
+    private final IInboxClient inboxClient;
     private final IBaseKVStoreClient storeClient;
     private final KVRangeBalanceController balanceController;
     private final AsyncRunner jobRunner;
@@ -77,7 +77,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
 
     public AbstractInboxStore(T builder) {
         this.clusterId = builder.clusterId;
-        this.inboxReaderClient = builder.inboxReaderClient;
+        this.inboxClient = builder.inboxClient;
         this.storeClient = builder.storeClient;
         this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
@@ -208,7 +208,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                         .map(scopedInboxIdToGc -> {
                             String tenantId = parseTenantId(scopedInboxIdToGc);
                             String inboxId = parseInboxId(scopedInboxIdToGc);
-                            return inboxReaderClient.touch(reqId, tenantId, inboxId)
+                            return inboxClient.touch(reqId, tenantId, inboxId)
                                 .handle((v, e) -> {
                                     if (e != null) {
                                         log.error("Failed to clean expired inbox", e);

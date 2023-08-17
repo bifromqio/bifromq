@@ -36,7 +36,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxCheckResult;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -80,7 +80,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
     private static final int MAX_CLIENT_ID_LEN = BifroMQSysProp.MAX_CLIENT_ID_LENGTH.get();
     private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
     private IDistClient distClient;
-    private IInboxReaderClient inboxClient;
+    private IInboxClient inboxClient;
     private ClientInfo clientInfo;
     private boolean isTransient;
     private MQTT3SessionHandler.WillMessage willMessage;

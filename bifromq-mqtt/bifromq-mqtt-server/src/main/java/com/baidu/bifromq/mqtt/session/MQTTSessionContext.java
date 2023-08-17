@@ -15,7 +15,7 @@ package com.baidu.bifromq.mqtt.session;
 
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
@@ -43,7 +43,7 @@ public final class MQTTSessionContext {
     public final IEventCollector eventCollector;
     public final ISettingProvider settingProvider;
     public final IDistClient distClient;
-    public final IInboxReaderClient inboxClient;
+    public final IInboxClient inboxClient;
     public final IRetainClient retainClient;
     public final ISessionDictClient sessionDictClient;
     public final String serverId;
@@ -60,7 +60,7 @@ public final class MQTTSessionContext {
                        ILocalSessionRegistry sessionRegistry,
                        IAuthProvider authProvider,
                        IDistClient distClient,
-                       IInboxReaderClient inboxClient,
+                       IInboxClient inboxClient,
                        IRetainClient retainClient,
                        ISessionDictClient sessionDictClient,
                        int maxResendTimes,
