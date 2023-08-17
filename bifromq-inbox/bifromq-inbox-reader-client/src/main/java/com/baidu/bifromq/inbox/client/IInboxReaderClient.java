@@ -35,9 +35,14 @@ public interface IInboxReaderClient extends IConnectable {
 
     CompletableFuture<DeleteInboxReply> delete(long reqId, String inboxId, ClientInfo clientInfo);
 
-    String getDelivererKey(String inboxId, ClientInfo clientInfo);
+    CompletableFuture<Void> touch(long reqId, String tenantId, String inboxId);
 
-    IInboxReader openInboxReader(String inboxId, String delivererKey, ClientInfo clientInfo);
+    CompletableFuture<InboxSubResult> sub(long reqId, String inboxId, String topicFilter, QoS qos,
+                                          ClientInfo clientInfo);
+
+    CompletableFuture<InboxUnsubResult> unsub(long reqId, String inboxId, String topicFilter, ClientInfo clientInfo);
+
+    IInboxReader openInboxReader(String inboxId, ClientInfo clientInfo);
 
     interface IInboxReader {
         void fetch(BiConsumer<Fetched, Throwable> consumer);

@@ -63,9 +63,9 @@ public final class AsyncRunner {
     private <T> CompletableFuture<T> add(Supplier<CompletableFuture<T>> taskSupplier, boolean first) {
         CompletableFuture<T> f = new CompletableFuture<>();
         if (first) {
-            taskQueue.addFirst(new Task(taskSupplier, f));
+            taskQueue.addFirst(new Task<>(taskSupplier, f));
         } else {
-            taskQueue.addLast(new Task(taskSupplier, f));
+            taskQueue.addLast(new Task<>(taskSupplier, f));
         }
         while (true) {
             if (state.compareAndSet(State.EMPTY_STOP, State.NONEMPTY_STOP)) {

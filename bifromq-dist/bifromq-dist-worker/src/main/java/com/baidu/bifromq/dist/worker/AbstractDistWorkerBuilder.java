@@ -44,7 +44,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     Duration statsInterval = Duration.ofSeconds(30);
-    Duration gcInterval = Duration.ofMinutes(5);
 
     AbstractDistWorkerBuilder() {
     }
@@ -131,11 +130,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
 
     public T statsInterval(Duration statsInterval) {
         this.statsInterval = statsInterval;
-        return thisT();
-    }
-
-    public T gcInterval(Duration gcInterval) {
-        this.gcInterval = gcInterval;
         return thisT();
     }
 }

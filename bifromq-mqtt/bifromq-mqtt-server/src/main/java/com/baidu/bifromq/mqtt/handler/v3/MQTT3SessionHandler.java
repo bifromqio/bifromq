@@ -662,8 +662,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         }
         // using subMessageId for reqId to thread calls
         List<CompletableFuture<Boolean>> unsubTasks = doUnsubscribe(messageId, topicFilters);
-        allOf(unsubTasks.toArray(new CompletableFuture[0])).thenApply(
-                v -> unsubTasks.stream().map(CompletableFuture::join).collect(Collectors.toList()))
+        allOf(unsubTasks.toArray(new CompletableFuture[0]))
+            .thenApply(v -> unsubTasks.stream().map(CompletableFuture::join).collect(Collectors.toList()))
             .thenAcceptAsync(unsubReplies -> {
                 if (ctx.channel().isActive()) {
                     writeAndFlush(MQTT3MessageUtils.toMqttUnsubAckMessage(messageId));

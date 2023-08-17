@@ -18,6 +18,8 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.dist.client.SubResult;
+import com.baidu.bifromq.dist.client.UnsubResult;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.PushEvent;
@@ -25,6 +27,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropp
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Pushed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Dropped;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -33,7 +36,10 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Builder;
@@ -42,7 +48,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler implements IMQTT3TransientSession {
     private final AtomicLong seqNum = new AtomicLong();
-    private boolean clearOnDisconnect = false;
+    private final Set<String> topicFilters = new HashSet<>();
 
     @Builder
     public MQTT3TransientSessionHandler(ClientInfo clientInfo,
@@ -61,16 +67,17 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
-        if (clearOnDisconnect) {
-            submitBgTask(() -> sessionCtx.distClient.clear(System.nanoTime(), clientInfo().getTenantId(), channelId(),
-                    toDelivererKey(channelId(), sessionCtx.serverId), 0)
-                .whenComplete((clearResult, e) -> {
-                    if (e != null) {
-                        log.warn("Subscription clean error for client:\n{}", clientInfo());
-                    } else {
-                        log.trace("Subscription cleaned for client:\n{}", clientInfo());
-                    }
-                }));
+        if (!topicFilters.isEmpty()) {
+            submitBgTask(() -> CompletableFuture.allOf(topicFilters.stream()
+                .map(topicFilter -> sessionCtx.distClient.unsub(System.nanoTime(), clientInfo().getTenantId(),
+                        topicFilter, channelId(), toDelivererKey(channelId(), sessionCtx.serverId), 0)
+                    .exceptionally(e -> {
+                        log.error("Failed to unsub: tenantId={}, topicFilter={}, inboxId={}, delivererKey={}",
+                            clientInfo().getTenantId(), topicFilter, channelId(),
+                            toDelivererKey(channelId(), sessionCtx.serverId), e);
+                        return UnsubResult.ERROR;
+                    }))
+                .toArray(CompletableFuture[]::new)));
         }
         ctx.fireChannelInactive();
     }
@@ -87,23 +94,42 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
 
     @Override
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
+        int maxTopicFiltersPerInbox = settingProvider.provide(Setting.MaxTopicFiltersPerInbox,
+            clientInfo().getTenantId());
+        if (topicFilters.size() >= maxTopicFiltersPerInbox) {
+            return CompletableFuture.completedFuture(MqttQoS.FAILURE);
+        }
         return sessionCtx.distClient.sub(reqId, clientInfo().getTenantId(), topicSub.topicName(),
                 QoS.forNumber(topicSub.qualityOfService().value()), channelId(),
                 toDelivererKey(channelId(), sessionCtx.serverId), 0)
             .thenApplyAsync(subResult -> {
-                MqttQoS qos = MqttQoS.valueOf(subResult);
-                if (qos != MqttQoS.FAILURE) {
-                    clearOnDisconnect = true;
+                if (subResult == SubResult.OK) {
+                    topicFilters.add(topicSub.topicName());
+                    return topicSub.qualityOfService();
                 }
-                return qos;
+                return MqttQoS.FAILURE;
             }, ctx.channel().eventLoop());
     }
 
     @Override
     protected CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
+        if (!topicFilters.remove(topicFilter)) {
+            return CompletableFuture.completedFuture(false);
+        }
         return sessionCtx.distClient.unsub(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
                 toDelivererKey(channelId(), sessionCtx.serverId), 0)
-            .exceptionally(e -> true);
+            .handleAsync((v, e) -> {
+                if (e != null) {
+                    topicFilters.add(topicFilter);
+                    return false;
+                } else {
+                    if (Objects.requireNonNull(v) == UnsubResult.OK) {
+                        return true;
+                    }
+                    topicFilters.add(topicFilter);
+                    return false;
+                }
+            });
     }
 
     @Override

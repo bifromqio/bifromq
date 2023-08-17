@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.dist.client.SubResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
@@ -148,10 +149,10 @@ public class DistTest extends DistServiceTest {
         int totalSub = 5;
         int totalMsg = 1;
         for (int i = 0; i < totalSub; i++) {
-            int subResult =
+            SubResult subResult =
                 distClient().sub(reqId, tenantId, "$share/g1/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i,
                     "server1", 0).join();
-            assertEquals(subResult, 1);
+            assertEquals(subResult, SubResult.OK);
         }
         CountDownLatch latch = new CountDownLatch(totalMsg);
         for (int i = 0; i < totalMsg; i++) {

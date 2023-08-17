@@ -9,38 +9,34 @@ option java_outer_classname = "DistCoProcProtos";
 
 package distservice;
 
-message InboxSubInfo {
-  map<string, commontype.QoS> topicFilters = 1; // key: Original TopicFilter
+message BatchSubRequest {
+  uint64 reqId = 1;
+  map<string, commontype.QoS> scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
 }
 
-message AddTopicFilter{
-  map<string, InboxSubInfo> topicFilter = 2; // key: subInfoKeyUtf8
-}
-
-message AddTopicFilterReply{
+message BatchSubReply {
   enum Result{
     OK = 0;
-    ExceedQuota = 1;
+    EXCEED_LIMIT = 1; // only for group join
+    ERROR = 2;
   }
-  message Results{
-    map<string, Result> results = 1; // key: Original TopicFilter
-  }
-  map<string, Results> result = 2; // key: subInfoKeyUtf8
+  uint64 reqId = 1;
+  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
 }
 
-message TopicFilterList{
-  repeated string topicFilter = 1;
+message BatchUnsubRequest {
+  uint64 reqId = 1;
+  repeated string scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
 }
 
-message RemoveTopicFilter{
-  map<string, TopicFilterList> topicFilter = 2; // key: subInfoKeyUtf8
-}
-
-message RemoveTopicFilterReply{
-  message Results{
-    map<string, bool> result = 1; // key: Original TopicFilter, value: exist or not
+message BatchUnsubReply {
+  enum Result{
+    OK = 0;
+    NOT_EXISTED = 1;
+    ERROR = 2;
   }
-  map<string, Results> result = 2; // key: subInfoKeyUtf8
+  uint64 reqId = 1;
+  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
 }
 
 message GroupMatchRecord {
@@ -52,90 +48,6 @@ message MatchRecord {
     commontype.QoS normal = 1;
     GroupMatchRecord group = 2;
   }
-}
-
-message MatchRecords{
-  repeated MatchRecord record = 1;
-}
-
-message InsertMatchRecord {
-  map<string, commontype.QoS> record = 1; // key: normal matchRecordKey
-}
-
-message InsertMatchRecordReply {
-  // TODO: refine the result
-}
-
-message JoinMatchGroup {
-  map<string, GroupMatchRecord> record = 1; // key: group matchRecordKey
-}
-
-message JoinMatchGroupReply {
-  enum Result{
-    OK = 0;
-    ExceedLimit = 1;
-  }
-  message Results{
-    map<string, Result> result = 1;
-  }
-  map<string, Results> result = 1; // key: group matchRecordKey utf8
-}
-
-message DeleteMatchRecord {
-  repeated string matchRecordKey = 1; // normal matchRecordKey utf8
-}
-
-message DeleteMatchRecordReply {
-  map<string, bool> exist = 1;
-}
-
-message QInboxIdList{
-  repeated string qInboxId = 1;
-}
-
-message LeaveMatchGroup {
-  map<string, QInboxIdList> record = 1; // key: group matchRecordKey, value: list of member qualified InboxId
-}
-
-message LeaveMatchGroupReply {
-}
-
-message ClearSubInfo {
-  repeated bytes subInfoKey = 1;
-}
-
-message ClearSubInfoReply {
-  repeated InboxSubInfo subInfo = 2;
-}
-
-message UpdateRequest{
-  uint64 reqId = 1;
-  optional AddTopicFilter addTopicFilter = 2;
-  optional RemoveTopicFilter removeTopicFilter = 3;
-  optional InsertMatchRecord insertMatchRecord = 4;
-  optional JoinMatchGroup joinMatchGroup = 5;
-  optional DeleteMatchRecord deleteMatchRecord = 6;
-  optional LeaveMatchGroup leaveMatchGroup = 7;
-  optional ClearSubInfo clearSubInfo = 8;
-}
-
-message UpdateReply{
-  uint64 reqId = 1;
-  optional AddTopicFilterReply addTopicFilter = 2;
-  optional RemoveTopicFilterReply removeTopicFilter = 3;
-  optional InsertMatchRecordReply insertMatchRecord = 4;
-  optional JoinMatchGroupReply joinMatchGroup = 5;
-  optional DeleteMatchRecordReply deleteMatchRecord = 6;
-  optional LeaveMatchGroupReply leaveMatchGroup = 7;
-  optional ClearSubInfoReply clearSubInfo = 8;
-}
-
-message GCRequest {
-  uint64 reqId = 1;
-}
-
-message GCReply {
-  uint64 reqId = 1;
 }
 
 message DistPack{
@@ -164,26 +76,30 @@ message CollectMetricsReply{
 }
 
 message DistServiceRWCoProcInput{
-  UpdateRequest updateRequest = 1;
+  oneof type{
+    BatchSubRequest batchSub = 1;
+    BatchUnsubRequest batchUnsub = 2;
+  }
 }
 
 message DistServiceRWCoProcOutput{
-  UpdateReply updateReply = 1;
+  oneof type{
+    BatchSubReply batchSub = 1;
+    BatchUnsubReply batchUnsub = 2;
+  }
 }
 
 message DistServiceROCoProcInput{
   oneof Input{
     BatchDist dist = 1;
-    GCRequest gcRequest = 2;
-    CollectMetricsRequest collectMetricsRequest = 3;
+    CollectMetricsRequest collectMetricsRequest = 2;
   }
 }
 
 message DistServiceROCoProcOutput{
   oneof Output{
     BatchDistReply distReply = 1;
-    GCReply gcReply = 2;
-    CollectMetricsReply collectMetricsReply = 3;
+    CollectMetricsReply collectMetricsReply = 2;
   }
 }
 

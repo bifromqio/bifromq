@@ -33,8 +33,6 @@ import com.google.protobuf.ByteString;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-
-import com.sun.source.tree.ModuleTree;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -92,12 +90,9 @@ public class DistQoS2Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        insertMatchRecord(tenantA, "/a/b/c", AT_MOST_ONCE,
-            MqttBroker, "inbox1", "server1");
-        insertMatchRecord(tenantA, "/#", AT_LEAST_ONCE,
-            MqttBroker, "inbox1", "server1");
-        insertMatchRecord(tenantA, "/#", EXACTLY_ONCE,
-            MqttBroker, "inbox2", "server2");
+        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        sub(tenantA, "/#", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
+        sub(tenantA, "/#", EXACTLY_ONCE, MqttBroker, "inbox2", "server2");
         BatchDistReply reply = dist(tenantA, EXACTLY_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
 
@@ -136,8 +131,8 @@ public class DistQoS2Test extends DistWorkerTest {
             assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
         }
 
-        deleteMatchRecord(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
-        deleteMatchRecord(tenantA, "/#", MqttBroker, "inbox1", "server1");
-        deleteMatchRecord(tenantA, "/#", MqttBroker, "inbox2", "server2");
+        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
+        unsub(tenantA, "/#", MqttBroker, "inbox1", "server1");
+        unsub(tenantA, "/#", MqttBroker, "inbox2", "server2");
     }
 }

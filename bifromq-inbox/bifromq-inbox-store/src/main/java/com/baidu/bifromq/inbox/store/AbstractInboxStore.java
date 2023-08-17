@@ -14,6 +14,8 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildCollectMetricsRequest;
 import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
@@ -25,17 +27,21 @@ import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
+import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.util.MessageUtil;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -43,7 +49,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -57,6 +62,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
 
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
+    private final IInboxReaderClient inboxReaderClient;
     private final IBaseKVStoreClient storeClient;
     private final KVRangeBalanceController balanceController;
     private final AsyncRunner jobRunner;
@@ -65,16 +71,18 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     private final Duration statsInterval;
     private final Duration gcInterval;
     private final Map<String, Long> tenantInboxSpaceSize = new ConcurrentHashMap<>();
-    private volatile ScheduledFuture<?> gcJob;
-    private volatile ScheduledFuture<?> statsJob;
+    private volatile CompletableFuture<Void> gcJob;
+    private volatile CompletableFuture<Void> statsJob;
     protected final InboxStoreCoProcFactory coProcFactory;
 
     public AbstractInboxStore(T builder) {
         this.clusterId = builder.clusterId;
+        this.inboxReaderClient = builder.inboxReaderClient;
         this.storeClient = builder.storeClient;
         this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
-        coProcFactory = new InboxStoreCoProcFactory(builder.eventCollector, builder.clock, builder.purgeDelay);
+        coProcFactory = new InboxStoreCoProcFactory(builder.settingProvider,
+            builder.eventCollector, builder.clock, builder.purgeDelay);
         balanceController =
             new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
@@ -100,8 +108,16 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             storeServer().start();
             balanceController.start(storeServer().storeId(clusterId));
             status.compareAndSet(Status.STARTING, Status.STARTED);
-            scheduleGC();
-            scheduleStats();
+            storeClient
+                .connState()
+                // observe the first READY state
+                .filter(connState -> connState == IConnectable.ConnState.READY)
+                .takeUntil(connState -> connState == IConnectable.ConnState.READY)
+                .doOnComplete(() -> {
+                    scheduleGC();
+                    scheduleStats();
+                })
+                .subscribe();
             log.info("Inbox store started");
         }
     }
@@ -109,15 +125,13 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Shutting down inbox store");
+            jobRunner.awaitDone();
             if (gcJob != null && !gcJob.isDone()) {
-                gcJob.cancel(true);
-                awaitIfNotCancelled(gcJob);
+                gcJob.join();
             }
             if (statsJob != null && !statsJob.isDone()) {
-                statsJob.cancel(true);
-                awaitIfNotCancelled(statsJob);
+                statsJob.join();
             }
-            jobRunner.awaitDone();
             balanceController.stop();
             storeServer().stop();
             log.debug("Stopping CoProcFactory");
@@ -135,7 +149,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         if (status.get() != Status.STARTED) {
             return;
         }
-        gcJob = jobScheduler.schedule(this::gc, gcInterval.toSeconds(), TimeUnit.SECONDS);
+        jobScheduler.schedule(this::gc, gcInterval.toSeconds(), TimeUnit.SECONDS);
     }
 
     private void gc() {
@@ -148,31 +162,81 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             List<CompletableFuture<?>> gcFutures = new ArrayList<>();
             while (itr.hasNext()) {
                 KVRangeSetting leaderReplica = itr.next();
-                gcFutures.add(gcRange(leaderReplica));
+                CompletableFuture<Void> onDone = new CompletableFuture<>();
+                gcFutures.add(onDone);
+                gcRange(leaderReplica, null, 100, onDone);
             }
-            CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0])).whenComplete((v, e) -> scheduleGC());
+            gcJob = CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0]))
+                .whenComplete((v, e) -> scheduleGC());
         });
     }
 
-    private CompletableFuture<Void> gcRange(KVRangeSetting leaderReplica) {
+    private void gcRange(KVRangeSetting leaderReplica,
+                         ByteString scopedInboxId,
+                         int limit,
+                         CompletableFuture<Void> onDone) {
         long reqId = System.currentTimeMillis();
-        return storeClient.execute(leaderReplica.leader, KVRangeRWRequest.newBuilder()
+        storeClient.query(leaderReplica.leader, KVRangeRORequest.newBuilder()
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRwCoProc(MessageUtil.buildGCRequest(reqId).toByteString())
+                .setRoCoProcInput(MessageUtil.buildGCRequest(reqId, scopedInboxId, limit).toByteString())
                 .build())
-            .thenAccept(reply -> log.debug("Range gc succeed: serverId={}, rangeId={}, ver={}",
-                leaderReplica.leader, leaderReplica.id, leaderReplica.ver))
+            .thenApply(v -> {
+                try {
+                    if (v.getCode() == ReplyCode.Ok) {
+                        return InboxServiceROCoProcOutput.parseFrom(v.getRoCoProcResult()).getGc()
+                            .getScopedInboxIdList();
+                    }
+                    throw new RuntimeException("BaseKV Query failed:" + v.getCode().name());
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
+            })
             .exceptionally(e -> {
-                log.error("Range gc failed: serverId={}, rangeId={}, ver={}",
+                log.error("[InboxGC] scan failed: serverId={}, rangeId={}, ver={}",
+                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver, e);
+                return Collections.emptyList();
+            })
+            .thenCompose(scopedInboxIdList -> {
+                log.debug("[InboxGC] scan succeed: serverId={}, rangeId={}, ver={}",
                     leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-                return null;
+                if (scopedInboxIdList.isEmpty()) {
+                    return CompletableFuture.completedFuture(null);
+                }
+                return CompletableFuture.allOf(scopedInboxIdList.stream()
+                        .map(scopedInboxIdToGc -> {
+                            String tenantId = parseTenantId(scopedInboxIdToGc);
+                            String inboxId = parseInboxId(scopedInboxIdToGc);
+                            return inboxReaderClient.touch(reqId, tenantId, inboxId)
+                                .handle((v, e) -> {
+                                    if (e != null) {
+                                        log.error("Failed to clean expired inbox", e);
+                                    } else {
+                                        log.debug("[InboxGC] clean success: tenantId={}, inboxId={}", tenantId, inboxId);
+                                    }
+                                    return null;
+                                });
+                        })
+                        .toArray(CompletableFuture[]::new))
+                    .thenApply(v -> scopedInboxIdList.get(scopedInboxIdList.size() - 1));
+            })
+            .thenAccept(startFromScopedInboxId -> {
+                if (startFromScopedInboxId != null) {
+                    jobRunner.add(() -> {
+                        if (status.get() != Status.STARTED) {
+                            return;
+                        }
+                        gcRange(leaderReplica, startFromScopedInboxId, limit, onDone);
+                    });
+                } else {
+                    onDone.complete(null);
+                }
             });
     }
 
     private void scheduleStats() {
-        statsJob = jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
+        jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void collectMetrics() {
@@ -187,7 +251,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 KVRangeSetting leaderReplica = itr.next();
                 statsFutures.add(collectRangeMetrics(leaderReplica));
             }
-            CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
+            statsJob = CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
                 .whenComplete((v, e) -> {
                     if (e == null) {
                         Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
@@ -247,15 +311,5 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                     leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
                 return CollectMetricsReply.newBuilder().setReqId(reqId).build();
             });
-    }
-
-    private <S> void awaitIfNotCancelled(ScheduledFuture<S> sf) {
-        try {
-            if (!sf.isCancelled()) {
-                sf.get();
-            }
-        } catch (Throwable e) {
-            log.error("Error during awaiting", e);
-        }
     }
 }

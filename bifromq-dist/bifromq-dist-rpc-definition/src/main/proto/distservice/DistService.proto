@@ -11,7 +11,6 @@ package distservice;
 service DistService {
   rpc sub (SubRequest) returns (SubReply);
   rpc unsub (UnsubRequest) returns (UnsubReply);
-  rpc clear(ClearRequest) returns (ClearReply);
   rpc dist (stream DistRequest) returns (stream DistReply);
 }
 
@@ -26,14 +25,13 @@ message SubRequest {
 }
 
 message SubReply {
-  enum SubResult {
-    OK_QoS0 = 0x00; // max qos0 granted
-    OK_QoS1 = 0x01; // max qos1 granted
-    OK_QoS2 = 0x02; // max qos2 granted
-    Failure = 0x80;
+  enum Result {
+    OK = 0;
+    EXCEED_LIMIT = 1;
+    ERROR = 2;
   }
   uint64 reqId = 1;
-  SubResult result = 2;
+  Result result = 2;
 }
 
 message UnsubRequest {
@@ -46,20 +44,12 @@ message UnsubRequest {
 }
 
 message UnsubReply {
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
   uint64 reqId = 1;
-  bool exist = 2;
-}
-
-message ClearRequest {
-  uint64 reqId = 1;
-  string tenantId = 2;
-  string inboxId = 3;
-  uint32 broker = 4;
-  string delivererKey = 5;
-}
-
-message ClearReply {
-  uint64 reqId = 1;
+  Result result = 2;
 }
 
 message DistRequest {

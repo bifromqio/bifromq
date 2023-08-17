@@ -89,8 +89,6 @@ public abstract class DistServiceTest {
         closeable = MockitoAnnotations.openMocks(this);
         when(subBrokerMgr.get(anyInt())).thenReturn(inboxBroker);
         when(inboxBroker.open(anyString())).thenReturn(inboxDeliverer);
-        when(inboxBroker.hasInbox(anyInt(), anyString(), anyString(), anyString())).thenReturn(
-            CompletableFuture.completedFuture(CheckResult.EXIST));
         queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(2, 2, 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),

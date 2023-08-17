@@ -15,18 +15,23 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.isEmptyRange;
-import static com.baidu.bifromq.dist.entity.EntityUtil.isSubInfoKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
-import static com.baidu.bifromq.dist.entity.EntityUtil.parseInbox;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
+import static com.baidu.bifromq.dist.entity.EntityUtil.parseOriginalTopicFilter;
+import static com.baidu.bifromq.dist.entity.EntityUtil.parseQInboxIdFromScopedTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTenantId;
+import static com.baidu.bifromq.dist.entity.EntityUtil.parseTenantIdFromScopedTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
+import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilterFromScopedTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toGroupMatchRecordKey;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toNormalMatchRecordKey;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
+import static com.baidu.bifromq.dist.util.TopicUtil.isNormalTopicFilter;
 import static com.baidu.bifromq.dist.util.TopicUtil.isWildcardTopicFilter;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_FAN_OUT_PARALLELISM;
 import static java.util.Collections.singletonMap;
-import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
@@ -36,49 +41,29 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
-import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.entity.GroupMatching;
-import com.baidu.bifromq.dist.entity.Inbox;
 import com.baidu.bifromq.dist.entity.Matching;
-import com.baidu.bifromq.dist.rpc.proto.AddTopicFilter;
-import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDist;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.dist.rpc.proto.ClearSubInfo;
-import com.baidu.bifromq.dist.rpc.proto.ClearSubInfoReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchSubReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchSubRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnsubReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnsubRequest;
 import com.baidu.bifromq.dist.rpc.proto.CollectMetricsReply;
-import com.baidu.bifromq.dist.rpc.proto.DeleteMatchRecord;
-import com.baidu.bifromq.dist.rpc.proto.DeleteMatchRecordReply;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
-import com.baidu.bifromq.dist.rpc.proto.GCReply;
-import com.baidu.bifromq.dist.rpc.proto.GCRequest;
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
-import com.baidu.bifromq.dist.rpc.proto.InboxSubInfo;
-import com.baidu.bifromq.dist.rpc.proto.InsertMatchRecord;
-import com.baidu.bifromq.dist.rpc.proto.InsertMatchRecordReply;
-import com.baidu.bifromq.dist.rpc.proto.JoinMatchGroup;
-import com.baidu.bifromq.dist.rpc.proto.JoinMatchGroupReply;
-import com.baidu.bifromq.dist.rpc.proto.LeaveMatchGroup;
-import com.baidu.bifromq.dist.rpc.proto.LeaveMatchGroupReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
-import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilter;
-import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
-import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
-import com.baidu.bifromq.dist.rpc.proto.UpdateRequest;
 import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.plugin.subbroker.CheckResult;
-import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -90,6 +75,7 @@ import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -143,11 +129,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
                             .setDistReply(v).build().toByteString());
                 }
-                case GCREQUEST -> {
-                    return gc(coProcInput.getGcRequest(), reader)
-                        .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
-                            .setGcReply(v).build().toByteString());
-                }
                 case COLLECTMETRICSREQUEST -> {
                     return collect(coProcInput.getCollectMetricsRequest().getReqId(), reader)
                         .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
@@ -176,12 +157,16 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         cis.enableAliasing(true);
         DistServiceRWCoProcInput coProcInput = DistServiceRWCoProcInput.parseFrom(cis);
         log.trace("Receive rw co-proc request\n{}", coProcInput);
-        UpdateRequest request = coProcInput.getUpdateRequest();
         Set<String> touchedTenants = Sets.newHashSet();
         Set<ScopedTopic> touchedTopics = Sets.newHashSet();
-        ByteString output = DistServiceRWCoProcOutput.newBuilder()
-            .setUpdateReply(batchUpdate(request, reader, writer, touchedTenants, touchedTopics))
-            .build().toByteString();
+        DistServiceRWCoProcOutput.Builder outputBuilder = DistServiceRWCoProcOutput.newBuilder();
+        switch (coProcInput.getTypeCase()) {
+            case BATCHSUB -> outputBuilder.setBatchSub(
+                batchSub(coProcInput.getBatchSub(), reader, writer, touchedTenants, touchedTopics));
+            case BATCHUNSUB -> outputBuilder.setBatchUnsub(
+                batchUnsub(coProcInput.getBatchUnsub(), reader, writer, touchedTenants, touchedTopics));
+        }
+        ByteString output = outputBuilder.build().toByteString();
         return () -> {
             touchedTopics.forEach(routeCache::invalidate);
             touchedTenants.forEach(routeCache::touch);
@@ -194,156 +179,41 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         fanoutExecutorGroup.shutdown();
     }
 
-    private UpdateReply batchUpdate(UpdateRequest request, IKVReader reader, IKVWriter writer,
-                                    Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
-        UpdateReply.Builder replyBuilder = UpdateReply.newBuilder().setReqId(request.getReqId());
-        if (request.hasAddTopicFilter()) {
-            replyBuilder.setAddTopicFilter(
-                addTopicFilter(request.getAddTopicFilter(), reader, writer));
-        }
-        if (request.hasRemoveTopicFilter()) {
-            replyBuilder.setRemoveTopicFilter(
-                removeTopicFilter(request.getRemoveTopicFilter(), reader, writer));
-        }
-        if (request.hasInsertMatchRecord()) {
-            replyBuilder.setInsertMatchRecord(
-                insertMatchRecord(request.getInsertMatchRecord(), reader, writer, touchedTenants, touchedTopics));
-        }
-        if (request.hasDeleteMatchRecord()) {
-            replyBuilder.setDeleteMatchRecord(
-                deleteMatchRecord(request.getDeleteMatchRecord(), reader, writer, touchedTenants, touchedTopics));
-        }
-        if (request.hasJoinMatchGroup()) {
-            replyBuilder.setJoinMatchGroup(
-                joinMatchGroup(request.getJoinMatchGroup(), reader, writer, touchedTenants, touchedTopics));
-        }
-        if (request.hasLeaveMatchGroup()) {
-            replyBuilder.setLeaveMatchGroup(
-                leaveMatchGroup(request.getLeaveMatchGroup(), reader, writer, touchedTenants, touchedTopics));
-        }
-        if (request.hasClearSubInfo()) {
-            replyBuilder.setClearSubInfo(clearSubInfo(request.getClearSubInfo(), reader, writer));
-        }
-        return replyBuilder.build();
-    }
-
-    private AddTopicFilterReply addTopicFilter(AddTopicFilter request, IKVReader reader, IKVWriter writer) {
-        AddTopicFilterReply.Builder replyBuilder = AddTopicFilterReply.newBuilder();
-        for (String subInfoKeyUtf8 : request.getTopicFilterMap().keySet()) {
-            String tenantId = parseTenantId(subInfoKeyUtf8);
-            ByteString key = ByteString.copyFromUtf8(subInfoKeyUtf8);
-            InboxSubInfo subInfo = reader.get(key).map(b -> {
-                try {
-                    return InboxSubInfo.parseFrom(b);
-                } catch (InvalidProtocolBufferException e) {
-                    log.error("Unable to parse SubInfo", e);
-                    return InboxSubInfo.getDefaultInstance();
-                }
-            }).orElse(InboxSubInfo.getDefaultInstance());
-
-            AddTopicFilterReply.Results.Builder subResultBuilder = AddTopicFilterReply.Results.newBuilder();
-            InboxSubInfo newTopicFilters = request.getTopicFilterMap().get(subInfoKeyUtf8);
-            boolean update = false;
-            for (String topicFilter : newTopicFilters.getTopicFiltersMap().keySet()) {
-                QoS subQoS = newTopicFilters.getTopicFiltersMap().get(topicFilter);
-                if (subInfo.getTopicFiltersMap().get(topicFilter) != subQoS) {
-                    if (subInfo.getTopicFiltersCount() <
-                        (int) settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)) {
-                        subInfo = subInfo.toBuilder().putTopicFilters(topicFilter, subQoS).build();
-                        subResultBuilder.putResults(topicFilter, AddTopicFilterReply.Result.OK);
-                        update = true;
+    private BatchSubReply batchSub(BatchSubRequest request,
+                                   IKVReader reader,
+                                   IKVWriter writer,
+                                   Set<String> touchedTenants,
+                                   Set<ScopedTopic> touchedTopics) {
+        BatchSubReply.Builder replyBuilder = BatchSubReply.newBuilder()
+            .setReqId(request.getReqId());
+        Map<ByteString, Map<String, QoS>> groupMatchRecords = new HashMap<>();
+        request.getScopedTopicFilterMap().forEach((scopedTopicFilter, subQoS) -> {
+            String tenantId = parseTenantIdFromScopedTopicFilter(scopedTopicFilter);
+            String qInboxId = parseQInboxIdFromScopedTopicFilter(scopedTopicFilter);
+            String topicFilter = parseTopicFilterFromScopedTopicFilter(scopedTopicFilter);
+            if (isNormalTopicFilter(topicFilter)) {
+                ByteString normalMatchRecordKey = toNormalMatchRecordKey(tenantId, topicFilter, qInboxId);
+                if (!reader.exist(normalMatchRecordKey)) {
+                    writer.put(normalMatchRecordKey, MatchRecord.newBuilder().setNormal(subQoS).build().toByteString());
+                    if (isWildcardTopicFilter(topicFilter)) {
+                        touchedTenants.add(tenantId);
                     } else {
-                        subResultBuilder.putResults(topicFilter, AddTopicFilterReply.Result.ExceedQuota);
+                        touchedTopics.add(ScopedTopic.builder()
+                            .tenantId(tenantId)
+                            .topic(topicFilter)
+                            .range(reader.range())
+                            .build());
                     }
-                } else {
-                    subResultBuilder.putResults(topicFilter, AddTopicFilterReply.Result.OK);
                 }
+                replyBuilder.putResults(scopedTopicFilter, BatchSubReply.Result.OK);
+            } else {
+                ByteString groupMatchRecordKey = toGroupMatchRecordKey(tenantId, topicFilter);
+                groupMatchRecords.computeIfAbsent(groupMatchRecordKey, k -> new HashMap<>()).put(qInboxId, subQoS);
             }
-            if (update) {
-                writer.put(key, subInfo.toByteString());
-            }
-            replyBuilder.putResult(subInfoKeyUtf8, subResultBuilder.build());
-        }
-        return replyBuilder.build();
-    }
-
-    private RemoveTopicFilterReply removeTopicFilter(RemoveTopicFilter request, IKVReader reader, IKVWriter writer) {
-        RemoveTopicFilterReply.Builder replyBuilder = RemoveTopicFilterReply.newBuilder();
-        for (String subInfoKeyUtf8 : request.getTopicFilterMap().keySet()) {
-            ByteString key = ByteString.copyFromUtf8(subInfoKeyUtf8);
-            boolean ok = false;
-            Optional<InboxSubInfo> subInfo = reader.get(key).map(b -> {
-                try {
-                    return InboxSubInfo.parseFrom(b);
-                } catch (InvalidProtocolBufferException e) {
-                    log.error("Unable to parse SubInfo", e);
-                    return null;
-                }
-            });
-
-            InboxSubInfo.Builder subInfoBuilder = subInfo.orElse(InboxSubInfo.getDefaultInstance()).toBuilder();
-            RemoveTopicFilterReply.Results.Builder resultBuilder = RemoveTopicFilterReply.Results.newBuilder();
-            for (String topicFilter : request.getTopicFilterMap().get(subInfoKeyUtf8).getTopicFilterList()) {
-                if (subInfoBuilder.getTopicFiltersMap().containsKey(topicFilter)) {
-                    subInfoBuilder.removeTopicFilters(topicFilter);
-                    ok = true;
-                    resultBuilder.putResult(topicFilter, true);
-                } else {
-                    resultBuilder.putResult(topicFilter, false);
-                }
-            }
-
-            if (ok) {
-                if (subInfoBuilder.getTopicFiltersCount() == 0) {
-                    writer.delete(key);
-                } else {
-                    writer.put(key, subInfoBuilder.build().toByteString());
-                }
-            }
-            replyBuilder.putResult(subInfoKeyUtf8, resultBuilder.build());
-        }
-        return replyBuilder.build();
-    }
-
-    private InsertMatchRecordReply insertMatchRecord(InsertMatchRecord request, IKVReader reader, IKVWriter writer,
-                                                     Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
-        InsertMatchRecordReply.Builder replyBuilder = InsertMatchRecordReply.newBuilder();
-        for (String matchRecordKey : request.getRecordMap().keySet()) {
-            ByteString key = ByteString.copyFromUtf8(matchRecordKey);
-            QoS subQoS = request.getRecordMap().get(matchRecordKey);
-            switch (subQoS) {
-                case AT_MOST_ONCE:
-                case AT_LEAST_ONCE:
-                case EXACTLY_ONCE:
-                    if (!reader.exist(key)) {
-                        writer.put(key, MatchRecord.newBuilder().setNormal(subQoS).build().toByteString());
-
-                        String tenantId = EntityUtil.parseTenantId(matchRecordKey);
-                        String topicFilter = parseTopicFilter(matchRecordKey);
-                        if (isWildcardTopicFilter(topicFilter)) {
-                            touchedTenants.add(EntityUtil.parseTenantId(matchRecordKey));
-                        } else {
-                            touchedTopics.add(ScopedTopic.builder()
-                                .tenantId(tenantId)
-                                .topic(topicFilter)
-                                .range(reader.range())
-                                .build());
-                        }
-                    }
-                    break;
-            }
-        }
-        return replyBuilder.build();
-    }
-
-    private JoinMatchGroupReply joinMatchGroup(JoinMatchGroup request, IKVReader reader, IKVWriter writer,
-                                               Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
-        JoinMatchGroupReply.Builder replyBuilder = JoinMatchGroupReply.newBuilder();
-        for (String matchRecordKeyUtf8 : request.getRecordMap().keySet()) {
-            String tenantId = parseTenantId(matchRecordKeyUtf8);
-            ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
-            GroupMatchRecord newMembers = request.getRecordMap().get(matchRecordKeyUtf8);
-            GroupMatchRecord.Builder matchGroup = reader.get(matchRecordKey)
+        });
+        groupMatchRecords.forEach((groupMatchRecordKey, newGroupMembers) -> {
+            String tenantId = parseTenantId(groupMatchRecordKey);
+            GroupMatchRecord.Builder matchGroup = reader.get(groupMatchRecordKey)
                 .map(b -> {
                     try {
                         return MatchRecord.parseFrom(b).getGroup();
@@ -354,97 +224,64 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 })
                 .orElse(GroupMatchRecord.getDefaultInstance()).toBuilder();
 
-            JoinMatchGroupReply.Results.Builder resultBuilder = JoinMatchGroupReply.Results.newBuilder();
             boolean updated = false;
-            for (String qInboxId : newMembers.getEntryMap().keySet()) {
-                QoS subQoS = newMembers.getEntryMap().get(qInboxId);
-                if (!matchGroup.containsEntry(qInboxId) &&
-                    matchGroup.getEntryCount() <
-                        (int) settingProvider.provide(Setting.MaxSharedGroupMembers, tenantId)) {
-                    matchGroup.putEntry(qInboxId, subQoS);
-                    resultBuilder.putResult(qInboxId, JoinMatchGroupReply.Result.OK);
-                    updated = true;
+            int maxMembers = settingProvider.provide(Setting.MaxSharedGroupMembers, tenantId);
+            for (String newQInboxId : newGroupMembers.keySet()) {
+                QoS newSubQoS = newGroupMembers.get(newQInboxId);
+                QoS oldSubQoS = matchGroup.getEntryMap().get(newQInboxId);
+                if (oldSubQoS != newSubQoS) {
+                    if (oldSubQoS != null || matchGroup.getEntryCount() < maxMembers) {
+                        matchGroup.putEntry(newQInboxId, newSubQoS);
+                        replyBuilder.putResults(toScopedTopicFilter(tenantId, newQInboxId,
+                                parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
+                            BatchSubReply.Result.OK);
+                        updated = true;
+                    } else {
+                        replyBuilder.putResults(toScopedTopicFilter(tenantId, newQInboxId,
+                                parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
+                            BatchSubReply.Result.EXCEED_LIMIT);
+                    }
                 } else {
-                    resultBuilder.putResult(qInboxId, JoinMatchGroupReply.Result.ExceedLimit);
+                    replyBuilder.putResults(toScopedTopicFilter(tenantId, newQInboxId,
+                            parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
+                        BatchSubReply.Result.OK);
                 }
             }
             if (updated) {
-                writer.put(matchRecordKey, MatchRecord.newBuilder().setGroup(matchGroup).build().toByteString());
-                String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
-                if (isWildcardTopicFilter(topicFilter)) {
-                    touchedTenants.add(parseTenantId(matchRecordKey));
+                writer.put(groupMatchRecordKey, MatchRecord.newBuilder().setGroup(matchGroup).build().toByteString());
+                String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());
+                if (isWildcardTopicFilter(groupTopicFilter)) {
+                    touchedTenants.add(parseTenantId(groupMatchRecordKey));
                 } else {
                     touchedTopics.add(ScopedTopic.builder()
-                        .tenantId(tenantId)
-                        .topic(topicFilter)
+                        .tenantId(parseTenantId(groupMatchRecordKey))
+                        .topic(groupTopicFilter)
                         .range(reader.range())
                         .build());
                 }
             }
-            replyBuilder.putResult(matchRecordKeyUtf8, resultBuilder.build());
-        }
+        });
         return replyBuilder.build();
     }
 
-    private DeleteMatchRecordReply deleteMatchRecord(DeleteMatchRecord request, IKVReader reader, IKVWriter writer,
-                                                     Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
-        DeleteMatchRecordReply.Builder replyBuilder = DeleteMatchRecordReply.newBuilder();
-        for (String matchRecordKeyUtf8 : request.getMatchRecordKeyList()) {
-            ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
-            Optional<ByteString> value = reader.get(matchRecordKey);
-
-            if (value.isPresent()) {
-                writer.delete(matchRecordKey);
-
-                String tenantId = parseTenantId(matchRecordKey);
-                String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
-                if (isWildcardTopicFilter(topicFilter)) {
-                    touchedTenants.add(parseTenantId(matchRecordKey));
-                } else {
-                    touchedTopics.add(ScopedTopic.builder()
-                        .tenantId(tenantId)
-                        .topic(topicFilter)
-                        .range(reader.range())
-                        .build());
-                }
-                replyBuilder.putExist(matchRecordKeyUtf8, true);
-            } else {
-                replyBuilder.putExist(matchRecordKeyUtf8, false);
-            }
-        }
-        return replyBuilder.build();
-    }
-
-    private LeaveMatchGroupReply leaveMatchGroup(LeaveMatchGroup request, IKVReader reader, IKVWriter writer,
-                                                 Set<String> touchedTenants, Set<ScopedTopic> touchedTopics) {
-        for (String matchRecordKeyUtf8 : request.getRecordMap().keySet()) {
-            ByteString matchRecordKey = ByteString.copyFromUtf8(matchRecordKeyUtf8);
-            Optional<ByteString> value = reader.get(matchRecordKey);
-
-            if (value.isPresent()) {
-                Matching matching = parseMatchRecord(matchRecordKey, value.get());
-                assert matching instanceof GroupMatching;
-                GroupMatching groupMatching = (GroupMatching) matching;
-                Map<String, QoS> existing = Maps.newHashMap(groupMatching.inboxMap);
-                for (String qualifiedInboxId : request.getRecordMap()
-                    .get(matchRecordKeyUtf8)
-                    .getQInboxIdList()) {
-                    existing.remove(qualifiedInboxId);
-                }
-                if (existing.size() != groupMatching.inboxMap.size()) {
-                    if (existing.isEmpty()) {
-                        writer.delete(matchRecordKey);
-                    } else {
-                        writer.put(matchRecordKey, MatchRecord.newBuilder()
-                            .setGroup(GroupMatchRecord.newBuilder()
-                                .putAllEntry(existing)
-                                .build()).build()
-                            .toByteString());
-                    }
-                    String tenantId = parseTenantId(matchRecordKey);
-                    String topicFilter = parseTopicFilter(matchRecordKeyUtf8);
+    private BatchUnsubReply batchUnsub(BatchUnsubRequest request,
+                                       IKVReader reader,
+                                       IKVWriter writer,
+                                       Set<String> touchedTenants,
+                                       Set<ScopedTopic> touchedTopics) {
+        BatchUnsubReply.Builder replyBuilder = BatchUnsubReply.newBuilder().setReqId(request.getReqId());
+        Map<ByteString, Set<String>> delGroupMatchRecords = new HashMap<>();
+        for (String scopedTopicFilter : request.getScopedTopicFilterList()) {
+            String tenantId = parseTenantIdFromScopedTopicFilter(scopedTopicFilter);
+            String qInboxId = parseQInboxIdFromScopedTopicFilter(scopedTopicFilter);
+            String topicFilter = parseTopicFilterFromScopedTopicFilter(scopedTopicFilter);
+            if (isNormalTopicFilter(topicFilter)) {
+                ByteString normalMatchRecordKey = toNormalMatchRecordKey(tenantId, topicFilter, qInboxId);
+                Optional<ByteString> value = reader.get(normalMatchRecordKey);
+                if (value.isPresent()) {
+                    writer.delete(normalMatchRecordKey);
                     if (isWildcardTopicFilter(topicFilter)) {
-                        touchedTenants.add(parseTenantId(matchRecordKey));
+                        touchedTenants.add(tenantId);
                     } else {
                         touchedTopics.add(ScopedTopic.builder()
                             .tenantId(tenantId)
@@ -452,27 +289,63 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             .range(reader.range())
                             .build());
                     }
+                    replyBuilder.putResults(scopedTopicFilter, BatchUnsubReply.Result.OK);
+                } else {
+                    replyBuilder.putResults(scopedTopicFilter, BatchUnsubReply.Result.NOT_EXISTED);
                 }
+            } else {
+                ByteString groupMatchRecordKey = toGroupMatchRecordKey(tenantId, topicFilter);
+                delGroupMatchRecords.computeIfAbsent(groupMatchRecordKey, k -> new HashSet<>()).add(qInboxId);
             }
         }
-        return LeaveMatchGroupReply.getDefaultInstance();
-    }
+        delGroupMatchRecords.forEach((groupMatchRecordKey, delGroupMembers) -> {
+            String tenantId = parseTenantId(groupMatchRecordKey);
+            Optional<ByteString> value = reader.get(groupMatchRecordKey);
+            if (value.isPresent()) {
+                Matching matching = parseMatchRecord(groupMatchRecordKey, value.get());
+                assert matching instanceof GroupMatching;
+                GroupMatching groupMatching = (GroupMatching) matching;
+                Map<String, QoS> existing = Maps.newHashMap(groupMatching.inboxMap);
+                for (String delQInboxId : delGroupMembers) {
+                    if (existing.remove(delQInboxId) != null) {
+                        replyBuilder.putResults(
+                            toScopedTopicFilter(tenantId, delQInboxId, groupMatching.originalTopicFilter()),
+                            BatchUnsubReply.Result.OK);
 
-    private ClearSubInfoReply clearSubInfo(ClearSubInfo request, IKVReader reader, IKVWriter writer) {
-        ClearSubInfoReply.Builder replyBuilder = ClearSubInfoReply.newBuilder();
-        for (ByteString subInfoKey : request.getSubInfoKeyList()) {
-            Optional<InboxSubInfo> subInfo = reader.get(subInfoKey).map(b -> {
-                try {
-                    return InboxSubInfo.parseFrom(b);
-                } catch (InvalidProtocolBufferException e) {
-                    return null;
+                    } else {
+                        replyBuilder.putResults(
+                            toScopedTopicFilter(tenantId, delQInboxId, groupMatching.originalTopicFilter()),
+                            BatchUnsubReply.Result.NOT_EXISTED);
+                    }
                 }
-            });
-            if (subInfo.isPresent()) {
-                writer.delete(subInfoKey);
+                if (existing.size() != groupMatching.inboxMap.size()) {
+                    if (existing.isEmpty()) {
+                        writer.delete(groupMatchRecordKey);
+                    } else {
+                        writer.put(groupMatchRecordKey, MatchRecord.newBuilder()
+                            .setGroup(GroupMatchRecord.newBuilder()
+                                .putAllEntry(existing)
+                                .build()).build()
+                            .toByteString());
+                    }
+                    String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());
+                    if (isWildcardTopicFilter(groupTopicFilter)) {
+                        touchedTenants.add(parseTenantId(groupMatchRecordKey));
+                    } else {
+                        touchedTopics.add(ScopedTopic.builder()
+                            .tenantId(parseTenantId(groupMatchRecordKey))
+                            .topic(groupTopicFilter)
+                            .range(reader.range())
+                            .build());
+                    }
+                }
+            } else {
+                delGroupMembers.forEach(delQInboxId ->
+                    replyBuilder.putResults(toScopedTopicFilter(tenantId, delQInboxId,
+                            parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
+                        BatchUnsubReply.Result.NOT_EXISTED));
             }
-            replyBuilder.addSubInfo(subInfo.orElse(InboxSubInfo.getDefaultInstance()));
-        }
+        });
         return replyBuilder.build();
     }
 
@@ -523,53 +396,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         f -> TopicFanout.newBuilder().putAllFanout(f).build()))
                     .build();
             });
-    }
-
-    private CompletableFuture<GCReply> gc(GCRequest request, IKVReader reader) {
-        List<CompletableFuture<Void>> clearFutures = new ArrayList<>();
-        try (IKVIterator itr = reader.iterator()) {
-            for (itr.seekToFirst(); itr.isValid(); ) {
-                String tenantId = parseTenantId(itr.key());
-                if (isSubInfoKey(itr.key())) {
-                    Inbox inbox = parseInbox(itr.key());
-                    ISubBroker subBroker = subBrokerManager.get(inbox.broker);
-                    clearFutures.add(subBrokerManager.get(inbox.broker)
-                        .hasInbox(request.getReqId(), tenantId, inbox.inboxId, inbox.delivererKey)
-                        .exceptionally(e -> {
-                            if (e instanceof ServerNotFoundException ||
-                                e.getCause() instanceof ServerNotFoundException) {
-                                // TODO: taking MTTR into account when reporting server not found
-                                // ServerNotFoundException is thrown only when DD-semantic is used
-                                // For even-numbered id: the inbox id is bound to server and unrecoverable after crash, so SERVER_NOT_FOUND is highly likely indicating all inboxes on that server are gone and all associated subscriptions have to be cleaned
-                                // For odd-numbered id: the inbox id is bound to server and recoverable after crash
-                                return subBroker.id() % 2 == 0 ? CheckResult.NO_INBOX : CheckResult.FAILED;
-                            }
-                            return CheckResult.FAILED;
-                        })
-                        .thenCompose(checkResult -> {
-                            if (checkResult == CheckResult.NO_INBOX) {
-                                return distClient.clear(request.getReqId(), tenantId, inbox.inboxId, inbox.delivererKey,
-                                    inbox.broker);
-                            }
-                            return CompletableFuture.completedFuture(null);
-                        })
-                        .exceptionally(e -> {
-                            log.warn(
-                                "[GC]Clear subscription failed: tenantId={}, inboxId={}, delivererKey={}, brokerId={}",
-                                tenantId, inbox.inboxId, inbox.delivererKey, inbox.broker, e);
-                            return null;
-                        })
-                    );
-                    itr.next();
-                } else {
-                    itr.seek(tenantUpperBound(tenantId));
-                }
-            }
-        } catch (Exception e) {
-            log.error("Unexpected error", e);
-        }
-        return allOf(clearFutures.toArray(new CompletableFuture[0]))
-            .handle((v, e) -> GCReply.newBuilder().setReqId(request.getReqId()).build());
     }
 
     private CompletableFuture<CollectMetricsReply> collect(long reqId, IKVReader reader) {

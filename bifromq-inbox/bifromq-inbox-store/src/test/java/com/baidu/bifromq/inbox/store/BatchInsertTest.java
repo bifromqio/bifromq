@@ -55,6 +55,7 @@ public class BatchInsertTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(QoS.AT_LEAST_ONCE, "world");
         TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 3, 600, false);
+        requestSub(tenantId, inboxId, "greeting", QoS.EXACTLY_ONCE);
         requestInsert(tenantId, inboxId,
             MessagePack.newBuilder()
                 .setSubInfo(subInfo1)
@@ -119,6 +120,7 @@ public class BatchInsertTest extends InboxStoreTest {
 
         TopicMessagePack.PublisherPack msg = message(QoS.EXACTLY_ONCE, "hello world");
         requestCreate(tenantId, inboxId, 10, 600, false);
+        requestSub(tenantId, inboxId, "greeting", QoS.EXACTLY_ONCE);
         requestInsert(tenantId, inboxId,
             MessagePack.newBuilder()
                 .setSubInfo(subInfo)

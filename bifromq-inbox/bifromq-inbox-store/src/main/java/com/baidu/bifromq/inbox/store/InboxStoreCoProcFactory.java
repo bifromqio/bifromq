@@ -22,17 +22,21 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.protobuf.ByteString;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.function.Supplier;
 
 public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
+    private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final Clock clock;
     private final Duration purgeDelay;
 
-    public InboxStoreCoProcFactory(IEventCollector eventCollector, Clock clock, Duration purgeDelay) {
+    public InboxStoreCoProcFactory(ISettingProvider settingProvider, IEventCollector eventCollector, Clock clock,
+                                   Duration purgeDelay) {
+        this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.clock = clock;
         this.purgeDelay = purgeDelay;
@@ -45,7 +49,8 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
 
     @Override
     public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, ILoadTracker loadTracker) {
-        return new InboxStoreCoProc(id, rangeReaderProvider, eventCollector, clock, purgeDelay, loadTracker);
+        return new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector, clock, purgeDelay,
+            loadTracker);
     }
 
     public void close() {

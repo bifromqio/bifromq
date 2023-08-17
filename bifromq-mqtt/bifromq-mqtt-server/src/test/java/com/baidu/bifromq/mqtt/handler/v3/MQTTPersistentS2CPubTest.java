@@ -35,6 +35,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -107,8 +108,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
-        verify(distClient, times(5)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(inboxClient, times(5)).unsub(anyLong(), anyString(), anyString(), any(ClientInfo.class));
     }
 
     @Test
@@ -178,8 +178,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
         verifyEvent(4, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
-        verify(distClient, times(messageCount)).unsub(
-            anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(inboxClient, times(messageCount)).unsub(anyLong(), anyString(), anyString(), any(ClientInfo.class));
     }
 
     @Test
@@ -221,8 +220,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
         verifyEvent(4, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
-        verify(distClient, times(messageCount))
-            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(inboxClient, times(messageCount)).unsub(anyLong(), anyString(), anyString(), any(ClientInfo.class));
     }
 
     @Test

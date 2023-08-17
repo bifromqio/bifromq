@@ -13,11 +13,9 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_CLIENT_INFO;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_INBOX_ID;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ;
-import static com.baidu.bifromq.inbox.util.PipelineUtil.encode;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -52,7 +50,6 @@ class InboxReaderPipeline implements IInboxReaderClient.IInboxReader {
         this.rpcClient = rpcClient;
         Map<String, String> metadata = new HashMap<>() {{
             put(PIPELINE_ATTR_KEY_INBOX_ID, inboxId);
-            put(PIPELINE_ATTR_KEY_CLIENT_INFO, encode(clientInfo));
         }};
         ppln = rpcClient.createMessageStream(clientInfo.getTenantId(), null, delivererKey, () -> {
                 metadata.put(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ, lastFetchQoS0Seq + "");

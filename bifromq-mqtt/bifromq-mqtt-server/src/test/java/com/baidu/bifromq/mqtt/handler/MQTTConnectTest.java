@@ -79,9 +79,8 @@ public class MQTTConnectTest extends BaseMQTTTest {
         // clear failed
         mockAuthPass();
         mockSessionReg();
-        mockInboxDelete(true);
         mockInboxHas(true);
-        mockDistClear(false);
+        mockInboxDelete(false);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);

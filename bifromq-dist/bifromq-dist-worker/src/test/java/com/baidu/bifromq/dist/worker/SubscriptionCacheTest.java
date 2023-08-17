@@ -225,10 +225,10 @@ public class SubscriptionCacheTest {
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(true, false);
-        String qInboxId = EntityUtil.toQualifiedInboxId(0, "inbox1", "deliverer1");
+        String qInboxId = EntityUtil.toQInboxId(0, "inbox1", "deliverer1");
         String sharedTopicFilter = "$oshare/group/" + scopedTopic.topic;
         when(kvIterator.key())
-            .thenReturn(EntityUtil.matchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId));
+            .thenReturn(EntityUtil.toMatchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId));
         when(kvIterator.value())
             .thenReturn(MatchRecord.newBuilder()
                 .setGroup(GroupMatchRecord.newBuilder().putEntry(qInboxId, QoS.AT_MOST_ONCE).build())
@@ -262,12 +262,12 @@ public class SubscriptionCacheTest {
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(true, false, true, false, true, false);
-        String qInboxId1 = EntityUtil.toQualifiedInboxId(0, "inbox1", "deliverer1");
-        String qInboxId2 = EntityUtil.toQualifiedInboxId(0, "inbox2", "deliverer1");
-        String qInboxId3 = EntityUtil.toQualifiedInboxId(0, "inbox3", "deliverer1");
+        String qInboxId1 = EntityUtil.toQInboxId(0, "inbox1", "deliverer1");
+        String qInboxId2 = EntityUtil.toQInboxId(0, "inbox2", "deliverer1");
+        String qInboxId3 = EntityUtil.toQInboxId(0, "inbox3", "deliverer1");
         String sharedTopicFilter = "$oshare/group/" + scopedTopic.topic;
         when(kvIterator.key())
-            .thenReturn(EntityUtil.matchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId1));
+            .thenReturn(EntityUtil.toMatchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId1));
         when(kvIterator.value())
             .thenReturn(
                 MatchRecord.newBuilder()

@@ -13,13 +13,14 @@
 
 package com.baidu.bifromq.dist.worker;
 
+import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -45,23 +46,17 @@ import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
-import com.baidu.bifromq.dist.rpc.proto.AddTopicFilterReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDist;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.dist.rpc.proto.ClearSubInfoReply;
-import com.baidu.bifromq.dist.rpc.proto.DeleteMatchRecordReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchSubReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchSubRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnsubReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnsubRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
-import com.baidu.bifromq.dist.rpc.proto.InsertMatchRecordReply;
-import com.baidu.bifromq.dist.rpc.proto.JoinMatchGroupReply;
-import com.baidu.bifromq.dist.rpc.proto.LeaveMatchGroupReply;
-import com.baidu.bifromq.dist.rpc.proto.RemoveTopicFilterReply;
-import com.baidu.bifromq.dist.rpc.proto.SubRequest;
-import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
-import com.baidu.bifromq.dist.rpc.proto.UpdateReply;
 import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -169,12 +164,6 @@ public abstract class DistWorkerTest {
         lenient().when(settingProvider.provide(Setting.MaxSharedGroupMembers, tenantB)).thenReturn(200);
         lenient().when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         lenient().when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
-        lenient().when(mqttBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.EXIST));
-        lenient().when(inboxBroker.hasInbox(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.EXIST));
-        lenient().when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(null));
 
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -245,7 +234,6 @@ public abstract class DistWorkerTest {
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(balanceControllerOptions)
-            .gcInterval(Duration.ofSeconds(1))
             .statsInterval(Duration.ofSeconds(1))
             .storeOptions(options)
             .subBrokerManager(receiverManager)
@@ -281,23 +269,19 @@ public abstract class DistWorkerTest {
         closeable.close();
     }
 
-    protected AddTopicFilterReply addTopicFilter(String tenantId, String topicFilter, QoS subQoS,
-                                                 int subBroker, String inboxId, String delivererKey) {
+    protected BatchSubReply.Result sub(String tenantId, String topicFilter, QoS subQoS,
+                                       int subBroker, String inboxId, String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString subInfoKey =
-                EntityUtil.subInfoKey(tenantId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
-            KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
-            SubRequest request = SubRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setTopicFilter(topicFilter)
-                .setSubQoS(subQoS)
-                .setInboxId(inboxId)
-                .setBroker(subBroker)
-                .setDelivererKey(delivererKey)
+            String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
+            KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
+            String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
+            DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
+                .setBatchSub(BatchSubRequest.newBuilder()
+                    .setReqId(reqId)
+                    .putScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter), subQoS)
+                    .build())
                 .build();
-            DistServiceRWCoProcInput input = MessageUtil.buildAddTopicFilterRequest(request);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)
                 .setVer(s.ver)
@@ -306,31 +290,26 @@ public abstract class DistWorkerTest {
                 .build()).join();
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
-            UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
-            assertTrue(updateReply.hasAddTopicFilter());
-            assertEquals(updateReply.getReqId(), reqId);
-            return updateReply.getAddTopicFilter();
+            BatchSubReply batchSubReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchSub();
+            assertEquals(batchSubReply.getReqId(), reqId);
+            return batchSubReply.getResultsMap().get(scopedTopicFilter);
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected RemoveTopicFilterReply removeTopicFilter(String tenantId, String topicFilter,
-                                                       int subBroker, String inboxId, String delivererKey) {
+    protected BatchUnsubReply.Result unsub(String tenantId, String topicFilter, int subBroker, String inboxId,
+                                           String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString subInfoKey =
-                EntityUtil.subInfoKey(tenantId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
-            KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
-            UnsubRequest request = UnsubRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setTopicFilter(topicFilter)
-                .setBroker(subBroker)
-                .setInboxId(inboxId)
-                .setDelivererKey(delivererKey)
-                .build();
-            DistServiceRWCoProcInput input = MessageUtil.buildRemoveTopicFilterRequest(request);
+            String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
+            KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
+            String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
+            DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
+                .setBatchUnsub(BatchUnsubRequest.newBuilder()
+                    .setReqId(reqId)
+                    .addScopedTopicFilter(scopedTopicFilter)
+                    .build()).build();
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)
                 .setVer(s.ver)
@@ -339,157 +318,10 @@ public abstract class DistWorkerTest {
                 .build()).join();
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
-            UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
-            assertTrue(updateReply.hasRemoveTopicFilter());
-            assertEquals(updateReply.getReqId(), reqId);
-            return updateReply.getRemoveTopicFilter();
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    protected InsertMatchRecordReply insertMatchRecord(String tenantId, String topicFilter, QoS subQoS,
-                                                       int subBroker, String inboxId, String delivererKey) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString matchRecordKey = EntityUtil.matchRecordKey(tenantId, topicFilter,
-                EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
-            KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
-            SubRequest.Builder reqBuilder = SubRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setTopicFilter(topicFilter)
-                .setInboxId(inboxId)
-                .setBroker(subBroker)
-                .setSubQoS(subQoS)
-                .setDelivererKey(delivererKey);
-
-            DistServiceRWCoProcInput input = MessageUtil.buildInsertMatchRecordRequest(reqBuilder.build());
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
-            assertTrue(updateReply.hasInsertMatchRecord());
-            assertEquals(updateReply.getReqId(), reqId);
-            return updateReply.getInsertMatchRecord();
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    protected DeleteMatchRecordReply deleteMatchRecord(String tenantId, String topicFilter,
-                                                       int subBroker, String inboxId, String serverId) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            String scopedInboxId = EntityUtil.toQualifiedInboxId(subBroker, inboxId, serverId);
-            ByteString matchRecordKey = EntityUtil.matchRecordKey(tenantId, topicFilter, scopedInboxId);
-            KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
-            DistServiceRWCoProcInput input = MessageUtil.buildDeleteMatchRecordRequest(reqId, tenantId, scopedInboxId,
-                topicFilter);
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
-            assertTrue(updateReply.hasDeleteMatchRecord());
-            assertEquals(updateReply.getReqId(), reqId);
-            return updateReply.getDeleteMatchRecord();
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    protected JoinMatchGroupReply joinMatchGroup(String tenantId, String topicFilter, QoS subQoS,
-                                                 int subBroker, String inboxId, String delivererKey) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString matchRecordKey = EntityUtil.matchRecordKey(tenantId, topicFilter,
-                EntityUtil.toQualifiedInboxId(subBroker, inboxId, delivererKey));
-            KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
-            SubRequest.Builder reqBuilder = SubRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setTopicFilter(topicFilter)
-                .setInboxId(inboxId)
-                .setBroker(subBroker)
-                .setSubQoS(subQoS)
-                .setDelivererKey(delivererKey);
-
-            DistServiceRWCoProcInput input = MessageUtil.buildJoinMatchGroupRequest(reqBuilder.build());
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
-            assertTrue(updateReply.hasJoinMatchGroup());
-            assertEquals(updateReply.getReqId(), reqId);
-            return updateReply.getJoinMatchGroup();
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    protected LeaveMatchGroupReply leaveMatchGroup(String tenantId, String topicFilter,
-                                                   int subBroker, String inboxId, String serverId) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            String scopedInboxId = EntityUtil.toQualifiedInboxId(subBroker, inboxId, serverId);
-            ByteString matchRecordKey = EntityUtil.matchRecordKey(tenantId, topicFilter, scopedInboxId);
-            KVRangeSetting s = storeClient.findByKey(matchRecordKey).get();
-            DistServiceRWCoProcInput input = MessageUtil.buildLeaveMatchGroupRequest(reqId, tenantId, scopedInboxId,
-                topicFilter);
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
-            assertTrue(updateReply.hasLeaveMatchGroup());
-            assertEquals(updateReply.getReqId(), reqId);
-            return updateReply.getLeaveMatchGroup();
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    protected ClearSubInfoReply clearSubInfo(String tenantId,
-                                             int subBroker,
-                                             String inboxId,
-                                             String serverId) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString subInfoKey =
-                EntityUtil.subInfoKey(tenantId, EntityUtil.toQualifiedInboxId(subBroker, inboxId, serverId));
-            KVRangeSetting s = storeClient.findByKey(subInfoKey).get();
-            DistServiceRWCoProcInput input = MessageUtil.buildClearSubInfoRequest(reqId, subInfoKey);
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            UpdateReply updateReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getUpdateReply();
-            assertTrue(updateReply.hasClearSubInfo());
-            assertEquals(updateReply.getReqId(), reqId);
-            return updateReply.getClearSubInfo();
+            BatchUnsubReply batchUnsubReply =
+                DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchUnsub();
+            assertEquals(batchUnsubReply.getReqId(), reqId);
+            return batchUnsubReply.getResultsMap().get(scopedTopicFilter);
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }

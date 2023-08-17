@@ -15,16 +15,10 @@ package com.baidu.bifromq.inbox.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.RPCBluePrint;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
-import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
-import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.google.common.base.Preconditions;
 import io.reactivex.rxjava3.core.Observable;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.annotation.Nullable;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -46,18 +40,6 @@ final class InboxBrokerClient implements IInboxBrokerClient {
     public IDeliverer open(String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
         return new DeliveryPipeline(delivererKey, rpcClient);
-    }
-
-    @Override
-    public CompletableFuture<CheckResult> hasInbox(long reqId,
-                                                   @NonNull String tenantId,
-                                                   @NonNull String inboxId,
-                                                   @Nullable String delivererKey) {
-        Preconditions.checkState(!hasStopped.get());
-        return rpcClient.invoke(tenantId, null,
-                HasInboxRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).build(),
-                InboxServiceGrpc.getHasInboxMethod())
-            .thenApply(v -> CheckResult.values()[v.getResult().ordinal()]);
     }
 
     @Override

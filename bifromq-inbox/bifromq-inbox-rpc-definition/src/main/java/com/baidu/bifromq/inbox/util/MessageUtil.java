@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.util;
 
+import com.baidu.bifromq.inbox.storage.proto.BatchAddSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
@@ -23,12 +25,19 @@ import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
+import com.google.protobuf.ByteString;
 
 public class MessageUtil {
-    public static InboxServiceRWCoProcInput buildGCRequest(long reqId) {
-        return InboxServiceRWCoProcInput.newBuilder()
+    public static InboxServiceROCoProcInput buildGCRequest(long reqId, ByteString scopedInboxId, int limit) {
+        GCRequest.Builder reqBuilder = GCRequest.newBuilder()
             .setReqId(reqId)
-            .setGc(GCRequest.newBuilder().build())
+            .setLimit(limit);
+        if (scopedInboxId != null) {
+            reqBuilder.setScopedInboxId(scopedInboxId);
+        }
+        return InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setGc(reqBuilder.build())
             .build();
     }
 
@@ -45,6 +54,21 @@ public class MessageUtil {
             .setCreateInbox(request)
             .build();
     }
+
+    public static InboxServiceRWCoProcInput buildBatchAddSubRequest(long reqId, BatchAddSubRequest request) {
+        return InboxServiceRWCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setAddTopicFilter(request)
+            .build();
+    }
+
+    public static InboxServiceRWCoProcInput buildBatchRemoveSubRequest(long reqId, BatchRemoveSubRequest request) {
+        return InboxServiceRWCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setRemoveTopicFilter(request)
+            .build();
+    }
+
 
     public static InboxServiceROCoProcInput buildHasRequest(long reqId, HasRequest request) {
         return InboxServiceROCoProcInput.newBuilder()

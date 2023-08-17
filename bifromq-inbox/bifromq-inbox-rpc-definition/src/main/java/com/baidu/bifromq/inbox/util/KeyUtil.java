@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 public class KeyUtil {
+    private static final String NUL = String.valueOf('\u0000');
     private static final ByteString QOS0INBOX_SIGN = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString QOS1INBOX_SIGN = ByteString.copyFrom(new byte[] {0x01});
     private static final ByteString QOS2INBOX_SIGN = ByteString.copyFrom(new byte[] {0x11});
@@ -58,6 +59,26 @@ public class KeyUtil {
             .concat(tenantIdBS)
             .concat(toByteString(inboxIdBS.size()))
             .concat(inboxIdBS);
+    }
+
+    public static ByteString scopedTopicFilter(String tenantId, String inboxId, String topicFilter) {
+        return scopedTopicFilter(scopedInboxId(tenantId, inboxId), topicFilter);
+    }
+
+    public static ByteString scopedTopicFilter(ByteString scopedInboxId, String topicFilter) {
+        return scopedInboxId.concat(ByteString.copyFromUtf8(topicFilter));
+    }
+
+    public static ByteString parseScopedInboxIdFromScopedTopicFilter(ByteString scopedTopicFilter) {
+        int tenantIdLen = tenantIdLength(scopedTopicFilter);
+        int inboxIdLen = inboxIdLength(scopedTopicFilter, tenantIdLen);
+        return scopedTopicFilter.substring(0, tenantIdLen + inboxIdLen + 2 * Integer.BYTES);
+    }
+
+    public static String parseTopicFilterFromScopedTopicFilter(ByteString scopedTopicFilter) {
+        int tenantIdLen = tenantIdLength(scopedTopicFilter);
+        int inboxIdLen = inboxIdLength(scopedTopicFilter, tenantIdLen);
+        return scopedTopicFilter.substring(tenantIdLen + inboxIdLen + 2 * Integer.BYTES).toStringUtf8();
     }
 
     public static boolean isInboxMetadataKey(ByteString key) {

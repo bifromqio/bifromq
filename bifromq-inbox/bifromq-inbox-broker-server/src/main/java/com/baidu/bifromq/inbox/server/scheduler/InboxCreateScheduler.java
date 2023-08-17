@@ -25,24 +25,24 @@ import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.micrometer.core.instrument.Timer;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayDeque;
+import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxRequest, CreateInboxReply>
+public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxRequest, List<String>>
     implements IInboxCreateScheduler {
     private final ISettingProvider settingProvider;
 
@@ -52,10 +52,10 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
     }
 
     @Override
-    protected Batcher<CreateInboxRequest, CreateInboxReply, KVRangeSetting> newBatcher(String name,
-                                                                                       long tolerableLatencyNanos,
-                                                                                       long burstLatencyNanos,
-                                                                                       KVRangeSetting range) {
+    protected Batcher<CreateInboxRequest, List<String>, KVRangeSetting> newBatcher(String name,
+                                                                                   long tolerableLatencyNanos,
+                                                                                   long burstLatencyNanos,
+                                                                                   KVRangeSetting range) {
         return new InboxCreateBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient,
             settingProvider);
     }
@@ -65,39 +65,36 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
         return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
     }
 
-    private static class InboxCreateBatcher extends Batcher<CreateInboxRequest, CreateInboxReply, KVRangeSetting> {
-        private class InboxCreateBatch implements IBatchCall<CreateInboxRequest, CreateInboxReply> {
-            // key: scopedInboxIdUtf8
-            private final Map<String, CreateParams> inboxCreates = new HashMap<>();
-
-            // key: scopedInboxIdUtf8
-            private final Map<CreateInboxRequest, CompletableFuture<CreateInboxReply>> onInboxCreated = new HashMap<>();
+    private static class InboxCreateBatcher
+        extends Batcher<CreateInboxRequest, List<String>, KVRangeSetting> {
+        private class InboxCreateBatch implements IBatchCall<CreateInboxRequest, List<String>> {
+            private final Queue<CallTask<CreateInboxRequest, List<String>>> batchedTasks =
+                new ArrayDeque<>();
+            private CreateRequest.Builder reqBuilder = CreateRequest.newBuilder();
 
             @Override
             public void reset() {
-                inboxCreates.clear();
-                onInboxCreated.clear();
+                reqBuilder = CreateRequest.newBuilder();
             }
 
             @Override
-            public void add(CallTask<CreateInboxRequest, CreateInboxReply> callTask) {
+            public void add(CallTask<CreateInboxRequest, List<String>> callTask) {
                 CreateInboxRequest request = callTask.call;
                 ClientInfo client = request.getClientInfo();
                 String tenantId = client.getTenantId();
                 String scopedInboxIdUtf8 = scopedInboxId(tenantId, request.getInboxId()).toStringUtf8();
-                inboxCreates.computeIfAbsent(scopedInboxIdUtf8, k -> CreateParams.newBuilder()
+                reqBuilder.putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
                     .setExpireSeconds(settingProvider.provide(OfflineExpireTimeSeconds, tenantId))
                     .setLimit(settingProvider.provide(OfflineQueueSize, tenantId))
                     .setDropOldest(settingProvider.provide(OfflineOverflowDropOldest, tenantId))
                     .setClient(client)
                     .build());
-                onInboxCreated.put(request, callTask.callResult);
+                batchedTasks.add(callTask);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                Timer.Sample start = Timer.start();
                 return inboxStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
                             .setReqId(reqId)
@@ -105,9 +102,7 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setCreateInbox(CreateRequest.newBuilder()
-                                    .putAllInboxes(inboxCreates)
-                                    .build())
+                                .setCreateInbox(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
@@ -124,11 +119,20 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
                         throw new RuntimeException();
                     })
                     .handle((v, e) -> {
-                        for (CreateInboxRequest request : onInboxCreated.keySet()) {
-                            onInboxCreated.get(request).complete(CreateInboxReply.newBuilder()
-                                .setReqId(request.getReqId())
-                                .setResult(e == null ? CreateInboxReply.Result.OK : CreateInboxReply.Result.ERROR)
-                                .build());
+                        if (e != null) {
+                            CallTask<CreateInboxRequest, List<String>> callTask;
+                            while ((callTask = batchedTasks.poll()) != null) {
+                                callTask.callResult.completeExceptionally(e);
+                            }
+                        } else {
+                            CallTask<CreateInboxRequest, List<String>> callTask;
+                            while ((callTask = batchedTasks.poll()) != null) {
+                                String scopedInboxId = scopedInboxId(callTask.call.getClientInfo().getTenantId(),
+                                    callTask.call.getInboxId()).toStringUtf8();
+                                callTask.callResult.complete(
+                                    v.getSubsOrDefault(scopedInboxId, TopicFilterList.getDefaultInstance())
+                                        .getTopicFiltersList());
+                            }
                         }
                         return null;
                     });
@@ -152,7 +156,7 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
         }
 
         @Override
-        protected IBatchCall<CreateInboxRequest, CreateInboxReply> newBatch() {
+        protected IBatchCall<CreateInboxRequest, List<String>> newBatch() {
             return new InboxCreateBatch();
         }
     }

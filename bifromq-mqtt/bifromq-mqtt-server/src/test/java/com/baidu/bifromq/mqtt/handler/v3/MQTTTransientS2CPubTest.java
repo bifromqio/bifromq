@@ -53,6 +53,8 @@ import com.google.protobuf.ByteString;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
+import io.netty.handler.codec.mqtt.MqttQoS;
+import io.netty.handler.codec.mqtt.MqttTopicSubscription;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -99,7 +101,10 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         // not by pass
         mockAuthCheck(false);
         mockDistUnSub(true);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
+        mockDistSub(QoS.AT_MOST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_MOST_ONCE));
+        transientSessionHandler.publish(subInfo("testTopic", QoS.AT_MOST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
@@ -155,7 +160,10 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         // not by pass
         mockAuthCheck(false);
         mockDistUnSub(true);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
+        mockDistSub(QoS.AT_MOST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_MOST_ONCE));
+        transientSessionHandler.publish(subInfo("testTopic", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
@@ -301,7 +309,10 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         // not by pass
         mockAuthCheck(false);
         mockDistUnSub(true);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
+        mockDistSub(QoS.AT_MOST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_MOST_ONCE));
+        transientSessionHandler.publish(subInfo("testTopic", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", 5, QoS.EXACTLY_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {

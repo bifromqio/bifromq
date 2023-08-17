@@ -11,16 +11,18 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.server.benchmark;
+package com.baidu.bifromq.inbox.util;
 
-public class HasInboxState extends InboxServiceState {
-    @Override
-    protected void afterSetup() {
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_DELIVERERS;
 
-    }
+public class DelivererKeyUtil {
+    private static final int INBOX_GROUPS = INBOX_DELIVERERS.get();
 
-    @Override
-    protected void beforeTeardown() {
-
+    public static String getDelivererKey(String inboxId) {
+        int k = inboxId.hashCode() % INBOX_GROUPS;
+        if (k < 0) {
+            k = (k + INBOX_GROUPS) % INBOX_GROUPS;
+        }
+        return k + "";
     }
 }

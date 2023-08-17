@@ -21,6 +21,9 @@ import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.InboxSubResult;
+import com.baidu.bifromq.inbox.client.InboxUnsubResult;
+import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3PersistentSession;
@@ -70,16 +73,14 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
             setupInboxPipeline();
         } else {
             cancelOnInactive(sessionCtx.inboxClient.create(System.nanoTime(), userSessionId(clientInfo()),
-                clientInfo())).thenAcceptAsync(createInboxReply -> {
-                switch (createInboxReply.getResult()) {
-                    case OK:
+                clientInfo()))
+                .thenAcceptAsync(createInboxReply -> {
+                    if (createInboxReply.getResult() == CreateInboxReply.Result.OK) {
                         setupInboxPipeline();
-                        break;
-                    case ERROR:
-                    default:
+                    } else {
                         closeConnectionWithSomeDelay(getLocal(SessionCreateError.class).clientInfo(clientInfo()));
-                }
-            }, ctx.channel().eventLoop());
+                    }
+                }, ctx.channel().eventLoop());
         }
     }
 
@@ -131,18 +132,29 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     @Override
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
         String inboxId = userSessionId(clientInfo());
-        return sessionCtx.distClient.sub(reqId, clientInfo().getTenantId(), topicSub.topicName(),
-                QoS.forNumber(topicSub.qualityOfService().value()), inboxId,
-                sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), 1)
-            .thenApply(MqttQoS::valueOf);
+        QoS qos = QoS.forNumber(topicSub.qualityOfService().value());
+        return sessionCtx.inboxClient.sub(reqId, inboxId, topicSub.topicName(), qos, clientInfo())
+            .handle((v, e) -> {
+                if (e != null) {
+                    return MqttQoS.FAILURE;
+                }
+                if (v == InboxSubResult.OK) {
+                    return topicSub.qualityOfService();
+                }
+                return MqttQoS.FAILURE;
+            });
     }
 
     @Override
     protected CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
         String inboxId = userSessionId(clientInfo());
-        return sessionCtx.distClient.unsub(reqId, clientInfo().getTenantId(), topicFilter, inboxId,
-                sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), 1)
-            .exceptionally(e -> true);
+        return sessionCtx.inboxClient.unsub(reqId, inboxId, topicFilter, clientInfo())
+            .handle((v, e) -> {
+                if (e != null) {
+                    return false;
+                }
+                return v == InboxUnsubResult.OK;
+            });
     }
 
     private void confirmQoS1() {
@@ -174,8 +186,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
             return;
         }
         String inboxId = userSessionId(clientInfo());
-        inboxReader = sessionCtx.inboxClient.openInboxReader(inboxId,
-            sessionCtx.inboxClient.getDelivererKey(inboxId, clientInfo()), clientInfo());
+        inboxReader = sessionCtx.inboxClient.openInboxReader(inboxId, clientInfo());
 
         inboxReader.fetch(this::consume);
         bufferCapacityHinter.hint(inboxReader::hint);
@@ -193,50 +204,44 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                 clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0SeqCount(),
                 fetched.getQos1SeqCount(), fetched.getQos2SeqCount());
             ctx.channel().eventLoop().execute(() -> {
-                switch (fetched.getResult()) {
-                    case OK:
-                        long timestamp = HLC.INST.getPhysical();
-                        // deal with qos0
-                        assert fetched.getQos0SeqCount() == fetched.getQos0MsgCount();
-                        for (int i = 0; i < fetched.getQos0SeqCount(); i++) {
-                            InboxMessage msg = fetched.getQos0Msg(i);
-                            pubQoS0Message(msg.getTopicFilter(), msg.getMsg(), i + 1 == fetched.getQos0MsgCount(),
+                if (fetched.getResult() == Fetched.Result.OK) {
+                    long timestamp = HLC.INST.getPhysical();
+                    // deal with qos0
+                    assert fetched.getQos0SeqCount() == fetched.getQos0MsgCount();
+                    for (int i = 0; i < fetched.getQos0SeqCount(); i++) {
+                        InboxMessage msg = fetched.getQos0Msg(i);
+                        pubQoS0Message(msg.getTopicFilter(), msg.getMsg(), i + 1 == fetched.getQos0MsgCount(),
+                            timestamp);
+                    }
+                    // deal with qos1
+                    assert fetched.getQos1SeqCount() == fetched.getQos1MsgCount();
+                    if (fetched.getQos1SeqCount() > 0) {
+                        long triggerSeq = fetched.getQos1Seq(fetched.getQos1SeqCount() - 1);
+                        for (int i = 0; i < fetched.getQos1SeqCount(); i++) {
+                            long seq = fetched.getQos1Seq(i);
+                            log.trace("QoS1ConfirmSeqMap: {}-{}", seq, triggerSeq);
+                            qos1ConfirmSeqMap.put(seq, triggerSeq);
+                            InboxMessage distMsg = fetched.getQos1Msg(i);
+                            pubQoS1Message(seq, distMsg.getTopicFilter(), distMsg.getMsg(),
+                                i + 1 == fetched.getQos1SeqCount(), timestamp);
+                        }
+                    }
+                    // deal with qos2
+                    assert fetched.getQos2SeqCount() == fetched.getQos2MsgCount();
+                    if (fetched.getQos2SeqCount() > 0) {
+                        long triggerSeq = fetched.getQos2Seq(fetched.getQos2SeqCount() - 1);
+                        for (int i = 0; i < fetched.getQos2SeqCount(); i++) {
+                            long seq = fetched.getQos2Seq(i);
+                            qos2ConfirmSeqMap.put(seq, triggerSeq);
+                            InboxMessage distMsg = fetched.getQos2Msg(i);
+                            TopicMessage topicMsg = distMsg.getMsg();
+                            pubQoS2Message(seq, distMsg.getTopicFilter(), topicMsg,
+                                i + 1 == fetched.getQos2SeqCount(),
                                 timestamp);
                         }
-                        // deal with qos1
-                        assert fetched.getQos1SeqCount() == fetched.getQos1MsgCount();
-                        if (fetched.getQos1SeqCount() > 0) {
-                            long triggerSeq = fetched.getQos1Seq(fetched.getQos1SeqCount() - 1);
-                            for (int i = 0; i < fetched.getQos1SeqCount(); i++) {
-                                long seq = fetched.getQos1Seq(i);
-                                log.trace("QoS1ConfirmSeqMap: {}-{}", seq, triggerSeq);
-                                qos1ConfirmSeqMap.put(seq, triggerSeq);
-                                InboxMessage distMsg = fetched.getQos1Msg(i);
-                                pubQoS1Message(seq, distMsg.getTopicFilter(), distMsg.getMsg(),
-                                    i + 1 == fetched.getQos1SeqCount(), timestamp);
-                            }
-                        }
-                        // deal with qos2
-                        assert fetched.getQos2SeqCount() == fetched.getQos2MsgCount();
-                        if (fetched.getQos2SeqCount() > 0) {
-                            long triggerSeq = fetched.getQos2Seq(fetched.getQos2SeqCount() - 1);
-                            for (int i = 0; i < fetched.getQos2SeqCount(); i++) {
-                                long seq = fetched.getQos2Seq(i);
-                                qos2ConfirmSeqMap.put(seq, triggerSeq);
-                                InboxMessage distMsg = fetched.getQos2Msg(i);
-                                TopicMessage topicMsg = distMsg.getMsg();
-                                pubQoS2Message(seq, distMsg.getTopicFilter(), topicMsg, i + 1 == fetched.getQos2SeqCount(),
-                                    timestamp);
-                            }
-                        }
-                        break;
-                    case NO_INBOX:
-                        // fall through
-                    case ERROR:
-                        // fall through
-                    default:
-                        closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
-                        break;
+                    }
+                } else {
+                    closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
                 }
             });
         }

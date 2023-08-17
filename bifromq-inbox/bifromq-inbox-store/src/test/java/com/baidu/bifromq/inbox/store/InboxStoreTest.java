@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.inbox.util.KeyUtil.scopedTopicFilter;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -32,6 +36,12 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.storage.proto.BatchAddSubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchAddSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateReply;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
@@ -55,6 +65,8 @@ import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.inbox.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -94,6 +106,10 @@ abstract class InboxStoreTest {
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
 
     @Mock
+    protected IInboxReaderClient inboxReaderClient;
+    @Mock
+    protected ISettingProvider settingProvider;
+    @Mock
     protected IEventCollector eventCollector;
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
@@ -113,6 +129,8 @@ abstract class InboxStoreTest {
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
         dbRootDir = Files.createTempDirectory("");
+        when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
+            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -165,7 +183,9 @@ abstract class InboxStoreTest {
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
+            .inboxReaderClient(inboxReaderClient)
             .storeClient(storeClient)
+            .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .purgeDelay(Duration.ZERO)
             .clock(getClock())
@@ -179,6 +199,7 @@ abstract class InboxStoreTest {
             .build();
         testStore.start();
 
+        storeClient.connState().filter(connState -> connState == IConnectable.ConnState.READY).blockingFirst();
         storeClient.join();
         log.info("Setup finished, and start testing");
     }
@@ -193,9 +214,9 @@ abstract class InboxStoreTest {
             agentHost.shutdown();
             try {
                 Files.walk(dbRootDir)
-                        .sorted(Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
             } catch (IOException e) {
                 log.error("Failed to delete db root dir", e);
             }
@@ -246,6 +267,63 @@ abstract class InboxStoreTest {
             throw new AssertionError(e);
         }
     }
+
+    protected BatchAddSubReply.Result requestSub(String tenantId, String inboxId, String topicFilter, QoS subQoS) {
+        try {
+            long reqId = ThreadLocalRandom.current().nextInt();
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
+            KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
+            String scopedTopicFilter = scopedTopicFilter(tenantId, inboxId, topicFilter).toStringUtf8();
+            BatchAddSubRequest request = BatchAddSubRequest.newBuilder()
+                .setReqId(reqId)
+                .putTopicFilters(scopedTopicFilter, subQoS)
+                .build();
+            InboxServiceRWCoProcInput input = MessageUtil.buildBatchAddSubRequest(reqId, request);
+            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+                .setReqId(reqId)
+                .setVer(s.ver)
+                .setKvRangeId(s.id)
+                .setRwCoProc(input.toByteString())
+                .build()).join();
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
+            InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
+            assertTrue(output.hasAddTopicFilter());
+            assertEquals(output.getReqId(), reqId);
+            return output.getAddTopicFilter().getResultsMap().get(scopedTopicFilter);
+        } catch (InvalidProtocolBufferException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    protected BatchRemoveSubReply.Result requestUnsub(String tenantId, String inboxId, String topicFilter) {
+        try {
+            long reqId = ThreadLocalRandom.current().nextInt();
+            ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
+            KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
+            ByteString scopedTopicFilter = scopedTopicFilter(tenantId, inboxId, topicFilter);
+            BatchRemoveSubRequest request = BatchRemoveSubRequest.newBuilder()
+                .setReqId(reqId)
+                .addTopicFilters(scopedTopicFilter)
+                .build();
+            InboxServiceRWCoProcInput input = MessageUtil.buildBatchRemoveSubRequest(reqId, request);
+            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+                .setReqId(reqId)
+                .setVer(s.ver)
+                .setKvRangeId(s.id)
+                .setRwCoProc(input.toByteString())
+                .build()).join();
+            assertEquals(reply.getReqId(), reqId);
+            assertEquals(reply.getCode(), ReplyCode.Ok);
+            InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
+            assertTrue(output.hasRemoveTopicFilter());
+            assertEquals(output.getReqId(), reqId);
+            return output.getRemoveTopicFilter().getResultsMap().get(scopedTopicFilter.toStringUtf8());
+        } catch (InvalidProtocolBufferException e) {
+            throw new AssertionError(e);
+        }
+    }
+
 
     protected HasReply requestHas(String tenantId, String inboxId) {
         try {

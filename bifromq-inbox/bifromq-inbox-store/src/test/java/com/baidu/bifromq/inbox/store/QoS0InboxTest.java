@@ -71,6 +71,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         String topic = "greeting";
         String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
         requestCreate(tenantId, inboxId, 10, 2, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic,
             message(AT_MOST_ONCE, "hello"),
             message(AT_MOST_ONCE, "world"));
@@ -110,6 +111,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(AT_MOST_ONCE, "hello");
         TopicMessagePack.PublisherPack msg2 = message(AT_MOST_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 2, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS0(tenantId, inboxId, 10);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 2);
@@ -136,6 +138,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(AT_MOST_ONCE, "hello");
         TopicMessagePack.PublisherPack msg2 = message(AT_MOST_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS0(tenantId, inboxId, 1);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 1);
@@ -166,6 +169,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg5 = message(AT_MOST_ONCE, "e");
         TopicMessagePack.PublisherPack msg6 = message(AT_MOST_ONCE, "f");
         requestCreate(tenantId, inboxId, 10, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
         requestInsert(subInfo, topic, msg4, msg5, msg6);
 
@@ -210,6 +214,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg2 = message(AT_MOST_ONCE, "world");
         TopicMessagePack.PublisherPack msg3 = message(AT_MOST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 10, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
         requestCommitQoS0(tenantId, inboxId, 1);
 
@@ -277,6 +282,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(AT_MOST_ONCE, "world");
         TopicMessagePack.PublisherPack msg2 = message(AT_MOST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 2, 600, true);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0, msg1);
         requestInsert(subInfo, topic, msg2);
 
@@ -328,6 +334,7 @@ public class QoS0InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(AT_MOST_ONCE, "world");
         TopicMessagePack.PublisherPack msg2 = message(AT_MOST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 2, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0);
         requestInsert(subInfo, topic, msg1, msg2);
 

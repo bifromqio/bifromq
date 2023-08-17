@@ -44,9 +44,12 @@ import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.SubResult;
+import com.baidu.bifromq.dist.client.UnsubResult;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient.IInboxReader;
 import com.baidu.bifromq.inbox.client.InboxCheckResult;
+import com.baidu.bifromq.inbox.client.InboxSubResult;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
@@ -65,6 +68,7 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
@@ -207,6 +211,8 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockSettings() {
+        Mockito.lenient().when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
+            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         Mockito.lenient().when(settingProvider.provide(eq(InBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(OutBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(ForceTransient), anyString())).thenReturn(false);
@@ -285,35 +291,25 @@ public abstract class BaseMQTTTest {
             );
     }
 
-    protected void mockDistClear(boolean success) {
-        when(inboxClient.getDelivererKey(anyString(), any(ClientInfo.class))).thenReturn(delivererKey);
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(
-                success ? CompletableFuture.completedFuture(null) :
-                    CompletableFuture.failedFuture(new RuntimeException("Mock error"))
-            );
+    protected void mockDistSub(QoS qos, boolean success) {
+        when(distClient.sub(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(success ? SubResult.OK : SubResult.ERROR));
     }
 
-    protected void mockDistSub(QoS qos, boolean success) {
-        int subResult;
-        if (success) {
-            subResult = qos.getNumber();
-        } else {
-            subResult = 0x80;
-        }
-        when(distClient.sub(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(subResult));
+    protected void mockInboxSub(QoS qos, boolean success) {
+        when(inboxClient.sub(anyLong(), anyString(), anyString(), eq(qos), any()))
+            .thenReturn(CompletableFuture.completedFuture(success ? InboxSubResult.OK : InboxSubResult.ERROR));
     }
 
     protected void mockDistUnSub(boolean... success) {
-        CompletableFuture<Boolean>[] unsubResults = new CompletableFuture[success.length];
+        CompletableFuture<UnsubResult>[] unsubResults = new CompletableFuture[success.length];
         for (int i = 0; i < success.length; i++) {
-            unsubResults[i] = success[i] ? CompletableFuture.completedFuture(true)
+            unsubResults[i] = success[i] ? CompletableFuture.completedFuture(UnsubResult.OK)
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
-        OngoingStubbing<CompletableFuture<Boolean>> ongoingStubbing =
+        OngoingStubbing<CompletableFuture<UnsubResult>> ongoingStubbing =
             when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
-        for (CompletableFuture<Boolean> result : unsubResults) {
+        for (CompletableFuture<UnsubResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }
     }
@@ -337,8 +333,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockInboxReader() {
-        when(inboxClient.getDelivererKey(anyString(), any(ClientInfo.class))).thenReturn(delivererKey);
-        when(inboxClient.openInboxReader(anyString(), anyString(), any(ClientInfo.class))).thenReturn(inboxReader);
+        when(inboxClient.openInboxReader(anyString(), any(ClientInfo.class))).thenReturn(inboxReader);
         doAnswer(invocationOnMock -> {
             inboxFetchConsumer = invocationOnMock.getArgument(0);
             return null;
@@ -399,7 +394,6 @@ public abstract class BaseMQTTTest {
         mockInboxHas(hasInbox);
         if (cleanSession && hasInbox) {
             mockInboxDelete(true);
-            mockDistClear(true);
         }
         if (!cleanSession) {
             mockInboxReader();

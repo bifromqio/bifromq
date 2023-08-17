@@ -11,14 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.dist.client;
 
-public enum SubCallType {
-    ADD_TOPIC_FILTER,
-    INSERT_MATCH_RECORD,
-    JOIN_MATCH_GROUP,
-    REMOVE_TOPIC_FILTER,
-    DELETE_MATCH_RECORD,
-    LEAVE_JOIN_GROUP,
-    CLEAR
+public enum UnsubResult {
+    OK, ERROR;
 }

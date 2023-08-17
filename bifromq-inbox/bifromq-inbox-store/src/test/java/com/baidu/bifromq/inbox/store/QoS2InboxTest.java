@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
@@ -76,12 +77,14 @@ public class QoS2InboxTest extends InboxStoreTest {
         String scopedInboxIdUtf8 = KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8();
 
         requestCreate(tenantId, inboxId, 10, 2, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, "greeting",
             message(EXACTLY_ONCE, "hello"),
             message(EXACTLY_ONCE, "world"));
 
         // not expire
         requestCreate(tenantId, inboxId, 10, 2, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount(), 2);
 
@@ -126,6 +129,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "hello");
         TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 2, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 2);
@@ -152,6 +156,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "hello");
         TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
         requestCreate(tenantId, inboxId, 10, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2);
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 1, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
@@ -178,6 +183,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
         TopicMessagePack.PublisherPack msg3 = message(EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 10, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
 
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 1, 0L);
@@ -212,6 +218,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "world");
         TopicMessagePack.PublisherPack msg3 = message(EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 10, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
         requestCommitQoS2(tenantId, inboxId, 1);
 
@@ -249,6 +256,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(EXACTLY_ONCE, "world");
         TopicMessagePack.PublisherPack msg2 = message(EXACTLY_ONCE, "a");
         requestCreate(tenantId, inboxId, 10, 600, true);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0, msg0, msg1);
         requestInsert(subInfo, topic, msg0, msg2);
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
@@ -279,6 +287,7 @@ public class QoS2InboxTest extends InboxStoreTest {
             .putMetadata("userId", "user2")
             .build());
         requestCreate(tenantId, inboxId, 10, 600, true);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0, msg1);
         InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 2);
@@ -305,6 +314,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg4 = message(EXACTLY_ONCE, "c");
         TopicMessagePack.PublisherPack msg5 = message(EXACTLY_ONCE, "d");
         requestCreate(tenantId, inboxId, 2, 600, true);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0, msg1);
         requestInsert(subInfo, topic, msg2);
 
@@ -355,6 +365,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg5 = message(EXACTLY_ONCE, "d");
 
         requestCreate(tenantId, inboxId, 2, 600, false);
+        requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0);
         requestInsert(subInfo, topic, msg1, msg2);
 

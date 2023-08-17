@@ -29,6 +29,9 @@ public class RPCBluePrint {
         // reader client rpc
         .methodSemantic(InboxServiceGrpc.getCreateInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getDeleteInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
+        .methodSemantic(InboxServiceGrpc.getTouchInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
+        .methodSemantic(InboxServiceGrpc.getAddSubMethod(), BluePrint.WRUnaryMethod.getInstance())
+        .methodSemantic(InboxServiceGrpc.getRemoveSubMethod(), BluePrint.WRUnaryMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getFetchMethod(), BluePrint.WCHStreamingMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getCommitMethod(), BluePrint.WCHUnaryMethod
             .<CommitRequest>builder().keyHashFunc(CommitRequest::getInboxId).build())

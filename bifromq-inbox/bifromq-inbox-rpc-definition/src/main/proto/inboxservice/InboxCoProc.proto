@@ -1,5 +1,6 @@
 syntax = "proto3";
 import "commontype/ClientInfo.proto";
+import "commontype/QoS.proto";
 import "commontype/SubInfo.proto";
 import "commontype/TopicMessage.proto";
 import "inboxservice/InboxFetched.proto";
@@ -26,6 +27,7 @@ message InboxMetadata{
   uint64 qos2NextSeq = 10;
 
   commontype.ClientInfo client = 11; // the owner client
+  map<string, commontype.QoS> topicFilters = 12; // subscribed topic filter
 }
 
 message HasRequest{
@@ -43,11 +45,15 @@ message CreateParams {
   commontype.ClientInfo client = 4; // the owner client
 }
 
+message TopicFilterList{
+  repeated string topicFilters = 1;
+}
 message CreateRequest{
   map<string, CreateParams> inboxes = 1;
 }
 
 message CreateReply{
+  map<string, TopicFilterList> subs = 1; // key: scopedInboxIdUtf8
 }
 
 message TouchRequest{
@@ -55,6 +61,39 @@ message TouchRequest{
 }
 
 message TouchReply{
+  map<string, TopicFilterList> subs = 1; // key: scopedInboxIdUtf8
+}
+
+message BatchAddSubRequest{
+  uint64 reqId = 1;
+  map<string, commontype.QoS> topicFilters = 2; // key: tenantId_inboxId_topicFilter(scopedTopicFilter)
+}
+
+message BatchAddSubReply{
+  enum Result{
+    OK = 0;
+    EXCEED_LIMIT = 1;
+    NO_INBOX = 2;
+    ERROR = 3;
+  }
+  uint64 reqId = 1;
+  map<string, Result> results = 2; // key: tenantId_inboxId_topicFilter(scopedTopicFilter)
+}
+
+message BatchRemoveSubRequest{
+  uint64 reqId = 1;
+  repeated bytes topicFilters = 2; // tenantId_inboxId_topicFilter(scopedTopicFilter)
+}
+
+message BatchRemoveSubReply{
+  enum Result{
+    OK = 0;
+    NO_INBOX = 1;
+    NO_SUB = 2;
+    ERROR = 3;
+  }
+  uint64 reqId = 1;
+  map<string, Result> results = 2;// key: tenantId_inboxId_topicFilter(scopedTopicFilter)
 }
 
 message FetchParams{
@@ -85,6 +124,7 @@ message InboxInsertResult{
   enum Result{
     OK = 0;
     NO_INBOX = 1;
+    ERROR = 2;
   }
   commontype.SubInfo subInfo = 1;
   Result result = 2;
@@ -119,10 +159,13 @@ message InboxComSertReply{
 
 message GCRequest {
   uint64 reqId = 1;
+  optional bytes scopedInboxId = 2;
+  uint32 limit = 3;
 }
 
 message GCReply {
   uint64 reqId = 1;
+  repeated bytes scopedInboxId = 2;
 }
 
 message CollectMetricsRequest{
@@ -141,8 +184,9 @@ message InboxServiceRWCoProcInput{
     InboxCommitRequest commit = 3;
     CreateRequest createInbox = 4;
     TouchRequest touch = 5;
-    GCRequest gc = 6;
-    InboxComSertRequest insertAndCommit = 7;
+    BatchAddSubRequest addTopicFilter = 6;
+    BatchRemoveSubRequest removeTopicFilter = 7;
+    InboxComSertRequest insertAndCommit = 8;
   }
 }
 
@@ -153,8 +197,9 @@ message InboxServiceRWCoProcOutput{
     InboxCommitReply commit = 3;
     CreateReply createInbox = 4;
     TouchReply touch = 5;
-    GCReply gc = 6;
-    InboxComSertReply insertAndCommit = 7;
+    BatchAddSubReply addTopicFilter = 6;
+    BatchRemoveSubReply removeTopicFilter = 7;
+    InboxComSertReply insertAndCommit = 8;
   }
 }
 
@@ -164,6 +209,7 @@ message InboxServiceROCoProcInput{
     HasRequest has = 2;
     InboxFetchRequest fetch = 3;
     CollectMetricsRequest collectMetrics = 4;
+    GCRequest gc = 5;
   }
 }
 
@@ -173,5 +219,6 @@ message InboxServiceROCoProcOutput{
     HasReply has = 2;
     InboxFetchReply fetch = 3;
     CollectMetricsReply collectedMetrics = 4;
+    GCReply gc = 5;
   }
 }

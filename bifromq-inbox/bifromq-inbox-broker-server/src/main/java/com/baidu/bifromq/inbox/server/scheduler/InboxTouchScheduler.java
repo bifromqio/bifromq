@@ -22,26 +22,28 @@ import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
 import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayDeque;
+import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchScheduler.Touch, Void>
+public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchScheduler.Touch, List<String>>
     implements IInboxTouchScheduler {
     public InboxTouchScheduler(IBaseKVStoreClient inboxStoreClient) {
         super(inboxStoreClient, "inbox_server_touch");
     }
 
     @Override
-    protected Batcher<Touch, Void, KVRangeSetting> newBatcher(String name,
-                                                              long tolerableLatencyNanos,
-                                                              long burstLatencyNanos,
-                                                              KVRangeSetting range) {
+    protected Batcher<Touch, List<String>, KVRangeSetting> newBatcher(String name,
+                                                                      long tolerableLatencyNanos,
+                                                                      long burstLatencyNanos,
+                                                                      KVRangeSetting range) {
         return new InboxTouchBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
     }
 
@@ -50,30 +52,22 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
         return ByteString.copyFromUtf8(request.scopedInboxIdUtf8);
     }
 
-    private static class InboxTouchBatcher extends Batcher<Touch, Void, KVRangeSetting> {
-        private class InboxTouchBatch implements IBatchCall<Touch, Void> {
-            // key: scopedInboxIdUtf8
-            private final Map<String, Boolean> inboxTouches = new HashMap<>();
-
-            // key: scopedInboxIdUtf8
-            private final Map<Touch, CompletableFuture<Void>> onInboxTouched = new HashMap<>();
+    private static class InboxTouchBatcher extends Batcher<Touch, List<String>, KVRangeSetting> {
+        private class InboxTouchBatch implements IBatchCall<Touch, List<String>> {
+            private final Queue<CallTask<Touch, List<String>>> batchedTasks = new ArrayDeque<>();
+            private TouchRequest.Builder reqBuilder = TouchRequest.newBuilder();
 
             @Override
             public void reset() {
-                inboxTouches.clear();
-                onInboxTouched.clear();
+                reqBuilder = TouchRequest.newBuilder();
             }
 
             @Override
-            public void add(CallTask<Touch, Void> callTask) {
+            public void add(CallTask<Touch, List<String>> callTask) {
                 Touch request = callTask.call;
-                inboxTouches.compute(request.scopedInboxIdUtf8, (k, v) -> {
-                    if (v == null) {
-                        return request.keep;
-                    }
-                    return v && request.keep;
-                });
-                onInboxTouched.put(request, callTask.callResult);
+                batchedTasks.add(callTask);
+                reqBuilder.putScopedInboxId(request.scopedInboxIdUtf8,
+                    request.keep && reqBuilder.getScopedInboxIdOrDefault(request.scopedInboxIdUtf8, true));
             }
 
             @Override
@@ -86,9 +80,7 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setTouch(TouchRequest.newBuilder()
-                                    .putAllScopedInboxId(inboxTouches)
-                                    .build())
+                                .setTouch(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
@@ -104,11 +96,16 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
                         throw new RuntimeException();
                     })
                     .handle((v, e) -> {
-                        for (Touch request : onInboxTouched.keySet()) {
-                            if (e != null) {
-                                onInboxTouched.get(request).completeExceptionally(e);
-                            } else {
-                                onInboxTouched.get(request).complete(null);
+                        if (e != null) {
+                            CallTask<Touch, List<String>> callTask;
+                            while ((callTask = batchedTasks.poll()) != null) {
+                                callTask.callResult.completeExceptionally(e);
+                            }
+                        } else {
+                            CallTask<Touch, List<String>> callTask;
+                            while ((callTask = batchedTasks.poll()) != null) {
+                                callTask.callResult.complete(v.getSubsOrDefault(callTask.call.scopedInboxIdUtf8,
+                                    TopicFilterList.getDefaultInstance()).getTopicFiltersList());
                             }
                         }
                         return null;
@@ -130,7 +127,7 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
         }
 
         @Override
-        protected IBatchCall<Touch, Void> newBatch() {
+        protected IBatchCall<Touch, List<String>> newBatch() {
             return new InboxTouchBatch();
         }
     }
