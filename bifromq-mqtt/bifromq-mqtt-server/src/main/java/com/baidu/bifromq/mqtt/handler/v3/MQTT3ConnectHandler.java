@@ -34,7 +34,6 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
-import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
@@ -276,15 +275,9 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
             }, ctx.channel().eventLoop())
             .thenComposeAsync(checkResult -> {
                 if (checkResult == InboxCheckResult.EXIST) {
-                    // clear subscription of previous persistent session
-                    CompletableFuture<Void> clearSubTask =
-                        cancelOnInactive(distClient.clear(reqId, clientInfo.getTenantId(), offlineInboxId,
-                            inboxClient.getDelivererKey(offlineInboxId, clientInfo), 1));
-                    CompletableFuture<DeleteInboxReply> deleteInboxTask =
-                        cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo));
-                    return allOf(clearSubTask, deleteInboxTask)
-                        .whenCompleteAsync((v, e) -> {
-                            if (e != null) {
+                    return cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo))
+                        .handleAsync((v, e) -> {
+                            if (e != null || v.getResult() == DeleteInboxReply.Result.ERROR) {
                                 closeConnectionWithSomeDelay(MqttMessageBuilders
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
@@ -293,6 +286,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                             } else {
                                 establishSucceed(mqttConnectMessage, false, true);
                             }
+                            return null;
                         }, ctx.channel().eventLoop());
                 } else {
                     establishSucceed(mqttConnectMessage, false, true);

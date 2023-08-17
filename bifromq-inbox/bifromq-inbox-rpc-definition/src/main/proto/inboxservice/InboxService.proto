@@ -17,6 +17,9 @@ service InboxService {
   rpc hasInbox (HasInboxRequest) returns (HasInboxReply);
   rpc createInbox (CreateInboxRequest) returns (CreateInboxReply);
   rpc deleteInbox (DeleteInboxRequest) returns (DeleteInboxReply);
+  rpc touchInbox (TouchInboxRequest) returns (TouchInboxReply);
+  rpc addSub(AddSubRequest) returns (AddSubReply);
+  rpc removeSub(RemoveSubRequest) returns (RemoveSubReply);
 
   rpc receive (stream SendRequest) returns (stream SendReply);
 
@@ -54,6 +57,54 @@ message DeleteInboxReply {
   uint64 reqId = 1;
   Result result = 2;
 }
+
+message TouchInboxRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string inboxId = 3;
+}
+
+message TouchInboxReply {
+  uint64 reqId = 1;
+}
+
+message AddSubRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  string topicFilter = 3;
+  commontype.QoS subQoS = 4;
+  commontype.ClientInfo clientInfo = 5;
+}
+
+message AddSubReply {
+  enum Result {
+    OK = 0;
+    NO_INBOX = 1;
+    EXCEED_LIMIT = 2;
+    ERROR = 3;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message RemoveSubRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  string topicFilter = 3;
+  commontype.ClientInfo clientInfo = 4;
+}
+
+message RemoveSubReply {
+  enum Result {
+    OK = 0;
+    NO_INBOX = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+
 
 message HasInboxRequest {
   uint64 reqId = 1;

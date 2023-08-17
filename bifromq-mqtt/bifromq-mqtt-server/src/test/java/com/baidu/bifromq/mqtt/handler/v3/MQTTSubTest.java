@@ -23,7 +23,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_SUBSCR
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -48,11 +48,11 @@ public class MQTTSubTest extends BaseMQTTTest {
     @AfterMethod
     public void clean() {
         if (shouldCleanSubs) {
-            when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
+            when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
                 .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
-            verify(distClient, times(1))
-                .clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
+            verify(distClient, atLeast(1))
+                .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
         } else {
             channel.close();
         }
@@ -142,7 +142,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void persistentQoS0Sub() {
         connectAndVerify(false);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
+        mockInboxSub(QoS.AT_MOST_ONCE, true);
         mockRetainMatch();
         int[] qos = {0, 0, 0};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -156,7 +156,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void persistentQoS1Sub() {
         connectAndVerify(false);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
+        mockInboxSub(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch();
         int[] qos = {1, 1, 1};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -170,7 +170,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void persistentQoS2Sub() {
         connectAndVerify(false);
         mockAuthCheck(true);
-        mockDistSub(QoS.EXACTLY_ONCE, true);
+        mockInboxSub(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
         int[] qos = {2, 2, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -184,9 +184,9 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void persistentMixedSub() {
         connectAndVerify(false);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
-        mockDistSub(QoS.EXACTLY_ONCE, true);
+        mockInboxSub(QoS.AT_MOST_ONCE, true);
+        mockInboxSub(QoS.AT_LEAST_ONCE, true);
+        mockInboxSub(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
         int[] qos = {0, 1, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -256,5 +256,4 @@ public class MQTTSubTest extends BaseMQTTTest {
             assertEquals(expectedQos[i], (int) subAckMessage.payload().grantedQoSLevels().get(i));
         }
     }
-
 }

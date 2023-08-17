@@ -21,7 +21,8 @@ abstract class AbstractInboxServer implements IInboxServer {
     protected final InboxService inboxService;
 
     AbstractInboxServer(AbstractInboxServerBuilder<?> builder) {
-        this.inboxService = new InboxService(builder.settingProvider, builder.inboxStoreClient, builder.bgTaskExecutor);
+        this.inboxService = new InboxService(builder.settingProvider, builder.distClient,
+            builder.inboxStoreClient, builder.bgTaskExecutor);
     }
 
     @Override

@@ -13,10 +13,6 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxReply;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
@@ -48,15 +44,6 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
     @Override
     public StreamObserver<WriteRequest> write(StreamObserver<WriteReply> responseObserver) {
         return new LocalSessionWritePipeline(transientSessionMap, responseObserver);
-    }
-
-    @Override
-    public void hasInbox(HasInboxRequest request, StreamObserver<HasInboxReply> responseObserver) {
-        response(tenantId -> CompletableFuture.completedFuture(HasInboxReply
-            .newBuilder()
-            .setReqId(request.getReqId())
-            .setResult(sessionMap.containsKey(request.getInboxId()))
-            .build()), responseObserver);
     }
 
     void reg(String sessionId, IMQTTSession session) {

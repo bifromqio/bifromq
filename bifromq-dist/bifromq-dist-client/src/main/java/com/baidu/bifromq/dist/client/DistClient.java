@@ -21,9 +21,7 @@ import com.baidu.bifromq.dist.RPCBluePrint;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCall;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
-import com.baidu.bifromq.dist.rpc.proto.ClearRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
-import com.baidu.bifromq.dist.rpc.proto.SubReply;
 import com.baidu.bifromq.dist.rpc.proto.SubRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
@@ -74,8 +72,8 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<Integer> sub(long reqId, String tenantId, String topicFilter, QoS qos, String inboxId,
-                                          String delivererKey, int subBrokerId) {
+    public CompletableFuture<SubResult> sub(long reqId, String tenantId, String topicFilter, QoS qos, String inboxId,
+                                            String delivererKey, int subBrokerId) {
         SubRequest request = SubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -87,20 +85,12 @@ final class DistClient implements IDistClient {
             .build();
         log.trace("Handling sub request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getSubMethod())
-            .handle((v, e) -> {
-                if (e != null) {
-                    log.debug("Sub request failed: reqId={}, tenantId={}", request.getReqId(), tenantId, e);
-                    return SubReply.SubResult.Failure.getNumber();
-                }
-                log.trace("Finish handling sub request:\n{}, reply:\n{}", request, v);
-                return v.getResult().getNumber();
-            });
-
+            .thenApply(v -> SubResult.values()[v.getResult().getNumber()]);
     }
 
     @Override
-    public CompletableFuture<Boolean> unsub(long reqId, String tenantId, String topicFilter, String inbox,
-                                            String delivererKey, int subBrokerId) {
+    public CompletableFuture<UnsubResult> unsub(long reqId, String tenantId, String topicFilter, String inbox,
+                                                String delivererKey, int subBrokerId) {
         UnsubRequest request = UnsubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -111,28 +101,7 @@ final class DistClient implements IDistClient {
             .build();
         log.trace("Handling unsub request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnsubMethod())
-            .thenApply(v -> {
-                log.trace("Finish handling unsub request:\n{}", request);
-                return v.getExist();
-            });
-    }
-
-    @Override
-    public CompletableFuture<Void> clear(long reqId, String tenantId, String inboxId, String delivererKey,
-                                         int subBrokerId) {
-        log.trace("Requesting clear: reqId={}", reqId);
-        ClearRequest request = ClearRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setDelivererKey(delivererKey)
-            .setBroker(subBrokerId)
-            .build();
-        return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getClearMethod())
-            .thenApply(v -> {
-                log.trace("Got clear reply: request={}, reply={}", request, v);
-                return null;
-            });
+            .thenApply(v -> UnsubResult.values()[v.getResult().getNumber()]);
     }
 
     @Override

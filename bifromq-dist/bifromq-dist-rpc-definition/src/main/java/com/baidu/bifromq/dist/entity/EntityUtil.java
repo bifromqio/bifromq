@@ -14,6 +14,9 @@
 package com.baidu.bifromq.dist.entity;
 
 import static com.baidu.bifromq.dist.util.TopicUtil.NUL;
+import static com.baidu.bifromq.dist.util.TopicUtil.ORDERED_SHARE;
+import static com.baidu.bifromq.dist.util.TopicUtil.TOPIC_SEPARATOR;
+import static com.baidu.bifromq.dist.util.TopicUtil.UNORDERED_SHARE;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.dist.util.TopicUtil.isNormalTopicFilter;
 import static com.baidu.bifromq.dist.util.TopicUtil.parseSharedTopic;
@@ -34,9 +37,29 @@ public class EntityUtil {
     private static final ByteString FLAG_UNORDERD_SHARE = copyFromUtf8("1");
     private static final ByteString FLAG_ORDERD_SHARE = copyFromUtf8("2");
 
-    public static String toQualifiedInboxId(int subBrokerId, String inboxId, String delivererKey) {
+    public static String toQInboxId(int subBrokerId, String inboxId, String delivererKey) {
         String scoped = subBrokerId + NUL + inboxId + NUL + delivererKey;
         return Base64.getEncoder().encodeToString(scoped.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static String toScopedQInboxId(String tenantId, String qInboxId) {
+        return tenantId + NUL + qInboxId;
+    }
+
+    public static String toScopedTopicFilter(String tenantId, String qInboxId, String topicFilter) {
+        return tenantId + NUL + qInboxId + NUL + topicFilter;
+    }
+
+    public static String parseTenantIdFromScopedTopicFilter(String scopedTopicFilter) {
+        return scopedTopicFilter.substring(0, scopedTopicFilter.indexOf(NUL));
+    }
+
+    public static String parseQInboxIdFromScopedTopicFilter(String scopedTopicFilter) {
+        return scopedTopicFilter.substring(scopedTopicFilter.indexOf(NUL) + 1, scopedTopicFilter.lastIndexOf(NUL));
+    }
+
+    public static String parseTopicFilterFromScopedTopicFilter(String scopedTopicFilter) {
+        return scopedTopicFilter.substring(scopedTopicFilter.lastIndexOf(NUL) + 1);
     }
 
     public static int parseSubBroker(String scopedInboxId) {
@@ -45,32 +68,12 @@ public class EntityUtil {
         return Integer.parseInt(scopedInboxId.substring(0, splitIdx));
     }
 
-    public static String parseInboxId(String scopedInboxId) {
-        scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);
-        int splitIdx = scopedInboxId.indexOf(NUL);
-        return scopedInboxId.substring(splitIdx + 1, scopedInboxId.lastIndexOf(NUL));
-    }
-
     public static ByteString tenantPrefix(String tenantId) {
         return copyFromUtf8(tenantId + NUL);
     }
 
     public static ByteString tenantUpperBound(String tenantId) {
         return tenantPrefix(tenantId).concat(INFIX_UPPERBOUND_INFIX);
-    }
-
-    public static ByteString subInfoKeyPrefix(String tenantId) {
-        return tenantPrefix(tenantId).concat(INFIX_SUBINFO_INFIX);
-    }
-
-    public static ByteString subInfoKey(String tenantId, String scopedInboxId) {
-        return subInfoKeyPrefix(tenantId).concat(copyFromUtf8(scopedInboxId));
-    }
-
-    public static boolean isSubInfoKey(ByteString rawKey) {
-        String keyStr = rawKey.toStringUtf8();
-        int firstSplit = keyStr.indexOf(NUL);
-        return keyStr.substring(firstSplit + 1, firstSplit + 2).equals(INFIX_SUBINFO_INFIX.toStringUtf8());
     }
 
     public static String parseTenantId(ByteString rawKey) {
@@ -82,13 +85,6 @@ public class EntityUtil {
     public static String parseTenantId(String rawKeyUtf8) {
         int firstSplit = rawKeyUtf8.indexOf(NUL);
         return rawKeyUtf8.substring(0, firstSplit);
-    }
-
-    public static Inbox parseInbox(ByteString subInfoKey) {
-        String subInfoKeyStr = subInfoKey.toStringUtf8();
-        int firstSplit = subInfoKeyStr.indexOf(NUL);
-        String scopedInboxId = subInfoKeyStr.substring(firstSplit + 2);
-        return new Inbox(scopedInboxId);
     }
 
     public static Matching parseMatchRecord(ByteString matchRecordKey, ByteString matchRecordValue) {
@@ -119,7 +115,24 @@ public class EntityUtil {
         return tenantPrefix(tenantId).concat(INFIX_MATCH_RECORD_INFIX);
     }
 
-    public static ByteString matchRecordKey(String tenantId, String topicFilter, String qInboxId) {
+    public static ByteString toNormalMatchRecordKey(String tenantId, String topicFilter, String qInboxId) {
+        assert isNormalTopicFilter(topicFilter);
+        return matchRecordKeyPrefix(tenantId)
+            .concat(copyFromUtf8(escape(topicFilter) + NUL))
+            .concat(FLAG_NORMAL)
+            .concat(copyFromUtf8(qInboxId));
+    }
+
+    public static ByteString toGroupMatchRecordKey(String tenantId, String topicFilter) {
+        assert !isNormalTopicFilter(topicFilter);
+        TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
+        return matchRecordKeyPrefix(tenantId)
+            .concat(copyFromUtf8(escape(stf.topicFilter) + NUL))
+            .concat(stf.ordered ? FLAG_ORDERD_SHARE : FLAG_UNORDERD_SHARE)
+            .concat(copyFromUtf8(stf.shareGroup));
+    }
+
+    public static ByteString toMatchRecordKey(String tenantId, String topicFilter, String qInboxId) {
         if (isNormalTopicFilter(topicFilter)) {
             return matchRecordKeyPrefix(tenantId)
                 .concat(copyFromUtf8(escape(topicFilter) + NUL))
@@ -143,5 +156,27 @@ public class EntityUtil {
         int firstSplit = matchRecordKeyStr.indexOf(NUL);
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
         return unescape(matchRecordKeyStr.substring(firstSplit + 2, lastSplit));
+    }
+
+    public static String parseOriginalTopicFilter(String matchRecordKeyStr) {
+        // <tenantId><NUL><1><ESCAPED_TOPIC_FILTER><NUL><FLAG><SCOPED_INBOX|SHARE_GROUP>
+        int firstSplit = matchRecordKeyStr.indexOf(NUL);
+        int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
+        String topicFilter = unescape(matchRecordKeyStr.substring(firstSplit + 2, lastSplit));
+        char flag = matchRecordKeyStr.charAt(lastSplit + 1);
+        switch (flag) {
+            case '0' -> {
+                return topicFilter;
+            }
+            case '1' -> {
+                String group = matchRecordKeyStr.substring(lastSplit + 2);
+                return UNORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
+            }
+            case '2' -> {
+                String group = matchRecordKeyStr.substring(lastSplit + 2);
+                return ORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
+            }
+            default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
+        }
     }
 }

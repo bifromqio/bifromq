@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.dist.entity;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKey;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQualifiedInboxId;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -35,16 +35,16 @@ public class EntityUtilTest {
 
     @Test
     public void testParseTopicFilter() {
-        String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "delivererKey1");
+        String scopedInboxId = toQInboxId(MqttBroker, "inbox1", "delivererKey1");
         String topicFilter = "/a/b/c";
-        ByteString key = matchRecordKey("tenantId", topicFilter, scopedInboxId);
+        ByteString key = toMatchRecordKey("tenantId", topicFilter, scopedInboxId);
         assertEquals(parseTopicFilter(key.toStringUtf8()), topicFilter);
     }
 
     @Test
     public void testParseNormalMatchRecord() {
-        String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "delivererKey1");
-        ByteString key = matchRecordKey("tenantId", "/a/b/c", scopedInboxId);
+        String scopedInboxId = toQInboxId(MqttBroker, "inbox1", "delivererKey1");
+        ByteString key = toMatchRecordKey("tenantId", "/a/b/c", scopedInboxId);
         MatchRecord normal = MatchRecord.newBuilder()
             .setNormal(QoS.AT_MOST_ONCE).build();
         Matching matching = parseMatchRecord(key, normal.toByteString());
@@ -66,8 +66,8 @@ public class EntityUtilTest {
 
     @Test
     public void testParseGroupMatchRecord() {
-        String scopedInboxId = toQualifiedInboxId(MqttBroker, "inbox1", "server1");
-        ByteString key = matchRecordKey("tenantId", "$share/group//a/b/c", scopedInboxId);
+        String scopedInboxId = toQInboxId(MqttBroker, "inbox1", "server1");
+        ByteString key = toMatchRecordKey("tenantId", "$share/group//a/b/c", scopedInboxId);
         MatchRecord record = MatchRecord.newBuilder()
             .setGroup(GroupMatchRecord.newBuilder()
                 .putEntry(scopedInboxId, QoS.AT_MOST_ONCE)

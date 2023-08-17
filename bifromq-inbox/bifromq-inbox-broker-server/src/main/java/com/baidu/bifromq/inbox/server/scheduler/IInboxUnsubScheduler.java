@@ -11,14 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.inbox;
+package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.baserpc.BluePrint;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.inbox.rpc.proto.RemoveSubReply;
+import com.baidu.bifromq.inbox.rpc.proto.RemoveSubRequest;
 
-public class RPCBluePrint {
-    public static final BluePrint INSTANCE = BluePrint.builder()
-        .serviceDescriptor(OnlineInboxBrokerGrpc.getServiceDescriptor())
-        .methodSemantic(OnlineInboxBrokerGrpc.getWriteMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
-        .build();
+public interface IInboxUnsubScheduler
+    extends IBatchCallScheduler<RemoveSubRequest, RemoveSubReply> {
 }

@@ -20,8 +20,6 @@ import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.annotation.Nullable;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -53,22 +51,6 @@ final class MonitoredSubBroker implements ISubBroker {
         Preconditions.checkState(!hasStopped.get());
         return new MonitoredDeliverer(delivererKey);
     }
-
-    @Override
-    public CompletableFuture<CheckResult> hasInbox(long reqId,
-                                                   @NonNull String tenantId,
-                                                   @NonNull String inboxId,
-                                                   @Nullable String delivererKey) {
-        Preconditions.checkState(!hasStopped.get());
-        try {
-            Timer.Sample start = Timer.start();
-            return delegate.hasInbox(reqId, tenantId, inboxId, delivererKey)
-                .whenComplete((v, e) -> start.stop(hasInboxCallTimer));
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
-        }
-    }
-
 
     @Override
     public void close() {

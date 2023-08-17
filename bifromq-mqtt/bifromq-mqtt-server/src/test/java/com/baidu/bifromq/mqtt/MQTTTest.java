@@ -75,7 +75,6 @@ class MQTTTest {
 
     @Mock
     protected IEventCollector eventCollector;
-
     @Mock
     protected ISettingProvider settingProvider;
 
@@ -186,7 +185,9 @@ class MQTTTest {
             .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
+            .inboxReaderClient(inboxReaderClient)
             .storeClient(inboxStoreKVStoreClient)
+            .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
@@ -197,16 +198,16 @@ class MQTTTest {
                 .setDataEngineConfigurator(new InMemoryKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
             .build();
-        inboxServer = IInboxServer.nonStandaloneBuilder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .settingProvider(settingProvider)
-            .inboxStoreClient(inboxStoreKVStoreClient)
-            .build();
         distClient = IDistClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-
+        inboxServer = IInboxServer.nonStandaloneBuilder()
+            .rpcServerBuilder(rpcServerBuilder)
+            .distClient(distClient)
+            .settingProvider(settingProvider)
+            .inboxStoreClient(inboxStoreKVStoreClient)
+            .build();
         retainClient = IRetainClient
             .newBuilder()
             .crdtService(clientCrdtService)
@@ -218,7 +219,6 @@ class MQTTTest {
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-
         retainStore = IRetainStore.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)

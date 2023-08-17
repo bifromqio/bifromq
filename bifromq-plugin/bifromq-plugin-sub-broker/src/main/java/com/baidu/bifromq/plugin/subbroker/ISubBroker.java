@@ -37,17 +37,6 @@ public interface ISubBroker extends ExtensionPoint {
     IDeliverer open(String delivererKey);
 
     /**
-     * Check the existence of an inbox asynchronously.
-     *
-     * @param reqId        the request id
-     * @param tenantId     the id of the tenant to which the inbox belongs
-     * @param inboxId      the inbox id
-     * @param delivererKey the key of the deliverer who is responsible for delivering subscribed messages to the inbox
-     * @return CheckResult the check result
-     */
-    CompletableFuture<CheckResult> hasInbox(long reqId, String tenantId, String inboxId, String delivererKey);
-
-    /**
      * Close the inbox broker
      */
     void close();

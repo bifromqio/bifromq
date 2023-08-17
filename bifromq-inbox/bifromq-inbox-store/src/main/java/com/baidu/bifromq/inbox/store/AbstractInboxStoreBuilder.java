@@ -18,7 +18,9 @@ import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.Executor;
@@ -29,7 +31,9 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     boolean bootstrap;
     IAgentHost agentHost;
     ICRDTService crdtService;
+    IInboxReaderClient inboxReaderClient;
     IBaseKVStoreClient storeClient;
+    ISettingProvider settingProvider;
     IEventCollector eventCollector;
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions;
@@ -67,8 +71,18 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
         return thisT();
     }
 
+    public T inboxReaderClient(IInboxReaderClient inboxReaderClient) {
+        this.inboxReaderClient = inboxReaderClient;
+        return thisT();
+    }
+
     public T storeClient(IBaseKVStoreClient storeClient) {
         this.storeClient = storeClient;
+        return thisT();
+    }
+
+    public T settingProvider(ISettingProvider settingProvider) {
+        this.settingProvider = settingProvider;
         return thisT();
     }
 

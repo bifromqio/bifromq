@@ -82,10 +82,10 @@ public class DistQoS1Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
+        when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
             CompletableFuture.completedFuture(null));
 
-        insertMatchRecord(tenantA, "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
+        sub(tenantA, "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
@@ -110,7 +110,7 @@ public class DistQoS1Test extends DistWorkerTest {
         verify(distClient, timeout(100).atLeastOnce())
             .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
-        deleteMatchRecord(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
+        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
     }
 
     @SneakyThrows
@@ -136,10 +136,10 @@ public class DistQoS1Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
-        joinMatchGroup(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
+        sub(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
@@ -168,6 +168,6 @@ public class DistQoS1Test extends DistWorkerTest {
 
         verify(eventCollector, timeout(100).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
 
-        leaveMatchGroup(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
+        unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
     }
 }

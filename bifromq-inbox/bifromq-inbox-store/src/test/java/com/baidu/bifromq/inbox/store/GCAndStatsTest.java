@@ -14,7 +14,12 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
@@ -23,6 +28,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import java.util.concurrent.CompletableFuture;
+import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 
 public class GCAndStatsTest extends InboxStoreTest {
@@ -35,6 +42,9 @@ public class GCAndStatsTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg1 = message(QoS.AT_LEAST_ONCE, "world");
         TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 3, 1, true);
+        requestSub(tenantId, inboxId, "greeting", QoS.AT_MOST_ONCE);
+        when(inboxReaderClient.touch(anyLong(), anyString(), anyString()))
+            .thenReturn(CompletableFuture.completedFuture(null));
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
@@ -43,7 +53,13 @@ public class GCAndStatsTest extends InboxStoreTest {
             .build();
         requestInsert(subInfo, topic, msg0, msg1, msg2);
         assertTrue(exist(tenantId, inboxId));
-        await().until(() -> !exist(tenantId, inboxId));
+
+        ArgumentCaptor<String> tenantIdCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> inboxIdCaptor = ArgumentCaptor.forClass(String.class);
+        verify(inboxReaderClient, timeout(3000))
+            .touch(anyLong(), tenantIdCaptor.capture(), inboxIdCaptor.capture());
+        assertEquals(tenantIdCaptor.getValue(), tenantId);
+        assertEquals(inboxIdCaptor.getValue(), inboxId);
     }
 
     private boolean exist(String tenantId, String inboxId) {

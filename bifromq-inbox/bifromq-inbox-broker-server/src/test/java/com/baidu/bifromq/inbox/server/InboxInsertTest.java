@@ -70,7 +70,7 @@ public class InboxInsertTest extends InboxServiceTest {
         Map<SubInfo, DeliveryResult> result = writer.deliver(msgPack).join();
         assertEquals(result.get(subInfo), DeliveryResult.OK);
 
-        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, delivererKey, clientInfo);
+        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, clientInfo);
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
@@ -136,7 +136,7 @@ public class InboxInsertTest extends InboxServiceTest {
         Map<SubInfo, DeliveryResult> result3 = writeFuture3.join();
         assertEquals(result3.get(subInfo), DeliveryResult.OK);
 
-        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, delivererKey, clientInfo);
+        IInboxReaderClient.IInboxReader reader = inboxReaderClient.openInboxReader(inboxId, clientInfo);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
         reader.fetch((fetched, throwable) -> {

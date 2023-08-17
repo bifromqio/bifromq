@@ -14,10 +14,17 @@
 package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.UnsubResult;
+import com.baidu.bifromq.inbox.rpc.proto.AddSubReply;
+import com.baidu.bifromq.inbox.rpc.proto.AddSubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -28,21 +35,29 @@ import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
+import com.baidu.bifromq.inbox.rpc.proto.RemoveSubReply;
+import com.baidu.bifromq.inbox.rpc.proto.RemoveSubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
+import com.baidu.bifromq.inbox.rpc.proto.TouchInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCheckScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCreateScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxTouchScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCheckScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCreateScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxUnSubScheduler;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -54,6 +69,7 @@ import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -82,6 +98,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final ScheduledExecutorService bgTaskExecutor;
     private final boolean bgTaskExecutorOwner;
+    private final IDistClient distClient;
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
     private final IInboxFetchScheduler fetchScheduler;
     private final IInboxCheckScheduler checkScheduler;
@@ -90,19 +107,25 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     //    private final IInboxComSertScheduler comSertScheduler;
     private final IInboxTouchScheduler touchScheduler;
     private final IInboxCreateScheduler createScheduler;
+    private final IInboxSubScheduler subScheduler;
+    private final IInboxUnsubScheduler unsubScheduler;
     private final RateLimiter fetcherCreationLimiter;
     private final Duration touchIdle = Duration.ofMinutes(5);
     private ScheduledFuture<?> touchTask;
 
     InboxService(ISettingProvider settingProvider,
+                 IDistClient distClient,
                  IBaseKVStoreClient inboxStoreClient,
                  ScheduledExecutorService bgTaskExecutor) {
+        this.distClient = distClient;
         this.checkScheduler = new InboxCheckScheduler(inboxStoreClient);
         this.fetchScheduler = new InboxFetchScheduler(inboxStoreClient);
         this.insertScheduler = new InboxInsertScheduler(inboxStoreClient);
         this.commitScheduler = new InboxCommitScheduler(inboxStoreClient);
 //        this.comSertScheduler = new InboxComSertScheduler2(inboxStoreClient);
         this.createScheduler = new InboxCreateScheduler(inboxStoreClient, settingProvider);
+        this.subScheduler = new InboxSubScheduler(inboxStoreClient);
+        this.unsubScheduler = new InboxUnSubScheduler(inboxStoreClient);
         this.touchScheduler = new InboxTouchScheduler(inboxStoreClient);
         fetcherCreationLimiter = RateLimiter.create(INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT.get());
         this.bgTaskExecutorOwner = bgTaskExecutor == null;
@@ -122,19 +145,184 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Override
     public void createInbox(CreateInboxRequest request, StreamObserver<CreateInboxReply> responseObserver) {
-        response(tenantId -> createScheduler.schedule(request).exceptionally(e -> CreateInboxReply.newBuilder()
-            .setReqId(request.getReqId())
-            .setResult(CreateInboxReply.Result.ERROR)
-            .build()), responseObserver);
+        response(tenantId -> createScheduler.schedule(request)
+            .thenCompose(topicFilters -> {
+                if (topicFilters.isEmpty()) {
+                    return CompletableFuture.completedFuture(CreateInboxReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(CreateInboxReply.Result.OK)
+                        .build());
+                } else {
+                    List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
+                        topicFilter -> distClient.unsub(request.getReqId(),
+                            request.getClientInfo().getTenantId(),
+                            topicFilter,
+                            request.getInboxId(),
+                            getDelivererKey(request.getInboxId()), 1
+                        )).toList();
+                    return CompletableFuture.allOf(unsubFutures.toArray(CompletableFuture[]::new))
+                        .thenApply(v -> unsubFutures.stream().map(CompletableFuture::join).toList())
+                        .handle((unsubResults, e) -> {
+                            if (e != null) {
+                                return CreateInboxReply.newBuilder()
+                                    .setReqId(request.getReqId())
+                                    .setResult(CreateInboxReply.Result.ERROR)
+                                    .build();
+                            } else {
+                                if (unsubResults.stream().allMatch(result -> result == UnsubResult.OK)) {
+                                    return CreateInboxReply.newBuilder()
+                                        .setReqId(request.getReqId())
+                                        .setResult(CreateInboxReply.Result.OK)
+                                        .build();
+                                } else {
+                                    return CreateInboxReply.newBuilder()
+                                        .setReqId(request.getReqId())
+                                        .setResult(CreateInboxReply.Result.ERROR)
+                                        .build();
+                                }
+                            }
+                        });
+                }
+            })
+            .exceptionally(e -> CreateInboxReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setResult(CreateInboxReply.Result.ERROR)
+                .build()), responseObserver);
     }
 
     @Override
     public void deleteInbox(DeleteInboxRequest request, StreamObserver<DeleteInboxReply> responseObserver) {
         response(tenantId -> touchScheduler.schedule(new IInboxTouchScheduler.Touch(request))
+            .exceptionally(e -> Collections.emptyList())
+            .thenCompose(topicFilters -> {
+                if (topicFilters.isEmpty()) {
+                    return CompletableFuture.completedFuture(null);
+                } else {
+                    long reqId = System.nanoTime();
+                    List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
+                        topicFilter -> distClient.unsub(reqId,
+                            tenantId,
+                            topicFilter,
+                            request.getInboxId(),
+                            getDelivererKey(request.getInboxId()), 1
+                        )).toList();
+                    return CompletableFuture.allOf(unsubFutures.toArray(CompletableFuture[]::new))
+                        .thenApply(v -> unsubFutures.stream().map(CompletableFuture::join).toList())
+                        .handle((unsubResults, e) -> {
+                            if (e != null) {
+                                log.error("Touch inbox error", e);
+                            }
+                            return null;
+                        });
+                }
+            })
             .handle((v, e) -> DeleteInboxReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setResult(e == null ? DeleteInboxReply.Result.OK : DeleteInboxReply.Result.ERROR)
                 .build()), responseObserver);
+    }
+
+    @Override
+    public void touchInbox(TouchInboxRequest request, StreamObserver<TouchInboxReply> responseObserver) {
+        response(tenantId -> touchScheduler.schedule(new IInboxTouchScheduler.Touch(request))
+            .exceptionally(e -> Collections.emptyList())
+            .thenCompose(topicFilters -> {
+                if (topicFilters.isEmpty()) {
+                    return CompletableFuture.completedFuture(null);
+                } else {
+                    long reqId = System.nanoTime();
+                    List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
+                        topicFilter -> distClient.unsub(reqId,
+                            tenantId,
+                            topicFilter,
+                            request.getInboxId(),
+                            getDelivererKey(request.getInboxId()), 1
+                        )).toList();
+                    return CompletableFuture.allOf(unsubFutures.toArray(CompletableFuture[]::new))
+                        .thenApply(v -> unsubFutures.stream().map(CompletableFuture::join).toList())
+                        .handle((unsubResults, e) -> {
+                            if (e != null) {
+                                log.error("Touch inbox error", e);
+                            }
+                            return null;
+                        });
+                }
+            })
+            .handle((v, e) -> {
+                if (e != null) {
+                    log.error("Touch inbox failed: inboxId={}", request.getInboxId(), e);
+                }
+                return TouchInboxReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .build();
+            }), responseObserver);
+    }
+
+    @Override
+    public void addSub(AddSubRequest request, StreamObserver<AddSubReply> responseObserver) {
+        response(tenantId -> subScheduler.schedule(request)
+            .thenCompose(v -> {
+                if (v.getResult() == AddSubReply.Result.OK) {
+                    return distClient.sub(request.getReqId(),
+                            request.getClientInfo().getTenantId(),
+                            request.getTopicFilter(),
+                            request.getSubQoS(),
+                            request.getInboxId(),
+                            getDelivererKey(request.getInboxId()), 1)
+                        .thenApply(subResult ->
+                            switch (subResult) {
+                                case OK -> AddSubReply.Result.OK;
+                                case EXCEED_LIMIT -> AddSubReply.Result.EXCEED_LIMIT;
+                                default -> AddSubReply.Result.ERROR;
+                            });
+                }
+                return CompletableFuture.completedFuture(v.getResult());
+            })
+            .handle((v, e) -> {
+                if (e != null) {
+                    log.error("Failed to subscribe", e);
+                    return AddSubReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(AddSubReply.Result.ERROR)
+                        .build();
+                }
+                return AddSubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(v)
+                    .build();
+            }), responseObserver);
+    }
+
+    @Override
+    public void removeSub(RemoveSubRequest request, StreamObserver<RemoveSubReply> responseObserver) {
+        response(tenantId -> unsubScheduler.schedule(request)
+            .thenCompose(v -> {
+                if (v.getResult() == RemoveSubReply.Result.OK) {
+                    return distClient.unsub(request.getReqId(),
+                            request.getClientInfo().getTenantId(),
+                            request.getTopicFilter(),
+                            request.getInboxId(),
+                            getDelivererKey(request.getInboxId()), 1)
+                        .thenApply(subResult ->
+                            switch (subResult) {
+                                case OK -> RemoveSubReply.Result.OK;
+                                default -> RemoveSubReply.Result.ERROR;
+                            });
+                }
+                return CompletableFuture.completedFuture(v.getResult());
+            })
+            .handle((v, e) -> {
+                if (e != null) {
+                    return RemoveSubReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(RemoveSubReply.Result.ERROR)
+                        .build();
+                }
+                return RemoveSubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(v)
+                    .build();
+            }), responseObserver);
     }
 
     @Override
@@ -193,9 +381,32 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     public StreamObserver<FetchHint> fetch(StreamObserver<Fetched> responseObserver) {
         return new InboxFetchPipeline(responseObserver,
             fetchScheduler::schedule,
-            scopedInboxId -> touchScheduler.schedule(new IInboxTouchScheduler.Touch(scopedInboxId)),
-            registry,
-            fetcherCreationLimiter);
+            scopedInboxId -> touchScheduler.schedule(new IInboxTouchScheduler.Touch(scopedInboxId))
+                .exceptionally(e -> Collections.emptyList())
+                .thenCompose(topicFilters -> {
+                    if (topicFilters.isEmpty()) {
+                        return CompletableFuture.completedFuture(null);
+                    } else {
+                        long reqId = System.nanoTime();
+                        String tenantId = parseTenantId(scopedInboxId);
+                        String inboxId = parseInboxId(scopedInboxId);
+                        List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
+                            topicFilter -> distClient.unsub(reqId,
+                                tenantId,
+                                topicFilter,
+                                inboxId,
+                                getDelivererKey(inboxId), 1
+                            )).toList();
+                        return CompletableFuture.allOf(unsubFutures.toArray(CompletableFuture[]::new))
+                            .thenApply(v -> unsubFutures.stream().map(CompletableFuture::join).toList())
+                            .handle((unsubResults, e) -> {
+                                if (e != null) {
+                                    log.error("Touch inbox error", e);
+                                }
+                                return null;
+                            });
+                    }
+                }), registry, fetcherCreationLimiter);
     }
 
     @Override

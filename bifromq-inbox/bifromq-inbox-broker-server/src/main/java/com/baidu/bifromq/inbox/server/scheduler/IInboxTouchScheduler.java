@@ -17,9 +17,11 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
 import com.google.protobuf.ByteString;
+import java.util.List;
 
-public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchScheduler.Touch, Void> {
+public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchScheduler.Touch, List<String>> {
     class Touch {
         final String scopedInboxIdUtf8;
         final boolean keep;
@@ -27,6 +29,12 @@ public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchSch
         public Touch(DeleteInboxRequest req) {
             scopedInboxIdUtf8 = scopedInboxId(req.getClientInfo().getTenantId(), req.getInboxId()).toStringUtf8();
             keep = false;
+        }
+
+        public Touch(TouchInboxRequest req) {
+            scopedInboxIdUtf8 = scopedInboxId(req.getTenantId(), req.getInboxId()).toStringUtf8();
+            keep = true;
+
         }
 
         public Touch(ByteString scopedInboxId) {

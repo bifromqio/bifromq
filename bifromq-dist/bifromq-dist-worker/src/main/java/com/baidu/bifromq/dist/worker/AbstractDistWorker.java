@@ -15,7 +15,6 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildCollectMetricsRequest;
-import static com.baidu.bifromq.dist.util.MessageUtil.buildGCRequest;
 import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.DistSubInfoSizeGauge;
@@ -62,16 +61,13 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
     private final AsyncRunner jobRunner;
     private final boolean jobExecutorOwner;
     private final Duration statsInterval;
-    private final Duration gcInterval;
-    private volatile ScheduledFuture<?> gcJob;
-    private volatile ScheduledFuture<?> statsJob;
+    private volatile CompletableFuture<Void> statsJob;
     private final Map<String, Long> tenantSubInfoSize = new ConcurrentHashMap<>();
     protected final DistWorkerCoProcFactory coProcFactory;
 
     public AbstractDistWorker(T builder) {
         this.clusterId = builder.clusterId;
         this.storeClient = builder.storeClient;
-        this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
         coProcFactory = new DistWorkerCoProcFactory(
             builder.distClient,
@@ -104,7 +100,6 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             storeServer().start();
             rangeBalanceController.start(storeServer().storeId(clusterId));
             status.compareAndSet(Status.STARTING, Status.STARTED);
-            scheduleGC();
             scheduleStats();
             log.info("Dist worker started");
         }
@@ -113,17 +108,11 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping dist worker");
-            if (gcJob != null && !gcJob.isDone()) {
-                gcJob.cancel(true);
-                awaitIfNotCancelled(gcJob);
-            }
-            if (statsJob != null && !statsJob.isDone()) {
-                statsJob.cancel(true);
-                awaitIfNotCancelled(statsJob);
-            }
             jobRunner.awaitDone();
-            // FIXME
-//            rangeBalanceController.stop();
+            if (statsJob != null && !statsJob.isDone()) {
+                statsJob.join();
+            }
+            rangeBalanceController.stop();
             storeServer().stop();
             log.debug("Stopping CoProcFactory");
             coProcFactory.close();
@@ -136,51 +125,11 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
         }
     }
 
-    private void scheduleGC() {
-        if (status.get() != Status.STARTED) {
-            return;
-        }
-        gcJob = jobScheduler.schedule(this::gc, gcInterval.toSeconds(), TimeUnit.SECONDS);
-    }
-
-    private void gc() {
-        jobRunner.add(() -> {
-            if (status.get() != Status.STARTED) {
-                return;
-            }
-            List<KVRangeSetting> settings = storeClient.findByRange(FULL_RANGE);
-            Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
-            List<CompletableFuture<?>> gcFutures = new ArrayList<>();
-            while (itr.hasNext()) {
-                KVRangeSetting leaderReplica = itr.next();
-                gcFutures.add(gcRange(leaderReplica));
-            }
-            CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0])).whenComplete((v, e) -> scheduleGC());
-        });
-    }
-
-    private CompletableFuture<Void> gcRange(KVRangeSetting leaderReplica) {
-        long reqId = System.currentTimeMillis();
-        return storeClient.query(leaderReplica.leader, KVRangeRORequest.newBuilder()
-                .setReqId(reqId)
-                .setKvRangeId(leaderReplica.id)
-                .setVer(leaderReplica.ver)
-                .setRoCoProcInput(buildGCRequest(reqId).toByteString())
-                .build())
-            .thenAccept(reply -> log.debug("Range gc succeed: serverId={}, rangeId={}, ver={}",
-                leaderReplica.leader, leaderReplica.id, leaderReplica.ver))
-            .exceptionally(e -> {
-                log.error("Range gc failed: serverId={}, rangeId={}, ver={}",
-                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-                return null;
-            });
-    }
-
     private void scheduleStats() {
         if (status.get() != Status.STARTED) {
             return;
         }
-        statsJob = jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
+        jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void collectMetrics() {
@@ -195,7 +144,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
                 KVRangeSetting leaderReplica = itr.next();
                 statsFutures.add(collectRangeMetrics(leaderReplica));
             }
-            CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
+            statsJob = CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
                 .whenComplete((v, e) -> {
                     if (e == null) {
                         Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())

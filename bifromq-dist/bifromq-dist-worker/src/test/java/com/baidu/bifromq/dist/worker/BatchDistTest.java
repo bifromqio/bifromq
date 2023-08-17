@@ -85,16 +85,11 @@ public class BatchDistTest extends DistWorkerTest {
                     .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
             });
 
-        insertMatchRecord(tenantA, "/a/1", AT_MOST_ONCE,
-            MqttBroker, "inbox1", "batch1");
-        insertMatchRecord(tenantA, "/a/2", AT_MOST_ONCE,
-            MqttBroker, "inbox1", "batch1");
-        insertMatchRecord(tenantA, "/a/2", AT_MOST_ONCE,
-            MqttBroker, "inbox3", "batch1");
-        insertMatchRecord(tenantA, "/a/3", AT_LEAST_ONCE,
-            InboxService, "inbox2", "batch2");
-        insertMatchRecord(tenantA, "/a/4", AT_LEAST_ONCE,
-            InboxService, "inbox2", "batch2");
+        sub(tenantA, "/a/1", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        sub(tenantA, "/a/2", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        sub(tenantA, "/a/2", AT_MOST_ONCE, MqttBroker, "inbox3", "batch1");
+        sub(tenantA, "/a/3", AT_LEAST_ONCE, InboxService, "inbox2", "batch2");
+        sub(tenantA, "/a/4", AT_LEAST_ONCE, InboxService, "inbox2", "batch2");
 
         BatchDistReply reply = dist(tenantA,
             List.of(
@@ -120,11 +115,11 @@ public class BatchDistTest extends DistWorkerTest {
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/3").intValue(), 1);
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/4").intValue(), 1);
 
-        deleteMatchRecord(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
-        deleteMatchRecord(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");
-        deleteMatchRecord(tenantA, "/a/2", MqttBroker, "inbox3", "batch1");
-        deleteMatchRecord(tenantA, "/a/3", InboxService, "inbox2", "batch2");
-        deleteMatchRecord(tenantA, "/a/4", InboxService, "inbox2", "batch2");
+        unsub(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
+        unsub(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");
+        unsub(tenantA, "/a/2", MqttBroker, "inbox3", "batch1");
+        unsub(tenantA, "/a/3", InboxService, "inbox2", "batch2");
+        unsub(tenantA, "/a/4", InboxService, "inbox2", "batch2");
     }
 
     private TopicMessagePack.PublisherPack toMsg(String tenantId, QoS qos, ByteString payload) {

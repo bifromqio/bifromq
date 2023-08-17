@@ -23,6 +23,7 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxBrokerClient;
 import com.baidu.bifromq.inbox.client.IInboxReaderClient;
 import com.baidu.bifromq.inbox.store.IInboxStore;
@@ -38,6 +39,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 
@@ -56,6 +58,9 @@ public abstract class InboxServiceTest {
 
         }
     };
+
+    @Mock
+    private IDistClient distClient;
     private IBaseKVStoreClient inboxStoreClient;
 
     private IInboxStore inboxStore;
@@ -109,7 +114,9 @@ public abstract class InboxServiceTest {
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
+            .inboxReaderClient(inboxReaderClient)
             .storeClient(inboxStoreClient)
+            .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(kvRangeStoreOptions)
             .balanceControllerOptions(controllerOptions)
@@ -121,6 +128,7 @@ public abstract class InboxServiceTest {
         inboxServer = IInboxServer.standaloneBuilder()
             .host("127.0.0.1")
             .crdtService(serverCrdtService)
+            .distClient(distClient)
             .settingProvider(settingProvider)
             .inboxStoreClient(inboxStoreClient)
             .build();

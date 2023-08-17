@@ -234,7 +234,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
+            .inboxReaderClient(inboxReaderClient)
             .storeClient(inboxStoreClient)
+            .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
             .queryExecutor(queryExecutor)
             .mutationExecutor(mutationExecutor)
@@ -259,6 +261,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
+            .distClient(distClient)
             .settingProvider(settingProviderMgr)
             .inboxStoreClient(inboxStoreClient)
             .bgTaskExecutor(bgTaskExecutor)

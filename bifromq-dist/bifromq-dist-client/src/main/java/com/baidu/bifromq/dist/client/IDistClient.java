@@ -52,8 +52,8 @@ public interface IDistClient extends IConnectable {
      * @param subBrokerId  the hosting subbroker of the inbox
      * @return correspond to Mqtt Sub QoS
      */
-    CompletableFuture<Integer> sub(long reqId, String tenantId, String topicFilter, QoS qos, String inboxId,
-                                   String delivererKey, int subBrokerId);
+    CompletableFuture<SubResult> sub(long reqId, String tenantId, String topicFilter, QoS qos, String inboxId,
+                                     String delivererKey, int subBrokerId);
 
     /**
      * Remove a topic subscription
@@ -66,11 +66,8 @@ public interface IDistClient extends IConnectable {
      * @param subBrokerId  the hosting subbroker of the inbox
      * @return true for remove successfully, false for subscription not found
      */
-    CompletableFuture<Boolean> unsub(long reqId, String tenantId, String topicFilter, String inboxId,
-                                     String delivererKey, int subBrokerId);
-
-    CompletableFuture<Void> clear(long reqId, String tenantId, String inboxId, String delivererKey,
-                                  int subBrokerId);
+    CompletableFuture<UnsubResult> unsub(long reqId, String tenantId, String topicFilter, String inboxId,
+                                         String delivererKey, int subBrokerId);
 
     void stop();
 }

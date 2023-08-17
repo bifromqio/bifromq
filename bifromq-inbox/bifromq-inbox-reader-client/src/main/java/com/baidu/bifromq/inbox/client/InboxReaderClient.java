@@ -13,17 +13,23 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_DELIVERERS;
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.RPCBluePrint;
+import com.baidu.bifromq.inbox.rpc.proto.AddSubReply;
+import com.baidu.bifromq.inbox.rpc.proto.AddSubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
+import com.baidu.bifromq.inbox.rpc.proto.RemoveSubReply;
+import com.baidu.bifromq.inbox.rpc.proto.RemoveSubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.QoS;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,7 +37,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class InboxReaderClient implements IInboxReaderClient {
-    private static final int INBOX_GROUPS = INBOX_DELIVERERS.get();
 
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -48,8 +53,8 @@ final class InboxReaderClient implements IInboxReaderClient {
     }
 
     @Override
-    public IInboxReader openInboxReader(String inboxId, String delivererKey, ClientInfo clientInfo) {
-        return new InboxReaderPipeline(inboxId, delivererKey, clientInfo, rpcClient);
+    public IInboxReader openInboxReader(String inboxId, ClientInfo clientInfo) {
+        return new InboxReaderPipeline(inboxId, getDelivererKey(inboxId), clientInfo, rpcClient);
     }
 
     @Override
@@ -93,12 +98,51 @@ final class InboxReaderClient implements IInboxReaderClient {
     }
 
     @Override
-    public String getDelivererKey(String inboxId, ClientInfo clientInfo) {
-        int k = inboxId.hashCode() % INBOX_GROUPS;
-        if (k < 0) {
-            k = (k + INBOX_GROUPS) % INBOX_GROUPS;
-        }
-        return k + "";
+    public CompletableFuture<Void> touch(long reqId, String tenantId, String inboxId) {
+        return rpcClient.invoke(tenantId, null, TouchInboxRequest.newBuilder()
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setInboxId(inboxId)
+                .build(), InboxServiceGrpc.getTouchInboxMethod())
+            .handle((v, e) -> {
+                if (e != null) {
+                    log.error("Touch inbox failed: inboxId={}", inboxId, e);
+                }
+                return null;
+            });
+    }
+
+    @Override
+    public CompletableFuture<InboxSubResult> sub(long reqId, String inboxId, String topicFilter, QoS qos,
+                                                 ClientInfo clientInfo) {
+        return rpcClient.invoke(clientInfo.getTenantId(), null, AddSubRequest.newBuilder()
+                .setReqId(reqId)
+                .setInboxId(inboxId)
+                .setTopicFilter(topicFilter)
+                .setSubQoS(qos)
+                .setClientInfo(clientInfo)
+                .build(), InboxServiceGrpc.getAddSubMethod())
+            .exceptionally(e -> AddSubReply.newBuilder()
+                .setReqId(reqId)
+                .setResult(AddSubReply.Result.ERROR)
+                .build())
+            .thenApply(v -> InboxSubResult.values()[v.getResult().ordinal()]);
+    }
+
+    @Override
+    public CompletableFuture<InboxUnsubResult> unsub(long reqId, String inboxId, String topicFilter,
+                                                     ClientInfo clientInfo) {
+        return rpcClient.invoke(clientInfo.getTenantId(), null, RemoveSubRequest.newBuilder()
+                .setReqId(reqId)
+                .setInboxId(inboxId)
+                .setTopicFilter(topicFilter)
+                .setClientInfo(clientInfo)
+                .build(), InboxServiceGrpc.getRemoveSubMethod())
+            .exceptionally(e -> RemoveSubReply.newBuilder()
+                .setReqId(reqId)
+                .setResult(RemoveSubReply.Result.ERROR)
+                .build())
+            .thenApply(v -> InboxUnsubResult.values()[v.getResult().ordinal()]);
     }
 
     @Override

@@ -10,8 +10,6 @@ package mqttbroker;
 
 service OnlineInboxBroker {
   rpc write (stream WriteRequest) returns (stream WriteReply);
-
-  rpc hasInbox (HasInboxRequest) returns (HasInboxReply);
 }
 
 message WritePack{
@@ -38,14 +36,3 @@ message WriteReply {
   uint64 reqId = 1;
   repeated WriteResult result = 2;
 }
-
-message HasInboxRequest {
-  uint64 reqId = 1;
-  string inboxId = 2;
-}
-
-message HasInboxReply {
-  uint64 reqId = 1;
-  bool result = 2;
-}
-

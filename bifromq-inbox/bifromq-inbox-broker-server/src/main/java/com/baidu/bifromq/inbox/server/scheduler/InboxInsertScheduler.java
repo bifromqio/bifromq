@@ -106,11 +106,10 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
                         } else {
                             Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
                             for (InboxInsertResult result : v.getInsert().getResultsList()) {
-                                if (result.getResult() == InboxInsertResult.Result.NO_INBOX) {
-                                    insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
-                                } else {
-                                    insertResults.put(result.getSubInfo(),
-                                        com.baidu.bifromq.inbox.rpc.proto.SendResult.Result.OK);
+                                switch (result.getResult()) {
+                                    case OK -> insertResults.put(result.getSubInfo(), SendResult.Result.OK);
+                                    case NO_INBOX -> insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
+                                    case ERROR -> insertResults.put(result.getSubInfo(), SendResult.Result.ERROR);
                                 }
                             }
                             CallTask<MessagePack, SendResult.Result> task;

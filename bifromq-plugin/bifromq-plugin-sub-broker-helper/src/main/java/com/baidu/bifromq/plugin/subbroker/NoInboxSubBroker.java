@@ -53,11 +53,6 @@ class NoInboxSubBroker implements ISubBroker {
     }
 
     @Override
-    public CompletableFuture<CheckResult> hasInbox(long reqId, String tenantId, String inboxId, String delivererKey) {
-        return NO_INBOX;
-    }
-
-    @Override
     public void close() {
 
     }

@@ -11,22 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.store.benchmark;
+package com.baidu.bifromq.dist.server.scheduler;
 
-import lombok.extern.slf4j.Slf4j;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.State;
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.dist.rpc.proto.UnsubReply;
+import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
 
-@Slf4j
-@State(Scope.Benchmark)
-public class HasInboxState extends InboxStoreState {
-    @Override
-    void afterSetup() {
-
-    }
-
-    @Override
-    void beforeTeardown() {
-
-    }
+public interface IUnsubCallScheduler extends IBatchCallScheduler<UnsubRequest, UnsubReply> {
 }

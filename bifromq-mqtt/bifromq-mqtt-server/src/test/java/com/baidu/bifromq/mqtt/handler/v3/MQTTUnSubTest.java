@@ -21,11 +21,17 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATI
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBSCRIPTION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
+import com.baidu.bifromq.inbox.client.InboxUnsubResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.Assert;
@@ -60,7 +66,8 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     public void persistentUnSub() {
         connectAndVerify(false);
         mockAuthCheck(true);
-        mockDistUnSub(true);
+        when(inboxClient.unsub(anyLong(), anyString(), anyString(), any())).thenReturn(
+            CompletableFuture.completedFuture(InboxUnsubResult.OK));
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
@@ -72,6 +79,10 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         connectAndVerify(false);
         mockAuthCheck(true);
         mockDistUnSub(true, false, true);
+        when(inboxClient.unsub(anyLong(), anyString(), anyString(), any()))
+            .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.OK))
+            .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.ERROR))
+            .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.OK));
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);

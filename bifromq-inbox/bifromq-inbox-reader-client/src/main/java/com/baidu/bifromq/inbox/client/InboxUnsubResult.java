@@ -11,14 +11,10 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.inbox;
+package com.baidu.bifromq.inbox.client;
 
-import com.baidu.bifromq.baserpc.BluePrint;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
-
-public class RPCBluePrint {
-    public static final BluePrint INSTANCE = BluePrint.builder()
-        .serviceDescriptor(OnlineInboxBrokerGrpc.getServiceDescriptor())
-        .methodSemantic(OnlineInboxBrokerGrpc.getWriteMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
-        .build();
+public enum InboxUnsubResult {
+    OK,
+    NO_INBOX,
+    ERROR
 }

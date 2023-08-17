@@ -14,6 +14,8 @@
 package com.baidu.bifromq.dist.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.dist.rpc.proto.SubReply;
+import com.baidu.bifromq.dist.rpc.proto.SubRequest;
 
-public interface ISubCallScheduler extends IBatchCallScheduler<SubCall, SubCallResult> {
+public interface ISubCallScheduler extends IBatchCallScheduler<SubRequest, SubReply> {
 }

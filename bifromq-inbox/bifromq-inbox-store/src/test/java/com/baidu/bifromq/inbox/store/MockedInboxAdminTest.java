@@ -31,6 +31,7 @@ import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.HasReply;
 import com.baidu.bifromq.inbox.storage.proto.HasRequest;
@@ -40,6 +41,8 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import java.time.Clock;
@@ -66,6 +69,7 @@ public class MockedInboxAdminTest {
     @Mock
     private ILoadTracker loadTracker;
     private final Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
+    private final ISettingProvider settingProvider = Setting::current;
     private final IEventCollector eventCollector = event -> {
     };
     private final String tenantId = "tenantA";
@@ -110,7 +114,7 @@ public class MockedInboxAdminTest {
         when(reader.get(any())).thenReturn(Optional.empty());
         doNothing().when(writer).put(any(), any());
 
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
+        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
             clock, Duration.ofMinutes(30), loadTracker);
         coProc.mutate(coProcInput.toByteString(), reader, writer);
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
@@ -153,7 +157,7 @@ public class MockedInboxAdminTest {
         when(kvIterator.isValid()).thenReturn(false);
         doNothing().when(writer).put(any(), any());
 
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
+        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
             Clock.systemUTC(), Duration.ofMinutes(30), loadTracker);
         coProc.mutate(coProcInput.toByteString(), reader, writer);
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
@@ -177,29 +181,29 @@ public class MockedInboxAdminTest {
     public void testHasInbox() {
         HasRequest.Builder hasBuilder = HasRequest.newBuilder();
         hasBuilder.addScopedInboxId(ByteString.copyFromUtf8(scopedInboxIdUtf8))
-                .addScopedInboxId(ByteString.copyFromUtf8("dev-" + scopedInboxIdUtf8))
-                .addScopedInboxId(ByteString.copyFromUtf8("expire-" + scopedInboxIdUtf8));
+            .addScopedInboxId(ByteString.copyFromUtf8("dev-" + scopedInboxIdUtf8))
+            .addScopedInboxId(ByteString.copyFromUtf8("expire-" + scopedInboxIdUtf8));
         HasRequest hasRequest = hasBuilder.build();
 
         InboxServiceROCoProcInput roInput = InboxServiceROCoProcInput.newBuilder()
-                .setReqId(System.nanoTime())
-                .setHas(hasRequest)
-                .build();
+            .setReqId(System.nanoTime())
+            .setHas(hasRequest)
+            .build();
 
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8))).thenReturn(Optional.empty());
         when(reader.get(ByteString.copyFromUtf8("dev-" + scopedInboxIdUtf8)))
-                .thenReturn(Optional.of(InboxMetadata.newBuilder()
-                        .setLastFetchTime(clock.millis())
-                        .setExpireSeconds(Integer.MAX_VALUE)
-                        .build().toByteString()));
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis())
+                .setExpireSeconds(Integer.MAX_VALUE)
+                .build().toByteString()));
         when(reader.get(ByteString.copyFromUtf8("expire-" + scopedInboxIdUtf8)))
-                .thenReturn(Optional.of(InboxMetadata.newBuilder()
-                        .setLastFetchTime(clock.millis() - 30 * 1000)
-                        .setExpireSeconds(1)
-                        .build().toByteString()));
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() - 30 * 1000)
+                .setExpireSeconds(1)
+                .build().toByteString()));
 
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
-                clock, Duration.ofMinutes(30), loadTracker);
+        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
+            clock, Duration.ofMinutes(30), loadTracker);
         ByteString result = coProc.query(roInput.toByteString(), reader).join();
 
         try {
@@ -207,7 +211,7 @@ public class MockedInboxAdminTest {
             Assert.assertTrue(!hasReply.getExistsMap().get(scopedInboxIdUtf8));
             Assert.assertTrue(hasReply.getExistsMap().get("dev-" + scopedInboxIdUtf8));
             Assert.assertTrue(!hasReply.getExistsMap().get("expire-" + scopedInboxIdUtf8));
-        }catch (Exception exception) {
+        } catch (Exception exception) {
             fail();
         }
     }
@@ -215,29 +219,29 @@ public class MockedInboxAdminTest {
     @Test
     public void testDeleteInbox() {
         InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.newBuilder()
-                .setTouch(TouchRequest.newBuilder()
-                        .putScopedInboxId(scopedInboxIdUtf8, false)
-                        .putScopedInboxId("dev-" + scopedInboxIdUtf8, false)
-                        .putScopedInboxId("expire-" + scopedInboxIdUtf8, true)
-                        .build())
-                .build();
+            .setTouch(TouchRequest.newBuilder()
+                .putScopedInboxId(scopedInboxIdUtf8, false)
+                .putScopedInboxId("dev-" + scopedInboxIdUtf8, false)
+                .putScopedInboxId("expire-" + scopedInboxIdUtf8, true)
+                .build())
+            .build();
 
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
-                .thenReturn(Optional.empty());
+            .thenReturn(Optional.empty());
         when(reader.get(ByteString.copyFromUtf8("dev-" + scopedInboxIdUtf8)))
-                .thenReturn(Optional.of(InboxMetadata.newBuilder()
-                        .setLastFetchTime(clock.millis())
-                        .setExpireSeconds(Integer.MAX_VALUE)
-                        .build().toByteString()));
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis())
+                .setExpireSeconds(Integer.MAX_VALUE)
+                .build().toByteString()));
         when(reader.get(ByteString.copyFromUtf8("expire-" + scopedInboxIdUtf8)))
-                .thenReturn(Optional.of(InboxMetadata.newBuilder()
-                        .setLastFetchTime(clock.millis() - 30 * 1000)
-                        .setExpireSeconds(1)
-                        .build().toByteString()));
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() - 30 * 1000)
+                .setExpireSeconds(1)
+                .build().toByteString()));
         doNothing().when(writer).delete(any());
 
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
-                clock, Duration.ofMinutes(30), loadTracker);
+        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
+            clock, Duration.ofMinutes(30), loadTracker);
         coProc.mutate(coProcInput.toByteString(), reader, writer);
 
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
@@ -254,43 +258,127 @@ public class MockedInboxAdminTest {
     }
 
     @Test
-    public void testGC() {
-        InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.newBuilder()
-                .setTouch(TouchRequest.newBuilder()
-                        .build())
-                .setReqId(System.nanoTime())
-                .setGc(GCRequest.newBuilder().build())
-                .build();
+    public void testGCScan() {
+        long reqId = System.nanoTime();
+        InboxServiceROCoProcInput coProcInput = InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setGc(GCRequest.newBuilder().setReqId(reqId).setLimit(10).build())
+            .build();
 
         when(reader.get(any()))
-                .thenReturn(Optional.of(InboxMetadata.newBuilder()
-                        .setLastFetchTime(clock.millis() - 30 * 1000)
-                        .setExpireSeconds(1)
-                        .build().toByteString()));
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() - 30 * 1000)
+                .setExpireSeconds(1)
+                .build().toByteString()));
 
         when(kvIterator.isValid())
-                .thenReturn(true)
-                .thenReturn(false);
+            .thenReturn(true)
+            .thenReturn(false);
         when(kvIterator.key())
-                .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8));
+            .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8));
         when(kvIterator.value())
-                .thenReturn(InboxMetadata.newBuilder()
-                        .setLastFetchTime(clock.millis() - 30 * 1000)
-                        .setExpireSeconds(1)
-                        .build().toByteString());
+            .thenReturn(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() - 30 * 1000)
+                .setExpireSeconds(1)
+                .build().toByteString());
 
+        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
+            clock, Duration.ZERO, loadTracker);
+        ByteString output = coProc.query(coProcInput.toByteString(), reader).join();
 
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, eventCollector,
-                clock, Duration.ZERO, loadTracker);
-        coProc.mutate(coProcInput.toByteString(), reader, writer);
-
-        ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
-        verify(writer).delete(argumentCaptor.capture());
-        List<ByteString> args = argumentCaptor.getAllValues();
+        verify(kvIterator).seekToFirst();
 
         try {
-            assertEquals(args.size(), 1);
-            assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8), args.get(0));
+            GCReply reply = InboxServiceROCoProcOutput.parseFrom(output).getGc();
+            assertEquals(reply.getReqId(), coProcInput.getGc().getReqId());
+            assertEquals(reply.getScopedInboxIdCount(), 1);
+            assertEquals(reply.getScopedInboxIdList().get(0), ByteString.copyFromUtf8(scopedInboxIdUtf8));
+        } catch (Exception exception) {
+            fail();
+        }
+    }
+
+    @Test
+    public void testGCScanWithNoExpiredInbox() {
+        long reqId = System.nanoTime();
+        InboxServiceROCoProcInput coProcInput = InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setGc(GCRequest.newBuilder().setReqId(reqId).setLimit(10).build())
+            .build();
+
+        when(reader.get(any()))
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis())
+                .setExpireSeconds(1)
+                .build().toByteString()));
+
+        when(kvIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(false);
+        when(kvIterator.key())
+            .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8));
+        when(kvIterator.value())
+            .thenReturn(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis())
+                .setExpireSeconds(1)
+                .build().toByteString());
+
+        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
+            clock, Duration.ZERO, loadTracker);
+        ByteString output = coProc.query(coProcInput.toByteString(), reader).join();
+
+        verify(kvIterator).seekToFirst();
+
+        try {
+            GCReply reply = InboxServiceROCoProcOutput.parseFrom(output).getGc();
+            assertEquals(reply.getReqId(), coProcInput.getGc().getReqId());
+            assertEquals(reply.getScopedInboxIdCount(), 0);
+        } catch (Exception exception) {
+            fail();
+        }
+    }
+
+    @Test
+    public void testGCScanWithLimit() {
+        long reqId = System.nanoTime();
+        String scopedInboxId1 = scopedInboxId(tenantId, "inbox1").toStringUtf8();
+        String scopedInboxId2 = scopedInboxId(tenantId, "inbox2").toStringUtf8();
+
+        InboxServiceROCoProcInput coProcInput = InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setGc(GCRequest.newBuilder().setReqId(reqId).setLimit(1).build())
+            .build();
+
+        when(reader.get(any()))
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() - 30 * 1000)
+                .setExpireSeconds(1)
+                .build().toByteString()));
+
+        when(kvIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(kvIterator.key())
+            .thenReturn(ByteString.copyFromUtf8(scopedInboxId1))
+            .thenReturn(ByteString.copyFromUtf8(scopedInboxId2));
+        when(kvIterator.value())
+            .thenReturn(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() - 30 * 1000)
+                .setExpireSeconds(1)
+                .build().toByteString());
+
+        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
+            clock, Duration.ZERO, loadTracker);
+        ByteString output = coProc.query(coProcInput.toByteString(), reader).join();
+
+        verify(kvIterator).seekToFirst();
+
+        try {
+            GCReply reply = InboxServiceROCoProcOutput.parseFrom(output).getGc();
+            assertEquals(reply.getReqId(), coProcInput.getGc().getReqId());
+            assertEquals(reply.getScopedInboxIdCount(), 1);
+            assertEquals(reply.getScopedInboxIdList().get(0), ByteString.copyFromUtf8(scopedInboxId1));
         } catch (Exception exception) {
             fail();
         }

@@ -24,12 +24,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.ClearResult;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -53,10 +53,10 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
 
     @AfterMethod
     public void clean() {
-        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));
         channel.close();
-        verify(distClient).clear(anyLong(), anyString(), anyString(), anyString(), anyInt());
+        verify(distClient, atLeast(1)).unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
