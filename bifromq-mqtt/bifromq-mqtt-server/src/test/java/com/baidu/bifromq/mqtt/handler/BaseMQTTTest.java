@@ -46,8 +46,7 @@ import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.SubResult;
 import com.baidu.bifromq.dist.client.UnsubResult;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient.IInboxReader;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxCheckResult;
 import com.baidu.bifromq.inbox.client.InboxSubResult;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -112,7 +111,7 @@ public abstract class BaseMQTTTest {
     @Mock
     protected IDistClient distClient;
     @Mock
-    protected IInboxReaderClient inboxClient;
+    protected IInboxClient inboxClient;
     @Mock
     protected IRetainClient retainClient;
     @Mock
@@ -120,7 +119,7 @@ public abstract class BaseMQTTTest {
     @Mock
     protected IRPCClient.IMessageStream<Quit, Ping> kickStream;
     @Mock
-    protected IInboxReader inboxReader;
+    protected IInboxClient.IInboxReader inboxReader;
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
     protected ILocalSessionRegistry sessionRegistry = new ILocalSessionRegistry() {

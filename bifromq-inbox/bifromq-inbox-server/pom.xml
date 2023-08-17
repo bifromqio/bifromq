@@ -15,15 +15,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.baidu.bifromq</groupId>
         <artifactId>bifromq-inbox</artifactId>
         <version>1.0.2</version>
     </parent>
+    <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>bifromq-inbox-store</artifactId>
-
+    <artifactId>bifromq-inbox-server</artifactId>
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -31,11 +30,11 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-metrics</artifactId>
+            <artifactId>bifromq-sysprops</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-client</artifactId>
+            <artifactId>base-scheduler</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -43,19 +42,15 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-kv-store-server</artifactId>
+            <artifactId>bifromq-metrics</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-kv-store-balance-controller</artifactId>
+            <artifactId>bifromq-common-type</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-rpc-definition</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-sysprops</artifactId>
+            <artifactId>bifromq-dist-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -63,20 +58,30 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-event-collector-helper</artifactId>
+            <artifactId>bifromq-inbox-rpc-definition</artifactId>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
-        <!-- test dependencies -->
+        <!-- for testing -->
         <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-inbox-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-inbox-store</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
         </dependency>
         <dependency>
             <groupId>org.openjdk.jmh</groupId>
@@ -90,6 +95,10 @@
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-dist-rpc-definition</artifactId>
         </dependency>
     </dependencies>
 </project>

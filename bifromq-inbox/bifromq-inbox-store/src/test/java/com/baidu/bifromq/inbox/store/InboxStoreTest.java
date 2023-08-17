@@ -37,7 +37,7 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.IConnectable;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.BatchAddSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAddSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubReply;
@@ -106,7 +106,7 @@ abstract class InboxStoreTest {
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
 
     @Mock
-    protected IInboxReaderClient inboxReaderClient;
+    protected IInboxClient inboxClient;
     @Mock
     protected ISettingProvider settingProvider;
     @Mock
@@ -183,7 +183,7 @@ abstract class InboxStoreTest {
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .inboxReaderClient(inboxReaderClient)
+            .inboxClient(inboxClient)
             .storeClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)

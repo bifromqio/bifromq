@@ -43,7 +43,7 @@ public class GCAndStatsTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 3, 1, true);
         requestSub(tenantId, inboxId, "greeting", QoS.AT_MOST_ONCE);
-        when(inboxReaderClient.touch(anyLong(), anyString(), anyString()))
+        when(inboxClient.touch(anyLong(), anyString(), anyString()))
             .thenReturn(CompletableFuture.completedFuture(null));
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)
@@ -56,7 +56,7 @@ public class GCAndStatsTest extends InboxStoreTest {
 
         ArgumentCaptor<String> tenantIdCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> inboxIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(inboxReaderClient, timeout(3000))
+        verify(inboxClient, timeout(3000))
             .touch(anyLong(), tenantIdCaptor.capture(), inboxIdCaptor.capture());
         assertEquals(tenantIdCaptor.getValue(), tenantId);
         assertEquals(inboxIdCaptor.getValue(), inboxId);

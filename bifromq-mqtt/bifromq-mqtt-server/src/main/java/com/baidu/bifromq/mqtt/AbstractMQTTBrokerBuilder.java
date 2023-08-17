@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.inbox.client.IInboxReaderClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -23,7 +23,6 @@ import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.netty.channel.EventLoopGroup;
 import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
 
 @Slf4j
 abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>> implements IMQTTBrokerBuilder<T> {
@@ -44,7 +43,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     IEventCollector eventCollector;
     ISettingProvider settingProvider;
     IDistClient distClient;
-    IInboxReaderClient inboxClient;
+    IInboxClient inboxClient;
     IRetainClient retainClient;
     ISessionDictClient sessionDictClient;
     ConnListenerBuilder.TCPConnListenerBuilder<T> tcpListenerBuilder;
@@ -177,7 +176,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
         return thisT();
     }
 
-    public T inboxClient(IInboxReaderClient inboxClient) {
+    public T inboxClient(IInboxClient inboxClient) {
         this.inboxClient = inboxClient;
         return thisT();
     }
