@@ -209,6 +209,11 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .build();
+        distClient = IDistClient.newBuilder()
+            .crdtService(clientCrdtService)
+            .executor(MoreExecutors.directExecutor())
+            .sslContext(clientSslContext)
+            .build();
         inboxClient = IInboxClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
@@ -303,12 +308,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         retainServer = IRetainServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .retainStoreClient(retainStoreClient)
-            .build();
-
-        distClient = IDistClient.newBuilder()
-            .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
-            .sslContext(clientSslContext)
             .build();
 
         mqttBrokerClient = IMqttBrokerClient.newBuilder()
