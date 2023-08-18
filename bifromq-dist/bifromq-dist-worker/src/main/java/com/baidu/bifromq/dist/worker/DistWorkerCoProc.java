@@ -44,12 +44,12 @@ import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
-import com.baidu.bifromq.dist.rpc.proto.BatchDist;
+import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchSubReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchSubRequest;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnsubReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnsubRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.CollectMetricsReply;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
@@ -124,15 +124,15 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             cis.enableAliasing(true);
             DistServiceROCoProcInput coProcInput = DistServiceROCoProcInput.parseFrom(cis);
             switch (coProcInput.getInputCase()) {
-                case DIST -> {
-                    return dist(coProcInput.getDist(), reader)
+                case BATCHDIST -> {
+                    return batchDist(coProcInput.getBatchDist(), reader)
                         .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
-                            .setDistReply(v).build().toByteString());
+                            .setBatchDist(v).build().toByteString());
                 }
-                case COLLECTMETRICSREQUEST -> {
-                    return collect(coProcInput.getCollectMetricsRequest().getReqId(), reader)
+                case COLLECTMETRICS -> {
+                    return collect(coProcInput.getCollectMetrics().getReqId(), reader)
                         .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
-                            .setCollectMetricsReply(v).build().toByteString());
+                            .setCollectMetrics(v).build().toByteString());
                 }
                 default -> {
                     log.error("Unknown co proc type {}", coProcInput.getInputCase());
@@ -161,10 +161,10 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         Set<ScopedTopic> touchedTopics = Sets.newHashSet();
         DistServiceRWCoProcOutput.Builder outputBuilder = DistServiceRWCoProcOutput.newBuilder();
         switch (coProcInput.getTypeCase()) {
-            case BATCHSUB -> outputBuilder.setBatchSub(
-                batchSub(coProcInput.getBatchSub(), reader, writer, touchedTenants, touchedTopics));
-            case BATCHUNSUB -> outputBuilder.setBatchUnsub(
-                batchUnsub(coProcInput.getBatchUnsub(), reader, writer, touchedTenants, touchedTopics));
+            case BATCHMATCH -> outputBuilder.setBatchMatch(
+                batchMatch(coProcInput.getBatchMatch(), reader, writer, touchedTenants, touchedTopics));
+            case BATCHUNMATCH -> outputBuilder.setBatchUnmatch(
+                batchUnmatch(coProcInput.getBatchUnmatch(), reader, writer, touchedTenants, touchedTopics));
         }
         ByteString output = outputBuilder.build().toByteString();
         return () -> {
@@ -179,13 +179,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         fanoutExecutorGroup.shutdown();
     }
 
-    private BatchSubReply batchSub(BatchSubRequest request,
-                                   IKVReader reader,
-                                   IKVWriter writer,
-                                   Set<String> touchedTenants,
-                                   Set<ScopedTopic> touchedTopics) {
-        BatchSubReply.Builder replyBuilder = BatchSubReply.newBuilder()
-            .setReqId(request.getReqId());
+    private BatchMatchReply batchMatch(BatchMatchRequest request,
+                                       IKVReader reader,
+                                       IKVWriter writer,
+                                       Set<String> touchedTenants,
+                                       Set<ScopedTopic> touchedTopics) {
+        BatchMatchReply.Builder replyBuilder = BatchMatchReply.newBuilder().setReqId(request.getReqId());
         Map<ByteString, Map<String, QoS>> groupMatchRecords = new HashMap<>();
         request.getScopedTopicFilterMap().forEach((scopedTopicFilter, subQoS) -> {
             String tenantId = parseTenantIdFromScopedTopicFilter(scopedTopicFilter);
@@ -205,7 +204,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             .build());
                     }
                 }
-                replyBuilder.putResults(scopedTopicFilter, BatchSubReply.Result.OK);
+                replyBuilder.putResults(scopedTopicFilter, BatchMatchReply.Result.OK);
             } else {
                 ByteString groupMatchRecordKey = toGroupMatchRecordKey(tenantId, topicFilter);
                 groupMatchRecords.computeIfAbsent(groupMatchRecordKey, k -> new HashMap<>()).put(qInboxId, subQoS);
@@ -234,17 +233,17 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         matchGroup.putEntry(newQInboxId, newSubQoS);
                         replyBuilder.putResults(toScopedTopicFilter(tenantId, newQInboxId,
                                 parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
-                            BatchSubReply.Result.OK);
+                            BatchMatchReply.Result.OK);
                         updated = true;
                     } else {
                         replyBuilder.putResults(toScopedTopicFilter(tenantId, newQInboxId,
                                 parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
-                            BatchSubReply.Result.EXCEED_LIMIT);
+                            BatchMatchReply.Result.EXCEED_LIMIT);
                     }
                 } else {
                     replyBuilder.putResults(toScopedTopicFilter(tenantId, newQInboxId,
                             parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
-                        BatchSubReply.Result.OK);
+                        BatchMatchReply.Result.OK);
                 }
             }
             if (updated) {
@@ -264,12 +263,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         return replyBuilder.build();
     }
 
-    private BatchUnsubReply batchUnsub(BatchUnsubRequest request,
-                                       IKVReader reader,
-                                       IKVWriter writer,
-                                       Set<String> touchedTenants,
-                                       Set<ScopedTopic> touchedTopics) {
-        BatchUnsubReply.Builder replyBuilder = BatchUnsubReply.newBuilder().setReqId(request.getReqId());
+    private BatchUnmatchReply batchUnmatch(BatchUnmatchRequest request,
+                                           IKVReader reader,
+                                           IKVWriter writer,
+                                           Set<String> touchedTenants,
+                                           Set<ScopedTopic> touchedTopics) {
+        BatchUnmatchReply.Builder replyBuilder = BatchUnmatchReply.newBuilder().setReqId(request.getReqId());
         Map<ByteString, Set<String>> delGroupMatchRecords = new HashMap<>();
         for (String scopedTopicFilter : request.getScopedTopicFilterList()) {
             String tenantId = parseTenantIdFromScopedTopicFilter(scopedTopicFilter);
@@ -289,9 +288,9 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             .range(reader.range())
                             .build());
                     }
-                    replyBuilder.putResults(scopedTopicFilter, BatchUnsubReply.Result.OK);
+                    replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.OK);
                 } else {
-                    replyBuilder.putResults(scopedTopicFilter, BatchUnsubReply.Result.NOT_EXISTED);
+                    replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.NOT_EXISTED);
                 }
             } else {
                 ByteString groupMatchRecordKey = toGroupMatchRecordKey(tenantId, topicFilter);
@@ -310,12 +309,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     if (existing.remove(delQInboxId) != null) {
                         replyBuilder.putResults(
                             toScopedTopicFilter(tenantId, delQInboxId, groupMatching.originalTopicFilter()),
-                            BatchUnsubReply.Result.OK);
+                            BatchUnmatchReply.Result.OK);
 
                     } else {
                         replyBuilder.putResults(
                             toScopedTopicFilter(tenantId, delQInboxId, groupMatching.originalTopicFilter()),
-                            BatchUnsubReply.Result.NOT_EXISTED);
+                            BatchUnmatchReply.Result.NOT_EXISTED);
                     }
                 }
                 if (existing.size() != groupMatching.inboxMap.size()) {
@@ -343,13 +342,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 delGroupMembers.forEach(delQInboxId ->
                     replyBuilder.putResults(toScopedTopicFilter(tenantId, delQInboxId,
                             parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
-                        BatchUnsubReply.Result.NOT_EXISTED));
+                        BatchUnmatchReply.Result.NOT_EXISTED));
             }
         });
         return replyBuilder.build();
     }
 
-    private CompletableFuture<BatchDistReply> dist(BatchDist request, IKVReader reader) {
+    private CompletableFuture<BatchDistReply> batchDist(BatchDistRequest request, IKVReader reader) {
         List<DistPack> distPackList = request.getDistPackList();
         if (distPackList.isEmpty()) {
             return CompletableFuture.completedFuture(BatchDistReply.newBuilder()

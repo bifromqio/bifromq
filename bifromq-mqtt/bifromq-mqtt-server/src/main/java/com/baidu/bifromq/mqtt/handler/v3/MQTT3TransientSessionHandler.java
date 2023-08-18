@@ -18,8 +18,8 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.SubResult;
-import com.baidu.bifromq.dist.client.UnsubResult;
+import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.PushEvent;
@@ -69,13 +69,13 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
         super.channelInactive(ctx);
         if (!topicFilters.isEmpty()) {
             submitBgTask(() -> CompletableFuture.allOf(topicFilters.stream()
-                .map(topicFilter -> sessionCtx.distClient.unsub(System.nanoTime(), clientInfo().getTenantId(),
+                .map(topicFilter -> sessionCtx.distClient.unmatch(System.nanoTime(), clientInfo().getTenantId(),
                         topicFilter, channelId(), toDelivererKey(channelId(), sessionCtx.serverId), 0)
                     .exceptionally(e -> {
                         log.error("Failed to unsub: tenantId={}, topicFilter={}, inboxId={}, delivererKey={}",
                             clientInfo().getTenantId(), topicFilter, channelId(),
                             toDelivererKey(channelId(), sessionCtx.serverId), e);
-                        return UnsubResult.ERROR;
+                        return UnmatchResult.ERROR;
                     }))
                 .toArray(CompletableFuture[]::new)));
         }
@@ -99,11 +99,11 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
             return CompletableFuture.completedFuture(MqttQoS.FAILURE);
         }
-        return sessionCtx.distClient.sub(reqId, clientInfo().getTenantId(), topicSub.topicName(),
+        return sessionCtx.distClient.match(reqId, clientInfo().getTenantId(), topicSub.topicName(),
                 QoS.forNumber(topicSub.qualityOfService().value()), channelId(),
                 toDelivererKey(channelId(), sessionCtx.serverId), 0)
             .thenApplyAsync(subResult -> {
-                if (subResult == SubResult.OK) {
+                if (subResult == MatchResult.OK) {
                     topicFilters.add(topicSub.topicName());
                     return topicSub.qualityOfService();
                 }
@@ -116,14 +116,14 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
         if (!topicFilters.remove(topicFilter)) {
             return CompletableFuture.completedFuture(false);
         }
-        return sessionCtx.distClient.unsub(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
+        return sessionCtx.distClient.unmatch(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
                 toDelivererKey(channelId(), sessionCtx.serverId), 0)
             .handleAsync((v, e) -> {
                 if (e != null) {
                     topicFilters.add(topicFilter);
                     return false;
                 } else {
-                    if (Objects.requireNonNull(v) == UnsubResult.OK) {
+                    if (Objects.requireNonNull(v) == UnmatchResult.OK) {
                         return true;
                     }
                     topicFilters.add(topicFilter);

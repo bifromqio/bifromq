@@ -29,10 +29,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.retain.rpc.proto.BatchMatchCoProcReply;
-import com.baidu.bifromq.retain.rpc.proto.BatchMatchCoProcRequest;
-import com.baidu.bifromq.retain.rpc.proto.BatchRetainCoProcReply;
-import com.baidu.bifromq.retain.rpc.proto.BatchRetainCoProcRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchReply;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainReply;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchError;
@@ -82,10 +82,10 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         try {
             RetainServiceROCoProcInput coProcInput = RetainServiceROCoProcInput.parseFrom(input);
             switch (coProcInput.getTypeCase()) {
-                case MATCH:
-                    return batchMatch(coProcInput.getMatch(), reader)
+                case BATCHMATCH:
+                    return batchMatch(coProcInput.getBatchMatch(), reader)
                         .thenApply(v -> RetainServiceROCoProcOutput.newBuilder()
-                            .setMatch(v).build().toByteString());
+                            .setBatchMatch(v).build().toByteString());
                 default:
                     log.error("Unknown co proc type {}", coProcInput.getTypeCase());
                     return CompletableFuture.failedFuture(
@@ -103,11 +103,11 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     public Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter writer) {
         RetainServiceRWCoProcInput coProcInput = RetainServiceRWCoProcInput.parseFrom(input);
         final ByteString output = switch (coProcInput.getTypeCase()) {
-            case RETAIN -> RetainServiceRWCoProcOutput.newBuilder()
-                .setRetain(batchRetain(coProcInput.getRetain(), reader, writer)).build()
+            case BATCHRETAIN -> RetainServiceRWCoProcOutput.newBuilder()
+                .setBatchRetain(batchRetain(coProcInput.getBatchRetain(), reader, writer)).build()
                 .toByteString();
-            case GCREQUEST -> RetainServiceRWCoProcOutput.newBuilder()
-                .setGcReply(gc(coProcInput.getGcRequest(), reader, writer)).build().toByteString();
+            case GC -> RetainServiceRWCoProcOutput.newBuilder()
+                .setGc(gc(coProcInput.getGc(), reader, writer)).build().toByteString();
             default -> {
                 log.error("Unknown co proc type {}", coProcInput.getTypeCase());
                 throw new IllegalStateException("Unknown co proc type " + coProcInput.getTypeCase());
@@ -121,8 +121,8 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     }
 
-    private CompletableFuture<BatchMatchCoProcReply> batchMatch(BatchMatchCoProcRequest request, IKVReader reader) {
-        BatchMatchCoProcReply.Builder replyBuilder = BatchMatchCoProcReply.newBuilder().setReqId(request.getReqId());
+    private CompletableFuture<BatchMatchReply> batchMatch(BatchMatchRequest request, IKVReader reader) {
+        BatchMatchReply.Builder replyBuilder = BatchMatchReply.newBuilder().setReqId(request.getReqId());
         request.getMatchParamsMap().forEach((tenantId, matchParams) -> {
             MatchResultPack.Builder resultPackBuilder = MatchResultPack.newBuilder();
             matchParams.getTopicFiltersMap().forEach((topicFilter, limit) -> {
@@ -185,9 +185,9 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         }
     }
 
-    private BatchRetainCoProcReply batchRetain(BatchRetainCoProcRequest request, IKVReader reader, IKVWriter writer) {
-        BatchRetainCoProcReply.Builder replyBuilder =
-            BatchRetainCoProcReply.newBuilder().setReqId(request.getReqId());
+    private BatchRetainReply batchRetain(BatchRetainRequest request, IKVReader reader, IKVWriter writer) {
+        BatchRetainReply.Builder replyBuilder =
+            BatchRetainReply.newBuilder().setReqId(request.getReqId());
         request.getRetainMessagePackMap().forEach((tenantId, retainMsgPack) -> {
             int maxRetainTopics = settingProvider.provide(RetainedTopicLimit, tenantId);
             RetainResultPack.Builder resultBuilder = RetainResultPack.newBuilder();
@@ -348,34 +348,34 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Range range = Range.newBuilder().setStartKey(tenantNS).setEndKey(RangeUtil.upperBound(tenantNS)).build();
-        IKVIterator itr = reader.iterator();
-        itr.seek(range.getStartKey());
-        itr.next();
-        int expires = 0;
-        long earliestExp = Long.MAX_VALUE;
-        for (; itr.isValid() && compare(itr.key(), range.getEndKey()) < 0; itr.next()) {
-            long expireTime = TopicMessage.parseFrom(itr.value()).getMessage().getExpireTimestamp();
-            if (expireTime <= now) {
-                writer.delete(itr.key());
-                expires++;
-            } else {
-                earliestExp = Math.min(expireTime, earliestExp);
+        try (IKVIterator itr = reader.iterator()) {
+            itr.seek(range.getStartKey());
+            itr.next();
+            int expires = 0;
+            long earliestExp = Long.MAX_VALUE;
+            for (; itr.isValid() && compare(itr.key(), range.getEndKey()) < 0; itr.next()) {
+                long expireTime = TopicMessage.parseFrom(itr.value()).getMessage().getExpireTimestamp();
+                if (expireTime <= now) {
+                    writer.delete(itr.key());
+                    expires++;
+                } else {
+                    earliestExp = Math.min(expireTime, earliestExp);
+                }
             }
-        }
-        metadata = metadata.toBuilder()
-            .setCount(metadata.getCount() - expires)
-            .setEstExpire(earliestExp == Long.MAX_VALUE ? now : earliestExp)
-            .build();
-        if (metadata.getCount() == 0) {
-            writer.delete(tenantNS);
+            metadata = metadata.toBuilder()
+                .setCount(metadata.getCount() - expires)
+                .setEstExpire(earliestExp == Long.MAX_VALUE ? now : earliestExp)
+                .build();
+            if (metadata.getCount() == 0) {
+                writer.delete(tenantNS);
+            }
         }
         return metadata;
     }
 
     private GCReply gc(GCRequest request, IKVReader reader, IKVWriter writer) {
         long now = clock.millis();
-        IKVIterator itr = reader.iterator();
-        try {
+        try (IKVIterator itr = reader.iterator()) {
             itr.seekToFirst();
             while (itr.isValid()) {
                 ByteString tenantNS = KeyUtil.parseTenantNS(itr.key());
@@ -389,7 +389,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 itr.seek(RangeUtil.upperBound(tenantNS));
             }
             return GCReply.newBuilder().setReqId(request.getReqId()).build();
-        } catch (InvalidProtocolBufferException e) {
+        } catch (Throwable e) {
             log.error("Unable to parse metadata");
             return GCReply.newBuilder().setReqId(request.getReqId()).build();
         }

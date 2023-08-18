@@ -195,7 +195,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
 
                 try {
                     return DistServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult())
-                        .getCollectMetricsReply();
+                        .getCollectMetrics();
                 } catch (InvalidProtocolBufferException e) {
                     throw new IllegalStateException("Unable to parse CollectMetricReply", e);
                 }

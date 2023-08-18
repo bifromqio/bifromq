@@ -27,12 +27,12 @@ import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnsubReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnsubRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
-import com.baidu.bifromq.dist.rpc.proto.UnsubReply;
-import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
+import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
@@ -43,48 +43,48 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class UnsubCallScheduler extends BatchCallScheduler<UnsubRequest, UnsubReply, KVRangeSetting>
-    implements IUnsubCallScheduler {
+public class UnmatchCallScheduler extends BatchCallScheduler<UnmatchRequest, UnmatchReply, KVRangeSetting>
+    implements IUnmatchCallScheduler {
     private final IBaseKVStoreClient distWorkerClient;
 
-    public UnsubCallScheduler(IBaseKVStoreClient distWorkerClient) {
+    public UnmatchCallScheduler(IBaseKVStoreClient distWorkerClient) {
         super("dist_server_unsub_batcher", Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
         this.distWorkerClient = distWorkerClient;
     }
 
     @Override
-    protected Batcher<UnsubRequest, UnsubReply, KVRangeSetting> newBatcher(String name,
-                                                                           long tolerableLatencyNanos,
-                                                                           long burstLatencyNanos,
-                                                                           KVRangeSetting range) {
+    protected Batcher<UnmatchRequest, UnmatchReply, KVRangeSetting> newBatcher(String name,
+                                                                               long tolerableLatencyNanos,
+                                                                               long burstLatencyNanos,
+                                                                               KVRangeSetting range) {
         return new UnsubCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, distWorkerClient);
     }
 
     @Override
-    protected Optional<KVRangeSetting> find(UnsubRequest subCall) {
+    protected Optional<KVRangeSetting> find(UnmatchRequest subCall) {
         return distWorkerClient.findByKey(rangeKey(subCall));
     }
 
-    private ByteString rangeKey(UnsubRequest call) {
+    private ByteString rangeKey(UnmatchRequest call) {
         String qInboxId = toQInboxId(call.getBroker(), call.getInboxId(), call.getDelivererKey());
         return toMatchRecordKey(call.getTenantId(), call.getTopicFilter(), qInboxId);
     }
 
-    private static class UnsubCallBatcher extends Batcher<UnsubRequest, UnsubReply, KVRangeSetting> {
+    private static class UnsubCallBatcher extends Batcher<UnmatchRequest, UnmatchReply, KVRangeSetting> {
 
-        private class UnsubCallBatch implements IBatchCall<UnsubRequest, UnsubReply> {
-            private final Queue<CallTask<UnsubRequest, UnsubReply>> batchedTasks = new ArrayDeque<>();
-            private BatchUnsubRequest.Builder reqBuilder = BatchUnsubRequest.newBuilder();
+        private class UnsubCallBatch implements IBatchCall<UnmatchRequest, UnmatchReply> {
+            private final Queue<CallTask<UnmatchRequest, UnmatchReply>> batchedTasks = new ArrayDeque<>();
+            private BatchUnmatchRequest.Builder reqBuilder = BatchUnmatchRequest.newBuilder();
 
             @Override
             public void reset() {
-                reqBuilder = BatchUnsubRequest.newBuilder();
+                reqBuilder = BatchUnmatchRequest.newBuilder();
             }
 
             @Override
-            public void add(CallTask<UnsubRequest, UnsubReply> callTask) {
-                UnsubRequest subCall = callTask.call;
+            public void add(CallTask<UnmatchRequest, UnmatchReply> callTask) {
+                UnmatchRequest subCall = callTask.call;
                 batchedTasks.add(callTask);
                 String qInboxId =
                     toQInboxId(subCall.getBroker(), subCall.getInboxId(), subCall.getDelivererKey());
@@ -102,7 +102,7 @@ public class UnsubCallScheduler extends BatchCallScheduler<UnsubRequest, UnsubRe
                         .setVer(range.ver)
                         .setKvRangeId(range.id)
                         .setRwCoProc(DistServiceRWCoProcInput.newBuilder()
-                            .setBatchUnsub(reqBuilder
+                            .setBatchUnmatch(reqBuilder
                                 .setReqId(reqId)
                                 .build())
                             .build().toByteString())
@@ -110,7 +110,7 @@ public class UnsubCallScheduler extends BatchCallScheduler<UnsubRequest, UnsubRe
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
-                                return DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchUnsub();
+                                return DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchUnmatch();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);
                                 throw new RuntimeException(e);
@@ -121,27 +121,27 @@ public class UnsubCallScheduler extends BatchCallScheduler<UnsubRequest, UnsubRe
                     })
                     .handle((reply, e) -> {
                         if (e != null) {
-                            CallTask<UnsubRequest, UnsubReply> callTask;
+                            CallTask<UnmatchRequest, UnmatchReply> callTask;
                             while ((callTask = batchedTasks.poll()) != null) {
-                                callTask.callResult.complete(UnsubReply.newBuilder()
+                                callTask.callResult.complete(UnmatchReply.newBuilder()
                                     .setReqId(callTask.call.getReqId())
-                                    .setResult(UnsubReply.Result.ERROR)
+                                    .setResult(UnmatchReply.Result.ERROR)
                                     .build());
                             }
                         } else {
-                            CallTask<UnsubRequest, UnsubReply> callTask;
+                            CallTask<UnmatchRequest, UnmatchReply> callTask;
                             while ((callTask = batchedTasks.poll()) != null) {
-                                UnsubRequest request = callTask.call;
+                                UnmatchRequest request = callTask.call;
                                 String qInboxId =
                                     toQInboxId(request.getBroker(), request.getInboxId(),
                                         request.getDelivererKey());
                                 String scopedTopicFilter =
                                     toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
-                                BatchUnsubReply.Result result =
-                                    reply.getResultsOrDefault(scopedTopicFilter, BatchUnsubReply.Result.ERROR);
-                                callTask.callResult.complete(UnsubReply.newBuilder()
+                                BatchUnmatchReply.Result result =
+                                    reply.getResultsOrDefault(scopedTopicFilter, BatchUnmatchReply.Result.ERROR);
+                                callTask.callResult.complete(UnmatchReply.newBuilder()
                                     .setReqId(callTask.call.getReqId())
-                                    .setResult(UnsubReply.Result.forNumber(result.getNumber()))
+                                    .setResult(UnmatchReply.Result.forNumber(result.getNumber()))
                                     .build());
                             }
                         }
@@ -164,7 +164,7 @@ public class UnsubCallScheduler extends BatchCallScheduler<UnsubRequest, UnsubRe
         }
 
         @Override
-        protected IBatchCall<UnsubRequest, UnsubReply> newBatch() {
+        protected IBatchCall<UnmatchRequest, UnmatchReply> newBatch() {
             return new UnsubCallBatch();
         }
     }

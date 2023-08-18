@@ -22,18 +22,18 @@ import com.baidu.bifromq.basescheduler.ICallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
-import com.baidu.bifromq.dist.rpc.proto.SubReply;
-import com.baidu.bifromq.dist.rpc.proto.SubRequest;
-import com.baidu.bifromq.dist.rpc.proto.UnsubReply;
-import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.dist.rpc.proto.MatchReply;
+import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
+import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
+import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
 import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.IGlobalDistCallRateSchedulerFactory;
-import com.baidu.bifromq.dist.server.scheduler.ISubCallScheduler;
-import com.baidu.bifromq.dist.server.scheduler.IUnsubCallScheduler;
-import com.baidu.bifromq.dist.server.scheduler.SubCallScheduler;
-import com.baidu.bifromq.dist.server.scheduler.UnsubCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.IMatchCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.IUnmatchCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.MatchCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.UnmatchCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.SubscribeError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Subscribed;
@@ -51,8 +51,8 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final IEventCollector eventCollector;
     private final ICallScheduler<DistWorkerCall> distCallRateScheduler;
     private final IDistCallScheduler distCallScheduler;
-    private final ISubCallScheduler subCallScheduler;
-    private final IUnsubCallScheduler unsubCallScheduler;
+    private final IMatchCallScheduler subCallScheduler;
+    private final IUnmatchCallScheduler unsubCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
 
     DistService(IBaseKVStoreClient distWorkerClient,
@@ -63,15 +63,15 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         this.eventCollector = eventCollector;
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
         this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient);
-        this.subCallScheduler = new SubCallScheduler(distWorkerClient);
-        this.unsubCallScheduler = new UnsubCallScheduler(distWorkerClient);
+        this.subCallScheduler = new MatchCallScheduler(distWorkerClient);
+        this.unsubCallScheduler = new UnmatchCallScheduler(distWorkerClient);
         tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(k -> new RunningAverage(5));
     }
 
     @Override
-    public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
+    public void match(MatchRequest request, StreamObserver<MatchReply> responseObserver) {
         response(tenantId -> subCallScheduler.schedule(request)
             .handle((v, e) -> {
                 if (e != null) {
@@ -84,9 +84,9 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                         .inboxId(request.getInboxId())
                         .subBrokerId(request.getBroker())
                         .delivererKey(request.getDelivererKey()));
-                    return SubReply.newBuilder()
+                    return MatchReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setResult(SubReply.Result.ERROR)
+                        .setResult(MatchReply.Result.ERROR)
                         .build();
 
                 }
@@ -102,7 +102,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
             }), responseObserver);
     }
 
-    public void unsub(UnsubRequest request, StreamObserver<UnsubReply> responseObserver) {
+    public void unmatch(UnmatchRequest request, StreamObserver<UnmatchReply> responseObserver) {
         response(tenantId -> unsubCallScheduler.schedule(request)
             .handle((v, e) -> {
                 if (e != null) {
@@ -114,9 +114,9 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                         .inboxId(request.getInboxId())
                         .subBrokerId(request.getBroker())
                         .delivererKey(request.getDelivererKey()));
-                    return UnsubReply.newBuilder()
+                    return UnmatchReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setResult(UnsubReply.Result.ERROR)
+                        .setResult(UnmatchReply.Result.ERROR)
                         .build();
                 }
                 eventCollector.report(getLocal(Unsubscribed.class)

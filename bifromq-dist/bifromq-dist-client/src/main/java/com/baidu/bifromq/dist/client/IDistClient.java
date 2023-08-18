@@ -41,7 +41,7 @@ public interface IDistClient extends IConnectable {
                                 ClientInfo publisher);
 
     /**
-     * Add a topic subscription
+     * Add a topic match
      *
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
@@ -52,11 +52,16 @@ public interface IDistClient extends IConnectable {
      * @param subBrokerId  the hosting subbroker of the inbox
      * @return correspond to Mqtt Sub QoS
      */
-    CompletableFuture<SubResult> sub(long reqId, String tenantId, String topicFilter, QoS qos, String inboxId,
-                                     String delivererKey, int subBrokerId);
+    CompletableFuture<MatchResult> match(long reqId,
+                                         String tenantId,
+                                         String topicFilter,
+                                         QoS qos,
+                                         String inboxId,
+                                         String delivererKey,
+                                         int subBrokerId);
 
     /**
-     * Remove a topic subscription
+     * Remove a topic match
      *
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
@@ -66,8 +71,12 @@ public interface IDistClient extends IConnectable {
      * @param subBrokerId  the hosting subbroker of the inbox
      * @return true for remove successfully, false for subscription not found
      */
-    CompletableFuture<UnsubResult> unsub(long reqId, String tenantId, String topicFilter, String inboxId,
-                                         String delivererKey, int subBrokerId);
+    CompletableFuture<UnmatchResult> unmatch(long reqId,
+                                             String tenantId,
+                                             String topicFilter,
+                                             String inboxId,
+                                             String delivererKey,
+                                             int subBrokerId);
 
     void stop();
 }

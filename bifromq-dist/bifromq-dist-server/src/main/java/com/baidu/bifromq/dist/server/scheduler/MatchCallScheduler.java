@@ -27,12 +27,12 @@ import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.dist.rpc.proto.BatchSubReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchSubRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
-import com.baidu.bifromq.dist.rpc.proto.SubReply;
-import com.baidu.bifromq.dist.rpc.proto.SubRequest;
+import com.baidu.bifromq.dist.rpc.proto.MatchReply;
+import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
@@ -43,48 +43,48 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class SubCallScheduler extends BatchCallScheduler<SubRequest, SubReply, KVRangeSetting>
-    implements ISubCallScheduler {
+public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchReply, KVRangeSetting>
+    implements IMatchCallScheduler {
     private final IBaseKVStoreClient distWorkerClient;
 
-    public SubCallScheduler(IBaseKVStoreClient distWorkerClient) {
+    public MatchCallScheduler(IBaseKVStoreClient distWorkerClient) {
         super("dist_server_sub_batcher", Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
         this.distWorkerClient = distWorkerClient;
     }
 
     @Override
-    protected Batcher<SubRequest, SubReply, KVRangeSetting> newBatcher(String name,
-                                                                       long tolerableLatencyNanos,
-                                                                       long burstLatencyNanos,
-                                                                       KVRangeSetting range) {
+    protected Batcher<MatchRequest, MatchReply, KVRangeSetting> newBatcher(String name,
+                                                                           long tolerableLatencyNanos,
+                                                                           long burstLatencyNanos,
+                                                                           KVRangeSetting range) {
         return new SubCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, distWorkerClient);
     }
 
     @Override
-    protected Optional<KVRangeSetting> find(SubRequest subCall) {
+    protected Optional<KVRangeSetting> find(MatchRequest subCall) {
         return distWorkerClient.findByKey(rangeKey(subCall));
     }
 
-    private ByteString rangeKey(SubRequest call) {
+    private ByteString rangeKey(MatchRequest call) {
         String qInboxId = toQInboxId(call.getBroker(), call.getInboxId(), call.getDelivererKey());
         return toMatchRecordKey(call.getTenantId(), call.getTopicFilter(), qInboxId);
     }
 
-    private static class SubCallBatcher extends Batcher<SubRequest, SubReply, KVRangeSetting> {
+    private static class SubCallBatcher extends Batcher<MatchRequest, MatchReply, KVRangeSetting> {
 
-        private class SubCallBatch implements IBatchCall<SubRequest, SubReply> {
-            private final Queue<CallTask<SubRequest, SubReply>> batchedTasks = new ArrayDeque<>();
-            private BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder();
+        private class SubCallBatch implements IBatchCall<MatchRequest, MatchReply> {
+            private final Queue<CallTask<MatchRequest, MatchReply>> batchedTasks = new ArrayDeque<>();
+            private BatchMatchRequest.Builder reqBuilder = BatchMatchRequest.newBuilder();
 
             @Override
             public void reset() {
-                reqBuilder = BatchSubRequest.newBuilder();
+                reqBuilder = BatchMatchRequest.newBuilder();
             }
 
             @Override
-            public void add(CallTask<SubRequest, SubReply> callTask) {
-                SubRequest subCall = callTask.call;
+            public void add(CallTask<MatchRequest, MatchReply> callTask) {
+                MatchRequest subCall = callTask.call;
                 batchedTasks.add(callTask);
                 String qInboxId =
                     toQInboxId(subCall.getBroker(), subCall.getInboxId(), subCall.getDelivererKey());
@@ -102,7 +102,7 @@ public class SubCallScheduler extends BatchCallScheduler<SubRequest, SubReply, K
                         .setVer(range.ver)
                         .setKvRangeId(range.id)
                         .setRwCoProc(DistServiceRWCoProcInput.newBuilder()
-                            .setBatchSub(reqBuilder
+                            .setBatchMatch(reqBuilder
                                 .setReqId(reqId)
                                 .build())
                             .build().toByteString())
@@ -110,7 +110,7 @@ public class SubCallScheduler extends BatchCallScheduler<SubRequest, SubReply, K
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
-                                return DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchSub();
+                                return DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchMatch();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);
                                 throw new RuntimeException(e);
@@ -121,27 +121,27 @@ public class SubCallScheduler extends BatchCallScheduler<SubRequest, SubReply, K
                     })
                     .handle((reply, e) -> {
                         if (e != null) {
-                            CallTask<SubRequest, SubReply> callTask;
+                            CallTask<MatchRequest, MatchReply> callTask;
                             while ((callTask = batchedTasks.poll()) != null) {
-                                callTask.callResult.complete(SubReply.newBuilder()
+                                callTask.callResult.complete(MatchReply.newBuilder()
                                     .setReqId(callTask.call.getReqId())
-                                    .setResult(SubReply.Result.ERROR)
+                                    .setResult(MatchReply.Result.ERROR)
                                     .build());
                             }
                         } else {
-                            CallTask<SubRequest, SubReply> callTask;
+                            CallTask<MatchRequest, MatchReply> callTask;
                             while ((callTask = batchedTasks.poll()) != null) {
-                                SubRequest subCall = callTask.call;
+                                MatchRequest subCall = callTask.call;
                                 String qInboxId =
                                     toQInboxId(subCall.getBroker(), subCall.getInboxId(),
                                         subCall.getDelivererKey());
                                 String scopedTopicFilter =
                                     toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
-                                BatchSubReply.Result result =
-                                    reply.getResultsOrDefault(scopedTopicFilter, BatchSubReply.Result.ERROR);
-                                callTask.callResult.complete(SubReply.newBuilder()
+                                BatchMatchReply.Result result =
+                                    reply.getResultsOrDefault(scopedTopicFilter, BatchMatchReply.Result.ERROR);
+                                callTask.callResult.complete(MatchReply.newBuilder()
                                     .setReqId(callTask.call.getReqId())
-                                    .setResult(SubReply.Result.forNumber(result.getNumber()))
+                                    .setResult(MatchReply.Result.forNumber(result.getNumber()))
                                     .build());
                             }
                         }
@@ -164,7 +164,7 @@ public class SubCallScheduler extends BatchCallScheduler<SubRequest, SubReply, K
         }
 
         @Override
-        protected IBatchCall<SubRequest, SubReply> newBatch() {
+        protected IBatchCall<MatchRequest, MatchReply> newBatch() {
             return new SubCallBatch();
         }
     }

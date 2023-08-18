@@ -27,7 +27,7 @@ public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchSch
         final boolean keep;
 
         public Touch(DeleteInboxRequest req) {
-            scopedInboxIdUtf8 = scopedInboxId(req.getClientInfo().getTenantId(), req.getInboxId()).toStringUtf8();
+            scopedInboxIdUtf8 = scopedInboxId(req.getTenantId(), req.getInboxId()).toStringUtf8();
             keep = false;
         }
 

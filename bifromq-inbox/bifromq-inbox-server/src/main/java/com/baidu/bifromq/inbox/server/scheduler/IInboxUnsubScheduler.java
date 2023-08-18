@@ -14,9 +14,8 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.rpc.proto.RemoveSubReply;
-import com.baidu.bifromq.inbox.rpc.proto.RemoveSubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 
-public interface IInboxUnsubScheduler
-    extends IBatchCallScheduler<RemoveSubRequest, RemoveSubReply> {
+public interface IInboxUnsubScheduler extends IBatchCallScheduler<UnsubRequest, UnsubReply> {
 }

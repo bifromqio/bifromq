@@ -20,7 +20,6 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -53,10 +52,10 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
 
     @AfterMethod
     public void clean() {
-        when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));
         channel.close();
-        verify(distClient, atLeast(1)).unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(distClient, atLeast(1)).unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -142,7 +141,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         connectAndVerify(true);
         mockAuthCheck(true);
         mockDistSub(QoS.AT_MOST_ONCE, true);
-        when(retainClient.match(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        when(retainClient.match(anyLong(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(
                 MatchReply.newBuilder().setResult(Result.ERROR).build()
             ));
@@ -180,7 +179,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
                         .build()
                 );
         }
-        when(retainClient.match(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        when(retainClient.match(anyLong(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(builder.build()));
     }
 

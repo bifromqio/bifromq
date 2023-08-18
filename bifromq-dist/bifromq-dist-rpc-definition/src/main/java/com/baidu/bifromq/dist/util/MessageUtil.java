@@ -13,19 +13,19 @@
 
 package com.baidu.bifromq.dist.util;
 
-import com.baidu.bifromq.dist.rpc.proto.BatchDist;
+import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.CollectMetricsRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 
 public class MessageUtil {
 
-    public static DistServiceROCoProcInput buildBatchDistRequest(BatchDist request) {
-        return DistServiceROCoProcInput.newBuilder().setDist(request).build();
+    public static DistServiceROCoProcInput buildBatchDistRequest(BatchDistRequest request) {
+        return DistServiceROCoProcInput.newBuilder().setBatchDist(request).build();
     }
 
     public static DistServiceROCoProcInput buildCollectMetricsRequest(long reqId) {
         return DistServiceROCoProcInput.newBuilder()
-            .setCollectMetricsRequest(CollectMetricsRequest.newBuilder().setReqId(reqId).build())
+            .setCollectMetrics(CollectMetricsRequest.newBuilder().setReqId(reqId).build())
             .build();
     }
 }

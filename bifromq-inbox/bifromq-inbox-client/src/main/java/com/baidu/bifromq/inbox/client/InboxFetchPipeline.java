@@ -23,7 +23,6 @@ import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -38,20 +37,20 @@ import lombok.extern.slf4j.Slf4j;
 class InboxFetchPipeline implements IInboxClient.IInboxReader {
     private final IRPCClient.IMessageStream<Fetched, FetchHint> ppln;
     private final CompositeDisposable consumptions = new CompositeDisposable();
-    private final ClientInfo clientInfo;
+    private final String tenantId;
     private final String inboxId;
     private final IRPCClient rpcClient;
     private volatile long lastFetchQoS0Seq = -1;
     private volatile long lastFetchQoS2Seq = -1;
 
-    InboxFetchPipeline(String inboxId, String delivererKey, ClientInfo clientInfo, IRPCClient rpcClient) {
-        this.clientInfo = clientInfo;
+    InboxFetchPipeline(String tenantId, String inboxId, String delivererKey, IRPCClient rpcClient) {
+        this.tenantId = tenantId;
         this.inboxId = inboxId;
         this.rpcClient = rpcClient;
         Map<String, String> metadata = new HashMap<>() {{
             put(PIPELINE_ATTR_KEY_INBOX_ID, inboxId);
         }};
-        ppln = rpcClient.createMessageStream(clientInfo.getTenantId(), null, delivererKey, () -> {
+        ppln = rpcClient.createMessageStream(this.tenantId, null, delivererKey, () -> {
                 metadata.put(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ, lastFetchQoS0Seq + "");
                 metadata.put(PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ, lastFetchQoS2Seq + "");
                 return metadata;
@@ -103,20 +102,19 @@ class InboxFetchPipeline implements IInboxClient.IInboxReader {
 
     @Override
     public void hint(int bufferCapacity) {
-        log.trace("Send hint: inboxId={}, capacity={}, client={}", inboxId, bufferCapacity, clientInfo);
+        log.trace("Send hint: inboxId={}, capacity={}, client={}", inboxId, bufferCapacity, tenantId);
         ppln.ack(FetchHint.newBuilder().setCapacity(bufferCapacity).build());
     }
 
     @Override
     public CompletableFuture<CommitReply> commit(long reqId, QoS qos, long upToSeq) {
-        log.trace("Commit: inbox={}, qos={}, seq={}, client={}", inboxId, qos, upToSeq, clientInfo);
-        return rpcClient.invoke(clientInfo.getTenantId(), null,
+        log.trace("Commit: tenantId={}, inbox={}, qos={}, seq={}", tenantId, inboxId, qos, upToSeq);
+        return rpcClient.invoke(tenantId, null,
                 CommitRequest.newBuilder()
                     .setReqId(reqId)
                     .setQos(qos)
                     .setUpToSeq(upToSeq)
                     .setInboxId(inboxId)
-                    .setClientInfo(clientInfo)
                     .build(),
                 InboxServiceGrpc.getCommitMethod())
             .exceptionally(e -> {

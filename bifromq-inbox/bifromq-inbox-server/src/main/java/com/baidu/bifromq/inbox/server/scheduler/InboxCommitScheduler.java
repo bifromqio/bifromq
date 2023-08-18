@@ -18,16 +18,16 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommit;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
+import com.baidu.bifromq.inbox.storage.proto.CommitParams;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -55,26 +55,25 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
 
     @Override
     protected ByteString rangeKey(CommitRequest request) {
-        return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
+        return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
     private static class InboxCommitBatcher extends Batcher<CommitRequest, CommitReply, KVRangeSetting> {
         private class InboxBatchCommit implements IBatchCall<CommitRequest, CommitReply> {
             private final Queue<CallTask<CommitRequest, CommitReply>> batchTasks = new ArrayDeque<>();
             // key: scopedInboxIdUtf8, value: [qos0, qos1, qos2]
-            private Map<String, Long[]> inboxCommits = new HashMap<>(128);
+            private Map<String, Long[]> commitParamsMap = new HashMap<>(128);
 
             @Override
             public void reset() {
-                inboxCommits = new HashMap<>(128);
+                commitParamsMap = new HashMap<>(128);
             }
 
             @Override
             public void add(CallTask<CommitRequest, CommitReply> callTask) {
-                ClientInfo clientInfo = callTask.call.getClientInfo();
-                String scopedInboxIdUtf8 = scopedInboxId(clientInfo.getTenantId(),
-                    callTask.call.getInboxId()).toStringUtf8();
-                Long[] upToSeqs = inboxCommits.computeIfAbsent(scopedInboxIdUtf8, k -> new Long[3]);
+                String tenantId = callTask.call.getTenantId();
+                String scopedInboxIdUtf8 = scopedInboxId(tenantId, callTask.call.getInboxId()).toStringUtf8();
+                Long[] upToSeqs = commitParamsMap.computeIfAbsent(scopedInboxIdUtf8, k -> new Long[3]);
                 QoS qos = callTask.call.getQos();
                 upToSeqs[qos.ordinal()] = upToSeqs[qos.ordinal()] == null ?
                     callTask.call.getUpToSeq() : Math.max(upToSeqs[qos.ordinal()], callTask.call.getUpToSeq());
@@ -84,9 +83,9 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                InboxCommitRequest.Builder reqBuilder = InboxCommitRequest.newBuilder();
-                inboxCommits.forEach((k, v) -> {
-                    InboxCommit.Builder cb = InboxCommit.newBuilder();
+                BatchCommitRequest.Builder reqBuilder = BatchCommitRequest.newBuilder();
+                commitParamsMap.forEach((k, v) -> {
+                    CommitParams.Builder cb = CommitParams.newBuilder();
                     if (v[0] != null) {
                         cb.setQos0UpToSeq(v[0]);
                     }
@@ -105,21 +104,19 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setCommit(reqBuilder.build())
+                                .setBatchCommit(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
-                        switch (reply.getCode()) {
-                            case Ok:
-                                try {
-                                    return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-                                } catch (InvalidProtocolBufferException e) {
-                                    log.error("Unable to parse rw co-proc output", e);
-                                    throw new RuntimeException(e);
-                                }
-                            default:
-                                throw new RuntimeException(reply.getCode().name());
+                        if (reply.getCode() == ReplyCode.Ok) {
+                            try {
+                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
+                            } catch (InvalidProtocolBufferException e) {
+                                log.error("Unable to parse rw co-proc output", e);
+                                throw new RuntimeException(e);
+                            }
                         }
+                        throw new RuntimeException(reply.getCode().name());
                     })
                     .handle((v, e) -> {
                         if (e != null) {
@@ -135,10 +132,10 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
                             while ((task = batchTasks.poll()) != null) {
                                 task.callResult.complete(CommitReply.newBuilder()
                                     .setReqId(task.call.getReqId())
-                                    .setResult(v.getCommit()
+                                    .setResult(v.getBatchCommit()
                                         .getResultMap()
                                         .get(scopedInboxId(
-                                            task.call.getClientInfo().getTenantId(),
+                                            task.call.getTenantId(),
                                             task.call.getInboxId()).toStringUtf8()) ?
                                         CommitReply.Result.OK : CommitReply.Result.ERROR)
                                     .build());

@@ -20,10 +20,10 @@ import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
-import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayDeque;
@@ -55,11 +55,11 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
     private static class InboxTouchBatcher extends Batcher<Touch, List<String>, KVRangeSetting> {
         private class InboxTouchBatch implements IBatchCall<Touch, List<String>> {
             private final Queue<CallTask<Touch, List<String>>> batchedTasks = new ArrayDeque<>();
-            private TouchRequest.Builder reqBuilder = TouchRequest.newBuilder();
+            private BatchTouchRequest.Builder reqBuilder = BatchTouchRequest.newBuilder();
 
             @Override
             public void reset() {
-                reqBuilder = TouchRequest.newBuilder();
+                reqBuilder = BatchTouchRequest.newBuilder();
             }
 
             @Override
@@ -80,13 +80,13 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setTouch(reqBuilder.build())
+                                .setBatchTouch(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getTouch();
+                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchTouch();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);
                                 throw new RuntimeException(e);

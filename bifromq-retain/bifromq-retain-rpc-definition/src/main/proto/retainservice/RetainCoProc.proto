@@ -22,7 +22,7 @@ message RetainMessagePack{
   map<string, RetainMessage> topicMessages = 1; // key: topic
 }
 
-message BatchRetainCoProcRequest{
+message BatchRetainRequest{
   uint64 reqId = 1;
   map<string, RetainMessagePack> retainMessagePack = 2; // key: tenantId
 }
@@ -37,7 +37,7 @@ message RetainResultPack{
   map<string, RetainResult> results = 2; // key: topic
 }
 
-message BatchRetainCoProcReply{
+message BatchRetainReply{
   uint64 reqId = 1;
   map<string, RetainResultPack> results = 2;
 }
@@ -46,7 +46,7 @@ message MatchParam{
   map<string, uint32> topicFilters = 1; // key: topicFilters value: limit
 }
 
-message BatchMatchCoProcRequest{
+message BatchMatchRequest{
   uint64 reqId = 1;
   map<string, MatchParam> matchParams = 2; // key: tenantId
 
@@ -71,7 +71,7 @@ message MatchResultPack{
   map<string, MatchResult> results = 1; // key: topic filter
 }
 
-message BatchMatchCoProcReply{
+message BatchMatchReply{
   uint64 reqId = 1;
   map<string, MatchResultPack> resultPack = 2;// key: tenantId
 }
@@ -86,27 +86,27 @@ message GCReply {
 
 message RetainServiceRWCoProcInput{
   oneof type{
-    BatchRetainCoProcRequest retain = 1;
-    GCRequest gcRequest = 2;
+    BatchRetainRequest batchRetain = 1;
+    GCRequest gc = 2;
   }
 }
 
 message RetainServiceRWCoProcOutput{
   oneof type{
-    BatchRetainCoProcReply retain = 1;
-    GCReply gcReply = 2;
+    BatchRetainReply batchRetain = 1;
+    GCReply gc = 2;
   }
 }
 
 message RetainServiceROCoProcInput{
   oneof type{
-    BatchMatchCoProcRequest match = 1;
+    BatchMatchRequest batchMatch = 1;
   }
 }
 
 message RetainServiceROCoProcOutput{
   oneof type{
-    BatchMatchCoProcReply match = 1;
+    BatchMatchReply batchMatch = 1;
   }
 }
 

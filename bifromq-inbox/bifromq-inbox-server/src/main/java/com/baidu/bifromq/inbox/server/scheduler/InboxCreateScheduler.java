@@ -26,8 +26,8 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
-import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
@@ -70,11 +70,11 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
         private class InboxCreateBatch implements IBatchCall<CreateInboxRequest, List<String>> {
             private final Queue<CallTask<CreateInboxRequest, List<String>>> batchedTasks =
                 new ArrayDeque<>();
-            private CreateRequest.Builder reqBuilder = CreateRequest.newBuilder();
+            private BatchCreateRequest.Builder reqBuilder = BatchCreateRequest.newBuilder();
 
             @Override
             public void reset() {
-                reqBuilder = CreateRequest.newBuilder();
+                reqBuilder = BatchCreateRequest.newBuilder();
             }
 
             @Override
@@ -102,14 +102,14 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setCreateInbox(reqBuilder.build())
+                                .setBatchCreate(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
                                 return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                    .getCreateInbox();
+                                    .getBatchCreate();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);
                                 throw new RuntimeException(e);

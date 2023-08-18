@@ -21,8 +21,8 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
@@ -74,7 +74,7 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                InboxInsertRequest.Builder reqBuilder = InboxInsertRequest.newBuilder();
+                BatchInsertRequest.Builder reqBuilder = BatchInsertRequest.newBuilder();
                 inboxInserts.forEach(insertTask -> reqBuilder.addSubMsgPack(insertTask.call));
                 return inboxStoreClient.execute(range.leader,
                         KVRangeRWRequest.newBuilder()
@@ -83,7 +83,7 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setInsert(reqBuilder.build())
+                                .setBatchInsert(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
@@ -105,7 +105,7 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
                             }
                         } else {
                             Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-                            for (InboxInsertResult result : v.getInsert().getResultsList()) {
+                            for (InsertResult result : v.getBatchInsert().getResultsList()) {
                                 switch (result.getResult()) {
                                     case OK -> insertResults.put(result.getSubInfo(), SendResult.Result.OK);
                                     case NO_INBOX -> insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);

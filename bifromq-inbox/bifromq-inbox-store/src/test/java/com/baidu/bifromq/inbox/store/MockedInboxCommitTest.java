@@ -30,9 +30,9 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommit;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
+import com.baidu.bifromq.inbox.storage.proto.CommitParams;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
@@ -91,8 +91,8 @@ public class MockedInboxCommitTest {
     @Test
     public void testCommitQoS0InboxWithNoEntry() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setCommit(InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxIdUtf8, InboxCommit.newBuilder()
+            .setBatchCommit(BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxIdUtf8, CommitParams.newBuilder()
                     .setQos0UpToSeq(10)
                     .build())
                 .build())
@@ -104,7 +104,7 @@ public class MockedInboxCommitTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxCommitReply commitReply = output.getCommit();
+            BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(!commitReply.getResultMap().get(scopedInboxIdUtf8));
         } catch (Exception exception) {
             fail();
@@ -114,8 +114,8 @@ public class MockedInboxCommitTest {
     @Test
     public void testCommitQoS0InboxWithExpiration() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setCommit(InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxIdUtf8, InboxCommit.newBuilder()
+            .setBatchCommit(BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxIdUtf8, CommitParams.newBuilder()
                     .setQos0UpToSeq(10)
                     .build())
                 .build())
@@ -133,7 +133,7 @@ public class MockedInboxCommitTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxCommitReply commitReply = output.getCommit();
+            BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(!commitReply.getResultMap().get(scopedInboxIdUtf8));
         } catch (Exception exception) {
             fail();
@@ -146,8 +146,8 @@ public class MockedInboxCommitTest {
         long oldestSeq = 15;
 
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setCommit(InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxIdUtf8, InboxCommit.newBuilder()
+            .setBatchCommit(BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxIdUtf8, CommitParams.newBuilder()
                     .setQos0UpToSeq(qos0UpToSeq)
                     .build())
                 .build())
@@ -174,7 +174,7 @@ public class MockedInboxCommitTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxCommitReply commitReply = output.getCommit();
+            BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
             InboxMetadata metadata = InboxMetadata.parseFrom(args.get(1));
@@ -190,8 +190,8 @@ public class MockedInboxCommitTest {
         long oldestSeq = 0;
 
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setCommit(InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxIdUtf8, InboxCommit.newBuilder()
+            .setBatchCommit(BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxIdUtf8, CommitParams.newBuilder()
                     .setQos0UpToSeq(qos0UpToSeq)
                     .build())
                 .build())
@@ -229,7 +229,7 @@ public class MockedInboxCommitTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxCommitReply commitReply = output.getCommit();
+            BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
             InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));
@@ -249,8 +249,8 @@ public class MockedInboxCommitTest {
         long oldestSeq = 5;
 
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setCommit(InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxIdUtf8, InboxCommit.newBuilder()
+            .setBatchCommit(BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxIdUtf8, CommitParams.newBuilder()
                     .setQos0UpToSeq(qos0UpToSeq)
                     .build())
                 .build())
@@ -293,7 +293,7 @@ public class MockedInboxCommitTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxCommitReply commitReply = output.getCommit();
+            BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
             InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));
@@ -313,8 +313,8 @@ public class MockedInboxCommitTest {
         long oldestSeq = 0;
 
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setCommit(InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxIdUtf8, InboxCommit.newBuilder()
+            .setBatchCommit(BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxIdUtf8, CommitParams.newBuilder()
                     .setQos1UpToSeq(qos1UpToSeq)
                     .build())
                 .build())
@@ -352,7 +352,7 @@ public class MockedInboxCommitTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxCommitReply commitReply = output.getCommit();
+            BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
             InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));
@@ -372,8 +372,8 @@ public class MockedInboxCommitTest {
         long oldestSeq = 5;
 
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setCommit(InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxIdUtf8, InboxCommit.newBuilder()
+            .setBatchCommit(BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxIdUtf8, CommitParams.newBuilder()
                     .setQos1UpToSeq(qos1UpToSeq)
                     .build())
                 .build())
@@ -416,7 +416,7 @@ public class MockedInboxCommitTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxCommitReply commitReply = output.getCommit();
+            BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
             InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));

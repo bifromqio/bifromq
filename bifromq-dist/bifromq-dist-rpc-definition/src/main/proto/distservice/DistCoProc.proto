@@ -9,36 +9,6 @@ option java_outer_classname = "DistCoProcProtos";
 
 package distservice;
 
-message BatchSubRequest {
-  uint64 reqId = 1;
-  map<string, commontype.QoS> scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
-}
-
-message BatchSubReply {
-  enum Result{
-    OK = 0;
-    EXCEED_LIMIT = 1; // only for group join
-    ERROR = 2;
-  }
-  uint64 reqId = 1;
-  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
-}
-
-message BatchUnsubRequest {
-  uint64 reqId = 1;
-  repeated string scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
-}
-
-message BatchUnsubReply {
-  enum Result{
-    OK = 0;
-    NOT_EXISTED = 1;
-    ERROR = 2;
-  }
-  uint64 reqId = 1;
-  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
-}
-
 message GroupMatchRecord {
   map<string, commontype.QoS> entry = 1; // qualified inboxId to NormalMatchRecord
 }
@@ -50,12 +20,41 @@ message MatchRecord {
   }
 }
 
+message BatchMatchRequest {
+  uint64 reqId = 1;
+  map<string, commontype.QoS> scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+}
+
+message BatchMatchReply {
+  enum Result{
+    OK = 0;
+    EXCEED_LIMIT = 1; // only for group join
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+}
+
+message BatchUnmatchRequest {
+  uint64 reqId = 1;
+  repeated string scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+}
+
+message BatchUnmatchReply {
+  enum Result{
+    OK = 0;
+    NOT_EXISTED = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+}
 message DistPack{
   string tenantId = 1;
   repeated commontype.TopicMessagePack msgPack = 2; // topic messages packs shares same tenantId
 }
 
-message BatchDist {
+message BatchDistRequest {
   uint64 reqId = 1;
   repeated DistPack distPack = 2; // sorted by tenantId and topic
   string orderKey = 3;
@@ -77,29 +76,29 @@ message CollectMetricsReply{
 
 message DistServiceRWCoProcInput{
   oneof type{
-    BatchSubRequest batchSub = 1;
-    BatchUnsubRequest batchUnsub = 2;
+    BatchMatchRequest batchMatch = 1;
+    BatchUnmatchRequest batchUnmatch = 2;
   }
 }
 
 message DistServiceRWCoProcOutput{
   oneof type{
-    BatchSubReply batchSub = 1;
-    BatchUnsubReply batchUnsub = 2;
+    BatchMatchReply batchMatch = 1;
+    BatchUnmatchReply batchUnmatch = 2;
   }
 }
 
 message DistServiceROCoProcInput{
   oneof Input{
-    BatchDist dist = 1;
-    CollectMetricsRequest collectMetricsRequest = 2;
+    BatchDistRequest batchDist = 1;
+    CollectMetricsRequest collectMetrics = 2;
   }
 }
 
 message DistServiceROCoProcOutput{
   oneof Output{
-    BatchDistReply distReply = 1;
-    CollectMetricsReply collectMetricsReply = 2;
+    BatchDistReply batchDist = 1;
+    CollectMetricsReply collectMetrics = 2;
   }
 }
 

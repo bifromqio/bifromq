@@ -264,7 +264,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
      */
     private CompletableFuture<Void> establishTransientSession(long reqId, MqttConnectMessage mqttConnectMessage) {
         String offlineInboxId = userSessionId(clientInfo);
-        return cancelOnInactive(inboxClient.has(reqId, offlineInboxId, clientInfo))
+        return cancelOnInactive(inboxClient.has(reqId, clientInfo.getTenantId(), offlineInboxId))
             .exceptionallyComposeAsync(e -> {
                 closeConnectionWithSomeDelay(MqttMessageBuilders
                         .connAck()
@@ -275,7 +275,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
             }, ctx.channel().eventLoop())
             .thenComposeAsync(checkResult -> {
                 if (checkResult == InboxCheckResult.EXIST) {
-                    return cancelOnInactive(inboxClient.delete(reqId, offlineInboxId, clientInfo))
+                    return cancelOnInactive(inboxClient.delete(reqId, clientInfo.getTenantId(), offlineInboxId))
                         .handleAsync((v, e) -> {
                             if (e != null || v.getResult() == DeleteInboxReply.Result.ERROR) {
                                 closeConnectionWithSomeDelay(MqttMessageBuilders
@@ -304,7 +304,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
      * asynchronously via messaging
      */
     private CompletableFuture<Void> establishPersistentSession(long reqId, MqttConnectMessage mqttConnectMessage) {
-        return cancelOnInactive(inboxClient.has(reqId, userSessionId(clientInfo), clientInfo))
+        return cancelOnInactive(inboxClient.has(reqId, clientInfo.getTenantId(), userSessionId(clientInfo)))
             .handleAsync((checkResult, e) -> {
                 if (e != null) {
                     closeConnectionWithSomeDelay(MqttMessageBuilders

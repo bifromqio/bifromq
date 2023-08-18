@@ -12,19 +12,14 @@ option java_outer_classname = "InboxServiceProtos";
 package inboxservice;
 
 service InboxService {
-
-  // for admin
   rpc hasInbox (HasInboxRequest) returns (HasInboxReply);
   rpc createInbox (CreateInboxRequest) returns (CreateInboxReply);
   rpc deleteInbox (DeleteInboxRequest) returns (DeleteInboxReply);
   rpc touchInbox (TouchInboxRequest) returns (TouchInboxReply);
-  rpc addSub(AddSubRequest) returns (AddSubReply);
-  rpc removeSub(RemoveSubRequest) returns (RemoveSubReply);
-
+  rpc sub(SubRequest) returns (SubReply);
+  rpc unsub(UnsubRequest) returns (UnsubReply);
   rpc receive (stream SendRequest) returns (stream SendReply);
-
   rpc fetch(stream FetchHint) returns (stream Fetched);
-
   rpc commit(CommitRequest) returns(CommitReply);
 }
 
@@ -45,8 +40,8 @@ message CreateInboxReply {
 
 message DeleteInboxRequest {
   uint64 reqId = 1;
-  string inboxId = 2;
-  commontype.ClientInfo clientInfo = 3;
+  string tenantId = 2;
+  string inboxId = 3;
 }
 
 message DeleteInboxReply {
@@ -68,15 +63,15 @@ message TouchInboxReply {
   uint64 reqId = 1;
 }
 
-message AddSubRequest {
+message SubRequest {
   uint64 reqId = 1;
-  string inboxId = 2;
-  string topicFilter = 3;
-  commontype.QoS subQoS = 4;
-  commontype.ClientInfo clientInfo = 5;
+  string tenantId = 2;
+  string inboxId = 3;
+  string topicFilter = 4;
+  commontype.QoS subQoS = 5;
 }
 
-message AddSubReply {
+message SubReply {
   enum Result {
     OK = 0;
     NO_INBOX = 1;
@@ -87,14 +82,14 @@ message AddSubReply {
   Result result = 2;
 }
 
-message RemoveSubRequest {
+message UnsubRequest {
   uint64 reqId = 1;
-  string inboxId = 2;
-  string topicFilter = 3;
-  commontype.ClientInfo clientInfo = 4;
+  string tenantId = 2;
+  string inboxId = 3;
+  string topicFilter = 4;
 }
 
-message RemoveSubReply {
+message UnsubReply {
   enum Result {
     OK = 0;
     NO_INBOX = 1;
@@ -104,12 +99,10 @@ message RemoveSubReply {
   Result result = 2;
 }
 
-
-
 message HasInboxRequest {
   uint64 reqId = 1;
-  string inboxId = 2;
-  commontype.ClientInfo clientInfo = 3;
+  string tenantId = 2;
+  string inboxId = 3;
 }
 
 message HasInboxReply {
@@ -153,10 +146,10 @@ message FetchHint {
 
 message CommitRequest {
   uint64 reqId = 1;
-  commontype.QoS qos = 2;
-  uint64 upToSeq = 3;
-  string inboxId = 4;
-  commontype.ClientInfo clientInfo = 5;
+  string tenantId = 2;
+  string inboxId = 3;
+  commontype.QoS qos = 4;
+  uint64 upToSeq = 5;
 }
 
 message CommitReply {

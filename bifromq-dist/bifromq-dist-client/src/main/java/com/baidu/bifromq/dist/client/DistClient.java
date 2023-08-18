@@ -22,8 +22,8 @@ import com.baidu.bifromq.dist.client.scheduler.DistServerCall;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
-import com.baidu.bifromq.dist.rpc.proto.SubRequest;
-import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
+import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -72,9 +72,10 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<SubResult> sub(long reqId, String tenantId, String topicFilter, QoS qos, String inboxId,
-                                            String delivererKey, int subBrokerId) {
-        SubRequest request = SubRequest.newBuilder()
+    public CompletableFuture<MatchResult> match(long reqId, String tenantId, String topicFilter, QoS qos,
+                                                String inboxId,
+                                                String delivererKey, int subBrokerId) {
+        MatchRequest request = MatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setTopicFilter(topicFilter)
@@ -83,15 +84,15 @@ final class DistClient implements IDistClient {
             .setDelivererKey(delivererKey)
             .setBroker(subBrokerId)
             .build();
-        log.trace("Handling sub request:\n{}", request);
-        return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getSubMethod())
-            .thenApply(v -> SubResult.values()[v.getResult().getNumber()]);
+        log.trace("Handling match request:\n{}", request);
+        return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getMatchMethod())
+            .thenApply(v -> MatchResult.values()[v.getResult().getNumber()]);
     }
 
     @Override
-    public CompletableFuture<UnsubResult> unsub(long reqId, String tenantId, String topicFilter, String inbox,
-                                                String delivererKey, int subBrokerId) {
-        UnsubRequest request = UnsubRequest.newBuilder()
+    public CompletableFuture<UnmatchResult> unmatch(long reqId, String tenantId, String topicFilter, String inbox,
+                                                    String delivererKey, int subBrokerId) {
+        UnmatchRequest request = UnmatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setTopicFilter(topicFilter)
@@ -100,8 +101,8 @@ final class DistClient implements IDistClient {
             .setBroker(subBrokerId)
             .build();
         log.trace("Handling unsub request:\n{}", request);
-        return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnsubMethod())
-            .thenApply(v -> UnsubResult.values()[v.getResult().getNumber()]);
+        return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnmatchMethod())
+            .thenApply(v -> UnmatchResult.values()[v.getResult().getNumber()]);
     }
 
     @Override

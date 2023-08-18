@@ -29,7 +29,7 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.dist.rpc.proto.BatchDist;
+import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
@@ -137,7 +137,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                 List<CompletableFuture<BatchDistReply>> distReplyFutures = distPacksByRange.entrySet().stream()
                     .map(entry -> {
                         KVRangeSetting range = entry.getKey();
-                        BatchDist batchDist = BatchDist.newBuilder()
+                        BatchDistRequest batchDist = BatchDistRequest.newBuilder()
                             .setReqId(reqId)
                             .addAllDistPack(entry.getValue())
                             .setOrderKey(orderKey)
@@ -154,7 +154,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                         BatchDistReply batchDistReply =
                                             DistServiceROCoProcOutput.parseFrom(
                                                     v.getRoCoProcResult())
-                                                .getDistReply();
+                                                .getBatchDist();
                                         assert batchDistReply.getReqId() == reqId;
                                         return batchDistReply;
                                     } catch (Throwable e) {

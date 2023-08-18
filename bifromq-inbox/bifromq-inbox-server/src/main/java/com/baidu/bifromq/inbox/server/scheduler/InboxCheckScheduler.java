@@ -24,7 +24,7 @@ import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
-import com.baidu.bifromq.inbox.storage.proto.HasRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.google.protobuf.ByteString;
@@ -59,7 +59,7 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
 
     @Override
     protected ByteString rangeKey(HasInboxRequest request) {
-        return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
+        return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
     private static class InboxCheckBatcher extends Batcher<HasInboxRequest, HasInboxReply, InboxReadBatcherKey> {
@@ -76,7 +76,7 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
             @Override
             public void add(CallTask<HasInboxRequest, HasInboxReply> callTask) {
                 checkInboxes.add(
-                    scopedInboxId(callTask.call.getClientInfo().getTenantId(), callTask.call.getInboxId()));
+                    scopedInboxId(callTask.call.getTenantId(), callTask.call.getInboxId()));
                 onInboxChecked.put(callTask.call, callTask.callResult);
             }
 
@@ -90,7 +90,7 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
                             .setKvRangeId(range.id)
                             .setRoCoProcInput(InboxServiceROCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setHas(HasRequest.newBuilder()
+                                .setBatchCheck(BatchCheckRequest.newBuilder()
                                     .addAllScopedInboxId(checkInboxes)
                                     .build())
                                 .build()
@@ -103,7 +103,7 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
                                     InboxServiceROCoProcOutput reply = InboxServiceROCoProcOutput.parseFrom(
                                         v.getRoCoProcResult());
                                     assert reply.getReqId() == reqId;
-                                    return reply.getHas();
+                                    return reply.getBatchCheck();
                                 } catch (InvalidProtocolBufferException e) {
                                     log.error("Unable to parse rw co-proc output", e);
                                     throw new RuntimeException("Unable to parse rw co-proc output", e);
@@ -120,7 +120,7 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
                         } else {
                             onInboxChecked.forEach((req, f) -> {
                                 Boolean exists = v.getExistsMap()
-                                    .get(scopedInboxId(req.getClientInfo().getTenantId(),
+                                    .get(scopedInboxId(req.getTenantId(),
                                         req.getInboxId()).toStringUtf8());
                                 // if query result doesn't contain the scoped inboxId, reply error
                                 if (exists == null) {

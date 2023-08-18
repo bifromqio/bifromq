@@ -22,9 +22,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_PIPELINE_CRE
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.UnsubResult;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubReply;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubRequest;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -35,13 +33,15 @@ import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
-import com.baidu.bifromq.inbox.rpc.proto.RemoveSubReply;
-import com.baidu.bifromq.inbox.rpc.proto.RemoveSubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.TouchInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCheckScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCreateScheduler;
@@ -153,8 +153,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setResult(CreateInboxReply.Result.OK)
                         .build());
                 } else {
-                    List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
-                        topicFilter -> distClient.unsub(request.getReqId(),
+                    List<CompletableFuture<UnmatchResult>> unsubFutures = topicFilters.stream().map(
+                        topicFilter -> distClient.unmatch(request.getReqId(),
                             request.getClientInfo().getTenantId(),
                             topicFilter,
                             request.getInboxId(),
@@ -169,7 +169,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                     .setResult(CreateInboxReply.Result.ERROR)
                                     .build();
                             } else {
-                                if (unsubResults.stream().allMatch(result -> result == UnsubResult.OK)) {
+                                if (unsubResults.stream().allMatch(result -> result == UnmatchResult.OK)) {
                                     return CreateInboxReply.newBuilder()
                                         .setReqId(request.getReqId())
                                         .setResult(CreateInboxReply.Result.OK)
@@ -199,8 +199,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     return CompletableFuture.completedFuture(null);
                 } else {
                     long reqId = System.nanoTime();
-                    List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
-                        topicFilter -> distClient.unsub(reqId,
+                    List<CompletableFuture<UnmatchResult>> unsubFutures = topicFilters.stream().map(
+                        topicFilter -> distClient.unmatch(reqId,
                             tenantId,
                             topicFilter,
                             request.getInboxId(),
@@ -231,8 +231,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     return CompletableFuture.completedFuture(null);
                 } else {
                     long reqId = System.nanoTime();
-                    List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
-                        topicFilter -> distClient.unsub(reqId,
+                    List<CompletableFuture<UnmatchResult>> unsubFutures = topicFilters.stream().map(
+                        topicFilter -> distClient.unmatch(reqId,
                             tenantId,
                             topicFilter,
                             request.getInboxId(),
@@ -259,21 +259,21 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     }
 
     @Override
-    public void addSub(AddSubRequest request, StreamObserver<AddSubReply> responseObserver) {
+    public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
         response(tenantId -> subScheduler.schedule(request)
             .thenCompose(v -> {
-                if (v.getResult() == AddSubReply.Result.OK) {
-                    return distClient.sub(request.getReqId(),
-                            request.getClientInfo().getTenantId(),
+                if (v.getResult() == SubReply.Result.OK) {
+                    return distClient.match(request.getReqId(),
+                            request.getTenantId(),
                             request.getTopicFilter(),
                             request.getSubQoS(),
                             request.getInboxId(),
                             getDelivererKey(request.getInboxId()), 1)
                         .thenApply(subResult ->
                             switch (subResult) {
-                                case OK -> AddSubReply.Result.OK;
-                                case EXCEED_LIMIT -> AddSubReply.Result.EXCEED_LIMIT;
-                                default -> AddSubReply.Result.ERROR;
+                                case OK -> SubReply.Result.OK;
+                                case EXCEED_LIMIT -> SubReply.Result.EXCEED_LIMIT;
+                                default -> SubReply.Result.ERROR;
                             });
                 }
                 return CompletableFuture.completedFuture(v.getResult());
@@ -281,12 +281,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .handle((v, e) -> {
                 if (e != null) {
                     log.error("Failed to subscribe", e);
-                    return AddSubReply.newBuilder()
+                    return SubReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setResult(AddSubReply.Result.ERROR)
+                        .setResult(SubReply.Result.ERROR)
                         .build();
                 }
-                return AddSubReply.newBuilder()
+                return SubReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(v)
                     .build();
@@ -294,31 +294,31 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     }
 
     @Override
-    public void removeSub(RemoveSubRequest request, StreamObserver<RemoveSubReply> responseObserver) {
+    public void unsub(UnsubRequest request, StreamObserver<UnsubReply> responseObserver) {
         response(tenantId -> unsubScheduler.schedule(request)
             .thenCompose(v -> {
-                if (v.getResult() == RemoveSubReply.Result.OK) {
-                    return distClient.unsub(request.getReqId(),
-                            request.getClientInfo().getTenantId(),
+                if (v.getResult() == UnsubReply.Result.OK) {
+                    return distClient.unmatch(request.getReqId(),
+                            request.getTenantId(),
                             request.getTopicFilter(),
                             request.getInboxId(),
                             getDelivererKey(request.getInboxId()), 1)
                         .thenApply(subResult ->
                             switch (subResult) {
-                                case OK -> RemoveSubReply.Result.OK;
-                                default -> RemoveSubReply.Result.ERROR;
+                                case OK -> UnsubReply.Result.OK;
+                                default -> UnsubReply.Result.ERROR;
                             });
                 }
                 return CompletableFuture.completedFuture(v.getResult());
             })
             .handle((v, e) -> {
                 if (e != null) {
-                    return RemoveSubReply.newBuilder()
+                    return UnsubReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setResult(RemoveSubReply.Result.ERROR)
+                        .setResult(UnsubReply.Result.ERROR)
                         .build();
                 }
-                return RemoveSubReply.newBuilder()
+                return UnsubReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(v)
                     .build();
@@ -390,8 +390,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         long reqId = System.nanoTime();
                         String tenantId = parseTenantId(scopedInboxId);
                         String inboxId = parseInboxId(scopedInboxId);
-                        List<CompletableFuture<UnsubResult>> unsubFutures = topicFilters.stream().map(
-                            topicFilter -> distClient.unsub(reqId,
+                        List<CompletableFuture<UnmatchResult>> unsubFutures = topicFilters.stream().map(
+                            topicFilter -> distClient.unmatch(reqId,
                                 tenantId,
                                 topicFilter,
                                 inboxId,

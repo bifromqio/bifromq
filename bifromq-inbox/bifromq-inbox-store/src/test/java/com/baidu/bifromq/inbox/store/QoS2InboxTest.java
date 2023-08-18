@@ -23,16 +23,15 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.inbox.storage.proto.HasReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.io.IOException;
 import java.time.Clock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -85,13 +84,13 @@ public class QoS2InboxTest extends InboxStoreTest {
         // not expire
         requestCreate(tenantId, inboxId, 10, 2, false);
         requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount(), 2);
 
         when(clock.millis()).thenReturn(2100L);
 
         requestCreate(tenantId, inboxId, 10, 100, false);
-        HasReply has = requestHas(tenantId, inboxId);
+        BatchCheckReply has = requestHas(tenantId, inboxId);
         assertTrue(has.getExistsMap().get(KeyUtil.scopedInboxId(tenantId, inboxId).toStringUtf8()));
         reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2MsgCount(), 0);
@@ -110,16 +109,16 @@ public class QoS2InboxTest extends InboxStoreTest {
 
         requestCreate(tenantId, inboxId, 10, 1, false);
         when(clock.millis()).thenReturn(1100L);
-        InboxInsertReply reply = requestInsert(subInfo, "greeting",
+        BatchInsertReply reply = requestInsert(subInfo, "greeting",
             message(EXACTLY_ONCE, "hello"));
-        assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.NO_INBOX);
+        assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
     }
 
     @Test(groups = "integration")
     public void insertToNonExistInbox() {
-        InboxInsertReply reply = requestInsert(subInfo, "greeting",
+        BatchInsertReply reply = requestInsert(subInfo, "greeting",
             message(EXACTLY_ONCE, "hello"));
-        assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.NO_INBOX);
+        assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
     }
 
     @Test(groups = "integration")
@@ -131,7 +130,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestCreate(tenantId, inboxId, 10, 2, false);
         requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2);
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 2);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(1), 1);
@@ -142,7 +141,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Msg(1).getMsg().getMessage(),
             msg2.getMessage(0));
 
-        InboxFetchReply reply1 = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply1 = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos2SeqList(),
             reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqList());
         assertEquals(reply1.getResultMap().get(scopedInboxIdUtf8).getQos2MsgList(),
@@ -158,7 +157,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestCreate(tenantId, inboxId, 10, 600, false);
         requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2);
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 1, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 1, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
 
@@ -186,7 +185,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg1, msg2, msg3);
 
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 1, 0L);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 1, 0L);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 1);
 
@@ -222,7 +221,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestInsert(subInfo, topic, msg1, msg2, msg3);
         requestCommitQoS2(tenantId, inboxId, 1);
 
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 1);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 2);
 
@@ -259,7 +258,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0, msg0, msg1);
         requestInsert(subInfo, topic, msg0, msg2);
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 3);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(1), 1);
@@ -289,7 +288,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestCreate(tenantId, inboxId, 10, 600, true);
         requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
         requestInsert(subInfo, topic, msg0, msg1);
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 2);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(1), 1);
@@ -318,7 +317,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestInsert(subInfo, topic, msg0, msg1);
         requestInsert(subInfo, topic, msg2);
 
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 2);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 1);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(1), 2);
@@ -369,7 +368,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestInsert(subInfo, topic, msg0);
         requestInsert(subInfo, topic, msg1, msg2);
 
-        InboxFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
+        BatchFetchReply reply = requestFetchQoS2(tenantId, inboxId, 10, null);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2SeqCount(), 2);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(0), 0);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos2Seq(1), 1);
@@ -413,7 +412,7 @@ public class QoS2InboxTest extends InboxStoreTest {
         requestCreate(tenantId, inboxId, 2, 1, false);
         requestInsert(subInfo, topic, msg1, msg2);
         when(clock.millis()).thenReturn(1100L);
-        InboxInsertReply reply = requestInsert(subInfo, topic, msg1);
-        assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.NO_INBOX);
+        BatchInsertReply reply = requestInsert(subInfo, topic, msg1);
+        assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
     }
 }

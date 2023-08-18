@@ -155,18 +155,20 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         remainStores.remove(leaderStore);
         log.info("Remain: {}", remainStores);
 
-        await().ignoreExceptions().until(() -> {
-            KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
-            if (newSetting.allReplicas.size() == 2 &&
-                !newSetting.allReplicas.contains(leaderStore)) {
-                return true;
-            }
-            cluster.changeReplicaConfig(remainStores.get(0), newSetting.ver, rangeId, Sets.newHashSet(remainStores),
-                emptySet()).toCompletableFuture().join();
-            newSetting = cluster.kvRangeSetting(rangeId);
-            return newSetting.allReplicas.size() == 2 &&
-                !newSetting.allReplicas.contains(leaderStore);
-        });
+        await().atMost(Duration.ofSeconds(30))
+            .ignoreExceptions()
+            .until(() -> {
+                KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
+                if (newSetting.allReplicas.size() == 2 &&
+                    !newSetting.allReplicas.contains(leaderStore)) {
+                    return true;
+                }
+                cluster.changeReplicaConfig(remainStores.get(0), newSetting.ver, rangeId, Sets.newHashSet(remainStores),
+                    emptySet()).toCompletableFuture().join();
+                newSetting = cluster.kvRangeSetting(rangeId);
+                return newSetting.allReplicas.size() == 2 &&
+                    !newSetting.allReplicas.contains(leaderStore);
+            });
     }
 
     @Cluster(initNodes = 1)

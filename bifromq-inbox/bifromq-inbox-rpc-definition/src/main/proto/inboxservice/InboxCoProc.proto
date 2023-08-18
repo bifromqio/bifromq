@@ -30,11 +30,11 @@ message InboxMetadata{
   map<string, commontype.QoS> topicFilters = 12; // subscribed topic filter
 }
 
-message HasRequest{
+message BatchCheckRequest{
   repeated bytes scopedInboxId = 1;
 }
 
-message HasReply{
+message BatchCheckReply{
   map<string, bool> exists = 1; // key: scopedInboxIdUtf8
 }
 
@@ -48,28 +48,29 @@ message CreateParams {
 message TopicFilterList{
   repeated string topicFilters = 1;
 }
-message CreateRequest{
+
+message BatchCreateRequest{
   map<string, CreateParams> inboxes = 1;
 }
 
-message CreateReply{
+message BatchCreateReply{
   map<string, TopicFilterList> subs = 1; // key: scopedInboxIdUtf8
 }
 
-message TouchRequest{
+message BatchTouchRequest{
   map<string, bool> scopedInboxId = 1; // key: scopedInboxIdUtf8, value: true for keep the inbox, false for drop the inbox immediately
 }
 
-message TouchReply{
+message BatchTouchReply{
   map<string, TopicFilterList> subs = 1; // key: scopedInboxIdUtf8
 }
 
-message BatchAddSubRequest{
+message BatchSubRequest{
   uint64 reqId = 1;
   map<string, commontype.QoS> topicFilters = 2; // key: tenantId_inboxId_topicFilter(scopedTopicFilter)
 }
 
-message BatchAddSubReply{
+message BatchSubReply{
   enum Result{
     OK = 0;
     EXCEED_LIMIT = 1;
@@ -80,12 +81,12 @@ message BatchAddSubReply{
   map<string, Result> results = 2; // key: tenantId_inboxId_topicFilter(scopedTopicFilter)
 }
 
-message BatchRemoveSubRequest{
+message BatchUnsubRequest{
   uint64 reqId = 1;
   repeated bytes topicFilters = 2; // tenantId_inboxId_topicFilter(scopedTopicFilter)
 }
 
-message BatchRemoveSubReply{
+message BatchUnsubReply{
   enum Result{
     OK = 0;
     NO_INBOX = 1;
@@ -103,11 +104,11 @@ message FetchParams{
   optional uint64 qos2StartAfter = 4;
 }
 
-message InboxFetchRequest{
+message BatchFetchRequest{
   map<string, FetchParams> inboxFetch = 1; // key: scopedInboxIdUtf8
 }
 
-message InboxFetchReply{
+message BatchFetchReply{
   map<string, Fetched> result = 1; // key: scopedInboxIdUtf8
 }
 
@@ -116,11 +117,11 @@ message MessagePack{
   repeated commontype.TopicMessagePack messages = 2;
 }
 
-message InboxInsertRequest{
+message BatchInsertRequest{
   repeated MessagePack subMsgPack = 1;
 }
 
-message InboxInsertResult{
+message InsertResult{
   enum Result{
     OK = 0;
     NO_INBOX = 1;
@@ -129,31 +130,31 @@ message InboxInsertResult{
   commontype.SubInfo subInfo = 1;
   Result result = 2;
 }
-message InboxInsertReply{
-  repeated InboxInsertResult results = 1;
+message BatchInsertReply{
+  repeated InsertResult results = 1;
 }
 
-message InboxCommit{
+message CommitParams{
   optional uint64 qos0UpToSeq = 1;
   optional uint64 qos1UpToSeq = 2;
   optional uint64 qos2UpToSeq = 3;
 }
 
-message InboxCommitRequest{
-  map<string, InboxCommit> inboxCommit = 1;
+message BatchCommitRequest{
+  map<string, CommitParams> inboxCommit = 1;
 }
 
-message InboxCommitReply{
+message BatchCommitReply{
   map<string, bool> result = 1;
 }
 
 message InboxComSertRequest{
   repeated MessagePack insert = 1;
-  map<string, InboxCommit> commit = 2;
+  map<string, CommitParams> commit = 2;
 }
 
 message InboxComSertReply{
-  repeated InboxInsertResult insertResults = 1;
+  repeated InsertResult insertResults = 1;
   map<string, bool> commitResults = 2;
 }
 
@@ -180,12 +181,12 @@ message CollectMetricsReply{
 message InboxServiceRWCoProcInput{
   uint64 reqId = 1;
   oneof type{
-    InboxInsertRequest insert = 2;
-    InboxCommitRequest commit = 3;
-    CreateRequest createInbox = 4;
-    TouchRequest touch = 5;
-    BatchAddSubRequest addTopicFilter = 6;
-    BatchRemoveSubRequest removeTopicFilter = 7;
+    BatchInsertRequest batchInsert = 2;
+    BatchCommitRequest batchCommit = 3;
+    BatchCreateRequest batchCreate = 4;
+    BatchTouchRequest batchTouch = 5;
+    BatchSubRequest batchSub = 6;
+    BatchUnsubRequest batchUnsub = 7;
     InboxComSertRequest insertAndCommit = 8;
   }
 }
@@ -193,12 +194,12 @@ message InboxServiceRWCoProcInput{
 message InboxServiceRWCoProcOutput{
   uint64 reqId = 1;
   oneof type{
-    InboxInsertReply insert = 2;
-    InboxCommitReply commit = 3;
-    CreateReply createInbox = 4;
-    TouchReply touch = 5;
-    BatchAddSubReply addTopicFilter = 6;
-    BatchRemoveSubReply removeTopicFilter = 7;
+    BatchInsertReply batchInsert = 2;
+    BatchCommitReply batchCommit = 3;
+    BatchCreateReply batchCreate = 4;
+    BatchTouchReply batchTouch = 5;
+    BatchSubReply batchSub = 6;
+    BatchUnsubReply batchUnsub = 7;
     InboxComSertReply insertAndCommit = 8;
   }
 }
@@ -206,8 +207,8 @@ message InboxServiceRWCoProcOutput{
 message InboxServiceROCoProcInput{
   uint64 reqId = 1;
   oneof input{
-    HasRequest has = 2;
-    InboxFetchRequest fetch = 3;
+    BatchCheckRequest batchCheck = 2;
+    BatchFetchRequest batchFetch = 3;
     CollectMetricsRequest collectMetrics = 4;
     GCRequest gc = 5;
   }
@@ -216,8 +217,8 @@ message InboxServiceROCoProcInput{
 message InboxServiceROCoProcOutput{
   uint64 reqId = 1;
   oneof output{
-    HasReply has = 2;
-    InboxFetchReply fetch = 3;
+    BatchCheckReply batchCheck = 2;
+    BatchFetchReply batchFetch = 3;
     CollectMetricsReply collectedMetrics = 4;
     GCReply gc = 5;
   }

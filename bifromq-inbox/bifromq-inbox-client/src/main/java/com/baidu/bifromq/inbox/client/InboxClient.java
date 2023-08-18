@@ -17,17 +17,17 @@ import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.RPCBluePrint;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubReply;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
-import com.baidu.bifromq.inbox.rpc.proto.RemoveSubReply;
-import com.baidu.bifromq.inbox.rpc.proto.RemoveSubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -64,26 +64,26 @@ final class InboxClient implements IInboxClient {
     }
 
     @Override
-    public IInboxReader openInboxReader(String inboxId, ClientInfo clientInfo) {
-        return new InboxFetchPipeline(inboxId, getDelivererKey(inboxId), clientInfo, rpcClient);
+    public IInboxReader openInboxReader(String tenantId, String inboxId) {
+        return new InboxFetchPipeline(tenantId, inboxId, getDelivererKey(inboxId), rpcClient);
     }
 
     @Override
-    public CompletableFuture<InboxCheckResult> has(long reqId, String inboxId, ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTenantId(), null, HasInboxRequest.newBuilder()
+    public CompletableFuture<InboxCheckResult> has(long reqId, String tenantId, String inboxId) {
+        return rpcClient.invoke(tenantId, null, HasInboxRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setInboxId(inboxId)
-                .setClientInfo(clientInfo)
                 .build(), InboxServiceGrpc.getHasInboxMethod())
             .thenApply(v -> InboxCheckResult.values()[v.getResult().ordinal()]);
     }
 
     @Override
-    public CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTenantId(), null, CreateInboxRequest.newBuilder()
+    public CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo owner) {
+        return rpcClient.invoke(owner.getTenantId(), null, CreateInboxRequest.newBuilder()
                 .setReqId(reqId)
                 .setInboxId(inboxId)
-                .setClientInfo(clientInfo)
+                .setClientInfo(owner)
                 .build(), InboxServiceGrpc.getCreateInboxMethod())
             .exceptionally(e -> CreateInboxReply.newBuilder()
                 .setReqId(reqId)
@@ -91,11 +91,11 @@ final class InboxClient implements IInboxClient {
     }
 
     @Override
-    public CompletableFuture<DeleteInboxReply> delete(long reqId, String inboxId, ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTenantId(), null, DeleteInboxRequest.newBuilder()
+    public CompletableFuture<DeleteInboxReply> delete(long reqId, String tenantId, String inboxId) {
+        return rpcClient.invoke(tenantId, null, DeleteInboxRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setInboxId(inboxId)
-                .setClientInfo(clientInfo)
                 .build(), InboxServiceGrpc.getDeleteInboxMethod())
             .exceptionally(e -> DeleteInboxReply.newBuilder()
                 .setReqId(reqId)
@@ -119,34 +119,36 @@ final class InboxClient implements IInboxClient {
     }
 
     @Override
-    public CompletableFuture<InboxSubResult> sub(long reqId, String inboxId, String topicFilter, QoS qos,
-                                                 ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTenantId(), null, AddSubRequest.newBuilder()
+    public CompletableFuture<InboxSubResult> sub(long reqId,
+                                                 String tenantId,
+                                                 String inboxId,
+                                                 String topicFilter,
+                                                 QoS qos) {
+        return rpcClient.invoke(tenantId, null, SubRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setInboxId(inboxId)
                 .setTopicFilter(topicFilter)
                 .setSubQoS(qos)
-                .setClientInfo(clientInfo)
-                .build(), InboxServiceGrpc.getAddSubMethod())
-            .exceptionally(e -> AddSubReply.newBuilder()
+                .build(), InboxServiceGrpc.getSubMethod())
+            .exceptionally(e -> SubReply.newBuilder()
                 .setReqId(reqId)
-                .setResult(AddSubReply.Result.ERROR)
+                .setResult(SubReply.Result.ERROR)
                 .build())
             .thenApply(v -> InboxSubResult.values()[v.getResult().ordinal()]);
     }
 
     @Override
-    public CompletableFuture<InboxUnsubResult> unsub(long reqId, String inboxId, String topicFilter,
-                                                     ClientInfo clientInfo) {
-        return rpcClient.invoke(clientInfo.getTenantId(), null, RemoveSubRequest.newBuilder()
+    public CompletableFuture<InboxUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter) {
+        return rpcClient.invoke(tenantId, null, UnsubRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setInboxId(inboxId)
                 .setTopicFilter(topicFilter)
-                .setClientInfo(clientInfo)
-                .build(), InboxServiceGrpc.getRemoveSubMethod())
-            .exceptionally(e -> RemoveSubReply.newBuilder()
+                .build(), InboxServiceGrpc.getUnsubMethod())
+            .exceptionally(e -> UnsubReply.newBuilder()
                 .setReqId(reqId)
-                .setResult(RemoveSubReply.Result.ERROR)
+                .setResult(UnsubReply.Result.ERROR)
                 .build())
             .thenApply(v -> InboxUnsubResult.values()[v.getResult().ordinal()]);
     }
