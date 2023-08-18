@@ -19,7 +19,7 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildCollectMetricsRequest;
 import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.InboxSpaceSizeGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.InboxUsedSpaceGauge;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
@@ -277,12 +277,12 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             boolean newGauging = !tenantInboxSpaceSize.containsKey(tenantId);
             tenantInboxSpaceSize.put(tenantId, sizeMap.get(tenantId));
             if (newGauging) {
-                gauging(tenantId, InboxSpaceSizeGauge, () -> tenantInboxSpaceSize.getOrDefault(tenantId, 0L));
+                gauging(tenantId, InboxUsedSpaceGauge, () -> tenantInboxSpaceSize.getOrDefault(tenantId, 0L));
             }
         }
         for (String tenantId : tenantInboxSpaceSize.keySet()) {
             if (!sizeMap.containsKey(tenantId)) {
-                stopGauging(tenantId, InboxSpaceSizeGauge);
+                stopGauging(tenantId, InboxUsedSpaceGauge);
                 tenantInboxSpaceSize.remove(tenantId);
             }
         }

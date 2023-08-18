@@ -56,6 +56,8 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -88,10 +90,10 @@ public class RetainStoreTest {
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
+    protected SimpleMeterRegistry meterRegistry;
     @Mock
     protected ISettingProvider settingProvider;
     protected IRetainStore testStore;
-
     protected IBaseKVStoreClient storeClient;
     private ExecutorService queryExecutor;
     private ExecutorService mutationExecutor;
@@ -103,9 +105,12 @@ public class RetainStoreTest {
     @BeforeClass(alwaysRun = true)
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
+        meterRegistry = new SimpleMeterRegistry();
+        Metrics.globalRegistry.add(meterRegistry);
         when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArguments()[0]).current(invocation.getArgument(1)));
         dbRootDir = Files.createTempDirectory("");
+
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -165,6 +170,8 @@ public class RetainStoreTest {
             .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .gcInterval(Duration.ofSeconds(1))
+            .statsInterval(Duration.ofSeconds(1))
             .build();
         testStore.start();
 

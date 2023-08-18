@@ -14,25 +14,36 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.metrics.TenantMeter.gauging;
+import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.TenantMetric.RetainUsedSpaceGauge;
+import static com.baidu.bifromq.retain.utils.MessageUtil.buildCollectMetricsRequest;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
+import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.util.AsyncRunner;
+import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.retain.rpc.proto.CollectMetricsReply;
+import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
 import com.baidu.bifromq.retain.utils.MessageUtil;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,12 +59,14 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
     private final KVRangeBalanceController rangeBalanceController;
-    private final ScheduledExecutorService jobExecutor;
+    private final AsyncRunner jobRunner;
+    private final ScheduledExecutorService jobScheduler;
     private final boolean jobExecutorOwner;
     private final Duration statsInterval;
     private final Duration gcInterval;
-    private volatile ScheduledFuture<?> gcJob;
-    private volatile ScheduledFuture<?> statsJob;
+    private final Map<String, Long> tenantRetainSpaceSize = new ConcurrentHashMap<>();
+    private volatile CompletableFuture<Void> gcJob;
+    private volatile CompletableFuture<Void> statsJob;
     protected final RetainStoreCoProcFactory coProcFactory;
 
     public AbstractRetainStore(T builder) {
@@ -67,11 +80,12 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
         jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
             String threadName = String.format("retain-store[%s]-job-executor", builder.clusterId);
-            jobExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            jobScheduler = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
                 new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory(threadName)), threadName);
         } else {
-            jobExecutor = builder.bgTaskExecutor;
+            jobScheduler = builder.bgTaskExecutor;
         }
+        jobRunner = new AsyncRunner(jobScheduler);
     }
 
     protected abstract IBaseKVStoreServer storeServer();
@@ -87,8 +101,16 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             storeServer().start();
             rangeBalanceController.start(id());
             status.compareAndSet(Status.STARTING, Status.STARTED);
-            scheduleGC();
-            scheduleStats();
+            storeClient
+                .connState()
+                // observe the first READY state
+                .filter(connState -> connState == IConnectable.ConnState.READY)
+                .takeUntil(connState -> connState == IConnectable.ConnState.READY)
+                .doOnComplete(() -> {
+                    scheduleGC();
+                    scheduleStats();
+                })
+                .subscribe();
             log.info("Retain store started");
         }
     }
@@ -96,18 +118,18 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping retain store");
-            rangeBalanceController.stop();
-            log.debug("Stopping KVStore server");
-            storeServer().stop();
+            jobRunner.awaitDone();
             if (gcJob != null && !gcJob.isDone()) {
-                gcJob.cancel(true);
+                gcJob.join();
             }
             if (statsJob != null && !statsJob.isDone()) {
-                statsJob.cancel(true);
+                statsJob.join();
             }
+            rangeBalanceController.stop();
+            storeServer().stop();
             if (jobExecutorOwner) {
                 log.debug("Shutting down job executor");
-                MoreExecutors.shutdownAndAwaitTermination(jobExecutor, 5, TimeUnit.SECONDS);
+                MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
             log.info("Retain store shutdown");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
@@ -115,25 +137,27 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     }
 
     private void scheduleGC() {
-        gcJob = jobExecutor.schedule(this::gc, gcInterval.toMinutes(), TimeUnit.MINUTES);
+        jobScheduler.schedule(this::gc, gcInterval.toMinutes(), TimeUnit.MINUTES);
     }
 
     private void gc() {
-        if (status.get() != Status.STARTED) {
-            return;
-        }
-        Iterator<KVRangeSetting> itr = storeClient.findByRange(FULL_RANGE)
-            .stream().filter(k -> k.leader.equals(id())).iterator();
-        List<CompletableFuture<?>> gcFutures = new ArrayList<>();
-        while (itr.hasNext()) {
-            KVRangeSetting leaderReplica = itr.next();
-            gcFutures.add(gcRange(leaderReplica));
-        }
-        CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0])).whenComplete((v, e) -> scheduleGC());
+        jobRunner.add(() -> {
+            if (status.get() != Status.STARTED) {
+                return;
+            }
+            Iterator<KVRangeSetting> itr = storeClient.findByRange(FULL_RANGE)
+                .stream().filter(k -> k.leader.equals(id())).iterator();
+            List<CompletableFuture<?>> gcFutures = new ArrayList<>();
+            while (itr.hasNext()) {
+                KVRangeSetting leaderReplica = itr.next();
+                gcFutures.add(gcRange(leaderReplica));
+            }
+            gcJob = CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0]))
+                .whenComplete((v, e) -> scheduleGC());
+        });
     }
 
-    @VisibleForTesting
-    CompletableFuture<Void> gcRange(KVRangeSetting leaderReplica) {
+    private CompletableFuture<Void> gcRange(KVRangeSetting leaderReplica) {
         long reqId = System.currentTimeMillis();
         return storeClient.execute(leaderReplica.leader, KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)
@@ -151,68 +175,80 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     }
 
     private void scheduleStats() {
-        statsJob = jobExecutor.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
+        jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void collectMetrics() {
-        if (status.get() != Status.STARTED) {
-            return;
-        }
-        // TODO: collect stats
-//        Iterator<KVRangeSettings> itr = storeClient.findByRange(FULL_RANGE)
-//                .stream().filter(k -> k.getLeader() == id()).iterator();
-//        List<CompletableFuture<CollectMetricsReply>> statsFutures = new ArrayList<>();
-//        while (itr.hasNext()) {
-//            KVRangeSettings leaderReplica = itr.next();
-//            statsFutures.add(collectRangeMetrics(leaderReplica));
-//        }
-//        CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
-//                .whenComplete((v, e) -> {
-//                    Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
-//                            .reduce(new HashMap<>(), (result, item) -> {
-//                                item.forEach((tenantId, usedSpace) -> result.compute(tenantId, (k, read) -> {
-//                                    if (read == null) {
-//                                        read = 0L;
-//                                    }
-//                                    read += usedSpace;
-//                                    return read;
-//                                }));
-//                                return result;
-//                            });
-//                    meter.recordSpaceUsed(usedSpaceMap);
-//                    scheduleStats();
-//                });
+        jobRunner.add(() -> {
+            if (status.get() != Status.STARTED) {
+                return;
+            }
+            List<KVRangeSetting> settings = storeClient.findByRange(FULL_RANGE);
+            Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
+            List<CompletableFuture<CollectMetricsReply>> statsFutures = new ArrayList<>();
+            while (itr.hasNext()) {
+                KVRangeSetting leaderReplica = itr.next();
+                statsFutures.add(collectRangeMetrics(leaderReplica));
+            }
+            statsJob = CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
+                .whenComplete((v, e) -> {
+                    if (e == null) {
+                        Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
+                            .reduce(new HashMap<>(), (result, item) -> {
+                                item.forEach((tenantId, usedSpace) -> result.compute(tenantId, (k, read) -> {
+                                    if (read == null) {
+                                        read = 0L;
+                                    }
+                                    read += usedSpace;
+                                    return read;
+                                }));
+                                return result;
+                            });
+                        record(usedSpaceMap);
+                    }
+                    scheduleStats();
+                });
+        });
     }
 
-//    @VisibleForTesting
-//    CompletableFuture<CollectMetricsReply> collectRangeMetrics(KVRangeSettings leaderReplica) {
-//        long reqId = System.currentTimeMillis();
-//        return storeClient.query(leaderReplica.getLeader(), KVRangeRORequest.newBuilder()
-//                        .setReqId(reqId)
-//                        .setKvRangeId(leaderReplica.getId())
-//                        .setVer(leaderReplica.getVer())
-//                        .setCmd(KVROCommand.newBuilder()
-//                                .setRoCoProc(ROCoProc.newBuilder()
-//                                        .setKey(leaderReplica.getRange().getStartKey())
-//                                        .setProc(buildCollectMetricsRequest(reqId).toByteString())
-//                                        .build())
-//                                .build())
-//                        .build())
-//                .thenApply(reply -> {
-//                    log.debug("Range gc succeed: serverId={}, rangeId={}, ver={}",
-//                            leaderReplica.getLeader(), leaderReplica.getId(), leaderReplica.getVer());
-//
-//                    try {
-//                        return InboxServiceROCoProcOutput.parseFrom(reply.getResult().getRoCoProcResult().getOutput())
-//                                .getCollectMetricsReply();
-//                    } catch (InvalidProtocolBufferException e) {
-//                        throw new IllegalStateException("Unable to parse CollectMetricReply", e);
-//                    }
-//                })
-//                .exceptionally(e -> {
-//                    log.error("Range gc failed: serverId={}, rangeId={}, ver={}",
-//                            leaderReplica.getLeader(), leaderReplica.getId(), leaderReplica.getVer());
-//                    return CollectMetricsReply.newBuilder().setReqId(reqId).build();
-//                });
-//    }
+    private void record(Map<String, Long> sizeMap) {
+        for (String tenantId : sizeMap.keySet()) {
+            boolean newGauging = !tenantRetainSpaceSize.containsKey(tenantId);
+            tenantRetainSpaceSize.put(tenantId, sizeMap.get(tenantId));
+            if (newGauging) {
+                gauging(tenantId, RetainUsedSpaceGauge, () -> tenantRetainSpaceSize.getOrDefault(tenantId, 0L));
+            }
+        }
+        for (String tenantId : tenantRetainSpaceSize.keySet()) {
+            if (!sizeMap.containsKey(tenantId)) {
+                stopGauging(tenantId, RetainUsedSpaceGauge);
+                tenantRetainSpaceSize.remove(tenantId);
+            }
+        }
+    }
+
+    private CompletableFuture<CollectMetricsReply> collectRangeMetrics(KVRangeSetting leaderReplica) {
+        long reqId = System.currentTimeMillis();
+        return storeClient.query(leaderReplica.leader, KVRangeRORequest.newBuilder()
+                .setReqId(reqId)
+                .setKvRangeId(leaderReplica.id)
+                .setVer(leaderReplica.ver)
+                .setRoCoProcInput(buildCollectMetricsRequest(reqId).toByteString())
+                .build())
+            .thenApply(reply -> {
+                log.debug("Range metrics collected: serverId={}, rangeId={}, ver={}",
+                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
+
+                try {
+                    return RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult()).getCollectMetrics();
+                } catch (InvalidProtocolBufferException e) {
+                    throw new IllegalStateException("Unable to parse CollectMetricReply", e);
+                }
+            })
+            .exceptionally(e -> {
+                log.error("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",
+                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
+                return CollectMetricsReply.newBuilder().setReqId(reqId).build();
+            });
+    }
 }

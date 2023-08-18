@@ -32,7 +32,7 @@ import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 
-public class GCAndStatsTest extends InboxStoreTest {
+public class GCTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void gc() {
         String tenantId = "tenantId";

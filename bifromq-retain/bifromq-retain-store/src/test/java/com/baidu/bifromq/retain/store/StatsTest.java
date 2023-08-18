@@ -11,32 +11,36 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker;
+package com.baidu.bifromq.retain.store;
 
-import static com.baidu.bifromq.metrics.TenantMetric.DistUsedSpaceGauge;
-import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
+import static com.baidu.bifromq.metrics.TenantMetric.RetainUsedSpaceGauge;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.rpc.proto.RetainResult;
+import com.baidu.bifromq.type.TopicMessage;
 import io.micrometer.core.instrument.Meter;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
-@Slf4j
-public class StatsTest extends DistWorkerTest {
+public class StatsTest extends RetainStoreTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void reportRangeMetrics() {
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        String tenantId = "tenantId";
+        String topic = "/a/b/c";
+        TopicMessage message = message(topic, "hello");
+        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
 
-        sub(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
-        sub(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
+        RetainResult reply = requestRetain(tenantId, message);
+        assertEquals(reply, RetainResult.RETAINED);
 
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(DistUsedSpaceGauge.metricName)) {
+                    meter.getId().getName().equals(RetainUsedSpaceGauge.metricName)) {
                     return true;
                 }
             }

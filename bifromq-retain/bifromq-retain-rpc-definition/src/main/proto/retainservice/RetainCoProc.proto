@@ -84,6 +84,15 @@ message GCReply {
   uint64 reqId = 1;
 }
 
+message CollectMetricsRequest{
+  uint64 reqId = 1;
+}
+
+message CollectMetricsReply{
+  uint64 reqId = 1;
+  map<string, uint64> usedSpaces = 2;
+}
+
 message RetainServiceRWCoProcInput{
   oneof type{
     BatchRetainRequest batchRetain = 1;
@@ -101,12 +110,14 @@ message RetainServiceRWCoProcOutput{
 message RetainServiceROCoProcInput{
   oneof type{
     BatchMatchRequest batchMatch = 1;
+    CollectMetricsRequest collectMetrics = 2;
   }
 }
 
 message RetainServiceROCoProcOutput{
   oneof type{
     BatchMatchReply batchMatch = 1;
+    CollectMetricsReply collectMetrics = 2;
   }
 }
 
