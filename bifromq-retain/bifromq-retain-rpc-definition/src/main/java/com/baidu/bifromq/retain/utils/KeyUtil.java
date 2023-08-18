@@ -56,6 +56,11 @@ public class KeyUtil {
         return key.size() == Integer.BYTES + tenantIdLength;
     }
 
+    public static String parseTenantId(ByteString key) {
+        int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
+        return key.substring(Integer.BYTES, Integer.BYTES + tenantIdLength).toStringUtf8();
+    }
+
     public static ByteString parseTenantNS(ByteString key) {
         int tenantIdLength = toInt(key.substring(0, Integer.BYTES));
         return key.substring(0, Integer.BYTES + tenantIdLength);

@@ -13,14 +13,16 @@
 
 package com.baidu.bifromq.retain.store;
 
+import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
+import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
+import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.retain.utils.TopicUtil.isWildcardTopicFilter;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 
-import com.baidu.bifromq.basekv.localengine.RangeUtil;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
@@ -33,6 +35,8 @@ import com.baidu.bifromq.retain.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
+import com.baidu.bifromq.retain.rpc.proto.CollectMetricsReply;
+import com.baidu.bifromq.retain.rpc.proto.CollectMetricsRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchError;
@@ -86,6 +90,10 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     return batchMatch(coProcInput.getBatchMatch(), reader)
                         .thenApply(v -> RetainServiceROCoProcOutput.newBuilder()
                             .setBatchMatch(v).build().toByteString());
+                case COLLECTMETRICS:
+                    return CompletableFuture.completedFuture(RetainServiceROCoProcOutput.newBuilder()
+                        .setCollectMetrics(collectMetrics(coProcInput.getCollectMetrics(), reader)).build()
+                        .toByteString());
                 default:
                     log.error("Unknown co proc type {}", coProcInput.getTypeCase());
                     return CompletableFuture.failedFuture(
@@ -150,7 +158,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         }
         Range range = Range.newBuilder()
             .setStartKey(tenantNS)
-            .setEndKey(RangeUtil.upperBound(tenantNS))
+            .setEndKey(upperBound(tenantNS))
             .build();
         try (IKVIterator itr = reader.iterator()) {
             itr.seek(range.getStartKey());
@@ -221,7 +229,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 // already expired
                 return RetainResult.ERROR;
             }
-            if (!metaBytes.isPresent()) {
+            if (metaBytes.isEmpty()) {
                 if (maxRetainTopics > 0 && !topicMessage.getMessage().getPayload().isEmpty()) {
                     // this is the first message to be retained
                     RetainSetMetadata metadata = RetainSetMetadata.newBuilder()
@@ -265,7 +273,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     }
                     return RetainResult.CLEARED;
                 }
-                if (!val.isPresent()) {
+                if (val.isEmpty()) {
                     // retain new message
                     if (metadata.getCount() >= maxRetainTopics) {
                         if (metadata.getEstExpire() <= now) {
@@ -347,7 +355,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     private RetainSetMetadata gc(long now, ByteString tenantNS, RetainSetMetadata metadata,
                                  IKVReader reader,
                                  IKVWriter writer) {
-        Range range = Range.newBuilder().setStartKey(tenantNS).setEndKey(RangeUtil.upperBound(tenantNS)).build();
+        Range range = Range.newBuilder().setStartKey(tenantNS).setEndKey(upperBound(tenantNS)).build();
         try (IKVIterator itr = reader.iterator()) {
             itr.seek(range.getStartKey());
             itr.next();
@@ -386,12 +394,31 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         writer.put(tenantNS, updated.toByteString());
                     }
                 }
-                itr.seek(RangeUtil.upperBound(tenantNS));
+                itr.seek(upperBound(tenantNS));
             }
             return GCReply.newBuilder().setReqId(request.getReqId()).build();
         } catch (Throwable e) {
             log.error("Unable to parse metadata");
             return GCReply.newBuilder().setReqId(request.getReqId()).build();
         }
+    }
+
+    private CollectMetricsReply collectMetrics(CollectMetricsRequest request, IKVReader reader) {
+        CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
+        try (IKVIterator itr = reader.iterator()) {
+            for (itr.seekToFirst(); itr.isValid(); ) {
+                ByteString startKey = itr.key();
+                ByteString endKey = upperBound(itr.key());
+                builder.putUsedSpaces(parseTenantId(startKey),
+                    reader.size(intersect(reader.range(), Range.newBuilder()
+                        .setStartKey(startKey)
+                        .setEndKey(endKey)
+                        .build())));
+                itr.seek(endKey);
+            }
+        } catch (Exception e) {
+            // never happens
+        }
+        return builder.build();
     }
 }

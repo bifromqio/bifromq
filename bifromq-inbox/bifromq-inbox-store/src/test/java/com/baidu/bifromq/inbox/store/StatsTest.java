@@ -11,10 +11,9 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker;
+package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.metrics.TenantMetric.DistUsedSpaceGauge;
-import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
+import static com.baidu.bifromq.metrics.TenantMetric.InboxUsedSpaceGauge;
 import static org.awaitility.Awaitility.await;
 
 import io.micrometer.core.instrument.Meter;
@@ -23,20 +22,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class StatsTest extends DistWorkerTest {
+public class StatsTest extends InboxStoreTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void reportRangeMetrics() {
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-
-        sub(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
-        sub(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
+        String tenantId = "reportRangeMetrics_tenantId";
+        String inboxId = "reportRangeMetrics_inboxId";
+        requestCreate(tenantId, inboxId, 10, 100, false);
 
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(DistUsedSpaceGauge.metricName)) {
+                    meter.getId().getName().equals(InboxUsedSpaceGauge.metricName)) {
                     return true;
                 }
             }

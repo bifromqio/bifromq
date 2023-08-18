@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildCollectMetricsRequest;
 import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.DistSubInfoSizeGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.DistUsedSpaceGauge;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
@@ -170,12 +170,12 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             boolean newGauging = !tenantSubInfoSize.containsKey(tenantId);
             tenantSubInfoSize.put(tenantId, sizeMap.get(tenantId));
             if (newGauging) {
-                gauging(tenantId, DistSubInfoSizeGauge, () -> tenantSubInfoSize.getOrDefault(tenantId, 0L));
+                gauging(tenantId, DistUsedSpaceGauge, () -> tenantSubInfoSize.getOrDefault(tenantId, 0L));
             }
         }
         for (String tenantId : tenantSubInfoSize.keySet()) {
             if (!sizeMap.containsKey(tenantId)) {
-                stopGauging(tenantId, DistSubInfoSizeGauge);
+                stopGauging(tenantId, DistUsedSpaceGauge);
                 tenantSubInfoSize.remove(tenantId);
             }
         }

@@ -74,6 +74,8 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -105,6 +107,8 @@ abstract class InboxStoreTest {
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
 
+    protected SimpleMeterRegistry meterRegistry;
+
     @Mock
     protected IInboxClient inboxClient;
     @Mock
@@ -131,6 +135,8 @@ abstract class InboxStoreTest {
         dbRootDir = Files.createTempDirectory("");
         when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
+        meterRegistry = new SimpleMeterRegistry();
+        Metrics.globalRegistry.add(meterRegistry);
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -196,6 +202,7 @@ abstract class InboxStoreTest {
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(1))
+            .statsInterval(Duration.ofSeconds(1))
             .build();
         testStore.start();
 
