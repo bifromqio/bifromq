@@ -25,7 +25,7 @@ import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.retain.rpc.proto.BatchMatchCoProcRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
@@ -89,7 +89,7 @@ public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchRe
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                BatchMatchCoProcRequest.Builder reqBuilder = BatchMatchCoProcRequest
+                BatchMatchRequest.Builder reqBuilder = BatchMatchRequest
                     .newBuilder()
                     .setReqId(reqId);
                 matchParamBuilders.forEach((tenantId, matchParamsBuilder) ->
@@ -99,14 +99,14 @@ public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchRe
                     .setVer(batcherKey.ver)
                     .setKvRangeId(batcherKey.id)
                     .setRoCoProcInput(RetainServiceROCoProcInput.newBuilder()
-                        .setMatch(reqBuilder.build())
+                        .setBatchMatch(reqBuilder.build())
                         .build().toByteString())
                     .build();
                 return retainStoreClient.linearizedQuery(selectStore(batcherKey), request)
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
-                                return RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult()).getMatch()
+                                return RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult()).getBatchMatch()
                                     .getResultPackMap();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);

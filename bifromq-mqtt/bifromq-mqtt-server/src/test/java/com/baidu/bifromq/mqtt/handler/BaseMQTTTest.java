@@ -44,8 +44,8 @@ import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.SubResult;
-import com.baidu.bifromq.dist.client.UnsubResult;
+import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxCheckResult;
 import com.baidu.bifromq.inbox.client.InboxSubResult;
@@ -258,7 +258,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockInboxHas(boolean success) {
-        when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
+        when(inboxClient.has(anyLong(), anyString(), anyString()))
             .thenReturn(CompletableFuture.completedFuture(
                 success ? InboxCheckResult.EXIST : InboxCheckResult.NO_INBOX));
     }
@@ -273,7 +273,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockInboxDelete(boolean success) {
-        when(inboxClient.delete(anyLong(), anyString(), any(ClientInfo.class)))
+        when(inboxClient.delete(anyLong(), anyString(), anyString()))
             .thenReturn(
                 CompletableFuture.completedFuture(DeleteInboxReply.newBuilder()
                     .setResult(success ? DeleteInboxReply.Result.OK : DeleteInboxReply.Result.ERROR)
@@ -291,24 +291,24 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockDistSub(QoS qos, boolean success) {
-        when(distClient.sub(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(success ? SubResult.OK : SubResult.ERROR));
+        when(distClient.match(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
     protected void mockInboxSub(QoS qos, boolean success) {
-        when(inboxClient.sub(anyLong(), anyString(), anyString(), eq(qos), any()))
+        when(inboxClient.sub(anyLong(), anyString(), anyString(), anyString(), eq(qos)))
             .thenReturn(CompletableFuture.completedFuture(success ? InboxSubResult.OK : InboxSubResult.ERROR));
     }
 
     protected void mockDistUnSub(boolean... success) {
-        CompletableFuture<UnsubResult>[] unsubResults = new CompletableFuture[success.length];
+        CompletableFuture<UnmatchResult>[] unsubResults = new CompletableFuture[success.length];
         for (int i = 0; i < success.length; i++) {
-            unsubResults[i] = success[i] ? CompletableFuture.completedFuture(UnsubResult.OK)
+            unsubResults[i] = success[i] ? CompletableFuture.completedFuture(UnmatchResult.OK)
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
-        OngoingStubbing<CompletableFuture<UnsubResult>> ongoingStubbing =
-            when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
-        for (CompletableFuture<UnsubResult> result : unsubResults) {
+        OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
+            when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
+        for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }
     }
@@ -332,7 +332,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockInboxReader() {
-        when(inboxClient.openInboxReader(anyString(), any(ClientInfo.class))).thenReturn(inboxReader);
+        when(inboxClient.openInboxReader(anyString(), anyString())).thenReturn(inboxReader);
         doAnswer(invocationOnMock -> {
             inboxFetchConsumer = invocationOnMock.getArgument(0);
             return null;
@@ -344,14 +344,14 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockRetainMatch() {
-        when(retainClient.match(anyLong(), anyString(), anyString(), anyInt(), any(ClientInfo.class)))
+        when(retainClient.match(anyLong(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(
                 MatchReply.newBuilder().setResult(MatchReply.Result.OK).build()
             ));
     }
 
     protected void mockRetainPipeline(RetainReply.Result result) {
-        when(retainClient.retain(anyLong(), anyString(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(retainClient.retain(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
             any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(result).build()));
     }

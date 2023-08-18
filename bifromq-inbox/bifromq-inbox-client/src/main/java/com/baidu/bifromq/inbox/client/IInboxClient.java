@@ -35,20 +35,19 @@ public interface IInboxClient extends ISubBroker, IConnectable {
         return 1;
     }
 
-    CompletableFuture<InboxCheckResult> has(long reqId, String inboxId, ClientInfo clientInfo);
+    CompletableFuture<InboxCheckResult> has(long reqId, String tenantId, String inboxId);
 
-    CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo clientInfo);
+    CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo owner);
 
-    CompletableFuture<DeleteInboxReply> delete(long reqId, String inboxId, ClientInfo clientInfo);
+    CompletableFuture<DeleteInboxReply> delete(long reqId, String tenantId, String inboxId);
 
     CompletableFuture<Void> touch(long reqId, String tenantId, String inboxId);
 
-    CompletableFuture<InboxSubResult> sub(long reqId, String inboxId, String topicFilter, QoS qos,
-                                          ClientInfo clientInfo);
+    CompletableFuture<InboxSubResult> sub(long reqId, String tenantId, String inboxId, String topicFilter, QoS qos);
 
-    CompletableFuture<InboxUnsubResult> unsub(long reqId, String inboxId, String topicFilter, ClientInfo clientInfo);
+    CompletableFuture<InboxUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter);
 
-    IInboxReader openInboxReader(String inboxId, ClientInfo clientInfo);
+    IInboxReader openInboxReader(String tenantId, String inboxId);
 
     interface IInboxReader {
         void fetch(BiConsumer<Fetched, Throwable> consumer);

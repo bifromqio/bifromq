@@ -9,12 +9,12 @@ option java_outer_classname = "DistServiceProtos";
 package distservice;
 
 service DistService {
-  rpc sub (SubRequest) returns (SubReply);
-  rpc unsub (UnsubRequest) returns (UnsubReply);
+  rpc match (MatchRequest) returns (MatchReply);
+  rpc unmatch (UnmatchRequest) returns (UnmatchReply);
   rpc dist (stream DistRequest) returns (stream DistReply);
 }
 
-message SubRequest {
+message MatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string inboxId = 3; // the inbox id defined in calling sub broker service identified by CN field of client cert
@@ -24,7 +24,7 @@ message SubRequest {
   string delivererKey = 7;
 }
 
-message SubReply {
+message MatchReply {
   enum Result {
     OK = 0;
     EXCEED_LIMIT = 1;
@@ -34,7 +34,7 @@ message SubReply {
   Result result = 2;
 }
 
-message UnsubRequest {
+message UnmatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string inboxId = 3; // the inbox id defined in calling sub broker service identified by CN field of client cert
@@ -43,7 +43,7 @@ message UnsubRequest {
   string delivererKey = 6;
 }
 
-message UnsubReply {
+message UnmatchReply {
   enum Result {
     OK = 0;
     ERROR = 1;

@@ -26,26 +26,25 @@ public class InboxCreateTest extends InboxServiceTest {
     private final String tenantId = "trafficA";
     private final String inboxId = "inbox1";
     private final long reqId = System.nanoTime();
-    private ClientInfo clientInfo;
 
     @Test(groups = "integration")
     public void create() {
-        clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        assertEquals(inboxClient.has(reqId, inboxId, clientInfo).join(), InboxCheckResult.NO_INBOX);
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        assertEquals(inboxClient.has(reqId, tenantId, inboxId).join(), InboxCheckResult.NO_INBOX);
 
         CreateInboxReply createInboxReply = inboxClient.create(reqId, inboxId, clientInfo).join();
         assertEquals(createInboxReply.getReqId(), reqId);
         assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
 
-        assertEquals(inboxClient.has(reqId, inboxId, clientInfo).join(), InboxCheckResult.EXIST);
+        assertEquals(inboxClient.has(reqId, tenantId, inboxId).join(), InboxCheckResult.EXIST);
     }
 
     @Test(groups = "integration", dependsOnMethods = "create")
     public void delete() {
-        DeleteInboxReply deleteInboxReply = inboxClient.delete(reqId, inboxId, clientInfo).join();
+        DeleteInboxReply deleteInboxReply = inboxClient.delete(reqId, tenantId, inboxId).join();
         assertEquals(deleteInboxReply.getReqId(), reqId);
         assertEquals(deleteInboxReply.getResult(), DeleteInboxReply.Result.OK);
 
-        assertEquals(inboxClient.has(reqId, inboxId, clientInfo).join(), InboxCheckResult.NO_INBOX);
+        assertEquals(inboxClient.has(reqId, tenantId, inboxId).join(), InboxCheckResult.NO_INBOX);
     }
 }

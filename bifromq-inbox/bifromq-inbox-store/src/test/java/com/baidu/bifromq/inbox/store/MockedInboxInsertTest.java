@@ -29,9 +29,9 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
@@ -97,7 +97,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxWithNoInbox() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -118,9 +118,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsList().size(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.NO_INBOX);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
         }
@@ -129,7 +129,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxWithExpiration() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -157,9 +157,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsList().size(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.NO_INBOX);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
         }
@@ -168,7 +168,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertWithNoSub() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -211,9 +211,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.NO_INBOX);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
         }
@@ -222,7 +222,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxNormallyForDropOldestPolicy() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -269,9 +269,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.OK);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
             Assert.assertEquals(args.size(), 4);
             Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
@@ -286,7 +286,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxWithDropOldestPartially() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -346,9 +346,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.OK);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
             Assert.assertEquals(args.size(), 7);
             Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0),
@@ -367,7 +367,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxWithDropOldestPartiallyAndMultiEntries() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -442,9 +442,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.OK);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
             Assert.assertEquals(writerArgs.size(), 6);
             Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 4),
@@ -464,7 +464,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxWithDropOldestFully() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -535,9 +535,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.OK);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
             Assert.assertEquals(args.size(), 4);
             Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
@@ -557,7 +557,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxNormallyWithDropYoungestPolicy() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -604,9 +604,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.OK);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
             Assert.assertEquals(args.size(), 4);
             Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
@@ -621,7 +621,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxWithDropYoungestPartially() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -693,9 +693,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.OK);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
             Assert.assertEquals(args.size(), 4);
             Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
@@ -721,7 +721,7 @@ public class MockedInboxInsertTest {
     @Test
     public void testInsertQoS0InboxWithDropYoungestFully() {
         InboxServiceRWCoProcInput input = InboxServiceRWCoProcInput.newBuilder()
-            .setInsert(InboxInsertRequest.newBuilder()
+            .setBatchInsert(BatchInsertRequest.newBuilder()
                 .addSubMsgPack(MessagePack.newBuilder()
                     .setSubInfo(SubInfo.newBuilder()
                         .setTenantId(tenantId)
@@ -792,9 +792,9 @@ public class MockedInboxInsertTest {
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
-            InboxInsertReply reply = output.getInsert();
+            BatchInsertReply reply = output.getBatchInsert();
             Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InboxInsertResult.Result.OK);
+            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
             Assert.assertEquals(args.size(), 2);
             Assert.assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8), args.get(0));

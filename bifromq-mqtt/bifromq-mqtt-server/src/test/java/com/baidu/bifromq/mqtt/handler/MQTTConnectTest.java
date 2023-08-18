@@ -20,7 +20,6 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEP
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
@@ -31,7 +30,6 @@ import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.type.ClientInfo;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -62,7 +60,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         // clear failed
         mockAuthPass();
         mockSessionReg();
-        when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
+        when(inboxClient.has(anyLong(), anyString(), anyString()))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mock exception")));
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
@@ -119,7 +117,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         // create inbox failed
         mockAuthPass();
         mockSessionReg();
-        when(inboxClient.has(anyLong(), anyString(), any(ClientInfo.class)))
+        when(inboxClient.has(anyLong(), anyString(), anyString()))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mock exception")));
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);

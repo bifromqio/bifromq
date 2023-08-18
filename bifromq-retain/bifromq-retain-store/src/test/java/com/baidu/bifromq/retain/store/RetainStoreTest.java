@@ -37,8 +37,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.retain.rpc.proto.BatchMatchCoProcRequest;
-import com.baidu.bifromq.retain.rpc.proto.BatchRetainCoProcRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
@@ -212,7 +212,7 @@ public class RetainStoreTest {
             KVRangeSetting s = storeClient.findByKey(tenantNS).get();
             String topic = topicMsg.getTopic();
             Message message = topicMsg.getMessage();
-            BatchRetainCoProcRequest request = BatchRetainCoProcRequest.newBuilder()
+            BatchRetainRequest request = BatchRetainRequest.newBuilder()
                 .setReqId(message.getMessageId())
                 .putRetainMessagePack(tenantId, RetainMessagePack.newBuilder()
                     .putTopicMessages(topic, RetainMessage.newBuilder()
@@ -231,9 +231,9 @@ public class RetainStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             RetainServiceRWCoProcOutput output = RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasRetain());
-            assertEquals(output.getRetain().getReqId(), message.getMessageId());
-            return output.getRetain().getResultsMap().get(tenantId).getResultsMap().get(topic);
+            assertTrue(output.hasBatchRetain());
+            assertEquals(output.getBatchRetain().getReqId(), message.getMessageId());
+            return output.getBatchRetain().getResultsMap().get(tenantId).getResultsMap().get(topic);
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
@@ -244,7 +244,7 @@ public class RetainStoreTest {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString tenantNS = KeyUtil.tenantNS(tenantId);
             KVRangeSetting s = storeClient.findByKey(tenantNS).get();
-            BatchMatchCoProcRequest request = BatchMatchCoProcRequest.newBuilder()
+            BatchMatchRequest request = BatchMatchRequest.newBuilder()
                 .setReqId(reqId)
                 .putMatchParams(tenantId, MatchParam.newBuilder()
                     .putTopicFilters(topicFilter, limit)
@@ -260,9 +260,9 @@ public class RetainStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             RetainServiceROCoProcOutput output = RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasMatch());
-            assertEquals(output.getMatch().getReqId(), reqId);
-            return output.getMatch().getResultPackMap().get(tenantId).getResultsMap().get(topicFilter);
+            assertTrue(output.hasBatchMatch());
+            assertEquals(output.getBatchMatch().getReqId(), reqId);
+            return output.getBatchMatch().getResultPackMap().get(tenantId).getResultsMap().get(topicFilter);
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
@@ -283,9 +283,9 @@ public class RetainStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             RetainServiceRWCoProcOutput output = RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasGcReply());
-            assertEquals(output.getGcReply().getReqId(), reqId);
-            return output.getGcReply();
+            assertTrue(output.hasGc());
+            assertEquals(output.getGc().getReqId(), reqId);
+            return output.getGc();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }

@@ -158,7 +158,7 @@ class FanoutExecutorGroup {
                     case NO_INBOX -> {
                         // unsub as side effect
                         SubInfo subInfo = matched.subInfo;
-                        distClient.unsub(System.nanoTime(),
+                        distClient.unmatch(System.nanoTime(),
                             subInfo.getTenantId(),
                             subInfo.getTopicFilter(),
                             subInfo.getInboxId(),

@@ -18,7 +18,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
-import com.baidu.bifromq.dist.client.SubResult;
+import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
@@ -108,7 +108,7 @@ public class DistTest extends DistServiceTest {
         ClientInfo clientInfo;
         int total = 1;
         for (int i = 0; i < total; i++) {
-            distClient().sub(reqId, tenantId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0)
+            distClient().match(reqId, tenantId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0)
                 .join();
         }
         CountDownLatch latch = new CountDownLatch(total);
@@ -149,10 +149,10 @@ public class DistTest extends DistServiceTest {
         int totalSub = 5;
         int totalMsg = 1;
         for (int i = 0; i < totalSub; i++) {
-            SubResult subResult =
-                distClient().sub(reqId, tenantId, "$share/g1/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i,
+            MatchResult subResult =
+                distClient().match(reqId, tenantId, "$share/g1/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i,
                     "server1", 0).join();
-            assertEquals(subResult, SubResult.OK);
+            assertEquals(subResult, MatchResult.OK);
         }
         CountDownLatch latch = new CountDownLatch(totalMsg);
         for (int i = 0; i < totalMsg; i++) {
@@ -193,7 +193,7 @@ public class DistTest extends DistServiceTest {
         ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
         int totalInbox = 100;
         for (int i = 0; i < totalInbox; i++) {
-            distClient().sub(reqId, tenantId, "/sport/tennis", QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0)
+            distClient().match(reqId, tenantId, "/sport/tennis", QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0)
                 .join();
         }
 

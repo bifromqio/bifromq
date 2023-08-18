@@ -25,12 +25,10 @@ import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
+import com.baidu.bifromq.inbox.storage.proto.CommitParams;
 import com.baidu.bifromq.inbox.storage.proto.InboxComSertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommit;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
@@ -65,7 +63,7 @@ public class InboxComSertScheduler
         }
         assert request.type() == ComSertCallType.COMMIT;
         return scopedInboxId(
-            ((CommitCall) request).request.getClientInfo().getTenantId(),
+            ((CommitCall) request).request.getTenantId(),
             ((CommitCall) request).request.getInboxId());
     }
 
@@ -95,8 +93,8 @@ public class InboxComSertScheduler
                     case INSERT -> inboxInserts.add(callTask);
                     case COMMIT -> {
                         CommitRequest commitRequest = ((CommitCall) request).request;
-                        ClientInfo clientInfo = commitRequest.getClientInfo();
-                        String scopedInboxIdUtf8 = scopedInboxId(clientInfo.getTenantId(),
+                        String tenantId = commitRequest.getTenantId();
+                        String scopedInboxIdUtf8 = scopedInboxId(tenantId,
                             commitRequest.getInboxId()).toStringUtf8();
                         Long[] upToSeqs = inboxCommits.computeIfAbsent(scopedInboxIdUtf8, k -> new Long[3]);
                         QoS qos = commitRequest.getQos();
@@ -113,7 +111,7 @@ public class InboxComSertScheduler
                 InboxComSertRequest.Builder reqBuilder = InboxComSertRequest.newBuilder();
                 inboxInserts.forEach(insertTask -> reqBuilder.addInsert(((InsertCall) insertTask.call).messagePack));
                 inboxCommits.forEach((k, v) -> {
-                    InboxCommit.Builder cb = InboxCommit.newBuilder();
+                    CommitParams.Builder cb = CommitParams.newBuilder();
                     if (v[0] != null) {
                         cb.setQos0UpToSeq(v[0]);
                     }
@@ -161,8 +159,10 @@ public class InboxComSertScheduler
                             }
                         } else {
                             Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-                            for (InboxInsertResult result : v.getInsertAndCommit().getInsertResultsList()) {
-                                if (result.getResult() == InboxInsertResult.Result.NO_INBOX) {
+                            for (com.baidu.bifromq.inbox.storage.proto.InsertResult result : v.getInsertAndCommit()
+                                .getInsertResultsList()) {
+                                if (result.getResult() ==
+                                    com.baidu.bifromq.inbox.storage.proto.InsertResult.Result.NO_INBOX) {
                                     insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
                                 } else {
                                     insertResults.put(result.getSubInfo(), SendResult.Result.OK);
@@ -180,7 +180,7 @@ public class InboxComSertScheduler
                                         .setResult(v.getInsertAndCommit()
                                             .getCommitResultsMap()
                                             .get(scopedInboxId(
-                                                request.getClientInfo().getTenantId(),
+                                                request.getTenantId(),
                                                 request.getInboxId()).toStringUtf8()) ?
                                             CommitReply.Result.OK : CommitReply.Result.ERROR)
                                         .build()));

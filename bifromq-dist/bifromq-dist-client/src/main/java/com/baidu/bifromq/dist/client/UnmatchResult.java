@@ -13,6 +13,6 @@
 
 package com.baidu.bifromq.dist.client;
 
-public enum SubResult {
-    OK, EXCEED_LIMIT, ERROR
+public enum UnmatchResult {
+    OK, ERROR;
 }

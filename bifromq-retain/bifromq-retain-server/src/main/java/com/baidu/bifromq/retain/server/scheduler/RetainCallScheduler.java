@@ -25,7 +25,7 @@ import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.retain.rpc.proto.BatchRetainCoProcRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
 import com.baidu.bifromq.retain.rpc.proto.RetainMessagePack;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
@@ -64,7 +64,7 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
 
     @Override
     protected Optional<KVRangeSetting> find(RetainRequest request) {
-        return retainStoreClient.findByKey(tenantNS(request.getTenantId()));
+        return retainStoreClient.findByKey(tenantNS(request.getPublisher().getTenantId()));
     }
 
     private static class RetainCallBatcher extends Batcher<RetainRequest, RetainReply, KVRangeSetting> {
@@ -76,7 +76,8 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
             public void add(CallTask<RetainRequest, RetainReply> task) {
                 RetainRequest request = task.call;
                 batchedTasks.add(task);
-                retainMsgPackBuilders.computeIfAbsent(request.getTenantId(), k -> RetainMessagePack.newBuilder())
+                retainMsgPackBuilders.computeIfAbsent(request.getPublisher().getTenantId(),
+                        k -> RetainMessagePack.newBuilder())
                     .putTopicMessages(request.getTopic(), RetainMessage.newBuilder()
                         .setMessage(request.getMessage())
                         .setPublisher(request.getPublisher())
@@ -91,7 +92,7 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                BatchRetainCoProcRequest.Builder reqBuilder = BatchRetainCoProcRequest.newBuilder().setReqId(reqId);
+                BatchRetainRequest.Builder reqBuilder = BatchRetainRequest.newBuilder().setReqId(reqId);
                 retainMsgPackBuilders.forEach((tenantId, retainMsgPackBuilder) ->
                     reqBuilder.putRetainMessagePack(tenantId, retainMsgPackBuilder.build()));
                 return retainStoreClient.execute(batcherKey.leader, KVRangeRWRequest.newBuilder()
@@ -99,13 +100,13 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
                         .setVer(batcherKey.ver)
                         .setKvRangeId(batcherKey.id)
                         .setRwCoProc(RetainServiceRWCoProcInput.newBuilder()
-                            .setRetain(reqBuilder.build())
+                            .setBatchRetain(reqBuilder.build())
                             .build().toByteString())
                         .build())
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
-                                return RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getRetain()
+                                return RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchRetain()
                                     .getResultsMap();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);
@@ -130,7 +131,8 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
                                 RetainReply.Builder replyBuilder = RetainReply.newBuilder()
                                     .setReqId(task.call.getReqId());
                                 RetainResult result =
-                                    v.getOrDefault(task.call.getTenantId(), RetainResultPack.getDefaultInstance())
+                                    v.getOrDefault(task.call.getPublisher().getTenantId(),
+                                            RetainResultPack.getDefaultInstance())
                                         .getResultsOrDefault(task.call.getTopic(), RetainResult.ERROR);
                                 switch (result) {
                                     case RETAINED -> replyBuilder.setResult(RetainReply.Result.RETAINED);

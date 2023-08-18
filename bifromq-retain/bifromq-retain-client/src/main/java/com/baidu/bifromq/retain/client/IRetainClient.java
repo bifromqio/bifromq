@@ -26,14 +26,9 @@ public interface IRetainClient extends IConnectable {
         return new RetainClientBuilder();
     }
 
-    CompletableFuture<MatchReply> match(long reqId,
-                                        String tenantId,
-                                        String topicFilter,
-                                        int limit,
-                                        ClientInfo subscriber);
+    CompletableFuture<MatchReply> match(long reqId, String tenantId, String topicFilter, int limit);
 
     CompletableFuture<RetainReply> retain(long reqId,
-                                          String tenantId,
                                           String topic,
                                           QoS qos,
                                           ByteBuffer payload,

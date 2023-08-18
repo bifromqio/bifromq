@@ -68,12 +68,12 @@ public class InboxInsertTest extends InboxServiceTest {
         List<DeliveryPack> msgPack = new LinkedList<>();
         msgPack.add(new DeliveryPack(pack, singletonList(subInfo)));
 
-        inboxClient.sub(System.nanoTime(), inboxId, "topic", QoS.AT_LEAST_ONCE, clientInfo);
+        inboxClient.sub(System.nanoTime(), tenantId, inboxId, "topic", QoS.AT_LEAST_ONCE).join();
 
         Map<SubInfo, DeliveryResult> result = writer.deliver(msgPack).join();
         assertEquals(result.get(subInfo), DeliveryResult.OK);
 
-        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(inboxId, clientInfo);
+        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
@@ -88,14 +88,14 @@ public class InboxInsertTest extends InboxServiceTest {
 
         reader.close();
         writer.close();
-        inboxClient.delete(reqId, inboxId, clientInfo).join();
+        inboxClient.delete(reqId, tenantId, inboxId).join();
     }
 
     @Test(groups = "integration")
     public void insertMultiMsgPackWithSameInbox() throws InterruptedException {
-        String tenantId = "trafficA";
+        String tenantId = "trafficB";
         String inboxId = "insertMultiMsgPackWithSameInbox_inbox";
-        String delivererKey = "deliverer1";
+        String delivererKey = "deliverer2";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
         CreateInboxReply createInboxReply = inboxClient.create(reqId, inboxId, clientInfo).join();
@@ -129,7 +129,7 @@ public class InboxInsertTest extends InboxServiceTest {
         List<DeliveryPack> msgPack2 = new LinkedList<>();
         msgPack2.add(new DeliveryPack(pack2, singletonList(subInfo)));
 
-        inboxClient.sub(System.nanoTime(), inboxId, "topic", QoS.AT_LEAST_ONCE, clientInfo);
+        inboxClient.sub(System.nanoTime(), tenantId, inboxId, "topic", QoS.AT_LEAST_ONCE).join();
 
         CompletableFuture<Map<SubInfo, DeliveryResult>> writeFuture1 = writer.deliver(msgPack1);
         CompletableFuture<Map<SubInfo, DeliveryResult>> writeFuture2 = writer.deliver(msgPack2);
@@ -142,7 +142,7 @@ public class InboxInsertTest extends InboxServiceTest {
         Map<SubInfo, DeliveryResult> result3 = writeFuture3.join();
         assertEquals(result3.get(subInfo), DeliveryResult.OK);
 
-        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(inboxId, clientInfo);
+        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
         reader.fetch((fetched, throwable) -> {
@@ -157,6 +157,6 @@ public class InboxInsertTest extends InboxServiceTest {
         reader.close();
         writer.close();
 
-        inboxClient.delete(reqId, inboxId, clientInfo).join();
+        inboxClient.delete(reqId, tenantId, inboxId).join();
     }
 }

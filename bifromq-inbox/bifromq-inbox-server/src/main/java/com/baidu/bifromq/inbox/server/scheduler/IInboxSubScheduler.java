@@ -14,8 +14,8 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubReply;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 
-public interface IInboxSubScheduler extends IBatchCallScheduler<AddSubRequest, AddSubReply> {
+public interface IInboxSubScheduler extends IBatchCallScheduler<SubRequest, SubReply> {
 }

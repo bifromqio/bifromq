@@ -82,7 +82,7 @@ public class DistQoS1Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
             CompletableFuture.completedFuture(null));
 
         sub(tenantA, "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
@@ -108,7 +108,7 @@ public class DistQoS1Test extends DistWorkerTest {
         }
 
         verify(distClient, timeout(100).atLeastOnce())
-            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
         unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
     }
@@ -136,7 +136,7 @@ public class DistQoS1Test extends DistWorkerTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        when(distClient.unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
         sub(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
@@ -164,7 +164,7 @@ public class DistQoS1Test extends DistWorkerTest {
 
 
         verify(distClient, timeout(100).atLeastOnce())
-            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
         verify(eventCollector, timeout(100).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
 

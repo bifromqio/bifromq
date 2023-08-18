@@ -11,11 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.dist.client;
 
-import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.dist.rpc.proto.UnsubReply;
-import com.baidu.bifromq.dist.rpc.proto.UnsubRequest;
-
-public interface IUnsubCallScheduler extends IBatchCallScheduler<UnsubRequest, UnsubReply> {
+public enum MatchResult {
+    OK, EXCEED_LIMIT, ERROR
 }

@@ -23,9 +23,9 @@ import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubReply;
-import com.baidu.bifromq.inbox.rpc.proto.AddSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchAddSubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.google.protobuf.ByteString;
@@ -36,42 +36,41 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxSubScheduler extends InboxMutateScheduler<AddSubRequest, AddSubReply>
-    implements IInboxSubScheduler {
+public class InboxSubScheduler extends InboxMutateScheduler<SubRequest, SubReply> implements IInboxSubScheduler {
     public InboxSubScheduler(IBaseKVStoreClient inboxStoreClient) {
         super(inboxStoreClient, "inbox_server_sub");
     }
 
     @Override
-    protected Batcher<AddSubRequest, AddSubReply, KVRangeSetting> newBatcher(String name,
-                                                                             long tolerableLatencyNanos,
-                                                                             long burstLatencyNanos,
-                                                                             KVRangeSetting range) {
+    protected Batcher<SubRequest, SubReply, KVRangeSetting> newBatcher(String name,
+                                                                       long tolerableLatencyNanos,
+                                                                       long burstLatencyNanos,
+                                                                       KVRangeSetting range) {
         return new InboxSubBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
     }
 
     @Override
-    protected ByteString rangeKey(AddSubRequest request) {
-        return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
+    protected ByteString rangeKey(SubRequest request) {
+        return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
-    private static class InboxSubBatcher extends Batcher<AddSubRequest, AddSubReply, KVRangeSetting> {
-        private class InboxBatchSub implements IBatchCall<AddSubRequest, AddSubReply> {
-            private final Queue<CallTask<AddSubRequest, AddSubReply>> batchTasks = new ArrayDeque<>();
-            private BatchAddSubRequest.Builder reqBuilder = BatchAddSubRequest.newBuilder();
+    private static class InboxSubBatcher extends Batcher<SubRequest, SubReply, KVRangeSetting> {
+        private class InboxBatchSub implements IBatchCall<SubRequest, SubReply> {
+            private final Queue<CallTask<SubRequest, SubReply>> batchTasks = new ArrayDeque<>();
+            private BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder();
 
             @Override
-            public void add(CallTask<AddSubRequest, AddSubReply> task) {
+            public void add(CallTask<SubRequest, SubReply> task) {
                 batchTasks.add(task);
-                AddSubRequest request = task.call;
+                SubRequest request = task.call;
                 reqBuilder.putTopicFilters(
-                    scopedTopicFilter(request.getClientInfo().getTenantId(), request.getInboxId(),
+                    scopedTopicFilter(request.getTenantId(), request.getInboxId(),
                         request.getTopicFilter()).toStringUtf8(), request.getSubQoS());
             }
 
             @Override
             public void reset() {
-                reqBuilder = BatchAddSubRequest.newBuilder();
+                reqBuilder = BatchSubRequest.newBuilder();
             }
 
             @Override
@@ -85,14 +84,14 @@ public class InboxSubScheduler extends InboxMutateScheduler<AddSubRequest, AddSu
                             .setKvRangeId(range.id)
                             .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setAddTopicFilter(reqBuilder.build())
+                                .setBatchSub(reqBuilder.build())
                                 .build().toByteString())
                             .build())
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
                                 return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                    .getAddTopicFilter();
+                                    .getBatchSub();
                             } catch (InvalidProtocolBufferException e) {
                                 log.error("Unable to parse rw co-proc output", e);
                                 throw new RuntimeException(e);
@@ -102,21 +101,21 @@ public class InboxSubScheduler extends InboxMutateScheduler<AddSubRequest, AddSu
                     })
                     .handle((v, e) -> {
                         if (e != null) {
-                            CallTask<AddSubRequest, AddSubReply> task;
+                            CallTask<SubRequest, SubReply> task;
                             while ((task = batchTasks.poll()) != null) {
-                                task.callResult.complete(AddSubReply.newBuilder()
+                                task.callResult.complete(SubReply.newBuilder()
                                     .setReqId(task.call.getReqId())
-                                    .setResult(AddSubReply.Result.ERROR)
+                                    .setResult(SubReply.Result.ERROR)
                                     .build());
                             }
                         } else {
-                            CallTask<AddSubRequest, AddSubReply> task;
+                            CallTask<SubRequest, SubReply> task;
                             while ((task = batchTasks.poll()) != null) {
-                                task.callResult.complete(AddSubReply.newBuilder()
+                                task.callResult.complete(SubReply.newBuilder()
                                     .setReqId(task.call.getReqId())
-                                    .setResult(AddSubReply.Result.forNumber(v
+                                    .setResult(SubReply.Result.forNumber(v
                                         .getResultsMap()
-                                        .get(scopedTopicFilter(task.call.getClientInfo().getTenantId(),
+                                        .get(scopedTopicFilter(task.call.getTenantId(),
                                             task.call.getInboxId(), task.call.getTopicFilter()).toStringUtf8())
                                         .getNumber()))
                                     .build());
@@ -141,7 +140,7 @@ public class InboxSubScheduler extends InboxMutateScheduler<AddSubRequest, AddSu
         }
 
         @Override
-        protected IBatchCall<AddSubRequest, AddSubReply> newBatch() {
+        protected IBatchCall<SubRequest, SubReply> newBatch() {
             return new InboxBatchSub();
         }
     }

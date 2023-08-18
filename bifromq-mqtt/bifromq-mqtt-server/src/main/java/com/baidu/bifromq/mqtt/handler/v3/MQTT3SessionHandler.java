@@ -848,7 +848,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             return CompletableFuture.completedFuture(true);
         }
         return cancelOnInactive(
-            sessionCtx.retainClient.match(reqId, clientInfo.getTenantId(), topicFilter, retainMatchLimit, clientInfo))
+            sessionCtx.retainClient.match(reqId, clientInfo.getTenantId(), topicFilter, retainMatchLimit))
             .exceptionally(e -> {
                 log.error("Match failed", e);
                 return MatchReply.newBuilder()
@@ -1399,7 +1399,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         return cancelOnInactive(
             sessionCtx.retainClient.retain(
                     reqId,
-                    clientInfo.getTenantId(),
                     topic,
                     qos,
                     payload.duplicate().nioBuffer(),
@@ -1456,7 +1455,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
 
         return sessionCtx.retainClient.retain(
                 reqId,
-                clientInfo.getTenantId(),
                 topic,
                 willMessage.qos,
                 payload.duplicate().nioBuffer(),

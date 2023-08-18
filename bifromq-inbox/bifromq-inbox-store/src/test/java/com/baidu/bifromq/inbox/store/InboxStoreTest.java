@@ -38,30 +38,30 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.storage.proto.BatchAddSubReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchAddSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
+import com.baidu.bifromq.inbox.storage.proto.CommitParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
-import com.baidu.bifromq.inbox.storage.proto.CreateReply;
-import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
-import com.baidu.bifromq.inbox.storage.proto.HasReply;
-import com.baidu.bifromq.inbox.storage.proto.HasRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommit;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
-import com.baidu.bifromq.inbox.storage.proto.TouchReply;
-import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.inbox.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -237,13 +237,13 @@ abstract class InboxStoreTest {
         return osName != null && osName.startsWith("Mac");
     }
 
-    protected CreateReply requestCreate(String tenantId, String inboxId,
-                                        int limit, int expireSeconds, boolean dropOldest) {
+    protected BatchCreateReply requestCreate(String tenantId, String inboxId,
+                                             int limit, int expireSeconds, boolean dropOldest) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            CreateRequest request = CreateRequest.newBuilder()
+            BatchCreateRequest request = BatchCreateRequest.newBuilder()
                 .putInboxes(scopedInboxId.toStringUtf8(), CreateParams.newBuilder()
                     .setExpireSeconds(expireSeconds)
                     .setLimit(limit)
@@ -260,25 +260,25 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasCreateInbox());
+            assertTrue(output.hasBatchCreate());
             assertEquals(output.getReqId(), reqId);
-            return output.getCreateInbox();
+            return output.getBatchCreate();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected BatchAddSubReply.Result requestSub(String tenantId, String inboxId, String topicFilter, QoS subQoS) {
+    protected BatchSubReply.Result requestSub(String tenantId, String inboxId, String topicFilter, QoS subQoS) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             String scopedTopicFilter = scopedTopicFilter(tenantId, inboxId, topicFilter).toStringUtf8();
-            BatchAddSubRequest request = BatchAddSubRequest.newBuilder()
+            BatchSubRequest request = BatchSubRequest.newBuilder()
                 .setReqId(reqId)
                 .putTopicFilters(scopedTopicFilter, subQoS)
                 .build();
-            InboxServiceRWCoProcInput input = MessageUtil.buildBatchAddSubRequest(reqId, request);
+            InboxServiceRWCoProcInput input = MessageUtil.buildBatchSubRequest(reqId, request);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)
                 .setVer(s.ver)
@@ -288,25 +288,25 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasAddTopicFilter());
+            assertTrue(output.hasBatchSub());
             assertEquals(output.getReqId(), reqId);
-            return output.getAddTopicFilter().getResultsMap().get(scopedTopicFilter);
+            return output.getBatchSub().getResultsMap().get(scopedTopicFilter);
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected BatchRemoveSubReply.Result requestUnsub(String tenantId, String inboxId, String topicFilter) {
+    protected BatchUnsubReply.Result requestUnsub(String tenantId, String inboxId, String topicFilter) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
             ByteString scopedTopicFilter = scopedTopicFilter(tenantId, inboxId, topicFilter);
-            BatchRemoveSubRequest request = BatchRemoveSubRequest.newBuilder()
+            BatchUnsubRequest request = BatchUnsubRequest.newBuilder()
                 .setReqId(reqId)
                 .addTopicFilters(scopedTopicFilter)
                 .build();
-            InboxServiceRWCoProcInput input = MessageUtil.buildBatchRemoveSubRequest(reqId, request);
+            InboxServiceRWCoProcInput input = MessageUtil.buildBatchUnsubRequest(reqId, request);
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)
                 .setVer(s.ver)
@@ -316,21 +316,21 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasRemoveTopicFilter());
+            assertTrue(output.hasBatchUnsub());
             assertEquals(output.getReqId(), reqId);
-            return output.getRemoveTopicFilter().getResultsMap().get(scopedTopicFilter.toStringUtf8());
+            return output.getBatchUnsub().getResultsMap().get(scopedTopicFilter.toStringUtf8());
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
 
-    protected HasReply requestHas(String tenantId, String inboxId) {
+    protected BatchCheckReply requestHas(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            HasRequest request = HasRequest.newBuilder().addScopedInboxId(scopedInboxId).build();
+            BatchCheckRequest request = BatchCheckRequest.newBuilder().addScopedInboxId(scopedInboxId).build();
             InboxServiceROCoProcInput input = MessageUtil.buildHasRequest(reqId, request);
             KVRangeROReply reply = storeClient.linearizedQuery(s.leader, KVRangeRORequest.newBuilder()
                 .setReqId(reqId)
@@ -341,20 +341,20 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasHas());
+            assertTrue(output.hasBatchCheck());
             assertEquals(output.getReqId(), reqId);
-            return output.getHas();
+            return output.getBatchCheck();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected TouchReply requestDelete(String tenantId, String inboxId) {
+    protected BatchTouchReply requestDelete(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            TouchRequest request = TouchRequest.newBuilder()
+            BatchTouchRequest request = BatchTouchRequest.newBuilder()
                 .putScopedInboxId(scopedInboxId.toStringUtf8(), false)
                 .build();
             InboxServiceRWCoProcInput input = MessageUtil.buildTouchRequest(reqId, request);
@@ -367,15 +367,15 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasTouch());
+            assertTrue(output.hasBatchTouch());
             assertEquals(output.getReqId(), reqId);
-            return output.getTouch();
+            return output.getBatchTouch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected InboxInsertReply requestInsert(SubInfo subInfo, String topic,
+    protected BatchInsertReply requestInsert(SubInfo subInfo, String topic,
                                              TopicMessagePack.PublisherPack... messages) {
         return requestInsert(subInfo.getTenantId(), subInfo.getInboxId(), MessagePack.newBuilder()
             .setSubInfo(subInfo)
@@ -386,9 +386,9 @@ abstract class InboxStoreTest {
             .build());
     }
 
-    protected InboxInsertReply requestInsert(String tenantId, String inboxId, MessagePack... subMsgPacks) {
+    protected BatchInsertReply requestInsert(String tenantId, String inboxId, MessagePack... subMsgPacks) {
         try {
-            InboxInsertRequest request = InboxInsertRequest.newBuilder()
+            BatchInsertRequest request = BatchInsertRequest.newBuilder()
                 .addAllSubMsgPack(Arrays.stream(subMsgPacks).collect(Collectors.toList()))
                 .build();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
@@ -404,15 +404,15 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasInsert());
+            assertTrue(output.hasBatchInsert());
             assertEquals(output.getReqId(), reqId);
-            return output.getInsert();
+            return output.getBatchInsert();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected InboxFetchReply requestFetchQoS0(String tenantId,
+    protected BatchFetchReply requestFetchQoS0(String tenantId,
                                                String inboxId,
                                                int maxFetch,
                                                Long startAfterSeq) {
@@ -420,7 +420,7 @@ abstract class InboxStoreTest {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            InboxFetchRequest.Builder request = InboxFetchRequest.newBuilder()
+            BatchFetchRequest.Builder request = BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxId.toStringUtf8(), FetchParams.newBuilder()
                     .setMaxFetch(maxFetch)
                     .build());
@@ -440,25 +440,25 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasFetch());
+            assertTrue(output.hasBatchFetch());
             assertEquals(output.getReqId(), reqId);
-            return output.getFetch();
+            return output.getBatchFetch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected InboxFetchReply requestFetchQoS0(String tenantId, String inboxId, int maxFetch) {
+    protected BatchFetchReply requestFetchQoS0(String tenantId, String inboxId, int maxFetch) {
         return requestFetchQoS0(tenantId, inboxId, maxFetch, null);
     }
 
-    protected InboxFetchReply requestFetchQoS1(String tenantId, String inboxId, int maxFetch,
+    protected BatchFetchReply requestFetchQoS1(String tenantId, String inboxId, int maxFetch,
                                                Long startAfterSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            InboxFetchRequest.Builder request = InboxFetchRequest.newBuilder()
+            BatchFetchRequest.Builder request = BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxId.toStringUtf8(), FetchParams.newBuilder()
                     .setMaxFetch(maxFetch)
                     .build());
@@ -478,25 +478,25 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasFetch());
+            assertTrue(output.hasBatchFetch());
             assertEquals(output.getReqId(), reqId);
-            return output.getFetch();
+            return output.getBatchFetch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected InboxFetchReply requestFetchQoS1(String tenantId, String inboxId, int maxFetch) {
+    protected BatchFetchReply requestFetchQoS1(String tenantId, String inboxId, int maxFetch) {
         return requestFetchQoS1(tenantId, inboxId, maxFetch, null);
     }
 
-    protected InboxFetchReply requestFetchQoS2(String tenantId, String inboxId, int maxFetch,
+    protected BatchFetchReply requestFetchQoS2(String tenantId, String inboxId, int maxFetch,
                                                Long startAfterSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            InboxFetchRequest.Builder request = InboxFetchRequest.newBuilder()
+            BatchFetchRequest.Builder request = BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxId.toStringUtf8(), FetchParams.newBuilder()
                     .setMaxFetch(maxFetch)
                     .build());
@@ -516,20 +516,20 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasFetch());
+            assertTrue(output.hasBatchFetch());
             assertEquals(output.getReqId(), reqId);
-            return output.getFetch();
+            return output.getBatchFetch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected TouchReply requestTouch(String tenantId, String inboxId) {
+    protected BatchTouchReply requestTouch(String tenantId, String inboxId) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            InboxServiceRWCoProcInput input = MessageUtil.buildTouchRequest(reqId, TouchRequest.newBuilder()
+            InboxServiceRWCoProcInput input = MessageUtil.buildTouchRequest(reqId, BatchTouchRequest.newBuilder()
                 .putScopedInboxId(scopedInboxId.toStringUtf8(), true)
                 .build());
             KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -541,22 +541,22 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasTouch());
+            assertTrue(output.hasBatchTouch());
             assertEquals(output.getReqId(), reqId);
-            return output.getTouch();
+            return output.getBatchTouch();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
 
     }
 
-    protected InboxCommitReply requestCommitQoS0(String tenantId, String inboxId, long upToSeq) {
+    protected BatchCommitReply requestCommitQoS0(String tenantId, String inboxId, long upToSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxId.toStringUtf8(), InboxCommit.newBuilder()
+            InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxId.toStringUtf8(), CommitParams.newBuilder()
                     .setQos0UpToSeq(upToSeq).build())
                 .build());
 
@@ -570,23 +570,23 @@ abstract class InboxStoreTest {
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply
                 .getRwCoProcResult());
-            assertTrue(output.hasCommit());
+            assertTrue(output.hasBatchCommit());
             assertEquals(output.getReqId(), reqId);
-            assertTrue(output.getCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
-            return output.getCommit();
+            assertTrue(output.getBatchCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
+            return output.getBatchCommit();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
 
-    protected InboxCommitReply requestCommitQoS1(String tenantId, String inboxId, long upToSeq) {
+    protected BatchCommitReply requestCommitQoS1(String tenantId, String inboxId, long upToSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxId.toStringUtf8(), InboxCommit.newBuilder()
+            InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxId.toStringUtf8(), CommitParams.newBuilder()
                     .setQos1UpToSeq(upToSeq).build())
                 .build());
 
@@ -599,22 +599,22 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasCommit());
+            assertTrue(output.hasBatchCommit());
             assertEquals(output.getReqId(), reqId);
-            assertTrue(output.getCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
-            return output.getCommit();
+            assertTrue(output.getBatchCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
+            return output.getBatchCommit();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected InboxCommitReply requestCommitQoS2(String tenantId, String inboxId, long upToSeq) {
+    protected BatchCommitReply requestCommitQoS2(String tenantId, String inboxId, long upToSeq) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
             KVRangeSetting s = storeClient.findByKey(scopedInboxId).get();
-            InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, InboxCommitRequest.newBuilder()
-                .putInboxCommit(scopedInboxId.toStringUtf8(), InboxCommit.newBuilder()
+            InboxServiceRWCoProcInput input = MessageUtil.buildBatchCommitRequest(reqId, BatchCommitRequest.newBuilder()
+                .putInboxCommit(scopedInboxId.toStringUtf8(), CommitParams.newBuilder()
                     .setQos2UpToSeq(upToSeq)
                     .build())
                 .build());
@@ -627,10 +627,10 @@ abstract class InboxStoreTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasCommit());
+            assertTrue(output.hasBatchCommit());
             assertEquals(output.getReqId(), reqId);
-            assertTrue(output.getCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
-            return output.getCommit();
+            assertTrue(output.getBatchCommit().getResultMap().get(scopedInboxId.toStringUtf8()));
+            return output.getBatchCommit();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }

@@ -30,7 +30,7 @@ import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.SubResult;
+import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -76,8 +76,8 @@ public abstract class InboxServiceTest {
     @BeforeClass(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        when(distClient.sub(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(SubResult.OK));
+        when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -92,7 +92,6 @@ public abstract class InboxServiceTest {
         serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         serverCrdtService.start(agentHost);
         inboxClient = IInboxClient.newBuilder().crdtService(clientCrdtService).build();
-
 
         KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();

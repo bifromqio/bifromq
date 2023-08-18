@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.mqtt;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.client.MqttMsg;
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
@@ -211,7 +211,7 @@ public class MQTTLastWillTest {
             .thenReturn(CompletableFuture.completedFuture(true));
 
         doAnswer(invocationOnMock -> {
-            Event event = invocationOnMock.getArgument(0);
+            Event<?> event = invocationOnMock.getArgument(0);
             log.info("event: {}", event.type());
             return null;
         }).when(mqttTest.eventCollector).report(any(Event.class));

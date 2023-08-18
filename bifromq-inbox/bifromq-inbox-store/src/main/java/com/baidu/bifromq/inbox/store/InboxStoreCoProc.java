@@ -45,31 +45,33 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
-import com.baidu.bifromq.inbox.storage.proto.BatchAddSubReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchAddSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
+import com.baidu.bifromq.inbox.storage.proto.CommitParams;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
-import com.baidu.bifromq.inbox.storage.proto.CreateReply;
-import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
-import com.baidu.bifromq.inbox.storage.proto.HasReply;
-import com.baidu.bifromq.inbox.storage.proto.HasRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxComSertReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxComSertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommit;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
@@ -79,8 +81,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
-import com.baidu.bifromq.inbox.storage.proto.TouchReply;
-import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
@@ -140,8 +140,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             InboxServiceROCoProcOutput.Builder outputBuilder = InboxServiceROCoProcOutput.newBuilder()
                 .setReqId(coProcInput.getReqId());
             switch (coProcInput.getInputCase()) {
-                case HAS -> outputBuilder.setHas(hasInbox(coProcInput.getHas(), reader));
-                case FETCH -> outputBuilder.setFetch(fetch(coProcInput.getFetch(), reader));
+                case BATCHCHECK -> outputBuilder.setBatchCheck(batchCheck(coProcInput.getBatchCheck(), reader));
+                case BATCHFETCH -> outputBuilder.setBatchFetch(batchFetch(coProcInput.getBatchFetch(), reader));
                 case COLLECTMETRICS ->
                     outputBuilder.setCollectedMetrics(collect(coProcInput.getCollectMetrics(), reader));
                 case GC -> outputBuilder.setGc(gcScan(coProcInput.getGc(), reader));
@@ -160,16 +160,16 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         InboxServiceRWCoProcOutput.Builder replyBuilder =
             InboxServiceRWCoProcOutput.newBuilder().setReqId(coProcInput.getReqId());
         switch (coProcInput.getTypeCase()) {
-            case CREATEINBOX -> replyBuilder.setCreateInbox(createInbox(coProcInput.getCreateInbox(), reader, writer));
-            case ADDTOPICFILTER -> replyBuilder
-                .setAddTopicFilter(batchSub(coProcInput.getAddTopicFilter(), reader, writer));
-            case REMOVETOPICFILTER -> replyBuilder
-                .setRemoveTopicFilter(batchUnsub(coProcInput.getRemoveTopicFilter(), reader, writer));
-            case INSERT -> replyBuilder.setInsert(batchInsert(coProcInput.getInsert(), reader, writer));
-            case COMMIT -> replyBuilder.setCommit(batchCommit(coProcInput.getCommit(), reader, writer));
+            case BATCHCREATE -> replyBuilder.setBatchCreate(batchCreate(coProcInput.getBatchCreate(), reader, writer));
+            case BATCHTOUCH -> replyBuilder.setBatchTouch(batchTouch(coProcInput.getBatchTouch(), reader, writer));
+            case BATCHSUB -> replyBuilder
+                .setBatchSub(batchSub(coProcInput.getBatchSub(), reader, writer));
+            case BATCHUNSUB -> replyBuilder
+                .setBatchUnsub(batchUnsub(coProcInput.getBatchUnsub(), reader, writer));
+            case BATCHINSERT -> replyBuilder.setBatchInsert(batchInsert(coProcInput.getBatchInsert(), reader, writer));
+            case BATCHCOMMIT -> replyBuilder.setBatchCommit(batchCommit(coProcInput.getBatchCommit(), reader, writer));
             case INSERTANDCOMMIT ->
                 replyBuilder.setInsertAndCommit(batchInsertAndCommit(coProcInput.getInsertAndCommit(), reader, writer));
-            case TOUCH -> replyBuilder.setTouch(touch(coProcInput.getTouch(), reader, writer));
         }
         ByteString output = replyBuilder.build().toByteString();
         return () -> output;
@@ -180,8 +180,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     @SneakyThrows
-    private HasReply hasInbox(HasRequest request, IKVReader reader) {
-        HasReply.Builder replyBuilder = HasReply.newBuilder();
+    private BatchCheckReply batchCheck(BatchCheckRequest request, IKVReader reader) {
+        BatchCheckReply.Builder replyBuilder = BatchCheckReply.newBuilder();
         for (ByteString scopedInboxId : request.getScopedInboxIdList()) {
             Optional<ByteString> value = reader.get(scopedInboxId);
             if (value.isPresent()) {
@@ -193,18 +193,18 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return replyBuilder.build();
     }
 
-    private InboxFetchReply fetch(InboxFetchRequest request, IKVReader reader) {
-        InboxFetchReply.Builder replyBuilder = InboxFetchReply.newBuilder();
+    private BatchFetchReply batchFetch(BatchFetchRequest request, IKVReader reader) {
+        BatchFetchReply.Builder replyBuilder = BatchFetchReply.newBuilder();
         IKVIterator itr = reader.iterator();
         for (String scopedInboxIdUtf8 : request.getInboxFetchMap().keySet()) {
             ByteString scopedInboxId = ByteString.copyFromUtf8(scopedInboxIdUtf8);
             FetchParams inboxFetch = request.getInboxFetchMap().get(scopedInboxIdUtf8);
-            replyBuilder.putResult(scopedInboxIdUtf8, fetch(scopedInboxId, inboxFetch, itr, reader));
+            replyBuilder.putResult(scopedInboxIdUtf8, batchFetch(scopedInboxId, inboxFetch, itr, reader));
         }
         return replyBuilder.build();
     }
 
-    private Fetched fetch(ByteString scopedInboxId, FetchParams request, IKVIterator itr, IKVReader reader) {
+    private Fetched batchFetch(ByteString scopedInboxId, FetchParams request, IKVIterator itr, IKVReader reader) {
         Fetched.Builder replyBuilder = Fetched.newBuilder();
         int fetchCount = request.getMaxFetch();
         try {
@@ -255,8 +255,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     @SneakyThrows
-    private CreateReply createInbox(CreateRequest request, IKVReader reader, IKVWriter writeClient) {
-        CreateReply.Builder replyBuilder = CreateReply.newBuilder();
+    private BatchCreateReply batchCreate(BatchCreateRequest request, IKVReader reader, IKVWriter writeClient) {
+        BatchCreateReply.Builder replyBuilder = BatchCreateReply.newBuilder();
         for (String scopedInboxIdUtf8 : request.getInboxesMap().keySet()) {
             ByteString scopedInboxId = ByteString.copyFromUtf8(scopedInboxIdUtf8);
             CreateParams inboxParams = request.getInboxesMap().get(scopedInboxIdUtf8);
@@ -302,8 +302,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return replyBuilder.build();
     }
 
-    private BatchAddSubReply batchSub(BatchAddSubRequest request, IKVReader reader, IKVWriter writeClient) {
-        BatchAddSubReply.Builder replyFilter = BatchAddSubReply.newBuilder().setReqId(request.getReqId());
+    private BatchSubReply batchSub(BatchSubRequest request, IKVReader reader, IKVWriter writeClient) {
+        BatchSubReply.Builder replyFilter = BatchSubReply.newBuilder().setReqId(request.getReqId());
         Map<ByteString, Map<String, QoS>> subMap = new HashMap<>();
         request.getTopicFiltersMap()
             .forEach((scopedTopicFilterUtf8, subQoS) -> {
@@ -321,14 +321,14 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 if (value.isEmpty()) {
                     topicFilters.forEach((topicFilter, subQoS) ->
                         replyFilter.putResults(scopedTopicFilter(scopedInboxId, topicFilter).toStringUtf8(),
-                            BatchAddSubReply.Result.NO_INBOX));
+                            BatchSubReply.Result.NO_INBOX));
                     return;
                 }
                 InboxMetadata metadata = InboxMetadata.parseFrom(value.get());
                 if (hasExpired(metadata)) {
                     topicFilters.forEach((topicFilter, subQoS) ->
                         replyFilter.putResults(scopedTopicFilter(scopedInboxId, topicFilter).toStringUtf8(),
-                            BatchAddSubReply.Result.NO_INBOX));
+                            BatchSubReply.Result.NO_INBOX));
                 } else {
                     InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
                     int maxTopicFilters = settingProvider
@@ -338,10 +338,10 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                         if (metadataBuilder.getTopicFiltersCount() < maxTopicFilters) {
                             metadataBuilder.putTopicFilters(topicFilter, subQoS);
                             replyFilter.putResults(scopedTopicFilter(scopedInboxId, topicFilter).toStringUtf8(),
-                                BatchAddSubReply.Result.OK);
+                                BatchSubReply.Result.OK);
                         } else {
                             replyFilter.putResults(scopedTopicFilter(scopedInboxId, topicFilter).toStringUtf8(),
-                                BatchAddSubReply.Result.EXCEED_LIMIT);
+                                BatchSubReply.Result.EXCEED_LIMIT);
                         }
                     });
                     metadata = metadataBuilder.setLastFetchTime(clock.millis()).build();
@@ -350,40 +350,40 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             } catch (Throwable e) {
                 topicFilters.forEach((topicFilter, subQoS) -> replyFilter
                     .putResults(scopedTopicFilter(scopedInboxId, topicFilter).toStringUtf8(),
-                        BatchAddSubReply.Result.ERROR));
+                        BatchSubReply.Result.ERROR));
             }
         });
         return replyFilter.build();
     }
 
-    private BatchRemoveSubReply batchUnsub(BatchRemoveSubRequest request, IKVReader reader,
-                                           IKVWriter writeClient) {
-        BatchRemoveSubReply.Builder replyFilter = BatchRemoveSubReply.newBuilder().setReqId(request.getReqId());
+    private BatchUnsubReply batchUnsub(BatchUnsubRequest request, IKVReader reader,
+                                       IKVWriter writeClient) {
+        BatchUnsubReply.Builder replyFilter = BatchUnsubReply.newBuilder().setReqId(request.getReqId());
         request.getTopicFiltersList().forEach(scopedTopicFilter -> {
             ByteString scopedInboxId = parseScopedInboxIdFromScopedTopicFilter(scopedTopicFilter);
             String topicFilter = parseTopicFilterFromScopedTopicFilter(scopedTopicFilter);
             Optional<ByteString> value = reader.get(scopedInboxId);
             try {
                 if (value.isEmpty()) {
-                    replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchRemoveSubReply.Result.NO_INBOX);
+                    replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchUnsubReply.Result.NO_INBOX);
                     return;
                 }
                 InboxMetadata metadata = InboxMetadata.parseFrom(value.get());
                 if (hasExpired(metadata)) {
-                    replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchRemoveSubReply.Result.NO_INBOX);
+                    replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchUnsubReply.Result.NO_INBOX);
                 } else {
                     InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
                     if (metadataBuilder.containsTopicFilters(topicFilter)) {
                         metadataBuilder.removeTopicFilters(topicFilter);
-                        replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchRemoveSubReply.Result.OK);
+                        replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchUnsubReply.Result.OK);
                     } else {
-                        replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchRemoveSubReply.Result.NO_SUB);
+                        replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchUnsubReply.Result.NO_SUB);
                     }
                     metadata = metadataBuilder.setLastFetchTime(clock.millis()).build();
                     writeClient.put(scopedInboxId, metadata.toByteString());
                 }
             } catch (Throwable e) {
-                replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchRemoveSubReply.Result.ERROR);
+                replyFilter.putResults(scopedTopicFilter.toStringUtf8(), BatchUnsubReply.Result.ERROR);
             }
         });
         return replyFilter.build();
@@ -474,10 +474,10 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     private InboxComSertReply batchInsertAndCommit(InboxComSertRequest request, IKVReader reader, IKVWriter writer) {
         IKVIterator itr = reader.iterator();
-        Map<SubInfo, InboxInsertResult.Result> results = new LinkedHashMap<>();
+        Map<SubInfo, InsertResult.Result> results = new LinkedHashMap<>();
         Map<ByteString, List<MessagePack>> subMsgPacksByInbox = new HashMap<>();
         List<MessagePack> subMsgPackList = request.getInsertList();
-        Map<ByteString, InboxCommit> commitInboxs = new HashMap<>();
+        Map<ByteString, CommitParams> commitInboxs = new HashMap<>();
         request.getCommitMap().forEach((k, v) -> commitInboxs.put(ByteString.copyFromUtf8(k), v));
 
 
@@ -490,10 +490,10 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         }
         for (ByteString scopedInboxId : subMsgPacksByInbox.keySet()) {
             List<MessagePack> subMsgPacks = subMsgPacksByInbox.get(scopedInboxId);
-            InboxCommit inboxCommit = commitInboxs.remove(scopedInboxId);
+            CommitParams inboxCommit = commitInboxs.remove(scopedInboxId);
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
             if (metadataBytes.isEmpty()) {
-                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.NO_INBOX));
                 if (inboxCommit != null) {
                     replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), false);
                 }
@@ -502,7 +502,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             try {
                 InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
                 if (hasExpired(metadata)) {
-                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.NO_INBOX));
                     if (inboxCommit != null) {
                         replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), false);
                     }
@@ -515,21 +515,21 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     replyBuilder.putCommitResults(scopedInboxId.toStringUtf8(), true);
                 }
                 writer.put(scopedInboxId, metadata.toByteString());
-                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.OK));
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.OK));
             } catch (Throwable e) {
                 log.error("Error inserting messages to inbox {}", scopedInboxId, e);
-                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.NO_INBOX));
             }
         }
-        for (Map.Entry<SubInfo, InboxInsertResult.Result> entry : results.entrySet()) {
-            replyBuilder.addInsertResults(InboxInsertResult.newBuilder()
+        for (Map.Entry<SubInfo, InsertResult.Result> entry : results.entrySet()) {
+            replyBuilder.addInsertResults(InsertResult.newBuilder()
                 .setSubInfo(entry.getKey())
                 .setResult(entry.getValue())
                 .build());
         }
         // handle commit only inbox
         for (ByteString scopedInboxId : commitInboxs.keySet()) {
-            InboxCommit inboxCommit = commitInboxs.get(scopedInboxId);
+            CommitParams inboxCommit = commitInboxs.get(scopedInboxId);
             assert inboxCommit.hasQos0UpToSeq() || inboxCommit.hasQos1UpToSeq() || inboxCommit.hasQos2UpToSeq();
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
             if (metadataBytes.isEmpty()) {
@@ -552,9 +552,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return replyBuilder.build();
     }
 
-    private InboxInsertReply batchInsert(InboxInsertRequest request, IKVReader reader, IKVWriter writer) {
+    private BatchInsertReply batchInsert(BatchInsertRequest request, IKVReader reader, IKVWriter writer) {
         IKVIterator itr = reader.iterator();
-        Map<SubInfo, InboxInsertResult.Result> results = new LinkedHashMap<>();
+        Map<SubInfo, InsertResult.Result> results = new LinkedHashMap<>();
         Map<ByteString, List<MessagePack>> subMsgPacksByInbox = new HashMap<>();
         for (MessagePack subMsgPack : request.getSubMsgPackList()) {
             SubInfo subInfo = subMsgPack.getSubInfo();
@@ -566,13 +566,13 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             List<MessagePack> subMsgPacks = subMsgPacksByInbox.get(scopedInboxId);
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
             if (metadataBytes.isEmpty()) {
-                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.NO_INBOX));
                 continue;
             }
             try {
                 InboxMetadata metadata = InboxMetadata.parseFrom(metadataBytes.get());
                 if (hasExpired(metadata)) {
-                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.NO_INBOX));
+                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.NO_INBOX));
                     continue;
                 }
                 Iterator<MessagePack> packsItr = subMsgPacks.iterator();
@@ -580,24 +580,24 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     MessagePack msgPack = packsItr.next();
                     // topic filter not found
                     if (!metadata.containsTopicFilters(msgPack.getSubInfo().getTopicFilter())) {
-                        results.put(msgPack.getSubInfo(), InboxInsertResult.Result.NO_INBOX);
+                        results.put(msgPack.getSubInfo(), InsertResult.Result.NO_INBOX);
                         packsItr.remove();
                     }
                 }
                 if (!subMsgPacks.isEmpty()) {
                     metadata = insertInbox(scopedInboxId, subMsgPacks, metadata, itr, reader, writer);
                     writer.put(scopedInboxId, metadata.toByteString());
-                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.OK));
+                    subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.OK));
                 }
             } catch (Throwable e) {
                 log.error("Error inserting messages to inbox {}", scopedInboxId, e);
-                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InboxInsertResult.Result.ERROR));
+                subMsgPacks.forEach(pack -> results.put(pack.getSubInfo(), InsertResult.Result.ERROR));
             }
         }
 
-        InboxInsertReply.Builder replyBuilder = InboxInsertReply.newBuilder();
-        for (Map.Entry<SubInfo, InboxInsertResult.Result> entry : results.entrySet()) {
-            replyBuilder.addResults(InboxInsertResult.newBuilder()
+        BatchInsertReply.Builder replyBuilder = BatchInsertReply.newBuilder();
+        for (Map.Entry<SubInfo, InsertResult.Result> entry : results.entrySet()) {
+            replyBuilder.addResults(InsertResult.newBuilder()
                 .setSubInfo(entry.getKey())
                 .setResult(entry.getValue())
                 .build());
@@ -858,8 +858,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     @SneakyThrows
-    private TouchReply touch(TouchRequest request, IKVReader reader, IKVWriter writer) {
-        TouchReply.Builder replyBuilder = TouchReply.newBuilder();
+    private BatchTouchReply batchTouch(BatchTouchRequest request, IKVReader reader, IKVWriter writer) {
+        BatchTouchReply.Builder replyBuilder = BatchTouchReply.newBuilder();
         for (String scopedInboxIdUtf8 : request.getScopedInboxIdMap().keySet()) {
             ByteString scopedInboxId = ByteString.copyFromUtf8(scopedInboxIdUtf8);
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
@@ -879,12 +879,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return replyBuilder.build();
     }
 
-    private InboxCommitReply batchCommit(InboxCommitRequest request, IKVReader reader, IKVWriter writer) {
-        InboxCommitReply.Builder replyBuilder = InboxCommitReply.newBuilder();
+    private BatchCommitReply batchCommit(BatchCommitRequest request, IKVReader reader, IKVWriter writer) {
+        BatchCommitReply.Builder replyBuilder = BatchCommitReply.newBuilder();
         IKVIterator itr = reader.iterator();
         for (String scopedInboxIdUtf8 : request.getInboxCommitMap().keySet()) {
             ByteString scopedInboxId = ByteString.copyFromUtf8(scopedInboxIdUtf8);
-            InboxCommit inboxCommit = request.getInboxCommitMap().get(scopedInboxIdUtf8);
+            CommitParams inboxCommit = request.getInboxCommitMap().get(scopedInboxIdUtf8);
             assert inboxCommit.hasQos0UpToSeq() || inboxCommit.hasQos1UpToSeq() || inboxCommit.hasQos2UpToSeq();
             Optional<ByteString> metadataBytes = reader.get(scopedInboxId);
             if (metadataBytes.isEmpty()) {
@@ -908,7 +908,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     private InboxMetadata commitInbox(ByteString scopedInboxId,
-                                      InboxCommit inboxCommit,
+                                      CommitParams inboxCommit,
                                       InboxMetadata metadata,
                                       IKVIterator itr,
                                       IKVWriter writer) throws InvalidProtocolBufferException {

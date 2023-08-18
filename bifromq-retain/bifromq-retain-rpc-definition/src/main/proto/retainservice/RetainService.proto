@@ -15,10 +15,9 @@ service RetainService {
 
 message RetainRequest {
   uint64 reqId = 1; // message id
-  string tenantId = 2;
-  string topic = 3;
-  commontype.Message message = 4;
-  commontype.ClientInfo publisher = 5;
+  string topic = 2;
+  commontype.Message message = 3;
+  commontype.ClientInfo publisher = 4;
 }
 
 message RetainReply {
@@ -36,7 +35,6 @@ message MatchRequest {
   string tenantId = 2;
   string topicFilter = 3;
   uint32 limit = 4;
-  commontype.ClientInfo subscriber = 5;
 }
 
 message MatchReply {

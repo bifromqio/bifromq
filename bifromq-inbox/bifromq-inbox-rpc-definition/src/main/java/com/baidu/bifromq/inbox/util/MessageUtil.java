@@ -13,18 +13,18 @@
 
 package com.baidu.bifromq.inbox.util;
 
-import com.baidu.bifromq.inbox.storage.proto.BatchAddSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
-import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
-import com.baidu.bifromq.inbox.storage.proto.HasRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxCommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.google.protobuf.ByteString;
 
 public class MessageUtil {
@@ -48,60 +48,60 @@ public class MessageUtil {
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildCreateRequest(long reqId, CreateRequest request) {
+    public static InboxServiceRWCoProcInput buildCreateRequest(long reqId, BatchCreateRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setCreateInbox(request)
+            .setBatchCreate(request)
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchAddSubRequest(long reqId, BatchAddSubRequest request) {
+    public static InboxServiceRWCoProcInput buildBatchSubRequest(long reqId, BatchSubRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setAddTopicFilter(request)
+            .setBatchSub(request)
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchRemoveSubRequest(long reqId, BatchRemoveSubRequest request) {
+    public static InboxServiceRWCoProcInput buildBatchUnsubRequest(long reqId, BatchUnsubRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setRemoveTopicFilter(request)
+            .setBatchUnsub(request)
             .build();
     }
 
 
-    public static InboxServiceROCoProcInput buildHasRequest(long reqId, HasRequest request) {
+    public static InboxServiceROCoProcInput buildHasRequest(long reqId, BatchCheckRequest request) {
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setHas(request)
+            .setBatchCheck(request)
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchInboxInsertRequest(long reqId, InboxInsertRequest request) {
+    public static InboxServiceRWCoProcInput buildBatchInboxInsertRequest(long reqId, BatchInsertRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setInsert(request)
+            .setBatchInsert(request)
             .build();
     }
 
-    public static InboxServiceROCoProcInput buildInboxFetchRequest(long reqId, InboxFetchRequest request) {
+    public static InboxServiceROCoProcInput buildInboxFetchRequest(long reqId, BatchFetchRequest request) {
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setFetch(request)
+            .setBatchFetch(request)
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildTouchRequest(long reqId, TouchRequest request) {
+    public static InboxServiceRWCoProcInput buildTouchRequest(long reqId, BatchTouchRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setTouch(request)
+            .setBatchTouch(request)
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchCommitRequest(long reqId, InboxCommitRequest request) {
+    public static InboxServiceRWCoProcInput buildBatchCommitRequest(long reqId, BatchCommitRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setCommit(request)
+            .setBatchCommit(request)
             .build();
     }
 }

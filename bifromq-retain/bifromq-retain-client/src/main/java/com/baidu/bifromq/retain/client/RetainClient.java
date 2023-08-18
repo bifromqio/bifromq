@@ -66,28 +66,24 @@ final class RetainClient implements IRetainClient {
     public CompletableFuture<MatchReply> match(long reqId,
                                                String tenantId,
                                                String topicFilter,
-                                               int limit,
-                                               ClientInfo subscriber) {
+                                               int limit) {
         log.trace("Handling match request: reqId={}, topicFilter={}", reqId, topicFilter);
         return rpcClient.invoke(tenantId, null, MatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setTopicFilter(topicFilter)
             .setLimit(limit)
-            .setSubscriber(subscriber)
             .build(), RetainServiceGrpc.getMatchMethod());
     }
 
     @Override
-    public CompletableFuture<RetainReply> retain(long reqId, String tenantId,
-                                                 String topic, QoS qos, ByteBuffer payload,
+    public CompletableFuture<RetainReply> retain(long reqId, String topic, QoS qos, ByteBuffer payload,
                                                  int expirySeconds, ClientInfo publisher) {
         long now = System.currentTimeMillis();
         long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE : now +
             TimeUnit.MILLISECONDS.convert(expirySeconds, TimeUnit.SECONDS);
-        return rpcClient.invoke(tenantId, null, RetainRequest.newBuilder()
+        return rpcClient.invoke(publisher.getTenantId(), null, RetainRequest.newBuilder()
             .setReqId(reqId)
-            .setTenantId(tenantId)
             .setTopic(topic)
             .setMessage(Message.newBuilder()
                 .setMessageId(reqId)

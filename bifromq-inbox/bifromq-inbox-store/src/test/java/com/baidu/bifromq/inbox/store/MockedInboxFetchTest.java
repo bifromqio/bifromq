@@ -25,10 +25,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
@@ -82,7 +82,7 @@ public class MockedInboxFetchTest {
     @Test
     public void testFetchQoS0WithNoInbox() {
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setFetch(InboxFetchRequest.newBuilder()
+            .setBatchFetch(BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
                     .setMaxFetch(100)
                     .setQos0StartAfter(0L)
@@ -97,7 +97,7 @@ public class MockedInboxFetchTest {
         ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            InboxFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getFetch();
+            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
             Assert.assertEquals(fetchReply.getResultMap().get(scopedInboxIdUtf8).getResult(), Fetched.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
@@ -107,7 +107,7 @@ public class MockedInboxFetchTest {
     @Test
     public void testFetchExpiredInbox() {
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setFetch(InboxFetchRequest.newBuilder()
+            .setBatchFetch(BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
                     .setMaxFetch(100)
                     .setQos0StartAfter(0L)
@@ -126,7 +126,7 @@ public class MockedInboxFetchTest {
         ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            InboxFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getFetch();
+            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
             Assert.assertEquals(fetchReply.getResultMap().get(scopedInboxIdUtf8).getResult(), Fetched.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
@@ -136,7 +136,7 @@ public class MockedInboxFetchTest {
     @Test
     public void testFetchQoS0FromOneEntry() {
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setFetch(InboxFetchRequest.newBuilder()
+            .setBatchFetch(BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
                     .setMaxFetch(1)
                     .build())
@@ -163,7 +163,7 @@ public class MockedInboxFetchTest {
         ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            InboxFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getFetch();
+            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos0MsgCount(), 1);
@@ -176,7 +176,7 @@ public class MockedInboxFetchTest {
     @Test
     public void testFetchQoS0FromMultipleEntries() {
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setFetch(InboxFetchRequest.newBuilder()
+            .setBatchFetch(BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
                     .setMaxFetch(3)
                     .build())
@@ -212,7 +212,7 @@ public class MockedInboxFetchTest {
         ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            InboxFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getFetch();
+            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos0MsgCount(), 3);
@@ -224,7 +224,7 @@ public class MockedInboxFetchTest {
     @Test
     public void testFetchQoS0UtilEntryInvalid() {
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setFetch(InboxFetchRequest.newBuilder()
+            .setBatchFetch(BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
                     .setMaxFetch(100)
                     .build())
@@ -261,7 +261,7 @@ public class MockedInboxFetchTest {
         ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            InboxFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getFetch();
+            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos0MsgCount(), 3);
@@ -273,7 +273,7 @@ public class MockedInboxFetchTest {
     @Test
     public void testFetchQoS1FromOneEntry() {
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setFetch(InboxFetchRequest.newBuilder()
+            .setBatchFetch(BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
                     .setMaxFetch(1)
                     .build())
@@ -301,7 +301,7 @@ public class MockedInboxFetchTest {
         ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            InboxFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getFetch();
+            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos1MsgCount(), 1);
@@ -314,7 +314,7 @@ public class MockedInboxFetchTest {
     @Test
     public void testFetchQoS1FromMultipleEntries() {
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setFetch(InboxFetchRequest.newBuilder()
+            .setBatchFetch(BatchFetchRequest.newBuilder()
                 .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
                     .setMaxFetch(3)
                     .build())
@@ -347,7 +347,7 @@ public class MockedInboxFetchTest {
         ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            InboxFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getFetch();
+            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos1MsgCount(), 3);
@@ -357,5 +357,4 @@ public class MockedInboxFetchTest {
             fail();
         }
     }
-
 }

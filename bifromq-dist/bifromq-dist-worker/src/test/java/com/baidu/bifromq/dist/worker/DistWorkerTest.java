@@ -21,8 +21,6 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -46,12 +44,12 @@ import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
-import com.baidu.bifromq.dist.rpc.proto.BatchDist;
+import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchSubReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchSubRequest;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnsubReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnsubRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
@@ -61,7 +59,6 @@ import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -83,7 +80,6 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -269,15 +265,15 @@ public abstract class DistWorkerTest {
         closeable.close();
     }
 
-    protected BatchSubReply.Result sub(String tenantId, String topicFilter, QoS subQoS,
-                                       int subBroker, String inboxId, String delivererKey) {
+    protected BatchMatchReply.Result sub(String tenantId, String topicFilter, QoS subQoS,
+                                         int subBroker, String inboxId, String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
             KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
             String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
             DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
-                .setBatchSub(BatchSubRequest.newBuilder()
+                .setBatchMatch(BatchMatchRequest.newBuilder()
                     .setReqId(reqId)
                     .putScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter), subQoS)
                     .build())
@@ -290,23 +286,24 @@ public abstract class DistWorkerTest {
                 .build()).join();
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
-            BatchSubReply batchSubReply = DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchSub();
-            assertEquals(batchSubReply.getReqId(), reqId);
-            return batchSubReply.getResultsMap().get(scopedTopicFilter);
+            BatchMatchReply batchMatchReply =
+                DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchMatch();
+            assertEquals(batchMatchReply.getReqId(), reqId);
+            return batchMatchReply.getResultsMap().get(scopedTopicFilter);
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
     }
 
-    protected BatchUnsubReply.Result unsub(String tenantId, String topicFilter, int subBroker, String inboxId,
-                                           String delivererKey) {
+    protected BatchUnmatchReply.Result unsub(String tenantId, String topicFilter, int subBroker, String inboxId,
+                                             String delivererKey) {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
             KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
             String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
             DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
-                .setBatchUnsub(BatchUnsubRequest.newBuilder()
+                .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
                     .setReqId(reqId)
                     .addScopedTopicFilter(scopedTopicFilter)
                     .build()).build();
@@ -318,10 +315,10 @@ public abstract class DistWorkerTest {
                 .build()).join();
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
-            BatchUnsubReply batchUnsubReply =
-                DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchUnsub();
-            assertEquals(batchUnsubReply.getReqId(), reqId);
-            return batchUnsubReply.getResultsMap().get(scopedTopicFilter);
+            BatchUnmatchReply batchUnmatchReply =
+                DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchUnmatch();
+            assertEquals(batchUnmatchReply.getReqId(), reqId);
+            return batchUnmatchReply.getResultsMap().get(scopedTopicFilter);
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }
@@ -331,7 +328,7 @@ public abstract class DistWorkerTest {
         try {
             long reqId = ThreadLocalRandom.current().nextInt();
             KVRangeSetting s = storeClient.findByKey(EntityUtil.matchRecordKeyPrefix(tenantId)).get();
-            BatchDist request = BatchDist.newBuilder()
+            BatchDistRequest request = BatchDistRequest.newBuilder()
                 .setReqId(reqId)
                 .addDistPack(DistPack.newBuilder()
                     .setTenantId(tenantId)
@@ -349,9 +346,9 @@ public abstract class DistWorkerTest {
             assertEquals(reply.getReqId(), reqId);
             assertEquals(reply.getCode(), ReplyCode.Ok);
             DistServiceROCoProcOutput output = DistServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasDistReply());
-            assertEquals(output.getDistReply().getReqId(), reqId);
-            return output.getDistReply();
+            assertTrue(output.hasBatchDist());
+            assertEquals(output.getBatchDist().getReqId(), reqId);
+            return output.getBatchDist();
         } catch (InvalidProtocolBufferException e) {
             throw new AssertionError(e);
         }

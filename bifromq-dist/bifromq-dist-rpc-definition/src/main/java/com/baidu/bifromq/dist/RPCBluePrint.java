@@ -19,8 +19,8 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
         .serviceDescriptor(DistServiceGrpc.getServiceDescriptor())
-        .methodSemantic(DistServiceGrpc.getSubMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(DistServiceGrpc.getUnsubMethod(), BluePrint.WRUnaryMethod.getInstance())
+        .methodSemantic(DistServiceGrpc.getMatchMethod(), BluePrint.WRUnaryMethod.getInstance())
+        .methodSemantic(DistServiceGrpc.getUnmatchMethod(), BluePrint.WRUnaryMethod.getInstance())
         .methodSemantic(DistServiceGrpc.getDistMethod(), BluePrint.WRPipelineUnaryMethod.getInstance())
         .build();
 }

@@ -29,17 +29,17 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.CreateParams;
-import com.baidu.bifromq.inbox.storage.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
-import com.baidu.bifromq.inbox.storage.proto.HasReply;
-import com.baidu.bifromq.inbox.storage.proto.HasRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.TouchRequest;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -101,14 +101,14 @@ public class MockedInboxAdminTest {
 
     @Test
     public void testCreateNewInbox() {
-        CreateRequest createRequest = CreateRequest.newBuilder()
+        BatchCreateRequest createRequest = BatchCreateRequest.newBuilder()
             .putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
                 .setClient(clientInfo)
                 .build())
             .build();
         InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.newBuilder()
             .setReqId(System.nanoTime())
-            .setCreateInbox(createRequest)
+            .setBatchCreate(createRequest)
             .build();
 
         when(reader.get(any())).thenReturn(Optional.empty());
@@ -136,14 +136,14 @@ public class MockedInboxAdminTest {
 
     @Test
     public void testCreateExpiredInbox() {
-        CreateRequest createRequest = CreateRequest.newBuilder()
+        BatchCreateRequest createRequest = BatchCreateRequest.newBuilder()
             .putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
                 .setClient(clientInfo)
                 .build())
             .build();
         InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.newBuilder()
             .setReqId(System.nanoTime())
-            .setCreateInbox(createRequest)
+            .setBatchCreate(createRequest)
             .build();
 
         when(reader.get(any())).thenReturn(Optional.of(InboxMetadata.newBuilder()
@@ -179,15 +179,15 @@ public class MockedInboxAdminTest {
 
     @Test
     public void testHasInbox() {
-        HasRequest.Builder hasBuilder = HasRequest.newBuilder();
+        BatchCheckRequest.Builder hasBuilder = BatchCheckRequest.newBuilder();
         hasBuilder.addScopedInboxId(ByteString.copyFromUtf8(scopedInboxIdUtf8))
             .addScopedInboxId(ByteString.copyFromUtf8("dev-" + scopedInboxIdUtf8))
             .addScopedInboxId(ByteString.copyFromUtf8("expire-" + scopedInboxIdUtf8));
-        HasRequest hasRequest = hasBuilder.build();
+        BatchCheckRequest batchCheckRequest = hasBuilder.build();
 
         InboxServiceROCoProcInput roInput = InboxServiceROCoProcInput.newBuilder()
             .setReqId(System.nanoTime())
-            .setHas(hasRequest)
+            .setBatchCheck(batchCheckRequest)
             .build();
 
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8))).thenReturn(Optional.empty());
@@ -207,10 +207,10 @@ public class MockedInboxAdminTest {
         ByteString result = coProc.query(roInput.toByteString(), reader).join();
 
         try {
-            HasReply hasReply = InboxServiceROCoProcOutput.parseFrom(result).getHas();
-            Assert.assertTrue(!hasReply.getExistsMap().get(scopedInboxIdUtf8));
-            Assert.assertTrue(hasReply.getExistsMap().get("dev-" + scopedInboxIdUtf8));
-            Assert.assertTrue(!hasReply.getExistsMap().get("expire-" + scopedInboxIdUtf8));
+            BatchCheckReply batchCheckReply = InboxServiceROCoProcOutput.parseFrom(result).getBatchCheck();
+            Assert.assertFalse(batchCheckReply.getExistsMap().get(scopedInboxIdUtf8));
+            Assert.assertTrue(batchCheckReply.getExistsMap().get("dev-" + scopedInboxIdUtf8));
+            Assert.assertFalse(batchCheckReply.getExistsMap().get("expire-" + scopedInboxIdUtf8));
         } catch (Exception exception) {
             fail();
         }
@@ -219,7 +219,7 @@ public class MockedInboxAdminTest {
     @Test
     public void testDeleteInbox() {
         InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.newBuilder()
-            .setTouch(TouchRequest.newBuilder()
+            .setBatchTouch(BatchTouchRequest.newBuilder()
                 .putScopedInboxId(scopedInboxIdUtf8, false)
                 .putScopedInboxId("dev-" + scopedInboxIdUtf8, false)
                 .putScopedInboxId("expire-" + scopedInboxIdUtf8, true)

@@ -21,9 +21,9 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.inbox.storage.proto.InboxFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.google.protobuf.ByteString;
@@ -112,7 +112,7 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
                             .setKvRangeId(range.id)
                             .setRoCoProcInput(InboxServiceROCoProcInput.newBuilder()
                                 .setReqId(reqId)
-                                .setFetch(InboxFetchRequest.newBuilder()
+                                .setBatchFetch(BatchFetchRequest.newBuilder()
                                     .putAllInboxFetch(inboxFetches)
                                     .build())
                                 .build()
@@ -125,7 +125,7 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
                                     InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(
                                         v.getRoCoProcResult());
                                     assert output.getReqId() == reqId;
-                                    return output.getFetch();
+                                    return output.getBatchFetch();
                                 } catch (InvalidProtocolBufferException e) {
                                     log.error("Unable to parse rw co-proc output", e);
                                     throw new RuntimeException("Unable to parse rw co-proc output", e);

@@ -19,11 +19,11 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.inbox.storage.proto.BatchAddSubReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchRemoveSubReply;
-import com.baidu.bifromq.inbox.storage.proto.CreateReply;
-import com.baidu.bifromq.inbox.storage.proto.HasReply;
-import com.baidu.bifromq.inbox.storage.proto.TouchReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.QoS;
 import java.time.Clock;
@@ -49,7 +49,7 @@ public class InboxAdminTest extends InboxStoreTest {
     public void createAndHasCheck() {
         String tenantId = "tenantId";
         String inboxId = "inboxId";
-        HasReply has = requestHas(tenantId, inboxId);
+        BatchCheckReply has = requestHas(tenantId, inboxId);
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
         requestCreate(tenantId, inboxId, 10, 100, false);
         has = requestHas(tenantId, inboxId);
@@ -62,11 +62,11 @@ public class InboxAdminTest extends InboxStoreTest {
         String tenantId = "tenantId";
         String inboxId = "createOverExpiredOne_inboxId";
         requestCreate(tenantId, inboxId, 10, 2, false);
-        BatchAddSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchAddSubReply.Result.OK);
+        BatchSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
+        assertEquals(result, BatchSubReply.Result.OK);
         when(clock.millis()).thenReturn(2100L);
 
-        CreateReply reply = requestCreate(tenantId, inboxId, 10, 100, false);
+        BatchCreateReply reply = requestCreate(tenantId, inboxId, 10, 100, false);
         assertEquals(reply.getSubsCount(), 1);
         assertEquals(reply.getSubsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()).getTopicFilters(0),
             "/a/b/c");
@@ -77,11 +77,11 @@ public class InboxAdminTest extends InboxStoreTest {
         String tenantId = "tenantId";
         String inboxId = "deleteAndReturnSubs_inboxId";
         requestCreate(tenantId, inboxId, 10, 2, false);
-        BatchAddSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchAddSubReply.Result.OK);
+        BatchSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
+        assertEquals(result, BatchSubReply.Result.OK);
         when(clock.millis()).thenReturn(2100L);
 
-        TouchReply reply = requestDelete(tenantId, inboxId);
+        BatchTouchReply reply = requestDelete(tenantId, inboxId);
         assertEquals(reply.getSubsCount(), 1);
         assertEquals(reply.getSubsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()).getTopicFilters(0),
             "/a/b/c");
@@ -91,13 +91,13 @@ public class InboxAdminTest extends InboxStoreTest {
     public void subUnsub() {
         String tenantId = "tenantId";
         String inboxId = "subUnsub_inbox";
-        assertEquals(requestSub(tenantId, inboxId, "/a/", QoS.AT_MOST_ONCE), BatchAddSubReply.Result.NO_INBOX);
-        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchRemoveSubReply.Result.NO_INBOX);
+        assertEquals(requestSub(tenantId, inboxId, "/a/", QoS.AT_MOST_ONCE), BatchSubReply.Result.NO_INBOX);
+        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchUnsubReply.Result.NO_INBOX);
 
         requestCreate(tenantId, inboxId, 10, 2, false);
-        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchRemoveSubReply.Result.NO_SUB);
-        assertEquals(requestSub(tenantId, inboxId, "/a/", QoS.AT_MOST_ONCE), BatchAddSubReply.Result.OK);
-        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchRemoveSubReply.Result.OK);
+        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchUnsubReply.Result.NO_SUB);
+        assertEquals(requestSub(tenantId, inboxId, "/a/", QoS.AT_MOST_ONCE), BatchSubReply.Result.OK);
+        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchUnsubReply.Result.OK);
     }
 
     @Test(groups = "integration")
@@ -106,30 +106,30 @@ public class InboxAdminTest extends InboxStoreTest {
         String inboxId = "subExceedLimit_inboxId";
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(2);
         requestCreate(tenantId, inboxId, 10, 2, false);
-        BatchAddSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchAddSubReply.Result.OK);
+        BatchSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
+        assertEquals(result, BatchSubReply.Result.OK);
 
         // same topic filter
         result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchAddSubReply.Result.OK);
+        assertEquals(result, BatchSubReply.Result.OK);
 
         result = requestSub(tenantId, inboxId, "/a/b/", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchAddSubReply.Result.OK);
+        assertEquals(result, BatchSubReply.Result.OK);
 
         result = requestSub(tenantId, inboxId, "/a/", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchAddSubReply.Result.EXCEED_LIMIT);
+        assertEquals(result, BatchSubReply.Result.EXCEED_LIMIT);
 
         requestUnsub(tenantId, inboxId, "/a/b/");
 
         result = requestSub(tenantId, inboxId, "/a/", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchAddSubReply.Result.OK);
+        assertEquals(result, BatchSubReply.Result.OK);
     }
 
     @Test(groups = "integration")
     public void expireAndHasCheck() {
         String tenantId = "tenantId";
         String inboxId = "expireAndHasCheck_inboxId";
-        HasReply has = requestHas(tenantId, inboxId);
+        BatchCheckReply has = requestHas(tenantId, inboxId);
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
         requestCreate(tenantId, inboxId, 10, 2, false);
         has = requestHas(tenantId, inboxId);
@@ -164,7 +164,7 @@ public class InboxAdminTest extends InboxStoreTest {
         String tenantId = "tenantId";
         String inboxId = "deleteNonExist_inboxId";
         requestDelete(tenantId, inboxId);
-        HasReply has = requestHas(tenantId, inboxId);
+        BatchCheckReply has = requestHas(tenantId, inboxId);
         assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
         requestDelete(tenantId, inboxId);
     }

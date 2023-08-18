@@ -113,7 +113,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
         verify(distClient, times(1))
-            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -172,7 +172,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
         verify(distClient, times(1))
-            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test
@@ -321,7 +321,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(6, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
         verify(distClient, times(1))
-            .unsub(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test

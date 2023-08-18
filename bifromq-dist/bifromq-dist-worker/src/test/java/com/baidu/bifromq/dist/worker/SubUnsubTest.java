@@ -19,8 +19,8 @@ import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.dist.rpc.proto.BatchSubReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnsubReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.QoS;
 import lombok.extern.slf4j.Slf4j;
@@ -32,81 +32,82 @@ public class SubUnsubTest extends DistWorkerTest {
     public void normalSub() {
         String topicFilter = "/a/b/c";
 
-        BatchSubReply.Result result = sub("tenantA", topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
+        BatchMatchReply.Result result = sub("tenantA", topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        assertEquals(result, BatchMatchReply.Result.OK);
 
         result = sub("tenantA", topicFilter, QoS.AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
+        assertEquals(result, BatchMatchReply.Result.OK);
 
         result = sub("tenantA", topicFilter, EXACTLY_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
+        assertEquals(result, BatchMatchReply.Result.OK);
     }
 
     @Test(groups = "integration")
     public void sharedSub() {
         String topicFilter = "$share/group/a/b/c";
 
-        BatchSubReply.Result result = sub(tenantA, topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
+        BatchMatchReply.Result result = sub(tenantA, topicFilter, AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        assertEquals(result, BatchMatchReply.Result.OK);
 
         result = sub(tenantA, topicFilter, AT_LEAST_ONCE, MqttBroker, "inbox1", "server2");
-        assertEquals(result, BatchSubReply.Result.OK);
+        assertEquals(result, BatchMatchReply.Result.OK);
 
         result = sub(tenantA, topicFilter, EXACTLY_ONCE, MqttBroker, "inbox1", "server3");
-        assertEquals(result, BatchSubReply.Result.OK);
+        assertEquals(result, BatchMatchReply.Result.OK);
     }
 
     @Test(groups = "integration")
     public void normalUnsub() {
-        BatchUnsubReply.Result result = unsub(tenantB, "/a/b/c", MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchUnsubReply.Result.NOT_EXISTED);
+        BatchUnmatchReply.Result result = unsub(tenantB, "/a/b/c", MqttBroker, "inbox1", "server1");
+        assertEquals(result, BatchUnmatchReply.Result.NOT_EXISTED);
         sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
         result = unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchUnsubReply.Result.OK);
+        assertEquals(result, BatchUnmatchReply.Result.OK);
 
         sub(tenantA, "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server2");
         result = unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server2");
-        assertEquals(result, BatchUnsubReply.Result.OK);
+        assertEquals(result, BatchUnmatchReply.Result.OK);
 
         sub(tenantA, "/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server3");
         result = unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server3");
-        assertEquals(result, BatchUnsubReply.Result.OK);
+        assertEquals(result, BatchUnmatchReply.Result.OK);
     }
 
     @Test(groups = "integration")
     public void sharedUnsub() {
-        BatchUnsubReply.Result result = unsub(tenantB, "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchUnsubReply.Result.NOT_EXISTED);
+        BatchUnmatchReply.Result result = unsub(tenantB, "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
+        assertEquals(result, BatchUnmatchReply.Result.NOT_EXISTED);
         sub(tenantA, "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
         result = unsub(tenantA, "$share/group/a/b/c", MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchUnsubReply.Result.OK);
+        assertEquals(result, BatchUnmatchReply.Result.OK);
 
         sub(tenantA, "$share/group/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server2");
         result = unsub(tenantA, "$share/group/a/b/c", MqttBroker, "inbox1", "server2");
-        assertEquals(result, BatchUnsubReply.Result.OK);
+        assertEquals(result, BatchUnmatchReply.Result.OK);
 
         sub(tenantA, "$share/group/a/b/c", EXACTLY_ONCE, MqttBroker, "inbox1", "server3");
         result = unsub(tenantA, "$share/group/a/b/c", MqttBroker, "inbox1", "server3");
-        assertEquals(result, BatchUnsubReply.Result.OK);
+        assertEquals(result, BatchUnmatchReply.Result.OK);
     }
 
-    @Test
+    @Test(groups = "integration")
     public void sharedSubExceedLimit() {
         when(settingProvider.provide(Setting.MaxSharedGroupMembers, tenantA)).thenReturn(2);
-        BatchSubReply.Result result = sub(tenantA, "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
-        result = sub(tenantA, "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox2", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
+        BatchMatchReply.Result result =
+            sub(tenantA, "$share/sharedSubExceedLimit/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        assertEquals(result, BatchMatchReply.Result.OK);
+        result = sub(tenantA, "$share/sharedSubExceedLimit/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox2", "server1");
+        assertEquals(result, BatchMatchReply.Result.OK);
 
-        result = sub(tenantA, "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox2", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
+        result = sub(tenantA, "$share/sharedSubExceedLimit/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox2", "server1");
+        assertEquals(result, BatchMatchReply.Result.OK);
 
-        result = sub(tenantA, "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox3", "server1");
-        assertEquals(result, BatchSubReply.Result.EXCEED_LIMIT);
+        result = sub(tenantA, "$share/sharedSubExceedLimit/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox3", "server1");
+        assertEquals(result, BatchMatchReply.Result.EXCEED_LIMIT);
 
-        unsub(tenantA, "$share/group/a/b/c", MqttBroker, "inbox2", "server1");
+        unsub(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox2", "server1");
 
-        result = sub(tenantA, "$share/group/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox3", "server1");
-        assertEquals(result, BatchSubReply.Result.OK);
+        result = sub(tenantA, "$share/sharedSubExceedLimit/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox3", "server1");
+        assertEquals(result, BatchMatchReply.Result.OK);
     }
 }
