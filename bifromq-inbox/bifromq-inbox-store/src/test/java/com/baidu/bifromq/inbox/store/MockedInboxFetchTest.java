@@ -25,10 +25,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.inbox.storage.proto.BatchFetchReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
@@ -41,6 +41,7 @@ import com.google.protobuf.ByteString;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.function.Supplier;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -142,22 +143,19 @@ public class MockedInboxFetchTest {
                     .build())
                 .build())
             .build();
-
-        when(kvIterator.isValid()).thenReturn(true);
-        when(kvIterator.key())
-            .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8))
-            .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0));
-        when(kvIterator.value())
-            .thenReturn(InboxMetadata.newBuilder()
+        when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis() + 30 * 1000)
-                .setQos0LastFetchBeforeSeq(0)
+                .setQos0StartSeq(0)
                 .setQos0NextSeq(20)
                 .setExpireSeconds(Integer.MAX_VALUE)
-                .build().toByteString())
-            .thenReturn(InboxMessageList.newBuilder()
-                .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance(),
-                    InboxMessage.getDefaultInstance()))
-                .build().toByteString());
+                .build().toByteString()));
+        when(kvIterator.isValid()).thenReturn(true);
+        when(kvIterator.key()).thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0));
+        when(kvIterator.value()).thenReturn(InboxMessageList.newBuilder()
+            .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance(),
+                InboxMessage.getDefaultInstance()))
+            .build().toByteString());
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
             clock, Duration.ofMinutes(30), loadTracker);
         ByteString output = coProc.query(input.toByteString(), reader).join();
@@ -182,23 +180,21 @@ public class MockedInboxFetchTest {
                     .build())
                 .build())
             .build();
-
+        when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() + 30 * 1000)
+                .setQos0StartSeq(0)
+                .setQos0NextSeq(20)
+                .setExpireSeconds(Integer.MAX_VALUE)
+                .build().toByteString()));
         when(kvIterator.isValid())
-            .thenReturn(true)
             .thenReturn(true)
             .thenReturn(true);
         when(kvIterator.key())
-            .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8))
             .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0))
             .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0))
             .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1));
         when(kvIterator.value())
-            .thenReturn(InboxMetadata.newBuilder()
-                .setLastFetchTime(clock.millis() + 30 * 1000)
-                .setQos0LastFetchBeforeSeq(0)
-                .setQos0NextSeq(20)
-                .setExpireSeconds(Integer.MAX_VALUE)
-                .build().toByteString())
             .thenReturn(InboxMessageList.newBuilder()
                 .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance()))
                 .build().toByteString())
@@ -230,24 +226,23 @@ public class MockedInboxFetchTest {
                     .build())
                 .build())
             .build();
+        when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() + 30 * 1000)
+                .setQos0StartSeq(0)
+                .setQos0NextSeq(20)
+                .setExpireSeconds(Integer.MAX_VALUE)
+                .build().toByteString()));
 
         when(kvIterator.isValid())
             .thenReturn(true)
             .thenReturn(true)
-            .thenReturn(true)
             .thenReturn(false);
         when(kvIterator.key())
-            .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8))
             .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0))
             .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0))
             .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1));
         when(kvIterator.value())
-            .thenReturn(InboxMetadata.newBuilder()
-                .setLastFetchTime(clock.millis() + 30 * 1000)
-                .setQos0LastFetchBeforeSeq(0)
-                .setQos0NextSeq(20)
-                .setExpireSeconds(Integer.MAX_VALUE)
-                .build().toByteString())
             .thenReturn(InboxMessageList.newBuilder()
                 .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance()))
                 .build().toByteString())
@@ -280,18 +275,18 @@ public class MockedInboxFetchTest {
                 .build())
             .build();
 
+        when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() + 30 * 1000)
+                .setQos1StartSeq(0)
+                .setQos1NextSeq(20)
+                .setExpireSeconds(Integer.MAX_VALUE)
+                .build().toByteString()));
         when(kvIterator.isValid())
             .thenReturn(true);
         when(kvIterator.key())
-            .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8))
             .thenReturn(qos1InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0));
         when(kvIterator.value())
-            .thenReturn(InboxMetadata.newBuilder()
-                .setLastFetchTime(clock.millis() + 30 * 1000)
-                .setQos1LastCommitBeforeSeq(0)
-                .setQos1NextSeq(20)
-                .setExpireSeconds(Integer.MAX_VALUE)
-                .build().toByteString())
             .thenReturn(InboxMessageList.newBuilder()
                 .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance(),
                     InboxMessage.getDefaultInstance()))
@@ -320,21 +315,20 @@ public class MockedInboxFetchTest {
                     .build())
                 .build())
             .build();
-
+        when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
+            .thenReturn(Optional.of(InboxMetadata.newBuilder()
+                .setLastFetchTime(clock.millis() + 30 * 1000)
+                .setQos1StartSeq(0)
+                .setQos1NextSeq(20)
+                .setExpireSeconds(Integer.MAX_VALUE)
+                .build().toByteString()));
         when(kvIterator.isValid())
             .thenReturn(true);
         when(kvIterator.key())
-            .thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8))
             .thenReturn(qos1InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0))
             .thenReturn(qos1InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0))
             .thenReturn(qos1InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1));
         when(kvIterator.value())
-            .thenReturn(InboxMetadata.newBuilder()
-                .setLastFetchTime(clock.millis() + 30 * 1000)
-                .setQos1LastCommitBeforeSeq(0)
-                .setQos1NextSeq(20)
-                .setExpireSeconds(Integer.MAX_VALUE)
-                .build().toByteString())
             .thenReturn(InboxMessageList.newBuilder()
                 .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance()))
                 .build().toByteString())

@@ -16,9 +16,9 @@ package com.baidu.bifromq.inbox.store;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 import static org.testng.AssertJUnit.fail;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -31,12 +31,12 @@ import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
@@ -56,7 +56,6 @@ import java.util.function.Supplier;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -79,6 +78,7 @@ public class MockedInboxInsertTest {
     private final String tenantId = "tenantA";
     private final String inboxId = "inboxId";
     private final String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
+    private final ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
     private final Clock clock = Clock.systemUTC();
     private AutoCloseable closeable;
 
@@ -119,8 +119,8 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsList().size(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
+            assertEquals(reply.getResultsList().size(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
         }
@@ -158,8 +158,8 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsList().size(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
+            assertEquals(reply.getResultsList().size(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
         }
@@ -212,8 +212,8 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
         }
@@ -270,14 +270,14 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
-            Assert.assertEquals(args.size(), 4);
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
+            assertEquals(args.size(), 4);
+            assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
                 args.get(0));
             InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos0NextSeq(), nextSeq + 1);
+            assertEquals(metadata.getQos0NextSeq(), nextSeq + 1);
         } catch (Exception exception) {
             fail();
         }
@@ -338,27 +338,30 @@ public class MockedInboxInsertTest {
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
             clock, Duration.ofMinutes(30), loadTracker);
         ByteString result = coProc.mutate(input.toByteString(), reader, writer).get();
+        ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
         ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
-        verify(writer).delete(argumentCaptor.capture());
-        verify(writer, times(2)).insert(argumentCaptor.capture(), argumentCaptor.capture());
+        verify(writer).deleteRange(rangeCaptor.capture());
+        verify(writer).insert(argumentCaptor.capture(), argumentCaptor.capture());
         verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
         List<ByteString> args = argumentCaptor.getAllValues();
+
+        assertEquals(rangeCaptor.getValue().getStartKey(),
+            qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0));
+        assertEquals(rangeCaptor.getValue().getEndKey(),
+            qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1));
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
-            Assert.assertEquals(args.size(), 7);
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0),
-                args.get(0));
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1),
-                args.get(1));
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
-                args.get(3));
-            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(6));
-            Assert.assertEquals(metadata.getQos0NextSeq(), nextSeq + 2);
+            assertEquals(args.size(), 4);
+            assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1), args.get(0));
+            assertEquals(3, InboxMessageList.parseFrom(args.get(1)).getMessageCount());
+            assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8), args.get(2));
+            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
+            assertEquals(metadata.getQos0NextSeq(), nextSeq + 2);
         } catch (Exception exception) {
             fail();
         }
@@ -412,7 +415,11 @@ public class MockedInboxInsertTest {
             .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 3));
         when(kvIterator.value())
             .thenReturn(InboxMessageList.newBuilder()
-                .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance(),
+                .addAllMessage(Arrays.asList(
+                    InboxMessage.getDefaultInstance(),
+                    InboxMessage.getDefaultInstance(),
+                    InboxMessage.getDefaultInstance(),
+                    InboxMessage.getDefaultInstance(),
                     InboxMessage.getDefaultInstance()))
                 .build().toByteString());
         when(reader.get(any()))
@@ -428,13 +435,16 @@ public class MockedInboxInsertTest {
             clock, Duration.ofMinutes(30), loadTracker);
         ByteString result = coProc.mutate(input.toByteString(), reader, writer).get();
 
-        ArgumentCaptor<ByteString> writerArgsCap = ArgumentCaptor.forClass(ByteString.class);
-        verify(writer, times(2)).insert(writerArgsCap.capture(), writerArgsCap.capture());
-        verify(writer).put(writerArgsCap.capture(), writerArgsCap.capture());
-        List<ByteString> writerArgs = writerArgsCap.getAllValues();
-
         ArgumentCaptor<Range> rangeArgsCap = ArgumentCaptor.forClass(Range.class);
         verify(writer).deleteRange(rangeArgsCap.capture());
+        assertEquals(rangeArgsCap.getValue().getStartKey(), qos0InboxMsgKey(scopedInboxId, 0));
+        assertEquals(rangeArgsCap.getValue().getEndKey(), qos0InboxMsgKey(scopedInboxId, 4));
+
+
+        ArgumentCaptor<ByteString> writerArgsCap = ArgumentCaptor.forClass(ByteString.class);
+        verify(writer).insert(writerArgsCap.capture(), writerArgsCap.capture());
+        verify(writer).put(writerArgsCap.capture(), writerArgsCap.capture());
+        List<ByteString> writerArgs = writerArgsCap.getAllValues();
 
         ArgumentCaptor<Overflowed> overflowArgs = ArgumentCaptor.forClass(Overflowed.class);
         verify(eventCollector).report(overflowArgs.capture());
@@ -443,19 +453,19 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
-            Assert.assertEquals(writerArgs.size(), 6);
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 4),
-                writerArgs.get(0));
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
-                writerArgs.get(2));
-            InboxMetadata metadata = InboxMetadata.parseFrom(writerArgs.get(5));
-            Assert.assertEquals(metadata.getQos0NextSeq(), nextSeq + 3);
+            assertEquals(writerArgs.size(), 4);
+            assertEquals(qos0InboxMsgKey(scopedInboxId, 4), writerArgs.get(0));
+            assertEquals(InboxMessageList.parseFrom(writerArgs.get(1)).getMessageCount(), 4);
 
-            Assert.assertEquals(overflow.size(), 1);
-            Assert.assertEquals(overflow.get(0).dropCount(), 3);
+            assertEquals(scopedInboxId, writerArgs.get(2));
+            InboxMetadata metadata = InboxMetadata.parseFrom(writerArgs.get(3));
+            assertEquals(metadata.getQos0NextSeq(), nextSeq + 3);
+
+            assertEquals(overflow.size(), 1);
+            assertEquals(overflow.get(0).dropCount(), 4);
         } catch (Exception exception) {
             fail();
         }
@@ -536,19 +546,17 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
-            Assert.assertEquals(args.size(), 4);
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
-                args.get(0));
-            Assert.assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8),
-                args.get(2));
+            assertEquals(args.size(), 4);
+            assertEquals(args.get(0), qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq + 1));
+            assertEquals(args.get(2), ByteString.copyFromUtf8(scopedInboxIdUtf8));
             InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos0NextSeq(), nextSeq + 2);
+            assertEquals(nextSeq + 3, metadata.getQos0NextSeq());
 
-            Assert.assertEquals(overflow.size(), 1);
-            Assert.assertEquals(overflow.get(0).dropCount(), 3);
+            assertEquals(overflow.size(), 1);
+            assertEquals(overflow.get(0).dropCount(), 3);
         } catch (Exception exception) {
             fail();
         }
@@ -605,14 +613,14 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
-            Assert.assertEquals(args.size(), 4);
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
+            assertEquals(args.size(), 4);
+            assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
                 args.get(0));
             InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos0NextSeq(), nextSeq + 1);
+            assertEquals(metadata.getQos0NextSeq(), nextSeq + 1);
         } catch (Exception exception) {
             fail();
         }
@@ -694,25 +702,25 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
-            Assert.assertEquals(args.size(), 4);
-            Assert.assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
+            assertEquals(args.size(), 4);
+            assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
                 args.get(0));
             InboxMessageList inboxMessageList = InboxMessageList.parseFrom(args.get(1));
-            Assert.assertEquals(inboxMessageList.getMessageCount(), 2);
-            Assert.assertEquals(inboxMessageList.getMessage(0).getMsg().getMessage().getPayload().toStringUtf8(),
+            assertEquals(inboxMessageList.getMessageCount(), 2);
+            assertEquals(inboxMessageList.getMessage(0).getMsg().getMessage().getPayload().toStringUtf8(),
                 "test-1");
-            Assert.assertEquals(inboxMessageList.getMessage(1).getMsg().getMessage().getPayload().toStringUtf8(),
+            assertEquals(inboxMessageList.getMessage(1).getMsg().getMessage().getPayload().toStringUtf8(),
                 "test-2");
-            Assert.assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8),
+            assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8),
                 args.get(2));
             InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos0NextSeq(), nextSeq + 2);
+            assertEquals(metadata.getQos0NextSeq(), nextSeq + 2);
 
-            Assert.assertEquals(overflow.size(), 1);
-            Assert.assertEquals(overflow.get(0).dropCount(), 1);
+            assertEquals(overflow.size(), 1);
+            assertEquals(overflow.get(0).dropCount(), 1);
         } catch (Exception exception) {
             fail();
         }
@@ -793,16 +801,16 @@ public class MockedInboxInsertTest {
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchInsertReply reply = output.getBatchInsert();
-            Assert.assertEquals(reply.getResultsCount(), 1);
-            Assert.assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
+            assertEquals(reply.getResultsCount(), 1);
+            assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
 
-            Assert.assertEquals(args.size(), 2);
-            Assert.assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8), args.get(0));
+            assertEquals(args.size(), 2);
+            assertEquals(ByteString.copyFromUtf8(scopedInboxIdUtf8), args.get(0));
             InboxMetadata metadata = InboxMetadata.parseFrom(args.get(1));
-            Assert.assertEquals(metadata.getQos0NextSeq(), nextSeq);
+            assertEquals(metadata.getQos0NextSeq(), nextSeq);
 
-            Assert.assertEquals(overflow.size(), 1);
-            Assert.assertEquals(overflow.get(0).dropCount(), 3);
+            assertEquals(overflow.size(), 1);
+            assertEquals(overflow.get(0).dropCount(), 3);
         } catch (Exception exception) {
             fail();
         }

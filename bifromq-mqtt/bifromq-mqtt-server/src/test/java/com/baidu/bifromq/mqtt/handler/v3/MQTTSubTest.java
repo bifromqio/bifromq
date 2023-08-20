@@ -63,7 +63,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void transientQoS0Sub() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
         mockRetainMatch();
         int[] qos = {0, 0, 0};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -78,7 +78,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void transientQoS1Sub() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch();
         int[] qos = {1, 1, 1};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -93,7 +93,7 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void transientQoS2Sub() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.EXACTLY_ONCE, true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
         int[] qos = {2, 2, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -108,9 +108,9 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void transientMixedSub() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
-        mockDistSub(QoS.EXACTLY_ONCE, true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
         int[] qos = {0, 1, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -125,9 +125,9 @@ public class MQTTSubTest extends BaseMQTTTest {
     public void transientMixedSubWithDistSubFailed() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
-        mockDistSub(QoS.EXACTLY_ONCE, false);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
+        mockDistMatch(QoS.EXACTLY_ONCE, false);
         mockRetainMatch();
         int[] qos = {0, 1, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);

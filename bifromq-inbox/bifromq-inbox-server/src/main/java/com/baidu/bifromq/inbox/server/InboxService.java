@@ -74,6 +74,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -260,67 +261,62 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Override
     public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
-        response(tenantId -> subScheduler.schedule(request)
-            .thenCompose(v -> {
-                if (v.getResult() == SubReply.Result.OK) {
-                    return distClient.match(request.getReqId(),
-                            request.getTenantId(),
-                            request.getTopicFilter(),
-                            request.getSubQoS(),
-                            request.getInboxId(),
-                            getDelivererKey(request.getInboxId()), 1)
-                        .thenApply(subResult ->
-                            switch (subResult) {
-                                case OK -> SubReply.Result.OK;
-                                case EXCEED_LIMIT -> SubReply.Result.EXCEED_LIMIT;
-                                default -> SubReply.Result.ERROR;
-                            });
+        response(tenantId -> distClient.match(request.getReqId(),
+                request.getTenantId(),
+                request.getTopicFilter(),
+                request.getSubQoS(),
+                request.getInboxId(),
+                getDelivererKey(request.getInboxId()), 1)
+            .thenCompose(matchResult -> {
+                switch (matchResult) {
+                    case OK -> {
+                        return subScheduler.schedule(request);
+                    }
+                    case EXCEED_LIMIT -> {
+                        return CompletableFuture.completedFuture(SubReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(SubReply.Result.EXCEED_LIMIT)
+                            .build());
+                    }
+                    default -> {
+                        return CompletableFuture.completedFuture(SubReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(SubReply.Result.ERROR)
+                            .build());
+                    }
                 }
-                return CompletableFuture.completedFuture(v.getResult());
             })
-            .handle((v, e) -> {
-                if (e != null) {
-                    log.error("Failed to subscribe", e);
-                    return SubReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(SubReply.Result.ERROR)
-                        .build();
-                }
+            .exceptionally(e -> {
+                log.error("Failed to subscribe", e);
                 return SubReply.newBuilder()
                     .setReqId(request.getReqId())
-                    .setResult(v)
+                    .setResult(SubReply.Result.ERROR)
                     .build();
+
             }), responseObserver);
     }
 
     @Override
     public void unsub(UnsubRequest request, StreamObserver<UnsubReply> responseObserver) {
-        response(tenantId -> unsubScheduler.schedule(request)
-            .thenCompose(v -> {
-                if (v.getResult() == UnsubReply.Result.OK) {
-                    return distClient.unmatch(request.getReqId(),
-                            request.getTenantId(),
-                            request.getTopicFilter(),
-                            request.getInboxId(),
-                            getDelivererKey(request.getInboxId()), 1)
-                        .thenApply(subResult ->
-                            switch (subResult) {
-                                case OK -> UnsubReply.Result.OK;
-                                default -> UnsubReply.Result.ERROR;
-                            });
+        response(tenantId -> distClient.unmatch(request.getReqId(),
+                request.getTenantId(),
+                request.getTopicFilter(),
+                request.getInboxId(),
+                getDelivererKey(request.getInboxId()), 1)
+            .thenCompose(unmatchResult -> {
+                if (Objects.requireNonNull(unmatchResult) == UnmatchResult.OK) {
+                    return unsubScheduler.schedule(request);
                 }
-                return CompletableFuture.completedFuture(v.getResult());
+                return CompletableFuture.completedFuture(UnsubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(UnsubReply.Result.ERROR)
+                    .build());
             })
-            .handle((v, e) -> {
-                if (e != null) {
-                    return UnsubReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(UnsubReply.Result.ERROR)
-                        .build();
-                }
+            .exceptionally(e -> {
+                log.error("Failed to unsubscribe", e);
                 return UnsubReply.newBuilder()
                     .setReqId(request.getReqId())
-                    .setResult(v)
+                    .setResult(UnsubReply.Result.ERROR)
                     .build();
             }), responseObserver);
     }

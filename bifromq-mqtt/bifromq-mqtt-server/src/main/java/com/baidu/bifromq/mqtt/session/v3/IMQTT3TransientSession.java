@@ -18,5 +18,5 @@ import com.baidu.bifromq.type.TopicMessagePack;
 
 public interface IMQTT3TransientSession extends IMQTT3Session {
 
-    void publish(SubInfo subInfo, TopicMessagePack messagePack);
+    boolean publish(SubInfo subInfo, TopicMessagePack messagePack);
 }

@@ -305,8 +305,8 @@ public class QoS1InboxTest extends InboxStoreTest {
 
         reply = requestFetchQoS1(tenantId, inboxId, 10);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos1SeqCount(), 2);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos1Seq(0), 3);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos1Seq(1), 4);
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos1Seq(0), 4);
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos1Seq(1), 5);
 
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos1MsgCount(), 2);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos1Msg(0).getMsg().getMessage(),

@@ -120,24 +120,25 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                 toDelivererKey(channelId(), sessionCtx.serverId), 0)
             .handleAsync((v, e) -> {
                 if (e != null) {
-                    topicFilters.add(topicFilter);
                     return false;
                 } else {
                     if (Objects.requireNonNull(v) == UnmatchResult.OK) {
                         return true;
                     }
-                    topicFilters.add(topicFilter);
                     return false;
                 }
             });
     }
 
     @Override
-    public void publish(SubInfo subInfo, TopicMessagePack topicMsgPack) {
+    public boolean publish(SubInfo subInfo, TopicMessagePack topicMsgPack) {
+        String topicFilter = subInfo.getTopicFilter();
+        if (!topicFilters.contains(topicFilter)) {
+            return false;
+        }
+        QoS subQoS = subInfo.getSubQoS();
         String topic = topicMsgPack.getTopic();
         List<TopicMessagePack.PublisherPack> publisherPacks = topicMsgPack.getMessageList();
-        String topicFilter = subInfo.getTopicFilter();
-        QoS subQoS = subInfo.getSubQoS();
         cancelOnInactive(authProvider.check(clientInfo(), buildSubAction(topicFilter, subQoS)))
             .thenAcceptAsync(allow -> {
                 if (allow) {
@@ -152,7 +153,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                 QoS.forNumber(Math.min(message.getPubQoS().getNumber(), subQoS.getNumber()));
                             boolean flush = i + 1 == publisherPacks.size() && j + 1 == messages.size();
                             switch (finalQoS) {
-                                case AT_MOST_ONCE:
+                                case AT_MOST_ONCE -> {
                                     if (bufferCapacityHinter.hasCapacity()) {
                                         if (sendQoS0TopicMessage(topic, message, false, flush, timestamp)) {
                                             if (debugMode) {
@@ -190,8 +191,8 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                             .size(message.getPayload().size())
                                             .clientInfo(clientInfo()));
                                     }
-                                    break;
-                                case AT_LEAST_ONCE:
+                                }
+                                case AT_LEAST_ONCE -> {
                                     if (bufferCapacityHinter.hasCapacity()) {
                                         int messageId = sendQoS1TopicMessage(seqNum.incrementAndGet(),
                                             topicFilter, topic, message, publisher, false, flush, timestamp);
@@ -210,8 +211,8 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                             .size(message.getPayload().size())
                                             .clientInfo(clientInfo()));
                                     }
-                                    break;
-                                case EXACTLY_ONCE:
+                                }
+                                case EXACTLY_ONCE -> {
                                     if (bufferCapacityHinter.hasCapacity()) {
                                         int messageId = sendQoS2TopicMessage(seqNum.incrementAndGet(),
                                             topicFilter, topic, message, publisher, false, flush, timestamp);
@@ -230,7 +231,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                                             .size(message.getPayload().size())
                                             .clientInfo(clientInfo()));
                                     }
-                                    break;
+                                }
                             }
                         }
                     }
@@ -263,5 +264,6 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                     );
                 }
             }, ctx.channel().eventLoop());
+        return true;
     }
 }

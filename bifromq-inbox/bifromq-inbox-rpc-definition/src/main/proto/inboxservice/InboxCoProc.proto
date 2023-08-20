@@ -17,13 +17,13 @@ message InboxMetadata{
   uint32 limit = 3;
   bool dropOldest = 4;
 
-  uint64 qos0LastFetchBeforeSeq = 5;
+  uint64 qos0StartSeq = 5;
   uint64 qos0NextSeq = 6;
 
-  uint64 qos1LastCommitBeforeSeq = 7;
+  uint64 qos1StartSeq = 7;
   uint64 qos1NextSeq = 8;
 
-  uint64 qos2LastCommitBeforeSeq = 9;
+  uint64 qos2StartSeq = 9;
   uint64 qos2NextSeq = 10;
 
   commontype.ClientInfo client = 11; // the owner client
