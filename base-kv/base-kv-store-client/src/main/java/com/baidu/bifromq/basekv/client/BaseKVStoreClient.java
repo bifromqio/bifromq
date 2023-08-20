@@ -147,7 +147,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             .build();
         crdtService.host(storeDescriptorMapCRDTURI(clusterId));
         storeDescriptorCRDT = (IORMap) crdtService.get(storeDescriptorMapCRDTURI(clusterId)).get();
-        disposables.add(Observable.combineLatest(storeDescriptorCRDT.inflation().map(this::currentStoreDescriptors),
+        disposables.add(Observable.combineLatest(
+                storeDescriptorCRDT.inflation().map(this::currentStoreDescriptors),
                 rpcClient.serverList()
                     .map(servers -> Maps.transformValues(servers, metadata -> metadata.get(RPC_METADATA_STORE_ID))),
                 ClusterInfo::new)
@@ -403,19 +404,19 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         if (rangeRouteUpdated || storeRouteUpdated) {
             refreshExecPipelines(storeToServerMap);
         }
+        if (rangeRouteUpdated) {
+            if (router.isFullRangeCovered()) {
+                synchronized (this) {
+                    this.notifyAll();
+                }
+            }
+        }
     }
 
     private boolean refreshRangeRoute(ClusterInfo clusterInfo) {
         boolean changed = false;
         for (KVRangeStoreDescriptor storeDesc : clusterInfo.storeDescriptors) {
             changed |= router.upsert(storeDesc);
-        }
-        if (changed) {
-            if (router.isFullRangeCovered()) {
-                synchronized (this) {
-                    this.notifyAll();
-                }
-            }
         }
         return changed;
     }

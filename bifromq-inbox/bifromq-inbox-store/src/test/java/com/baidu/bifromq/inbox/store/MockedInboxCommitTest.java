@@ -17,9 +17,9 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos1InboxMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 import static org.testng.AssertJUnit.fail;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -73,6 +74,7 @@ public class MockedInboxCommitTest {
     private final String tenantId = "tenantA";
     private final String inboxId = "inboxId";
     private final String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
+    private final ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
     private final Clock clock = Clock.systemUTC();
     private AutoCloseable closeable;
 
@@ -157,6 +159,8 @@ public class MockedInboxCommitTest {
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis())
                 .setExpireSeconds(Integer.MAX_VALUE)
+                .setQos0StartSeq(oldestSeq)
+                .setQos0NextSeq(oldestSeq + 1)
                 .build().toByteString()));
         when(kvIterator.isValid())
             .thenReturn(true)
@@ -178,12 +182,13 @@ public class MockedInboxCommitTest {
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
             InboxMetadata metadata = InboxMetadata.parseFrom(args.get(1));
-            Assert.assertEquals(metadata.getQos0LastFetchBeforeSeq(), oldestSeq);
+            assertEquals(metadata.getQos0StartSeq(), oldestSeq);
         } catch (Exception exception) {
             fail();
         }
     }
 
+    @SneakyThrows
     @Test
     public void commitQoS0InboxFromOneEntry() {
         long qos0UpToSeq = 1;
@@ -204,39 +209,45 @@ public class MockedInboxCommitTest {
             add(InboxMessage.getDefaultInstance());
         }};
 
-        when(reader.get(any()))
-            .thenReturn(Optional.of(InboxMetadata.newBuilder()
-                .setLastFetchTime(clock.millis())
-                .setExpireSeconds(Integer.MAX_VALUE)
-                .build().toByteString()));
-        when(kvIterator.isValid())
-            .thenReturn(true);
-        when(kvIterator.key())
-            .thenReturn(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), oldestSeq));
-        when(kvIterator.value())
-            .thenReturn(InboxMessageList.newBuilder()
-                .addAllMessage(messages)
-                .build().toByteString());
+        when(reader.get(scopedInboxId)).thenReturn(Optional.of(InboxMetadata.newBuilder()
+            .setLastFetchTime(clock.millis())
+            .setExpireSeconds(Integer.MAX_VALUE)
+            .setQos0StartSeq(0)
+            .setQos0NextSeq(4)
+            .build().toByteString()));
+        when(kvIterator.isValid()).thenReturn(true);
+        when(kvIterator.key()).thenReturn(qos0InboxMsgKey(scopedInboxId, oldestSeq));
+        when(kvIterator.value()).thenReturn(InboxMessageList.newBuilder()
+            .addAllMessage(messages)
+            .build().toByteString());
 
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
             clock, Duration.ofMinutes(30), loadTracker);
         ByteString result = coProc.mutate(input.toByteString(), reader, writer).get();
 
-        ArgumentCaptor<ByteString> argCap = ArgumentCaptor.forClass(ByteString.class);
-        verify(writer, times(2)).put(argCap.capture(), argCap.capture());
-        verify(writer).delete(argCap.capture());
-        List<ByteString> args = argCap.getAllValues();
+        ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
+        verify(writer).deleteRange(rangeCaptor.capture());
+        assertEquals(qos0InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
+        assertEquals(qos0InboxMsgKey(scopedInboxId, 2), rangeCaptor.getValue().getEndKey());
 
+
+        ArgumentCaptor<ByteString> argCap = ArgumentCaptor.forClass(ByteString.class);
+        verify(writer).insert(argCap.capture(), argCap.capture());
+        assertEquals(qos0InboxMsgKey(scopedInboxId, 2), argCap.getAllValues().get(0));
+        InboxMessageList messageList = InboxMessageList.parseFrom(argCap.getAllValues().get(1));
+        assertEquals(messageList.getMessageCount(), 2);
+
+        argCap = ArgumentCaptor.forClass(ByteString.class);
+        verify(writer).put(argCap.capture(), argCap.capture());
+        List<ByteString> args = argCap.getAllValues();
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
-            InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));
-            Assert.assertEquals(messageList.getMessageCount(), messages.size() - qos0UpToSeq - oldestSeq - 1);
-
-            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos0LastFetchBeforeSeq(), qos0UpToSeq + 1);
+            assertEquals(scopedInboxId, args.get(0));
+            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(1));
+            assertEquals(metadata.getQos0StartSeq(), qos0UpToSeq + 1);
         } catch (Exception exception) {
             fail();
         }
@@ -263,11 +274,12 @@ public class MockedInboxCommitTest {
             add(InboxMessage.getDefaultInstance());
         }};
 
-        when(reader.get(any()))
-            .thenReturn(Optional.of(InboxMetadata.newBuilder()
-                .setLastFetchTime(clock.millis())
-                .setExpireSeconds(Integer.MAX_VALUE)
-                .build().toByteString()));
+        when(reader.get(any())).thenReturn(Optional.of(InboxMetadata.newBuilder()
+            .setLastFetchTime(clock.millis())
+            .setExpireSeconds(Integer.MAX_VALUE)
+            .setQos0StartSeq(0)
+            .setQos0NextSeq(12)
+            .build().toByteString()));
         when(kvIterator.isValid())
             .thenReturn(true);
         when(kvIterator.key())
@@ -283,30 +295,29 @@ public class MockedInboxCommitTest {
             clock, Duration.ofMinutes(30), loadTracker);
         ByteString result = coProc.mutate(input.toByteString(), reader, writer).get();
 
-        ArgumentCaptor<ByteString> argCap = ArgumentCaptor.forClass(ByteString.class);
-        verify(writer, times(2)).put(argCap.capture(), argCap.capture());
-        verify(writer).delete(argCap.capture());
-        List<ByteString> args = argCap.getAllValues();
+        ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
+        verify(writer).deleteRange(rangeCaptor.capture());
+        assertEquals(qos0InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
+        assertEquals(qos0InboxMsgKey(scopedInboxId, 12), rangeCaptor.getValue().getEndKey());
 
-        ArgumentCaptor<Range> rangeArgumentCaptor = ArgumentCaptor.forClass(Range.class);
-        verify(writer).deleteRange(rangeArgumentCaptor.capture());
+        ArgumentCaptor<ByteString> argCap = ArgumentCaptor.forClass(ByteString.class);
+        verify(writer).put(argCap.capture(), argCap.capture());
+        List<ByteString> args = argCap.getAllValues();
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
+            assertEquals(scopedInboxId, args.get(0));
 
-            InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));
-            Assert.assertEquals(messageList.getMessageCount(), messages.size() -
-                (qos0UpToSeq - currentEntrySeq + 1));
-
-            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos0LastFetchBeforeSeq(), qos0UpToSeq + 1);
+            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(1));
+            assertEquals(metadata.getQos0StartSeq(), qos0UpToSeq + 1);
         } catch (Exception exception) {
             fail();
         }
     }
 
+    @SneakyThrows
     @Test
     public void commitQoS1InboxFromOneEntry() {
         long qos1UpToSeq = 1;
@@ -327,10 +338,12 @@ public class MockedInboxCommitTest {
             add(InboxMessage.getDefaultInstance());
         }};
 
-        when(reader.get(any()))
+        when(reader.get(scopedInboxId))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis())
                 .setExpireSeconds(Integer.MAX_VALUE)
+                .setQos1StartSeq(0)
+                .setQos1NextSeq(4)
                 .build().toByteString()));
         when(kvIterator.isValid())
             .thenReturn(true);
@@ -345,9 +358,21 @@ public class MockedInboxCommitTest {
             clock, Duration.ofMinutes(30), loadTracker);
         ByteString result = coProc.mutate(input.toByteString(), reader, writer).get();
 
+        ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
+        verify(writer).deleteRange(rangeCaptor.capture());
+        assertEquals(qos1InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
+        assertEquals(qos1InboxMsgKey(scopedInboxId, 2), rangeCaptor.getValue().getEndKey());
+
+
         ArgumentCaptor<ByteString> argCap = ArgumentCaptor.forClass(ByteString.class);
-        verify(writer, times(2)).put(argCap.capture(), argCap.capture());
-        verify(writer).delete(argCap.capture());
+        verify(writer).insert(argCap.capture(), argCap.capture());
+        assertEquals(qos1InboxMsgKey(scopedInboxId, 2), argCap.getAllValues().get(0));
+        InboxMessageList messageList = InboxMessageList.parseFrom(argCap.getAllValues().get(1));
+        assertEquals(messageList.getMessageCount(), 2);
+
+
+        argCap = ArgumentCaptor.forClass(ByteString.class);
+        verify(writer).put(argCap.capture(), argCap.capture());
         List<ByteString> args = argCap.getAllValues();
 
         try {
@@ -355,11 +380,9 @@ public class MockedInboxCommitTest {
             BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
-            InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));
-            Assert.assertEquals(messageList.getMessageCount(), messages.size() - qos1UpToSeq - oldestSeq - 1);
-
-            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos1LastCommitBeforeSeq(), qos1UpToSeq + 1);
+            assertEquals(scopedInboxId, args.get(0));
+            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(1));
+            assertEquals(metadata.getQos1StartSeq(), qos1UpToSeq + 1);
         } catch (Exception exception) {
             fail();
         }
@@ -390,6 +413,8 @@ public class MockedInboxCommitTest {
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis())
                 .setExpireSeconds(Integer.MAX_VALUE)
+                .setQos1StartSeq(0)
+                .setQos1NextSeq(12)
                 .build().toByteString()));
         when(kvIterator.isValid())
             .thenReturn(true);
@@ -405,26 +430,24 @@ public class MockedInboxCommitTest {
         InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
             clock, Duration.ofMinutes(30), loadTracker);
         ByteString result = coProc.mutate(input.toByteString(), reader, writer).get();
+        ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
+        verify(writer).deleteRange(rangeCaptor.capture());
+        assertEquals(qos1InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
+        assertEquals(qos1InboxMsgKey(scopedInboxId, 12), rangeCaptor.getValue().getEndKey());
 
         ArgumentCaptor<ByteString> argCap = ArgumentCaptor.forClass(ByteString.class);
-        verify(writer, times(2)).put(argCap.capture(), argCap.capture());
-        verify(writer).delete(argCap.capture());
+        verify(writer).put(argCap.capture(), argCap.capture());
         List<ByteString> args = argCap.getAllValues();
-
-        ArgumentCaptor<Range> rangeArgumentCaptor = ArgumentCaptor.forClass(Range.class);
-        verify(writer).deleteRange(rangeArgumentCaptor.capture());
 
         try {
             InboxServiceRWCoProcOutput output = InboxServiceRWCoProcOutput.parseFrom(result);
             BatchCommitReply commitReply = output.getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
-            InboxMessageList messageList = InboxMessageList.parseFrom(args.get(1));
-            Assert.assertEquals(messageList.getMessageCount(), messages.size() -
-                (qos1UpToSeq - currentEntrySeq + 1));
+            assertEquals(scopedInboxId, args.get(0));
 
-            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(3));
-            Assert.assertEquals(metadata.getQos1LastCommitBeforeSeq(), qos1UpToSeq + 1);
+            InboxMetadata metadata = InboxMetadata.parseFrom(args.get(1));
+            assertEquals(metadata.getQos1StartSeq(), qos1UpToSeq + 1);
         } catch (Exception exception) {
             fail();
         }

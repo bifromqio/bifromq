@@ -290,7 +290,7 @@ public abstract class BaseMQTTTest {
             );
     }
 
-    protected void mockDistSub(QoS qos, boolean success) {
+    protected void mockDistMatch(QoS qos, boolean success) {
         when(distClient.match(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
@@ -300,7 +300,7 @@ public abstract class BaseMQTTTest {
             .thenReturn(CompletableFuture.completedFuture(success ? InboxSubResult.OK : InboxSubResult.ERROR));
     }
 
-    protected void mockDistUnSub(boolean... success) {
+    protected void mockDistUnmatch(boolean... success) {
         CompletableFuture<UnmatchResult>[] unsubResults = new CompletableFuture[success.length];
         for (int i = 0; i < success.length; i++) {
             unsubResults[i] = success[i] ? CompletableFuture.completedFuture(UnmatchResult.OK)

@@ -44,7 +44,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     public void transientUnSub() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistUnSub(true);
+        mockDistUnmatch(true);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
@@ -55,7 +55,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     public void transientMixedUnSubWithDistUnSubFailed() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistUnSub(true, false, true);
+        mockDistUnmatch(true, false, true);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
@@ -78,7 +78,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
     public void persistentMixedSubWithDistUnSubFailed() {
         connectAndVerify(false);
         mockAuthCheck(true);
-        mockDistUnSub(true, false, true);
+        mockDistUnmatch(true, false, true);
         when(inboxClient.unsub(anyLong(), anyString(), anyString(), any()))
             .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.OK))
             .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.ERROR))

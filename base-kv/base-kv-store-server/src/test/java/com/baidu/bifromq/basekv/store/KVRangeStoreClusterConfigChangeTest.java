@@ -241,7 +241,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         Set<String> newReplicas = Sets.newHashSet(newStore1, newStore2, newStore3);
 
         log.info("Current config: {}", rangeSettings.allReplicas);
-        await().ignoreExceptions().forever().until(() -> {
+        await().ignoreExceptions().atMost(Duration.ofSeconds(30)).until(() -> {
             KVRangeSetting newSettings = cluster.kvRangeSetting(rangeId);
             if (newReplicas.containsAll(newSettings.allReplicas)) {
                 return true;

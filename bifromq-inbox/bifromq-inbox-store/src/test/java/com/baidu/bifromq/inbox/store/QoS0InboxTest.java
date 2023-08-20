@@ -283,7 +283,8 @@ public class QoS0InboxTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg2 = message(AT_MOST_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 2, 600, true);
         requestSub(tenantId, inboxId, subInfo.getTopicFilter(), AT_MOST_ONCE);
-        requestInsert(subInfo, topic, msg0, msg1);
+        requestInsert(subInfo, topic, msg0);
+        requestInsert(subInfo, topic, msg1);
         requestInsert(subInfo, topic, msg2);
 
         ArgumentCaptor<Overflowed> argCap = ArgumentCaptor.forClass(Overflowed.class);
@@ -315,8 +316,8 @@ public class QoS0InboxTest extends InboxStoreTest {
 
         reply = requestFetchQoS0(tenantId, inboxId, 10);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0SeqCount(), 2);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(0), 3);
-        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(1), 4);
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(0), 4);
+        assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Seq(1), 5);
 
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0MsgCount(), 2);
         assertEquals(reply.getResultMap().get(scopedInboxIdUtf8).getQos0Msg(0).getMsg().getMessage(),

@@ -62,7 +62,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     public void qoS0Match() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
         int[] qos = {0, 0, 0};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -81,7 +81,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     public void qoS1Match() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
         int[] qos = {1, 1, 1};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -100,7 +100,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     public void qoS2Match() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.EXACTLY_ONCE, true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
         int[] qos = {2, 2, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -119,9 +119,9 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     public void mixedMatch() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
-        mockDistSub(QoS.AT_LEAST_ONCE, true);
-        mockDistSub(QoS.EXACTLY_ONCE, true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
         int[] qos = {0, 1, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
@@ -140,7 +140,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
     public void qoS0MatchFailed() {
         connectAndVerify(true);
         mockAuthCheck(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
         when(retainClient.match(anyLong(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(
                 MatchReply.newBuilder().setResult(Result.ERROR).build()

@@ -85,6 +85,11 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS0Pub() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopicFilter", MqttQoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+
         transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
@@ -100,10 +105,12 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     public void qoS0PubAuthFailed() {
         // not by pass
         mockAuthCheck(false);
-        mockDistUnSub(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
+        mockDistUnmatch(true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
         transientSessionHandler.doSubscribe(System.nanoTime(),
             new MqttTopicSubscription("testTopic", MqttQoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+
         transientSessionHandler.publish(subInfo("testTopic", QoS.AT_MOST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
@@ -119,8 +126,13 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS0PubExceedBufferCapacity() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+
         List<ByteBuffer> payloads = s2cMessagesPayload(10, 32 * 1024);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_MOST_ONCE),
+        transientSessionHandler.publish(subInfo("testTopic", QoS.AT_MOST_ONCE),
             s2cMessages("testTopic", payloads, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         // channel unWritable after 9 messages and lastHintRemaining is 0, then drop
@@ -140,8 +152,13 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubAndAck() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_LEAST_ONCE));
+        channel.runPendingTasks();
+
         int messageCount = 3;
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
+        transientSessionHandler.publish(subInfo("testTopic", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", messageCount, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
         // s2c pub received and ack
@@ -159,10 +176,12 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     public void qoS1PubAuthFailed() {
         // not by pass
         mockAuthCheck(false);
-        mockDistUnSub(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
+        mockDistUnmatch(true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
         transientSessionHandler.doSubscribe(System.nanoTime(),
             new MqttTopicSubscription("testTopic", MqttQoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+
         transientSessionHandler.publish(subInfo("testTopic", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", 5, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
@@ -178,8 +197,13 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubExceedBufferCapacity() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_LEAST_ONCE));
+        channel.runPendingTasks();
+
         List<ByteBuffer> payloads = s2cMessagesPayload(10, 32 * 1024);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
+        transientSessionHandler.publish(subInfo("testTopic", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", payloads, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
         // channel unWritable after 9 messages and lastHintRemaining is 0, then drop
@@ -199,8 +223,13 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS1PubAndNoAck() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_LEAST_ONCE));
+        channel.runPendingTasks();
+
         int messageCount = 3;
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
+        transientSessionHandler.publish(subInfo("testTopic", QoS.AT_LEAST_ONCE),
             s2cMessages("testTopic", messageCount, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
         // s2c pub received and not ack
@@ -249,10 +278,15 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     public void qoS1PubAndPacketIdOverflow() {
         channel.freezeTime();
         mockAuthCheck(true);
+        mockDistMatch(QoS.AT_LEAST_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.AT_LEAST_ONCE));
+        channel.runPendingTasks();
+
         int messageCount = 65535;
         int overFlowCount = 10;
         for (int i = 0; i < messageCount + overFlowCount; i++) {
-            transientSessionHandler.publish(subInfo("testTopicFilter", QoS.AT_LEAST_ONCE),
+            transientSessionHandler.publish(subInfo("testTopic", QoS.AT_LEAST_ONCE),
                 s2cMessages("testTopic", 1, QoS.AT_LEAST_ONCE));
             channel.runPendingTasks();
         }
@@ -283,8 +317,13 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubAndRel() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.EXACTLY_ONCE));
+        channel.runPendingTasks();
+
         int messageCount = 1;
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
+        transientSessionHandler.publish(subInfo("testTopic", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", messageCount, QoS.EXACTLY_ONCE));
         channel.runPendingTasks();
         // s2c pub received and rec
@@ -308,10 +347,12 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     public void qoS2PubAuthFailed() {
         // not by pass
         mockAuthCheck(false);
-        mockDistUnSub(true);
-        mockDistSub(QoS.AT_MOST_ONCE, true);
+        mockDistUnmatch(true);
+        mockDistMatch(QoS.AT_MOST_ONCE, true);
         transientSessionHandler.doSubscribe(System.nanoTime(),
             new MqttTopicSubscription("testTopic", MqttQoS.AT_MOST_ONCE));
+        channel.runPendingTasks();
+
         transientSessionHandler.publish(subInfo("testTopic", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", 5, QoS.EXACTLY_ONCE));
         channel.runPendingTasks();
@@ -327,8 +368,13 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubExceedBufferCapacity() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.EXACTLY_ONCE));
+        channel.runPendingTasks();
+
         List<ByteBuffer> payloads = s2cMessagesPayload(10, 32 * 1024);
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
+        transientSessionHandler.publish(subInfo("testTopic", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", payloads, QoS.EXACTLY_ONCE));
         channel.runPendingTasks();
         // channel unWritable after 9 messages and lastHintRemaining is 0, then drop
@@ -349,8 +395,13 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     public void qoS2PubAndNoRec() throws InterruptedException {
         channel.unfreezeTime();
         mockAuthCheck(true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.EXACTLY_ONCE));
+        channel.runPendingTasks();
+
         int messageCount = 1;
-        transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE),
+        transientSessionHandler.publish(subInfo("testTopic", QoS.EXACTLY_ONCE),
             s2cMessages("testTopic", messageCount, QoS.EXACTLY_ONCE));
         channel.runPendingTasks();
         // s2c pub received and not ack
@@ -400,14 +451,19 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     public void qoS2PubAndPacketIdOverflow() {
         channel.freezeTime();
         mockAuthCheck(true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("testTopic", MqttQoS.EXACTLY_ONCE));
+        channel.runPendingTasks();
+
         int messageCount = 65535;
         int overFlowCount = 10;
         List<TopicMessagePack> messages = s2cMessageList("testTopic", messageCount + overFlowCount, QoS.EXACTLY_ONCE);
         for (int i = 0; i < messageCount + overFlowCount; i++) {
             if (i > messageCount) {
-                transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE), messages.get(i));
+                transientSessionHandler.publish(subInfo("testTopic", QoS.EXACTLY_ONCE), messages.get(i));
             } else {
-                transientSessionHandler.publish(subInfo("testTopicFilter", QoS.EXACTLY_ONCE), messages.get(i));
+                transientSessionHandler.publish(subInfo("testTopic", QoS.EXACTLY_ONCE), messages.get(i));
             }
             channel.runPendingTasks();
         }
@@ -436,6 +492,11 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS2PubWithSameSourcePacketId() {
         mockAuthCheck(true);
+        mockDistMatch(QoS.EXACTLY_ONCE, true);
+        transientSessionHandler.doSubscribe(System.nanoTime(),
+            new MqttTopicSubscription("#", MqttQoS.EXACTLY_ONCE));
+        channel.runPendingTasks();
+
         int messageCount = 2;
         List<ByteBuffer> payloads = s2cMessagesPayload(messageCount, 1);
         List<TopicMessagePack.PublisherPack> messagesFromClient1 = Lists.newArrayList();

@@ -53,13 +53,19 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
             for (SubInfo subInfo : subInfos) {
                 IMQTT3TransientSession session = sessionMap.get(subInfo.getInboxId());
                 if (!noInbox.contains(subInfo) && session != null) {
-                    ok.add(subInfo);
                     inboxes.put(session, subInfo);
                 } else {
                     noInbox.add(subInfo);
                 }
             }
-            inboxes.forEach((session, subInfo) -> session.publish(subInfo, topicMsgPack));
+            inboxes.forEach((session, subInfo) -> {
+                boolean succeed = session.publish(subInfo, topicMsgPack);
+                if (succeed) {
+                    ok.add(subInfo);
+                } else {
+                    noInbox.add(subInfo);
+                }
+            });
         }
         ok.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
             .setSubInfo(subInfo)

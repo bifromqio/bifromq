@@ -98,7 +98,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     public void qoS0PubAuthFailed() {
         // not by pass
         mockAuthCheck(false);
-        mockDistUnSub(true);
+        mockDistUnmatch(true);
         inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE), null);
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
@@ -167,7 +167,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     public void qoS1PubAuthFailed() {
         // not by pass
         mockAuthCheck(false);
-        mockDistUnSub(true);
+        mockDistUnmatch(true);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE), null);
         channel.runPendingTasks();
@@ -209,7 +209,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     public void qoS2PubAuthFailed() {
         // not by pass
         mockAuthCheck(false);
-        mockDistUnSub(true);
+        mockDistUnmatch(true);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE), null);
         channel.runPendingTasks();

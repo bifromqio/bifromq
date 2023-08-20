@@ -112,6 +112,7 @@ class InboxFetchPipeline implements IInboxClient.IInboxReader {
         return rpcClient.invoke(tenantId, null,
                 CommitRequest.newBuilder()
                     .setReqId(reqId)
+                    .setTenantId(tenantId)
                     .setQos(qos)
                     .setUpToSeq(upToSeq)
                     .setInboxId(inboxId)
