@@ -434,6 +434,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     }
 
     public void start() {
+        super.start();
         sessionDictServer.start();
 
         inboxStore.start();
@@ -450,7 +451,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         sharedBaseKVRpcServer.start();
 
         mqttBroker.start();
-
         Observable.combineLatest(
                 distWorkerClient.connState(),
                 inboxClient.connState(),
@@ -471,12 +471,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .filter(state -> state == IRPCClient.ConnState.READY)
             .firstElement()
             .blockingSubscribe();
-
         inboxStoreClient.join();
         retainStoreClient.join();
         distWorkerClient.join();
         log.info("Standalone broker started");
-        setupMetrics();
     }
 
     public void stop() {
@@ -544,6 +542,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         pluginMgr.stopPlugins();
         pluginMgr.unloadPlugins();
         log.info("Standalone broker stopped");
+        super.stop();
     }
 
     public static void main(String[] args) {

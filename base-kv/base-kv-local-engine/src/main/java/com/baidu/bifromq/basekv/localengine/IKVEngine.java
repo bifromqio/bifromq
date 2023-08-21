@@ -64,8 +64,6 @@ public interface IKVEngine {
 
     String checkpoint();
 
-    void checkpoint(String checkpointId);
-
     boolean hasCheckpoint(String checkpointId);
 
     boolean exist(String namespace, ByteString key);

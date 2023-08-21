@@ -41,14 +41,17 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
-import java.time.Duration;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,7 +67,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -99,7 +101,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     private final WriteOptions writeOptions;
     private final ConcurrentHashMap<CompactionTaskKey, CompletableFuture<Void>> compactionTasks =
         new ConcurrentHashMap<>();
-    private final Duration checkpointAge;
     private MetricManager metricMgr;
     private OptimisticTransactionDB instance;
     private String identity;
@@ -111,19 +112,10 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
 
     RocksDBKVEngine(String overrideIdentity,
                     List<String> namespaces,
-                    Predicate<String> checkpointInUse,
+                    Predicate<String> checkpointCheck,
                     RocksDBKVEngineConfigurator c) {
-        this(overrideIdentity, namespaces, checkpointInUse, c, Duration.ofSeconds(c.getGcIntervalInSec() * 2));
-    }
-
-    RocksDBKVEngine(String overrideIdentity,
-                    List<String> namespaces,
-                    Predicate<String> checker,
-                    RocksDBKVEngineConfigurator c,
-                    Duration checkpointAge) {
-        super(overrideIdentity, namespaces, checker);
+        super(overrideIdentity, namespaces, checkpointCheck);
         configurator = c;
-        this.checkpointAge = checkpointAge;
         // default cf must appear as the first one
         cfDescs.put(DEFAULT_NS,
             new ColumnFamilyDescriptor(DEFAULT_NS.getBytes(UTF_8), configurator.config(DEFAULT_NS)));
@@ -424,26 +416,40 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         if (state() != State.STARTED) {
             return;
         }
-        gcTask = this.bgTaskExecutor.schedule(this::gc, configurator.getGcIntervalInSec(), TimeUnit.SECONDS);
+        gcTask = this.bgTaskExecutor.schedule(() -> metricMgr.gcTimer.record(this::gc),
+            configurator.getGcIntervalInSec(), TimeUnit.SECONDS);
     }
 
     private void gc() {
         if (state() != State.STARTED) {
             return;
         }
-        try {
-            for (String checkpointId : findCheckpointIds()) {
-                if (!inUse(checkpointId)) {
-                    log.debug("Deleting checkpoint[{}]", checkpointId);
-                    openedCheckpoints.invalidate(checkpointId);
-                    File cpPath = toCheckpointPath(checkpointId);
-                    Files.walk(cpPath.toPath())
-                        .sorted(Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
-                    cpPath.delete();
-                } else {
-                    log.debug("Checkpoint[{}] is in used", checkpointId);
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dbCheckPointRootDir.toPath())) {
+            for (Path cpPath : stream) {
+                if (Files.isDirectory(cpPath)) {
+                    String checkpointId = cpPath.toFile().getName();
+                    if (!inUse(cpPath.toFile().getName())) {
+                        log.debug("Deleting checkpoint[{}]", checkpointId);
+                        openedCheckpoints.invalidate(checkpointId);
+                        Files.walkFileTree(cpPath, EnumSet.noneOf(FileVisitOption.class), Integer.MAX_VALUE,
+                            new SimpleFileVisitor<>() {
+                                @Override
+                                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                                    throws IOException {
+                                    Files.delete(file);
+                                    return FileVisitResult.CONTINUE;
+                                }
+
+                                @Override
+                                public FileVisitResult postVisitDirectory(Path dir, IOException exc)
+                                    throws IOException {
+                                    Files.delete(dir);
+                                    return FileVisitResult.CONTINUE;
+                                }
+                            });
+                    } else {
+                        log.debug("Checkpoint[{}] is in used", checkpointId);
+                    }
                 }
             }
         } catch (Throwable e) {
@@ -544,16 +550,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         }
 
         return false;
-    }
-
-    private List<String> findCheckpointIds() {
-        return Arrays.stream(dbCheckPointRootDir.listFiles())
-            .filter(File::isDirectory)
-            // this is a workaround, only pick old enough cp
-            .filter(d ->
-                checkpointAge.compareTo(Duration.ofMillis(System.currentTimeMillis() - d.lastModified())) < 0)
-            .map(File::getName)
-            .collect(Collectors.toList());
     }
 
     private File toCheckpointPath(String checkpointId) {
@@ -880,6 +876,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         private final Gauge checkpointGauge;
         private final Gauge compactionTaskGauge;
         private final Timer compactionTimer;
+        private final Timer gcTimer;
         private final Gauge blockCacheMemSizeGauge;
         private final Gauge indexAndFilterSizeGauge;
         private final Gauge memtableSizeGauges;
@@ -915,7 +912,9 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             compactionTimer = Timer.builder("basekv.le.rocksdb.compaction.time")
                 .tags(tags)
                 .register(Metrics.globalRegistry);
-
+            gcTimer = Timer.builder("basekv.le.rocksdb.gc.time")
+                .tags(tags)
+                .register(Metrics.globalRegistry);
             blockCacheMemSizeGauge = Gauge.builder("basekv.le.rocksdb.memusage",
                     () -> {
                         try {
@@ -976,6 +975,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             Metrics.globalRegistry.remove(checkpointGauge);
             Metrics.globalRegistry.remove(compactionTaskGauge);
             Metrics.globalRegistry.remove(compactionTimer);
+            Metrics.globalRegistry.remove(gcTimer);
             Metrics.globalRegistry.remove(blockCacheMemSizeGauge);
             Metrics.globalRegistry.remove(indexAndFilterSizeGauge);
             Metrics.globalRegistry.remove(memtableSizeGauges);

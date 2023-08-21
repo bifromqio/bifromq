@@ -21,11 +21,13 @@ import com.baidu.bifromq.starter.utils.ResourceUtil;
 import com.google.common.base.Strings;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ClassLoaderMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmCompilationMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmHeapPressureMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmInfoMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
+import io.micrometer.core.instrument.binder.system.FileDescriptorMetrics;
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
 import io.micrometer.core.instrument.binder.system.UptimeMetrics;
 import io.netty.handler.ssl.ClientAuth;
@@ -38,16 +40,22 @@ import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import java.io.File;
 import java.security.Provider;
 import java.security.Security;
+import java.util.LinkedList;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
-
     static {
         RxJavaPlugins.setErrorHandler(e -> log.error("Uncaught RxJava exception", e));
     }
 
+    private static File loadFromConfDir(String fileName) {
+        return ResourceUtil.getFile(fileName, CONF_DIR_PROP);
+    }
+
     public static final String CONF_DIR_PROP = "CONF_DIR";
+    private final List<AutoCloseable> closeables = new LinkedList<>();
 
     protected abstract void init(T config);
 
@@ -95,16 +103,6 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
         }
     }
 
-    protected void setupMetrics() {
-        new JvmInfoMetrics().bindTo(Metrics.globalRegistry);
-        new JvmMemoryMetrics().bindTo(Metrics.globalRegistry);
-        new JvmGcMetrics().bindTo(Metrics.globalRegistry);
-        new JvmHeapPressureMetrics().bindTo(Metrics.globalRegistry);
-        new JvmThreadMetrics().bindTo(Metrics.globalRegistry);
-        new UptimeMetrics().bindTo(Metrics.globalRegistry);
-        new ClassLoaderMetrics().bindTo(Metrics.globalRegistry);
-        new ProcessorMetrics().bindTo(Metrics.globalRegistry);
-    }
 
     private SslProvider defaultSslProvider() {
         if (OpenSsl.isAvailable()) {
@@ -125,8 +123,36 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
         return null;
     }
 
-    public static File loadFromConfDir(String fileName) {
-        return ResourceUtil.getFile(fileName, CONF_DIR_PROP);
+
+    @Override
+    public void start() {
+        // os metrics
+        new FileDescriptorMetrics().bindTo(Metrics.globalRegistry);
+        new UptimeMetrics().bindTo(Metrics.globalRegistry);
+        new ProcessorMetrics().bindTo(Metrics.globalRegistry);
+        // jvm metrics
+        new JvmInfoMetrics().bindTo(Metrics.globalRegistry);
+        new ClassLoaderMetrics().bindTo(Metrics.globalRegistry);
+        new JvmCompilationMetrics().bindTo(Metrics.globalRegistry);
+        new JvmMemoryMetrics().bindTo(Metrics.globalRegistry);
+        new JvmThreadMetrics().bindTo(Metrics.globalRegistry);
+        JvmGcMetrics jvmGcMetrics = new JvmGcMetrics();
+        closeables.add(jvmGcMetrics);
+
+        jvmGcMetrics.bindTo(Metrics.globalRegistry);
+        JvmHeapPressureMetrics jvmHeapPressureMetrics = new JvmHeapPressureMetrics();
+        jvmHeapPressureMetrics.bindTo(Metrics.globalRegistry);
+        closeables.add(jvmHeapPressureMetrics);
     }
 
+    @Override
+    public void stop() {
+        closeables.forEach(closable -> {
+            try {
+                closable.close();
+            } catch (Exception e) {
+                // Never happen
+            }
+        });
+    }
 }

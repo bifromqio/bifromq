@@ -27,9 +27,9 @@ import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.raft.proto.Voting;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
+import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.nio.ByteBuffer;
@@ -37,11 +37,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -59,13 +57,11 @@ class KVRangeWALStore implements IRaftStateStore {
     private final int walKeyRangeId;
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
     private final AppendCallback appendCallback;
-    private final Executor bgMgmtExecutor;
-    private final Set<CompletableFuture<Void>> bgTasks = Sets.newConcurrentHashSet();
-
+    private final AsyncRunner taskRunner;
     private long currentTerm = 0;
     private Voting currentVoting;
     private Snapshot latestSnapshot;
-    private volatile long lastIndex;
+    private long lastIndex;
     private long prevStabilizedIndex;
     private int logEntriesKeyInfix;
 
@@ -82,7 +78,7 @@ class KVRangeWALStore implements IRaftStateStore {
         this.storeId = kvEngine.id();
         this.walKeyRangeId = walKeyRangeId;
         this.appendCallback = appendCallback;
-        this.bgMgmtExecutor = bgMgmtExecutor;
+        this.taskRunner = new AsyncRunner(bgMgmtExecutor);
         load();
     }
 
@@ -149,7 +145,6 @@ class KVRangeWALStore implements IRaftStateStore {
                     break;
                 }
             }
-            CompletableFuture<Void> truncateDone = new CompletableFuture<>();
             Runnable truncateTask = () -> {
                 log.trace("Truncating logs before index[{}]: rangeId={}, storeId={}",
                     truncateBeforeIndex, toShortString(rangeId), storeId);
@@ -175,17 +170,9 @@ class KVRangeWALStore implements IRaftStateStore {
                 } finally {
                     log.debug("Logs truncated before index[{}]: rangeId={}, storeId={}",
                         truncateBeforeIndex, toShortString(rangeId), storeId);
-                    truncateDone.complete(null);
                 }
             };
-            bgTasks.add(truncateDone);
-            truncateDone.whenComplete((v, e) -> bgTasks.remove(truncateDone));
-            try {
-                bgMgmtExecutor.execute(truncateTask);
-            } catch (RejectedExecutionException ree) {
-                log.warn("Truncation task rejected by executor, run it in calling thread");
-                truncateTask.run();
-            }
+            taskRunner.add(truncateTask);
         } else {
             // the snapshot represents a different history, it happens when installing snapshot from leader
             // save snapshot
@@ -224,14 +211,7 @@ class KVRangeWALStore implements IRaftStateStore {
                     truncateDone.complete(null);
                 }
             };
-            bgTasks.add(truncateDone);
-            truncateDone.whenComplete((v, e) -> bgTasks.remove(truncateDone));
-            try {
-                bgMgmtExecutor.execute(truncateTask);
-            } catch (RejectedExecutionException ree) {
-                log.warn("Truncation task rejected by executor, run it in calling thread");
-                truncateTask.run();
-            }
+            taskRunner.add(truncateTask);
         }
     }
 
@@ -253,7 +233,7 @@ class KVRangeWALStore implements IRaftStateStore {
     @Override
     public Optional<LogEntry> entryAt(long index) {
         if (index < firstIndex() || index > lastIndex()) {
-            return Optional.ofNullable(null);
+            return Optional.empty();
         }
         try {
             ByteString data =
@@ -336,7 +316,7 @@ class KVRangeWALStore implements IRaftStateStore {
     public CompletableFuture<Void> stop() {
         log.debug("Stop range wal storage: rangeId={}, storeId={}", toShortString(rangeId), storeId);
         stableListener = DEFAULT_STABLE_LISTENER;
-        return CompletableFuture.allOf(bgTasks.toArray(new CompletableFuture[0]));
+        return taskRunner.awaitDone().toCompletableFuture();
     }
 
     public void destroy() {

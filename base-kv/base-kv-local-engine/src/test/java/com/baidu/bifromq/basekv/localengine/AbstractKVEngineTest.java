@@ -331,8 +331,11 @@ public abstract class AbstractKVEngineTest {
     public void testCheckpointGC() {
         String cpId1 = kvEngine.checkpoint();
         String cpId2 = kvEngine.checkpoint();
+        String cpId3 = kvEngine.checkpoint();
         cp.set(cpId1);
-        await().until(() -> kvEngine.hasCheckpoint(cpId1) && !kvEngine.hasCheckpoint(cpId2));
+        // latest cp always treated as in-use
+        await().until(
+            () -> kvEngine.hasCheckpoint(cpId1) && !kvEngine.hasCheckpoint(cpId2) && kvEngine.hasCheckpoint(cpId3));
     }
 
     @Test

@@ -126,7 +126,7 @@ public class RocksDBCompactionTest {
             .setDbRootDir(Paths.get(dataDir.toString(), uid, DB_NAME).toString());
 
         kvEngine = new RocksDBKVEngine(null, List.of(IKVEngine.DEFAULT_NS, NS),
-            this::isUsed, configurator, Duration.ofSeconds(-1));
+            this::isUsed, configurator);
         kvEngine.start(bgTaskExecutor);
     }
 
