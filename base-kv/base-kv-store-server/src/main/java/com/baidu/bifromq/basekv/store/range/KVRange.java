@@ -159,8 +159,10 @@ public class KVRange implements IKVRange {
     private final CompletableFuture<Void> destroySignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
     private final ILoadEstimator loadEstimator;
+    private final long compactionLingerNanos;
     private IKVRangeMessenger messenger;
     private volatile CompletableFuture<Void> checkWalSizeTask;
+    private long lastCompactionDoneAt;
 
     public KVRange(KVRangeId id,
                    String hostStoreId,
@@ -177,6 +179,7 @@ public class KVRange implements IKVRange {
             this.opts = opts.toBuilder().build();
             this.id = id;
             this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
+            this.compactionLingerNanos = Duration.ofSeconds(opts.getCompactLingerTimeSec()).toNanos();
             loadEstimator = new LoadEstimator(opts.getMaxRangeLoad(),
                 opts.getSplitKeyThreshold(),
                 opts.getLoadTrackingWindowSec(),
@@ -1341,13 +1344,15 @@ public class KVRange implements IKVRange {
 
     private void checkWalSize() {
         if ((checkWalSizeTask == null || checkWalSizeTask.isDone()) &&
+            System.nanoTime() - lastCompactionDoneAt > compactionLingerNanos &&
             wal.logDataSize() > opts.getCompactWALThresholdBytes()) {
             IKVRangeReader reader = accessor.borrow();
             long lastAppliedIndex = reader.lastAppliedIndex();
             accessor.returnBorrowed(reader);
             KVRangeSnapshot snapshot = wal.latestSnapshot();
             if (snapshot.getLastAppliedIndex() < lastAppliedIndex) {
-                checkWalSizeTask = doCompact(accessor.metadata().blockingFirst());
+                checkWalSizeTask = doCompact(accessor.metadata().blockingFirst())
+                    .whenComplete((v, e) -> lastCompactionDoneAt = System.nanoTime());
             }
         }
     }

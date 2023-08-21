@@ -33,7 +33,6 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -74,7 +73,7 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
             .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
             .setGcIntervalInSec(1);
         kvEngine = new RocksDBKVEngine(null, List.of(IKVEngine.DEFAULT_NS, NS),
-            this::isUsed, configurator, Duration.ofSeconds(1));
+            this::isUsed, configurator);
         kvEngine.start(bgTaskExecutor);
     }
 

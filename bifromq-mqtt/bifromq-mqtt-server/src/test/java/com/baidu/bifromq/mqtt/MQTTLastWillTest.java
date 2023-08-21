@@ -210,12 +210,6 @@ public class MQTTLastWillTest {
         when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
             .thenReturn(CompletableFuture.completedFuture(true));
 
-        doAnswer(invocationOnMock -> {
-            Event<?> event = invocationOnMock.getArgument(0);
-            log.info("event: {}", event.type());
-            return null;
-        }).when(mqttTest.eventCollector).report(any(Event.class));
-
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);
         lwtPubConnOpts.setWill(willTopic, willPayload.toByteArray(), 2, true);

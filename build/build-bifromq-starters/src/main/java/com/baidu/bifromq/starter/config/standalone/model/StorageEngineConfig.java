@@ -26,5 +26,5 @@ import lombok.Setter;
     @JsonSubTypes.Type(value = RocksDBEngineConfig.class, name = "rocksdb")
 })
 public abstract class StorageEngineConfig {
-    private int gcIntervalInSec = 300; // 5min
+    private int gcIntervalInSec = 60;
 }

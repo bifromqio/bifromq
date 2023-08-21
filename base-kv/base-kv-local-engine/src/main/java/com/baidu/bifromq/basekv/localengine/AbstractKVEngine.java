@@ -42,6 +42,7 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     private final ConcurrentHashMap<Integer, K> ranges = new ConcurrentHashMap<>();
     private final Map<Integer, B> writeBatches = new ConcurrentHashMap<>();
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
+    protected volatile String latestCheckpointId;
 
     private MetricManager metricMgr;
 
@@ -189,16 +190,19 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     protected abstract long size(String checkpointId, K range, ByteString start, ByteString end);
 
     protected final boolean inUse(String checkpointId) {
-        return checkpointInUse.test(checkpointId);
+        return checkpointId.equals(latestCheckpointId) || checkpointInUse.test(checkpointId);
     }
 
     @Override
     public final String checkpoint() {
         checkState();
         String checkpointId = UUID.randomUUID().toString();
-        checkpoint(checkpointId);
+        latestCheckpointId = checkpointId;
+        metricMgr.cpCallTimer.record(() -> checkpoint(checkpointId));
         return checkpointId;
     }
+
+    protected abstract void checkpoint(String checkpointId);
 
     @Override
     public final boolean exist(String namespace, ByteString key) {
@@ -688,6 +692,7 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     private class MetricManager {
         private final Gauge activeKeyRangesGauge;
         private final Gauge activeWriteBatchGauge;
+        private final Timer cpCallTimer;
         private final Timer sizeCallTimer;
         private final Timer skipCallTimer;
         private final Timer existCallTimer;
@@ -716,6 +721,10 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
                 .register(Metrics.globalRegistry);
             activeWriteBatchGauge = Gauge.builder("basekv.le.active.batches", writeBatches::size)
                 .tags(tags)
+                .register(Metrics.globalRegistry);
+            cpCallTimer = Timer.builder("basekv.le.call.time")
+                .tags(tags)
+                .tag("op", "cp")
                 .register(Metrics.globalRegistry);
             sizeCallTimer = Timer.builder("basekv.le.call.time")
                 .tags(tags)
@@ -797,6 +806,7 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
         void close() {
             Metrics.globalRegistry.remove(activeKeyRangesGauge);
             Metrics.globalRegistry.remove(activeWriteBatchGauge);
+            Metrics.globalRegistry.remove(cpCallTimer);
             Metrics.globalRegistry.remove(sizeCallTimer);
             Metrics.globalRegistry.remove(skipCallTimer);
 
