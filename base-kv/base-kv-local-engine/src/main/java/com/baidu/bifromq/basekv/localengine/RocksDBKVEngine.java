@@ -222,8 +222,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         }
     }
 
-    @Override
-    public void checkpoint(String checkpointId) {
+    protected void checkpoint(String checkpointId) {
         checkState();
         File cpPath = toCheckpointPath(checkpointId);
         if (hasCheckpoint(checkpointId)) {
@@ -428,6 +427,9 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             for (Path cpPath : stream) {
                 if (Files.isDirectory(cpPath)) {
                     String checkpointId = cpPath.toFile().getName();
+                    if (!isCheckpointId(checkpointId)) {
+                        continue;
+                    }
                     if (!inUse(cpPath.toFile().getName())) {
                         log.debug("Deleting checkpoint[{}]", checkpointId);
                         openedCheckpoints.invalidate(checkpointId);
