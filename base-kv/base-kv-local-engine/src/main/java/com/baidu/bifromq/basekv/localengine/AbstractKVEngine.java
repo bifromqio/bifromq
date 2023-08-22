@@ -35,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends AbstractWriteBatch> implements IKVEngine {
+    private static final String CP_SUFFIX = ".cp";
     protected final String overrideIdentity;
     private final Set<String> namespaces;
     private final Predicate<String> checkpointInUse;
@@ -196,10 +197,26 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     @Override
     public final String checkpoint() {
         checkState();
-        String checkpointId = UUID.randomUUID().toString();
+        String checkpointId = genCheckpointId();
         latestCheckpointId = checkpointId;
         metricMgr.cpCallTimer.record(() -> checkpoint(checkpointId));
         return checkpointId;
+    }
+
+    private String genCheckpointId() {
+        return UUID.randomUUID() + CP_SUFFIX;
+    }
+
+    protected boolean isCheckpointId(String checkpointId) {
+        if (checkpointId.endsWith(CP_SUFFIX)) {
+            try {
+                UUID.fromString(checkpointId.substring(0, checkpointId.lastIndexOf(CP_SUFFIX)));
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        }
+        return false;
     }
 
     protected abstract void checkpoint(String checkpointId);

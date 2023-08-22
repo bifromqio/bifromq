@@ -197,8 +197,7 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
         }
     }
 
-    @Override
-    public void checkpoint(String checkpointId) {
+    protected void checkpoint(String checkpointId) {
         checkState();
         Checkpoint nsDataCheckpoint = new Checkpoint();
         nsData.forEach((ns, data) -> nsDataCheckpoint.put(ns, data.clone()));
