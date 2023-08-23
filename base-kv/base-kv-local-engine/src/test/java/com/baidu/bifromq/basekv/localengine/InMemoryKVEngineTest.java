@@ -18,7 +18,6 @@ import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.google.common.util.concurrent.MoreExecutors;
-import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +33,7 @@ public class InMemoryKVEngineTest extends AbstractKVEngineTest {
         maintenanceTaskExecutor =
             newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
         InMemoryKVEngineConfigurator configurator = new InMemoryKVEngineConfigurator().setGcIntervalInSec(1);
-        kvEngine = new InMemoryKVEngine(null, singletonList(NS), this::isUsed, configurator,
-            Duration.ofSeconds(-1));
+        kvEngine = new InMemoryKVEngine(null, singletonList(NS), this::isUsed, configurator);
         kvEngine.start(maintenanceTaskExecutor);
     }
 

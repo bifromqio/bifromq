@@ -32,8 +32,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Predicate;
 import lombok.AllArgsConstructor;
@@ -43,39 +41,25 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange, InMemoryKVEngine.WriteBatch> {
     private final String identity;
-
     private final Comparator<ByteString> comparator = unsignedLexicographicalComparator();
     private final Map<String, ConcurrentSkipListMap<ByteString, ByteString>> nsData = new HashMap<>();
-
     private final ConcurrentHashMap<String, Checkpoint> openedCheckpoints = new ConcurrentHashMap<>();
-
     private final InMemoryKVEngineConfigurator configurator;
-
+    private final Duration checkpointAge;
     private final Map<String, Long> averageKVSizeMap = new HashMap<>();
     private final Map<String, Long> approximateKVCountMap = new HashMap<>();
     private final LongAdder readKeys = new LongAdder();
     private final LongAdder readBytes = new LongAdder();
     private final LongAdder writtenKeys = new LongAdder();
     private final LongAdder writtenBytes = new LongAdder();
-    private final Duration checkpointAge;
-    private ScheduledExecutorService gcExecutor;
-    private volatile ScheduledFuture<?> gcFuture;
 
     public InMemoryKVEngine(String overrideIdentity,
                             List<String> namespaces,
                             Predicate<String> checker,
                             InMemoryKVEngineConfigurator c) {
-        this(overrideIdentity, namespaces, checker, c, Duration.ofMillis(5));
-    }
-
-    public InMemoryKVEngine(String overrideIdentity,
-                            List<String> namespaces,
-                            Predicate<String> checker,
-                            InMemoryKVEngineConfigurator c,
-                            Duration checkpointAge) {
-        super(overrideIdentity, namespaces, checker);
+        super(overrideIdentity, namespaces, checker, Duration.ofSeconds(c.getGcIntervalInSec()));
         this.configurator = c;
-        this.checkpointAge = checkpointAge;
+        this.checkpointAge = Duration.ofSeconds(c.getGcIntervalInSec() / 2);
         if (namespaces.isEmpty()) {
             throw new IllegalArgumentException("Namespaces mustn't be empty");
         }
@@ -95,29 +79,13 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
 
     @Override
     protected void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
-        this.gcExecutor = bgTaskExecutor;
         log.debug("InMemoryKVEngine[{}] initialized", id());
-    }
-
-    @Override
-    protected void afterStart() {
-        scheduleNextGC();
     }
 
     @SneakyThrows
     @Override
     protected void doStop() {
         log.debug("Stopping InMemoryKVEngine");
-        if (gcFuture != null) {
-            gcFuture.cancel(true);
-            if (!gcFuture.isCancelled()) {
-                try {
-                    gcFuture.get();
-                } catch (Throwable e) {
-                    log.error("Error during stop gc task", e);
-                }
-            }
-        }
     }
 
     @Override
@@ -329,22 +297,17 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
         calculateAverageKVSize(namespace, key, value);
     }
 
-    private void scheduleNextGC() {
-        if (state() != State.STARTED) {
-            return;
-        }
-        log.debug("Checkpoint collector scheduled[identity={}]", identity);
-        gcFuture = gcExecutor.schedule(this::gc, configurator.getGcIntervalInSec(), TimeUnit.SECONDS);
+    @Override
+    protected Iterable<String> checkpoints() {
+        return openedCheckpoints.entrySet().stream()
+            .filter(entry -> entry.getValue().older(checkpointAge))
+            .map(Map.Entry::getKey)
+            .toList();
     }
 
-    private void gc() {
-        if (state() != State.STARTED) {
-            return;
-        }
-        openedCheckpoints.keySet()
-            .removeIf(checkpointId -> !inUse(checkpointId)
-                && openedCheckpoints.get(checkpointId).older(checkpointAge));
-        scheduleNextGC();
+    @Override
+    protected void cleanCheckpoint(String checkpointId) {
+        openedCheckpoints.remove(checkpointId);
     }
 
     private void calculateAverageKVSize(String namespace, ByteString key, ByteString value) {

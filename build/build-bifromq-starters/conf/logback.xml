@@ -38,7 +38,7 @@
             <pattern>${eventPattern}</pattern>
         </encoder>
         <filter class="ch.qos.logback.classic.filter.LevelFilter">
-            <level>DEBUG</level>
+            <level>INFO</level>
             <onMatch>ACCEPT</onMatch>
             <onMismatch>DENY</onMismatch>
         </filter>
@@ -130,6 +130,11 @@
         <appender-ref ref="infoLogFile"/>
         <appender-ref ref="warnLogFile"/>
         <appender-ref ref="errorLogFile"/>
+    </logger>
+
+    <!--FOLLOWING LOGGER IS ONLY FOR DEMO PURPOSE-->
+    <logger name="DemoEventLogger" level="INFO" additivity="false">
+        <appender-ref ref="eventLogFile"/>
     </logger>
 
     <root level="INFO">

@@ -41,7 +41,6 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -50,7 +49,9 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -62,14 +63,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.Checkpoint;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -106,16 +106,17 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     private String identity;
     private final File dbRootDir;
     private final File dbCheckPointRootDir;
+    private final Duration checkpointAge;
     private Checkpoint checkpoint;
-    private ScheduledFuture<?> gcTask;
     private ScheduledExecutorService bgTaskExecutor;
 
     RocksDBKVEngine(String overrideIdentity,
                     List<String> namespaces,
                     Predicate<String> checkpointCheck,
                     RocksDBKVEngineConfigurator c) {
-        super(overrideIdentity, namespaces, checkpointCheck);
+        super(overrideIdentity, namespaces, checkpointCheck, Duration.ofSeconds(c.getGcIntervalInSec()));
         configurator = c;
+        checkpointAge = Duration.ofSeconds(c.getGcIntervalInSec() / 2);
         // default cf must appear as the first one
         cfDescs.put(DEFAULT_NS,
             new ColumnFamilyDescriptor(DEFAULT_NS.getBytes(UTF_8), configurator.config(DEFAULT_NS)));
@@ -128,7 +129,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             .scheduler(Scheduler.systemScheduler())
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .executor(MoreExecutors.directExecutor()) // ensure Removal Listener called synchronously
-            .removalListener((RemovalListener<String, OpenedCheckpoint>) (key, value, removalCause) -> {
+            .evictionListener((RemovalListener<String, OpenedCheckpoint>) (key, value, removalCause) -> {
                 log.debug("Close checkpoint[{}]", key);
                 if (value != null) {
                     value.close();
@@ -225,10 +226,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     protected void checkpoint(String checkpointId) {
         checkState();
         File cpPath = toCheckpointPath(checkpointId);
-        if (hasCheckpoint(checkpointId)) {
-            log.warn("Checkpoint[{}] already exists in path[{}]", checkpointId, cpPath);
-            return;
-        }
         log.debug("Generating checkpoint[{}] in path[{}]", checkpointId, cpPath);
         try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
             // flush before checkpointing
@@ -373,14 +370,45 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     }
 
     @Override
-    protected void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
-        this.bgTaskExecutor = bgTaskExecutor;
-        metricMgr = new MetricManager(metricTags);
+    protected Iterable<String> checkpoints() {
+        return Arrays.stream(dbCheckPointRootDir.listFiles())
+            .filter(d -> d.isDirectory() &&
+                checkpointAge.compareTo(Duration.ofMillis(System.currentTimeMillis() - d.lastModified())) < 0)
+            .map(File::getName)
+            .collect(Collectors.toList());
     }
 
     @Override
-    protected void afterStart() {
-        scheduleGC();
+    protected void cleanCheckpoint(String checkpointId) {
+        log.debug("Deleting checkpoint[{}]", checkpointId);
+        openedCheckpoints.invalidate(checkpointId);
+        try {
+            Files.walkFileTree(toCheckpointPath(checkpointId).toPath(), EnumSet.noneOf(FileVisitOption.class),
+                Integer.MAX_VALUE,
+                new SimpleFileVisitor<>() {
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                        throws IOException {
+                        Files.delete(file);
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult postVisitDirectory(Path dir, IOException exc)
+                        throws IOException {
+                        Files.delete(dir);
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
+        } catch (IOException e) {
+            log.error("Failed to clean checkpoint:{} at path:{}", checkpointId, toCheckpointPath(checkpointId));
+        }
+    }
+
+    @Override
+    protected void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
+        this.bgTaskExecutor = bgTaskExecutor;
+        metricMgr = new MetricManager(metricTags);
     }
 
     @Override
@@ -388,16 +416,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         log.info("Stopping RocksDBKVEngine[{}]", identity);
         metricMgr.close();
         openedCheckpoints.invalidateAll();
-        if (gcTask != null) {
-            gcTask.cancel(true);
-            try {
-                if (!gcTask.isCancelled()) {
-                    gcTask.get();
-                }
-            } catch (Throwable e) {
-                log.error("Failed to stop gc task");
-            }
-        }
         log.debug("Waiting for compaction task[{}] finish", compactionTasks.size());
         CompletableFuture.allOf(compactionTasks.values().toArray(new CompletableFuture[0]))
             .exceptionally(e -> null)
@@ -409,55 +427,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         cfDescs.values().forEach(cfDesc -> cfDesc.getOptions().close());
         dbOptions.close();
         writeOptions.close();
-    }
-
-    private void scheduleGC() {
-        if (state() != State.STARTED) {
-            return;
-        }
-        gcTask = this.bgTaskExecutor.schedule(() -> metricMgr.gcTimer.record(this::gc),
-            configurator.getGcIntervalInSec(), TimeUnit.SECONDS);
-    }
-
-    private void gc() {
-        if (state() != State.STARTED) {
-            return;
-        }
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dbCheckPointRootDir.toPath())) {
-            for (Path cpPath : stream) {
-                if (Files.isDirectory(cpPath)) {
-                    String checkpointId = cpPath.toFile().getName();
-                    if (!isCheckpointId(checkpointId)) {
-                        continue;
-                    }
-                    if (!inUse(cpPath.toFile().getName())) {
-                        log.debug("Deleting checkpoint[{}]", checkpointId);
-                        openedCheckpoints.invalidate(checkpointId);
-                        Files.walkFileTree(cpPath, EnumSet.noneOf(FileVisitOption.class), Integer.MAX_VALUE,
-                            new SimpleFileVisitor<>() {
-                                @Override
-                                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                                    throws IOException {
-                                    Files.delete(file);
-                                    return FileVisitResult.CONTINUE;
-                                }
-
-                                @Override
-                                public FileVisitResult postVisitDirectory(Path dir, IOException exc)
-                                    throws IOException {
-                                    Files.delete(dir);
-                                    return FileVisitResult.CONTINUE;
-                                }
-                            });
-                    } else {
-                        log.debug("Checkpoint[{}] is in used", checkpointId);
-                    }
-                }
-            }
-        } catch (Throwable e) {
-            log.error("unexpected error during collecting checkpoints", e);
-        }
-        scheduleGC();
     }
 
     @VisibleForTesting
@@ -492,9 +461,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             }
             return whenFinish;
         });
-        onDone.whenComplete((v, e) -> {
-            compactionTasks.remove(key, onDone);
-        });
+        onDone.whenComplete((v, e) -> compactionTasks.remove(key, onDone));
         return onDone.thenApply(v -> null);
     }
 
@@ -514,7 +481,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         try {
             Path overrideIdentityFilePath = Paths.get(dbRootDir.getAbsolutePath(), "OVERRIDEIDENTITY");
             if (isCreation && (overrideIdentity != null && !overrideIdentity.trim().isEmpty())) {
-                Files.write(overrideIdentityFilePath, overrideIdentity.getBytes(UTF_8), StandardOpenOption.CREATE);
+                Files.writeString(overrideIdentityFilePath, overrideIdentity, StandardOpenOption.CREATE);
             }
             if (overrideIdentityFilePath.toFile().exists()) {
                 List<String> lines = Files.readAllLines(overrideIdentityFilePath);
@@ -547,7 +514,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     private boolean isEmpty(Path path) throws IOException {
         if (Files.isDirectory(path)) {
             try (Stream<Path> entries = Files.list(path)) {
-                return !entries.findFirst().isPresent();
+                return entries.findFirst().isEmpty();
             }
         }
 
@@ -571,12 +538,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         return new org.rocksdb.Range(new Slice(start.toByteArray()), new Slice(end.toByteArray()));
     }
 
-    @AllArgsConstructor
-    @EqualsAndHashCode
-    private static class CompactionTaskKey {
-        final String namespace;
-        final ByteString startKey;
-        final ByteString endKey;
+    private record CompactionTaskKey(String namespace, ByteString startKey, ByteString endKey) {
     }
 
     @AllArgsConstructor
@@ -617,7 +579,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         }
     }
 
-    protected class KeyRange extends AbstractKeyRange {
+    public class KeyRange extends AbstractKeyRange {
         private final AtomicBoolean compacting = new AtomicBoolean();
         private final AtomicInteger keyCount = new AtomicInteger();
         private final AtomicInteger tombstoneCount = new AtomicInteger();
@@ -858,7 +820,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             int idx = count++ % window.length;
             long dropped = window[idx];
             window[idx] = latency;
-            total += latency - dropped;
+            total += (int) (latency - dropped);
             estimate = total / Math.min(count, window.length);
             if (estimate > 10_000_000) { // 10ms seems a reasonable guess from my observation so far
                 if (compacting.compareAndSet(false, true)) {
@@ -878,7 +840,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         private final Gauge checkpointGauge;
         private final Gauge compactionTaskGauge;
         private final Timer compactionTimer;
-        private final Timer gcTimer;
         private final Gauge blockCacheMemSizeGauge;
         private final Gauge indexAndFilterSizeGauge;
         private final Gauge memtableSizeGauges;
@@ -912,9 +873,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                 .baseUnit("tasks")
                 .register(Metrics.globalRegistry);
             compactionTimer = Timer.builder("basekv.le.rocksdb.compaction.time")
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            gcTimer = Timer.builder("basekv.le.rocksdb.gc.time")
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             blockCacheMemSizeGauge = Gauge.builder("basekv.le.rocksdb.memusage",
@@ -977,7 +935,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             Metrics.globalRegistry.remove(checkpointGauge);
             Metrics.globalRegistry.remove(compactionTaskGauge);
             Metrics.globalRegistry.remove(compactionTimer);
-            Metrics.globalRegistry.remove(gcTimer);
             Metrics.globalRegistry.remove(blockCacheMemSizeGauge);
             Metrics.globalRegistry.remove(indexAndFilterSizeGauge);
             Metrics.globalRegistry.remove(memtableSizeGauges);

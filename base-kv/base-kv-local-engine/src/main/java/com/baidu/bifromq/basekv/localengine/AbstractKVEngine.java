@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,13 +29,16 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends AbstractWriteBatch> implements IKVEngine {
+public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends AbstractWriteBatch<K>>
+    implements IKVEngine {
     private static final String CP_SUFFIX = ".cp";
     protected final String overrideIdentity;
     private final Set<String> namespaces;
@@ -43,27 +47,32 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     private final ConcurrentHashMap<Integer, K> ranges = new ConcurrentHashMap<>();
     private final Map<Integer, B> writeBatches = new ConcurrentHashMap<>();
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
-    protected volatile String latestCheckpointId;
-
+    private final Duration gcInterval;
+    private ScheduledExecutorService gcExecutor;
+    private volatile ScheduledFuture<?> gcFuture;
     private MetricManager metricMgr;
 
     public AbstractKVEngine(String overrideIdentity,
                             List<String> namespaces,
-                            Predicate<String> checkpointInUse) {
+                            Predicate<String> checkpointInUse,
+                            Duration gcInterval) {
         this.overrideIdentity = overrideIdentity;
         this.namespaces = new HashSet<>(namespaces);
         this.namespaces.add(DEFAULT_NS);
         this.namespaces.forEach(ns -> defaultRanges.put(ns, newKeyRange(0, ns, null, null)));
         this.checkpointInUse = checkpointInUse == null ? cpId -> true : checkpointInUse;
+        this.gcInterval = gcInterval;
     }
 
     @Override
     public final void start(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
-                doStart(bgTaskExecutor, metricTags);
+                this.gcExecutor = bgTaskExecutor;
                 metricMgr = new MetricManager(metricTags);
+                doStart(bgTaskExecutor, metricTags);
                 state.set(State.STARTED);
+                scheduleNextGC();
                 afterStart();
             } catch (Throwable e) {
                 state.set(State.FATAL_FAILURE);
@@ -82,6 +91,16 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     public final void stop() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             try {
+                if (gcFuture != null) {
+                    gcFuture.cancel(true);
+                    if (!gcFuture.isCancelled()) {
+                        try {
+                            gcFuture.get();
+                        } catch (Throwable e) {
+                            log.error("Error during stop gc task", e);
+                        }
+                    }
+                }
                 doStop();
                 metricMgr.close();
             } finally {
@@ -190,27 +209,23 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
 
     protected abstract long size(String checkpointId, K range, ByteString start, ByteString end);
 
-    protected final boolean inUse(String checkpointId) {
-        return checkpointId.equals(latestCheckpointId) || checkpointInUse.test(checkpointId);
-    }
-
     @Override
     public final String checkpoint() {
         checkState();
         String checkpointId = genCheckpointId();
-        latestCheckpointId = checkpointId;
         metricMgr.cpCallTimer.record(() -> checkpoint(checkpointId));
         return checkpointId;
     }
 
     private String genCheckpointId() {
+        // we need generate global unique checkpoint id, since it will be used in raft snapshot
         return UUID.randomUUID() + CP_SUFFIX;
     }
 
     protected boolean isCheckpointId(String checkpointId) {
         if (checkpointId.endsWith(CP_SUFFIX)) {
             try {
-                UUID.fromString(checkpointId.substring(0, checkpointId.lastIndexOf(CP_SUFFIX)));
+                UUID uuid = UUID.fromString(checkpointId.substring(0, checkpointId.lastIndexOf(CP_SUFFIX)));
                 return true;
             } catch (Throwable e) {
                 return false;
@@ -609,6 +624,37 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
         INIT, STARTING, STARTED, FATAL_FAILURE, STOPPING, STOPPED
     }
 
+    protected abstract Iterable<String> checkpoints();
+
+    protected abstract void cleanCheckpoint(String checkpointId);
+
+    private void scheduleNextGC() {
+        if (state() != State.STARTED) {
+            return;
+        }
+        log.debug("Checkpoint collector scheduled[identity={}]", id());
+        gcFuture = gcExecutor.schedule(this::gc, gcInterval.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private void gc() {
+        if (state() != State.STARTED) {
+            return;
+        }
+        Timer.Sample start = Timer.start();
+        try {
+            for (String checkpointId : checkpoints()) {
+                if (isCheckpointId(checkpointId) && !checkpointInUse.test(checkpointId)) {
+                    cleanCheckpoint(checkpointId);
+                }
+            }
+        } catch (Throwable e) {
+            log.error("Checkpoint gc failed", e);
+        } finally {
+            start.stop(metricMgr.gcTimer);
+        }
+        scheduleNextGC();
+    }
+
     private void checkBatchId(int batchId) {
         assert writeBatches.containsKey(batchId) : String.format("Batch[%s] not found", batchId);
     }
@@ -709,6 +755,8 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     private class MetricManager {
         private final Gauge activeKeyRangesGauge;
         private final Gauge activeWriteBatchGauge;
+
+        private final Timer gcTimer;
         private final Timer cpCallTimer;
         private final Timer sizeCallTimer;
         private final Timer skipCallTimer;
@@ -737,6 +785,9 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             activeWriteBatchGauge = Gauge.builder("basekv.le.active.batches", writeBatches::size)
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            gcTimer = Timer.builder("basekv.le.gc.time")
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             cpCallTimer = Timer.builder("basekv.le.call.time")
