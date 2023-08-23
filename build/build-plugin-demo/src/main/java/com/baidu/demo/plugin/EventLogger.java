@@ -33,7 +33,7 @@ public final class EventLogger implements IEventCollector {
                     DIST_ERROR,
                     OVERFLOWED,
                     QOS1_DROPPED,
-                    DELIVER_ERROR -> LOG.warn("Message dropped due to {}", event.type());
+                    DELIVER_ERROR -> LOG.info("Message dropped due to {}", event.type());
             }
         }
     }
