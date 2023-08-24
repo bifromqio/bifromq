@@ -13,12 +13,14 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,6 +32,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -65,12 +68,14 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     }
 
     @Override
-    public final void start(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
+    public final void start(String... metricTags) {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
-                this.gcExecutor = bgTaskExecutor;
                 metricMgr = new MetricManager(metricTags);
-                doStart(bgTaskExecutor, metricTags);
+                this.gcExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                    new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("cp-gc-executor")),
+                    "cp-gc-executor-" + Tags.of(metricTags));
+                doStart(metricTags);
                 state.set(State.STARTED);
                 scheduleNextGC();
                 afterStart();
@@ -81,7 +86,7 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
         }
     }
 
-    protected abstract void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags);
+    protected abstract void doStart(String... metricTags);
 
     protected void afterStart() {
 

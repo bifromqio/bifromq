@@ -172,6 +172,7 @@ public class KVRange implements IKVRange {
                    IKVRangeWALStoreEngine walStateStorageEngine,
                    Executor queryExecutor,
                    Executor fsmExecutor,
+                   Executor mgmtExecutor,
                    Executor bgExecutor,
                    KVRangeOptions opts,
                    @Nullable Snapshot initSnapshot) {
@@ -197,7 +198,7 @@ public class KVRange implements IKVRange {
                 new KVRangeWAL(id, walStateStorageEngine, opts.getWalRaftConfig(), opts.getMaxWALFatchBatchSize());
             this.fsmExecutor = fsmExecutor;
             this.bgExecutor = bgExecutor;
-            this.mgmtTaskRunner = new AsyncRunner(bgExecutor);
+            this.mgmtTaskRunner = new AsyncRunner(mgmtExecutor);
             this.coProc = coProcFactory.create(id, () -> accessor.getReader(true), loadEstimator);
             this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor);
             this.queryRunner = new KVRangeQueryRunner(accessor, coProc, queryExecutor, linearizer);

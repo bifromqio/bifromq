@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.localengine;
 
 import com.google.protobuf.ByteString;
 import java.util.Optional;
-import java.util.concurrent.ScheduledExecutorService;
 
 public interface IKVEngine {
     String DEFAULT_NS = "default";
@@ -23,7 +22,7 @@ public interface IKVEngine {
     /**
      * The unique identifier of the engine
      *
-     * @return
+     * @return id
      */
     String id();
 
@@ -32,7 +31,7 @@ public interface IKVEngine {
      * boundary overlapping at the same time. The range is used for internal statistics and bookkeeping at runtime, and
      * it will not be persisted.
      *
-     * @param namespace
+     * @param namespace the namespace
      * @param start     the left end of the range, null for left open end
      * @param end       the right end of the range, null for right open end
      * @return unique
@@ -42,7 +41,7 @@ public interface IKVEngine {
     /**
      * Unregister a range
      *
-     * @param rangeId
+     * @param rangeId the id identifying the registered range
      */
     void unregisterKeyRange(int rangeId);
 
@@ -226,7 +225,7 @@ public interface IKVEngine {
 
     void flush();
 
-    void start(ScheduledExecutorService bgTaskExecutor, String... metricTags);
+    void start(String... metricTags);
 
     void stop();
 

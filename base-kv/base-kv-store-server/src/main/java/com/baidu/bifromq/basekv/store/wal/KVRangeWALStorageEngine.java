@@ -111,7 +111,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
                 this.bgTaskExecutor = bgTaskExecutor;
-                kvEngine.start(bgTaskExecutor, "storeId", id(), "type", "wal");
+                kvEngine.start("storeId", id(), "type", "wal");
                 loadExisting();
                 state.set(State.STARTED);
             } catch (Throwable e) {

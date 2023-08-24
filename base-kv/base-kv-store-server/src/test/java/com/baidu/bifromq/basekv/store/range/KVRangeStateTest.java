@@ -16,13 +16,11 @@ package com.baidu.bifromq.basekv.store.range;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
-import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -35,7 +33,6 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -43,8 +40,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.testng.annotations.AfterMethod;
@@ -55,7 +50,6 @@ public class KVRangeStateTest {
     public Path dbRootDir;
     private String DB_NAME = "testDB";
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
-    private ScheduledExecutorService bgMgmtTaskExecutor;
     private KVEngineConfigurator<?> configurator = null;
     private IKVEngine kvEngine;
 
@@ -65,8 +59,6 @@ public class KVRangeStateTest {
 
     @BeforeMethod
     public void setup() throws IOException {
-        bgMgmtTaskExecutor =
-            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
         if (!isDevEnv()) {
             configurator = new InMemoryKVEngineConfigurator();
         } else {
@@ -78,13 +70,12 @@ public class KVRangeStateTest {
         }
 
         kvEngine = KVEngineFactory.create(null, List.of(DEFAULT_NS), cpId -> false, configurator);
-        kvEngine.start(bgMgmtTaskExecutor);
+        kvEngine.start();
     }
 
     @AfterMethod
     public void teardown() {
         kvEngine.stop();
-        MoreExecutors.shutdownAndAwaitTermination(bgMgmtTaskExecutor, 5, TimeUnit.SECONDS);
         if (configurator instanceof RocksDBKVEngineConfigurator) {
             TestUtil.deleteDir(dbRootDir.toString());
             dbRootDir.toFile().delete();

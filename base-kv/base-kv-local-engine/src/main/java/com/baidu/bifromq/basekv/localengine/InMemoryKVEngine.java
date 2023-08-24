@@ -31,7 +31,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Predicate;
 import lombok.AllArgsConstructor;
@@ -78,7 +77,7 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
     }
 
     @Override
-    protected void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
+    protected void doStart(String... metricTags) {
         log.debug("InMemoryKVEngine[{}] initialized", id());
     }
 
