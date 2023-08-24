@@ -444,9 +444,18 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     }
 
     private void submitRangeCompactionTask(String namespace, ByteString start, ByteString end) {
+        if (start == null) {
+            start = ByteString.empty();
+        }
         rangeCompactionQueue.get(namespace)
             .compute(start, (k, v) -> {
                 if (v == null) {
+                    return end == null ? ByteString.empty() : end;
+                }
+                if (v.isEmpty()) {
+                    return v;
+                }
+                if (end.isEmpty()) {
                     return end;
                 }
                 return ByteString.unsignedLexicographicalComparator().compare(v, end) < 0 ? v : end;
@@ -468,16 +477,24 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                     ByteString endKey = entry.getValue();
                     Map.Entry<ByteString, ByteString> nextEntry;
                     while ((nextEntry = ranges.ceilingEntry(startKey)) != null) {
-                        if (compare(nextEntry.getKey(), endKey) <= 0) {
-                            // coalesces adjacent ranges
-                            endKey = compare(endKey, nextEntry.getValue()) < 0 ? nextEntry.getValue() : endKey;
+                        if (endKey.isEmpty() || compare(nextEntry.getKey(), endKey) <= 0) {
+                            if (!endKey.isEmpty()) {
+                                // coalesces adjacent ranges
+                                if (nextEntry.getValue().isEmpty()) {
+                                    endKey = nextEntry.getValue();
+                                } else {
+                                    endKey = compare(endKey, nextEntry.getValue()) < 0 ? nextEntry.getValue() : endKey;
+                                }
+                            }
                             ranges.remove(nextEntry.getKey());
                         } else {
                             // coalesces the range based on boundary 'similarity'
                             break;
                         }
                     }
-                    compactionFutures.add(compactRange(namespace, startKey, endKey));
+                    compactionFutures.add(compactRange(namespace,
+                        startKey.isEmpty() ? null : startKey,
+                        endKey.isEmpty() ? null : endKey));
                 }
             }
             CompletableFuture.allOf(compactionFutures.toArray(CompletableFuture[]::new))

@@ -579,6 +579,7 @@ public class KVRange implements IKVRange {
                             metricManager.reportLastAppliedIndex(entry.getIndex());
                             onDone.complete(null);
                         } catch (Throwable t) {
+                            log.error("Failed to apply log", t);
                             onDone.completeExceptionally(t);
                         }
                     }
