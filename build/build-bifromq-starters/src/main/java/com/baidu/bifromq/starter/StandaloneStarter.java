@@ -60,6 +60,8 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
+import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
@@ -185,14 +187,30 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         serverCrdtService.start(agentHost);
         log.debug("CRDT service started");
 
+        EventLoopGroup rpcServerBossELG =
+            NettyUtil.createEventLoopGroup(1, EnvProvider.INSTANCE.newThreadFactory("rpc-boss-elg"));
+        new NettyEventExecutorMetrics(rpcServerBossELG).bindTo(Metrics.globalRegistry);
+
+        EventLoopGroup ioRPCWorkerELG =
+            NettyUtil.createEventLoopGroup(0, EnvProvider.INSTANCE.newThreadFactory("io-rpc-worker-elg"));
+        new NettyEventExecutorMetrics(ioRPCWorkerELG).bindTo(Metrics.globalRegistry);
+
+        EventLoopGroup kvRPCWorkerELG =
+            NettyUtil.createEventLoopGroup(0, EnvProvider.INSTANCE.newThreadFactory("kv-rpc-worker-elg"));
+        new NettyEventExecutorMetrics(ioRPCWorkerELG).bindTo(Metrics.globalRegistry);
+
         RPCServerBuilder sharedIORPCServerBuilder = IRPCServer.newBuilder()
             .host(config.getRpcServerConfig().getHost())
             .port(config.getRpcServerConfig().getPort())
+            .bossEventLoopGroup(rpcServerBossELG)
+            .workerEventLoopGroup(ioRPCWorkerELG)
             .crdtService(serverCrdtService)
             .executor(ioServerExecutor);
         RPCServerBuilder sharedBaseKVRPCServerBuilder = IRPCServer.newBuilder()
             .host(config.getRpcServerConfig().getHost())
             .port(config.getBaseKVRpcServerConfig().getPort())
+            .bossEventLoopGroup(rpcServerBossELG)
+            .workerEventLoopGroup(kvRPCWorkerELG)
             .crdtService(serverCrdtService)
             .executor(MoreExecutors.directExecutor());
         if (config.getRpcServerConfig().getSslConfig() != null) {
@@ -369,10 +387,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         MQTTServerConfig mqttServerConfig = config.getMqttServerConfig();
         IMQTTBrokerBuilder<?> brokerBuilder = IMQTTBroker.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
-            .mqttBossGroup(NettyUtil.createEventLoopGroup(mqttServerConfig.getBossELGThreads(),
-                EnvProvider.INSTANCE.newThreadFactory("mqtt-boss-elg")))
-            .mqttWorkerGroup(NettyUtil.createEventLoopGroup(mqttServerConfig.getWorkerELGThreads(),
-                EnvProvider.INSTANCE.newThreadFactory("mqtt-worker-elg")))
+            .mqttBossELGThreads(mqttServerConfig.getBossELGThreads())
+            .mqttWorkerELGThreads(mqttServerConfig.getWorkerELGThreads())
             .authProvider(authProviderMgr)
             .eventCollector(eventCollectorMgr)
             .settingProvider(settingProviderMgr)

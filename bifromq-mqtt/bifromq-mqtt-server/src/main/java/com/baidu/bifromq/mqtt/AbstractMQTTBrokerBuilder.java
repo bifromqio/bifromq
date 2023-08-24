@@ -20,7 +20,6 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import io.netty.channel.EventLoopGroup;
 import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,8 +35,8 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     long writeLimit = 512 * 1024;
     long readLimit = 512 * 1024;
     int maxBytesInMessage = 256 * 1024;
-    EventLoopGroup mqttBossGroup;
-    EventLoopGroup mqttWorkerGroup;
+    int mqttBossELGThreads;
+    int mqttWorkerELGThrreads;
     Executor bgTaskExecutor;
     IAuthProvider authProvider;
     IEventCollector eventCollector;
@@ -141,13 +140,13 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
         return thisT();
     }
 
-    public T mqttBossGroup(EventLoopGroup mqttBossGroup) {
-        this.mqttBossGroup = mqttBossGroup;
+    public T mqttBossELGThreads(int mqttWorkerELGThreads) {
+        this.mqttBossELGThreads = mqttWorkerELGThreads;
         return thisT();
     }
 
-    public T mqttWorkerGroup(EventLoopGroup mqttWorkerGroup) {
-        this.mqttWorkerGroup = mqttWorkerGroup;
+    public T mqttWorkerELGThreads(int mqttWorkerELGThreads) {
+        this.mqttWorkerELGThrreads = mqttWorkerELGThreads;
         return thisT();
     }
 

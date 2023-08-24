@@ -27,9 +27,12 @@ import io.micrometer.core.instrument.binder.jvm.JvmHeapPressureMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmInfoMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
+import io.micrometer.core.instrument.binder.netty4.NettyAllocatorMetrics;
 import io.micrometer.core.instrument.binder.system.FileDescriptorMetrics;
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
 import io.micrometer.core.instrument.binder.system.UptimeMetrics;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContext;
@@ -143,6 +146,9 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
         JvmHeapPressureMetrics jvmHeapPressureMetrics = new JvmHeapPressureMetrics();
         jvmHeapPressureMetrics.bindTo(Metrics.globalRegistry);
         closeables.add(jvmHeapPressureMetrics);
+        // netty default allocator metrics
+        new NettyAllocatorMetrics(PooledByteBufAllocator.DEFAULT).bindTo(Metrics.globalRegistry);
+        new NettyAllocatorMetrics(UnpooledByteBufAllocator.DEFAULT).bindTo(Metrics.globalRegistry);
     }
 
     @Override

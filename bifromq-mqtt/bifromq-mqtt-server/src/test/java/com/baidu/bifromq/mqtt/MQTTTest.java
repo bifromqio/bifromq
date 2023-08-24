@@ -273,8 +273,8 @@ class MQTTTest {
 
         mqttBroker = IMQTTBroker.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
-            .mqttBossGroup(NettyUtil.createEventLoopGroup(1))
-            .mqttWorkerGroup(NettyUtil.createEventLoopGroup())
+            .mqttBossELGThreads(1)
+            .mqttWorkerELGThreads(4)
             .authProvider(authProvider)
             .eventCollector(eventCollector)
             .settingProvider(settingProvider)

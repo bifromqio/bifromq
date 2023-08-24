@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.mqtt.handler.ByteBufToWebSocketFrameEncoder;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -23,6 +24,8 @@ import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -56,10 +59,14 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
 
     public AbstractMQTTBroker(T builder) {
         this.builder = builder;
-        this.bossGroup = builder.mqttBossGroup;
-        this.workerGroup = builder.mqttWorkerGroup;
+        this.bossGroup = NettyUtil.createEventLoopGroup(builder.mqttBossELGThreads,
+            EnvProvider.INSTANCE.newThreadFactory("mqtt-boss-elg"));
+        this.workerGroup = NettyUtil.createEventLoopGroup(builder.mqttWorkerELGThrreads,
+            EnvProvider.INSTANCE.newThreadFactory("mqtt-worker-elg"));
         connRateLimitHandler = new ConnectionRateLimitHandler(builder.connectRateLimit);
         remoteAddrHandler = new ClientAddrHandler();
+        new NettyEventExecutorMetrics(bossGroup).bindTo(Metrics.globalRegistry);
+        new NettyEventExecutorMetrics(workerGroup).bindTo(Metrics.globalRegistry);
     }
 
     protected abstract ILocalSessionRegistry sessionRegistry();
