@@ -13,92 +13,38 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxMsgKey;
-import static com.baidu.bifromq.inbox.util.KeyUtil.qos1InboxMsgKey;
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-import static org.mockito.Mockito.when;
-import static org.testng.AssertJUnit.fail;
-
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.store.api.IKVIterator;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.google.protobuf.ByteString;
-import java.time.Clock;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.function.Supplier;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.testng.Assert;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class MockedInboxFetchTest {
-    private KVRangeId id;
-    @Mock
-    private IKVReader reader;
-    @Mock
-    private IKVIterator kvIterator;
-    @Mock
-    private ILoadTracker loadTracker;
-    private final Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
-    private final ISettingProvider settingProvider = Setting::current;
-    private final IEventCollector eventCollector = event -> {
-    };
-    private final String tenantId = "tenantA";
-    private final String inboxId = "inboxId";
-    private final String scopedInboxIdUtf8 = scopedInboxId(tenantId, inboxId).toStringUtf8();
-    private final Clock clock = Clock.systemUTC();
-    private AutoCloseable closeable;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Optional;
 
-    @BeforeMethod
-    public void setup() {
-        closeable = MockitoAnnotations.openMocks(this);
-        when(reader.iterator()).thenReturn(kvIterator);
-        id = KVRangeIdUtil.generate();
-    }
+import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxMsgKey;
+import static com.baidu.bifromq.inbox.util.KeyUtil.qos1InboxMsgKey;
+import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.fail;
 
-    @AfterMethod
-    public void teardown() throws Exception {
-        closeable.close();
-    }
-
+public class MockedInboxFetchTest extends MockedInboxStoreTest {
     @Test
     public void testFetchQoS0WithNoInbox() {
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setBatchFetch(BatchFetchRequest.newBuilder()
-                .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
-                    .setMaxFetch(100)
-                    .setQos0StartAfter(0L)
-                    .build())
-                .build())
-            .build();
-
         when(kvIterator.isValid()).thenReturn(true);
         when(kvIterator.key()).thenReturn(ByteString.empty());
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
-        ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
+            BatchFetchReply fetchReply = requestRO(getFetchInput(new HashMap<>() {{
+                put(scopedInboxIdUtf8, FetchParams.newBuilder()
+                        .setMaxFetch(100)
+                        .setQos0StartAfter(0L)
+                        .build());
+            }})).getBatchFetch();
             Assert.assertEquals(fetchReply.getResultMap().get(scopedInboxIdUtf8).getResult(), Fetched.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
@@ -107,27 +53,20 @@ public class MockedInboxFetchTest {
 
     @Test
     public void testFetchExpiredInbox() {
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setBatchFetch(BatchFetchRequest.newBuilder()
-                .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
-                    .setMaxFetch(100)
-                    .setQos0StartAfter(0L)
-                    .build())
-                .build())
-            .build();
-
         when(kvIterator.isValid()).thenReturn(true);
         when(kvIterator.key()).thenReturn(ByteString.copyFromUtf8(scopedInboxIdUtf8));
         when(kvIterator.value()).thenReturn(InboxMetadata.newBuilder()
             .setLastFetchTime(clock.millis() - 30 * 1000)
             .setExpireSeconds(1)
             .build().toByteString());
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
-        ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
+            BatchFetchReply fetchReply = requestRO(getFetchInput(new HashMap<>() {{
+                put(scopedInboxIdUtf8, FetchParams.newBuilder()
+                        .setMaxFetch(100)
+                        .setQos0StartAfter(0L)
+                        .build());
+            }})).getBatchFetch();
             Assert.assertEquals(fetchReply.getResultMap().get(scopedInboxIdUtf8).getResult(), Fetched.Result.NO_INBOX);
         } catch (Exception exception) {
             fail();
@@ -136,13 +75,6 @@ public class MockedInboxFetchTest {
 
     @Test
     public void testFetchQoS0FromOneEntry() {
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setBatchFetch(BatchFetchRequest.newBuilder()
-                .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
-                    .setMaxFetch(1)
-                    .build())
-                .build())
-            .build();
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis() + 30 * 1000)
@@ -156,12 +88,13 @@ public class MockedInboxFetchTest {
             .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance(),
                 InboxMessage.getDefaultInstance()))
             .build().toByteString());
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
-        ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
+            BatchFetchReply fetchReply = requestRO(getFetchInput(new HashMap<>() {{
+                put(scopedInboxIdUtf8, FetchParams.newBuilder()
+                        .setMaxFetch(1)
+                        .build());
+            }})).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos0MsgCount(), 1);
@@ -173,13 +106,6 @@ public class MockedInboxFetchTest {
 
     @Test
     public void testFetchQoS0FromMultipleEntries() {
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setBatchFetch(BatchFetchRequest.newBuilder()
-                .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
-                    .setMaxFetch(3)
-                    .build())
-                .build())
-            .build();
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis() + 30 * 1000)
@@ -203,12 +129,12 @@ public class MockedInboxFetchTest {
                     InboxMessage.getDefaultInstance(), InboxMessage.getDefaultInstance()))
                 .build().toByteString());
 
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
-        ByteString output = coProc.query(input.toByteString(), reader).join();
-
         try {
-            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
+            BatchFetchReply fetchReply = requestRO(getFetchInput(new HashMap<>() {{
+                put(scopedInboxIdUtf8, FetchParams.newBuilder()
+                        .setMaxFetch(3)
+                        .build());
+            }})).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos0MsgCount(), 3);
@@ -219,13 +145,6 @@ public class MockedInboxFetchTest {
 
     @Test
     public void testFetchQoS0UtilEntryInvalid() {
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setBatchFetch(BatchFetchRequest.newBuilder()
-                .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
-                    .setMaxFetch(100)
-                    .build())
-                .build())
-            .build();
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis() + 30 * 1000)
@@ -233,7 +152,6 @@ public class MockedInboxFetchTest {
                 .setQos0NextSeq(20)
                 .setExpireSeconds(Integer.MAX_VALUE)
                 .build().toByteString()));
-
         when(kvIterator.isValid())
             .thenReturn(true)
             .thenReturn(true)
@@ -251,12 +169,12 @@ public class MockedInboxFetchTest {
                     InboxMessage.getDefaultInstance()))
                 .build().toByteString());
 
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
-        ByteString output = coProc.query(input.toByteString(), reader).join();
-
         try {
-            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
+            BatchFetchReply fetchReply = requestRO(getFetchInput(new HashMap<>() {{
+                put(scopedInboxIdUtf8, FetchParams.newBuilder()
+                        .setMaxFetch(100)
+                        .build());
+            }})).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos0MsgCount(), 3);
@@ -267,14 +185,6 @@ public class MockedInboxFetchTest {
 
     @Test
     public void testFetchQoS1FromOneEntry() {
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setBatchFetch(BatchFetchRequest.newBuilder()
-                .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
-                    .setMaxFetch(1)
-                    .build())
-                .build())
-            .build();
-
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis() + 30 * 1000)
@@ -291,12 +201,13 @@ public class MockedInboxFetchTest {
                 .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance(),
                     InboxMessage.getDefaultInstance()))
                 .build().toByteString());
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
-        ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
+            BatchFetchReply fetchReply = requestRO(getFetchInput(new HashMap<>() {{
+                put(scopedInboxIdUtf8, FetchParams.newBuilder()
+                        .setMaxFetch(1)
+                        .build());
+            }})).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos1MsgCount(), 1);
@@ -308,13 +219,6 @@ public class MockedInboxFetchTest {
 
     @Test
     public void testFetchQoS1FromMultipleEntries() {
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setBatchFetch(BatchFetchRequest.newBuilder()
-                .putInboxFetch(scopedInboxIdUtf8, FetchParams.newBuilder()
-                    .setMaxFetch(3)
-                    .build())
-                .build())
-            .build();
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis() + 30 * 1000)
@@ -336,12 +240,13 @@ public class MockedInboxFetchTest {
                 .addAllMessage(Arrays.asList(InboxMessage.getDefaultInstance(),
                     InboxMessage.getDefaultInstance()))
                 .build().toByteString());
-        InboxStoreCoProc coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
-        ByteString output = coProc.query(input.toByteString(), reader).join();
 
         try {
-            BatchFetchReply fetchReply = InboxServiceROCoProcOutput.parseFrom(output).getBatchFetch();
+            BatchFetchReply fetchReply = requestRO(getFetchInput(new HashMap<>() {{
+                put(scopedInboxIdUtf8, FetchParams.newBuilder()
+                        .setMaxFetch(3)
+                        .build());
+            }})).getBatchFetch();
             Fetched fetched = fetchReply.getResultMap().get(scopedInboxIdUtf8);
             Assert.assertEquals(fetched.getResult(), Fetched.Result.OK);
             Assert.assertEquals(fetched.getQos1MsgCount(), 3);
