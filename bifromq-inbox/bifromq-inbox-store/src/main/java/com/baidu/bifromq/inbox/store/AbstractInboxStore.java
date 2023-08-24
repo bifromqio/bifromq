@@ -225,6 +225,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 if (startFromScopedInboxId != null) {
                     jobRunner.add(() -> {
                         if (status.get() != Status.STARTED) {
+                            onDone.complete(null);
                             return;
                         }
                         gcRange(leaderReplica, startFromScopedInboxId, limit, onDone);
