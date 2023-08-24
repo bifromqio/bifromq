@@ -35,6 +35,7 @@ import io.grpc.netty.InProcServerBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
@@ -119,10 +120,14 @@ class RPCServer implements IRPCServer {
             nettyServerBuilder.sslContext(builder.sslContext);
         }
         if (builder.bossEventLoopGroup == null) {
-            builder.bossEventLoopGroup = NettyUtil.createEventLoopGroup(1);
+            builder.bossEventLoopGroup =
+                NettyUtil.createEventLoopGroup(1, EnvProvider.INSTANCE.newThreadFactory("rpc-server-boss-elg"));
+            new NettyEventExecutorMetrics(builder.bossEventLoopGroup).bindTo(Metrics.globalRegistry);
         }
         if (builder.workerEventLoopGroup == null) {
-            builder.workerEventLoopGroup = NettyUtil.createEventLoopGroup();
+            builder.workerEventLoopGroup =
+                NettyUtil.createEventLoopGroup(0, EnvProvider.INSTANCE.newThreadFactory("rpc-server-worker-elg"));
+            new NettyEventExecutorMetrics(builder.workerEventLoopGroup).bindTo(Metrics.globalRegistry);
         }
         // if null, GRPC managed shared eventloop group will be used
         nettyServerBuilder.bossEventLoopGroup(builder.bossEventLoopGroup)
