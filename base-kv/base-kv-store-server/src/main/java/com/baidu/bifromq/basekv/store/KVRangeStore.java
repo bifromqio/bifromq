@@ -21,6 +21,7 @@ import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.ran
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static java.util.Collections.emptyList;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
@@ -49,6 +50,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
@@ -64,6 +68,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -99,6 +104,7 @@ public class KVRangeStore implements IKVRangeStore {
     private final ScheduledExecutorService tickExecutor;
     private volatile ScheduledFuture<?> tickFuture;
     private final ScheduledExecutorService bgTaskExecutor;
+    private final ScheduledExecutorService rangeMgmtTaskExecutor;
     private final AsyncRunner rangeMgmtTaskRunner;
     private final KVRangeStoreOptions opts;
     private IStoreMessenger messenger;
@@ -126,7 +132,10 @@ public class KVRangeStore implements IKVRangeStore {
         this.mutationExecutor = mutationExecutor;
         this.tickExecutor = tickExecutor;
         this.bgTaskExecutor = bgTaskExecutor;
-        this.rangeMgmtTaskRunner = new AsyncRunner(this.bgTaskExecutor);
+        this.rangeMgmtTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("kvstore-mgmt-executor")),
+            "kvstore-mgmt-executor", Tags.of("storeId", id));
+        this.rangeMgmtTaskRunner = new AsyncRunner(rangeMgmtTaskExecutor);
         storeStatsCollector =
             new KVRangeStoreStatsCollector(opts, Duration.ofSeconds(opts.getStatsCollectIntervalSec()),
                 this.bgTaskExecutor);
@@ -148,7 +157,7 @@ public class KVRangeStore implements IKVRangeStore {
             try {
                 this.messenger = messenger;
                 walStorageEngine.start(bgTaskExecutor);
-                kvRangeEngine.start(bgTaskExecutor, "storeId", id, "type", "data");
+                kvRangeEngine.start("storeId", id, "type", "data");
                 log.debug("KVRangeStore[{}] started", id);
                 status.set(Status.STARTED);
                 disposable.add(messenger.receive().subscribe(this::receive));
@@ -195,6 +204,7 @@ public class KVRangeStore implements IKVRangeStore {
                 log.error("Error occurred during stopping range store", e);
             } finally {
                 messenger.close();
+                rangeMgmtTaskExecutor.shutdown();
                 status.set(Status.TERMINATED);
             }
         }
@@ -428,7 +438,7 @@ public class KVRangeStore implements IKVRangeStore {
                     quitRanges.remove(range);
                     updateDescriptorList();
                 }
-            }, bgTaskExecutor));
+            }, rangeMgmtTaskExecutor));
     }
 
     private KVRange initKVRange(KVRangeId kvRangeId, Snapshot initSnapshot) {
@@ -441,6 +451,7 @@ public class KVRangeStore implements IKVRangeStore {
             walStorageEngine,
             queryExecutor,
             mutationExecutor,
+            rangeMgmtTaskExecutor,
             bgTaskExecutor,
             opts.getKvRangeOptions(),
             initSnapshot);

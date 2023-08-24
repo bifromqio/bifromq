@@ -14,11 +14,9 @@
 package com.baidu.bifromq.basekv.localengine;
 
 import static java.lang.Math.max;
-import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import java.nio.ByteBuffer;
@@ -58,22 +56,18 @@ public class RocksDBCompactionTest {
     protected static final String NS = "test-namespace";
     protected final AtomicReference<String> cp = new AtomicReference<>();
     protected RocksDBKVEngine kvEngine;
-    private ScheduledExecutorService bgTaskExecutor;
     private Path dataDir;
 
     @BeforeMethod
     public void setup() {
         dataDir = Paths.get(System.getProperty("user.dir"), "data");
         dataDir.toFile().mkdirs();
-        bgTaskExecutor = newScheduledThreadPool(4,
-            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
         start();
     }
 
     @AfterMethod
     public void teardown() {
         stop();
-        MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
     }
 
     private void start() {
@@ -127,7 +121,7 @@ public class RocksDBCompactionTest {
 
         kvEngine = new RocksDBKVEngine(null, List.of(IKVEngine.DEFAULT_NS, NS),
             this::isUsed, configurator);
-        kvEngine.start(bgTaskExecutor);
+        kvEngine.start();
     }
 
     private void stop() {

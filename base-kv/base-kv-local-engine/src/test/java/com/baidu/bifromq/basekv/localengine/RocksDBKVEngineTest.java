@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.localengine;
 
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotEquals;
@@ -23,8 +22,6 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import java.io.IOException;
@@ -34,8 +31,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
@@ -48,20 +43,16 @@ import org.testng.annotations.Test;
 @Slf4j
 public class RocksDBKVEngineTest extends AbstractKVEngineTest {
     public Path dbRootDir;
-    private ScheduledExecutorService bgTaskExecutor;
 
     @BeforeMethod
     public void setup() throws IOException {
         dbRootDir = Files.createTempDirectory("");
-        bgTaskExecutor =
-            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
         start();
     }
 
     @AfterMethod
     public void teardown() {
         stop();
-        MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
         TestUtil.deleteDir(dbRootDir.toString());
     }
 
@@ -74,7 +65,7 @@ public class RocksDBKVEngineTest extends AbstractKVEngineTest {
             .setGcIntervalInSec(1);
         kvEngine = new RocksDBKVEngine(null, List.of(IKVEngine.DEFAULT_NS, NS),
             this::isUsed, configurator);
-        kvEngine.start(bgTaskExecutor);
+        kvEngine.start();
     }
 
     private void stop() {

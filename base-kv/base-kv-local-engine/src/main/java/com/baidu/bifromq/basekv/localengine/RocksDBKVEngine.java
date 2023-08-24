@@ -20,7 +20,6 @@ import static com.google.protobuf.ByteString.copyFrom;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singletonList;
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.rocksdb.SizeApproximationFlag.INCLUDE_FILES;
 import static org.rocksdb.SizeApproximationFlag.INCLUDE_MEMTABLES;
 
@@ -39,6 +38,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
@@ -53,16 +53,18 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -99,16 +101,19 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     private final RocksDBKVEngineConfigurator configurator;
     private final DBOptions dbOptions;
     private final WriteOptions writeOptions;
-    private final ConcurrentHashMap<CompactionTaskKey, CompletableFuture<Void>> compactionTasks =
+    private final ConcurrentHashMap<RangeCompactionTask, CompletableFuture<Void>> compactionTasks =
         new ConcurrentHashMap<>();
+    // key: namespace, subKey: rangeStart, value: rangeEnd
+    private final Map<String, NavigableMap<ByteString, ByteString>> rangeCompactionQueue = new HashMap<>();
+    private final AtomicBoolean compacting = new AtomicBoolean();
     private MetricManager metricMgr;
     private OptimisticTransactionDB instance;
     private String identity;
+    private ExecutorService compactionExecutor;
     private final File dbRootDir;
     private final File dbCheckPointRootDir;
     private final Duration checkpointAge;
     private Checkpoint checkpoint;
-    private ScheduledExecutorService bgTaskExecutor;
 
     RocksDBKVEngine(String overrideIdentity,
                     List<String> namespaces,
@@ -120,9 +125,13 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         // default cf must appear as the first one
         cfDescs.put(DEFAULT_NS,
             new ColumnFamilyDescriptor(DEFAULT_NS.getBytes(UTF_8), configurator.config(DEFAULT_NS)));
+        rangeCompactionQueue.put(DEFAULT_NS,
+            new ConcurrentSkipListMap<>(ByteString.unsignedLexicographicalComparator()));
         namespaces.forEach(ns -> {
             if (!ns.equals(DEFAULT_NS)) {
                 cfDescs.put(ns, new ColumnFamilyDescriptor(ns.getBytes(UTF_8), configurator.config(ns)));
+                rangeCompactionQueue.put(ns,
+                    new ConcurrentSkipListMap<>(ByteString.unsignedLexicographicalComparator()));
             }
         });
         openedCheckpoints = Caffeine.newBuilder()
@@ -406,8 +415,12 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     }
 
     @Override
-    protected void doStart(ScheduledExecutorService bgTaskExecutor, String... metricTags) {
-        this.bgTaskExecutor = bgTaskExecutor;
+    protected void doStart(String... metricTags) {
+        compactionExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                EnvProvider.INSTANCE.newThreadFactory("compaction-executor")),
+            "compaction-executor-" + Tags.of(metricTags));
         metricMgr = new MetricManager(metricTags);
     }
 
@@ -427,11 +440,59 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         cfDescs.values().forEach(cfDesc -> cfDesc.getOptions().close());
         dbOptions.close();
         writeOptions.close();
+        compactionExecutor.shutdown();
+    }
+
+    private void submitRangeCompactionTask(String namespace, ByteString start, ByteString end) {
+        rangeCompactionQueue.get(namespace)
+            .compute(start, (k, v) -> {
+                if (v == null) {
+                    return end;
+                }
+                return ByteString.unsignedLexicographicalComparator().compare(v, end) < 0 ? v : end;
+            });
+        compact();
+    }
+
+    private void compact() {
+        if (state() != State.STARTED) {
+            return;
+        }
+        if (compacting.compareAndSet(false, true)) {
+            List<CompletableFuture<Void>> compactionFutures = new ArrayList<>();
+            for (String namespace : rangeCompactionQueue.keySet()) {
+                NavigableMap<ByteString, ByteString> ranges = rangeCompactionQueue.get(namespace);
+                Map.Entry<ByteString, ByteString> entry = ranges.pollFirstEntry();
+                if (entry != null) {
+                    ByteString startKey = entry.getKey();
+                    ByteString endKey = entry.getValue();
+                    Map.Entry<ByteString, ByteString> nextEntry;
+                    while ((nextEntry = ranges.ceilingEntry(startKey)) != null) {
+                        if (compare(nextEntry.getKey(), endKey) <= 0) {
+                            // coalesces adjacent ranges
+                            endKey = compare(endKey, nextEntry.getValue()) < 0 ? nextEntry.getValue() : endKey;
+                            ranges.remove(nextEntry.getKey());
+                        } else {
+                            // coalesces the range based on boundary 'similarity'
+                            break;
+                        }
+                    }
+                    compactionFutures.add(compactRange(namespace, startKey, endKey));
+                }
+            }
+            CompletableFuture.allOf(compactionFutures.toArray(CompletableFuture[]::new))
+                .whenComplete((v, e) -> {
+                    compacting.set(false);
+                    if (rangeCompactionQueue.values().stream().anyMatch(m -> !m.isEmpty())) {
+                        compact();
+                    }
+                });
+        }
     }
 
     @VisibleForTesting
     CompletableFuture<Void> compactRange(String namespace, ByteString start, ByteString end) {
-        CompactionTaskKey key = new CompactionTaskKey(namespace, start, end);
+        RangeCompactionTask key = new RangeCompactionTask(namespace, start, end);
         CompletableFuture<Void> onDone = compactionTasks.computeIfAbsent(key, k -> {
             CompletableFuture<Void> whenFinish = new CompletableFuture<>();
             Runnable compact = metricMgr.compactionTimer.wrap(() -> {
@@ -440,25 +501,19 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                     return;
                 }
                 try (CompactRangeOptions options = new CompactRangeOptions()) {
-                    options.setBottommostLevelCompaction(CompactRangeOptions.BottommostLevelCompaction.kForce);
+                    options.setBottommostLevelCompaction(CompactRangeOptions.BottommostLevelCompaction.kSkip);
                     instance.compactRange(cfHandles.get(namespace),
                         start != null ? start.toByteArray() : null,
                         end != null ? end.toByteArray() : null, options);
+                    log.debug("Compaction end[id={}, namespace={}, start={}, end={}]",
+                        identity, DEFAULT_NS, start, end);
                     whenFinish.complete(null);
                 } catch (Throwable e) {
                     whenFinish.completeExceptionally(new KVEngineException("Compaction failed", e));
                 }
             });
-            try {
-                bgTaskExecutor.execute(compact);
-            } catch (RejectedExecutionException ree) {
-                ExecutorService fallbackExecutor = newSingleThreadExecutor(
-                    EnvProvider.INSTANCE.newThreadFactory("fallback-executor"));
-                fallbackExecutor.execute(() -> {
-                    compact.run();
-                    fallbackExecutor.shutdown();
-                });
-            }
+            log.debug("Compaction start[id={}, namespace={}, start={}, end={}]", identity, DEFAULT_NS, start, end);
+            compactionExecutor.execute(compact);
             return whenFinish;
         });
         onDone.whenComplete((v, e) -> compactionTasks.remove(key, onDone));
@@ -538,7 +593,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         return new org.rocksdb.Range(new Slice(start.toByteArray()), new Slice(end.toByteArray()));
     }
 
-    private record CompactionTaskKey(String namespace, ByteString startKey, ByteString endKey) {
+    private record RangeCompactionTask(String namespace, ByteString startKey, ByteString endKey) {
     }
 
     @AllArgsConstructor
@@ -580,7 +635,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     }
 
     public class KeyRange extends AbstractKeyRange {
-        private final AtomicBoolean compacting = new AtomicBoolean();
         private final AtomicInteger keyCount = new AtomicInteger();
         private final AtomicInteger tombstoneCount = new AtomicInteger();
 
@@ -640,33 +694,11 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         private void compactIfNeeded() {
             int totalDeleteKeys = tombstoneCount.get();
             int totalKeys = keyCount.get();
-            if (totalDeleteKeys > configurator.getCompactMinTombstoneKeys()
-                && (double) totalDeleteKeys / (totalKeys + totalDeleteKeys) >=
-                configurator.getCompactTombstonePercent()) {
-                if (compacting.compareAndSet(false, true)) {
-                    tombstoneCount.set(0);
-                    keyCount.set(0);
-                    long startTS = System.nanoTime();
-                    log.debug("Compaction start[id={}, namespace={}, start={}, end={}, tombstones={}, keys={}]",
-                        identity, DEFAULT_NS, start, end, totalDeleteKeys, totalKeys);
-                    compactRange(DEFAULT_NS, start, end)
-                        .whenComplete((v, e) -> {
-                            if (e != null) {
-                                if (e instanceof CancellationException) {
-                                    log.error("Compaction canceled[id={}, namespace={}, start={}, end={}]",
-                                        identity, DEFAULT_NS, start, end);
-                                } else {
-                                    log.error("Compaction error[id={}, namespace={}, start={}, end={}]",
-                                        identity, DEFAULT_NS, start, end, e);
-                                }
-                            } else {
-                                log.debug("Compaction complete[id={}, namespace={}, start={}, end={}] cost {} ns",
-                                    identity, DEFAULT_NS, start, end, System.nanoTime() - startTS);
-                            }
-                            compacting.set(false);
-                            compactIfNeeded();
-                        });
-                }
+            if (totalDeleteKeys > configurator.getCompactMinTombstoneKeys() &&
+                (double) totalDeleteKeys / (totalKeys + totalDeleteKeys) >= configurator.getCompactTombstonePercent()) {
+                tombstoneCount.set(0);
+                keyCount.set(0);
+                submitRangeCompactionTask(DEFAULT_NS, start, end);
             }
         }
     }
@@ -745,7 +777,6 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         private final KeyRange range;
         private final ByteString start;
         private final ByteString end;
-        private final AtomicBoolean compacting = new AtomicBoolean();
         private int total;
         private int count;
         private int estimate;
@@ -823,9 +854,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             total += (int) (latency - dropped);
             estimate = total / Math.min(count, window.length);
             if (estimate > 10_000_000) { // 10ms seems a reasonable guess from my observation so far
-                if (compacting.compareAndSet(false, true)) {
-                    compactRange(range.ns, start, end).whenComplete((v, e) -> compacting.set(false));
-                }
+                submitRangeCompactionTask(range.ns, start, end);
             }
             metricMgr.iterLatencySummary.record(estimate);
         }

@@ -15,13 +15,11 @@ package com.baidu.bifromq.basekv.localengine.benchmark;
 
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static java.lang.Math.max;
-import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
-import com.google.common.util.concurrent.MoreExecutors;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -30,8 +28,6 @@ import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Setup;
@@ -56,7 +52,6 @@ import org.rocksdb.util.SizeUnit;
 abstract class BenchmarkState {
     protected IKVEngine kvEngine;
     private Path dbRootDir;
-    private ScheduledExecutorService bgTaskExecutor;
 
     BenchmarkState() {
         try {
@@ -67,8 +62,6 @@ abstract class BenchmarkState {
         String DB_NAME = "testDB";
         String DB_CHECKPOINT_DIR = "testDB_cp";
         String uuid = UUID.randomUUID().toString();
-        bgTaskExecutor =
-            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
         RocksDBKVEngineConfigurator configurator =
             new RocksDBKVEngineConfigurator(new RocksDBKVEngineConfigurator.DBOptionsConfigurator() {
                 @Override
@@ -188,7 +181,7 @@ abstract class BenchmarkState {
 
     @Setup(Level.Trial)
     public void setup() {
-        kvEngine.start(bgTaskExecutor);
+        kvEngine.start();
         afterSetup();
         log.info("Setup finished, and start testing");
     }
@@ -199,7 +192,6 @@ abstract class BenchmarkState {
     public void teardown() {
         beforeTeardown();
         kvEngine.stop();
-        MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
         try {
             Files.walk(dbRootDir)
                 .sorted(Comparator.reverseOrder())

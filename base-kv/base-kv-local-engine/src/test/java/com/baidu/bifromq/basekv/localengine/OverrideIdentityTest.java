@@ -13,11 +13,8 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
-import com.google.common.util.concurrent.MoreExecutors;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,8 +23,6 @@ import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -39,19 +34,15 @@ public class OverrideIdentityTest {
     private String cf = "TestCF";
     private IKVEngine engine;
     private AtomicReference<String> cp = new AtomicReference<>();
-    private ScheduledExecutorService bgTaskExecutor;
     public Path dbRootDir;
 
     @BeforeMethod
     public void setup() throws IOException {
         dbRootDir = Files.createTempDirectory("");
-        bgTaskExecutor =
-            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("Checkpoint GC"));
     }
 
     @AfterMethod
     public void teardown() {
-        MoreExecutors.shutdownAndAwaitTermination(bgTaskExecutor, 5, TimeUnit.SECONDS);
         try {
             Files.walk(dbRootDir)
                 .sorted(Comparator.reverseOrder())
@@ -70,7 +61,7 @@ public class OverrideIdentityTest {
             .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
         engine = KVEngineFactory.create(overrideIdentity, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
-        engine.start(bgTaskExecutor);
+        engine.start();
         assertEquals(engine.id(), overrideIdentity);
         engine.stop();
         // restart without overrideIdentity specified
@@ -80,7 +71,7 @@ public class OverrideIdentityTest {
 
         engine = KVEngineFactory.create(null, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
-        engine.start(bgTaskExecutor);
+        engine.start();
 
         assertEquals(engine.id(), overrideIdentity);
         engine.stop();
@@ -92,7 +83,7 @@ public class OverrideIdentityTest {
 
         engine = KVEngineFactory.create(another, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
-        engine.start(bgTaskExecutor);
+        engine.start();
 
         assertEquals(engine.id(), overrideIdentity);
         engine.stop();
@@ -106,7 +97,7 @@ public class OverrideIdentityTest {
 
         engine = KVEngineFactory.create(null, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
-        engine.start(bgTaskExecutor);
+        engine.start();
         String identity = engine.id();
         engine.stop();
         // restart with overrideIdentity specified
@@ -117,7 +108,7 @@ public class OverrideIdentityTest {
 
         engine = KVEngineFactory.create(overrideIdentity, List.of(IKVEngine.DEFAULT_NS, cf),
             this::isUsed, configurator);
-        engine.start(bgTaskExecutor);
+        engine.start();
 
         assertEquals(engine.id(), identity);
         engine.stop();
