@@ -111,9 +111,10 @@ public class AutoDropper {
         disposables.add(memberList.members()
             .observeOn(scheduler)
             .subscribe(members -> alivePeers = Maps.filterKeys(members, k -> !k.equals(memberList.local()))));
-        healthScoreGauge = Gauge.builder("basecluster.crdt.healthScore",
+        healthScoreGauge = Gauge.builder("basecluster.healthScore",
                 () -> failureDetector.healthScoring().blockingFirst())
-            .tags(Tags.of("replica_addr", memberList.local().getEndpoint().getId().toStringUtf8()))
+            .tags(Tags.of("local",
+                memberList.local().getEndpoint().getAddress() + ":" + memberList.local().getEndpoint().getPort()))
             .register(Metrics.globalRegistry);
     }
 

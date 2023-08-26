@@ -25,6 +25,8 @@ import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.google.common.collect.Sets;
 import com.google.protobuf.AbstractMessageLite;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -62,6 +64,7 @@ public final class Agent implements IAgent {
     private final BehaviorSubject<Map<AgentMemberAddr, AgentMemberMetadata>> agentMembersSubject =
         BehaviorSubject.createDefault(emptyMap());
     private final CompositeDisposable disposables = new CompositeDisposable();
+    private final Gauge memberNumGauge;
     private volatile Set<HostEndpoint> currentEndpoints = new HashSet<>();
 
     public Agent(String agentId,
@@ -84,6 +87,10 @@ public final class Agent implements IAgent {
         disposables.add(hostProvider.getHostEndpoints()
             .observeOn(scheduler)
             .subscribe(this::handleHostEndpointsUpdate));
+        memberNumGauge = Gauge.builder("basecluster.agent.members", () -> agentMembersSubject.getValue().size())
+            .tags("id", agentId)
+            .tags("local", hostEndpoint.getAddress() + ":" + hostEndpoint.getPort())
+            .register(Metrics.globalRegistry);
     }
 
     @Override
@@ -146,6 +153,7 @@ public final class Agent implements IAgent {
             }
         } finally {
             writeLock.unlock();
+            Metrics.globalRegistry.remove(memberNumGauge);
         }
     }
 

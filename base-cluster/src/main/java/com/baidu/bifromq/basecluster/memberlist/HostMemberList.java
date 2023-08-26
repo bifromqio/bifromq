@@ -401,7 +401,7 @@ public class HostMemberList implements IHostMemberList {
         private final Set<Meter> meters = new HashSet<>();
 
         MetricManager() {
-            Tags tags = Tags.of("replica_addr", local.getEndpoint().getId().toStringUtf8());
+            Tags tags = Tags.of("local", local.getEndpoint().getAddress() + ":" + local.getEndpoint().getPort());
             meters.add(Gauge.builder("basecluster.crdt.agentcluster.count", agentMap, Map::size)
                 .tags(tags)
                 .register(Metrics.globalRegistry));

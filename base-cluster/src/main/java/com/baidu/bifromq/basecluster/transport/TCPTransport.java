@@ -129,8 +129,8 @@ public final class TCPTransport extends AbstractTransport {
         }
     }
 
-    private final Counter sendBytes = Metrics.counter("cluster.send.bytes", "proto", "tcp");
-    private final Counter recvBytes = Metrics.counter("cluster.recv.bytes", "proto", "tcp");
+    private final Counter sendBytes = Metrics.counter("basecluster.send.bytes", "proto", "tcp");
+    private final Counter recvBytes = Metrics.counter("basecluster.recv.bytes", "proto", "tcp");
     private final ClientBridger clientBridger = new ClientBridger();
     private final ServerBridger serverBridger = new ServerBridger();
 
