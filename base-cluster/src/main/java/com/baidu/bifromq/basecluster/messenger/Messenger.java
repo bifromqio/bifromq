@@ -23,6 +23,7 @@ import com.google.common.collect.Maps;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
 import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
@@ -81,7 +82,7 @@ public class Messenger implements IMessenger {
             opts.retransmitMultiplier(),
             opts.spreadPeriod(),
             this.scheduler);
-        this.metricManager = new MetricManager();
+        this.metricManager = new MetricManager(localAddress.toString());
     }
 
     @Override
@@ -256,16 +257,17 @@ public class Messenger implements IMessenger {
         final Map<ClusterMessage.ClusterMessageTypeCase, Counter> gossipHeardCounters = Maps.newHashMap();
         final Counter gossipSpreadCounter = Metrics.counter("cluster.gossip.count");
 
-        MetricManager() {
+        MetricManager(String localAddress) {
             for (ClusterMessage.ClusterMessageTypeCase typeCase : ClusterMessage.ClusterMessageTypeCase.values()) {
+                Tags tags = Tags.of("local", localAddress).and("type", typeCase.name());
                 msgSendCounters.put(typeCase,
-                    Metrics.counter("cluster.send.count", "type", typeCase.name()));
+                    Metrics.counter("basecluster.send.count", tags));
                 msgRecvCounters.put(typeCase,
-                    Metrics.counter("cluster.recv.count", "type", typeCase.name()));
+                    Metrics.counter("basecluster.recv.count", tags));
                 gossipGenCounters.put(typeCase,
-                    Metrics.counter("cluster.gossip.gen.count", "type", typeCase.name()));
+                    Metrics.counter("basecluster.gossip.gen.count", tags));
                 gossipHeardCounters.put(typeCase,
-                    Metrics.counter("cluster.gossip.heard.count", "type", typeCase.name()));
+                    Metrics.counter("basecluster.gossip.heard.count", tags));
             }
         }
 

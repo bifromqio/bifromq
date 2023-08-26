@@ -61,8 +61,8 @@ public final class UDPTransport extends AbstractTransport {
         }
     }
 
-    private final Counter sendBytes = Metrics.counter("cluster.send.bytes", "proto", "udp");
-    private final Counter recvBytes = Metrics.counter("cluster.recv.bytes", "proto", "udp");
+    private final Counter sendBytes = Metrics.counter("basecluster.send.bytes", "proto", "udp");
+    private final Counter recvBytes = Metrics.counter("basecluster.recv.bytes", "proto", "udp");
 
     private final EventLoopGroup elg;
 

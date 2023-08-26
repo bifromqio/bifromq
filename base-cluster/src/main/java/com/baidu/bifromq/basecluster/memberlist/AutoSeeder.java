@@ -21,6 +21,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.collect.Sets;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -48,6 +50,7 @@ public final class AutoSeeder {
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final AtomicBoolean scheduled = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
+    private final Gauge seedNumGauge;
     private volatile Set<HostEndpoint> aliveMembers = new HashSet<>();
     private volatile Disposable job;
 
@@ -87,6 +90,11 @@ public final class AutoSeeder {
         disposables.add(memberList.members()
             .observeOn(scheduler)
             .subscribe(members -> aliveMembers = members.keySet()));
+        seedNumGauge = Gauge.builder("basecluster.seed.num", joiningSeeds::estimatedSize)
+            .tags("local",
+                memberList.local().getEndpoint().getAddress() + ":" + memberList.local().getEndpoint().getPort())
+            .register(Metrics.globalRegistry);
+
     }
 
     public CompletableFuture<Void> join(String domainName, int port) {
@@ -131,6 +139,7 @@ public final class AutoSeeder {
             if (job != null) {
                 job.dispose();
             }
+            Metrics.globalRegistry.remove(seedNumGauge);
         }
     }
 

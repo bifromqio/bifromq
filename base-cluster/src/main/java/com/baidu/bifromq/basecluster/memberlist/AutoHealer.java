@@ -27,6 +27,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.collect.Maps;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -50,6 +52,7 @@ public final class AutoHealer {
     private final AtomicBoolean scheduled = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final Map<HostEndpoint, Integer> alivePeers = new ConcurrentHashMap<>();
+    private final Gauge healingNumGauge;
     private volatile Disposable healingJob;
 
     public AutoHealer(IMessenger messenger, Scheduler scheduler, IHostMemberList memberList,
@@ -79,6 +82,10 @@ public final class AutoHealer {
                 alivePeers.clear();
                 alivePeers.putAll(Maps.filterKeys(members, k -> !k.equals(memberList.local())));
             }));
+        healingNumGauge = Gauge.builder("basecluster.heal.num", healingMembers::estimatedSize)
+            .tags("local",
+                memberList.local().getEndpoint().getAddress() + ":" + memberList.local().getEndpoint().getPort())
+            .register(Metrics.globalRegistry);
     }
 
     public void stop() {
@@ -88,6 +95,7 @@ public final class AutoHealer {
             if (healingJob != null) {
                 healingJob.dispose();
             }
+            Metrics.globalRegistry.remove(healingNumGauge);
         }
     }
 
