@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basecluster.transport;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -63,6 +63,7 @@ public class TCPTransportFuncTest {
     @Test(groups = "integration")
     public void testSendAndReceive() {
         transport1 = TCPTransport.builder()
+            .env("testenv")
             .bindAddr(address1)
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
@@ -74,6 +75,7 @@ public class TCPTransportFuncTest {
     @Test(groups = "integration")
     public void testConnectFail() {
         transport1 = TCPTransport.builder()
+            .env("testenv")
             .bindAddr(address1)
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
@@ -90,10 +92,12 @@ public class TCPTransportFuncTest {
     @Test(groups = "integration")
     public void testConnectionInActive() {
         transport1 = TCPTransport.builder()
+            .env("testenv")
             .bindAddr(address1)
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         transport2 = TCPTransport.builder()
+            .env("testenv")
             .bindAddr(address2)
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
@@ -105,6 +109,7 @@ public class TCPTransportFuncTest {
         // restart transport2
         log.info("Restart transport2");
         transport2 = TCPTransport.builder()
+            .env("testenv")
             .bindAddr(address2)
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
@@ -117,6 +122,7 @@ public class TCPTransportFuncTest {
     @Test(groups = "integration")
     public void testSendAndReceiveViaTls() {
         transport1 = TCPTransport.builder()
+            .env("testenv")
             .bindAddr(address1)
             .serverSslContext(buildServerAuthSslContext())
             .clientSslContext(buildClientAuthSslContext())
@@ -130,6 +136,7 @@ public class TCPTransportFuncTest {
     @Test(groups = "integration")
     public void testGetChannel() throws ExecutionException, InterruptedException {
         transport1 = TCPTransport.builder()
+            .env("testenv")
             .bindAddr(address1)
             .serverSslContext(buildServerAuthSslContext())
             .clientSslContext(buildClientAuthSslContext())
@@ -149,21 +156,21 @@ public class TCPTransportFuncTest {
             .bindAddr(address1)
             .serverSslContext(buildServerAuthSslContext())
             .clientSslContext(buildClientAuthSslContext())
-            .sharedToken("token1")
+            .env("token1")
             .opts(new TCPTransport.TCPTransportOptions().maxChannelsPerHost(2))
             .build();
         transport2 = TCPTransport.builder()
             .bindAddr(address2)
             .serverSslContext(buildServerAuthSslContext())
             .clientSslContext(buildClientAuthSslContext())
-            .sharedToken("token1")
+            .env("token1")
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
         ITransport transport3 = TCPTransport.builder()
             .bindAddr(address3)
             .serverSslContext(buildServerAuthSslContext())
             .clientSslContext(buildClientAuthSslContext())
-            .sharedToken("token2")
+            .env("token2")
             .opts(new TCPTransport.TCPTransportOptions())
             .build();
 

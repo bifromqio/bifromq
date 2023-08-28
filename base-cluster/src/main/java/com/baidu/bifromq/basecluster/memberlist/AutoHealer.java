@@ -56,7 +56,8 @@ public final class AutoHealer {
     private volatile Disposable healingJob;
 
     public AutoHealer(IMessenger messenger, Scheduler scheduler, IHostMemberList memberList,
-                      IHostAddressResolver addressResolver, Duration healingTimeout, Duration healingInterval) {
+                      IHostAddressResolver addressResolver, Duration healingTimeout, Duration healingInterval,
+                      String... tags) {
         this.messenger = messenger;
         this.scheduler = scheduler;
         this.memberList = memberList;
@@ -83,8 +84,7 @@ public final class AutoHealer {
                 alivePeers.putAll(Maps.filterKeys(members, k -> !k.equals(memberList.local())));
             }));
         healingNumGauge = Gauge.builder("basecluster.heal.num", healingMembers::estimatedSize)
-            .tags("local",
-                memberList.local().getEndpoint().getAddress() + ":" + memberList.local().getEndpoint().getPort())
+            .tags(tags)
             .register(Metrics.globalRegistry);
     }
 

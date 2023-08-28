@@ -72,7 +72,8 @@ public final class Agent implements IAgent {
                  IAgentMessenger messenger,
                  Scheduler scheduler,
                  ICRDTStore store,
-                 IAgentHostProvider hostProvider) {
+                 IAgentHostProvider hostProvider,
+                 String... tags) {
         this.agentId = agentId;
         this.hostEndpoint = hostEndpoint;
         this.messenger = messenger;
@@ -88,8 +89,8 @@ public final class Agent implements IAgent {
             .observeOn(scheduler)
             .subscribe(this::handleHostEndpointsUpdate));
         memberNumGauge = Gauge.builder("basecluster.agent.members", () -> agentMembersSubject.getValue().size())
+            .tags(tags)
             .tags("id", agentId)
-            .tags("local", hostEndpoint.getAddress() + ":" + hostEndpoint.getPort())
             .register(Metrics.globalRegistry);
     }
 

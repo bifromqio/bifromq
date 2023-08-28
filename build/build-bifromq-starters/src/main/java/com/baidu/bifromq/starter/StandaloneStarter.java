@@ -157,6 +157,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         AgentHostOptions agentHostOptions = AgentHostOptions.builder()
             .clusterDomainName(config.getClusterConfig().getClusterDomainName())
+            .env(config.getClusterConfig().getEnv())
             .addr(config.getClusterConfig().getHost())
             .port(config.getClusterConfig().getPort())
             .build();

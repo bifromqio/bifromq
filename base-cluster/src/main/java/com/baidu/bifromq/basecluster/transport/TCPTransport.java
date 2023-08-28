@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecluster.transport;
 
 import com.baidu.bifromq.basecluster.transport.proto.Packet;
+import com.baidu.bifromq.basehlc.HLC;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
@@ -21,7 +22,9 @@ import com.github.benmanes.caffeine.cache.Scheduler;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -52,6 +55,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.NonNull;
 import lombok.Setter;
 import lombok.SneakyThrows;
 import lombok.experimental.Accessors;
@@ -105,10 +109,11 @@ public final class TCPTransport extends AbstractTransport {
         }
 
         @Override
-        protected void channelRead0(ChannelHandlerContext ctx, Packet msg) {
+        protected void channelRead0(ChannelHandlerContext ctx, Packet packet) {
             trace("Received message: remote={}", ctx.channel().remoteAddress());
-            recvBytes.increment(msg.getSerializedSize());
-            doReceive(msg, (InetSocketAddress) ctx.channel().remoteAddress(),
+            recvBytes.increment(packet.getSerializedSize());
+            transportLatency.record(HLC.INST.getPhysical(packet.getHlc() - HLC.INST.get()));
+            doReceive(packet, (InetSocketAddress) ctx.channel().remoteAddress(),
                 (InetSocketAddress) ctx.channel().localAddress());
         }
 
@@ -129,8 +134,9 @@ public final class TCPTransport extends AbstractTransport {
         }
     }
 
-    private final Counter sendBytes = Metrics.counter("basecluster.send.bytes", "proto", "tcp");
-    private final Counter recvBytes = Metrics.counter("basecluster.recv.bytes", "proto", "tcp");
+    private final Counter sendBytes;
+    private final Counter recvBytes;
+    private final DistributionSummary transportLatency;
     private final ClientBridger clientBridger = new ClientBridger();
     private final ServerBridger serverBridger = new ServerBridger();
 
@@ -142,12 +148,11 @@ public final class TCPTransport extends AbstractTransport {
     private final AtomicInteger nextChannelKey = new AtomicInteger(0);
     private final Bootstrap clientBootstrap;
     private final ChannelFuture tcpListeningChannel;
-    private final InetSocketAddress localAddress;
 
     @Builder
-    TCPTransport(String sharedToken, InetSocketAddress bindAddr, SslContext serverSslContext,
+    TCPTransport(@NonNull String env, InetSocketAddress bindAddr, SslContext serverSslContext,
                  SslContext clientSslContext, TCPTransportOptions opts) {
-        super(sharedToken);
+        super(env);
         try {
             Preconditions.checkArgument(opts.connTimeoutInMS > 0, "connTimeoutInMS must be a positive number");
             Preconditions.checkArgument(opts.maxBufferSizeInBytes > 0,
@@ -157,7 +162,19 @@ public final class TCPTransport extends AbstractTransport {
             elg = NettyUtil.getEventLoopGroup(4, "cluster-tcp-transport");
             clientBootstrap = setupTcpClient(clientSslContext);
             tcpListeningChannel = setupTcpServer(bindAddr, serverSslContext);
-            localAddress = (InetSocketAddress) tcpListeningChannel.channel().localAddress();
+            InetSocketAddress localAddress = (InetSocketAddress) tcpListeningChannel.channel().localAddress();
+            Tags tags = Tags.of("proto", "tcp")
+                .and("env", env)
+                .and("local", localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort());
+            sendBytes = Counter.builder("basecluster.send.bytes")
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            recvBytes = Counter.builder("basecluster.recv.bytes")
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            transportLatency = DistributionSummary.builder("basecluster.transport.latency")
+                .tags(tags)
+                .register(Metrics.globalRegistry);
             log.debug("Creating tcp transport: bindAddr={}", localAddress);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize tcp transport", e);
@@ -252,6 +269,7 @@ public final class TCPTransport extends AbstractTransport {
             Completable.fromFuture(elg.shutdownGracefully()), Completable.fromRunnable(() -> {
                 Metrics.globalRegistry.remove(sendBytes);
                 Metrics.globalRegistry.remove(recvBytes);
+                Metrics.globalRegistry.remove(transportLatency);
             })).onErrorComplete();
     }
 

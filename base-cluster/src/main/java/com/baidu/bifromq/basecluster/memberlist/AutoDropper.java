@@ -32,7 +32,6 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tags;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -88,7 +87,8 @@ public class AutoDropper {
                        IFailureDetector failureDetector,
                        IHostAddressResolver addressResolver,
                        int suspicionMultiplier,
-                       int suspicionMaxTimeoutMultiplier) {
+                       int suspicionMaxTimeoutMultiplier,
+                       String... tags) {
         this.messenger = messenger;
         this.scheduler = scheduler;
         this.memberList = memberList;
@@ -113,8 +113,7 @@ public class AutoDropper {
             .subscribe(members -> alivePeers = Maps.filterKeys(members, k -> !k.equals(memberList.local()))));
         healthScoreGauge = Gauge.builder("basecluster.healthScore",
                 () -> failureDetector.healthScoring().blockingFirst())
-            .tags(Tags.of("local",
-                memberList.local().getEndpoint().getAddress() + ":" + memberList.local().getEndpoint().getPort()))
+            .tags(tags)
             .register(Metrics.globalRegistry);
     }
 

@@ -65,16 +65,17 @@ public class Messenger implements IMessenger {
     private Messenger(InetSocketAddress bindAddr,
                       SslContext serverSslContext,
                       SslContext clientSslContext,
-                      String clusterEnv,
+                      String env,
                       Scheduler scheduler,
                       MessengerOptions opts) {
+        env = env == null ? "" : env;
         this.opts = opts.toBuilder().build();
         this.scheduler = scheduler;
         this.transport = new MessengerTransport(Transport.builder()
             .bindAddr(bindAddr)
             .serverSslContext(serverSslContext)
             .clientSslContext(clientSslContext)
-            .sharedToken(clusterEnv)
+            .env(env)
             .options(opts.transporterOptions())
             .build());
         this.localAddress = transport.bindAddress();
@@ -82,7 +83,7 @@ public class Messenger implements IMessenger {
             opts.retransmitMultiplier(),
             opts.spreadPeriod(),
             this.scheduler);
-        this.metricManager = new MetricManager(localAddress.toString());
+        this.metricManager = new MetricManager(env, localAddress);
     }
 
     @Override
@@ -257,9 +258,12 @@ public class Messenger implements IMessenger {
         final Map<ClusterMessage.ClusterMessageTypeCase, Counter> gossipHeardCounters = Maps.newHashMap();
         final Counter gossipSpreadCounter = Metrics.counter("cluster.gossip.count");
 
-        MetricManager(String localAddress) {
+        MetricManager(String env, InetSocketAddress localAddress) {
             for (ClusterMessage.ClusterMessageTypeCase typeCase : ClusterMessage.ClusterMessageTypeCase.values()) {
-                Tags tags = Tags.of("local", localAddress).and("type", typeCase.name());
+                Tags tags = Tags
+                    .of("env", env)
+                    .and("local", localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort())
+                    .and("type", typeCase.name());
                 msgSendCounters.put(typeCase,
                     Metrics.counter("basecluster.send.count", tags));
                 msgRecvCounters.put(typeCase,

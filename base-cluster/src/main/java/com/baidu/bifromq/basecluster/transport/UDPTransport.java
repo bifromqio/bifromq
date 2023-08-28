@@ -17,9 +17,12 @@ import static com.baidu.bifromq.basecluster.transport.NettyUtil.getDatagramChann
 import static com.baidu.bifromq.basecluster.transport.NettyUtil.getEventLoopGroup;
 
 import com.baidu.bifromq.basecluster.transport.proto.Packet;
+import com.baidu.bifromq.basehlc.HLC;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -39,6 +42,7 @@ import io.reactivex.rxjava3.subjects.CompletableSubject;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
 import lombok.Builder;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -54,6 +58,7 @@ public final class UDPTransport extends AbstractTransport {
                 byte[] data = new byte[dp.content().readableBytes()];
                 dp.content().readBytes(data);
                 Packet packet = Packet.parseFrom(data);
+                transportLatency.record(HLC.INST.getPhysical(packet.getHlc() - HLC.INST.get()));
                 doReceive(packet, dp.sender(), dp.recipient());
             } catch (InvalidProtocolBufferException e) {
                 log.error("Unable to decode packet, just ignore");
@@ -61,8 +66,9 @@ public final class UDPTransport extends AbstractTransport {
         }
     }
 
-    private final Counter sendBytes = Metrics.counter("basecluster.send.bytes", "proto", "udp");
-    private final Counter recvBytes = Metrics.counter("basecluster.recv.bytes", "proto", "udp");
+    private final Counter sendBytes;
+    private final Counter recvBytes;
+    private final DistributionSummary transportLatency;
 
     private final EventLoopGroup elg;
 
@@ -73,8 +79,8 @@ public final class UDPTransport extends AbstractTransport {
 
 
     @Builder
-    UDPTransport(String sharedToken, InetSocketAddress bindAddr) {
-        super(sharedToken);
+    UDPTransport(@NonNull String env, InetSocketAddress bindAddr) {
+        super(env);
         try {
             bridger = new Bridger();
             elg = getEventLoopGroup(4, "cluster-udp-transport");
@@ -96,6 +102,20 @@ public final class UDPTransport extends AbstractTransport {
                 .sync()
                 .channel();
             localAddress = (InetSocketAddress) channel.localAddress();
+            Tags tags = Tags.of("proto", "udp")
+                .and("env", env)
+                .and("local", localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort());
+
+            sendBytes = Counter.builder("basecluster.send.bytes")
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            recvBytes = Counter.builder("basecluster.recv.bytes")
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            transportLatency = DistributionSummary.builder("basecluster.transport.latency")
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+
             log.debug("Creating udp transport: bindAddr={}", localAddress);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize udp transport", e);
@@ -133,6 +153,7 @@ public final class UDPTransport extends AbstractTransport {
                 Completable.fromRunnable(() -> {
                     Metrics.globalRegistry.remove(sendBytes);
                     Metrics.globalRegistry.remove(recvBytes);
+                    Metrics.globalRegistry.remove(transportLatency);
                 }))
             .onErrorComplete()
             .subscribe(doneSignal::onComplete);
