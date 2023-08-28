@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -68,26 +69,27 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         this.maxPipelineDepth = new AtomicLong(pipelineDepth);
         avgLatencyNanos = new MovingAverage(100, Duration.ofSeconds(1));
         this.batchPool = new ArrayDeque<>(pipelineDepth);
+        Tags tags = Tags.of("name", name);
         dropCounter = Counter.builder("batcher.call.drop.count")
-            .tags("name", name)
+            .tags(tags)
             .register(Metrics.globalRegistry);
         batchSaturationGauge = Gauge.builder("batcher.saturation", () -> maxBatchSize)
-            .tags("name", name)
+            .tags(tags)
             .register(Metrics.globalRegistry);
         batchCallTimer = Timer.builder("batcher.call.time")
-            .tags("name", name)
+            .tags(tags)
             .register(Metrics.globalRegistry);
         batchExecTimer = Timer.builder("batcher.exec.time")
-            .tags("name", name)
+            .tags(tags)
             .register(Metrics.globalRegistry);
         batchBuildTimeSummary = DistributionSummary.builder("batcher.build.time")
-            .tags("name", name)
+            .tags(tags)
             .register(Metrics.globalRegistry);
         batchSizeSummary = DistributionSummary.builder("batcher.batch.size")
-            .tags("name", name)
+            .tags(tags)
             .register(Metrics.globalRegistry);
         queueingTimeSummary = DistributionSummary.builder("batcher.queueing.time")
-            .tags("name", name)
+            .tags(tags)
             .register(Metrics.globalRegistry);
     }
 
@@ -112,13 +114,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     }
 
     public void close() {
-        Metrics.globalRegistry.remove(dropCounter);
-        Metrics.globalRegistry.remove(batchSaturationGauge);
-        Metrics.globalRegistry.remove(batchCallTimer);
-        Metrics.globalRegistry.remove(batchExecTimer);
-        Metrics.globalRegistry.remove(batchBuildTimeSummary);
-        Metrics.globalRegistry.remove(batchSizeSummary);
-        Metrics.globalRegistry.remove(queueingTimeSummary);
+        // don't remove metrics since it's shared by all batchers
     }
 
     protected abstract IBatchCall<Call, CallResult> newBatch();
