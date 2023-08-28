@@ -15,21 +15,18 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
@@ -57,7 +54,7 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
         return KeyUtil.scopedInboxId(request.getSubInfo().getTenantId(), request.getSubInfo().getInboxId());
     }
 
-    private static class InboxInsertBatcher extends Batcher<MessagePack, SendResult.Result, KVRangeSetting> {
+    private static class InboxInsertBatcher extends InboxMutateBatcher<MessagePack, SendResult.Result> {
         private class InboxBatchInsert implements IBatchCall<MessagePack, SendResult.Result> {
             // key: scopedInboxIdUtf8
             private final Queue<CallTask<MessagePack, SendResult.Result>> inboxInserts = new ArrayDeque<>(128);
@@ -76,27 +73,11 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
                 long reqId = System.nanoTime();
                 BatchInsertRequest.Builder reqBuilder = BatchInsertRequest.newBuilder();
                 inboxInserts.forEach(insertTask -> reqBuilder.addSubMsgPack(insertTask.call));
-                return inboxStoreClient.execute(range.leader,
-                        KVRangeRWRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
-                            .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setReqId(reqId)
-                                .setBatchInsert(reqBuilder.build())
-                                .build().toByteString())
-                            .build())
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-                            } catch (InvalidProtocolBufferException e) {
-                                throw new RuntimeException("Unable to parse rw co-proc output", e);
-                            }
-                        }
-                        throw new RuntimeException(
-                            String.format("Failed to exec rw co-proc[code=%s]", reply.getCode()));
-                    })
+                return mutate(InboxServiceRWCoProcInput.newBuilder()
+                    .setReqId(reqId)
+                    .setBatchInsert(reqBuilder.build())
+                    .build())
+                    .thenApply(InboxServiceRWCoProcOutput::getBatchInsert)
                     .handle((v, e) -> {
                         if (e != null) {
                             CallTask<MessagePack, SendResult.Result> task;
@@ -105,7 +86,7 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
                             }
                         } else {
                             Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-                            for (InsertResult result : v.getBatchInsert().getResultsList()) {
+                            for (InsertResult result : v.getResultsList()) {
                                 switch (result.getResult()) {
                                     case OK -> insertResults.put(result.getSubInfo(), SendResult.Result.OK);
                                     case NO_INBOX -> insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
@@ -122,17 +103,12 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
             }
         }
 
-        private final IBaseKVStoreClient inboxStoreClient;
-        private final KVRangeSetting range;
-
         InboxInsertBatcher(String name,
                            long tolerableLatencyNanos,
                            long burstLatencyNanos,
                            KVRangeSetting range,
                            IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.range = range;
-            this.inboxStoreClient = inboxStoreClient;
+            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
         }
 
         @Override

@@ -95,7 +95,7 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
                 BatchRetainRequest.Builder reqBuilder = BatchRetainRequest.newBuilder().setReqId(reqId);
                 retainMsgPackBuilders.forEach((tenantId, retainMsgPackBuilder) ->
                     reqBuilder.putRetainMessagePack(tenantId, retainMsgPackBuilder.build()));
-                return retainStoreClient.execute(batcherKey.leader, KVRangeRWRequest.newBuilder()
+                return executionPipeline.execute(KVRangeRWRequest.newBuilder()
                         .setReqId(reqId)
                         .setVer(batcherKey.ver)
                         .setKvRangeId(batcherKey.id)
@@ -147,7 +147,7 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
             }
         }
 
-        private final IBaseKVStoreClient retainStoreClient;
+        private final IBaseKVStoreClient.IExecutionPipeline executionPipeline;
 
         protected RetainCallBatcher(KVRangeSetting range,
                                     String name,
@@ -155,9 +155,14 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
                                     long burstLatencyNanos,
                                     IBaseKVStoreClient retainStoreClient) {
             super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.retainStoreClient = retainStoreClient;
+            this.executionPipeline = retainStoreClient.createExecutionPipeline(range.leader);
         }
 
+        @Override
+        public void close() {
+            super.close();
+            executionPipeline.close();
+        }
 
         @Override
         protected IBatchCall<RetainRequest, RetainReply> newBatch() {

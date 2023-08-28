@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -68,7 +67,7 @@ public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchRe
         return retainStoreClient.findByKey(tenantNS(matchRequest.getTenantId()));
     }
 
-    private static class MatchCallBatcher extends Batcher<MatchRequest, MatchReply, KVRangeSetting> {
+    public static class MatchCallBatcher extends Batcher<MatchRequest, MatchReply, KVRangeSetting> {
         private class BatchMatchCall implements IBatchCall<MatchRequest, MatchReply> {
             private Queue<CallTask<MatchRequest, MatchReply>> batchedTasks = new ArrayDeque<>();
             private Map<String, MatchParam.Builder> matchParamBuilders = new HashMap<>(128);
@@ -102,7 +101,7 @@ public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchRe
                         .setBatchMatch(reqBuilder.build())
                         .build().toByteString())
                     .build();
-                return retainStoreClient.linearizedQuery(selectStore(batcherKey), request)
+                return retainStoreClient.linearizedQuery(batcherKey.leader, request)
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
                             try {
@@ -141,10 +140,6 @@ public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchRe
                         }
                         return null;
                     });
-            }
-
-            private String selectStore(KVRangeSetting setting) {
-                return setting.allReplicas.get(ThreadLocalRandom.current().nextInt(setting.allReplicas.size()));
             }
         }
 

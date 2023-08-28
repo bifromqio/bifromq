@@ -15,8 +15,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
@@ -25,7 +23,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
@@ -52,7 +49,7 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
         return ByteString.copyFromUtf8(request.scopedInboxIdUtf8);
     }
 
-    private static class InboxTouchBatcher extends Batcher<Touch, List<String>, KVRangeSetting> {
+    private static class InboxTouchBatcher extends InboxMutateBatcher<Touch, List<String>> {
         private class InboxTouchBatch implements IBatchCall<Touch, List<String>> {
             private final Queue<CallTask<Touch, List<String>>> batchedTasks = new ArrayDeque<>();
             private BatchTouchRequest.Builder reqBuilder = BatchTouchRequest.newBuilder();
@@ -73,28 +70,11 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                return inboxStoreClient.execute(range.leader,
-                        KVRangeRWRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
-                            .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setReqId(reqId)
-                                .setBatchTouch(reqBuilder.build())
-                                .build().toByteString())
-                            .build())
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchTouch();
-                            } catch (InvalidProtocolBufferException e) {
-                                log.error("Unable to parse rw co-proc output", e);
-                                throw new RuntimeException(e);
-                            }
-                        }
-                        log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
-                        throw new RuntimeException();
-                    })
+                return mutate(InboxServiceRWCoProcInput.newBuilder()
+                    .setReqId(reqId)
+                    .setBatchTouch(reqBuilder.build())
+                    .build())
+                    .thenApply(InboxServiceRWCoProcOutput::getBatchTouch)
                     .handle((v, e) -> {
                         if (e != null) {
                             CallTask<Touch, List<String>> callTask;
@@ -113,17 +93,12 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
             }
         }
 
-        private final IBaseKVStoreClient inboxStoreClient;
-        private final KVRangeSetting range;
-
         InboxTouchBatcher(String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
                           KVRangeSetting range,
                           IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.range = range;
-            this.inboxStoreClient = inboxStoreClient;
+            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
         }
 
         @Override

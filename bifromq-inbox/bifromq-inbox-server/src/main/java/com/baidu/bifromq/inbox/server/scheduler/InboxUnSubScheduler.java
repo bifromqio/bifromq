@@ -18,8 +18,6 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedTopicFilter;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
@@ -29,7 +27,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -55,7 +52,7 @@ public class InboxUnSubScheduler extends InboxMutateScheduler<UnsubRequest, Unsu
         return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
-    private static class InboxUnSubBatcher extends Batcher<UnsubRequest, UnsubReply, KVRangeSetting> {
+    private static class InboxUnSubBatcher extends InboxMutateBatcher<UnsubRequest, UnsubReply> {
         private class InboxBatchUnSub implements IBatchCall<UnsubRequest, UnsubReply> {
             private final Queue<CallTask<UnsubRequest, UnsubReply>> batchTasks = new ArrayDeque<>();
             private BatchUnsubRequest.Builder reqBuilder = BatchUnsubRequest.newBuilder();
@@ -77,28 +74,11 @@ public class InboxUnSubScheduler extends InboxMutateScheduler<UnsubRequest, Unsu
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                return inboxStoreClient.execute(range.leader,
-                        KVRangeRWRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
-                            .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setReqId(reqId)
-                                .setBatchUnsub(reqBuilder.setReqId(reqId).build())
-                                .build().toByteString())
-                            .build())
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                    .getBatchUnsub();
-                            } catch (InvalidProtocolBufferException e) {
-                                log.error("Unable to parse rw co-proc output", e);
-                                throw new RuntimeException(e);
-                            }
-                        }
-                        throw new RuntimeException(reply.getCode().name());
-                    })
+                return mutate(InboxServiceRWCoProcInput.newBuilder()
+                    .setReqId(reqId)
+                    .setBatchUnsub(reqBuilder.setReqId(reqId).build())
+                    .build())
+                    .thenApply(InboxServiceRWCoProcOutput::getBatchUnsub)
                     .handle((v, e) -> {
                         if (e != null) {
                             CallTask<UnsubRequest, UnsubReply> task;
@@ -126,17 +106,12 @@ public class InboxUnSubScheduler extends InboxMutateScheduler<UnsubRequest, Unsu
             }
         }
 
-        private final IBaseKVStoreClient inboxStoreClient;
-        private final KVRangeSetting range;
-
         InboxUnSubBatcher(String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
                           KVRangeSetting range,
                           IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.range = range;
-            this.inboxStoreClient = inboxStoreClient;
+            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
         }
 
         @Override
