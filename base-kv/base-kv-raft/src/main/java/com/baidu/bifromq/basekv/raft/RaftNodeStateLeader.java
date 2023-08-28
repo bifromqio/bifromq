@@ -85,7 +85,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                         IRaftNode.IRaftMessageSender sender,
                         IRaftNode.IRaftEventListener listener,
                         IRaftNode.ISnapshotInstaller installer,
-                        OnSnapshotInstalled onSnapshotInstalled) {
+                        OnSnapshotInstalled onSnapshotInstalled,
+                        String... tags) {
         super(term,
             commitIndex,
             config,
@@ -95,7 +96,8 @@ class RaftNodeStateLeader extends RaftNodeState {
             sender,
             listener,
             installer,
-            onSnapshotInstalled);
+            onSnapshotInstalled,
+            tags);
         peerLogTracker = new PeerLogTracker(id(), config, stateStorage, listener, this);
         configChanger = new RaftConfigChanger(config, stateStorage, peerLogTracker, this);
         ClusterConfig clusterConfig = stateStorage.latestClusterConfig();
@@ -151,7 +153,8 @@ class RaftNodeStateLeader extends RaftNodeState {
             sender,
             listener,
             snapshotInstaller,
-            onSnapshotInstalled);
+            onSnapshotInstalled,
+            tags);
         configChanger.abort();
         readProgressTracker.abort();
         onDone.complete(true);
@@ -219,7 +222,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                     sender,
                     listener,
                     snapshotInstaller,
-                    onSnapshotInstalled
+                    onSnapshotInstalled,
+                    tags
                 );
             }
         }
@@ -299,14 +303,16 @@ class RaftNodeStateLeader extends RaftNodeState {
         RaftNodeState nextState = this;
         if (message.getTerm() > currentTerm()) {
             switch (message.getMessageTypeCase()) {
-                case REQUESTPREVOTE:
+                case REQUESTPREVOTE -> {
                     logDebug("Answering pre-vote request from peer[{}]", fromPeer);
                     sendRequestPreVoteReply(fromPeer, message.getTerm(), false);
                     return nextState;
-                case REQUESTPREVOTEREPLY:
+                }
+                case REQUESTPREVOTEREPLY -> {
                     // the out-dated pre-vote reply must be ignored
                     return nextState;
-                case REQUESTVOTE:
+                }
+                case REQUESTVOTE -> {
                     // prevent from being disrupted
                     boolean leaderTransfer = message.getRequestVote().getLeaderTransfer();
                     if (!leaderTransfer && !voters().contains(fromPeer)) {
@@ -328,6 +334,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                         }
                         leaderTransferTask = null;
                     }
+                }
             }
             // transition to follower according to $3.3 in raft paper
             // abort on-going config change and readIndex request if any
@@ -346,7 +353,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                 sender,
                 listener,
                 snapshotInstaller,
-                onSnapshotInstalled
+                onSnapshotInstalled,
+                tags
             );
             nextState.receive(fromPeer, message);
         } else if (message.getTerm() < currentTerm()) {
@@ -354,19 +362,16 @@ class RaftNodeStateLeader extends RaftNodeState {
             return nextState;
         } else {
             switch (message.getMessageTypeCase()) {
-                case APPENDENTRIESREPLY:
+                case APPENDENTRIESREPLY -> {
                     return handleAppendEntriesReply(fromPeer, message.getAppendEntriesReply());
-                case INSTALLSNAPSHOTREPLY:
+                }
+                case INSTALLSNAPSHOTREPLY -> {
                     return handleInstallSnapshotReply(fromPeer, message.getInstallSnapshotReply());
-                case REQUESTREADINDEX:
-                    handleRequestReadIndex(fromPeer, message.getRequestReadIndex());
-                    break;
-                case PROPOSE:
-                    handlePropose(fromPeer, message.getPropose());
-                    break;
-                case REQUESTPREVOTE:
-                    sendRequestPreVoteReply(fromPeer, currentTerm(), false);
-                    break;
+                }
+                case REQUESTREADINDEX -> handleRequestReadIndex(fromPeer, message.getRequestReadIndex());
+                case PROPOSE -> handlePropose(fromPeer, message.getPropose());
+                case REQUESTPREVOTE -> sendRequestPreVoteReply(fromPeer, currentTerm(), false);
+
                 // ignore other messages
             }
         }
@@ -429,28 +434,25 @@ class RaftNodeStateLeader extends RaftNodeState {
         }
         if (peerLogTracker.status(fromPeer) != RaftNodeSyncState.SnapshotSyncing) {
             // ignore heartbeat reply during snapshot syncing
-            switch (reply.getResultCase()) {
-                case REJECT:
-                    AppendEntriesReply.Reject reject = reply.getReject();
-                    logDebug("Follower[{}] with last entry[index:{},term:{}] rejected entries appending from index[{}]",
-                        fromPeer, reject.getLastIndex(), reject.getTerm(), reject.getRejectedIndex());
-                    peerLogTracker.backoff(fromPeer, reject.getRejectedIndex(), reject.getLastIndex());
-                    List<RaftMessage> messages = prepareAppendEntriesForPeer(fromPeer, true);
-                    submitRaftMessages(fromPeer, messages);
-                    return this;
-                case ACCEPT:
-                default:
-                    AppendEntriesReply.Accept accept = reply.getAccept();
-                    logTrace("Follower[{}] accepted entries, and advance match index[{}]",
-                        fromPeer, accept.getLastIndex());
-                    peerLogTracker.confirmMatch(fromPeer, accept.getLastIndex());
-                    if (leaderTransferTask != null && fromPeer.equals(leaderTransferTask.nextLeader)
-                        && peerLogTracker.matchIndex(fromPeer) == stateStorage.lastIndex()) {
-                        logInfo("Started leadership transfer by sending TimeoutNow to follower[{}]", fromPeer);
-                        sendTimeoutNow(leaderTransferTask.nextLeader);
-                    }
-                    return commit();
+            if (reply.getResultCase() == AppendEntriesReply.ResultCase.REJECT) {
+                AppendEntriesReply.Reject reject = reply.getReject();
+                logDebug("Follower[{}] with last entry[index:{},term:{}] rejected entries appending from index[{}]",
+                    fromPeer, reject.getLastIndex(), reject.getTerm(), reject.getRejectedIndex());
+                peerLogTracker.backoff(fromPeer, reject.getRejectedIndex(), reject.getLastIndex());
+                List<RaftMessage> messages = prepareAppendEntriesForPeer(fromPeer, true);
+                submitRaftMessages(fromPeer, messages);
+                return this;
             }
+            AppendEntriesReply.Accept accept = reply.getAccept();
+            logTrace("Follower[{}] accepted entries, and advance match index[{}]",
+                fromPeer, accept.getLastIndex());
+            peerLogTracker.confirmMatch(fromPeer, accept.getLastIndex());
+            if (leaderTransferTask != null && fromPeer.equals(leaderTransferTask.nextLeader)
+                && peerLogTracker.matchIndex(fromPeer) == stateStorage.lastIndex()) {
+                logInfo("Started leadership transfer by sending TimeoutNow to follower[{}]", fromPeer);
+                sendTimeoutNow(leaderTransferTask.nextLeader);
+            }
+            return commit();
         }
         return this;
     }
@@ -492,7 +494,7 @@ class RaftNodeStateLeader extends RaftNodeState {
         List<RaftMessage> messages = new ArrayList<>();
         long readIndex = readProgressTracker.highestReadIndex();
         switch (peerLogTracker.status(peer)) {
-            case SnapshotSyncing:
+            case SnapshotSyncing -> {
                 Snapshot snapshot = stateStorage.latestSnapshot();
                 if (!peerLogTracker.pauseReplicating(peer)) {
                     if (snapshot.getIndex() == peerLogTracker.matchIndex(peer)) {
@@ -534,8 +536,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                         .build());
                     peerLogTracker.replicateBy(peer, snapshot.getIndex());
                 }
-                break;
-            case Probing:
+            }
+            case Probing -> {
                 if (!peerLogTracker.pauseReplicating(peer) || forceHeartbeat || peerLogTracker.needHeartbeat(peer)) {
                     long nextIndex = Math.max(peerLogTracker.nextIndex(peer), stateStorage.firstIndex());
                     long preLogIndex = nextIndex - 1;
@@ -557,8 +559,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                         .build());
                     peerLogTracker.replicateBy(peer, preLogIndex);
                 }
-                break;
-            case Replicating:
+            }
+            case Replicating -> {
                 // maybe there is a compaction happened before, so logEntry pointed by nextIndex may not be available
                 long nextIndex = Math.max(peerLogTracker.nextIndex(peer), stateStorage.firstIndex());
                 long preLogIndex = nextIndex - 1;
@@ -612,7 +614,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                         .build());
                     peerLogTracker.replicateBy(peer, preLogIndex);
                 }
-                break;
+            }
         }
         return messages;
     }
@@ -649,7 +651,7 @@ class RaftNodeStateLeader extends RaftNodeState {
         if (configChanger.commitTo(commitIndex, currentTerm())) {
             // config changer state changed after committing some log entries
             switch (configChanger.state()) {
-                case Waiting:
+                case Waiting -> {
                     String localId = stateStorage.local();
                     if (!stateStorage.latestClusterConfig().getVotersList().contains(localId)) {
                         // leader has been removed from the latest config, say goodbye to
@@ -683,7 +685,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                             sender,
                             listener,
                             snapshotInstaller,
-                            onSnapshotInstalled
+                            onSnapshotInstalled,
+                            tags
                         );
                         // don't notify rep status change since leader has stepped down now
                         configChanger.confirmCommit(false);
@@ -705,8 +708,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                         // confirm the commit so that peers tracker of removed peers could be cleaned
                         configChanger.confirmCommit(true);
                     }
-                    break;
-                case TargetConfigCommitting:
+                }
+                case TargetConfigCommitting -> {
                     // joint config has committed and now target config is appended to log
                     ClusterConfig clusterConfig = stateStorage.latestClusterConfig();
                     activityTracker.refresh(clusterConfig);
@@ -718,7 +721,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                         leaderTransferTask.abort(LeaderTransferException.notFoundOrQualified());
                         leaderTransferTask = null;
                     }
-                    break;
+                }
             }
         }
         if (needNotify) {

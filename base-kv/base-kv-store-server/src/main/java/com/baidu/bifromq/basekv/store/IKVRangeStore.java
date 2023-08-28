@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 public interface IKVRangeStore {
+    String clusterId();
     String id();
 
     boolean isStarted();

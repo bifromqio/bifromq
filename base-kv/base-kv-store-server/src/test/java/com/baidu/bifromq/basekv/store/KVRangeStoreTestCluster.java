@@ -66,7 +66,7 @@ public class KVRangeStoreTestCluster {
     private static final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-
+    private static final String CLUSTER = "test_cluster";
     private final String bootstrapStore;
     private final KVRangeId genesisKVRangeId;
     private final Map<String, String> storePathMap = Maps.newConcurrentMap();
@@ -429,7 +429,12 @@ public class KVRangeStoreTestCluster {
 
     private KVRangeStore initStore(KVRangeStoreOptions options) {
         KVRangeStore store =
-            new KVRangeStore(options, new TestCoProcFactory(), queryExecutor, mutationExecutor, tickTaskExecutor,
+            new KVRangeStore(CLUSTER,
+                options,
+                new TestCoProcFactory(),
+                queryExecutor,
+                mutationExecutor,
+                tickTaskExecutor,
                 bgTaskExecutor);
         PublishSubject<StoreMessage> storeMsgSource = PublishSubject.create();
         store.start(new IStoreMessenger() {

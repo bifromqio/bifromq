@@ -13,15 +13,15 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.event.CommitEvent;
 import com.baidu.bifromq.basekv.raft.event.RaftEvent;
@@ -57,19 +57,19 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
     private final Logger log = LoggerFactory.getLogger("RaftNodeStateFollowerTest");
     private static final String leader = "v1";
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -79,6 +79,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
     public void releaseMocks() throws Exception {
         closeable.close();
     }
+
     @Test
     public void testStartUp() {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
@@ -88,7 +89,8 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             msgSender,
             eventListener,
             snapshotInstaller,
-            onSnapshotInstalled);
+            onSnapshotInstalled,
+            "cluster", "testCluster", "rangeId", "testRange");
         assertEquals(follower.id, stateStorage.local());
         assertEquals(follower.getState(), RaftNodeStatus.Follower);
         assertEquals(follower.latestClusterConfig(), clusterConfig);
@@ -668,7 +670,8 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", snapshot);
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null,
-            defaultRaftConfig, stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            defaultRaftConfig, stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled,
+            "cluster", "testCluster", "rangeId", "testRange");
 
         RaftMessage installSnapshot = RaftMessage.newBuilder()
             .setTerm(1)

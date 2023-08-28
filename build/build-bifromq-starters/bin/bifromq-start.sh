@@ -178,7 +178,7 @@ if [ "x$JVM_DEBUG" != "x" ]; then
   fi
 
   # Use the defaults if JAVA_DEBUG_OPTS was not set
-  DEFAULT_JAVA_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=${DEBUG_SUSPEND_FLAG:-n},address=*:$JAVA_DEBUG_PORT"
+  DEFAULT_JAVA_DEBUG_OPTS="-Djava.net.preferIPv4Stack=true -agentlib:jdwp=transport=dt_socket,server=y,suspend=${DEBUG_SUSPEND_FLAG:-n},address=*:$JAVA_DEBUG_PORT"
   if [ -z "$JAVA_DEBUG_OPTS" ]; then
     JAVA_DEBUG_OPTS="$DEFAULT_JAVA_DEBUG_OPTS"
   fi

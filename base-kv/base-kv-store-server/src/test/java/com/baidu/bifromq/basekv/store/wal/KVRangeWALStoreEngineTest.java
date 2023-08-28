@@ -82,7 +82,7 @@ public class KVRangeWALStoreEngineTest {
     public void testStartAndStop() {
         try {
             KVRangeWALStorageEngine stateStorageEngine =
-                new KVRangeWALStorageEngine(null, engineConfigurator);
+                new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
             stateStorageEngine.start(bgMgmtTaskExecutor);
             if (engineConfigurator instanceof RocksDBKVEngineConfigurator) {
                 assertTrue((new File(dbPath)).isDirectory());
@@ -100,7 +100,7 @@ public class KVRangeWALStoreEngineTest {
         try {
             KVRangeId testId = KVRangeIdUtil.generate();
             KVRangeWALStorageEngine stateStorageEngine =
-                new KVRangeWALStorageEngine(null, engineConfigurator);
+                new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
             stateStorageEngine.start(bgMgmtTaskExecutor);
             Snapshot snapshot = Snapshot.newBuilder()
                 .setIndex(0)
@@ -137,7 +137,7 @@ public class KVRangeWALStoreEngineTest {
         KVRangeId testId1 = KVRangeIdUtil.generate();
         KVRangeId testId2 = KVRangeIdUtil.next(testId1);
         KVRangeWALStorageEngine stateStorageEngine =
-            new KVRangeWALStorageEngine(null, engineConfigurator);
+            new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
         Snapshot snapshot = Snapshot.newBuilder()
             .setIndex(0)
@@ -151,7 +151,7 @@ public class KVRangeWALStoreEngineTest {
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 2);
         stateStorageEngine.stop();
 
-        stateStorageEngine = new KVRangeWALStorageEngine(null, engineConfigurator);
+        stateStorageEngine = new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 2);
         IRaftStateStore stateStorage = stateStorageEngine.get(testId1);
@@ -172,7 +172,7 @@ public class KVRangeWALStoreEngineTest {
         KVRangeId testId1 = KVRangeIdUtil.generate();
         KVRangeId testId2 = KVRangeIdUtil.next(testId1);
         KVRangeWALStorageEngine stateStorageEngine =
-            new KVRangeWALStorageEngine(null, engineConfigurator);
+            new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
         Snapshot snapshot = Snapshot.newBuilder()
             .setIndex(0)
@@ -189,7 +189,7 @@ public class KVRangeWALStoreEngineTest {
         assertTrue(stateStorageEngine.has(testId2));
         stateStorageEngine.stop();
 
-        stateStorageEngine = new KVRangeWALStorageEngine(null, engineConfigurator);
+        stateStorageEngine = new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
         assertTrue(stateStorageEngine.has(testId2));

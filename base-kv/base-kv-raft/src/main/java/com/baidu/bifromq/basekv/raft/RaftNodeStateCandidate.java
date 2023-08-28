@@ -52,7 +52,8 @@ class RaftNodeStateCandidate extends RaftNodeState {
                            IRaftNode.IRaftMessageSender sender,
                            IRaftNode.IRaftEventListener listener,
                            IRaftNode.ISnapshotInstaller installer,
-                           OnSnapshotInstalled onSnapshotInstalled) {
+                           OnSnapshotInstalled onSnapshotInstalled,
+                           String... tags) {
         super(term,
             commitIndex,
             config,
@@ -62,7 +63,8 @@ class RaftNodeStateCandidate extends RaftNodeState {
             sender,
             listener,
             installer,
-            onSnapshotInstalled);
+            onSnapshotInstalled,
+            tags);
         randomElectionTimeoutTick = randomizeElectionTimeoutTick();
         voteTracker = new QuorumTracker(stateStorage.latestClusterConfig(), this);
         preVoteTracker = new QuorumTracker(stateStorage.latestClusterConfig(), this);
@@ -133,28 +135,26 @@ class RaftNodeStateCandidate extends RaftNodeState {
         RaftNodeState nextState = this;
         if (message.getTerm() > currentTerm()) {
             switch (message.getMessageTypeCase()) {
-                case REQUESTPREVOTE:
-                    handlePreVote(fromPeer, message.getTerm(), message.getRequestPreVote());
-                    break;
-                case REQUESTPREVOTEREPLY:
+                case REQUESTPREVOTE -> handlePreVote(fromPeer, message.getTerm(), message.getRequestPreVote());
+                case REQUESTPREVOTEREPLY -> {
                     // update pre-vote tracker and tally pre-votes
                     preVoteTracker.poll(fromPeer, message.getRequestPreVoteReply().getVoteCouldGranted());
                     QuorumTracker.JointVoteResult preVoteResult = preVoteTracker.tally();
                     switch (preVoteResult.result) {
-                        case Won:
+                        case Won -> {
                             // initiate formal campaign
                             finishRecoveryTask(RecoveryException.notLostQuorum());
                             logDebug("Pre-Election won[{}] and started formal campaign", preVoteResult);
                             nextState = campaign(false, false);
-                            break;
-                        case Lost:
+                        }
+                        case Lost -> {
                             finishRecoveryTask(RecoveryException.notLostQuorum());
                             logDebug("Pre-Election lost[{}] and stay as candidate", preVoteResult);
-                            break;
+                        }
                     }
-                    break; // don't fall through
+                } // don't fall through
                 // fallthrough to become follower at new term if pre-vote is not granted
-                default:
+                default -> {
                     // higher term found and transition to follower according to $3.3 in raft paper
                     logDebug("Transited to follower due to higher term[{}] found", message.getTerm());
                     finishRecoveryTask(RecoveryException.abort());
@@ -169,9 +169,11 @@ class RaftNodeStateCandidate extends RaftNodeState {
                         sender,
                         listener,
                         snapshotInstaller,
-                        onSnapshotInstalled
+                        onSnapshotInstalled,
+                        tags
                     );
                     nextState.receive(fromPeer, message);
+                }
             }
         } else if (message.getTerm() < currentTerm()) {
             handleLowTermMessage(fromPeer, message);
@@ -179,8 +181,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
         } else {
             // term match, leader of this term has been elected
             switch (message.getMessageTypeCase()) {
-                case APPENDENTRIES:
-                case INSTALLSNAPSHOT:
+                case APPENDENTRIES, INSTALLSNAPSHOT -> {
                     String leader = message.getMessageTypeCase() == RaftMessage.MessageTypeCase.APPENDENTRIES ?
                         message.getAppendEntries().getLeaderId() : message.getInstallSnapshot().getLeaderId();
                     logDebug("Transited to follower to handle request from newly elected leader[{}]", leader);
@@ -196,20 +197,21 @@ class RaftNodeStateCandidate extends RaftNodeState {
                         sender,
                         listener,
                         snapshotInstaller,
-                        onSnapshotInstalled
+                        onSnapshotInstalled,
+                        tags
                     );
                     nextState.receive(fromPeer, message);
-                    break;
-                case REQUESTVOTEREPLY:
+                }
+                case REQUESTVOTEREPLY -> {
                     // update vote tracker and tally votes
                     voteTracker.poll(fromPeer, message.getRequestVoteReply().getVoteGranted());
                     nextState = tallyVotes();
-                    break;
-                case REQUESTVOTE:
+                }
+                case REQUESTVOTE -> {
                     // reject since candidate always votes for itself
                     logDebug("Rejected vote for candidate[{}]", fromPeer);
                     sendRequestVoteReply(fromPeer, currentTerm(), false);
-                    break;
+                }
             }
         }
         return nextState;
@@ -290,12 +292,13 @@ class RaftNodeStateCandidate extends RaftNodeState {
         } else {
             QuorumTracker.JointVoteResult preVoteResult = preVoteTracker.tally();
             switch (preVoteResult.result) {
-                case Won:
+                case Won -> {
                     // initiate formal campaign
                     logDebug("Pre-Election won[{}] and started formal campaign", preVoteResult);
                     finishRecoveryTask(RecoveryException.notLostQuorum());
                     return campaign(false, false);
-                case Lost:
+                }
+                case Lost -> {
                     logDebug("Pre-Election lost[{}] and transited to follower", preVoteResult);
                     finishRecoveryTask(RecoveryException.notLostQuorum());
                     return new RaftNodeStateFollower(
@@ -309,11 +312,13 @@ class RaftNodeStateCandidate extends RaftNodeState {
                         sender,
                         listener,
                         snapshotInstaller,
-                        onSnapshotInstalled
+                        onSnapshotInstalled,
+                        tags
                     );
-                default:
+                }
+                default -> {
                     return this;
-
+                }
             }
         }
     }
@@ -381,7 +386,8 @@ class RaftNodeStateCandidate extends RaftNodeState {
                     sender,
                     listener,
                     snapshotInstaller,
-                    onSnapshotInstalled
+                    onSnapshotInstalled,
+                    tags
                 );
             case Lost:
                 // lost election
@@ -398,7 +404,8 @@ class RaftNodeStateCandidate extends RaftNodeState {
                     sender,
                     listener,
                     snapshotInstaller,
-                    onSnapshotInstalled);
+                    onSnapshotInstalled,
+                    tags);
             case Pending:
                 logDebug("Election pending[{}]", voteResult);
                 // fallthrough

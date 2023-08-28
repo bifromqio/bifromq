@@ -56,7 +56,7 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
                 .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
                 .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
         }
-        stateStorageEngine = new KVRangeWALStorageEngine(null, walConfigurator);
+        stateStorageEngine = new KVRangeWALStorageEngine("testcluster", null, walConfigurator);
         stateStorageEngine.start(bgMgmtTaskExecutor);
     }
 
