@@ -30,7 +30,7 @@ import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public abstract class AbstractTransport implements ITransport {
-    private final String sharedToken;
+    private final String env;
     private final Subject<PacketEnvelope> publisher = PublishSubject.<PacketEnvelope>create();
     private final AtomicBoolean hasStopped = new AtomicBoolean();
 
@@ -42,8 +42,8 @@ public abstract class AbstractTransport implements ITransport {
         checkState();
         // piggyback local basehlc
         Packet.Builder builder = Packet.newBuilder().setHlc(HLC.INST.get()).addAllMessages(data);
-        if (!Strings.isNullOrEmpty(sharedToken)) {
-            builder.setClusterEnv(sharedToken);
+        if (!Strings.isNullOrEmpty(env)) {
+            builder.setClusterEnv(env);
         }
         Packet packet = builder.build();
         return doSend(packet, recipient);
@@ -68,9 +68,9 @@ public abstract class AbstractTransport implements ITransport {
     }
 
     protected void doReceive(Packet packet, InetSocketAddress sender, InetSocketAddress recipient) {
-        if (!Strings.isNullOrEmpty(sharedToken)
+        if (!Strings.isNullOrEmpty(env)
             && !Strings.isNullOrEmpty(packet.getClusterEnv())
-            && !sharedToken.equals(packet.getClusterEnv())
+            && !env.equals(packet.getClusterEnv())
         ) {
             return;
         }

@@ -19,6 +19,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ClusterConfig {
+    private String env = "";
     private String host;
     private int port;
     private String seedEndpoints;

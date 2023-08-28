@@ -76,14 +76,21 @@ public class HostMemberList implements IHostMemberList {
     private final IORMap hostListCRDT;
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final MetricManager metricManager;
+    private final String[] tags;
     private volatile HostMember local;
 
-    public HostMemberList(String bindAddr, int port, IMessenger messenger, Scheduler scheduler, ICRDTStore store,
-                          IHostAddressResolver addressResolver) {
+    public HostMemberList(String bindAddr,
+                          int port,
+                          IMessenger messenger,
+                          Scheduler scheduler,
+                          ICRDTStore store,
+                          IHostAddressResolver addressResolver,
+                          String... tags) {
         this.messenger = messenger;
         this.scheduler = scheduler;
         this.store = store;
         this.addressResolver = addressResolver;
+        this.tags = tags;
         // setup an ORMap for syncing host list
         store.host(AGENT_HOST_MAP_URI);
         hostListCRDT = (IORMap) store.get(AGENT_HOST_MAP_URI).get();
@@ -218,7 +225,8 @@ public class HostMemberList implements IHostMemberList {
                     new AgentMessenger(agentId, this::getMemberAddress, messenger),
                     scheduler,
                     store,
-                    new AgentHostProvider(agentId, membershipSubject)));
+                    new AgentHostProvider(agentId, membershipSubject),
+                    tags));
                 local = local.toBuilder().setIncarnation(local.getIncarnation() + 1).addAgentId(agentId).build();
                 join(local);
             }
@@ -401,7 +409,7 @@ public class HostMemberList implements IHostMemberList {
         private final Set<Meter> meters = new HashSet<>();
 
         MetricManager() {
-            Tags tags = Tags.of("local", local.getEndpoint().getAddress() + ":" + local.getEndpoint().getPort());
+            Tags metricTags = Tags.of(tags);
             meters.add(Gauge.builder("basecluster.crdt.agentcluster.count", agentMap, Map::size)
                 .tags(tags)
                 .register(Metrics.globalRegistry));

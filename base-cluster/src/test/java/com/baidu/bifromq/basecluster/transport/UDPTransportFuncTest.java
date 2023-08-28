@@ -27,7 +27,10 @@ public class UDPTransportFuncTest {
 
     @Test
     public void testSendAndReceive() {
-        UDPTransport transport = UDPTransport.builder().bindAddr(address).build();
+        UDPTransport transport = UDPTransport.builder()
+            .env("testEnv")
+            .bindAddr(address)
+            .build();
         Packet packet = Packet.newBuilder()
             .addMessages(ByteString.copyFrom("test", Charset.defaultCharset()))
             .build();

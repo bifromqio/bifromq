@@ -69,6 +69,7 @@ final class AgentHost implements IAgentHost {
     private final AutoDropper deadDropper;
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final LoadingCache<HostEndpoint, InetSocketAddress> hostAddressCache;
+    private final String[] tags;
 
     AgentHost(AgentHostOptions options) {
         checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
@@ -95,7 +96,7 @@ final class AgentHost implements IAgentHost {
             .bindAddr(new InetSocketAddress(options.addr(), options.port()))
             .serverSslContext(options.serverSslContext())
             .clientSslContext(options.clientSslContext())
-            .clusterEnv(options.env())
+            .env(options.env())
             .opts(messengerOptions)
             .scheduler(scheduler)
             .build();
@@ -106,8 +107,11 @@ final class AgentHost implements IAgentHost {
         this.store.start(messenger.receive()
             .filter(m -> m.value().message.hasCrdtStoreMessage())
             .map(m -> m.value().message.getCrdtStoreMessage()));
+        tags = new String[] {
+            "env", options.env(), "local", options.addr() + ":" + messenger.bindAddress().getPort()
+        };
         this.memberList = new HostMemberList(options.addr(), messenger.bindAddress().getPort(),
-            messenger, scheduler, store, hostAddressCache::get);
+            messenger, scheduler, store, hostAddressCache::get, tags);
         IFailureDetector failureDetector = FailureDetector.builder()
             .local(new IProbingTarget() {
                 @Override
@@ -128,11 +132,11 @@ final class AgentHost implements IAgentHost {
             .scheduler(scheduler)
             .build();
         healer = new AutoHealer(messenger, scheduler, memberList, hostAddressCache::get, options.autoHealingTimeout(),
-            options.autoHealingInterval());
+            options.autoHealingInterval(), tags);
         seeder = new AutoSeeder(messenger, scheduler, memberList, hostAddressCache::get, options.joinTimeout(),
-            Duration.ofSeconds(options.joinRetryInSec()));
+            Duration.ofSeconds(options.joinRetryInSec()), tags);
         deadDropper = new AutoDropper(messenger, scheduler, memberList, failureDetector, hostAddressCache::get,
-            options.suspicionMultiplier(), options.suspicionMaxTimeoutMultiplier());
+            options.suspicionMultiplier(), options.suspicionMaxTimeoutMultiplier(), tags);
         memberSelector = new MemberSelector(memberList, scheduler, hostAddressCache::get);
         disposables.add(store.storeMessages().subscribe(this::sendCRDTStoreMessage));
     }

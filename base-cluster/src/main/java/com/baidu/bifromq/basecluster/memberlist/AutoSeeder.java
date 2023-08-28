@@ -59,7 +59,8 @@ public final class AutoSeeder {
                       IHostMemberList memberList,
                       IHostAddressResolver addressResolver,
                       Duration joinTimeout,
-                      Duration joinInterval) {
+                      Duration joinInterval,
+                      String... tags) {
         this.messenger = messenger;
         this.scheduler = scheduler;
         this.memberList = memberList;
@@ -91,8 +92,7 @@ public final class AutoSeeder {
             .observeOn(scheduler)
             .subscribe(members -> aliveMembers = members.keySet()));
         seedNumGauge = Gauge.builder("basecluster.seed.num", joiningSeeds::estimatedSize)
-            .tags("local",
-                memberList.local().getEndpoint().getAddress() + ":" + memberList.local().getEndpoint().getPort())
+            .tags(tags)
             .register(Metrics.globalRegistry);
 
     }

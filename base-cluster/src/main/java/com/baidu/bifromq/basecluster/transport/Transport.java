@@ -51,21 +51,23 @@ public final class Transport implements ITransport {
     Transport(InetSocketAddress bindAddr,
               SslContext serverSslContext,
               SslContext clientSslContext,
-              String sharedToken,
+              String env,
               TransportOptions options) {
+        env = env == null ? "" : env;
         this.options = options == null ? new TransportOptions() : options.toBuilder().build();
         if (bindAddr == null) {
             bindAddr = new InetSocketAddress(0);
         }
         tcpTransport = TCPTransport.builder()
             .bindAddr(bindAddr)
-            .sharedToken(sharedToken)
+            .env(env)
             .serverSslContext(serverSslContext)
             .clientSslContext(clientSslContext)
             .opts(this.options.tcpTransportOptions)
             .build();
         // bind to same address
-        udpTransport = UDPTransport.builder().sharedToken(sharedToken)
+        udpTransport = UDPTransport.builder()
+            .env(env)
             .bindAddr(tcpTransport.bindAddress())
             .build();
 

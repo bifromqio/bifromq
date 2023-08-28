@@ -40,7 +40,8 @@ public class AgentHostOptions {
     /**
      * Agent host under same env can communicate with each other
      */
-    private String env;
+    @Builder.Default
+    private String env = "";
 
     /**
      * The advertised address of the store, must be IP or hostname
@@ -50,6 +51,7 @@ public class AgentHostOptions {
     /**
      * The advertised port
      */
+    @Builder.Default
     private int port = 0;
 
     /**
