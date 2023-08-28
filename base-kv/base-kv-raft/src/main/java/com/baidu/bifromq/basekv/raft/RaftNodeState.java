@@ -96,7 +96,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
         this.stateStorage = stateStorage;
         this.id = stateStorage.local();
         this.tags = tags;
-        this.logKey = buildLogKey(id, tags);
+        this.logKey = buildLogKey(tags);
         this.uncommittedProposals = uncommittedProposals;
         this.maxUncommittedProposals = config.getMaxUncommittedProposals() == 0 ? Integer.MAX_VALUE
             : config.getMaxUncommittedProposals();
@@ -434,13 +434,14 @@ abstract class RaftNodeState implements IRaftNodeLogger {
             clusterConfig.getNextLearnersList());
     }
 
-    private String buildLogKey(String id, String... tags) {
+    private String buildLogKey(String... tags) {
         StringBuilder logKey = new StringBuilder();
         for (int i = 0; i < tags.length; i += 2) {
             logKey.append(tags[i + 1]);
-            logKey.append("-");
+            if (i + 2 < tags.length) {
+                logKey.append("-");
+            }
         }
-        logKey.append(id);
         return logKey.toString();
     }
 }
