@@ -123,6 +123,7 @@ import lombok.extern.slf4j.Slf4j;
 public class KVRange implements IKVRange {
     enum Lifecycle {
         Init, // initialized but not open
+        Opening,
         Open, // accepting operations, handling incoming messages, generate out-going messages
         Closing,
         Closed, // wait for tick activity stopped
@@ -164,8 +165,9 @@ public class KVRange implements IKVRange {
     private volatile CompletableFuture<Void> checkWalSizeTask;
     private long lastCompactionDoneAt;
 
-    public KVRange(KVRangeId id,
+    public KVRange(String clusterId,
                    String hostStoreId,
+                   KVRangeId id,
                    IKVRangeCoProcFactory coProcFactory,
                    IKVRangeSnapshotChecker snapshotChecker,
                    IKVEngine rangeEngine,
@@ -194,8 +196,10 @@ public class KVRange implements IKVRange {
                 this.accessor = new KVRangeState(id, rangeEngine, loadEstimator);
             }
             this.snapshotChecker = snapshotChecker;
-            this.wal =
-                new KVRangeWAL(id, walStateStorageEngine, opts.getWalRaftConfig(), opts.getMaxWALFatchBatchSize());
+            this.wal = new KVRangeWAL(clusterId, id,
+                walStateStorageEngine,
+                opts.getWalRaftConfig(),
+                opts.getMaxWALFatchBatchSize());
             this.fsmExecutor = fsmExecutor;
             this.bgExecutor = bgExecutor;
             this.mgmtTaskRunner = new AsyncRunner(mgmtExecutor);
@@ -216,7 +220,7 @@ public class KVRange implements IKVRange {
                 }, fsmExecutor);
             this.statsCollector = new KVRangeStatsCollector(accessor,
                 wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
-            this.metricManager = new KVRangeMetricManager(hostStoreId, id);
+            this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
         } catch (InvalidProtocolBufferException e) {
             throw new KVRangeStoreException("Unable to restore from Snapshot", e);
         }
@@ -251,7 +255,7 @@ public class KVRange implements IKVRange {
             return;
         }
         mgmtTaskRunner.add(() -> {
-            if (lifecycle.compareAndSet(Init, Open)) {
+            if (lifecycle.compareAndSet(Init, Lifecycle.Opening)) {
                 this.messenger = messenger;
                 // start the wal
                 wal.start();
@@ -299,6 +303,8 @@ public class KVRange implements IKVRange {
                 // do compaction whenever there is a meta change
                 disposables.add(accessor.metadata().subscribe(this::doCompact));
                 clusterConfigSubject.onNext(wal.clusterConfig());
+                lifecycle.set(Open);
+                metricManager.reportLastAppliedIndex(accessor.getReader(false).lastAppliedIndex());
             }
         });
     }

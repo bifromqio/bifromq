@@ -51,8 +51,10 @@ class KVRangeMetricManager {
     private final AtomicReference<KVRangeDescriptor> currentDesc = new AtomicReference<>();
     private final AtomicLong currentLastAppliedIndex = new AtomicLong(-1);
 
-    KVRangeMetricManager(String storeId, KVRangeId rangeId) {
-        Tags tags = Tags.of("storeId", storeId).and("rangeId", KVRangeIdUtil.toString(rangeId));
+    KVRangeMetricManager(String clusterId, String storeId, KVRangeId rangeId) {
+        Tags tags = Tags.of("clusterId", clusterId)
+            .and("storeId", storeId)
+            .and("rangeId", KVRangeIdUtil.toString(rangeId));
         dumpBytesCounter = Metrics.counter("basekv.snap.dump", tags);
         restoreBytesCounter = Metrics.counter("basekv.snap.restore", tags);
         stateGauge = Gauge.builder("basekv.meta.state", () -> {

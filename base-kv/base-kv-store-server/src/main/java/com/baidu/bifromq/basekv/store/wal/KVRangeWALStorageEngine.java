@@ -74,18 +74,19 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
 
     private ScheduledExecutorService bgTaskExecutor;
 
-    public KVRangeWALStorageEngine(String overrideIdentity, int flushBufferSize, KVEngineConfigurator<?> configurator) {
+    public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, int flushBufferSize,
+                                   KVEngineConfigurator<?> configurator) {
         this.flushBufferSize = flushBufferSize;
         kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
         flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("wal-flusher")),
             "basekv[" + kvEngine.id() + "]-wal-flusher");
-        metricMgr = new MetricManager(kvEngine.id());
+        metricMgr = new MetricManager(clusterId, kvEngine.id());
     }
 
-    public KVRangeWALStorageEngine(String overrideIdentity, KVEngineConfigurator<?> configurator) {
-        this(overrideIdentity, 1024, configurator);
+    public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, KVEngineConfigurator<?> configurator) {
+        this(clusterId, overrideIdentity, 1024, configurator);
     }
 
     @Override
@@ -272,8 +273,8 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         private final Gauge flushBufferGauge;
         private final DistributionSummary flushBatchSummary;
 
-        MetricManager(String id) {
-            Tags tags = Tags.of("storeId", id);
+        MetricManager(String clusterId, String id) {
+            Tags tags = Tags.of("clusterId", clusterId).and("storeId", id);
             flushBufferGauge = Gauge.builder("basekv.engine.wal.flushbuffer", queuingCount::intValue)
                 .tags(tags).register(Metrics.globalRegistry);
             flushBatchSummary = DistributionSummary.builder("basekv.engine.wal.flushbatch")

@@ -140,6 +140,10 @@ class KVRangeDumpSession {
     }
 
     private void handleReply(SaveSnapshotDataReply reply) {
+        KVRangeMessage currReq = currentRequest;
+        if (currReq == null) {
+            return;
+        }
         SaveSnapshotDataRequest req = currentRequest.getSaveSnapshotDataRequest();
         lastReplyTS = System.nanoTime();
         if (req != null && req.getReqId() == reply.getReqId()) {

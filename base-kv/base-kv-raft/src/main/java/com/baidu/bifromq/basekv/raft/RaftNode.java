@@ -73,6 +73,11 @@ public final class RaftNode implements IRaftNode {
         final Gauge lastIndexGauge;
         final Gauge currentTermGauge;
         final Gauge currentStatusGauge;
+        final Gauge currentRoleGauge;
+        final Gauge currentVoters;
+        final Gauge currentLearners;
+        final Gauge currentNextVoters;
+        final Gauge currentNextLearners;
 
         MetricManager(Tags tags) {
             // timer for tick operation latency
@@ -142,9 +147,47 @@ public final class RaftNode implements IRaftNode {
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             // gauge for current status
-            currentStatusGauge = Gauge.builder("raft.status", RaftNode.this,
-                    r -> stateRef.get() instanceof RaftNodeStateLeader ?
-                        3 : (stateRef.get() instanceof RaftNodeStateFollower ? 2 : 1))
+            currentStatusGauge = Gauge.builder("raft.status", RaftNode.this, r -> stateRef.get().getState().getNumber())
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            // gauge for role in current cluster config
+            // 0 for voter, 1 for learner, 2 for next voter, 3 for next learner, 4, for not a member
+            currentRoleGauge = Gauge.builder("raft.role", RaftNode.this, r -> {
+                    ClusterConfig clusterConfig = stateRef.get().latestClusterConfig();
+                    if (clusterConfig.getVotersList().contains(id)) {
+                        return 0;
+                    }
+                    if (clusterConfig.getLearnersList().contains(id)) {
+                        return 1;
+                    }
+                    if (clusterConfig.getNextVotersList().contains(id)) {
+                        return 2;
+                    }
+                    if (clusterConfig.getNextLearnersList().contains(id)) {
+                        return 3;
+                    }
+                    return 4;
+                })
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            // gauge for voter number in current cluster config
+            currentVoters = Gauge.builder("raft.voters.current",
+                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getVotersCount())
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            // gauge for voter number in current cluster config
+            currentLearners = Gauge.builder("raft.learners.current",
+                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getLearnersCount())
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            // gauge for next voter number in current cluster config
+            currentNextVoters = Gauge.builder("raft.voters.next",
+                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getNextVotersCount())
+                .tags(tags)
+                .register(Metrics.globalRegistry);
+            // gauge for next voter number in current cluster config
+            currentNextLearners = Gauge.builder("raft.learners.next",
+                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getNextLearnersCount())
                 .tags(tags)
                 .register(Metrics.globalRegistry);
         }
@@ -240,17 +283,20 @@ public final class RaftNode implements IRaftNode {
     private final AtomicReference<RaftNodeState> stateRef = new AtomicReference<>();
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final AtomicReference<CompletableFuture<Void>> stopFuture = new AtomicReference<>();
-    private final Tags metricTags;
+    private final String[] tags;
     private MetricManager metricMgr;
 
-    public RaftNode(RaftConfig config, IRaftStateStore stateStore, Logger logger, ThreadFactory threadFactory,
-                    String... metricTags) {
-        verifyTags(metricTags);
+    public RaftNode(RaftConfig config,
+                    IRaftStateStore stateStore,
+                    Logger logger,
+                    ThreadFactory threadFactory,
+                    String... tags) {
+        verifyTags(tags);
         verifyConfig(config);
         verifyStateStore(stateStore);
         log = logger;
-        this.metricTags = Tags.of(metricTags);
-        this.stateStorage = new MetricMonitoredStateStore(stateStore, this.metricTags);
+        this.tags = tags;
+        this.stateStorage = new MetricMonitoredStateStore(stateStore, Tags.of(tags));
         this.id = stateStorage.local();
         this.config = config.toBuilder().build();
         this.raftExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
@@ -408,9 +454,10 @@ public final class RaftNode implements IRaftNode {
                 new SampledRaftMessageListener(sender),
                 new SampledRaftEventListener(listener),
                 new SampledSnapshotInstaller(installer),
-                this::onSnapshotRestored
+                this::onSnapshotRestored,
+                tags
             ));
-            metricMgr = new MetricManager(metricTags);
+            metricMgr = new MetricManager(Tags.of(tags));
             status.set(Status.STARTED);
             log.debug("Raft node[{}] started: term={}", id(), currentTerm);
         }
@@ -418,17 +465,11 @@ public final class RaftNode implements IRaftNode {
 
     @Override
     public CompletableFuture<Void> stop() {
-        switch (status.get()) {
-            case INIT:
-                // fallthrough
-            case STARTING:
-                return CompletableFuture.failedFuture(new IllegalStateException("Raft node not started"));
-            case STARTED:
-                // fallthrough
-            case STOPPING:
-                // fallthrough
-            case STOPPED:
-            default:
+        return switch (status.get()) {
+            // fallthrough
+            case INIT, STARTING -> CompletableFuture.failedFuture(new IllegalStateException("Raft node not started"));
+            // fallthrough
+            default -> {
                 if (stopFuture.compareAndSet(null, new CompletableFuture<>())) {
                     log.debug("Stopping raft node[{}]", id());
                     CompletableFuture<Void> lastTask = new CompletableFuture<>();
@@ -448,8 +489,9 @@ public final class RaftNode implements IRaftNode {
                     };
                     raftExecutor.execute(stop);
                 }
-                return stopFuture.get();
-        }
+                yield stopFuture.get();
+            }
+        };
     }
 
     void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex) {
@@ -475,23 +517,19 @@ public final class RaftNode implements IRaftNode {
         try {
             raftExecutor.execute(() -> {
                 switch (status.get()) {
-                    case INIT:
-                        // fallthrough
-                    case STARTING:
+                    // fallthrough
+                    case INIT, STARTING ->
                         doneFuture.completeExceptionally(new IllegalStateException("Raft node not started"));
-                        break;
-                    case STARTED:
+                    case STARTED -> {
                         try {
                             task.accept(doneFuture);
                         } catch (Throwable e) {
                             doneFuture.completeExceptionally(new InternalError(e));
                         }
-                        break;
-                    case STOPPING:
-                        // fallthrough
-                    case STOPPED:
+                    }
+                    // fallthrough
+                    case STOPPING, STOPPED ->
                         doneFuture.completeExceptionally(new IllegalStateException("Raft node has stopped"));
-                        break;
                 }
             });
         } catch (RejectedExecutionException e) {

@@ -88,6 +88,7 @@ public class KVRangeStore implements IKVRangeStore {
         TERMINATED // resource released
     }
 
+    private final String clusterId;
     private final String id;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final Map<KVRangeId, IKVRange> kvRangeMap = Maps.newConcurrentMap();
@@ -109,15 +110,17 @@ public class KVRangeStore implements IKVRangeStore {
     private final KVRangeStoreOptions opts;
     private IStoreMessenger messenger;
 
-    public KVRangeStore(KVRangeStoreOptions opts,
+    public KVRangeStore(String clusterId,
+                        KVRangeStoreOptions opts,
                         IKVRangeCoProcFactory coProcFactory,
                         @NonNull Executor queryExecutor,
                         @NonNull Executor mutationExecutor,
                         @NonNull ScheduledExecutorService tickExecutor,
                         @NonNull ScheduledExecutorService bgTaskExecutor) {
+        this.clusterId = clusterId;
         this.coProcFactory = coProcFactory;
         this.opts = opts.toBuilder().build();
-        this.walStorageEngine = new KVRangeWALStorageEngine(
+        this.walStorageEngine = new KVRangeWALStorageEngine(clusterId,
             opts.getOverrideIdentity(), this.opts.getWalFlushBufferSize(), opts.getWalEngineConfigurator());
         id = walStorageEngine.id();
         if (opts.getOverrideIdentity() != null
@@ -139,6 +142,11 @@ public class KVRangeStore implements IKVRangeStore {
         storeStatsCollector =
             new KVRangeStoreStatsCollector(opts, Duration.ofSeconds(opts.getStatsCollectIntervalSec()),
                 this.bgTaskExecutor);
+    }
+
+    @Override
+    public String clusterId() {
+        return clusterId;
     }
 
     @Override
@@ -444,7 +452,9 @@ public class KVRangeStore implements IKVRangeStore {
     private KVRange initKVRange(KVRangeId kvRangeId, Snapshot initSnapshot) {
         checkStarted();
         log.debug("Create range: storeId={}, rangeId={}", id, toShortString(kvRangeId));
-        KVRange kvRange = new KVRange(kvRangeId, id,
+        KVRange kvRange = new KVRange(clusterId,
+            id,
+            kvRangeId,
             coProcFactory,
             this::checkSnapshot,
             kvRangeEngine,

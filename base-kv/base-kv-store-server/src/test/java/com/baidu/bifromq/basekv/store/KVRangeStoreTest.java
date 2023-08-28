@@ -122,7 +122,12 @@ public class KVRangeStoreTest {
         }
 
         rangeStore =
-            new KVRangeStore(options, new TestCoProcFactory(), queryExecutor, mutationExecutor, tickTaskExecutor,
+            new KVRangeStore("testCluster",
+                options,
+                new TestCoProcFactory(),
+                queryExecutor,
+                mutationExecutor,
+                tickTaskExecutor,
                 bgTaskExecutor);
         messenger = new IStoreMessenger() {
             @Override

@@ -72,8 +72,8 @@ class RaftNodeStateFollower extends RaftNodeState {
                           IRaftNode.IRaftMessageSender sender,
                           IRaftNode.IRaftEventListener listener,
                           IRaftNode.ISnapshotInstaller installer,
-                          OnSnapshotInstalled onSnapshotInstalled
-    ) {
+                          OnSnapshotInstalled onSnapshotInstalled,
+                          String... tags) {
         this(term,
             commitIndex,
             leader,
@@ -84,7 +84,8 @@ class RaftNodeStateFollower extends RaftNodeState {
             sender,
             listener,
             installer,
-            onSnapshotInstalled);
+            onSnapshotInstalled,
+            tags);
     }
 
     RaftNodeStateFollower(long term,
@@ -97,7 +98,8 @@ class RaftNodeStateFollower extends RaftNodeState {
                           IRaftNode.IRaftMessageSender sender,
                           IRaftNode.IRaftEventListener listener,
                           IRaftNode.ISnapshotInstaller installer,
-                          OnSnapshotInstalled onSnapshotInstalled) {
+                          OnSnapshotInstalled onSnapshotInstalled,
+                          String... tags) {
         super(term,
             commitIndex,
             config,
@@ -107,7 +109,8 @@ class RaftNodeStateFollower extends RaftNodeState {
             sender,
             listener,
             installer,
-            onSnapshotInstalled);
+            onSnapshotInstalled,
+            tags);
         currentLeader = leader;
         randomElectionTimeoutTick = randomizeElectionTimeoutTick();
         tickToReadRequestsMap = new LinkedHashMap<>();
@@ -192,7 +195,8 @@ class RaftNodeStateFollower extends RaftNodeState {
                 sender,
                 listener,
                 snapshotInstaller,
-                onSnapshotInstalled)
+                onSnapshotInstalled,
+                tags)
                 .campaign(config.isPreVote(), false);
         }
         return this;
@@ -600,15 +604,11 @@ class RaftNodeStateFollower extends RaftNodeState {
         CompletableFuture<Void> pendingOnDone = idToForwardedProposeMap.get(reply.getId());
         if (pendingOnDone != null) {
             switch (reply.getCode()) {
-                case Success:
-                    pendingOnDone.complete(null);
-                    break;
-                case DropByLeaderTransferring:
+                case Success -> pendingOnDone.complete(null);
+                case DropByLeaderTransferring ->
                     pendingOnDone.completeExceptionally(DropProposalException.transferringLeader());
-                    break;
-                case DropByMaxUnappliedEntries:
+                case DropByMaxUnappliedEntries ->
                     pendingOnDone.completeExceptionally(DropProposalException.throttledByThreshold());
-                    break;
             }
         }
     }
@@ -627,7 +627,8 @@ class RaftNodeStateFollower extends RaftNodeState {
                 sender,
                 listener,
                 snapshotInstaller,
-                onSnapshotInstalled
+                onSnapshotInstalled,
+                tags
             ).campaign(config.isPreVote(), true);
         }
         return this;

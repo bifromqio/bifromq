@@ -58,6 +58,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
 
     BaseKVStoreService(BaseKVStoreServiceBuilder<?> builder) {
         kvRangeStore = new KVRangeStore(
+            builder.clusterId,
             builder.storeOptions,
             builder.coProcFactory,
             builder.queryExecutor,
