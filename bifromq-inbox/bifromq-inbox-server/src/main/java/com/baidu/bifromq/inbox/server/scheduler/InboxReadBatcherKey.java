@@ -13,14 +13,16 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 
 @AllArgsConstructor
 @EqualsAndHashCode
 public class InboxReadBatcherKey {
-    final KVRangeSetting range;
-    final int queueId;
+    public final String storeId;
+    public final KVRangeId id;
+    public final long ver;
+    public final int queueId;
 }
 

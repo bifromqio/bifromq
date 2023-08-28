@@ -20,8 +20,6 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineQueueSize;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
@@ -34,7 +32,6 @@ import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
@@ -65,8 +62,7 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
         return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
     }
 
-    private static class InboxCreateBatcher
-        extends Batcher<CreateInboxRequest, List<String>, KVRangeSetting> {
+    private static class InboxCreateBatcher extends InboxMutateBatcher<CreateInboxRequest, List<String>> {
         private class InboxCreateBatch implements IBatchCall<CreateInboxRequest, List<String>> {
             private final Queue<CallTask<CreateInboxRequest, List<String>>> batchedTasks =
                 new ArrayDeque<>();
@@ -95,29 +91,11 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                return inboxStoreClient.execute(range.leader,
-                        KVRangeRWRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
-                            .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setReqId(reqId)
-                                .setBatchCreate(reqBuilder.build())
-                                .build().toByteString())
-                            .build())
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult())
-                                    .getBatchCreate();
-                            } catch (InvalidProtocolBufferException e) {
-                                log.error("Unable to parse rw co-proc output", e);
-                                throw new RuntimeException(e);
-                            }
-                        }
-                        log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
-                        throw new RuntimeException();
-                    })
+                return mutate(InboxServiceRWCoProcInput.newBuilder()
+                    .setReqId(reqId)
+                    .setBatchCreate(reqBuilder.build())
+                    .build())
+                    .thenApply(InboxServiceRWCoProcOutput::getBatchCreate)
                     .handle((v, e) -> {
                         if (e != null) {
                             CallTask<CreateInboxRequest, List<String>> callTask;
@@ -139,9 +117,7 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
             }
         }
 
-        private final IBaseKVStoreClient inboxStoreClient;
         private final ISettingProvider settingProvider;
-        private final KVRangeSetting range;
 
         private InboxCreateBatcher(String name,
                                    long expectLatencyNanos,
@@ -149,9 +125,7 @@ public class InboxCreateScheduler extends InboxMutateScheduler<CreateInboxReques
                                    KVRangeSetting range,
                                    IBaseKVStoreClient inboxStoreClient,
                                    ISettingProvider settingProvider) {
-            super(range, name, expectLatencyNanos, maxTolerableLatencyNanos);
-            this.range = range;
-            this.inboxStoreClient = inboxStoreClient;
+            super(name, expectLatencyNanos, maxTolerableLatencyNanos, range, inboxStoreClient);
             this.settingProvider = settingProvider;
         }
 

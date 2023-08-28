@@ -16,7 +16,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.common.base.Preconditions;
@@ -43,7 +42,7 @@ public abstract class InboxReadScheduler<Req, Resp> extends BatchCallScheduler<R
 
     @Override
     protected Optional<InboxReadBatcherKey> find(Req req) {
-        Optional<KVRangeSetting> range = inboxStoreClient.findByKey(rangeKey(req));
-        return range.map(kvRangeSetting -> new InboxReadBatcherKey(kvRangeSetting, selectQueue(queuesPerRange, req)));
+        return inboxStoreClient.findByKey(rangeKey(req)).map(
+            range -> new InboxReadBatcherKey(range.leader, range.id, range.ver, selectQueue(queuesPerRange, req)));
     }
 }

@@ -17,8 +17,6 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
@@ -30,7 +28,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +55,7 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
         return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
-    private static class InboxCommitBatcher extends Batcher<CommitRequest, CommitReply, KVRangeSetting> {
+    private static class InboxCommitBatcher extends InboxMutateBatcher<CommitRequest, CommitReply> {
         private class InboxBatchCommit implements IBatchCall<CommitRequest, CommitReply> {
             private final Queue<CallTask<CommitRequest, CommitReply>> batchTasks = new ArrayDeque<>();
             // key: scopedInboxIdUtf8, value: [qos0, qos1, qos2]
@@ -97,27 +94,11 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
                     }
                     reqBuilder.putInboxCommit(k, cb.build());
                 });
-                return inboxStoreClient.execute(range.leader,
-                        KVRangeRWRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
-                            .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setReqId(reqId)
-                                .setBatchCommit(reqBuilder.build())
-                                .build().toByteString())
-                            .build())
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-                            } catch (InvalidProtocolBufferException e) {
-                                log.error("Unable to parse rw co-proc output", e);
-                                throw new RuntimeException(e);
-                            }
-                        }
-                        throw new RuntimeException(reply.getCode().name());
-                    })
+                return mutate(InboxServiceRWCoProcInput.newBuilder()
+                    .setReqId(reqId)
+                    .setBatchCommit(reqBuilder.build())
+                    .build())
+                    .thenApply(InboxServiceRWCoProcOutput::getBatchCommit)
                     .handle((v, e) -> {
                         if (e != null) {
                             CallTask<CommitRequest, CommitReply> task;
@@ -132,8 +113,7 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
                             while ((task = batchTasks.poll()) != null) {
                                 task.callResult.complete(CommitReply.newBuilder()
                                     .setReqId(task.call.getReqId())
-                                    .setResult(v.getBatchCommit()
-                                        .getResultMap()
+                                    .setResult(v.getResultMap()
                                         .get(scopedInboxId(
                                             task.call.getTenantId(),
                                             task.call.getInboxId()).toStringUtf8()) ?
@@ -146,17 +126,13 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
             }
         }
 
-        private final IBaseKVStoreClient inboxStoreClient;
-        private final KVRangeSetting range;
 
         InboxCommitBatcher(String name,
                            long tolerableLatencyNanos,
                            long burstLatencyNanos,
                            KVRangeSetting range,
                            IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.range = range;
-            this.inboxStoreClient = inboxStoreClient;
+            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
         }
 
         @Override

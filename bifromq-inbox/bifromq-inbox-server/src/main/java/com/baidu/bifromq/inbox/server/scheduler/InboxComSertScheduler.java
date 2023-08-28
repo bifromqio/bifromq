@@ -17,8 +17,6 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
@@ -32,7 +30,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
@@ -68,7 +65,7 @@ public class InboxComSertScheduler
     }
 
     private static class InboxComSertBatcher
-        extends Batcher<IInboxComSertScheduler.ComSertCall, IInboxComSertScheduler.ComSertResult, KVRangeSetting> {
+        extends InboxMutateBatcher<IInboxComSertScheduler.ComSertCall, IInboxComSertScheduler.ComSertResult> {
         private class InboxComSertBatch implements IBatchCall<ComSertCall, ComSertResult> {
             private final Queue<CallTask<IInboxComSertScheduler.ComSertCall, IInboxComSertScheduler.ComSertResult>>
                 inboxInserts = new ArrayDeque<>();
@@ -123,27 +120,11 @@ public class InboxComSertScheduler
                     }
                     reqBuilder.putCommit(k, cb.build());
                 });
-                return inboxStoreClient.execute(range.leader,
-                        KVRangeRWRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
-                            .setRwCoProc(InboxServiceRWCoProcInput.newBuilder()
-                                .setReqId(reqId)
-                                .setInsertAndCommit(reqBuilder.build())
-                                .build().toByteString())
-                            .build())
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            try {
-                                return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-                            } catch (InvalidProtocolBufferException e) {
-                                throw new RuntimeException("Unable to parse rw co-proc output", e);
-                            }
-                        }
-                        throw new RuntimeException(
-                            String.format("Failed to exec rw co-proc[code=%s]", reply.getCode()));
-                    })
+                return mutate(InboxServiceRWCoProcInput.newBuilder()
+                    .setReqId(reqId)
+                    .setInsertAndCommit(reqBuilder.build())
+                    .build())
+                    .thenApply(InboxServiceRWCoProcOutput::getInsertAndCommit)
                     .handle((v, e) -> {
                         if (e != null) {
                             while (!inboxInserts.isEmpty()) {
@@ -159,8 +140,7 @@ public class InboxComSertScheduler
                             }
                         } else {
                             Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-                            for (com.baidu.bifromq.inbox.storage.proto.InsertResult result : v.getInsertAndCommit()
-                                .getInsertResultsList()) {
+                            for (com.baidu.bifromq.inbox.storage.proto.InsertResult result : v.getInsertResultsList()) {
                                 if (result.getResult() ==
                                     com.baidu.bifromq.inbox.storage.proto.InsertResult.Result.NO_INBOX) {
                                     insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
@@ -177,8 +157,7 @@ public class InboxComSertScheduler
                                 onInboxCommitted.get(request)
                                     .complete(new CommitResult(CommitReply.newBuilder()
                                         .setReqId(request.getReqId())
-                                        .setResult(v.getInsertAndCommit()
-                                            .getCommitResultsMap()
+                                        .setResult(v.getCommitResultsMap()
                                             .get(scopedInboxId(
                                                 request.getTenantId(),
                                                 request.getInboxId()).toStringUtf8()) ?
@@ -191,17 +170,12 @@ public class InboxComSertScheduler
             }
         }
 
-        private final IBaseKVStoreClient inboxStoreClient;
-        private final KVRangeSetting range;
-
         private InboxComSertBatcher(String name,
                                     long tolerableLatencyNanos,
                                     long burstLatencyNanos,
                                     KVRangeSetting range,
                                     IBaseKVStoreClient inboxStoreClient) {
-            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.inboxStoreClient = inboxStoreClient;
-            this.range = range;
+            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
         }
 
         @Override

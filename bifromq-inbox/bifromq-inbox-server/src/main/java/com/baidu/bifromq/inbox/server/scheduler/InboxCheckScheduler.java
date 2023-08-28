@@ -16,7 +16,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_CHECK_QUEUES_PER_RANGE;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basescheduler.Batcher;
@@ -83,11 +82,11 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                return inboxStoreClient.linearizedQuery(range.leader,
+                return inboxStoreClient.linearizedQuery(batcherKey.storeId,
                         KVRangeRORequest.newBuilder()
                             .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
+                            .setVer(batcherKey.ver)
+                            .setKvRangeId(batcherKey.id)
                             .setRoCoProcInput(InboxServiceROCoProcInput.newBuilder()
                                 .setReqId(reqId)
                                 .setBatchCheck(BatchCheckRequest.newBuilder()
@@ -139,9 +138,6 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
         }
 
         private final String orderKey;
-
-        private final KVRangeSetting range;
-
         private final IBaseKVStoreClient inboxStoreClient;
 
         InboxCheckBatcher(InboxReadBatcherKey batcherKey,
@@ -150,7 +146,6 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
                           long burstLatencyNanos,
                           IBaseKVStoreClient inboxStoreClient) {
             super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.range = batcherKey.range;
             this.inboxStoreClient = inboxStoreClient;
             orderKey = this.hashCode() + "";
         }

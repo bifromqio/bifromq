@@ -15,7 +15,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_QUEUES_PER_RANGE;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basescheduler.Batcher;
@@ -31,7 +30,6 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -105,11 +103,11 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
             @Override
             public CompletableFuture<Void> execute() {
                 long reqId = System.nanoTime();
-                return inboxStoreClient.linearizedQuery(rangeStoreId,
+                return inboxStoreClient.linearizedQuery(batcherKey.storeId,
                         KVRangeRORequest.newBuilder()
                             .setReqId(reqId)
-                            .setVer(range.ver)
-                            .setKvRangeId(range.id)
+                            .setVer(batcherKey.ver)
+                            .setKvRangeId(batcherKey.id)
                             .setRoCoProcInput(InboxServiceROCoProcInput.newBuilder()
                                 .setReqId(reqId)
                                 .setBatchFetch(BatchFetchRequest.newBuilder()
@@ -151,9 +149,7 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
             }
         }
 
-        private final String rangeStoreId;
         private final String orderKey;
-        private final KVRangeSetting range;
         private final IBaseKVStoreClient inboxStoreClient;
 
         InboxFetchBatcher(InboxReadBatcherKey batcherKey,
@@ -162,19 +158,13 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
                           long burstLatencyNanos,
                           IBaseKVStoreClient inboxStoreClient) {
             super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.range = batcherKey.range;
             this.inboxStoreClient = inboxStoreClient;
-            rangeStoreId = selectStore(range);
             orderKey = String.valueOf(this.hashCode());
         }
 
         @Override
         protected IBatchCall<InboxFetch, Fetched> newBatch() {
             return new InboxFetchBatch();
-        }
-
-        private String selectStore(KVRangeSetting setting) {
-            return setting.allReplicas.get(ThreadLocalRandom.current().nextInt(setting.allReplicas.size()));
         }
     }
 }
