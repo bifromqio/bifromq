@@ -65,7 +65,6 @@ public class KVRangeWAL implements IKVRangeWAL {
     private final PublishSubject<Map<String, List<RaftMessage>>> raftMessagesPublisher = PublishSubject.create();
     private final BehaviorSubject<Map<String, RaftNodeSyncState>> syncStatePublisher =
         BehaviorSubject.createDefault(EMPTY_MAP);
-    private final String clusterId;
     private final KVRangeId rangeId;
     private final String localId;
     private final IKVRangeWALStoreEngine stateStoreEngine;
@@ -77,7 +76,6 @@ public class KVRangeWAL implements IKVRangeWAL {
                       IKVRangeWALStoreEngine stateStoreEngine,
                       RaftConfig raftConfig,
                       int maxFetchBytes) {
-        this.clusterId = clusterId;
         this.rangeId = rangeId;
         this.stateStoreEngine = stateStoreEngine;
         this.localId = stateStoreEngine.id();
@@ -85,7 +83,7 @@ public class KVRangeWAL implements IKVRangeWAL {
         raftNode = new RaftNode(raftConfig, stateStoreEngine.get(rangeId),
             getLogger("raft.logger"),
             EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toShortString(rangeId)),
-            "cluster", clusterId, "rangeId", KVRangeIdUtil.toString(rangeId));
+            "cluster", clusterId, "rangeId", KVRangeIdUtil.toString(rangeId), "storeId", localId);
     }
 
     @Override
