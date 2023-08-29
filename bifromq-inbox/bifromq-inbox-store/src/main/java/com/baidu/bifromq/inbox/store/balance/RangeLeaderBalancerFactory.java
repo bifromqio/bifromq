@@ -11,20 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.retain.store.balance;
-
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_VOTER_COUNT;
+package com.baidu.bifromq.inbox.store.balance;
 
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.impl.ReplicaCntBalancer;
 
-public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
-
+public class RangeLeaderBalancerFactory implements IStoreBalancerFactory {
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, RETAIN_STORE_VOTER_COUNT.get(),
-            RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS.get());
+        return new RangeLeaderBalancer(localStoreId);
     }
 }

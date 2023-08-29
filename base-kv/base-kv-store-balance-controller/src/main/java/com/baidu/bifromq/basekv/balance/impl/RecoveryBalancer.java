@@ -15,28 +15,23 @@ package com.baidu.bifromq.basekv.balance.impl;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
-import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.State.StateType;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.collect.Sets;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -76,10 +71,7 @@ public class RecoveryBalancer extends StoreBalancer {
     @Override
     public Optional<BalanceCommand> balance() {
         Optional<BalanceCommand> commandOptional = recoverNoLeaderRange();
-        if (commandOptional.isPresent()) {
-            return commandOptional;
-        }
-        return recoverRangeWithDeadStore();
+        return commandOptional;
     }
 
     private Optional<BalanceCommand> recoverNoLeaderRange() {
@@ -140,77 +132,4 @@ public class RecoveryBalancer extends StoreBalancer {
         return Optional.empty();
     }
 
-    private Optional<BalanceCommand> recoverRangeWithDeadStore() {
-        KVRangeStoreDescriptor localStoreDesc = null;
-        for (KVRangeStoreDescriptor d : latestStoreDescriptors) {
-            if (d.getId().equals(localStoreId)) {
-                localStoreDesc = d;
-                break;
-            }
-        }
-        if (localStoreDesc == null) {
-            log.warn("There is no storeDescriptor for local store: {}", localStoreId);
-            return Optional.empty();
-        }
-        List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
-            .stream()
-            .filter(d -> d.getRole() == RaftNodeStatus.Leader)
-            .filter(d -> d.getState() == StateType.Normal)
-            .collect(Collectors.toList());
-        // No range in localStore
-        if (localLeaderRangeDescriptors.isEmpty()) {
-            return Optional.empty();
-        }
-        Collections.shuffle(localLeaderRangeDescriptors);
-        // Sort store list by storeLoad for adding or removing replica
-        List<String> sortedAliveStores = latestStoreDescriptors.stream()
-            .sorted(Comparator.comparingDouble(this::calStoreLoad))
-            .map(KVRangeStoreDescriptor::getId).toList();
-        Set<String> allStores = Sets.newHashSet(deadStoreCache.asMap().keySet());
-        allStores.addAll(sortedAliveStores);
-        for (KVRangeDescriptor rangeDescriptor : localLeaderRangeDescriptors) {
-            Set<String> votersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getVotersList());
-            Set<String> learnersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getLearnersList());
-            List<String> sortedSpareStores = sortedAliveStores.stream()
-                .filter(s -> !votersInConfig.contains(s))
-                .filter(s -> !learnersInConfig.contains(s))
-                .collect(Collectors.toList());
-            Set<String> newVoters = tryReplace(votersInConfig, sortedSpareStores, s -> !allStores.contains(s));
-            Set<String> newLearners = tryReplace(learnersInConfig, sortedSpareStores, s -> !allStores.contains(s));
-            if (!votersInConfig.equals(newVoters) || !learnersInConfig.equals(newLearners)) {
-                ChangeConfigCommand changeConfigCommand = ChangeConfigCommand.builder()
-                    .toStore(localStoreId)
-                    .expectedVer(rangeDescriptor.getVer())
-                    .kvRangeId(rangeDescriptor.getId())
-                    .voters(newVoters)
-                    .learners(newLearners)
-                    .build();
-                return Optional.of(changeConfigCommand);
-            }
-        }
-        return Optional.empty();
-    }
-
-    private Set<String> tryReplace(Set<String> origin, List<String> spareStores, Predicate<String> replaceCondition) {
-        Set<String> result = new HashSet<>();
-        for (String s : origin) {
-            if (replaceCondition.test(s)) {
-                // try to replace store not exist
-                if (!spareStores.isEmpty()) {
-                    result.add(spareStores.remove(0));
-                }
-            } else {
-                result.add(s);
-            }
-        }
-        return result;
-    }
-
-
-    private double calStoreLoad(KVRangeStoreDescriptor descriptor) {
-        return descriptor.getRangesList()
-            .stream()
-            .map(kvRangeDescriptor -> kvRangeDescriptor.getLoadHint().getLoad())
-            .reduce(Double::sum).orElse(0.0D);
-    }
 }

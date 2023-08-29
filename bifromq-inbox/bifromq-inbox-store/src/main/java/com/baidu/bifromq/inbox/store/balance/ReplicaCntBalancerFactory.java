@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LEARNER_COUNT;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_RECOVERY_TIMEOUT_MILLIS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_VOTER_COUNT;
 
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
@@ -24,6 +24,7 @@ public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, INBOX_STORE_VOTER_COUNT.get(), INBOX_STORE_LEARNER_COUNT.get());
+        return new ReplicaCntBalancer(localStoreId, INBOX_STORE_VOTER_COUNT.get(),
+            INBOX_STORE_RECOVERY_TIMEOUT_MILLIS.get());
     }
 }

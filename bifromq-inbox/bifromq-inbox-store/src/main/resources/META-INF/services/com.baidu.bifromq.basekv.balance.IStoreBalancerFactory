@@ -14,3 +14,4 @@
 com.baidu.bifromq.inbox.store.balance.RecoveryBalancerFactory
 com.baidu.bifromq.inbox.store.balance.ReplicaCntBalancerFactory
 com.baidu.bifromq.inbox.store.balance.RangeSplitBalancerFactory
+com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory

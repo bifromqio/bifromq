@@ -148,7 +148,7 @@ class RaftConfigChanger {
             // accumulated
             if (catchingUpElapsedTick >=
                 config.getInstallSnapshotTimeoutTick() + 10L * config.getElectionTimeoutTick()) {
-                logger.logTrace("Catching up timeout, give up changing config");
+                logger.logDebug("Catching up timeout, give up changing config");
 
                 // report exception, unregister replicators and transit to Waiting state
                 Set<String> peersToStopTracking = new HashSet<>(jointConfig.getNextVotersList());
@@ -164,7 +164,7 @@ class RaftConfigChanger {
                 if (peersCatchUp()) {
                     if (noChangeJoint(jointConfig)) {
                         targetConfigIndex = stateStorage.lastIndex() + 1;
-                        logger.logTrace("Peers have caught up, append target config as log entry[index={}]",
+                        logger.logDebug("Peers have caught up, append target config as log entry[index={}]",
                             targetConfigIndex);
                         LogEntry targetConfigEntry = LogEntry.newBuilder()
                             .setTerm(currentTerm)
@@ -180,7 +180,7 @@ class RaftConfigChanger {
                     } else {
                         // append joint-consensus config as a log entry then replicated to peers in parallel
                         jointConfigIndex = stateStorage.lastIndex() + 1;
-                        logger.logTrace("Peers have caught up, append joint config as log entry[index={}]",
+                        logger.logDebug("Peers have caught up, append joint config as log entry[index={}]",
                             jointConfigIndex);
                         LogEntry jointConfigEntry = LogEntry.newBuilder()
                             .setTerm(currentTerm)

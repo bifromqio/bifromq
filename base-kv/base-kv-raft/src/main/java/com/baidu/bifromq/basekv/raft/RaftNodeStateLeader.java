@@ -459,7 +459,7 @@ class RaftNodeStateLeader extends RaftNodeState {
 
     private RaftNodeState handleInstallSnapshotReply(String fromPeer, InstallSnapshotReply reply) {
         if (!peerLogTracker.isTracking(fromPeer)) {
-            logDebug("No tracker available for peer[{}]", fromPeer);
+            logDebug("No tracker available for peer[{}] when handleInstallSnapshotReply", fromPeer);
             return this;
         }
         activityTracker.poll(fromPeer, true);
@@ -511,8 +511,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                             .build());
                         peerLogTracker.replicateBy(peer, snapshot.getIndex());
                     } else {
-                        logDebug("New snapshot[index:{},term:{}] generated, reset the tracker",
-                            snapshot.getIndex(), snapshot.getTerm());
+                        logDebug("New snapshot[index:{},term:{}] generated, reset the tracker for peer[{}]",
+                            snapshot.getIndex(), snapshot.getTerm(), peer);
                         // there is a new snapshot generated, reset the tracker explicitly using previous snapshot
                         peerLogTracker.backoff(peer, peerLogTracker.matchIndex(peer), peerLogTracker.matchIndex(peer));
                     }
