@@ -187,6 +187,8 @@ if [ "x$JVM_DEBUG" != "x" ]; then
   EXTRA_JVM_OPTS="$JAVA_DEBUG_OPTS $EXTRA_JVM_OPTS"
 fi
 
+# Enable core dump generation
+ulimit -c unlimited
 
 if [ "x$FOREGROUND_MODE" = "xtrue" ]; then
   exec "$JAVA" $JVM_HEAP_OPTS $JVM_PERF_OPTS "${JVM_GC[@]}" $EXTRA_JVM_OPTS \
