@@ -179,21 +179,24 @@ public class KVRangeBalanceController {
                         .whenCompleteAsync((r, e) -> {
                             scheduling.set(false);
                             CommandMetrics metrics = metricsManager.getCommandMetrics(balancerName, cmdName);
-                            if (Boolean.TRUE.equals(r)) {
-                                metrics.cmdSucceedCounter.increment();
-                                start.stop(metrics.cmdRunTimer);
-                                // Always schedule later after recovery command
-                                if (commandType == CommandType.RECOVERY) {
-                                    scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
-                                } else {
-                                    scheduleLater(1, TimeUnit.SECONDS);
-                                }
-                            } else {
-                                if (e != null) {
-                                    logError("Should not be here, error when run command", e);
-                                }
+                            if (e != null) {
+                                logError("Should not be here, error when run command", e);
                                 metrics.cmdFailedCounter.increment();
                                 scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
+                            } else {
+                                if (r) {
+                                    metrics.cmdSucceedCounter.increment();
+                                    start.stop(metrics.cmdRunTimer);
+                                    // Always schedule later after recovery command for that RecoverRequest has no 'version' and could not be cached
+                                    if (commandType == CommandType.RECOVERY) {
+                                        scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
+                                    } else {
+                                        scheduleLater(1, TimeUnit.SECONDS);
+                                    }
+                                } else {
+                                    metrics.cmdFailedCounter.increment();
+                                    scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
+                                }
                             }
                         }, executor);
                     return;
@@ -275,7 +278,7 @@ public class KVRangeBalanceController {
     }
 
     private CompletableFuture<Boolean> handleStoreReplyCode(BalanceCommand command,
-                                                           CompletableFuture<ReplyCode> storeReply) {
+                                                            CompletableFuture<ReplyCode> storeReply) {
         CompletableFuture<Boolean> onDone = new CompletableFuture<>();
         storeReply.whenComplete((code, e) -> {
             if (e != null) {
