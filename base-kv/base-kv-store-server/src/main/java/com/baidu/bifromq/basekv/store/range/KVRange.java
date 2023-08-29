@@ -843,8 +843,11 @@ public class KVRange implements IKVRange {
                                     if (e != null) {
                                         log.debug("Failed to transfer leadership[newLeader={}] due to {}",
                                             request.getNewLeader(), e.getMessage());
+                                        onDone.complete(() -> finishCommand(taskId, new KVRangeException.TryLater(
+                                            "Failed to transfer leadership for: " + e.getMessage())));
+                                    } else {
+                                        onDone.complete(() -> finishCommand(taskId));
                                     }
-                                    onDone.complete(() -> finishCommand(taskId));
                                 }, fsmExecutor);
                             break;
                         }

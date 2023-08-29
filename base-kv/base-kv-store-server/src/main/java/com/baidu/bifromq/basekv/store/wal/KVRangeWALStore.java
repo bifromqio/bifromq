@@ -189,7 +189,6 @@ class KVRangeWALStore implements IRaftStateStore {
 
             configEntryMap.clear();
 
-            CompletableFuture<Void> truncateDone = new CompletableFuture<>();
             Runnable truncateTask = () -> {
                 try {
                     log.trace("Truncating all logs: rangeId={}, storeId={}", toShortString(rangeId), storeId);
@@ -207,8 +206,6 @@ class KVRangeWALStore implements IRaftStateStore {
                     log.debug("All logs of truncated: rangeId={}, storeId={}", toShortString(rangeId), storeId);
                 } catch (Throwable e) {
                     log.error("Log truncation failed: rangeId={}, storeId={}", toShortString(rangeId), storeId, e);
-                } finally {
-                    truncateDone.complete(null);
                 }
             };
             taskRunner.add(truncateTask);
