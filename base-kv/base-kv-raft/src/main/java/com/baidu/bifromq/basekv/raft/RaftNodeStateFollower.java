@@ -386,15 +386,18 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     @Override
     void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex) {
+        if (ex != null) {
+            logWarn("Failed to restore snapshot", ex);
+        }
         if (currentISSRequest == null) {
             return;
         }
         InstallSnapshot iss = currentISSRequest;
-        currentISSRequest = null;
         Snapshot snapshot = iss.getSnapshot();
-        if (!snapshot.getData().equals(fsmSnapshot)) {
+        if (snapshot.getData() != fsmSnapshot) {
             return;
         }
+        currentISSRequest = null;
         RaftMessage reply;
         if (ex != null) {
             logWarn("Snapshot[index:{},term:{}] rejected by FSM", snapshot.getIndex(), snapshot.getTerm(), ex);
@@ -605,10 +608,10 @@ class RaftNodeStateFollower extends RaftNodeState {
         if (pendingOnDone != null) {
             switch (reply.getCode()) {
                 case Success -> pendingOnDone.complete(null);
-                case DropByLeaderTransferring ->
-                    pendingOnDone.completeExceptionally(DropProposalException.transferringLeader());
-                case DropByMaxUnappliedEntries ->
-                    pendingOnDone.completeExceptionally(DropProposalException.throttledByThreshold());
+                case DropByLeaderTransferring -> pendingOnDone.completeExceptionally(
+                    DropProposalException.transferringLeader());
+                case DropByMaxUnappliedEntries -> pendingOnDone.completeExceptionally(
+                    DropProposalException.throttledByThreshold());
             }
         }
     }

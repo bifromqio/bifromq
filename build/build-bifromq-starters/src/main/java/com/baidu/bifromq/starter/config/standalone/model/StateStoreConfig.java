@@ -57,7 +57,6 @@ public class StateStoreConfig {
         private BalancerOptions balanceConfig = new BalancerOptions();
 
         public DistWorkerConfig() {
-            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RecoveryBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory");
         }
     }
@@ -74,9 +73,9 @@ public class StateStoreConfig {
         private BalancerOptions balanceConfig = new BalancerOptions();
 
         public InboxStoreConfig() {
-            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RecoveryBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.ReplicaCntBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeSplitBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory");
         }
     }
 
@@ -92,7 +91,6 @@ public class StateStoreConfig {
         private BalancerOptions balanceConfig = new BalancerOptions();
 
         public RetainStoreConfig() {
-            balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.RecoveryBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.ReplicaCntBalancerFactory");
         }
     }

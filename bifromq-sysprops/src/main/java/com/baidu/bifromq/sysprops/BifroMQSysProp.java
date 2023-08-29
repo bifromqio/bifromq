@@ -38,7 +38,6 @@ public enum BifroMQSysProp {
     DIST_MATCH_PARALLELISM("dist_worker_match_parallelism",
         Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 2), IntegerParser.POSITIVE),
     DIST_WORKER_VOTER_COUNT("dist_worker_replica_voter_count", 3, IntegerParser.POSITIVE),
-    DIST_WORKER_LEARNER_COUNT("dist_worker_replica_learner_count", 3, IntegerParser.POSITIVE),
     DIST_WORKER_RECOVERY_TIMEOUT_MILLIS("dist_worker_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
     INBOX_DELIVERERS("inbox_deliverers", 100, IntegerParser.POSITIVE),
     INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT("inbox_fetch_pipeline_creation_rate_limit", 5000.0,
@@ -50,11 +49,9 @@ public enum BifroMQSysProp {
     INBOX_SPLIT_KEY_EST_THRESHOLD("inbox_store_split_key_threshold", 0.7D, DoubleParser.from(0.0, 1.0, true)),
     INBOX_LOAD_TRACKING_SECONDS("inbox_store_load_tracking_seconds", 5, IntegerParser.POSITIVE),
     INBOX_STORE_VOTER_COUNT("inbox_store_replica_voter_count", 3, IntegerParser.POSITIVE),
-    INBOX_STORE_LEARNER_COUNT("inbox_store_replica_learner_count", 3, IntegerParser.POSITIVE),
     INBOX_STORE_RECOVERY_TIMEOUT_MILLIS("inbox_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
     MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server", 4, IntegerParser.POSITIVE),
     RETAIN_STORE_VOTER_COUNT("retain_store_replica_voter_count", 3, IntegerParser.POSITIVE),
-    RETAIN_STORE_LEARNER_COUNT("retain_store_replica_learner_count", 3, IntegerParser.POSITIVE),
     RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS("retain_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE);
 
     public final String propKey;

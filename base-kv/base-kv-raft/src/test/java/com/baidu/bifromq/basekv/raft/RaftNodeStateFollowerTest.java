@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.mockito.ArgumentCaptor;
@@ -658,6 +659,76 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         noInLeaseFollower.receive("newLeader", installSnapshot);
         verify(msgSender, times(0)).send(anyMap());
         verify(eventListener, times(0)).onEvent(any());
+    }
+
+    @Test
+    public void testSnapshotInstallTwice() {
+        Snapshot snapshot = Snapshot.newBuilder()
+            .setClusterConfig(clusterConfig)
+            .setIndex(0)
+            .setTerm(1)
+            .build();
+        IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", snapshot);
+
+        RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null,
+            defaultRaftConfig, stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled,
+            "cluster", "testCluster", "rangeId", "testRange");
+
+        RaftMessage installSnapshot = RaftMessage.newBuilder()
+            .setTerm(1)
+            .setInstallSnapshot(InstallSnapshot.newBuilder()
+                .setLeaderId("newLeader")
+                .setSnapshot(Snapshot.newBuilder()
+                    .setTerm(1)
+                    .setIndex(0)
+                    .setData(ByteString.copyFrom("snapshot".getBytes()))
+                    .build())
+                .build())
+            .build();
+
+        RaftMessage installSnapshot2 = RaftMessage.newBuilder()
+            .setTerm(1)
+            .setInstallSnapshot(InstallSnapshot.newBuilder()
+                .setLeaderId("newLeader")
+                .setSnapshot(Snapshot.newBuilder()
+                    .setTerm(1)
+                    .setIndex(0)
+                    .setData(ByteString.copyFrom("snapshot".getBytes()))
+                    .build())
+                .build())
+            .build();
+
+        CompletableFuture<Void> firstInstallResult = new CompletableFuture<>();
+        CompletableFuture<Void> secondInstallResult = new CompletableFuture<>();
+
+        when(snapshotInstaller.install(any(ByteString.class))).thenReturn(firstInstallResult, secondInstallResult);
+
+        noInLeaseFollower.receive("newLeader", installSnapshot);
+        noInLeaseFollower.receive("newLeader", installSnapshot2);
+        firstInstallResult.completeExceptionally(new CancellationException());
+        secondInstallResult.complete(null);
+        ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(msgSender, times(1)).send(msgCaptor.capture());
+        assertEquals(msgCaptor.getValue(), new HashMap<String, List<RaftMessage>>() {{
+            put("newLeader", Collections.singletonList(RaftMessage.newBuilder()
+                .setTerm(1)
+                .setInstallSnapshotReply(InstallSnapshotReply.newBuilder()
+                    .setRejected(false)
+                    .setLastIndex(0)
+                    .build())
+                .build()));
+        }});
+        ArgumentCaptor<RaftEvent> eventCaptor = ArgumentCaptor.forClass(RaftEvent.class);
+        verify(eventListener, times(2)).onEvent(eventCaptor.capture());
+
+        List<RaftEvent> events = eventCaptor.getAllValues();
+
+        assertEquals(events.get(0).type, RaftEventType.SNAPSHOT_RESTORED);
+        assertEquals(((SnapshotRestoredEvent) events.get(0)).snapshot,
+            installSnapshot.getInstallSnapshot().getSnapshot());
+
+        assertEquals(events.get(1).type, RaftEventType.COMMIT);
+        assertEquals(((CommitEvent) events.get(1)).index, 0L);
     }
 
     @Test

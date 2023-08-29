@@ -17,10 +17,27 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController.MetricManager.CommandMetrics;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
+import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.CommandType;
+import com.baidu.bifromq.basekv.balance.command.MergeCommand;
+import com.baidu.bifromq.basekv.balance.command.SplitCommand;
+import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigReply;
+import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigRequest;
+import com.baidu.bifromq.basekv.store.proto.KVRangeMergeReply;
+import com.baidu.bifromq.basekv.store.proto.KVRangeMergeRequest;
+import com.baidu.bifromq.basekv.store.proto.KVRangeSplitReply;
+import com.baidu.bifromq.basekv.store.proto.KVRangeSplitRequest;
+import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
+import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
+import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
@@ -35,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -60,7 +78,7 @@ public class KVRangeBalanceController {
 
     private final KVRangeBalanceControllerOptions options;
     private final IBaseKVStoreClient storeClient;
-    private final CommandRunner commandRunner;
+    private final Cache<KVRangeId, Long> historyCommandCache;
     private final List<StoreBalancer> balancers = new ArrayList<>();
     private final ScheduledExecutorService executor;
     private final AtomicBoolean scheduling = new AtomicBoolean();
@@ -80,7 +98,9 @@ public class KVRangeBalanceController {
             )
             .build();
         this.storeClient = storeClient;
-        this.commandRunner = new CommandRunner(storeClient);
+        this.historyCommandCache = Caffeine.newBuilder()
+            .expireAfterWrite(1, TimeUnit.HOURS)
+            .build();
         executorOwner = executor == null;
         if (executor == null) {
             this.executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
@@ -109,7 +129,7 @@ public class KVRangeBalanceController {
             descriptorSub = this.storeClient.describe()
                 .distinctUntilChanged()
                 .subscribe(sds -> executor.execute(() -> updateStoreDescriptors(sds)));
-            scheduleLater();
+            scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
         }
     }
 
@@ -129,12 +149,12 @@ public class KVRangeBalanceController {
         for (StoreBalancer balancer : balancers) {
             balancer.update(descriptors);
         }
-        scheduleLater();
+        scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
     }
 
-    private void scheduleLater() {
+    private void scheduleLater(long delay, TimeUnit timeUnit) {
         if (state.get() == State.Started && scheduling.compareAndSet(false, true)) {
-            scheduledFuture = executor.schedule(this::scheduleNow, randomDelay(), TimeUnit.MILLISECONDS);
+            scheduledFuture = executor.schedule(this::scheduleNow, delay, timeUnit);
         }
     }
 
@@ -155,26 +175,25 @@ public class KVRangeBalanceController {
                     String cmdName = commandToRun.getClass().getSimpleName();
                     Sample start = Timer.start();
                     CommandType commandType = commandToRun.type();
-                    commandRunner.run(commandToRun)
+                    runCommand(commandToRun)
                         .whenCompleteAsync((r, e) -> {
+                            scheduling.set(false);
                             CommandMetrics metrics = metricsManager.getCommandMetrics(balancerName, cmdName);
-                            if (r == CommandRunner.Result.Succeed) {
+                            if (Boolean.TRUE.equals(r)) {
                                 metrics.cmdSucceedCounter.increment();
                                 start.stop(metrics.cmdRunTimer);
                                 // Always schedule later after recovery command
                                 if (commandType == CommandType.RECOVERY) {
-                                    scheduling.set(false);
-                                    scheduleLater();
+                                    scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
                                 } else {
-                                    scheduleNow();
+                                    scheduleLater(1, TimeUnit.SECONDS);
                                 }
                             } else {
-                                scheduling.set(false);
                                 if (e != null) {
                                     logError("Should not be here, error when run command", e);
                                 }
                                 metrics.cmdFailedCounter.increment();
-                                scheduleLater();
+                                scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
                             }
                         }, executor);
                     return;
@@ -185,6 +204,100 @@ public class KVRangeBalanceController {
         }
         // no command to run
         scheduling.set(false);
+    }
+
+    private CompletableFuture<Boolean> runCommand(BalanceCommand command) {
+        if (command.getExpectedVer() != null) {
+            Long prevCMDVer = historyCommandCache.getIfPresent(command.getKvRangeId());
+            if (prevCMDVer != null && prevCMDVer >= command.getExpectedVer()) {
+                logWarn("Command version is duplicated with prev one: {}", command);
+                return CompletableFuture.completedFuture(false);
+            }
+        }
+        logDebug("Send balanceCommand: {}", command);
+        switch (command.type()) {
+            case CHANGE_CONFIG:
+                ChangeReplicaConfigRequest changeConfigRequest = ChangeReplicaConfigRequest.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .setKvRangeId(command.getKvRangeId())
+                    .setVer(command.getExpectedVer())
+                    .addAllNewVoters(((ChangeConfigCommand) command).getVoters())
+                    .addAllNewLearners(((ChangeConfigCommand) command).getLearners())
+                    .build();
+                return handleStoreReplyCode(command,
+                    storeClient.changeReplicaConfig(command.getToStore(), changeConfigRequest)
+                        .thenApply(ChangeReplicaConfigReply::getCode)
+                );
+            case MERGE:
+                KVRangeMergeRequest rangeMergeRequest = KVRangeMergeRequest.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .setVer(command.getExpectedVer())
+                    .setMergerId(command.getKvRangeId())
+                    .setMergeeId(((MergeCommand) command).getMergeeId())
+                    .build();
+                return handleStoreReplyCode(command,
+                    storeClient.mergeRanges(command.getToStore(), rangeMergeRequest)
+                        .thenApply(KVRangeMergeReply::getCode));
+            case SPLIT:
+                KVRangeSplitRequest kvRangeSplitRequest = KVRangeSplitRequest.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .setKvRangeId(command.getKvRangeId())
+                    .setVer(command.getExpectedVer())
+                    .setSplitKey(((SplitCommand) command).getSplitKey())
+                    .build();
+                return handleStoreReplyCode(command,
+                    storeClient.splitRange(command.getToStore(), kvRangeSplitRequest)
+                        .thenApply(KVRangeSplitReply::getCode));
+            case TRANSFER_LEADERSHIP:
+                TransferLeadershipRequest transferLeadershipRequest = TransferLeadershipRequest.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .setKvRangeId(command.getKvRangeId())
+                    .setVer(command.getExpectedVer())
+                    .setNewLeaderStore(((TransferLeadershipCommand) command).getNewLeaderStore())
+                    .build();
+                return handleStoreReplyCode(command,
+                    storeClient.transferLeadership(command.getToStore(), transferLeadershipRequest)
+                        .thenApply(TransferLeadershipReply::getCode));
+            case RECOVERY:
+                RecoverRequest recoverRequest = RecoverRequest.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .build();
+                return storeClient.recover(command.getToStore(), recoverRequest)
+                    .handle((r, e) -> {
+                        if (e != null) {
+                            logError("Unexpected error when recover, req: {}", recoverRequest, e);
+                        }
+                        return true;
+                    });
+            default:
+                return CompletableFuture.completedFuture(false);
+        }
+    }
+
+    private CompletableFuture<Boolean> handleStoreReplyCode(BalanceCommand command,
+                                                           CompletableFuture<ReplyCode> storeReply) {
+        CompletableFuture<Boolean> onDone = new CompletableFuture<>();
+        storeReply.whenComplete((code, e) -> {
+            if (e != null) {
+                logError("Unexpected error when run command: {}", command, e);
+                onDone.complete(false);
+                return;
+            }
+            switch (code) {
+                case Ok -> {
+                    if (command.getExpectedVer() != null) {
+                        historyCommandCache.put(command.getKvRangeId(), command.getExpectedVer());
+                    }
+                    onDone.complete(true);
+                }
+                case BadRequest, BadVersion, TryLater, InternalError -> {
+                    logWarn("Failed with reply: {}, command: {}", code, command);
+                    onDone.complete(false);
+                }
+                default -> onDone.complete(false);
+            }
+        });
+        return onDone;
     }
 
     private void logDebug(String format, Object... args) {
