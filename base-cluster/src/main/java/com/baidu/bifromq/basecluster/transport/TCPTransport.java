@@ -164,7 +164,6 @@ public final class TCPTransport extends AbstractTransport {
             tcpListeningChannel = setupTcpServer(bindAddr, serverSslContext);
             InetSocketAddress localAddress = (InetSocketAddress) tcpListeningChannel.channel().localAddress();
             Tags tags = Tags.of("proto", "tcp")
-                .and("env", env)
                 .and("local", localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort());
             sendBytes = Counter.builder("basecluster.send.bytes")
                 .tags(tags)
