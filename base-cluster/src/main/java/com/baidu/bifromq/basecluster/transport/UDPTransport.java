@@ -103,7 +103,6 @@ public final class UDPTransport extends AbstractTransport {
                 .channel();
             localAddress = (InetSocketAddress) channel.localAddress();
             Tags tags = Tags.of("proto", "udp")
-                .and("env", env)
                 .and("local", localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort());
 
             sendBytes = Counter.builder("basecluster.send.bytes")

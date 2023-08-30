@@ -83,7 +83,7 @@ public class Messenger implements IMessenger {
             opts.retransmitMultiplier(),
             opts.spreadPeriod(),
             this.scheduler);
-        this.metricManager = new MetricManager(env, localAddress);
+        this.metricManager = new MetricManager(localAddress);
     }
 
     @Override
@@ -258,11 +258,10 @@ public class Messenger implements IMessenger {
         final Map<ClusterMessage.ClusterMessageTypeCase, Counter> gossipHeardCounters = Maps.newHashMap();
         final Counter gossipSpreadCounter = Metrics.counter("cluster.gossip.count");
 
-        MetricManager(String env, InetSocketAddress localAddress) {
+        MetricManager(InetSocketAddress localAddress) {
             for (ClusterMessage.ClusterMessageTypeCase typeCase : ClusterMessage.ClusterMessageTypeCase.values()) {
                 Tags tags = Tags
-                    .of("env", env)
-                    .and("local", localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort())
+                    .of("local", localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort())
                     .and("type", typeCase.name());
                 msgSendCounters.put(typeCase,
                     Metrics.counter("basecluster.send.count", tags));

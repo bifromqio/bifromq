@@ -107,9 +107,7 @@ final class AgentHost implements IAgentHost {
         this.store.start(messenger.receive()
             .filter(m -> m.value().message.hasCrdtStoreMessage())
             .map(m -> m.value().message.getCrdtStoreMessage()));
-        tags = new String[] {
-            "env", options.env(), "local", options.addr() + ":" + messenger.bindAddress().getPort()
-        };
+        tags = new String[] {"local", options.addr() + ":" + messenger.bindAddress().getPort()};
         this.memberList = new HostMemberList(options.addr(), messenger.bindAddress().getPort(),
             messenger, scheduler, store, hostAddressCache::get, tags);
         IFailureDetector failureDetector = FailureDetector.builder()
