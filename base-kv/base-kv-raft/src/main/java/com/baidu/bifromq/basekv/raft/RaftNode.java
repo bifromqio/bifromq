@@ -143,17 +143,19 @@ public final class RaftNode implements IRaftNode {
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             // gauge for current term
-            currentTermGauge = Gauge.builder("raft.log.term", RaftNode.this, r -> stateRef.get().currentTerm())
+            currentTermGauge = Gauge.builder("raft.log.term", RaftNode.this,
+                    r -> r.stateRef.get().currentTerm())
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             // gauge for current status
-            currentStatusGauge = Gauge.builder("raft.status", RaftNode.this, r -> stateRef.get().getState().getNumber())
-                .tags(tags)
-                .register(Metrics.globalRegistry);
+            currentStatusGauge =
+                Gauge.builder("raft.status", RaftNode.this, r -> r.stateRef.get().getState().getNumber())
+                    .tags(tags)
+                    .register(Metrics.globalRegistry);
             // gauge for role in current cluster config
             // 0 for voter, 1 for learner, 2 for next voter, 3 for next learner, 4, for not a member
             currentRoleGauge = Gauge.builder("raft.role", RaftNode.this, r -> {
-                    ClusterConfig clusterConfig = stateRef.get().latestClusterConfig();
+                    ClusterConfig clusterConfig = r.stateRef.get().latestClusterConfig();
                     if (clusterConfig.getVotersList().contains(id)) {
                         return 0;
                     }
@@ -172,22 +174,22 @@ public final class RaftNode implements IRaftNode {
                 .register(Metrics.globalRegistry);
             // gauge for voter number in current cluster config
             currentVoters = Gauge.builder("raft.voters.current",
-                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getVotersCount())
+                    RaftNode.this, r -> r.stateRef.get().latestClusterConfig().getVotersCount())
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             // gauge for voter number in current cluster config
             currentLearners = Gauge.builder("raft.learners.current",
-                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getLearnersCount())
+                    RaftNode.this, r -> r.stateRef.get().latestClusterConfig().getLearnersCount())
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             // gauge for next voter number in current cluster config
             currentNextVoters = Gauge.builder("raft.voters.next",
-                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getNextVotersCount())
+                    RaftNode.this, r -> r.stateRef.get().latestClusterConfig().getNextVotersCount())
                 .tags(tags)
                 .register(Metrics.globalRegistry);
             // gauge for next voter number in current cluster config
             currentNextLearners = Gauge.builder("raft.learners.next",
-                    RaftNode.this, r -> stateRef.get().latestClusterConfig().getNextLearnersCount())
+                    RaftNode.this, r -> r.stateRef.get().latestClusterConfig().getNextLearnersCount())
                 .tags(tags)
                 .register(Metrics.globalRegistry);
         }
@@ -229,6 +231,16 @@ public final class RaftNode implements IRaftNode {
             Metrics.globalRegistry.removeByPreFilterId(currentTermGauge.getId());
 
             Metrics.globalRegistry.removeByPreFilterId(currentStatusGauge.getId());
+
+            Metrics.globalRegistry.removeByPreFilterId(currentRoleGauge.getId());
+
+            Metrics.globalRegistry.removeByPreFilterId(currentVoters.getId());
+
+            Metrics.globalRegistry.removeByPreFilterId(currentLearners.getId());
+
+            Metrics.globalRegistry.removeByPreFilterId(currentNextVoters.getId());
+
+            Metrics.globalRegistry.removeByPreFilterId(currentNextLearners.getId());
         }
     }
 

@@ -26,16 +26,19 @@ import io.micrometer.core.instrument.Metrics;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.LongAdder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
     implements IBatchCallScheduler<Call, CallResult> {
-    private static final int BATCHER_EXPIRY_SECONDS = 3000;
+    private static final int BATCHER_EXPIRY_SECONDS = 600;
     private final ICallScheduler<Call> callScheduler;
     private final long tolerableLatencyNanos;
     private final long burstLatencyNanos;
     private final LoadingCache<BatcherKey, Batcher<Call, CallResult, BatcherKey>> batchers;
+    private final LongAdder runningCalls = new LongAdder();
+    private final Gauge runningCallsGauge;
     private final Gauge batcherNumGauge;
     private final Counter callSchedCounter;
     private final Counter callSubmitCounter;
@@ -68,6 +71,9 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
                     }
                 })
             .build(k -> newBatcher(name, this.tolerableLatencyNanos, burstLatencyNanos, k).init());
+        runningCallsGauge = Gauge.builder("batcher.call.running.gauge", runningCalls::sum)
+            .tags("name", name)
+            .register(Metrics.globalRegistry);
         batcherNumGauge = Gauge.builder("batcher.num", batchers::estimatedSize)
             .tags("name", name)
             .register(Metrics.globalRegistry);
@@ -89,6 +95,7 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
     @Override
     public CompletableFuture<CallResult> schedule(Call request) {
         callSchedCounter.increment();
+        runningCalls.increment();
         return callScheduler.submit(request)
             .thenCompose(req -> {
                 try {
@@ -103,12 +110,14 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
                     log.error("Error", e);
                     return CompletableFuture.failedFuture(new AbortException("Failed to submit request", e));
                 }
-            });
+            })
+            .whenComplete((v, e) -> runningCalls.decrement());
     }
 
     @Override
     public void close() {
         batchers.invalidateAll();
+        Metrics.globalRegistry.remove(runningCallsGauge);
         Metrics.globalRegistry.remove(batcherNumGauge);
         Metrics.globalRegistry.remove(callSubmitCounter);
         Metrics.globalRegistry.remove(callSchedCounter);
