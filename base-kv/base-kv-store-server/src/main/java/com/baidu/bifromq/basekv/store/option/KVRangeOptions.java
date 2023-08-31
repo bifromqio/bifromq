@@ -32,7 +32,7 @@ public class KVRangeOptions {
     private int maxRangeLoad = 300_000;
     private double splitKeyThreshold = 0.6;
     private int loadTrackingWindowSec = 5;
-    private int snapshotSyncBytesPerSec = 1024 * 1024;
+    private int snapshotSyncBytesPerSec = 128 * 1024 * 1024; // 128MB
     private int compactWALThresholdBytes = 256 * 1024 * 1024; // 256MB
     private int compactLingerTimeSec = 5;
     private long tickUnitInMS = 100;

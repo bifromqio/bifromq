@@ -18,7 +18,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 class KVRangeMetricManager {
-    private final Counter dumpBytesCounter;
-    private final Counter restoreBytesCounter;
+    private final DistributionSummary dumpBytesSummary;
+    private final DistributionSummary restoreBytesSummary;
     private final Gauge stateGauge;
     private final Gauge verGauge;
     private final Gauge lastAppliedIndexGauge;
@@ -55,8 +55,8 @@ class KVRangeMetricManager {
         Tags tags = Tags.of("clusterId", clusterId)
             .and("storeId", storeId)
             .and("rangeId", KVRangeIdUtil.toString(rangeId));
-        dumpBytesCounter = Metrics.counter("basekv.snap.dump", tags);
-        restoreBytesCounter = Metrics.counter("basekv.snap.restore", tags);
+        dumpBytesSummary = Metrics.summary("basekv.snap.dump", tags);
+        restoreBytesSummary = Metrics.summary("basekv.snap.restore", tags);
         stateGauge = Gauge.builder("basekv.meta.state", () -> {
                 KVRangeDescriptor desc = currentDesc.get();
                 if (desc != null) {
@@ -142,11 +142,11 @@ class KVRangeMetricManager {
     }
 
     void reportDump(int bytes) {
-        dumpBytesCounter.increment(bytes);
+        dumpBytesSummary.record(bytes);
     }
 
     void reportRestore(int bytes) {
-        restoreBytesCounter.increment(bytes);
+        restoreBytesSummary.record(bytes);
     }
 
     void reportLastAppliedIndex(long index) {
@@ -199,8 +199,8 @@ class KVRangeMetricManager {
     }
 
     void close() {
-        Metrics.globalRegistry.removeByPreFilterId(dumpBytesCounter.getId());
-        Metrics.globalRegistry.removeByPreFilterId(restoreBytesCounter.getId());
+        Metrics.globalRegistry.removeByPreFilterId(dumpBytesSummary.getId());
+        Metrics.globalRegistry.removeByPreFilterId(restoreBytesSummary.getId());
         Metrics.globalRegistry.removeByPreFilterId(stateGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(lastAppliedIndexGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(verGauge.getId());

@@ -71,6 +71,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -108,6 +109,7 @@ public class KVRangeStore implements IKVRangeStore {
     private final ScheduledExecutorService rangeMgmtTaskExecutor;
     private final AsyncRunner rangeMgmtTaskRunner;
     private final KVRangeStoreOptions opts;
+    private final MetricsManager metricsManager;
     private IStoreMessenger messenger;
 
     public KVRangeStore(String clusterId,
@@ -139,6 +141,7 @@ public class KVRangeStore implements IKVRangeStore {
             new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("kvstore-mgmt-executor")),
             "kvstore-mgmt-executor", Tags.of("storeId", id));
         this.rangeMgmtTaskRunner = new AsyncRunner(rangeMgmtTaskExecutor);
+        this.metricsManager = new MetricsManager(clusterId, id);
         storeStatsCollector =
             new KVRangeStoreStatsCollector(opts, Duration.ofSeconds(opts.getStatsCollectIntervalSec()),
                 this.bgTaskExecutor);
@@ -247,15 +250,17 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<Void> recover() {
         checkStarted();
+        metricsManager.runningRecoverNum.increment();
         return rangeMgmtTaskRunner.add(() -> CompletableFuture.allOf(kvRangeMap.values().stream()
-            .map(kvRange -> kvRange.recover().handle((v, e) -> {
-                if (e != null) {
-                    log.warn("KVRange[{}] recover failed for some reason",
-                        KVRangeIdUtil.toString(kvRange.id()), e);
-                }
-                return null;
-            }).toCompletableFuture())
-            .toArray(CompletableFuture[]::new)));
+                .map(kvRange -> kvRange.recover().handle((v, e) -> {
+                    if (e != null) {
+                        log.warn("KVRange[{}] recover failed for some reason",
+                            KVRangeIdUtil.toString(kvRange.id()), e);
+                    }
+                    return null;
+                }).toCompletableFuture())
+                .toArray(CompletableFuture[]::new)))
+            .whenComplete((v, e) -> metricsManager.runningRecoverNum.decrement());
     }
 
     @Override
@@ -305,7 +310,9 @@ public class KVRangeStore implements IKVRangeStore {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(rangeId);
         if (kvRange != null) {
-            return kvRange.transferLeadership(ver, newLeader);
+            metricsManager.runningTransferLeaderNum.increment();
+            return kvRange.transferLeadership(ver, newLeader)
+                .whenComplete((v, e) -> metricsManager.runningTransferLeaderNum.decrement());
         }
         return CompletableFuture.failedFuture(rangeNotFound());
     }
@@ -317,7 +324,9 @@ public class KVRangeStore implements IKVRangeStore {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(rangeId);
         if (kvRange != null) {
-            return kvRange.changeReplicaConfig(ver, newVoters, newLearners);
+            metricsManager.runningConfigChangeNum.increment();
+            return kvRange.changeReplicaConfig(ver, newVoters, newLearners)
+                .whenComplete((v, e) -> metricsManager.runningConfigChangeNum.decrement());
         }
         return CompletableFuture.failedFuture(rangeNotFound());
     }
@@ -327,7 +336,8 @@ public class KVRangeStore implements IKVRangeStore {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(rangeId);
         if (kvRange != null) {
-            return kvRange.split(ver, splitKey);
+            metricsManager.runningSplitNum.increment();
+            return kvRange.split(ver, splitKey).whenComplete((v, e) -> metricsManager.runningSplitNum.decrement());
         }
         return CompletableFuture.failedFuture(rangeNotFound());
     }
@@ -337,7 +347,8 @@ public class KVRangeStore implements IKVRangeStore {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(mergerId);
         if (kvRange != null) {
-            return kvRange.merge(ver, mergeeId);
+            metricsManager.runningMergeNum.increment();
+            return kvRange.merge(ver, mergeeId).whenComplete((v, e) -> metricsManager.runningMergeNum.decrement());
         }
         return CompletableFuture.failedFuture(rangeNotFound());
     }
@@ -369,7 +380,9 @@ public class KVRangeStore implements IKVRangeStore {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
-            return kvRange.queryCoProc(ver, query, linearized);
+            metricsManager.runningQueryNum.increment();
+            return kvRange.queryCoProc(ver, query, linearized)
+                .whenComplete((v, e) -> metricsManager.runningQueryNum.decrement());
         }
         return CompletableFuture.failedFuture(rangeNotFound());
     }
@@ -399,7 +412,9 @@ public class KVRangeStore implements IKVRangeStore {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
-            return kvRange.mutateCoProc(ver, mutate);
+            metricsManager.runningMutateNum.increment();
+            return kvRange.mutateCoProc(ver, mutate)
+                .whenComplete((v, e) -> metricsManager.runningMutateNum.decrement());
         }
         return CompletableFuture.failedFuture(rangeNotFound());
     }
@@ -532,5 +547,33 @@ public class KVRangeStore implements IKVRangeStore {
 
     private void checkStarted() {
         Preconditions.checkState(status.get() == Status.STARTED, "Store not running");
+    }
+
+    private static class MetricsManager {
+        private final LongAdder runningConfigChangeNum;
+        private final LongAdder runningTransferLeaderNum;
+        private final LongAdder runningSplitNum;
+        private final LongAdder runningMergeNum;
+        private final LongAdder runningRecoverNum;
+        private final LongAdder runningQueryNum;
+        private final LongAdder runningMutateNum;
+
+        MetricsManager(String clusterId, String storeId) {
+            Tags tags = Tags.of("clusterId", clusterId).and("storeId", storeId);
+            runningConfigChangeNum =
+                Metrics.gauge("basekv.store.running", tags.and("cmd", "configchange"), new LongAdder());
+            runningTransferLeaderNum =
+                Metrics.gauge("basekv.store.running", tags.and("cmd", "transferleader"), new LongAdder());
+            runningSplitNum =
+                Metrics.gauge("basekv.store.running", tags.and("cmd", "split"), new LongAdder());
+            runningMergeNum =
+                Metrics.gauge("basekv.store.running", tags.and("cmd", "merge"), new LongAdder());
+            runningRecoverNum =
+                Metrics.gauge("basekv.store.running", tags.and("cmd", "recover"), new LongAdder());
+            runningQueryNum =
+                Metrics.gauge("basekv.store.running", tags.and("cmd", "query"), new LongAdder());
+            runningMutateNum =
+                Metrics.gauge("basekv.store.running", tags.and("cmd", "mutate"), new LongAdder());
+        }
     }
 }
