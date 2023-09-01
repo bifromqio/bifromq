@@ -17,10 +17,8 @@ import com.baidu.bifromq.basecluster.annotation.StoreCfg;
 import com.baidu.bifromq.basecluster.annotation.StoreCfgs;
 import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.store.CRDTStoreOptions;
-
 import java.lang.reflect.Method;
 import java.time.Duration;
-
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -58,12 +56,12 @@ public abstract class AgentTestTemplate {
         }
     }
 
-    @BeforeMethod(groups = "integration")
+    @BeforeMethod()
     public void setup() {
         storeMgr = new AgentTestCluster();
     }
 
-    @AfterMethod(groups = "integration")
+    @AfterMethod()
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");
@@ -74,12 +72,14 @@ public abstract class AgentTestTemplate {
 
     private AgentHostOptions build(StoreCfg cfg) {
         return AgentHostOptions.builder()
-            .addr(cfg.bindAddr())
-            .port(cfg.bindPort())
             .udpPacketLimit(1400)
             .maxChannelsPerHost(1)
             .joinRetryInSec(cfg.joinRetryInSec())
             .joinTimeout(Duration.ofSeconds(cfg.joinTimeout()))
+            .autoHealingTimeout(Duration.ofSeconds(60))
+            .baseProbeTimeout(Duration.ofMillis(cfg.baseProbeTimeoutMillis()))
+            .baseProbeInterval(Duration.ofMillis(cfg.baseProbeIntervalMillis()))
+            .gossipPeriod(Duration.ofMillis(cfg.baseGossipIntervalMillis()))
             .crdtStoreOptions(CRDTStoreOptions.builder()
                 .engineOptions(CRDTEngineOptions.builder()
                     .orHistoryExpireTime(Duration.ofSeconds(cfg.compactDelayInSec()))

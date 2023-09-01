@@ -37,6 +37,7 @@ import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.protobuf.AbstractMessageLite;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -93,6 +94,7 @@ public class HostMemberList implements IHostMemberList {
         this.tags = tags;
         // setup an ORMap for syncing host list
         store.host(AGENT_HOST_MAP_URI);
+        assert store.get(AGENT_HOST_MAP_URI).isPresent();
         hostListCRDT = (IORMap) store.get(AGENT_HOST_MAP_URI).get();
         local = HostMember.newBuilder()
             .setEndpoint(HostEndpoint.newBuilder()
@@ -130,7 +132,9 @@ public class HostMemberList implements IHostMemberList {
                     .with(MVRegOperation.write(member.toByteString())));
                 // update crdt landscape
                 store.join(AGENT_HOST_MAP_URI, local.getEndpoint().toByteString(),
-                    currentMembers().keySet().stream().map(e -> e.toByteString()).collect(Collectors.toSet()));
+                    currentMembers().keySet().stream()
+                        .map(AbstractMessageLite::toByteString)
+                        .collect(Collectors.toSet()));
             }
             return joined;
         }
@@ -144,7 +148,9 @@ public class HostMemberList implements IHostMemberList {
             if (removed) {
                 // update crdt landscape
                 store.join(AGENT_HOST_MAP_URI, local.getEndpoint().toByteString(),
-                    currentMembers().keySet().stream().map(e -> e.toByteString()).collect(Collectors.toSet()));
+                    currentMembers().keySet().stream()
+                        .map(AbstractMessageLite::toByteString)
+                        .collect(Collectors.toSet()));
             }
         }
     }
@@ -166,7 +172,7 @@ public class HostMemberList implements IHostMemberList {
         if (state.compareAndSet(State.JOINED, State.QUITTING)) {
             synchronized (this) {
                 return CompletableFuture.allOf(agentMap.values().stream()
-                        .map(agent -> agent.quit()).toArray(CompletableFuture[]::new))
+                        .map(Agent::quit).toArray(CompletableFuture[]::new))
                     .exceptionally(e -> null)
                     .thenCompose(v -> {
                         disposables.dispose();
@@ -185,9 +191,7 @@ public class HostMemberList implements IHostMemberList {
                                 .build())
                             .build();
                         return messenger.spread(quit)
-                            .handle((v, e) -> {
-                                return null;
-                            });
+                            .handle((v, e) -> null);
                     })
                     .thenCompose(v -> store.stopHosting(AGENT_HOST_MAP_URI))
                     .whenComplete((v, e) -> {
@@ -205,7 +209,7 @@ public class HostMemberList implements IHostMemberList {
 
     @Override
     public Observable<Map<HostEndpoint, Integer>> members() {
-        return membershipSubject.map(hostMap -> Maps.transformValues(hostMap, v -> v.getIncarnation()));
+        return membershipSubject.map(hostMap -> Maps.transformValues(hostMap, HostMember::getIncarnation));
     }
 
     private void renew(int atLeastIncarnation) {
@@ -237,20 +241,20 @@ public class HostMemberList implements IHostMemberList {
     @Override
     public CompletableFuture<Void> stopHosting(String agentId) {
         checkState();
-        synchronized (this) {
-            Agent agent = agentMap.remove(agentId);
-            if (agent != null) {
-                return agent.quit().whenComplete((v, e) -> {
+        Agent agent = agentMap.remove(agentId);
+        if (agent != null) {
+            return agent.quit().whenComplete((v, e) -> {
+                synchronized (this) {
                     local = local.toBuilder()
                         .setIncarnation(local.getIncarnation() + 1)
                         .clearAgentId()
                         .addAllAgentId(agentMap.keySet())
                         .build();
-                    join(local);
-                });
-            }
-            return CompletableFuture.completedFuture(null);
+                }
+                join(local);
+            });
         }
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
@@ -299,17 +303,10 @@ public class HostMemberList implements IHostMemberList {
             return;
         }
         switch (message.getClusterMessageTypeCase()) {
-            case JOIN:
-                handleJoin(message.getJoin());
-                break;
-            case QUIT:
-                handleQuit(message.getQuit());
-                break;
-            case FAIL:
-                handleFail(message.getFail());
-                break;
-            case DOUBT:
-                handleDoubt(message.getDoubt());
+            case JOIN -> handleJoin(message.getJoin());
+            case QUIT -> handleQuit(message.getQuit());
+            case FAIL -> handleFail(message.getFail());
+            case DOUBT -> handleDoubt(message.getDoubt());
         }
     }
 
@@ -379,7 +376,7 @@ public class HostMemberList implements IHostMemberList {
         }
         // keep myself reporting via memberlist crdt
         Optional<HostMember> localMemberInCRDT = getHostMember(hostListCRDT, local.getEndpoint());
-        if (!localMemberInCRDT.isPresent() || localMemberInCRDT.get().getIncarnation() > local.getIncarnation()) {
+        if (localMemberInCRDT.isEmpty() || localMemberInCRDT.get().getIncarnation() > local.getIncarnation()) {
             renew(localMemberInCRDT.orElse(local).getIncarnation());
         }
 
@@ -411,10 +408,10 @@ public class HostMemberList implements IHostMemberList {
         MetricManager() {
             Tags metricTags = Tags.of(tags);
             meters.add(Gauge.builder("basecluster.crdt.agentcluster.count", agentMap, Map::size)
-                .tags(tags)
+                .tags(metricTags)
                 .register(Metrics.globalRegistry));
             meters.add(Gauge.builder("basecluster.crdt.hostcluster.size", membershipSubject, a -> a.getValue().size())
-                .tags(tags)
+                .tags(metricTags)
                 .register(Metrics.globalRegistry));
         }
 

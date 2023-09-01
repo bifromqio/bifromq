@@ -53,10 +53,6 @@ final class MessengerTransport {
         return transport.receive().flatMap(this::convert);
     }
 
-    CompletableFuture<Void> shutdown() {
-        return transport.shutdown();
-    }
-
     private Observable<Timed<MessengerMessageEnvelope>> convert(PacketEnvelope packetEnvelope) {
         return Observable.fromIterable(packetEnvelope.data.stream().map(b -> {
             MessengerMessageEnvelope.MessengerMessageEnvelopeBuilder messageEnvelopeBuilder =

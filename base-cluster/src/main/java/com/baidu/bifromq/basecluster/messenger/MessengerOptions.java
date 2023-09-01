@@ -30,7 +30,6 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class MessengerOptions {
-    private Transport.TransportOptions transporterOptions = new Transport.TransportOptions();
     private int maxFanout = 4;
     private int maxFanoutGossips = 60;
     private int maxHealthScore = 4;

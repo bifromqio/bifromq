@@ -13,9 +13,13 @@
 
 package com.baidu.bifromq.basecluster.messenger;
 
+import static org.testng.Assert.assertTrue;
+
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.membership.proto.Quit;
 import com.baidu.bifromq.basecluster.proto.ClusterMessage;
+import com.baidu.bifromq.basecluster.transport.ITransport;
+import com.baidu.bifromq.basecluster.transport.Transport;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.observers.TestObserver;
@@ -32,8 +36,6 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import static org.testng.Assert.assertTrue;
-
 @Slf4j
 public class MessengerFuncTest {
     private IRecipientSelector localRecipientSelector;
@@ -44,6 +46,8 @@ public class MessengerFuncTest {
     private TestObserver<Timed<MessageEnvelope>> remoteObserver;
     private InetSocketAddress local;
     private InetSocketAddress remote;
+    private ITransport localTransport;
+    private ITransport remoteTransport;
     private int maxFanout = 1;
     private int maxFanoutGossips = 5;
     private int retransmitMultiplier = 1;
@@ -60,19 +64,29 @@ public class MessengerFuncTest {
             .maxHealthScore(4)
             .maxFanoutGossips(maxFanoutGossips)
             .retransmitMultiplier(retransmitMultiplier)
-            .spreadPeriod(spreadPeriod)
-            .transporterOptions().mtu(udpPacketLimit);
+            .spreadPeriod(spreadPeriod);
         localObserver = TestObserver.create();
         remoteObserver = TestObserver.create();
+        localTransport = Transport.builder()
+            .env("test")
+            .bindAddr(new InetSocketAddress("localhost", 0))
+            .options(new Transport.TransportOptions().mtu(udpPacketLimit))
+            .build();
+        remoteTransport = Transport.builder()
+            .env("test")
+            .bindAddr(new InetSocketAddress("localhost", 0))
+            .options(new Transport.TransportOptions().mtu(udpPacketLimit))
+            .build();
 
         localMessenger = Messenger.builder()
-            .bindAddr(new InetSocketAddress("localhost", 0))
+            .transport(localTransport)
             .scheduler(scheduler)
             .opts(opts)
             .build();
         local = localMessenger.bindAddress();
+
         remoteMessenger = Messenger.builder()
-            .bindAddr(new InetSocketAddress("localhost", 0))
+            .transport(remoteTransport)
             .scheduler(scheduler)
             .opts(opts)
             .build();
@@ -115,10 +129,13 @@ public class MessengerFuncTest {
             .build();
     }
 
+    @SneakyThrows
     @AfterMethod(alwaysRun = true)
     public void close() {
-        localMessenger.shutdown().join();
-        remoteMessenger.shutdown().join();
+        localMessenger.shutdown();
+        remoteMessenger.shutdown();
+        localTransport.shutdown().join();
+        remoteTransport.shutdown().join();
     }
 
     @SneakyThrows

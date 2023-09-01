@@ -39,7 +39,7 @@ import org.testng.annotations.Test;
 @Listeners(AgentHostTestListener.class)
 public class AgentHostsTest extends AgentTestTemplate {
     @StoreCfgs(stores = {@StoreCfg(id = "s1")})
-    @Test(groups = "integration")
+    @Test
     public void testRegister() {
         IAgent agent = storeMgr.host("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
@@ -57,7 +57,7 @@ public class AgentHostsTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {@StoreCfg(id = "s1")})
-    @Test(groups = "integration")
+    @Test
     public void testUnregister() {
         IAgent agent = storeMgr.host("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
@@ -85,7 +85,7 @@ public class AgentHostsTest extends AgentTestTemplate {
         @StoreCfg(id = "s4"),
         @StoreCfg(id = "s5"),
     })
-    @Test(groups = "integration")
+    @Test
     public void testMultipleAgentHosts() {
         await().until(() -> storeMgr.membership("s1").size() == 5);
         await().until(() -> storeMgr.membership("s2").size() == 5);
@@ -98,7 +98,7 @@ public class AgentHostsTest extends AgentTestTemplate {
         @StoreCfg(id = "s1", isSeed = true),
         @StoreCfg(id = "s2"),
     })
-    @Test(groups = "integration")
+    @Test
     public void testAgentNodesInTwoStores() {
         await().until(() -> storeMgr.membership("s1").size() == 2);
         await().until(() -> storeMgr.membership("s2").size() == 2);
@@ -132,7 +132,7 @@ public class AgentHostsTest extends AgentTestTemplate {
         @StoreCfg(id = "s2"),
         @StoreCfg(id = "s3"),
     })
-    @Test(groups = "integration")
+    @Test
     public void testAgentNodesInThreeStores() {
         await().until(() -> {
             Set<HostEndpoint> hosts_s1 = Sets.newHashSet(storeMgr.getHost("s1").membership().blockingFirst());
@@ -205,7 +205,7 @@ public class AgentHostsTest extends AgentTestTemplate {
     }
 
     @StoreCfgs(stores = {@StoreCfg(id = "s1", isSeed = true)})
-    @Test(groups = "integration")
+    @Test
     public void testRefreshRoute() {
         IAgent agent = storeMgr.host("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
@@ -234,7 +234,7 @@ public class AgentHostsTest extends AgentTestTemplate {
         @StoreCfg(id = "s1", isSeed = true),
         @StoreCfg(id = "s2"),
     })
-    @Test(groups = "integration")
+    @Test
     public void testMulticast() {
         String sender = "sender";
         String receiverGroup = "receiverGroup";
@@ -261,5 +261,73 @@ public class AgentHostsTest extends AgentTestTemplate {
         testObserver1.awaitCount(1);
         testObserver2.awaitCount(1);
         testObserver1.assertValue(testObserver2.values().get(0));
+    }
+
+    @StoreCfgs(stores = {
+        @StoreCfg(id = "s1", isSeed = true),
+        @StoreCfg(id = "s2"),
+        @StoreCfg(id = "s3"),
+    })
+    @Test
+    public void testHostClusterPartitionAndHealing() {
+        IAgentHost host1 = storeMgr.getHost("s1");
+        IAgentHost host2 = storeMgr.getHost("s2");
+        IAgentHost host3 = storeMgr.getHost("s3");
+
+        await().until(() -> host1.membership().blockingFirst().size() == 3);
+        await().until(() -> host2.membership().blockingFirst().size() == 3);
+        await().until(() -> host3.membership().blockingFirst().size() == 3);
+
+        //  isolate s1 from others
+        log.info("isolate s1");
+        storeMgr.isolate("s1");
+        await().forever().until(() -> host1.membership().blockingFirst().size() == 1);
+        await().forever().until(() -> host2.membership().blockingFirst().size() == 2);
+        await().forever().until(() -> host3.membership().blockingFirst().size() == 2);
+        // integrate s1 into the cluster
+        storeMgr.integrate("s1");
+        await().forever().until(() -> host1.membership().blockingFirst().size() == 3);
+        await().forever().until(() -> host2.membership().blockingFirst().size() == 3);
+        await().forever().until(() -> host3.membership().blockingFirst().size() == 3);
+    }
+
+    @StoreCfgs(stores = {
+        @StoreCfg(id = "s1", isSeed = true),
+        @StoreCfg(id = "s2"),
+        @StoreCfg(id = "s3"),
+    })
+    @Test
+    public void testAgentClusterPartitionAndHealing() {
+        IAgent agentOnS1 = storeMgr.host("s1", "agent");
+        IAgent agentOnS2 = storeMgr.host("s2", "agent");
+        IAgent agentOnS3 = storeMgr.host("s3", "agent");
+        IAgentMember agentMember1OnS1 = agentOnS1.register("agentNode1OnS1");
+        agentMember1OnS1.metadata(copyFromUtf8("agentNode1OnS1"));
+        IAgentMember agentMember2OnS1 = agentOnS1.register("agentNode2OnS1");
+        agentMember1OnS1.metadata(copyFromUtf8("agentNode2OnS1"));
+
+        IAgentMember agentMemberOnS2 = agentOnS2.register("agentNodeOnS2");
+        agentMember2OnS1.metadata(copyFromUtf8("agentNodeOnS2"));
+
+        IAgentMember agentMemberOnS3 = agentOnS3.register("agentNodeOnS3");
+        agentMemberOnS3.metadata(copyFromUtf8("agentNodeOnS3"));
+
+        await().until(() -> agentOnS1.membership().blockingFirst().size() == 4);
+        await().until(() -> agentOnS2.membership().blockingFirst().size() == 4);
+        await().until(() -> agentOnS3.membership().blockingFirst().size() == 4);
+
+        //  isolate s1 from others
+        log.info("isolate s1");
+        storeMgr.isolate("s1");
+        await().forever().until(() -> agentOnS1.membership().blockingFirst().size() == 2);
+        await().forever().until(() -> agentOnS2.membership().blockingFirst().size() == 2);
+        await().forever().until(() -> agentOnS3.membership().blockingFirst().size() == 2);
+
+        log.info("integrate s1");
+        // integrate s1 into the cluster
+        storeMgr.integrate("s1");
+        await().until(() -> agentOnS1.membership().blockingFirst().size() == 4);
+        await().until(() -> agentOnS2.membership().blockingFirst().size() == 4);
+        await().until(() -> agentOnS3.membership().blockingFirst().size() == 4);
     }
 }
