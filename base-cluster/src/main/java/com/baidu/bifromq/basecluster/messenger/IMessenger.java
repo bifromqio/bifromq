@@ -66,5 +66,5 @@ public interface IMessenger {
 
     void start(IRecipientSelector recipientSelector);
 
-    CompletableFuture<Void> shutdown();
+    void shutdown();
 }

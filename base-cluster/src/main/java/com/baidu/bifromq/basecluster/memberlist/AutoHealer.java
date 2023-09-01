@@ -81,7 +81,7 @@ public final class AutoHealer {
             .observeOn(scheduler)
             .subscribe(members -> {
                 alivePeers.clear();
-                alivePeers.putAll(Maps.filterKeys(members, k -> !k.equals(memberList.local())));
+                alivePeers.putAll(Maps.filterKeys(members, k -> !k.equals(memberList.local().getEndpoint())));
             }));
         healingNumGauge = Gauge.builder("basecluster.heal.num", healingMembers::estimatedSize)
             .tags(tags)
@@ -101,18 +101,10 @@ public final class AutoHealer {
 
     private void handleMessage(ClusterMessage message) {
         switch (message.getClusterMessageTypeCase()) {
-            case JOIN:
-                handleJoin(message.getJoin());
-                break;
-            case ENDORSE:
-                handleEndorse(message.getEndorse());
-                break;
-            case QUIT:
-                handleQuit(message.getQuit());
-                break;
-            case FAIL:
-                handleFail(message.getFail());
-                break;
+            case JOIN -> handleJoin(message.getJoin());
+            case ENDORSE -> handleEndorse(message.getEndorse());
+            case QUIT -> handleQuit(message.getQuit());
+            case FAIL -> handleFail(message.getFail());
         }
     }
 
@@ -122,6 +114,8 @@ public final class AutoHealer {
         Integer healingMemberIncarnation = healingMembers.getIfPresent(joinEndpoint);
         if (healingMemberIncarnation != null && healingMemberIncarnation < joinMember.getIncarnation()) {
             // the member is alive, no need to heal it anymore
+            log.debug("Member[{},{}] is reachable now, stop healing: local={}",
+                joinEndpoint, healingMemberIncarnation, memberList.local().getEndpoint());
             healingMembers.invalidate(joinEndpoint);
         }
     }
@@ -131,6 +125,8 @@ public final class AutoHealer {
         Integer healingMemberIncarnation = healingMembers.getIfPresent(endpoint);
         if (healingMemberIncarnation != null && healingMemberIncarnation <= endorse.getIncarnation()) {
             // the member is alive, no need to heal it anymore
+            log.debug("Member[{},{}] is confirmed alive by others, stop healing: local={}",
+                endpoint, endorse.getIncarnation(), memberList.local().getEndpoint());
             healingMembers.invalidate(endpoint);
         }
     }
@@ -140,6 +136,8 @@ public final class AutoHealer {
         Integer healingMemberIncarnation = healingMembers.getIfPresent(quitEndpoint);
         if (healingMemberIncarnation != null && healingMemberIncarnation <= quit.getIncarnation()) {
             // the member has quit, no need to heal it anymore
+            log.debug("Member[{},{}] has quit, stop healing: local={}",
+                quitEndpoint, quit.getIncarnation(), memberList.local().getEndpoint());
             healingMembers.invalidate(quitEndpoint);
         }
     }
@@ -148,9 +146,11 @@ public final class AutoHealer {
         HostEndpoint failedEndpoint = fail.getEndpoint();
         // no need to heal self, memberlist will refute it
         Integer inc = alivePeers.get(failedEndpoint);
-        if (!failedEndpoint.equals(memberList.local()) &&
+        if (!failedEndpoint.equals(memberList.local().getEndpoint()) &&
             !memberList.isZombie(failedEndpoint) &&
             inc != null && inc <= fail.getIncarnation()) {
+            log.debug("Member[{},{}] is failed, add it healing list: local={}",
+                failedEndpoint, fail.getIncarnation(), memberList.local().getEndpoint());
             alivePeers.remove(failedEndpoint, inc);
             healingMembers.put(failedEndpoint, fail.getIncarnation());
             scheduleHealing();

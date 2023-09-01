@@ -32,6 +32,9 @@ import com.baidu.bifromq.basecluster.messenger.IMessenger;
 import com.baidu.bifromq.basecluster.messenger.Messenger;
 import com.baidu.bifromq.basecluster.messenger.MessengerOptions;
 import com.baidu.bifromq.basecluster.proto.ClusterMessage;
+import com.baidu.bifromq.basecluster.transport.ITransport;
+import com.baidu.bifromq.basecluster.transport.TCPTransport;
+import com.baidu.bifromq.basecluster.transport.Transport;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
 import com.baidu.bifromq.baseenv.EnvProvider;
@@ -61,6 +64,7 @@ final class AgentHost implements IAgentHost {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final AgentHostOptions options;
     private final ICRDTStore store;
+    private final ITransport transport;
     private final IMessenger messenger;
     private final IHostMemberList memberList;
     private final MemberSelector memberSelector;
@@ -71,32 +75,24 @@ final class AgentHost implements IAgentHost {
     private final LoadingCache<HostEndpoint, InetSocketAddress> hostAddressCache;
     private final String[] tags;
 
-    AgentHost(AgentHostOptions options) {
+    AgentHost(ITransport transport, AgentHostOptions options) {
         checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
             "Invalid bind address");
         checkArgument(Strings.isNullOrEmpty(options.clusterDomainName()) ||
             !Strings.isNullOrEmpty(options.clusterDomainName()) && options.port() > 0, "Invalid port number");
+        this.transport = transport;
         this.options = options.toBuilder().build();
-        this.store = ICRDTStore.newInstance(options.crdtStoreOptions());
         MessengerOptions messengerOptions = new MessengerOptions();
         messengerOptions.maxFanout(options.gossipFanout())
             .maxFanoutGossips(options.gossipFanoutPerPeriod())
             .maxHealthScore(options.awarenessMaxMultiplier())
             .retransmitMultiplier(options.retransmitMultiplier())
-            .spreadPeriod(options.gossipPeriod())
-            .transporterOptions()
-            .mtu(options.udpPacketLimit())
-            .tcpTransportOptions()
-            .maxChannelsPerHost(options.maxChannelsPerHost())
-            .idleTimeoutInSec(options.idleTimeoutInSec())
-            .connTimeoutInMS(options.connTimeoutInMS());
+            .spreadPeriod(options.gossipPeriod());
         Scheduler scheduler = Schedulers.from(newSingleThreadScheduledExecutor(
             EnvProvider.INSTANCE.newThreadFactory("agent-host-scheduler", true)));
+        this.store = ICRDTStore.newInstance(options.crdtStoreOptions());
         this.messenger = Messenger.builder()
-            .bindAddr(new InetSocketAddress(options.addr(), options.port()))
-            .serverSslContext(options.serverSslContext())
-            .clientSslContext(options.clientSslContext())
-            .env(options.env())
+            .transport(transport)
             .opts(messengerOptions)
             .scheduler(scheduler)
             .build();
@@ -137,6 +133,21 @@ final class AgentHost implements IAgentHost {
             options.suspicionMultiplier(), options.suspicionMaxTimeoutMultiplier(), tags);
         memberSelector = new MemberSelector(memberList, scheduler, hostAddressCache::get);
         disposables.add(store.storeMessages().subscribe(this::sendCRDTStoreMessage));
+    }
+
+    AgentHost(AgentHostOptions options) {
+        this(Transport.builder()
+            .env(options.env())
+            .bindAddr(new InetSocketAddress(options.addr(), options.port()))
+            .serverSslContext(options.serverSslContext())
+            .clientSslContext(options.clientSslContext())
+            .options(new Transport.TransportOptions()
+                .mtu(options.udpPacketLimit())
+                .tcpTransportOptions(new TCPTransport.TCPTransportOptions()
+                    .maxChannelsPerHost(options.maxChannelsPerHost())
+                    .idleTimeoutInSec(options.idleTimeoutInSec())
+                    .connTimeoutInMS(options.connTimeoutInMS())))
+            .build(), options);
     }
 
     @Override
@@ -196,10 +207,11 @@ final class AgentHost implements IAgentHost {
             deadDropper.stop();
             memberList.stop()
                 .exceptionally(e -> null)
-                .thenCompose(v -> {
+                .thenAccept(v -> {
                     store.stop();
-                    return messenger.shutdown();
+                    messenger.shutdown();
                 })
+                .thenCompose(v -> transport.shutdown())
                 .whenComplete((v, e) -> {
                     memberSelector.stop();
                     disposables.dispose();

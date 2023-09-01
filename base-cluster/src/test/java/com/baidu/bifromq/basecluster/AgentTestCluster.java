@@ -17,6 +17,7 @@ import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
+import com.baidu.bifromq.basecluster.transport.ITransport;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -40,8 +41,10 @@ public class AgentTestCluster {
         final AgentHostOptions options;
     }
 
+    private final MockNetwork network = new MockNetwork();
     private final Map<String, AgentHostMeta> hostMetaMap = Maps.newConcurrentMap();
     private final Map<String, HostEndpoint> hostEndpointMap = Maps.newConcurrentMap();
+    private final Map<String, ITransport> hostTransportMap = Maps.newConcurrentMap();
     private final Map<HostEndpoint, IAgentHost> hostMap = Maps.newConcurrentMap();
     private final Map<String, List<ByteString>> inflationLogs = Maps.newConcurrentMap();
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -70,7 +73,7 @@ public class AgentTestCluster {
         checkHost(joineeId);
         hostMap.get(hostEndpointMap.get(joinerId))
             .join(Sets.newHashSet(new InetSocketAddress(hostEndpointMap.get(joineeId).getAddress(),
-                    hostEndpointMap.get(joineeId).getPort())));
+                hostEndpointMap.get(joineeId).getPort())));
     }
 
     public void stopHost(String hostId) {
@@ -78,6 +81,16 @@ public class AgentTestCluster {
         inflationLogs.remove(hostId);
         hostMap.remove(hostEndpointMap.get(hostId)).shutdown();
     }
+
+    public void isolate(String hostId) {
+        checkHost(hostId);
+        network.isolate(hostTransportMap.get(hostId));
+    }
+
+    public void integrate(String hostId) {
+        network.integrate(hostTransportMap.get(hostId));
+    }
+
 
     public HostEndpoint endpoint(String hostId) {
         checkHost(hostId);
@@ -106,10 +119,14 @@ public class AgentTestCluster {
 
     private HostEndpoint loadStore(String storeId, AgentHostOptions options) {
         inflationLogs.putIfAbsent(storeId, new LinkedList<>());
-        IAgentHost host = IAgentHost.newInstance(options);
+        ITransport transport = network.create();
+        options.addr("127.0.0.1");
+        options.port(transport.bindAddress().getPort());
+        IAgentHost host = new AgentHost(transport, options);
         host.start();
         hostEndpointMap.put(storeId, host.local());
         hostMap.put(host.local(), host);
+        hostTransportMap.put(storeId, transport);
         return host.local();
     }
 
@@ -125,16 +142,5 @@ public class AgentTestCluster {
 
     private void checkHost(String hostId) {
         Preconditions.checkArgument(hostEndpointMap.containsKey(hostId));
-    }
-
-    private static <T> T getField(Object targetObject, String fieldName) {
-        try {
-            Field field = targetObject.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            return (T) field.get(targetObject);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            log.warn("get field {} from {} failed: {}", targetObject, fieldName, e.getMessage());
-        }
-        return null;
     }
 }

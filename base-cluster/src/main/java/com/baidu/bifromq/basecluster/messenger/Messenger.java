@@ -17,14 +17,13 @@ import com.baidu.bifromq.basecluster.messenger.proto.DirectMessage;
 import com.baidu.bifromq.basecluster.messenger.proto.GossipMessage;
 import com.baidu.bifromq.basecluster.messenger.proto.MessengerMessage;
 import com.baidu.bifromq.basecluster.proto.ClusterMessage;
-import com.baidu.bifromq.basecluster.transport.Transport;
+import com.baidu.bifromq.basecluster.transport.ITransport;
 import com.baidu.bifromq.basecluster.util.RandomUtils;
 import com.google.common.collect.Maps;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
-import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -62,22 +61,10 @@ public class Messenger implements IMessenger {
     private final MetricManager metricManager;
 
     @Builder
-    private Messenger(InetSocketAddress bindAddr,
-                      SslContext serverSslContext,
-                      SslContext clientSslContext,
-                      String env,
-                      Scheduler scheduler,
-                      MessengerOptions opts) {
-        env = env == null ? "" : env;
+    private Messenger(ITransport transport, Scheduler scheduler, MessengerOptions opts) {
+        this.transport = new MessengerTransport(transport);
         this.opts = opts.toBuilder().build();
         this.scheduler = scheduler;
-        this.transport = new MessengerTransport(Transport.builder()
-            .bindAddr(bindAddr)
-            .serverSslContext(serverSslContext)
-            .clientSslContext(clientSslContext)
-            .env(env)
-            .options(opts.transporterOptions())
-            .build());
         this.localAddress = transport.bindAddress();
         this.gossiper = new Gossiper(transport.bindAddress().toString(),
             opts.retransmitMultiplier(),
@@ -164,22 +151,22 @@ public class Messenger implements IMessenger {
     }
 
     @Override
-    public CompletableFuture<Void> shutdown() {
+    public void shutdown() {
         switch (state) {
-            case START:
+            case START -> {
                 state = State.STOP;
                 log.debug("Shutdown messenger");
                 metricManager.close();
                 // complete message publisher
                 publisher.onComplete();
                 disposables.dispose();
-                return transport.shutdown();
-            case INIT:
+            }
+            case INIT -> {
                 metricManager.close();
-                return CompletableFuture.failedFuture(new IllegalStateException("Messenger has not started"));
-            case STOP:
-            default:
-                return CompletableFuture.completedFuture(null);
+                throw new IllegalStateException("Messenger has not started");
+            }
+            default -> {
+            }
         }
     }
 

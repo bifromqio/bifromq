@@ -110,7 +110,8 @@ public class AutoDropper {
             .subscribe(this::handleMessage));
         disposables.add(memberList.members()
             .observeOn(scheduler)
-            .subscribe(members -> alivePeers = Maps.filterKeys(members, k -> !k.equals(memberList.local()))));
+            .subscribe(
+                members -> alivePeers = Maps.filterKeys(members, k -> !k.equals(memberList.local().getEndpoint()))));
         healthScoreGauge = Gauge.builder("basecluster.healthScore",
                 () -> failureDetector.healthScoring().blockingFirst())
             .tags(tags)
@@ -258,8 +259,8 @@ public class AutoDropper {
     }
 
     private void startSuspicion(Doubt doubt) {
-        log.debug("Start death suspicion of the endpoint[{}] from reporter[{}]",
-            doubt.getEndpoint(), doubt.getReporter());
+        log.debug("Start failure suspicion of member[{},{}] from reporter[{}]: local={}",
+            doubt.getEndpoint(), doubt.getIncarnation(), doubt.getReporter(), memberList.local().getEndpoint());
         // confirmed should contain local
         Set<HostEndpoint> confirmed = new HashSet<>();
         confirmed.add(doubt.getReporter());
@@ -274,6 +275,8 @@ public class AutoDropper {
                 k < 1 ? minInMS : Math.max(minInMS, Math.round(maxInMS - (maxInMS - minInMS) * coe));
             long elapsed = Instant.now().toEpochMilli() - start;
             long remaining = suspicionTimeout - elapsed;
+            log.debug("Suspicion of member[{},{}] will timeout in {}ms: local={}",
+                doubt.getEndpoint(), doubt.getIncarnation(), remaining, memberList.local().getEndpoint());
             emitter.onNext(remaining);
         }).switchMap(remain -> {
             if (remain > 0) {
@@ -298,7 +301,7 @@ public class AutoDropper {
                     } else if (confirmed.size() < k) {
                         confirmed.add(s.getReporter());
                         // this is a side-effect that re-gossip first k doubt done by reporter
-                        if (memberList.local().equals(s.getReporter())) {
+                        if (memberList.local().getEndpoint().equals(s.getReporter())) {
                             messenger.spread(clusterMessage);
                         }
                         return true;
@@ -315,8 +318,9 @@ public class AutoDropper {
                 .subscribe(ignore -> {
                     // suspicion timed out
                     suspicions.remove(doubt.getEndpoint());
-                    log.debug("Suspicion timeout, dead peer[{}] confirmed by {} peers",
-                        doubt, confirmed.size());
+                    log.debug("Suspicion timeout, dead peer[{},{}] confirmed by {} peers: local={}",
+                        doubt.getEndpoint(), doubt.getIncarnation(),
+                        confirmed.size(), memberList.local().getEndpoint());
                     Integer suspectIncarnation = alivePeers.get(doubt.getEndpoint());
                     if (suspectIncarnation == null) {
                         return;
@@ -338,7 +342,7 @@ public class AutoDropper {
                                     .build())
                                 .build();
                         }
-                        log.debug("Spread message:\n{}", msg);
+                        log.trace("Spread message: local={}\n{}", memberList.local().getEndpoint(), msg);
                         messenger.spread(msg);
                     }
                 })));
@@ -346,21 +350,11 @@ public class AutoDropper {
 
     private void handleMessage(ClusterMessage clusterMessage) {
         switch (clusterMessage.getClusterMessageTypeCase()) {
-            case JOIN:
-                handleJoin(clusterMessage.getJoin());
-                break;
-            case QUIT:
-                handleQuit(clusterMessage.getQuit());
-                break;
-            case FAIL:
-                handleFail(clusterMessage.getFail());
-                break;
-            case DOUBT:
-                handleDoubt(clusterMessage.getDoubt());
-                break;
-            case ENDORSE:
-                handleEndorse(clusterMessage.getEndorse());
-                break;
+            case JOIN -> handleJoin(clusterMessage.getJoin());
+            case QUIT -> handleQuit(clusterMessage.getQuit());
+            case FAIL -> handleFail(clusterMessage.getFail());
+            case DOUBT -> handleDoubt(clusterMessage.getDoubt());
+            case ENDORSE -> handleEndorse(clusterMessage.getEndorse());
         }
     }
 
@@ -393,7 +387,8 @@ public class AutoDropper {
     private void stopSuspectIfNeeded(HostEndpoint endpoint, int incarnation) {
         Suspicion suspicion = suspicions.get(endpoint);
         if (suspicion != null && suspicion.incarnation <= incarnation) {
-            log.debug("Suspected member[{}, {}] is alive, stop suspecting it", endpoint, incarnation);
+            log.debug("Suspected member[{},{}] is alive, stop suspecting it: local={}",
+                endpoint, incarnation, memberList.local().getEndpoint());
             suspicions.remove(endpoint, suspicion);
             suspicion.task.dispose();
         }
@@ -402,25 +397,27 @@ public class AutoDropper {
     private void handleDoubt(Doubt doubt) {
         HostEndpoint suspectedEndpoint = doubt.getEndpoint();
         if (suspicions.containsKey(doubt.getEndpoint())) {
-            if (!doubt.getReporter().equals(memberList.local())) {
-                log.debug("Ignore suspect[{}] of reporter[{}], member already under suspicion",
-                    doubt, doubt.getReporter());
+            if (!doubt.getReporter().equals(memberList.local().getEndpoint())) {
+                log.debug("Ignore suspect[{},{}] of reporter[{}], member already under suspicion: local={}",
+                    suspectedEndpoint, doubt.getIncarnation(), doubt.getReporter(), memberList.local().getEndpoint());
             }
             return;
         }
         Integer suspectedIncarnation = alivePeers.get(suspectedEndpoint);
         if (suspectedIncarnation == null) {
             // ignore obsolete suspect
-            log.debug("Ignore suspect[{}] by member[{}], no member found", doubt, doubt.getReporter());
+            log.debug("Ignore suspect[{},{}] by member[{}], no member found: local={}",
+                doubt.getEndpoint(), doubt.getIncarnation(), doubt.getReporter(), memberList.local().getEndpoint());
             return;
         }
         if (doubt.getIncarnation() < suspectedIncarnation) {
-            log.debug("Ignore suspect[{}] by member[{}], obsolete incarnation",
-                doubt.getEndpoint(), doubt.getReporter());
+            log.debug("Ignore suspect[{},{}] by member[{}], obsolete incarnation: local={}",
+                doubt.getEndpoint(), doubt.getIncarnation(), doubt.getReporter(), memberList.local().getEndpoint());
             return;
         }
-        if (memberList.local().equals(doubt.getEndpoint())) {
+        if (memberList.local().getEndpoint().equals(doubt.getEndpoint())) {
             // may be unhealthy
+            log.debug("Receive suspicion from others, penalty health: local={}", memberList.local().getEndpoint());
             failureDetector.penaltyHealth();
         } else {
             // start a suspicion if no one exist

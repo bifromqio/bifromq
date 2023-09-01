@@ -29,11 +29,11 @@ public @interface StoreCfg {
 
     int joinTimeout() default 30;
 
-    String bindAddr() default "127.0.0.1";
-
-    int bindPort() default 0;
-
-    long purgeDelayInSec() default 1;
-
     long compactDelayInSec() default 1;
+
+    int baseProbeIntervalMillis() default 50;
+
+    int baseProbeTimeoutMillis() default 20;
+
+    int baseGossipIntervalMillis() default 5;
 }
