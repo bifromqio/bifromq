@@ -33,16 +33,26 @@ class RocksDBKVEngineIterator implements IKVEngineIterator {
     private static class NativeState implements Runnable {
         private final RocksIterator itr;
         private final ReadOptions readOptions;
+        private final Slice lowerSlice;
+        private final Slice upperSlice;
 
-        private NativeState(RocksIterator itr, ReadOptions readOptions) {
+        private NativeState(RocksIterator itr, ReadOptions readOptions, Slice lowerSlice, Slice upperSlice) {
             this.itr = itr;
             this.readOptions = readOptions;
+            this.lowerSlice = lowerSlice;
+            this.upperSlice = upperSlice;
         }
 
         @Override
         public void run() {
             itr.close();
             readOptions.close();
+            if (lowerSlice != null) {
+                lowerSlice.close();
+            }
+            if (upperSlice != null) {
+                upperSlice.close();
+            }
         }
     }
 
@@ -63,14 +73,18 @@ class RocksDBKVEngineIterator implements IKVEngineIterator {
         if (snapshot != null) {
             readOptions.setSnapshot(snapshot);
         }
+        Slice lowerSlice = null;
         if (start != null) {
-            readOptions.setIterateLowerBound(new Slice(start.toByteArray()));
+            lowerSlice = new Slice(start.toByteArray());
+            readOptions.setIterateLowerBound(lowerSlice);
         }
+        Slice upperSlice = null;
         if (end != null) {
-            readOptions.setIterateUpperBound(new Slice(end.toByteArray()));
+            upperSlice = new Slice(end.toByteArray());
+            readOptions.setIterateUpperBound(upperSlice);
         }
         rocksIterator = db.newIterator(cfHandle, readOptions);
-        onClose = CLEANER.register(this, new NativeState(rocksIterator, readOptions));
+        onClose = CLEANER.register(this, new NativeState(rocksIterator, readOptions, lowerSlice, upperSlice));
     }
 
     @Override

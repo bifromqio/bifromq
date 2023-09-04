@@ -206,9 +206,12 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         start = start == null ? EMPTY : start;
         end = end == null ? leastUpperBound(instance, range) : end;
         if (compare(start, end) < 0) {
-            return instance.getApproximateSizes(cfHandles.get(range.ns),
-                singletonList(toRange(start, end)),
-                INCLUDE_MEMTABLES, INCLUDE_FILES)[0];
+            try (Slice startSlice = new Slice(start.toByteArray()); Slice endSlice = new Slice(end.toByteArray());) {
+                Range rocksDBRange = new Range(startSlice, endSlice);
+                return instance.getApproximateSizes(cfHandles.get(range.ns),
+                    singletonList(rocksDBRange),
+                    INCLUDE_MEMTABLES, INCLUDE_FILES)[0];
+            }
         }
         return 0;
     }
@@ -221,9 +224,15 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             ByteString upperBound = end == null ?
                 leastUpperBound(openedCheckpoint.instance, range.ns, start, null) : end;
             if (compare(lowerBound, upperBound) <= 0) {
-                return openedCheckpoint.instance().getApproximateSizes(cfHandles.get(range.ns),
-                    singletonList(toRange(lowerBound, upperBound)),
+                Slice startSlice = new Slice(lowerBound.toByteArray());
+                Slice endSlice = new Slice(upperBound.toByteArray());
+                Range rocksDBRange = new Range(startSlice, endSlice);
+                long approximateSize = openedCheckpoint.instance().getApproximateSizes(cfHandles.get(range.ns),
+                    singletonList(rocksDBRange),
                     INCLUDE_MEMTABLES, INCLUDE_FILES)[0];
+                startSlice.close();
+                endSlice.close();
+                return approximateSize;
             } else {
                 return 0;
             }
