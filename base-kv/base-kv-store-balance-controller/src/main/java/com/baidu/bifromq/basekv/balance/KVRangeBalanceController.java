@@ -18,7 +18,6 @@ import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController.MetricManager.CommandMetrics;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
-import com.baidu.bifromq.basekv.balance.command.CommandType;
 import com.baidu.bifromq.basekv.balance.command.MergeCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
@@ -170,11 +169,10 @@ public class KVRangeBalanceController {
                 Optional<BalanceCommand> commandOpt = fromBalancer.balance();
                 if (commandOpt.isPresent()) {
                     BalanceCommand commandToRun = commandOpt.get();
-                    logDebug("Balancer[{}] run command: {}", fromBalancer.getClass().getSimpleName(), commandToRun);
+                    logInfo("Balancer[{}] run command: {}", fromBalancer.getClass().getSimpleName(), commandToRun);
                     String balancerName = fromBalancer.getClass().getSimpleName();
                     String cmdName = commandToRun.getClass().getSimpleName();
                     Sample start = Timer.start();
-                    CommandType commandType = commandToRun.type();
                     runCommand(commandToRun)
                         .whenCompleteAsync((r, e) -> {
                             scheduling.set(false);
@@ -182,22 +180,15 @@ public class KVRangeBalanceController {
                             if (e != null) {
                                 logError("Should not be here, error when run command", e);
                                 metrics.cmdFailedCounter.increment();
-                                scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
                             } else {
                                 if (r) {
                                     metrics.cmdSucceedCounter.increment();
                                     start.stop(metrics.cmdRunTimer);
-                                    // Always schedule later after recovery command for that RecoverRequest has no 'version' and could not be cached
-                                    if (commandType == CommandType.RECOVERY) {
-                                        scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
-                                    } else {
-                                        scheduleLater(1, TimeUnit.SECONDS);
-                                    }
                                 } else {
                                     metrics.cmdFailedCounter.increment();
-                                    scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
                                 }
                             }
+                            scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
                         }, executor);
                     return;
                 }
@@ -217,9 +208,8 @@ public class KVRangeBalanceController {
                 return CompletableFuture.completedFuture(false);
             }
         }
-        logDebug("Send balanceCommand: {}", command);
-        switch (command.type()) {
-            case CHANGE_CONFIG:
+        return switch (command.type()) {
+            case CHANGE_CONFIG -> {
                 ChangeReplicaConfigRequest changeConfigRequest = ChangeReplicaConfigRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setKvRangeId(command.getKvRangeId())
@@ -227,54 +217,57 @@ public class KVRangeBalanceController {
                     .addAllNewVoters(((ChangeConfigCommand) command).getVoters())
                     .addAllNewLearners(((ChangeConfigCommand) command).getLearners())
                     .build();
-                return handleStoreReplyCode(command,
+                yield handleStoreReplyCode(command,
                     storeClient.changeReplicaConfig(command.getToStore(), changeConfigRequest)
                         .thenApply(ChangeReplicaConfigReply::getCode)
                 );
-            case MERGE:
+            }
+            case MERGE -> {
                 KVRangeMergeRequest rangeMergeRequest = KVRangeMergeRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setVer(command.getExpectedVer())
                     .setMergerId(command.getKvRangeId())
                     .setMergeeId(((MergeCommand) command).getMergeeId())
                     .build();
-                return handleStoreReplyCode(command,
+                yield handleStoreReplyCode(command,
                     storeClient.mergeRanges(command.getToStore(), rangeMergeRequest)
                         .thenApply(KVRangeMergeReply::getCode));
-            case SPLIT:
+            }
+            case SPLIT -> {
                 KVRangeSplitRequest kvRangeSplitRequest = KVRangeSplitRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setKvRangeId(command.getKvRangeId())
                     .setVer(command.getExpectedVer())
                     .setSplitKey(((SplitCommand) command).getSplitKey())
                     .build();
-                return handleStoreReplyCode(command,
+                yield handleStoreReplyCode(command,
                     storeClient.splitRange(command.getToStore(), kvRangeSplitRequest)
                         .thenApply(KVRangeSplitReply::getCode));
-            case TRANSFER_LEADERSHIP:
+            }
+            case TRANSFER_LEADERSHIP -> {
                 TransferLeadershipRequest transferLeadershipRequest = TransferLeadershipRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setKvRangeId(command.getKvRangeId())
                     .setVer(command.getExpectedVer())
                     .setNewLeaderStore(((TransferLeadershipCommand) command).getNewLeaderStore())
                     .build();
-                return handleStoreReplyCode(command,
+                yield handleStoreReplyCode(command,
                     storeClient.transferLeadership(command.getToStore(), transferLeadershipRequest)
                         .thenApply(TransferLeadershipReply::getCode));
-            case RECOVERY:
+            }
+            case RECOVERY -> {
                 RecoverRequest recoverRequest = RecoverRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .build();
-                return storeClient.recover(command.getToStore(), recoverRequest)
+                yield storeClient.recover(command.getToStore(), recoverRequest)
                     .handle((r, e) -> {
                         if (e != null) {
                             logError("Unexpected error when recover, req: {}", recoverRequest, e);
                         }
                         return true;
                     });
-            default:
-                return CompletableFuture.completedFuture(false);
-        }
+            }
+        };
     }
 
     private CompletableFuture<Boolean> handleStoreReplyCode(BalanceCommand command,
@@ -288,8 +281,9 @@ public class KVRangeBalanceController {
             }
             switch (code) {
                 case Ok -> {
-                    if (command.getExpectedVer() != null) {
-                        historyCommandCache.put(command.getKvRangeId(), command.getExpectedVer());
+                    switch (command.type()) {
+                        case CHANGE_CONFIG, SPLIT, MERGE ->
+                            historyCommandCache.put(command.getKvRangeId(), command.getExpectedVer());
                     }
                     onDone.complete(true);
                 }
@@ -305,6 +299,10 @@ public class KVRangeBalanceController {
 
     private void logDebug(String format, Object... args) {
         log(format, args, log::isDebugEnabled, log::debug);
+    }
+
+    private void logInfo(String format, Object... args) {
+        log(format, args, log::isInfoEnabled, log::info);
     }
 
     private void logWarn(String format, Object... args) {

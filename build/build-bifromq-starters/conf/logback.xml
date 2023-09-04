@@ -19,9 +19,9 @@
     <property name="eventPattern"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} --- %m%n"/>
     <property name="raftLogPattern"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] --- %m%n"/>
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] --- [%F:%L] %m%n"/>
     <property name="balancerLogPattern"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] --- %m%n"/>
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] --- [%F:%L] %m%n"/>
 
     <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
@@ -178,7 +178,7 @@
         <appender-ref ref="raftLogFile"/>
     </logger>
 
-    <logger name="balancer.logger" level="DEBUG" additivity="false">
+    <logger name="balancer.logger" level="INFO" additivity="false">
         <appender-ref ref="balancerLogFile"/>
     </logger>
 
