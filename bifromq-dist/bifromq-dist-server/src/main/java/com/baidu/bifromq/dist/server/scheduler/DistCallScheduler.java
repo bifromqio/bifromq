@@ -158,12 +158,12 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                         assert batchDistReply.getReqId() == reqId;
                                         return batchDistReply;
                                     } catch (Throwable e) {
-                                        log.error("Unable to parse rw co-proc output", e);
+                                        log.error("Unable to parse ro co-proc output", e);
                                         throw new RuntimeException("Unable to parse rw co-proc output",
                                             e);
                                     }
                                 }
-                                log.warn("Failed to exec rw co-proc[code={}]", v.getCode());
+                                log.warn("Failed to exec ro co-proc[code={}]", v.getCode());
                                 throw new RuntimeException("Failed to exec rw co-proc");
                             });
                     })
