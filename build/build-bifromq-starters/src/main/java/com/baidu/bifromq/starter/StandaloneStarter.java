@@ -270,14 +270,16 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                     .setMaxRangeLoad(INBOX_MAX_RANGE_LOAD.get())
                     .setSplitKeyThreshold(INBOX_SPLIT_KEY_EST_THRESHOLD.get())
                     .setLoadTrackingWindowSec(INBOX_LOAD_TRACKING_SECONDS.get()))
-                .setDataEngineConfigurator(buildEngineConf(config
-                    .getStateStoreConfig()
-                    .getInboxStoreConfig()
-                    .getDataEngineConfig(), "inbox_data"))
-                .setWalEngineConfigurator(buildEngineConf(config
-                    .getStateStoreConfig()
-                    .getInboxStoreConfig()
-                    .getWalEngineConfig(), "inbox_wal")))
+                .setDataEngineConfigurator(
+                    buildDataEngineConf(config
+                        .getStateStoreConfig()
+                        .getInboxStoreConfig()
+                        .getDataEngineConfig(), "inbox_data"))
+                .setWalEngineConfigurator(
+                    buildWALEngineConf(config
+                        .getStateStoreConfig()
+                        .getInboxStoreConfig()
+                        .getWalEngineConfig(), "inbox_wal")))
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
@@ -317,12 +319,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             )
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(
-                    buildEngineConf(config
+                    buildDataEngineConf(config
                         .getStateStoreConfig()
                         .getRetainStoreConfig()
                         .getDataEngineConfig(), "retain_data"))
                 .setWalEngineConfigurator(
-                    buildEngineConf(config
+                    buildWALEngineConf(config
                         .getStateStoreConfig()
                         .getRetainStoreConfig()
                         .getWalEngineConfig(), "retain_wal")))
@@ -366,12 +368,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(
-                    buildEngineConf(config
+                    buildDataEngineConf(config
                         .getStateStoreConfig()
                         .getDistWorkerConfig()
                         .getDataEngineConfig(), "dist_data"))
                 .setWalEngineConfigurator(
-                    buildEngineConf(config
+                    buildWALEngineConf(config
                         .getStateStoreConfig()
                         .getDistWorkerConfig()
                         .getWalEngineConfig(), "dist_wal")))
