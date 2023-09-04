@@ -73,11 +73,10 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         void config(String name, MutableColumnFamilyOptionsInterface<ColumnFamilyOptions> targetOption);
     }
 
-    public class BaseDBOptionConfigurator implements DBOptionsConfigurator {
+    public static class BaseDBOptionConfigurator implements DBOptionsConfigurator {
         @Override
         public void config(DBOptionsInterface<DBOptions> targetOption) {
             targetOption.setEnv(Env.getDefault())
-                .setAtomicFlush(true)
                 .setCreateIfMissing(true)
                 .setCreateMissingColumnFamilies(true)
                 .setRecycleLogFileNum(10)
@@ -93,14 +92,16 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         public void config(MutableDBOptionsInterface<DBOptions> targetOption) {
             targetOption
                 .setMaxOpenFiles(256)
+                .setIncreaseParallelism(max(EnvProvider.INSTANCE.availableProcessors() / 4, 2))
                 .setMaxBackgroundJobs(max(EnvProvider.INSTANCE.availableProcessors() / 4, 2));
         }
     }
 
-    public class BaseCFOptionConfigurator implements CFOptionsConfigurator {
+    public static class BaseCFOptionConfigurator implements CFOptionsConfigurator {
         @Override
         public void config(String name, ColumnFamilyOptionsInterface<ColumnFamilyOptions> targetOption) {
-            targetOption.setMergeOperatorName("uint64add")
+            targetOption
+                .setMergeOperatorName("uint64add")
                 .setTableFormatConfig(
                     new BlockBasedTableConfig() //
                         // Begin to use partitioned index filters
@@ -122,25 +123,15 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                         .setBlockSize(4 * SizeUnit.KB)//
                         .setBlockCache(
                             gcable(new LRUCache(512 * SizeUnit.MB, 8))))
-                .optimizeLevelStyleCompaction()
-                .setCompactionStyle(CompactionStyle.LEVEL) //
-                // Flushing options:
-                // min_write_buffer_number_to_merge is the minimum number of mem_tables to be
-                // merged before flushing to storage. For example, if this option is set to 2,
-                // immutable mem_tables are only flushed when there are two of them - a single
-                // immutable mem_table will never be flushed.  If multiple mem_tables are merged
-                // together, less data may be written to storage since two updates are merged to
-                // a single key. However, every Get() must traverse all immutable mem_tables
-                // linearly to check if the key is there. Setting this option too high may hurt
-                // read performance.
-                .setMinWriteBufferNumberToMerge(2)
                 // https://github.com/facebook/rocksdb/pull/5744
-                .setForceConsistencyChecks(true);
+                .setForceConsistencyChecks(true)
+                .setCompactionStyle(CompactionStyle.LEVEL);
         }
 
         @Override
         public void config(String name, MutableColumnFamilyOptionsInterface<ColumnFamilyOptions> targetOption) {
             targetOption
+                .setCompressionType(CompressionType.LZ4_COMPRESSION)
                 // Flushing options:
                 // write_buffer_size sets the size of a single mem_table. Once mem_table exceeds
                 // this size, it is marked immutable and a new one is created.
@@ -158,8 +149,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // is max_bytes_for_level_multiplier larger than previous one. The default
                 // is 10 and we do not recommend changing that.
                 .setMaxBytesForLevelBase(128 * SizeUnit.MB)
-                .setCompressionType(CompressionType.LZ4_COMPRESSION)
-
                 // Below methods are defined in AdvancedMutableColumnFamilyOptionsInterface
 
                 // Level Style Compaction:
@@ -171,7 +160,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // number of database files, which is generally a good thing. We recommend setting
                 // target_file_size_base to be max_bytes_for_level_base / 10, so that there are
                 // 10 files in level 1.
-                .setTargetFileSizeBase(64 * SizeUnit.MB)
+                .setTargetFileSizeBase(128 * SizeUnit.MB)
                 // If prefix_extractor is set and memtable_prefix_bloom_size_ratio is not 0,
                 // create prefix bloom for memtable with the size of
                 // write_buffer_size * memtable_prefix_bloom_size_ratio.
@@ -189,6 +178,15 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // mem_tables is larger than max_write_buffer_number we stall further writes.
                 // This may happen if the flush process is slower than the write rate.
                 .setMaxWriteBufferNumber(4)
+                // Flushing options:
+                // min_write_buffer_number_to_merge is the minimum number of mem_tables to be
+                // merged before flushing to storage. For example, if this option is set to 2,
+                // immutable mem_tables are only flushed when there are two of them - a single
+                // immutable mem_table will never be flushed.  If multiple mem_tables are merged
+                // together, less data may be written to storage since two updates are merged to
+                // a single key. However, every Get() must traverse all immutable mem_tables
+                // linearly to check if the key is there. Setting this option too high may hurt
+                // read performance.
                 .setMinWriteBufferNumberToMerge(3);
         }
     }
@@ -202,7 +200,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     private String dbCheckpointRootDir;
     private boolean disableWAL = false;
 
-    private int compactMinTombstoneKeys = 50000;
+    private int compactMinTombstoneKeys = 500000;
 
     private double compactTombstonePercent = 0.3;
     private long gcIntervalInSec = 30;
@@ -222,6 +220,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         DBOptions targetOption = new DBOptions();
         dbOptionsConfigurator.config((DBOptionsInterface) targetOption);
         dbOptionsConfigurator.config((MutableDBOptionsInterface) targetOption);
+        targetOption.setAtomicFlush(disableWAL); // if wal enabled no need to atomic flush
         return targetOption;
     }
 
