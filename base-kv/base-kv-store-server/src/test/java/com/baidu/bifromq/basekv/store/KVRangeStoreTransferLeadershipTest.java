@@ -19,6 +19,7 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Listeners;
@@ -94,8 +95,12 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
         });
         await().ignoreExceptions().until(() -> {
             KVRangeSetting rangeSettings = cluster.kvRangeSetting(rangeId);
-            cluster.transferLeader(rangeSettings.leader, rangeSettings.ver, rangeId, rangeSettings.leader)
-                .toCompletableFuture().join();
+            try {
+                cluster.transferLeader(rangeSettings.leader, rangeSettings.ver, rangeId, rangeSettings.leader)
+                    .toCompletableFuture().join();
+            } catch (Throwable e) {
+                return e.getCause().getCause() instanceof LeaderTransferException.SelfTransferException;
+            }
             KVRangeSetting newRangeSettings = cluster.kvRangeSetting(rangeId);
             return newRangeSettings.leader.equals(rangeSettings.leader);
         });

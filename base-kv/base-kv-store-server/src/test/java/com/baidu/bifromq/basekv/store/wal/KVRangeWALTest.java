@@ -94,7 +94,7 @@ public class KVRangeWALTest {
         when(walStorageEngine.get(id)).thenReturn(raftStateStorage);
 
         KVRangeWAL wal = new KVRangeWAL("testcluster", id, walStorageEngine, config, 1024);
-        assertEquals(wal.id(), replicaId);
+        assertEquals(wal.storeId(), replicaId);
     }
 
     @SneakyThrows

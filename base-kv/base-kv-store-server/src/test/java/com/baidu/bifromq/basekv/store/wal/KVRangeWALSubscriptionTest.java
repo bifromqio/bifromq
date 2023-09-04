@@ -14,13 +14,13 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
@@ -38,13 +38,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.stubbing.Answer;
 
 @Slf4j
 public class KVRangeWALSubscriptionTest {
@@ -58,6 +58,7 @@ public class KVRangeWALSubscriptionTest {
 
     private ExecutorService executor;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -89,7 +90,7 @@ public class KVRangeWALSubscriptionTest {
             });
 
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         latch.await();
         verify(wal, times(2)).retrieveCommitted(0, maxSize);
@@ -108,7 +109,7 @@ public class KVRangeWALSubscriptionTest {
             });
 
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         latch.await();
         walSub.stop();
@@ -134,14 +135,16 @@ public class KVRangeWALSubscriptionTest {
             });
 
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         await().until(() -> retryCount.get() > 2);
         snapshotSource.onNext(new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString()));
         latch.await();
-        int c = retryCount.get();
-        Thread.sleep(100);
-        assertEquals(retryCount.get(), c);
+        await().until(() -> {
+            int c = retryCount.get();
+            Thread.sleep(100);
+            return retryCount.get() == c;
+        });
         verify(wal, atLeast(2)).retrieveCommitted(0, maxSize);
     }
 
@@ -165,7 +168,7 @@ public class KVRangeWALSubscriptionTest {
                 return CompletableFuture.completedFuture(null);
             });
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         latch.await();
         log.info("{}", applyCount.get());
@@ -194,7 +197,7 @@ public class KVRangeWALSubscriptionTest {
                 return applyLogFuture;
             });
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         latch.await();
         snapshotSource.onNext(new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString()));
@@ -222,7 +225,7 @@ public class KVRangeWALSubscriptionTest {
                 return CompletableFuture.completedFuture(null);
             });
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         await().until(() -> retryCount.get() > 2);
         snapshotSource.onNext(new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString()));
@@ -283,7 +286,7 @@ public class KVRangeWALSubscriptionTest {
                 return applyLogFuture1;
             });
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         latch.await();
         snapshotSource.onNext(new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString()));

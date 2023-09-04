@@ -33,12 +33,14 @@ import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.nio.ByteBuffer;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,8 +49,8 @@ class KVRangeWALStore implements IRaftStateStore {
     private static final StableListener DEFAULT_STABLE_LISTENER = stabledIndex -> {
     };
 
-    interface AppendCallback {
-        void onAppend(KVRangeId id, long lastIndex);
+    interface FlushNotifier {
+        void notifyFlush();
     }
 
     private final String storeId;
@@ -56,13 +58,13 @@ class KVRangeWALStore implements IRaftStateStore {
     private final IKVEngine kvEngine;
     private final int walKeyRangeId;
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
-    private final AppendCallback appendCallback;
+    private final FlushNotifier flushNotifier;
+    private final Deque<StabilizingIndex> stabilizingIndices = new ConcurrentLinkedDeque<>();
     private final AsyncRunner taskRunner;
     private long currentTerm = 0;
     private Voting currentVoting;
     private Snapshot latestSnapshot;
     private long lastIndex;
-    private long prevStabilizedIndex;
     private int logEntriesKeyInfix;
 
     private volatile StableListener stableListener = DEFAULT_STABLE_LISTENER;
@@ -71,13 +73,13 @@ class KVRangeWALStore implements IRaftStateStore {
     KVRangeWALStore(KVRangeId rangeId,
                     IKVEngine kvEngine,
                     int walKeyRangeId,
-                    AppendCallback appendCallback,
+                    FlushNotifier flushNotifier,
                     Executor bgMgmtExecutor) {
         this.rangeId = rangeId;
         this.kvEngine = kvEngine;
         this.storeId = kvEngine.id();
         this.walKeyRangeId = walKeyRangeId;
-        this.appendCallback = appendCallback;
+        this.flushNotifier = flushNotifier;
         this.taskRunner = new AsyncRunner(bgMgmtExecutor);
         load();
     }
@@ -96,7 +98,7 @@ class KVRangeWALStore implements IRaftStateStore {
     public void saveVoting(Voting voting) {
         trace("Save voting: {}", voting);
         kvEngine.put(walKeyRangeId, KVRangeWALKeys.currentVotingKey(rangeId), voting.toByteString());
-        kvEngine.flush();
+        flush();
         currentVoting = voting;
     }
 
@@ -110,7 +112,7 @@ class KVRangeWALStore implements IRaftStateStore {
         trace("Save term: {}", term);
         kvEngine.put(walKeyRangeId, KVRangeWALKeys.currentTermKey(rangeId),
             unsafeWrap(ByteBuffer.allocate(Long.BYTES).putLong(term).array()));
-        kvEngine.flush();
+        flush();
         currentTerm = term;
     }
 
@@ -163,7 +165,7 @@ class KVRangeWALStore implements IRaftStateStore {
                         kvEngine.delete(batchId, walKeyRangeId, it.key());
                     }
                     kvEngine.endBatch(batchId);
-                    kvEngine.flush();
+                    flush();
                 } catch (Throwable e) {
                     log.error("Unexpected error during truncating log: rangeId={}, storeId={}",
                         toShortString(rangeId), storeId, e);
@@ -179,7 +181,6 @@ class KVRangeWALStore implements IRaftStateStore {
             kvEngine.put(walKeyRangeId, KVRangeWALKeys.latestSnapshotKey(rangeId), snapshot.toByteString());
             latestSnapshot = snapshot;
             lastIndex = latestSnapshot.getIndex();
-            prevStabilizedIndex = lastIndex;
 
             // update and save logEntriesKeyInfix
             int lastLogEntriesKeyInfix = logEntriesKeyInfix;
@@ -189,26 +190,24 @@ class KVRangeWALStore implements IRaftStateStore {
 
             configEntryMap.clear();
 
-            Runnable truncateTask = () -> {
-                try {
-                    log.trace("Truncating all logs: rangeId={}, storeId={}", toShortString(rangeId), storeId);
-                    int batchId = kvEngine.startBatch();
-                    // clear entire logs
-                    kvEngine.clearSubRange(batchId, walKeyRangeId,
-                        KVRangeWALKeys.logEntriesKeyPrefixInfix(rangeId, 0),
-                        RangeUtil.upperBound(KVRangeWALKeys.logEntriesKeyPrefixInfix(rangeId, lastLogEntriesKeyInfix)));
-                    kvEngine.clearSubRange(batchId, walKeyRangeId,
-                        KVRangeWALKeys.configEntriesKeyPrefixInfix(rangeId, 0),
-                        RangeUtil.upperBound(
-                            KVRangeWALKeys.configEntriesKeyPrefixInfix(rangeId, lastLogEntriesKeyInfix)));
-                    kvEngine.endBatch(batchId);
-                    kvEngine.flush();
-                    log.debug("All logs of truncated: rangeId={}, storeId={}", toShortString(rangeId), storeId);
-                } catch (Throwable e) {
-                    log.error("Log truncation failed: rangeId={}, storeId={}", toShortString(rangeId), storeId, e);
-                }
-            };
-            taskRunner.add(truncateTask);
+            try {
+                log.trace("Truncating all logs: rangeId={}, storeId={}", toShortString(rangeId), storeId);
+                int batchId = kvEngine.startBatch();
+                // clear entire logs
+                kvEngine.clearSubRange(batchId, walKeyRangeId,
+                    KVRangeWALKeys.logEntriesKeyPrefixInfix(rangeId, 0),
+                    RangeUtil.upperBound(KVRangeWALKeys.logEntriesKeyPrefixInfix(rangeId, lastLogEntriesKeyInfix)));
+                kvEngine.clearSubRange(batchId, walKeyRangeId,
+                    KVRangeWALKeys.configEntriesKeyPrefixInfix(rangeId, 0),
+                    RangeUtil.upperBound(
+                        KVRangeWALKeys.configEntriesKeyPrefixInfix(rangeId, lastLogEntriesKeyInfix)));
+                kvEngine.endBatch(batchId);
+                flush();
+                log.debug("All logs of truncated: rangeId={}, storeId={}", toShortString(rangeId), storeId);
+                // all previous index is stable after flush
+            } catch (Throwable e) {
+                log.error("Log truncation failed: rangeId={}, storeId={}", toShortString(rangeId), storeId, e);
+            }
         }
     }
 
@@ -287,20 +286,22 @@ class KVRangeWALStore implements IRaftStateStore {
                 kvEngine.put(batchId, walKeyRangeId,
                     KVRangeWALKeys.configEntriesKey(rangeId, logEntriesKeyInfix, entry.getIndex()),
                     KVUtil.toByteString(entry.getIndex()));
+                // force flush if log entry contains config
+                flush = true;
             }
-            trace("Append log entry[index={}, term={}, type={}]",
-                entry.getIndex(), entry.getTerm(), entry.getTypeCase().name());
+            trace("Append log entry[index={}, term={}, type={}], flush? {}",
+                entry.getIndex(), entry.getTerm(), entry.getTypeCase().name(), flush);
             kvEngine.put(batchId, walKeyRangeId,
                 KVRangeWALKeys.logEntryKey(rangeId, logEntriesKeyInfix, entry.getIndex()),
                 entry.toByteString());
         }
         kvEngine.endBatch(batchId);
         lastIndex = entries.get(entries.size() - 1).getIndex();
+        stabilizingIndices.add(new StabilizingIndex(lastIndex));
         if (flush) {
-            kvEngine.flush();
-            onStable(lastIndex);
+            flush();
         } else {
-            appendCallback.onAppend(rangeId, lastIndex);
+            flushNotifier.notifyFlush();
         }
     }
 
@@ -323,12 +324,26 @@ class KVRangeWALStore implements IRaftStateStore {
         kvEngine.unregisterKeyRange(walKeyRangeId);
     }
 
-    public void onStable(long stabledIndex) {
-        if (prevStabilizedIndex < stabledIndex) {
-            trace("Log entries before index[{}] stabilized", stabledIndex);
-            stableListener.onStabilized(stabledIndex);
-            prevStabilizedIndex = stabledIndex;
+    public void onStable(long flushTime) {
+        StabilizingIndex stabilizingIndex;
+        while ((stabilizingIndex = stabilizingIndices.poll()) != null) {
+            if (stabilizingIndex.ts < flushTime) {
+                stableListener.onStabilized(stabilizingIndex.index);
+            } else {
+                // add it back to queue
+                stabilizingIndices.addLast(stabilizingIndex);
+                break;
+            }
         }
+        if (!stabilizingIndices.isEmpty()) {
+            flushNotifier.notifyFlush();
+        }
+    }
+
+    private void flush() {
+        long flushTime = System.nanoTime();
+        kvEngine.flush();
+        onStable(flushTime);
     }
 
     private void load() {
@@ -459,6 +474,15 @@ class KVRangeWALStore implements IRaftStateStore {
     private void trace(String msg, Object... args) {
         if (log.isTraceEnabled()) {
             log.trace(msg, args);
+        }
+    }
+
+    private static class StabilizingIndex {
+        final long ts = System.nanoTime();
+        final long index;
+
+        private StabilizingIndex(long index) {
+            this.index = index;
         }
     }
 }

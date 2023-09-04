@@ -36,17 +36,16 @@ import lombok.experimental.Accessors;
 public class KVRangeStoreOptions {
     private String overrideIdentity;
     private KVRangeOptions kvRangeOptions = new KVRangeOptions();
-    private int walFlushBufferSize = 1024;
     private int statsCollectIntervalSec = 5;
 
-    private KVEngineConfigurator dataEngineConfigurator = new RocksDBKVEngineConfigurator()
+    private KVEngineConfigurator<?> dataEngineConfigurator = new RocksDBKVEngineConfigurator()
         .setDisableWAL(true) // data engine no need extra wal
         .setDbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
             ProcessUtil.processId(), "data").toString())
         .setDbCheckpointRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekvcp",
             ProcessUtil.processId(), "data").toString());
 
-    private KVEngineConfigurator walEngineConfigurator = new RocksDBKVEngineConfigurator()
+    private KVEngineConfigurator<?> walEngineConfigurator = new RocksDBKVEngineConfigurator()
         .setDbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
             ProcessUtil.processId(), "wal").toString())
         .setDbCheckpointRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekvcp",

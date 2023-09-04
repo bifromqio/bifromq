@@ -16,12 +16,14 @@ package com.baidu.bifromq.basekv.store.wal;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,13 +38,13 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final AtomicBoolean fetching = new AtomicBoolean();
     private final AtomicBoolean stopped = new AtomicBoolean();
-    private volatile long lastFetchedIdx;
-    private volatile long commitIdx = -1;
+    private final AtomicLong lastFetchedIdx = new AtomicLong();
+    private final AtomicLong commitIdx = new AtomicLong(-1);
 
     KVRangeWALSubscription(long maxFetchBytes,
                            IKVRangeWAL wal,
                            Observable<Long> commitIndex,
-                           long startIndex,
+                           long lastFetchedIndex,
                            IKVRangeWALSubscriber subscriber,
                            Executor executor) {
         this.maxFetchBytes = maxFetchBytes;
@@ -51,23 +53,29 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
         this.fetchRunner = new AsyncRunner(executor);
         this.applyRunner = new AsyncRunner(executor);
         this.subscriber = subscriber;
-        this.lastFetchedIdx = startIndex - 1;
+        this.lastFetchedIdx.set(lastFetchedIndex);
         this.subscriber.onSubscribe(this);
         disposables.add(wal.snapshotInstallTask()
             .subscribe(task -> fetchRunner.add(() -> {
                 try {
                     KVRangeSnapshot snap = KVRangeSnapshot.parseFrom(task.snapshot);
-                    lastFetchedIdx = snap.getLastAppliedIndex();
-                    commitIdx = -1;
                     applyRunner.cancelAll();
-                    applyRunner.add(applySnapshot(snap, task.onDone));
+                    applyRunner.add(installSnapshot(snap, task.onDone))
+                        .thenAccept(v -> {
+                            log.debug(
+                                "Snapshot installed: range={}, ver={}, state={}, checkpoint={}, lastAppliedIndex={}",
+                                KVRangeIdUtil.toString(snap.getId()),
+                                snap.getVer(), snap.getState(), snap.getCheckpointId(), snap.getLastAppliedIndex());
+                            lastFetchedIdx.set(snap.getLastAppliedIndex());
+                            commitIdx.set(-1);
+                        });
                 } catch (InvalidProtocolBufferException e) {
                     task.onDone.completeExceptionally(e);
                 }
             })));
         disposables.add(commitIndex
             .subscribe(c -> fetchRunner.add(() -> {
-                commitIdx = c;
+                commitIdx.set(c);
                 scheduleFetchWAL();
             })));
     }
@@ -90,11 +98,11 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
     }
 
     private CompletableFuture<Void> fetchWAL() {
-        if (lastFetchedIdx < commitIdx) {
-            return wal.retrieveCommitted(lastFetchedIdx + 1, maxFetchBytes)
+        if (lastFetchedIdx.get() < commitIdx.get()) {
+            return wal.retrieveCommitted(lastFetchedIdx.get() + 1, maxFetchBytes)
                 .handleAsync((logEntries, e) -> {
                     if (e != null) {
-                        log.error("Failed to retrieve log from wal", e);
+                        log.error("Failed to retrieve log from wal from index[{}]", lastFetchedIdx.get() + 1, e);
                         fetching.set(false);
                         scheduleFetchWAL();
                     } else {
@@ -106,10 +114,10 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
                                 applyRunner.add(applyLog(entry));
                             }
                             if (entry != null) {
-                                lastFetchedIdx = entry.getIndex();
+                                lastFetchedIdx.set(Math.max(entry.getIndex(), lastFetchedIdx.get()));
                             }
                             fetching.set(false);
-                            if (lastFetchedIdx < commitIdx) {
+                            if (lastFetchedIdx.get() < commitIdx.get()) {
                                 scheduleFetchWAL();
                             }
                         });
@@ -118,7 +126,7 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
                 }, executor);
         } else {
             fetching.set(false);
-            if (lastFetchedIdx < commitIdx) {
+            if (lastFetchedIdx.get() < commitIdx.get()) {
                 scheduleFetchWAL();
             }
             return CompletableFuture.completedFuture(null);
@@ -128,9 +136,6 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
     private Supplier<CompletableFuture<Void>> applyLog(LogEntry logEntry) {
         return () -> {
             CompletableFuture<Void> onDone = new CompletableFuture<>();
-            if (onDone.isCancelled()) {
-                return CompletableFuture.completedFuture(null);
-            }
             CompletableFuture<Void> applyFuture = subscriber.apply(logEntry);
             onDone.whenComplete((v, e) -> {
                 if (onDone.isCancelled()) {
@@ -151,7 +156,8 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
         };
     }
 
-    private Supplier<CompletableFuture<Void>> applySnapshot(KVRangeSnapshot snapshot, CompletableFuture<Void> onDone) {
+    private Supplier<CompletableFuture<Void>> installSnapshot(KVRangeSnapshot snapshot,
+                                                              CompletableFuture<Void> onDone) {
         return () -> {
             if (onDone.isCancelled()) {
                 return CompletableFuture.completedFuture(null);
