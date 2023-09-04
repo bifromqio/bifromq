@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
@@ -41,7 +42,9 @@ public interface IKVRangeWAL {
         public final CompletableFuture<Void> onDone = new CompletableFuture<>();
     }
 
-    String id();
+    String storeId();
+
+    KVRangeId rangeId();
 
     boolean isLeader();
 
@@ -57,13 +60,13 @@ public interface IKVRangeWAL {
 
     KVRangeSnapshot latestSnapshot();
 
-    CompletableFuture<Void> propose(KVRangeCommand command);
+    CompletableFuture<Long> propose(KVRangeCommand command);
 
     Observable<Map<String, RaftNodeSyncState>> replicationStatus();
 
-    IKVRangeWALSubscription subscribe(long startIndex, IKVRangeWALSubscriber subscriber, Executor executor);
+    IKVRangeWALSubscription subscribe(long lastFetchedIndex, IKVRangeWALSubscriber subscriber, Executor executor);
 
-    CompletableFuture<LogEntry> once(long startIndex, Predicate<LogEntry> condition, Executor executor);
+    CompletableFuture<LogEntry> once(long lastFetchedIndex, Predicate<LogEntry> condition, Executor executor);
 
     Observable<Long> commitIndex();
 

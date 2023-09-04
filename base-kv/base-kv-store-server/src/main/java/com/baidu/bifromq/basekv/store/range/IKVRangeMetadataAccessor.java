@@ -17,7 +17,7 @@ import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.proto.State;
 import io.reactivex.rxjava3.core.Observable;
 
-interface IKVRangeMetadataAccessor {
+public interface IKVRangeMetadataAccessor {
     long version();
 
     State state();

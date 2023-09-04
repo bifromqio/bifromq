@@ -77,6 +77,7 @@ class KVRangeDumpSession {
                 .build());
             executor.execute(() -> doneSignal.complete(null));
         } else if (!accessor.hasCheckpoint(request.getSnapshot())) {
+            log.warn("No checkpoint found for snapshot: {}", request.getSnapshot());
             messenger.send(KVRangeMessage.newBuilder()
                 .setRangeId(request.getSnapshot().getId())
                 .setHostStoreId(peerStoreId)
@@ -119,6 +120,7 @@ class KVRangeDumpSession {
     void tick() {
         long elapseNanos = Duration.ofNanos(System.nanoTime() - lastReplyTS).toNanos();
         if (maxIdleDuration.toNanos() < elapseNanos) {
+            log.warn("Cancel the idle dump session: {}", request.getSessionId());
             cancel();
         } else if (maxIdleDuration.toNanos() / 2 < elapseNanos) {
             runner.add(() -> {
@@ -204,6 +206,7 @@ class KVRangeDumpSession {
                         break;
                     }
                 } else {
+                    log.warn("DumpSession has been canceled: {}", request.getSessionId());
                     reqBuilder.clearKv();
                     reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.Error);
                     break;

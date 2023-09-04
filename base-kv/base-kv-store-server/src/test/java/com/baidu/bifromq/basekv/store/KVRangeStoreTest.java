@@ -483,6 +483,7 @@ public class KVRangeStoreTest {
             storeDescriptor.getRangesList().get(0) : storeDescriptor.getRangesList().get(1);
         KVRangeDescriptor mergee = storeDescriptor.getRangesList().get(1).getId().equals(id) ?
             storeDescriptor.getRangesList().get(0) : storeDescriptor.getRangesList().get(1);
+        log.info("Start Merging");
         rangeStore.merge(merger.getVer(), merger.getId(), mergee.getId()).toCompletableFuture().join();
         KVRangeDescriptor mergeeDesc = await().atMost(Duration.ofSeconds(10000)).until(() ->
                 rangeStore.describe()

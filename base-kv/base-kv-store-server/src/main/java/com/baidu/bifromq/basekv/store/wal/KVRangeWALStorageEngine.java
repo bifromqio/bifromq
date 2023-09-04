@@ -30,17 +30,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,10 +44,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.atomic.LongAdder;
 import javax.annotation.concurrent.NotThreadSafe;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -61,32 +54,19 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     private static final int CF_NUM = 100;
-    private final ConcurrentLinkedQueue<StabilizingIndex> stabilizingQueue = new ConcurrentLinkedQueue<>();
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final Map<KVRangeId, KVRangeWALStore> instances = Maps.newConcurrentMap();
-    private final Map<KVRangeId, Long> stabilizingRanges = new HashMap<>();
-    private final int flushBufferSize;
-    private final LongAdder queuingCount = new LongAdder();
     private final ExecutorService flushExecutor;
     private final AtomicBoolean flushing = new AtomicBoolean();
     private final IKVEngine kvEngine;
-    private final MetricManager metricMgr;
-
     private ScheduledExecutorService bgTaskExecutor;
 
-    public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, int flushBufferSize,
-                                   KVEngineConfigurator<?> configurator) {
-        this.flushBufferSize = flushBufferSize;
-        kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
-        flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("wal-flusher")),
-            "basekv[" + kvEngine.id() + "]-wal-flusher");
-        metricMgr = new MetricManager(clusterId, kvEngine.id());
-    }
-
     public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, KVEngineConfigurator<?> configurator) {
-        this(clusterId, overrideIdentity, 1024, configurator);
+        kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
+        flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("wal-flusher")),
+            "basekv[" + kvEngine.id() + "]-wal-flusher", Tags.of("clusterId", clusterId));
     }
 
     @Override
@@ -97,7 +77,6 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
                 instances.values().forEach(KVRangeWALStore::stop);
                 kvEngine.stop();
                 MoreExecutors.shutdownAndAwaitTermination(flushExecutor, 5, TimeUnit.SECONDS);
-                metricMgr.close();
                 state.set(State.STOPPED);
             } catch (Throwable e) {
                 log.warn("Failed to stop wal engine", e);
@@ -142,9 +121,9 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
             int keyRangeId = kvEngine.registerKeyRange(ns, KVRangeWALKeys.walStartKey(kvRangeId),
                 KVRangeWALKeys.walEndKey(kvRangeId));
             kvEngine.put(keyRangeId, KVRangeWALKeys.latestSnapshotKey(kvRangeId), initSnapshot.toByteString());
-            return new KVRangeWALStore(kvRangeId, kvEngine, keyRangeId, this::onAppend, bgTaskExecutor);
+            return new KVRangeWALStore(kvRangeId, kvEngine, keyRangeId, this::scheduleFlush, bgTaskExecutor);
         });
-        kvEngine.flush();
+        flush();
         return instances.get(kvRangeId);
     }
 
@@ -182,12 +161,6 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         });
     }
 
-    private void onAppend(KVRangeId kvRangeId, long stabilizingIndex) {
-        stabilizingQueue.add(new StabilizingIndex(kvRangeId, stabilizingIndex));
-        queuingCount.increment();
-        scheduleFlush();
-    }
-
     private void checkState() {
         Preconditions.checkState(state.get() == State.STARTED, "Not started");
     }
@@ -219,7 +192,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
                     instances.put(kvRangeId, new KVRangeWALStore(kvRangeId,
                         kvEngine,
                         walKeyRangeId,
-                        this::onAppend,
+                        this::scheduleFlush,
                         bgTaskExecutor));
                     log.debug("WAL loaded: kvRangeId={}", toShortString(kvRangeId));
                     it.seek(KVRangeWALKeys.walEndKey(kvRangeId));
@@ -233,59 +206,18 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     }
 
     private void flush() {
-        StabilizingIndex sIdx;
-        int i = 0;
-        while (i++ < flushBufferSize && (sIdx = stabilizingQueue.poll()) != null) {
-            stabilizingRanges.put(sIdx.id, sIdx.index);
-        }
-        queuingCount.add(-i);
-        metricMgr.flushBatchSummary.record(i);
         try {
+            long flushTime = System.nanoTime();
             kvEngine.flush();
-            stabilizingRanges.forEach((id, idx) -> {
-                KVRangeWALStore stateStorage = instances.get(id);
-                if (stateStorage != null) {
-                    stateStorage.onStable(idx);
-                }
-            });
-            stabilizingRanges.clear();
+            flushing.set(false);
+            instances.values().forEach(stateStore -> stateStore.onStable(flushTime));
         } catch (Throwable e) {
             log.error("Unexpected error during flushing", e);
-        }
-        flushing.set(false);
-        if (!stabilizingQueue.isEmpty()) {
-            scheduleFlush();
+            flushing.set(false);
         }
     }
 
     private enum State {
         INIT, STARTING, STARTED, STOPPING, STOPPED, TERMINATED
-    }
-
-    @NoArgsConstructor
-    @AllArgsConstructor
-    private static class StabilizingIndex {
-        KVRangeId id;
-        long index;
-    }
-
-    private class MetricManager {
-        private final Gauge flushBufferGauge;
-        private final DistributionSummary flushBatchSummary;
-
-        MetricManager(String clusterId, String id) {
-            Tags tags = Tags.of("clusterId", clusterId).and("storeId", id);
-            flushBufferGauge = Gauge.builder("basekv.engine.wal.flushbuffer", queuingCount::intValue)
-                .tags(tags).register(Metrics.globalRegistry);
-            flushBatchSummary = DistributionSummary.builder("basekv.engine.wal.flushbatch")
-                .tags(tags)
-                .baseUnit("indexes")
-                .register(Metrics.globalRegistry);
-        }
-
-        void close() {
-            Metrics.globalRegistry.remove(flushBufferGauge);
-            Metrics.globalRegistry.remove(flushBatchSummary);
-        }
     }
 }

@@ -26,7 +26,6 @@ import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
-
 import java.lang.reflect.Method;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -47,12 +46,12 @@ public abstract class KVRangeStoreClusterTestTemplate {
         }
         if (cluster != null) {
             Preconditions.checkArgument(cluster.initNodes() > 0,
-                    "Init nodes number must be greater than zero");
+                "Init nodes number must be greater than zero");
             initNodes = cluster.initNodes();
             KVRangeOptions rangeOptions = new KVRangeOptions();
             rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig().setAsyncAppend(cluster.asyncAppend()));
             rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig()
-                    .setInstallSnapshotTimeoutTick(cluster.installSnapshotTimeoutTick()));
+                .setInstallSnapshotTimeoutTick(cluster.installSnapshotTimeoutTick()));
             options.setKvRangeOptions(rangeOptions);
         } else {
             initNodes = 3;
@@ -76,17 +75,19 @@ public abstract class KVRangeStoreClusterTestTemplate {
             log.info("Preparing replica config for testing");
             await().ignoreExceptions().forever().until(() -> {
                 KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
+                String leader = setting.leader;
                 if (setting.allReplicas.containsAll(voters)) {
                     return true;
                 }
-                cluster.changeReplicaConfig(store0, setting.ver, rangeId, voters, Sets.newHashSet())
+                cluster.changeReplicaConfig(leader, setting.ver, rangeId, voters, Sets.newHashSet())
                     .toCompletableFuture().join();
                 setting = cluster.kvRangeSetting(rangeId);
                 log.info("Config change succeed: {}, {}, {}", setting, voters, setting.allReplicas.containsAll(voters));
                 return setting.allReplicas.containsAll(voters);
             });
             cluster.awaitAllKVRangeReady(rangeId, voters.size() == 1 ? 0 : 2, 5000);
-            log.info("KVRange ready in {}ms: kvRangeId={}", System.currentTimeMillis() - start, toShortString(rangeId));
+            log.info("KVRange[{}] ready in {}ms start testing", toShortString(rangeId),
+                System.currentTimeMillis() - start);
         } catch (Throwable e) {
             log.error("Failed to setup test cluster", e);
             fail();

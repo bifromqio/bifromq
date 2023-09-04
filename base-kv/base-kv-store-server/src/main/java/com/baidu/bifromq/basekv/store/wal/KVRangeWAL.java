@@ -87,8 +87,13 @@ public class KVRangeWAL implements IKVRangeWAL {
     }
 
     @Override
-    public String id() {
+    public String storeId() {
         return localId;
+    }
+
+    @Override
+    public KVRangeId rangeId() {
+        return rangeId;
     }
 
     @Override
@@ -131,15 +136,17 @@ public class KVRangeWAL implements IKVRangeWAL {
     }
 
     @Override
-    public IKVRangeWALSubscription subscribe(long startIndex, IKVRangeWALSubscriber subscriber, Executor executor) {
-        return new KVRangeWALSubscription(maxFetchBytes, this, commitIndexSubject, startIndex, subscriber, executor);
+    public IKVRangeWALSubscription subscribe(long lastFetchedIndex, IKVRangeWALSubscriber subscriber,
+                                             Executor executor) {
+        return new KVRangeWALSubscription(maxFetchBytes, this,
+            commitIndexSubject, lastFetchedIndex, subscriber, executor);
     }
 
     @Override
-    public CompletableFuture<LogEntry> once(long startIndex, Predicate<LogEntry> condition, Executor executor) {
+    public CompletableFuture<LogEntry> once(long lastFetchedIndex, Predicate<LogEntry> condition, Executor executor) {
         CompletableFuture<LogEntry> onDone = new CompletableFuture<>();
         KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxFetchBytes, this, commitIndexSubject, startIndex,
+            new KVRangeWALSubscription(maxFetchBytes, this, commitIndexSubject, lastFetchedIndex,
                 new IKVRangeWALSubscriber() {
                     @Override
                     public CompletableFuture<Void> apply(LogEntry log) {
@@ -163,8 +170,7 @@ public class KVRangeWAL implements IKVRangeWAL {
     }
 
     @Override
-    public CompletableFuture<Void> propose(KVRangeCommand command) {
-        log.trace("Propose KVRange Command[command={}]", command);
+    public CompletableFuture<Long> propose(KVRangeCommand command) {
         return raftNode.propose(command.toByteString());
     }
 
@@ -270,21 +276,11 @@ public class KVRangeWAL implements IKVRangeWAL {
 
     void onRaftEvent(RaftEvent event) {
         switch (event.type) {
-            case COMMIT:
-                commitIndexSubject.onNext(((CommitEvent) event).index);
-                break;
-            case ELECTION:
-                electionPublisher.onNext((ElectionEvent) event);
-                break;
-            case STATUS_CHANGED:
-                statusPublisher.onNext(((StatusChangedEvent) event).status);
-                break;
-            case SNAPSHOT_RESTORED:
-                snapRestoreEventPublisher.onNext((SnapshotRestoredEvent) event);
-                break;
-            case SYNC_STATE_CHANGED:
-                syncStatePublisher.onNext(((SyncStateChangedEvent) event).states);
-                break;
+            case COMMIT -> commitIndexSubject.onNext(((CommitEvent) event).index);
+            case ELECTION -> electionPublisher.onNext((ElectionEvent) event);
+            case STATUS_CHANGED -> statusPublisher.onNext(((StatusChangedEvent) event).status);
+            case SNAPSHOT_RESTORED -> snapRestoreEventPublisher.onNext((SnapshotRestoredEvent) event);
+            case SYNC_STATE_CHANGED -> syncStatePublisher.onNext(((SyncStateChangedEvent) event).states);
         }
     }
 

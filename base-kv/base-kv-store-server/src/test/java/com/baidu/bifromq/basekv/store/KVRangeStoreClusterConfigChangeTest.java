@@ -21,7 +21,6 @@ import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -36,19 +35,25 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void removeNonLeaderReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting setting = await().until(() -> cluster.kvRangeSetting(rangeId), Objects::nonNull);
-        String leaderStore = setting.leader;
-        String remainStore = nonLeaderStore(setting);
-
+        KVRangeSetting setting = await().until(() -> cluster.kvRangeSetting(rangeId), obj ->
+            obj != null && obj.allReplicas.size() == 3);
+        log.info("Start to change config");
         await().ignoreExceptions().until(() -> {
             KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
+            String remainStore = nonLeaderStore(setting);
             if (newSetting.allReplicas.size() == 2) {
                 return true;
             }
-            cluster.changeReplicaConfig(remainStore, newSetting.ver, rangeId, Sets.newHashSet(leaderStore, remainStore),
-                emptySet()).toCompletableFuture().join();
-            newSetting = cluster.kvRangeSetting(rangeId);
-            return newSetting.allReplicas.size() == 2;
+            try {
+                cluster.changeReplicaConfig(remainStore, newSetting.ver, rangeId,
+                        Sets.newHashSet(setting.followers), emptySet())
+                    .toCompletableFuture().join();
+                newSetting = cluster.kvRangeSetting(rangeId);
+                return newSetting.allReplicas.size() == 2;
+            } catch (Throwable e) {
+                log.info("Change config failed", e);
+                return false;
+            }
         });
     }
 
@@ -155,20 +160,18 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         remainStores.remove(leaderStore);
         log.info("Remain: {}", remainStores);
 
-        await().atMost(Duration.ofSeconds(30))
-            .ignoreExceptions()
-            .until(() -> {
-                KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
-                if (newSetting.allReplicas.size() == 2 &&
-                    !newSetting.allReplicas.contains(leaderStore)) {
-                    return true;
-                }
-                cluster.changeReplicaConfig(remainStores.get(0), newSetting.ver, rangeId, Sets.newHashSet(remainStores),
-                    emptySet()).toCompletableFuture().join();
-                newSetting = cluster.kvRangeSetting(rangeId);
-                return newSetting.allReplicas.size() == 2 &&
-                    !newSetting.allReplicas.contains(leaderStore);
-            });
+        await().ignoreExceptions().until(() -> {
+            KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
+            if (newSetting.allReplicas.size() == 2 &&
+                !newSetting.allReplicas.contains(leaderStore)) {
+                return true;
+            }
+            cluster.changeReplicaConfig(remainStores.get(0), newSetting.ver, rangeId, Sets.newHashSet(remainStores),
+                emptySet()).toCompletableFuture().join();
+            newSetting = cluster.kvRangeSetting(rangeId);
+            return newSetting.allReplicas.size() == 2 &&
+                !newSetting.allReplicas.contains(leaderStore);
+        });
     }
 
     @Cluster(initNodes = 1)
@@ -178,7 +181,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         String newStore = cluster.addStore();
         log.info("add replica {}", newStore);
 
-        await().atMost(Duration.ofSeconds(60)).ignoreExceptions().until(() -> {
+        await().ignoreExceptions().until(() -> {
             KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
             if (setting.allReplicas.size() == 2) {
                 return true;
@@ -241,7 +244,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         Set<String> newReplicas = Sets.newHashSet(newStore1, newStore2, newStore3);
 
         log.info("Current config: {}", rangeSettings.allReplicas);
-        await().ignoreExceptions().atMost(Duration.ofSeconds(30)).until(() -> {
+        await().ignoreExceptions().until(() -> {
             KVRangeSetting newSettings = cluster.kvRangeSetting(rangeId);
             if (newReplicas.containsAll(newSettings.allReplicas)) {
                 return true;
