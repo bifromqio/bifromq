@@ -262,21 +262,19 @@ class RaftConfigChanger {
     protected Set<String> remotePeers() {
         Set<String> all = new HashSet<>();
         switch (state) {
-            case Waiting:
+            case Waiting -> {
                 ClusterConfig clusterConfig = stateStorage.latestClusterConfig();
                 all.addAll(clusterConfig.getVotersList());
                 all.addAll(clusterConfig.getLearnersList());
                 all.remove(stateStorage.local());
-                break;
-            case CatchingUp:
-            case JointConfigCommitting:
-            case TargetConfigCommitting:
+            }
+            case CatchingUp, JointConfigCommitting, TargetConfigCommitting -> {
                 all.addAll(jointConfig.getVotersList());
                 all.addAll(jointConfig.getLearnersList());
                 all.addAll(jointConfig.getNextVotersList());
                 all.addAll(jointConfig.getNextLearnersList());
                 all.remove(stateStorage.local());
-                break;
+            }
         }
         return all;
     }
@@ -291,15 +289,12 @@ class RaftConfigChanger {
     public void abort() {
         assert state != Abort;
         switch (state) {
-            case Waiting:
-                state = Abort;
-                return;
-            case CatchingUp:
-            case TargetConfigCommitting:
-            case JointConfigCommitting:
+            case Waiting -> state = Abort;
+            case CatchingUp, TargetConfigCommitting, JointConfigCommitting -> {
                 logger.logDebug("Abort on-going cluster config change");
                 state = Abort;
                 onDone.completeExceptionally(ClusterConfigChangeException.leaderStepDown());
+            }
         }
     }
 

@@ -88,6 +88,7 @@ message ProposeReply {
   }
   uint32 id = 1;
   Code code = 2;
+  uint64 logIndex = 3;
 }
 
 message TimeoutNow {

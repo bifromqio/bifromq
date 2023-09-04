@@ -115,7 +115,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
     }
 
     @Override
-    void propose(ByteString fsmCmd, CompletableFuture<Void> onDone) {
+    void propose(ByteString fsmCmd, CompletableFuture<Long> onDone) {
         onDone.completeExceptionally(DropProposalException.NoLeader());
     }
 

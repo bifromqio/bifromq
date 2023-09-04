@@ -76,7 +76,7 @@ public interface IRaftNode {
      * @param appCommand
      * @return
      */
-    CompletableFuture<Void> propose(ByteString appCommand);
+    CompletableFuture<Long> propose(ByteString appCommand);
 
     /**
      * Request an index for safely linearizable read. NOTE: The returned will be completed by raft execution thread.

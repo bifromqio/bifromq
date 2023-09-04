@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.raft;
 
+import static com.baidu.bifromq.basekv.raft.exception.DropProposalException.superseded;
+
 import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
 import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
@@ -55,7 +57,7 @@ class RaftNodeStateFollower extends RaftNodeState {
     private final LinkedHashMap<Long, Set<Integer>> tickToReadRequestsMap;
     private final Map<Integer, CompletableFuture<Long>> idToReadRequestMap;
     private final LinkedHashMap<Long, Set<Integer>> tickToForwardedProposesMap;
-    private final Map<Integer, CompletableFuture<Void>> idToForwardedProposeMap;
+    private final Map<Integer, CompletableFuture<Long>> idToForwardedProposeMap;
     private int randomElectionTimeoutTick;
     private long currentTick;
     private int electionElapsedTick;
@@ -170,7 +172,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                 // pending elapsed ticks exceed two times heartbeatTimeout, doing cleanup
                 it.remove();
                 entry.getValue().forEach(pendingProposalId -> {
-                    CompletableFuture<Void> pendingOnDone = idToForwardedProposeMap.remove(pendingProposalId);
+                    CompletableFuture<Long> pendingOnDone = idToForwardedProposeMap.remove(pendingProposalId);
                     if (pendingOnDone != null && !pendingOnDone.isDone()) {
                         // if not finished by proposeReply then abort it
                         logDebug("Aborted forwarded timed-out Propose request[{}]", pendingProposalId);
@@ -203,7 +205,7 @@ class RaftNodeStateFollower extends RaftNodeState {
     }
 
     @Override
-    void propose(ByteString fsmCmd, CompletableFuture<Void> onDone) {
+    void propose(ByteString fsmCmd, CompletableFuture<Long> onDone) {
         if (config.isDisableForwardProposal()) {
             logDebug("Forward proposal to leader is disabled");
             onDone.completeExceptionally(DropProposalException.leaderForwardDisabled());
@@ -308,7 +310,6 @@ class RaftNodeStateFollower extends RaftNodeState {
             switch (message.getMessageTypeCase()) {
                 case REQUESTPREVOTE:
                     if (!inLease()) {
-                        logDebug("Answering pre-vote request from peer[{}]", fromPeer);
                         handlePreVote(fromPeer, message.getTerm(), message.getRequestPreVote());
                     } else {
                         sendRequestPreVoteReply(fromPeer, message.getTerm(), false);
@@ -428,7 +429,14 @@ class RaftNodeStateFollower extends RaftNodeState {
                             .build())
                     .build();
                 notifySnapshotRestored();
-                notifyCommit();
+                abortPendingRequests();
+                // Abort all uncommitted proposals inherited from previous leader state, since they may be superseded by snapshot
+                for (Iterator<Map.Entry<Long, ProposeTask>> it = uncommittedProposals.entrySet().iterator();
+                     it.hasNext(); ) {
+                    Map.Entry<Long, ProposeTask> entry = it.next();
+                    entry.getValue().future.completeExceptionally(superseded());
+                    it.remove();
+                }
             } catch (Throwable e) {
                 logError("Failed to apply snapshot[index:{}, term:{}]", snapshot.getIndex(), snapshot.getTerm(), e);
                 reply = RaftMessage.newBuilder()
@@ -477,30 +485,23 @@ class RaftNodeStateFollower extends RaftNodeState {
             if (appendEntries.getEntriesCount() > 0) {
                 // prevLogEntry match, filter out duplicated append entries requests
                 long newLastIndex = appendEntries.getEntries(appendEntries.getEntriesCount() - 1).getIndex();
-                if (newLastIndex > stateStorage.lastIndex()) {
-                    logDebug("Append {} entries after entry[index:{},term:{}]",
-                        appendEntries.getEntriesCount(),
-                        appendEntries.getPrevLogIndex(),
-                        appendEntries.getPrevLogTerm());
-                    stabilizingIndexes.compute(newLastIndex, (k, v) -> {
-                        if (v == null) {
-                            v = new StabilizingTask();
-                        }
-                        v.pendingReplyCount++;
-                        v.readIndex = appendEntries.getReadIndex();
-                        return v;
-                    });
-
-                    // to handle duplicated appendEntries requests
-                    stateStorage.append(appendEntries.getEntriesList(), !config.isAsyncAppend());
-                } else {
-                    logDebug("Drop duplicated {} entries[prevLogIndex={}, prefLogTerm={}] from leader[{}]",
-                        appendEntries.getEntriesCount(),
-                        appendEntries.getPrevLogIndex(),
-                        appendEntries.getPrevLogTerm(),
-                        fromLeader);
-                }
+                logDebug("Append {} entries after entry[index:{},term:{}]",
+                    appendEntries.getEntriesCount(),
+                    appendEntries.getPrevLogIndex(),
+                    appendEntries.getPrevLogTerm());
+                stabilizingIndexes.compute(newLastIndex, (k, v) -> {
+                    if (v == null) {
+                        v = new StabilizingTask();
+                    }
+                    v.pendingReplyCount++;
+                    v.readIndex = appendEntries.getReadIndex();
+                    return v;
+                });
+                // the higher index tasks are obsolete
+                stabilizingIndexes.tailMap(newLastIndex, false).clear();
+                stateStorage.append(appendEntries.getEntriesList(), !config.isAsyncAppend());
             } else {
+                // heartbeat, reply immediately
                 submitRaftMessages(currentLeader, RaftMessage.newBuilder()
                     .setTerm(currentTerm())
                     .setAppendEntriesReply(
@@ -571,13 +572,15 @@ class RaftNodeStateFollower extends RaftNodeState {
         Snapshot latestSnapshot = stateStorage.latestSnapshot();
         if (latestSnapshot.getIndex() > snapshot.getIndex() && latestSnapshot.getTerm() > snapshot.getTerm()) {
             // ignore obsolete snapshot
-            logDebug("Ignore obsolete snapshot[index:{},term:{}]", snapshot.getIndex(), snapshot.getTerm());
+            logDebug("Ignore obsolete snapshot[index:{},term:{}] from peer[{}]",
+                snapshot.getIndex(), snapshot.getTerm(), fromLeader);
             return;
         }
 
         currentISSRequest = installSnapshot;
         submitSnapshot(snapshot.getData());
-        logDebug("Snapshot[index:{},term:{}] submitted to FSM", snapshot.getIndex(), snapshot.getTerm());
+        logDebug("Snapshot[index:{},term:{}] from peer[{}] submitted to FSM",
+            snapshot.getIndex(), snapshot.getTerm(), fromLeader);
     }
 
     private void handleVote(String fromPeer, RequestVote request) {
@@ -591,8 +594,8 @@ class RaftNodeStateFollower extends RaftNodeState {
             // reset election tick when grant a vote
             electionElapsedTick = 0;
         }
-        logDebug("Vote for peer[{}]? {}, grant? {}, log up-to-date? {}",
-            fromPeer, vote, canGrantVote, isLogUpToDate);
+        logDebug("Vote for peer[{}] with last log[index={}, term={}]? {}, grant? {}, log up-to-date? {}",
+            fromPeer, request.getLastLogIndex(), request.getLastLogTerm(), vote, canGrantVote, isLogUpToDate);
         sendRequestVoteReply(fromPeer, currentTerm(), vote);
     }
 
@@ -604,10 +607,10 @@ class RaftNodeStateFollower extends RaftNodeState {
     }
 
     private void handleProposeReply(ProposeReply reply) {
-        CompletableFuture<Void> pendingOnDone = idToForwardedProposeMap.get(reply.getId());
+        CompletableFuture<Long> pendingOnDone = idToForwardedProposeMap.get(reply.getId());
         if (pendingOnDone != null) {
             switch (reply.getCode()) {
-                case Success -> pendingOnDone.complete(null);
+                case Success -> pendingOnDone.complete(reply.getLogIndex());
                 case DropByLeaderTransferring -> pendingOnDone.completeExceptionally(
                     DropProposalException.transferringLeader());
                 case DropByMaxUnappliedEntries -> pendingOnDone.completeExceptionally(
@@ -673,7 +676,7 @@ class RaftNodeStateFollower extends RaftNodeState {
             Map.Entry<Long, Set<Integer>> entry = it.next();
             it.remove();
             entry.getValue().forEach(pendingProposalId -> {
-                CompletableFuture<Void> pendingOnDone = idToForwardedProposeMap.remove(pendingProposalId);
+                CompletableFuture<Long> pendingOnDone = idToForwardedProposeMap.remove(pendingProposalId);
                 if (pendingOnDone != null && !pendingOnDone.isDone()) {
                     // if not finished by requestReadIndexReply then abort it
                     pendingOnDone.completeExceptionally(DropProposalException.forwardTimeout());

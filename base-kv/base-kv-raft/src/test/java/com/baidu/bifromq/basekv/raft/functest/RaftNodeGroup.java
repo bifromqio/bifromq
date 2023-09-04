@@ -366,7 +366,7 @@ public final class RaftNodeGroup {
         }
     }
 
-    public CompletableFuture<Void> propose(String id, ByteString fsmCmd) {
+    public CompletableFuture<Long> propose(String id, ByteString fsmCmd) {
         assert nodes.containsKey(id);
         return nodes.get(id).propose(fsmCmd);
     }
