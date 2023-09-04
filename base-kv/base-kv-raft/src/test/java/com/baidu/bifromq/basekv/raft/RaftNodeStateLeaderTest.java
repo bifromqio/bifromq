@@ -15,8 +15,8 @@ package com.baidu.bifromq.basekv.raft;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.assertSame;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.event.CommitEvent;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
@@ -43,17 +43,17 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
     private final Logger log = LoggerFactory.getLogger("RaftNodeStateLeaderTest");
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -63,6 +63,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
     public void releaseMocks() throws Exception {
         closeable.close();
     }
+
     @Test
     public void testProposeWithSlowFollower() {
         RaftNodeStateLeader leader = startUpLeader();
@@ -158,16 +159,16 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
 //        proposeThrottledLeader.receive("v2", appendEntriesReply);
 
         // proposeThrottled
+        CompletableFuture<Long> proposeDone = new CompletableFuture<>();
+        proposeThrottledLeader.propose(cmd, proposeDone);
+        assertTrue(proposeDone.isCompletedExceptionally());
+
         CompletableFuture<Void> onDone = new CompletableFuture<>();
-        proposeThrottledLeader.propose(cmd, onDone);
-        assertTrue(onDone.isCompletedExceptionally());
-
-
         RaftNodeStateLeader transferringLeader = startUpLeader();
         transferringLeader.transferLeadership("v1", onDone);
-        onDone = new CompletableFuture<>();
-        transferringLeader.propose(cmd, onDone);
-        assertTrue(onDone.isCompletedExceptionally());
+        proposeDone = new CompletableFuture<>();
+        transferringLeader.propose(cmd, proposeDone);
+        assertTrue(proposeDone.isCompletedExceptionally());
     }
 
     @Test

@@ -57,9 +57,9 @@ abstract class RaftNodeState implements IRaftNodeLogger {
      */
     protected static class ProposeTask {
         final long term;
-        final CompletableFuture<Void> future;
+        final CompletableFuture<Long> future;
 
-        ProposeTask(long term, CompletableFuture<Void> future) {
+        ProposeTask(long term, CompletableFuture<Long> future) {
             this.term = term;
             this.future = future;
         }
@@ -122,7 +122,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
 
     abstract RaftNodeState tick();
 
-    abstract void propose(ByteString fsmCmd, CompletableFuture<Void> onDone);
+    abstract void propose(ByteString fsmCmd, CompletableFuture<Long> onDone);
 
     abstract RaftNodeState stableTo(long stabledIndex);
 
@@ -243,7 +243,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
     }
 
     protected void submitSnapshot(ByteString fsmSnapshot) {
-        snapshotInstaller.install(fsmSnapshot).whenComplete((v, e) -> onSnapshotRestored(fsmSnapshot, e));
+        snapshotInstaller.install(fsmSnapshot).whenComplete((v, e) -> onSnapshotInstalled.done(fsmSnapshot, e));
     }
 
     protected void notifyCommit() {
@@ -261,7 +261,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
                     it.remove();
                     if (proposalTerm == proposalEntry.get().getTerm()) {
                         // proposal has committed
-                        task.future.complete(null);
+                        task.future.complete(proposalIndex);
                     } else {
                         // proposal has been overridden
                         task.future.completeExceptionally(DropProposalException.overridden());
@@ -315,6 +315,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
     }
 
     protected void sendRequestPreVoteReply(String fromPeer, long term, boolean granted) {
+        logDebug("Answering pre-vote request from peer[{}] of term[{}], granted?: {}", fromPeer, term, granted);
         RaftMessage reply = RaftMessage
             .newBuilder()
             .setTerm(term)

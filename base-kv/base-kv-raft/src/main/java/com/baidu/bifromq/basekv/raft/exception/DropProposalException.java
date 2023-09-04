@@ -38,6 +38,10 @@ public class DropProposalException extends RuntimeException {
         return new OverriddenException();
     }
 
+    public static SupersededBySnapshotException superseded() {
+        return new SupersededBySnapshotException();
+    }
+
     protected DropProposalException(String message) {
         super(message);
     }
@@ -75,6 +79,12 @@ public class DropProposalException extends RuntimeException {
     public static class OverriddenException extends DropProposalException {
         private OverriddenException() {
             super("Proposal dropped due to overridden by proposal from newer leader");
+        }
+    }
+
+    public static class SupersededBySnapshotException extends DropProposalException {
+        private SupersededBySnapshotException() {
+            super("Proposal dropped due to superseded by snapshot");
         }
     }
 }

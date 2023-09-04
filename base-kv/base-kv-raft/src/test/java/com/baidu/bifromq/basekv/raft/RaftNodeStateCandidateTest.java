@@ -247,7 +247,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
             stateStorage, log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
-        CompletableFuture<Void> onDone = new CompletableFuture<>();
+        CompletableFuture<Long> onDone = new CompletableFuture<>();
         raftNodeStateCandidate.propose(ByteString.copyFromUtf8("command"), onDone);
         assertTrue(onDone.isCompletedExceptionally());
     }

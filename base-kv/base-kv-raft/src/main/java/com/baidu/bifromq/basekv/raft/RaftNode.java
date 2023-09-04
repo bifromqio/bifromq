@@ -352,7 +352,7 @@ public final class RaftNode implements IRaftNode {
     }
 
     @Override
-    public CompletableFuture<Void> propose(ByteString appCommand) {
+    public CompletableFuture<Long> propose(ByteString appCommand) {
         return submit(onDone -> stateRef.get().propose(appCommand, sampleLatency(onDone, metricMgr.proposeTimer)));
     }
 

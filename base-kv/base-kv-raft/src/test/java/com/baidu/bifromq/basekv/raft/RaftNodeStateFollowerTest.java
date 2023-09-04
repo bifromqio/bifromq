@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.raft;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,7 +24,6 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.raft.event.CommitEvent;
 import com.baidu.bifromq.basekv.raft.event.RaftEvent;
 import com.baidu.bifromq.basekv.raft.event.RaftEventType;
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
@@ -141,8 +141,8 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
     @Test
     public void testPropose() {
         AtomicInteger onMessageReadyIndex = new AtomicInteger();
-        CompletableFuture<Void> onDoneOk = new CompletableFuture<>();
-        CompletableFuture<Void> onDoneExceptionally = new CompletableFuture<>();
+        CompletableFuture<Long> onDoneOk = new CompletableFuture<>();
+        CompletableFuture<Long> onDoneExceptionally = new CompletableFuture<>();
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
             .setClusterConfig(clusterConfig).build());
 
@@ -225,13 +225,13 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         RaftNodeStateFollower disableForwardProposalFollower = new RaftNodeStateFollower(1, 0, null,
             new RaftConfig().setDisableForwardProposal(true).setElectionTimeoutTick(3), raftStateStorage, log,
             msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
-        CompletableFuture<Void> disableForwardProposalOnDone = new CompletableFuture<>();
+        CompletableFuture<Long> disableForwardProposalOnDone = new CompletableFuture<>();
         disableForwardProposalFollower.propose(command, disableForwardProposalOnDone);
         assertTrue(disableForwardProposalOnDone.isCompletedExceptionally());
 
         RaftNodeStateFollower noLeaderFollower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
             raftStateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
-        CompletableFuture<Void> nonLeaderOnDone = new CompletableFuture<>();
+        CompletableFuture<Long> nonLeaderOnDone = new CompletableFuture<>();
         noLeaderFollower.propose(command, nonLeaderOnDone);
         assertTrue(nonLeaderOnDone.isCompletedExceptionally());
     }
@@ -705,6 +705,10 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
 
         noInLeaseFollower.receive("newLeader", installSnapshot);
         noInLeaseFollower.receive("newLeader", installSnapshot2);
+        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(),
+            new CancellationException());
+        noInLeaseFollower.onSnapshotRestored(installSnapshot2.getInstallSnapshot().getSnapshot().getData(), null);
+
         firstInstallResult.completeExceptionally(new CancellationException());
         secondInstallResult.complete(null);
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
@@ -719,16 +723,13 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .build()));
         }});
         ArgumentCaptor<RaftEvent> eventCaptor = ArgumentCaptor.forClass(RaftEvent.class);
-        verify(eventListener, times(2)).onEvent(eventCaptor.capture());
+        verify(eventListener, times(1)).onEvent(eventCaptor.capture());
 
         List<RaftEvent> events = eventCaptor.getAllValues();
 
         assertEquals(events.get(0).type, RaftEventType.SNAPSHOT_RESTORED);
         assertEquals(((SnapshotRestoredEvent) events.get(0)).snapshot,
             installSnapshot.getInstallSnapshot().getSnapshot());
-
-        assertEquals(events.get(1).type, RaftEventType.COMMIT);
-        assertEquals(((CommitEvent) events.get(1)).index, 0L);
     }
 
     @Test
@@ -760,7 +761,10 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Test Exception")));
 
         noInLeaseFollower.receive("newLeader", installSnapshot);
+        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(),
+            new RuntimeException("Test Exception"));
 
+        verify(onSnapshotInstalled).done(any(), any(Throwable.class));
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
         verify(msgSender, times(1)).send(msgCaptor.capture());
         assertEquals(msgCaptor.getValue(), new HashMap<String, List<RaftMessage>>() {{
@@ -801,6 +805,9 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
 
         when(snapshotInstaller.install(any(ByteString.class))).thenReturn(CompletableFuture.completedFuture(null));
         noInLeaseFollower.receive("newLeader", installSnapshot);
+        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(), null);
+
+        verify(onSnapshotInstalled).done(any(), isNull());
 
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
         verify(msgSender, times(1)).send(msgCaptor.capture());
@@ -815,16 +822,13 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         }});
 
         ArgumentCaptor<RaftEvent> eventCaptor = ArgumentCaptor.forClass(RaftEvent.class);
-        verify(eventListener, times(2)).onEvent(eventCaptor.capture());
+        verify(eventListener, times(1)).onEvent(eventCaptor.capture());
 
         List<RaftEvent> events = eventCaptor.getAllValues();
 
         assertEquals(events.get(0).type, RaftEventType.SNAPSHOT_RESTORED);
         assertEquals(((SnapshotRestoredEvent) events.get(0)).snapshot,
             installSnapshot.getInstallSnapshot().getSnapshot());
-
-        assertEquals(events.get(1).type, RaftEventType.COMMIT);
-        assertEquals(((CommitEvent) events.get(1)).index, 0L);
     }
 
     @Test
@@ -837,6 +841,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             stateStorage, log, messages -> {
             switch (onMessageReadyIndex.get()) {
                 case 0:
+                case 1:
                     onMessageReadyIndex.incrementAndGet();
                     assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("newLeader", Collections.singletonList(RaftMessage.newBuilder()
@@ -849,7 +854,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                             .build()));
                     }});
                     break;
-                case 1:
+                case 2:
                     onMessageReadyIndex.incrementAndGet();
                     assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("newLeader", Collections.singletonList(RaftMessage.newBuilder()
@@ -864,7 +869,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                             .build()));
                     }});
                     break;
-                case 2:
+                case 3:
                     assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                         put("newLeader", Collections.singletonList(RaftMessage.newBuilder()
                             .setTerm(2)

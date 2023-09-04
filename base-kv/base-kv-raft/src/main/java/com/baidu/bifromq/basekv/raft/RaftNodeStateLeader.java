@@ -235,7 +235,7 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     @Override
-    void propose(ByteString fsmCmd, CompletableFuture<Void> onDone) {
+    void propose(ByteString fsmCmd, CompletableFuture<Long> onDone) {
         if (leaderTransferTask != null) {
             logDebug("Dropped proposal due to transferring leadership");
             onDone.completeExceptionally(DropProposalException.transferringLeader());
@@ -257,7 +257,8 @@ class RaftNodeStateLeader extends RaftNodeState {
         // update self progress
         peerLogTracker.replicateBy(stateStorage.local(), stateStorage.lastIndex());
 
-        ProposeTask prev = uncommittedProposals.put(entry.getIndex(), new ProposeTask(entry.getTerm(), onDone));
+        ProposeTask prev =
+            uncommittedProposals.put(entry.getIndex(), new ProposeTask(entry.getTerm(), onDone));
         assert prev == null;
 
         Map<String, List<RaftMessage>> appendEntriesToSend = prepareAppendEntriesIfAbsent(false);
@@ -304,7 +305,6 @@ class RaftNodeStateLeader extends RaftNodeState {
         if (message.getTerm() > currentTerm()) {
             switch (message.getMessageTypeCase()) {
                 case REQUESTPREVOTE -> {
-                    logDebug("Answering pre-vote request from peer[{}]", fromPeer);
                     sendRequestPreVoteReply(fromPeer, message.getTerm(), false);
                     return nextState;
                 }
@@ -338,7 +338,7 @@ class RaftNodeStateLeader extends RaftNodeState {
             }
             // transition to follower according to $3.3 in raft paper
             // abort on-going config change and readIndex request if any
-            logDebug("Got higher term[{}] message[{}] from peer[{}], stepped down to follower",
+            logDebug("Got higher term[{}] message[{}] from peer[{}], start to step down",
                 message.getTerm(), message.getMessageTypeCase(), fromPeer);
             configChanger.abort();
             readProgressTracker.abort();
@@ -553,7 +553,8 @@ class RaftNodeStateLeader extends RaftNodeState {
                             .setLeaderId(stateStorage.local())
                             .setPrevLogIndex(preLogIndex)
                             .setPrevLogTerm(preLogTerm)
-                            .setCommitIndex(commitIndex) // tell follower the latest commit index
+                            // tell follower the minimum commit index to prevent it from committing mismatched entries
+                            .setCommitIndex(Math.min(preLogIndex, commitIndex))
                             .setReadIndex(readIndex)
                             .build())
                         .build());
@@ -753,7 +754,7 @@ class RaftNodeStateLeader extends RaftNodeState {
 
     private void handlePropose(String fromPeer, Propose propose) {
         logTrace("Received forwarded Propose request from peer[{}]", fromPeer);
-        CompletableFuture<Void> onDone = new CompletableFuture<>();
+        CompletableFuture<Long> onDone = new CompletableFuture<>();
         onDone.whenComplete((v, e) -> {
             // must be executed in raft thread
             if (e != null) {
@@ -775,6 +776,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                     .setProposeReply(ProposeReply.newBuilder()
                         .setId(propose.getId())
                         .setCode(ProposeReply.Code.Success)
+                        .setLogIndex(v)
                         .build())
                     .build());
             }

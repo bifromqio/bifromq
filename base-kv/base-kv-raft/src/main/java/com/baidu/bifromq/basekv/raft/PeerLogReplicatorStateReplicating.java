@@ -98,7 +98,7 @@ class PeerLogReplicatorStateReplicating extends PeerLogReplicatorState {
         // peer is out of sync, we need to move to probe or snapshot,
         // if log entry at peerLastIndex is still available
         Optional<LogEntry> prevLogEntry = stateStorage.entryAt(peerLastIndex);
-        if (!prevLogEntry.isPresent()) {
+        if (prevLogEntry.isEmpty()) {
             // if prev log entry is unavailable
             logger.logDebug("Entry[index:{}] not available for peer[{}] from "
                     + "tracker[matchIndex:{},nextIndex:{},state:{}], start syncing with snapshot",
@@ -107,7 +107,7 @@ class PeerLogReplicatorStateReplicating extends PeerLogReplicatorState {
         } else {
             // probing from peer's last index
             long probeStartIndex = Math.min(peerLastIndex, matchIndex);
-            logger.logDebug("Peer[{}] rejected entries after index[{}] from "
+            logger.logDebug("Peer[{}] with last index[{}] rejected appending entries from "
                     + "tracker[matchIndex:{},nextIndex:{},state:{}], start probing",
                 peerId, peerLastIndex, matchIndex, nextIndex, state());
             return new PeerLogReplicatorStateProbing(peerId, config,

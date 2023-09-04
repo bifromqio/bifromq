@@ -43,27 +43,27 @@ import org.testng.annotations.Test;
 public class ProposeTest extends SharedRaftConfigTestTemplate {
     @Test(groups = "integration")
     public void testProposalOverridden1() {
-        testProposalOverridden(true);
+        testProposalOverridden(true, DropProposalException.SupersededBySnapshotException.class);
     }
 
     @Config(preVote = false)
     @Test(groups = "integration")
     public void testProposalOverridden2() {
-        testProposalOverridden(true);
+        testProposalOverridden(true, DropProposalException.SupersededBySnapshotException.class);
     }
 
     @Test(groups = "integration")
     public void testProposalOverridden3() {
-        testProposalOverridden(false);
+        testProposalOverridden(false, DropProposalException.OverriddenException.class);
     }
 
     @Config(preVote = false)
     @Test(groups = "integration")
     public void testProposalOverridden4() {
-        testProposalOverridden(false);
+        testProposalOverridden(false, DropProposalException.OverriddenException.class);
     }
 
-    private void testProposalOverridden(boolean compaction) {
+    private void testProposalOverridden(boolean compaction, Class<? extends Throwable> expected) {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(leader, 1));
         group.propose(leader, copyFromUtf8("appCommand1"));
@@ -75,8 +75,8 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         log.info("Isolate {}", leader);
         group.isolate(leader);
         // following 3 entries are un-commit
-        CompletableFuture<Void> propose5Future = group.propose(leader, copyFromUtf8("appCommand4")); // <- 5
-        CompletableFuture<Void> propose6Future = group.propose(leader, copyFromUtf8("appCommand5")); // <- 6
+        CompletableFuture<Long> propose5Future = group.propose(leader, copyFromUtf8("appCommand4")); // <- 5
+        CompletableFuture<Long> propose6Future = group.propose(leader, copyFromUtf8("appCommand5")); // <- 6
         group.propose(leader, copyFromUtf8("appCommand6")); // <- 7
         group.propose(leader, copyFromUtf8("appCommand7")); // <- 8
         await().until(() -> group.currentLeader().isPresent() && !leader.equals(group.currentLeader().get()));
@@ -101,16 +101,16 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         group.integrate(leader);
         assertTrue(group.awaitIndexCommitted(leader, 9));
         Assert.assertEquals(group.logEntries(leader, 8), group.logEntries(newLeader, 8));
-        // the uncommitted proposal on old leader will be failed with Overridden exception
+        // the uncommitted proposal on old leader will be failed with SupersededBySnapshotException exception
         try {
-            propose5Future.get();
+            assertEquals(propose5Future.get(), 7);
         } catch (Exception e) {
-            assertEquals(e.getCause().getClass(), DropProposalException.OverriddenException.class);
+            assertEquals(e.getCause().getClass(), expected);
         }
         try {
-            propose6Future.get();
+            assertEquals(propose6Future.get(), 8);
         } catch (Exception e) {
-            assertEquals(e.getCause().getClass(), DropProposalException.OverriddenException.class);
+            assertEquals(e.getCause().getClass(), expected);
         }
     }
 
