@@ -24,7 +24,7 @@ import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.util.Optional;
-import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -48,6 +48,7 @@ class KVRangeMetricManager {
     private final Timer existTimer;
     private final Timer getTimer;
     private final Timer queryCoProcTimer;
+    private final Timer compactionTimer;
     private final AtomicReference<KVRangeDescriptor> currentDesc = new AtomicReference<>();
     private final AtomicLong currentLastAppliedIndex = new AtomicLong(-1);
 
@@ -135,6 +136,9 @@ class KVRangeMetricManager {
         queryCoProcTimer = Timer.builder("basekv.cmd.querycoproc")
             .tags(tags)
             .register(Metrics.globalRegistry);
+        compactionTimer = Timer.builder("basekv.cmd.compact")
+            .tags(tags)
+            .register(Metrics.globalRegistry);
     }
 
     void report(KVRangeDescriptor descriptor) {
@@ -153,49 +157,53 @@ class KVRangeMetricManager {
         currentLastAppliedIndex.set(index);
     }
 
-    private <T> CompletionStage<T> recordDuration(Supplier<CompletionStage<T>> supplier, Timer timer) {
+    private <T> CompletableFuture<T> recordDuration(Supplier<CompletableFuture<T>> supplier, Timer timer) {
         Timer.Sample sample = Timer.start();
         return supplier.get().whenComplete((v, e) -> sample.stop(timer));
     }
 
-    CompletionStage<Void> recordConfigChange(Supplier<CompletionStage<Void>> supplier) {
+    CompletableFuture<Void> recordConfigChange(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, configChangeTimer);
     }
 
-    CompletionStage<Void> recordTransferLeader(Supplier<CompletionStage<Void>> supplier) {
+    CompletableFuture<Void> recordTransferLeader(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, transferLeaderTimer);
     }
 
-    CompletionStage<Void> recordSplit(Supplier<CompletionStage<Void>> supplier) {
+    CompletableFuture<Void> recordSplit(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, splitTimer);
     }
 
-    CompletionStage<Void> recordMerge(Supplier<CompletionStage<Void>> supplier) {
+    CompletableFuture<Void> recordMerge(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, mergeTimer);
     }
 
-    CompletionStage<ByteString> recordPut(Supplier<CompletionStage<ByteString>> supplier) {
+    CompletableFuture<ByteString> recordPut(Supplier<CompletableFuture<ByteString>> supplier) {
         return recordDuration(supplier, putTimer);
     }
 
-    CompletionStage<ByteString> recordDelete(Supplier<CompletionStage<ByteString>> supplier) {
+    CompletableFuture<ByteString> recordDelete(Supplier<CompletableFuture<ByteString>> supplier) {
         return recordDuration(supplier, deleteTimer);
     }
 
-    CompletionStage<ByteString> recordMutateCoProc(Supplier<CompletionStage<ByteString>> supplier) {
+    CompletableFuture<ByteString> recordMutateCoProc(Supplier<CompletableFuture<ByteString>> supplier) {
         return recordDuration(supplier, mutateCoProcTimer);
     }
 
-    CompletionStage<Boolean> recordExist(Supplier<CompletionStage<Boolean>> supplier) {
+    CompletableFuture<Boolean> recordExist(Supplier<CompletableFuture<Boolean>> supplier) {
         return recordDuration(supplier, existTimer);
     }
 
-    CompletionStage<Optional<ByteString>> recordGet(Supplier<CompletionStage<Optional<ByteString>>> supplier) {
+    CompletableFuture<Optional<ByteString>> recordGet(Supplier<CompletableFuture<Optional<ByteString>>> supplier) {
         return recordDuration(supplier, getTimer);
     }
 
-    CompletionStage<ByteString> recordQueryCoProc(Supplier<CompletionStage<ByteString>> supplier) {
+    CompletableFuture<ByteString> recordQueryCoProc(Supplier<CompletableFuture<ByteString>> supplier) {
         return recordDuration(supplier, queryCoProcTimer);
+    }
+
+    CompletableFuture<Void> recordCompact(Supplier<CompletableFuture<Void>> supplier) {
+        return recordDuration(supplier, compactionTimer);
     }
 
     void close() {
@@ -217,5 +225,6 @@ class KVRangeMetricManager {
         Metrics.globalRegistry.removeByPreFilterId(existTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(getTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(queryCoProcTimer.getId());
+        Metrics.globalRegistry.removeByPreFilterId(compactionTimer.getId());
     }
 }

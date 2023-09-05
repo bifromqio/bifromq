@@ -27,7 +27,6 @@ import com.google.protobuf.ByteString;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
@@ -59,13 +58,13 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
 
     // Execute a ROCommand
     @Override
-    public CompletionStage<Boolean> exist(long ver, ByteString key, boolean linearized) {
+    public CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized) {
         return submit(ver, rangeReader -> completedFuture(rangeReader.kvReader().exist(key)), linearized);
     }
 
 
     @Override
-    public CompletionStage<Optional<ByteString>> get(long ver, ByteString key, boolean linearized) {
+    public CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized) {
         return submit(ver, rangeReader -> completedFuture(rangeReader.kvReader().get(key)), linearized);
     }
 
@@ -123,7 +122,7 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     }
 
     private <ReqT, ResultT> CompletableFuture<ResultT> doQuery(long ver, QueryFunction<ReqT, ResultT> queryFn) {
-        CompletableFuture onDone = new CompletableFuture();
+        CompletableFuture<ResultT> onDone = new CompletableFuture<>();
         IKVRangeReader rangeReader = kvRangeAccessor.borrow();
         // return the borrowed reader when future completed
         onDone.whenComplete((v, e) -> kvRangeAccessor.returnBorrowed(rangeReader));

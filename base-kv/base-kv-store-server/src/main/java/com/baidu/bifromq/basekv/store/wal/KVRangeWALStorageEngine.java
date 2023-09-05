@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,7 +58,6 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     private final ExecutorService flushExecutor;
     private final AtomicBoolean flushing = new AtomicBoolean();
     private final IKVEngine kvEngine;
-    private ScheduledExecutorService bgTaskExecutor;
 
     public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, KVEngineConfigurator<?> configurator) {
         kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
@@ -87,10 +85,9 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     }
 
     @Override
-    public void start(ScheduledExecutorService bgTaskExecutor) {
+    public void start() {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
-                this.bgTaskExecutor = bgTaskExecutor;
                 kvEngine.start("storeId", id(), "type", "wal");
                 loadExisting();
                 state.set(State.STARTED);
@@ -118,10 +115,10 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         instances.computeIfAbsent(kvRangeId, id -> {
             KVRangeWALKeys.cache(kvRangeId);
             String ns = raftGroupNS(kvRangeId);
-            int keyRangeId = kvEngine.registerKeyRange(ns, KVRangeWALKeys.walStartKey(kvRangeId),
+            int walKeyRangeId = kvEngine.registerKeyRange(ns, KVRangeWALKeys.walStartKey(kvRangeId),
                 KVRangeWALKeys.walEndKey(kvRangeId));
-            kvEngine.put(keyRangeId, KVRangeWALKeys.latestSnapshotKey(kvRangeId), initSnapshot.toByteString());
-            return new KVRangeWALStore(kvRangeId, kvEngine, keyRangeId, this::scheduleFlush, bgTaskExecutor);
+            kvEngine.put(walKeyRangeId, KVRangeWALKeys.latestSnapshotKey(kvRangeId), initSnapshot.toByteString());
+            return new KVRangeWALStore(kvRangeId, kvEngine, walKeyRangeId, this::scheduleFlush);
         });
         flush();
         return instances.get(kvRangeId);
@@ -192,8 +189,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
                     instances.put(kvRangeId, new KVRangeWALStore(kvRangeId,
                         kvEngine,
                         walKeyRangeId,
-                        this::scheduleFlush,
-                        bgTaskExecutor));
+                        this::scheduleFlush));
                     log.debug("WAL loaded: kvRangeId={}", toShortString(kvRangeId));
                     it.seek(KVRangeWALKeys.walEndKey(kvRangeId));
                 }

@@ -28,15 +28,11 @@ import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.common.util.concurrent.MoreExecutors;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -47,17 +43,11 @@ public class KVRangeWALStoreEngineTest {
     private static final String DB_NAME = "testDB";
     private static final String DB_CHECKPOINT_DIR = "testDB_cp";
     private String dbPath;
-
-
-    private KVEngineConfigurator engineConfigurator;
-
+    private KVEngineConfigurator<?> engineConfigurator;
     public Path dbRootDir;
-
-    private ScheduledExecutorService bgMgmtTaskExecutor;
 
     @BeforeMethod
     public void setup() throws IOException {
-        bgMgmtTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         if (isDevEnv()) {
             engineConfigurator = InMemoryKVEngineConfigurator.builder().build();
         } else {
@@ -71,7 +61,6 @@ public class KVRangeWALStoreEngineTest {
 
     @AfterMethod
     public void teardown() {
-        MoreExecutors.shutdownAndAwaitTermination(bgMgmtTaskExecutor, 5, TimeUnit.SECONDS);
         if (dbRootDir != null) {
             TestUtil.deleteDir(dbRootDir.toString());
             dbRootDir.toFile().delete();
@@ -83,7 +72,7 @@ public class KVRangeWALStoreEngineTest {
         try {
             KVRangeWALStorageEngine stateStorageEngine =
                 new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
-            stateStorageEngine.start(bgMgmtTaskExecutor);
+            stateStorageEngine.start();
             if (engineConfigurator instanceof RocksDBKVEngineConfigurator) {
                 assertTrue((new File(dbPath)).isDirectory());
             }
@@ -101,7 +90,7 @@ public class KVRangeWALStoreEngineTest {
             KVRangeId testId = KVRangeIdUtil.generate();
             KVRangeWALStorageEngine stateStorageEngine =
                 new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
-            stateStorageEngine.start(bgMgmtTaskExecutor);
+            stateStorageEngine.start();
             Snapshot snapshot = Snapshot.newBuilder()
                 .setIndex(0)
                 .setTerm(0)
@@ -138,7 +127,7 @@ public class KVRangeWALStoreEngineTest {
         KVRangeId testId2 = KVRangeIdUtil.next(testId1);
         KVRangeWALStorageEngine stateStorageEngine =
             new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
-        stateStorageEngine.start(bgMgmtTaskExecutor);
+        stateStorageEngine.start();
         Snapshot snapshot = Snapshot.newBuilder()
             .setIndex(0)
             .setTerm(0)
@@ -152,7 +141,7 @@ public class KVRangeWALStoreEngineTest {
         stateStorageEngine.stop();
 
         stateStorageEngine = new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
-        stateStorageEngine.start(bgMgmtTaskExecutor);
+        stateStorageEngine.start();
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 2);
         IRaftStateStore stateStorage = stateStorageEngine.get(testId1);
         assertEquals(stateStorage.local(), stateStorageEngine.id());
@@ -173,7 +162,7 @@ public class KVRangeWALStoreEngineTest {
         KVRangeId testId2 = KVRangeIdUtil.next(testId1);
         KVRangeWALStorageEngine stateStorageEngine =
             new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
-        stateStorageEngine.start(bgMgmtTaskExecutor);
+        stateStorageEngine.start();
         Snapshot snapshot = Snapshot.newBuilder()
             .setIndex(0)
             .setTerm(0)
@@ -190,7 +179,7 @@ public class KVRangeWALStoreEngineTest {
         stateStorageEngine.stop();
 
         stateStorageEngine = new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
-        stateStorageEngine.start(bgMgmtTaskExecutor);
+        stateStorageEngine.start();
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
         assertTrue(stateStorageEngine.has(testId2));
     }
