@@ -267,6 +267,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             )
             .storeOptions(new KVRangeStoreOptions()
                 .setKvRangeOptions(new KVRangeOptions()
+                    .setCompactWALThreshold(config.getStateStoreConfig()
+                        .getInboxStoreConfig()
+                        .getCompactWALThreshold())
                     .setMaxRangeLoad(INBOX_MAX_RANGE_LOAD.get())
                     .setSplitKeyThreshold(INBOX_SPLIT_KEY_EST_THRESHOLD.get())
                     .setLoadTrackingWindowSec(INBOX_LOAD_TRACKING_SECONDS.get()))
@@ -318,6 +321,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 toControllerOptions(config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig())
             )
             .storeOptions(new KVRangeStoreOptions()
+                .setKvRangeOptions(new KVRangeOptions()
+                    .setCompactWALThreshold(config.getStateStoreConfig()
+                        .getRetainStoreConfig()
+                        .getCompactWALThreshold()))
                 .setDataEngineConfigurator(
                     buildDataEngineConf(config
                         .getStateStoreConfig()
@@ -367,6 +374,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
+                .setKvRangeOptions(new KVRangeOptions()
+                    .setCompactWALThreshold(config.getStateStoreConfig()
+                        .getRetainStoreConfig()
+                        .getCompactWALThreshold()))
                 .setDataEngineConfigurator(
                     buildDataEngineConf(config
                         .getStateStoreConfig()
