@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.store.balance;
+package com.baidu.bifromq.basekv.balance.impl;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
@@ -20,7 +20,6 @@ import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.State.StateType;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import java.util.Collections;
@@ -34,7 +33,7 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class RangeLeaderBalancer extends StoreBalancer {
+public class RangeLeaderBalancer extends StoreBalancer {
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
     public RangeLeaderBalancer(String localStoreId) {
@@ -147,7 +146,7 @@ class RangeLeaderBalancer extends StoreBalancer {
         return localStoreDesc.getRangesList()
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
-            .filter(d -> d.getState() == State.StateType.Normal)
+            .filter(d -> d.getState() == StateType.Normal)
             .sorted((o1, o2) -> (int) (o1.getId().getId() + o1.getId().getEpoch() - o2.getId().getId() +
                 o2.getId().getEpoch()))
             .toList();

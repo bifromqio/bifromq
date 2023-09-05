@@ -21,6 +21,9 @@ import com.baidu.bifromq.basekv.store.IKVRangeStoreDescriptorReporter;
 import com.baidu.bifromq.basekv.store.KVRangeStore;
 import com.baidu.bifromq.basekv.store.KVRangeStoreDescriptorReporter;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
+import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadRequest;
+import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadVersion;
+import com.baidu.bifromq.basekv.store.exception.KVRangeException.TryLater;
 import com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
@@ -212,19 +215,19 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
                 .setCode(ReplyCode.Ok)
                 .build())
             .exceptionally(e -> {
-                if (e instanceof KVRangeException.BadVersion) {
+                if (e instanceof BadVersion || e.getCause() instanceof BadVersion) {
                     return KVRangeSplitReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.BadVersion)
                         .build();
                 }
-                if (e instanceof KVRangeException.TryLater) {
+                if (e instanceof TryLater || e.getCause() instanceof TryLater) {
                     return KVRangeSplitReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
-                if (e instanceof KVRangeException.BadRequest) {
+                if (e instanceof BadRequest || e.getCause() instanceof BadRequest) {
                     return KVRangeSplitReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.BadRequest)

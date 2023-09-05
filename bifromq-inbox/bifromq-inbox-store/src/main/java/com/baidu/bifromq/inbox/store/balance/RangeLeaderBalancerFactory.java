@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.store.balance;
 
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.basekv.balance.impl.RangeLeaderBalancer;
 
 public class RangeLeaderBalancerFactory implements IStoreBalancerFactory {
     @Override

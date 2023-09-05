@@ -34,15 +34,15 @@ import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class ReplicaCntBalancerTest {
+public class RangeLeaderBalancerTest {
 
     private static final String LOCAL_STORE_ID = "localStoreId";
 
-    private ReplicaCntBalancer balancer;
+    private RangeLeaderBalancer balancer;
 
     @BeforeMethod
     public void setup() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3);
+        balancer = new RangeLeaderBalancer(LOCAL_STORE_ID);
     }
 
     @Test
