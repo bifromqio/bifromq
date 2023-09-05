@@ -15,9 +15,11 @@ package com.baidu.bifromq.starter.config.standalone.model;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.experimental.Accessors;
 
 @Getter
 @Setter
+@Accessors(fluent = true)
 public class RocksDBEngineConfig extends StorageEngineConfig {
     private String dataPathRoot = "";
     private int compactMinTombstoneKeys = 200000;
