@@ -24,7 +24,6 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -43,7 +42,7 @@ public class ReplicaCntBalancerTest {
 
     @BeforeMethod
     public void setup() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 200L);
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3);
     }
 
     @Test
@@ -152,35 +151,6 @@ public class ReplicaCntBalancerTest {
     }
 
     @Test
-    public void balanceWithFourVoters() {
-        KVRangeId id = KVRangeIdUtil.generate();
-        List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2", "store3");
-        List<KVRangeDescriptor> rangeDescriptors = DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet());
-        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        for (int i = 0; i < 4; i++) {
-            storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
-                .setId(voters.get(i))
-                .addRanges(rangeDescriptors.get(i))
-                .build());
-        }
-        // four store with four voters
-        balancer.update(storeDescriptors);
-        Optional<BalanceCommand> commandOptional = balancer.balance();
-        Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
-        Assert.assertEquals(3, changeConfigCommand.getVoters().size());
-
-        String maxLoadStore = storeDescriptors.stream()
-            .filter(sd -> !sd.getId().equals(LOCAL_STORE_ID))
-            .max(Comparator.comparingDouble(sd -> sd.getRanges(0).getLoadHint().getLoad()))
-            .get()
-            .getId();
-        Set<String> expectedVoters = Sets.newHashSet(voters);
-        expectedVoters.remove(maxLoadStore);
-        Assert.assertEquals(expectedVoters, changeConfigCommand.getVoters());
-    }
-
-    @Test
     public void balanceWithFourLearners() {
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store2", "store3");
@@ -221,38 +191,6 @@ public class ReplicaCntBalancerTest {
         ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(2, changeConfigCommand.getLearners().size());
-    }
-
-
-    @Test
-    public void rangeWithThreeVAndTwoAlive() throws InterruptedException {
-        KVRangeId id = KVRangeIdUtil.generate();
-        List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
-        List<String> learners = Lists.newArrayList();
-        List<KVRangeDescriptor> rangeDescriptors =
-            DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
-        List<KVRangeStoreDescriptor> storeDescriptors = new ArrayList<>();
-        for (int i = 0; i < voters.size(); i++) {
-            storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
-                .setId(voters.get(i))
-                .addRanges(rangeDescriptors.get(i))
-                .build());
-        }
-        balancer.update(Sets.newHashSet(storeDescriptors));
-        // store2 dead
-        storeDescriptors.remove(storeDescriptors.size() - 1);
-        balancer.update(Sets.newHashSet(storeDescriptors));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
-        Assert.assertTrue(commandOptional.isEmpty());
-        Thread.sleep(250);
-        commandOptional = balancer.balance();
-        Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
-        Assert.assertEquals(2, changeConfigCommand.getVoters().size());
-        Assert.assertEquals(0, changeConfigCommand.getLearners().size());
-        Set<String> expectedVoters = Sets.newHashSet(voters);
-        expectedVoters.remove("store2");
-        Assert.assertEquals(expectedVoters, changeConfigCommand.getVoters());
     }
 
     @Test

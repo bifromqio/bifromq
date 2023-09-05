@@ -181,6 +181,8 @@ public class KVRangeBalanceController {
                                 logError("Should not be here, error when run command", e);
                                 metrics.cmdFailedCounter.increment();
                             } else {
+                                logInfo("Balancer command[{},{}] result: {}", fromBalancer.getClass().getSimpleName(),
+                                    commandToRun, r);
                                 if (r) {
                                     metrics.cmdSucceedCounter.increment();
                                     start.stop(metrics.cmdRunTimer);
