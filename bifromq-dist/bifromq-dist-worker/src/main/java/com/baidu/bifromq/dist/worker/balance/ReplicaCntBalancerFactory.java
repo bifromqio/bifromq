@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_RECOVERY_TIMEOUT_MILLIS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_VOTER_COUNT;
 
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
@@ -24,7 +23,6 @@ public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, DIST_WORKER_VOTER_COUNT.get(),
-            DIST_WORKER_RECOVERY_TIMEOUT_MILLIS.get());
+        return new ReplicaCntBalancer(localStoreId, DIST_WORKER_VOTER_COUNT.get());
     }
 }

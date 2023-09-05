@@ -20,17 +20,13 @@ import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.State.StateType;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.collect.Sets;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,34 +34,16 @@ import lombok.extern.slf4j.Slf4j;
 public class ReplicaCntBalancer extends StoreBalancer {
 
     private final int voterCount;
-    private final Cache<String, Long> deadStoreCache;
 
     private Set<KVRangeStoreDescriptor> latestStoreDescriptors = new HashSet<>();
 
-    public ReplicaCntBalancer(String localStoreId, int voterCount, long deadStoreTimeoutMillis) {
+    public ReplicaCntBalancer(String localStoreId, int voterCount) {
         super(localStoreId);
         this.voterCount = voterCount;
-        deadStoreCache = Caffeine.newBuilder()
-            .expireAfterWrite(deadStoreTimeoutMillis, TimeUnit.MILLISECONDS)
-            .build();
     }
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Map<String, KVRangeStoreDescriptor> prevAliveStores = this.latestStoreDescriptors.stream()
-            .collect(Collectors.toMap(
-                KVRangeStoreDescriptor::getId,
-                sd -> sd
-            ));
-        Set<String> currAliveStores =
-            storeDescriptors.stream().map(KVRangeStoreDescriptor::getId).collect(Collectors.toSet());
-        // Put disappeared store into cache to avoid frequently scheduling
-        for (String deadStore : Sets.difference(prevAliveStores.keySet(), currAliveStores)) {
-            deadStoreCache.put(deadStore, System.nanoTime());
-        }
-        for (String aliveStore : currAliveStores) {
-            deadStoreCache.invalidate(aliveStore);
-        }
         this.latestStoreDescriptors = storeDescriptors;
     }
 
@@ -98,16 +76,14 @@ public class ReplicaCntBalancer extends StoreBalancer {
             .map(KVRangeStoreDescriptor::getId)
             .collect(Collectors.toList());
 
-        Set<String> storesShouldNotRemove = Sets.newHashSet(deadStoreCache.asMap().keySet());
-        storesShouldNotRemove.addAll(sortedAliveStore);
         for (KVRangeDescriptor rangeDescriptor : localLeaderRangeDescriptors) {
             Set<String> votersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getVotersList());
             Set<String> learnersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getLearnersList());
             Set<String> newVoters = Sets.newHashSet(votersInConfig).stream()
-                .filter(storesShouldNotRemove::contains)
+                .filter(sortedAliveStore::contains)
                 .collect(Collectors.toSet());
             checkVotersCount(sortedAliveStore, newVoters);
-            Set<String> newLearners = storesShouldNotRemove.stream()
+            Set<String> newLearners = sortedAliveStore.stream()
                 .filter(l -> !newVoters.contains(l))
                 .collect(Collectors.toSet());
             if (!votersInConfig.equals(newVoters) || !learnersInConfig.equals(newLearners)) {
@@ -132,26 +108,6 @@ public class ReplicaCntBalancer extends StoreBalancer {
                     break;
                 }
                 voters.add(s);
-            }
-        }
-        if (voters.size() > voterCount) {
-            // Try to remove redundant voters from dead store cache firstly
-            for (String s : deadStoreCache.asMap().keySet()) {
-                if (voters.size() == voterCount) {
-                    return;
-                }
-                voters.remove(s);
-            }
-            // Remove redundant voters from sortedAliveStores
-            for (int i = sortedAliveStores.size() - 1; i >= 0; i--) {
-                if (voters.size() == voterCount) {
-                    return;
-                }
-                String s = sortedAliveStores.get(i);
-                if (s.equals(localStoreId)) {
-                    continue;
-                }
-                voters.remove(s);
             }
         }
     }
