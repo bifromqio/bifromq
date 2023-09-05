@@ -136,6 +136,22 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // write_buffer_size sets the size of a single mem_table. Once mem_table exceeds
                 // this size, it is marked immutable and a new one is created.
                 .setWriteBufferSize(128 * SizeUnit.MB)
+                // Flushing options:
+                // max_write_buffer_number sets the maximum number of mem_tables, both active
+                // and immutable.  If the active mem_table fills up and the total number of
+                // mem_tables is larger than max_write_buffer_number we stall further writes.
+                // This may happen if the flush process is slower than the write rate.
+                .setMaxWriteBufferNumber(6)
+                // Flushing options:
+                // min_write_buffer_number_to_merge is the minimum number of mem_tables to be
+                // merged before flushing to storage. For example, if this option is set to 2,
+                // immutable mem_tables are only flushed when there are two of them - a single
+                // immutable mem_table will never be flushed.  If multiple mem_tables are merged
+                // together, less data may be written to storage since two updates are merged to
+                // a single key. However, every Get() must traverse all immutable mem_tables
+                // linearly to check if the key is there. Setting this option too high may hurt
+                // read performance.
+                .setMinWriteBufferNumberToMerge(2)
                 // Level Style Compaction:
                 // level0_file_num_compaction_trigger -- Once level 0 reaches this number of
                 // files, L0->L1 compaction is triggered. We can therefore estimate level 0
@@ -148,9 +164,9 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // recommend that this be around the size of level 0. Each subsequent level
                 // is max_bytes_for_level_multiplier larger than previous one. The default
                 // is 10 and we do not recommend changing that.
-                .setMaxBytesForLevelBase(128 * SizeUnit.MB)
-                // Below methods are defined in AdvancedMutableColumnFamilyOptionsInterface
-
+                .setMaxBytesForLevelBase(targetOption.writeBufferSize() *
+                    ((ColumnFamilyOptions) targetOption).minWriteBufferNumberToMerge() *
+                    targetOption.level0FileNumCompactionTrigger())
                 // Level Style Compaction:
                 // target_file_size_base and target_file_size_multiplier
                 //  -- Files in level 1 will have target_file_size_base bytes. Each next
@@ -160,7 +176,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // number of database files, which is generally a good thing. We recommend setting
                 // target_file_size_base to be max_bytes_for_level_base / 10, so that there are
                 // 10 files in level 1.
-                .setTargetFileSizeBase(128 * SizeUnit.MB)
+                .setTargetFileSizeBase(targetOption.maxBytesForLevelBase() / 10)
                 // If prefix_extractor is set and memtable_prefix_bloom_size_ratio is not 0,
                 // create prefix bloom for memtable with the size of
                 // write_buffer_size * memtable_prefix_bloom_size_ratio.
@@ -171,23 +187,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // of files in level-0.
                 .setLevel0SlowdownWritesTrigger(80)
                 // Maximum number of level-0 files.  We stop writes at this point.
-                .setLevel0StopWritesTrigger(100)
-                // Flushing options:
-                // max_write_buffer_number sets the maximum number of mem_tables, both active
-                // and immutable.  If the active mem_table fills up and the total number of
-                // mem_tables is larger than max_write_buffer_number we stall further writes.
-                // This may happen if the flush process is slower than the write rate.
-                .setMaxWriteBufferNumber(4)
-                // Flushing options:
-                // min_write_buffer_number_to_merge is the minimum number of mem_tables to be
-                // merged before flushing to storage. For example, if this option is set to 2,
-                // immutable mem_tables are only flushed when there are two of them - a single
-                // immutable mem_table will never be flushed.  If multiple mem_tables are merged
-                // together, less data may be written to storage since two updates are merged to
-                // a single key. However, every Get() must traverse all immutable mem_tables
-                // linearly to check if the key is there. Setting this option too high may hurt
-                // read performance.
-                .setMinWriteBufferNumberToMerge(3);
+                .setLevel0StopWritesTrigger(100);
         }
     }
 
