@@ -19,6 +19,7 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 public interface IKVRange {
@@ -67,26 +68,26 @@ public interface IKVRange {
      *
      * @return
      */
-    CompletionStage<Void> recover();
+    CompletableFuture<Void> recover();
 
-    CompletionStage<Void> transferLeadership(long ver, String newLeader);
+    CompletableFuture<Void> transferLeadership(long ver, String newLeader);
 
-    CompletionStage<Void> changeReplicaConfig(long ver, Set<String> newVoters, Set<String> newLearners);
+    CompletableFuture<Void> changeReplicaConfig(long ver, Set<String> newVoters, Set<String> newLearners);
 
-    CompletionStage<Void> split(long ver, ByteString splitKey);
+    CompletableFuture<Void> split(long ver, ByteString splitKey);
 
-    CompletionStage<Void> merge(long ver, KVRangeId mergeeId);
+    CompletableFuture<Void> merge(long ver, KVRangeId mergeeId);
 
-    CompletionStage<Boolean> exist(long ver, ByteString key, boolean linearized);
+    CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized);
 
-    CompletionStage<Optional<ByteString>> get(long ver, ByteString key, boolean linearized);
+    CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized);
 
-    CompletionStage<ByteString> queryCoProc(long ver, ByteString query, boolean linearized);
+    CompletableFuture<ByteString> queryCoProc(long ver, ByteString query, boolean linearized);
 
-    CompletionStage<ByteString> put(long ver, ByteString key, ByteString value);
+    CompletableFuture<ByteString> put(long ver, ByteString key, ByteString value);
 
-    CompletionStage<ByteString> delete(long ver, ByteString key);
+    CompletableFuture<ByteString> delete(long ver, ByteString key);
 
-    CompletionStage<ByteString> mutateCoProc(long ver, ByteString mutate);
+    CompletableFuture<ByteString> mutateCoProc(long ver, ByteString mutate);
 
 }

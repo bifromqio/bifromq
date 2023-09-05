@@ -141,7 +141,7 @@ public class KVRange implements IKVRange {
     private final IKVRangeWALSubscription commitLogSubscription;
     private final IStatsCollector statsCollector;
     private final Executor fsmExecutor;
-    private final Executor bgExecutor;
+    private final Executor mgmtExecutor;
     private final AsyncRunner mgmtTaskRunner;
     private final IKVRangeCoProc coProc;
     private final KVRangeQueryLinearizer linearizer;
@@ -160,10 +160,8 @@ public class KVRange implements IKVRange {
     private final CompletableFuture<Void> destroySignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
     private final ILoadEstimator loadEstimator;
-    private final long compactionLingerNanos;
     private IKVRangeMessenger messenger;
     private volatile CompletableFuture<Void> checkWalSizeTask;
-    private long lastCompactionDoneAt;
 
     public KVRange(String clusterId,
                    String hostStoreId,
@@ -182,7 +180,6 @@ public class KVRange implements IKVRange {
             this.opts = opts.toBuilder().build();
             this.id = id;
             this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
-            this.compactionLingerNanos = Duration.ofSeconds(opts.getCompactLingerTimeSec()).toNanos();
             loadEstimator = new LoadEstimator(opts.getMaxRangeLoad(),
                 opts.getSplitKeyThreshold(),
                 opts.getLoadTrackingWindowSec(),
@@ -201,7 +198,7 @@ public class KVRange implements IKVRange {
                 opts.getWalRaftConfig(),
                 opts.getMaxWALFatchBatchSize());
             this.fsmExecutor = fsmExecutor;
-            this.bgExecutor = bgExecutor;
+            this.mgmtExecutor = mgmtExecutor;
             this.mgmtTaskRunner = new AsyncRunner(mgmtExecutor);
             this.coProc = coProcFactory.create(id, () -> accessor.getReader(true), loadEstimator);
             this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor);
@@ -336,13 +333,13 @@ public class KVRange implements IKVRange {
                         .forEach(f -> f.completeExceptionally(new KVRangeException.TryLater("Range closed")));
                     dumpSessions.values().forEach(KVRangeDumpSession::cancel);
                     statsCollector.stop()
-                        .thenComposeAsync(v -> mgmtTaskRunner.awaitDone(), bgExecutor)
-                        .thenComposeAsync(v -> wal.close(), bgExecutor)
+                        .thenComposeAsync(v -> mgmtTaskRunner.awaitDone(), mgmtExecutor)
+                        .thenComposeAsync(v -> wal.close(), mgmtExecutor)
                         .whenCompleteAsync((v, e) -> {
                             metricManager.close();
                             lifecycle.set(Closed);
                             closeSignal.complete(null);
-                        }, bgExecutor);
+                        }, mgmtExecutor);
                 }
             });
         }
@@ -394,7 +391,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<Void> transferLeadership(long ver, String newLeader) {
+    public CompletableFuture<Void> transferLeadership(long ver, String newLeader) {
         return metricManager.recordTransferLeader(() -> submitCommand(KVRangeCommand.newBuilder()
             .setTaskId(nextTaskId())
             .setVer(ver)
@@ -405,13 +402,13 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<Void> changeReplicaConfig(long ver, Set<String> newVoters, Set<String> newLearners) {
+    public CompletableFuture<Void> changeReplicaConfig(long ver, Set<String> newVoters, Set<String> newLearners) {
         return changeReplicaConfig(nextTaskId(), ver, newVoters, newLearners);
     }
 
-    private CompletionStage<Void> changeReplicaConfig(String taskId, long ver,
-                                                      Set<String> newVoters,
-                                                      Set<String> newLearners) {
+    private CompletableFuture<Void> changeReplicaConfig(String taskId, long ver,
+                                                        Set<String> newVoters,
+                                                        Set<String> newLearners) {
         return metricManager.recordConfigChange(() -> submitCommand(KVRangeCommand.newBuilder()
             .setTaskId(taskId)
             .setVer(ver)
@@ -423,7 +420,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<Void> split(long ver, ByteString splitKey) {
+    public CompletableFuture<Void> split(long ver, ByteString splitKey) {
         return metricManager.recordSplit(() -> submitCommand(KVRangeCommand.newBuilder()
             .setTaskId(nextTaskId())
             .setVer(ver)
@@ -435,7 +432,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<Void> merge(long ver, KVRangeId mergeeId) {
+    public CompletableFuture<Void> merge(long ver, KVRangeId mergeeId) {
         return metricManager.recordMerge(() -> submitCommand(KVRangeCommand.newBuilder()
             .setTaskId(nextTaskId())
             .setVer(ver)
@@ -446,7 +443,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<Boolean> exist(long ver, ByteString key, boolean linearized) {
+    public CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized) {
         if (!isWorking()) {
             // treat un-opened range as not exist
             return CompletableFuture.failedFuture(
@@ -456,7 +453,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<Optional<ByteString>> get(long ver, ByteString key, boolean linearized) {
+    public CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized) {
         if (!isWorking()) {
             // treat un-opened range as not exist
             return CompletableFuture.failedFuture(
@@ -466,7 +463,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<ByteString> queryCoProc(long ver, ByteString query, boolean linearized) {
+    public CompletableFuture<ByteString> queryCoProc(long ver, ByteString query, boolean linearized) {
         if (!isWorking()) {
             // treat un-opened range as not exist
             return CompletableFuture.failedFuture(
@@ -476,7 +473,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<ByteString> put(long ver, ByteString key, ByteString value) {
+    public CompletableFuture<ByteString> put(long ver, ByteString key, ByteString value) {
         return metricManager.recordPut(() -> submitCommand(KVRangeCommand.newBuilder()
             .setVer(ver)
             .setTaskId(nextTaskId())
@@ -485,7 +482,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<ByteString> delete(long ver, ByteString key) {
+    public CompletableFuture<ByteString> delete(long ver, ByteString key) {
         return metricManager.recordDelete(() -> submitCommand(KVRangeCommand.newBuilder()
             .setVer(ver)
             .setTaskId(nextTaskId())
@@ -494,7 +491,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletionStage<ByteString> mutateCoProc(long ver, ByteString mutate) {
+    public CompletableFuture<ByteString> mutateCoProc(long ver, ByteString mutate) {
         return metricManager.recordMutateCoProc(() -> submitCommand(KVRangeCommand.newBuilder()
             .setVer(ver)
             .setTaskId(nextTaskId())
@@ -1340,16 +1337,13 @@ public class KVRange implements IKVRange {
     }
 
     private void checkWalSize() {
-        if ((checkWalSizeTask == null || checkWalSizeTask.isDone()) &&
-            System.nanoTime() - lastCompactionDoneAt > compactionLingerNanos &&
-            wal.logDataSize() > opts.getCompactWALThresholdBytes()) {
+        if ((checkWalSizeTask == null || checkWalSizeTask.isDone())) {
             IKVRangeReader reader = accessor.borrow();
             long lastAppliedIndex = reader.lastAppliedIndex();
             accessor.returnBorrowed(reader);
             KVRangeSnapshot snapshot = wal.latestSnapshot();
-            if (snapshot.getLastAppliedIndex() < lastAppliedIndex) {
-                checkWalSizeTask = doCompact(accessor.metadata().blockingFirst())
-                    .whenComplete((v, e) -> lastCompactionDoneAt = System.nanoTime());
+            if (lastAppliedIndex - snapshot.getLastAppliedIndex() > opts.getCompactWALThreshold()) {
+                checkWalSizeTask = doCompact(accessor.metadata().blockingFirst());
             }
         }
     }
@@ -1362,14 +1356,16 @@ public class KVRange implements IKVRange {
             if (!isWorking()) {
                 return CompletableFuture.completedFuture(null);
             }
-            KVRangeSnapshot snapshot = accessor.checkpoint();
-            if (!isSafeToCompact(snapshot.getState())) {
-                log.debug("Skip compaction using snapshot[{}]", snapshot);
-                return CompletableFuture.completedFuture(null);
-            }
-            log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
-                toShortString(id), hostStoreId, snapshot);
-            return wal.compact(snapshot);
+            return metricManager.recordCompact(() -> {
+                KVRangeSnapshot snapshot = accessor.checkpoint();
+                if (!isSafeToCompact(snapshot.getState())) {
+                    log.debug("Skip compaction using snapshot[{}]", snapshot);
+                    return CompletableFuture.completedFuture(null);
+                }
+                log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
+                    toShortString(id), hostStoreId, snapshot);
+                return wal.compact(snapshot);
+            });
         });
     }
 

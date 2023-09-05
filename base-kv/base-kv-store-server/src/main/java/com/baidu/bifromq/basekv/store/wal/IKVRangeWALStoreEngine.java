@@ -22,7 +22,7 @@ import java.util.concurrent.ScheduledExecutorService;
 public interface IKVRangeWALStoreEngine {
     String id();
 
-    void start(ScheduledExecutorService bgTaskExecutor);
+    void start();
 
     void stop();
 

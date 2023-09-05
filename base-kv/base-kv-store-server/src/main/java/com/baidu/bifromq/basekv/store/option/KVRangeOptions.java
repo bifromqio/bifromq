@@ -33,14 +33,14 @@ public class KVRangeOptions {
     private double splitKeyThreshold = 0.6;
     private int loadTrackingWindowSec = 5;
     private int snapshotSyncBytesPerSec = 128 * 1024 * 1024; // 128MB
-    private int compactWALThresholdBytes = 256 * 1024 * 1024; // 256MB
-    private int compactLingerTimeSec = 5;
+    private int compactWALThreshold = 10000; // the max number of logs before compaction
     private long tickUnitInMS = 100;
-    private int maxWALFatchBatchSize = 64 * 1024; // 64KB
+    private int maxWALFatchBatchSize = 5 * 1024 * 1024; // 5MB
     private int snapshotSyncIdleTimeoutSec = 30;
     private int statsCollectIntervalSec = 5;
     private RaftConfig walRaftConfig = new RaftConfig()
         .setPreVote(true)
         .setInstallSnapshotTimeoutTick(300)
-        .setMaxSizePerAppend(2 * 1024 * 1024); // 2MB;
+        .setElectionTimeoutTick(30)
+        .setMaxSizePerAppend(10 * 1024 * 1024); // 10MB;
 }

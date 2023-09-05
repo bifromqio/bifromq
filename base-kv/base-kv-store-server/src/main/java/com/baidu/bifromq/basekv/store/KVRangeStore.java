@@ -167,7 +167,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (status.compareAndSet(Status.INIT, Status.STARTING)) {
             try {
                 this.messenger = messenger;
-                walStorageEngine.start(bgTaskExecutor);
+                walStorageEngine.start();
                 kvRangeEngine.start("storeId", id, "type", "data");
                 log.debug("KVRangeStore[{}] started", id);
                 status.set(Status.STARTED);

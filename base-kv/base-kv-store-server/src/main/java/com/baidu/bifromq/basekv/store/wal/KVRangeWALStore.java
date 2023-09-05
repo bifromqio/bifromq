@@ -27,7 +27,6 @@ import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.raft.proto.Voting;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
@@ -39,9 +38,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeMap;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -60,27 +57,23 @@ class KVRangeWALStore implements IRaftStateStore {
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
     private final FlushNotifier flushNotifier;
     private final Deque<StabilizingIndex> stabilizingIndices = new ConcurrentLinkedDeque<>();
-    private final AsyncRunner taskRunner;
     private long currentTerm = 0;
     private Voting currentVoting;
     private Snapshot latestSnapshot;
     private long lastIndex;
     private int logEntriesKeyInfix;
-
     private volatile StableListener stableListener = DEFAULT_STABLE_LISTENER;
 
 
     KVRangeWALStore(KVRangeId rangeId,
                     IKVEngine kvEngine,
                     int walKeyRangeId,
-                    FlushNotifier flushNotifier,
-                    Executor bgMgmtExecutor) {
+                    FlushNotifier flushNotifier) {
         this.rangeId = rangeId;
         this.kvEngine = kvEngine;
         this.storeId = kvEngine.id();
         this.walKeyRangeId = walKeyRangeId;
         this.flushNotifier = flushNotifier;
-        this.taskRunner = new AsyncRunner(bgMgmtExecutor);
         load();
     }
 
@@ -147,34 +140,31 @@ class KVRangeWALStore implements IRaftStateStore {
                     break;
                 }
             }
-            Runnable truncateTask = () -> {
-                log.trace("Truncating logs before index[{}]: rangeId={}, storeId={}",
-                    truncateBeforeIndex, toShortString(rangeId), storeId);
-                try (IKVEngineIterator it = kvEngine.newIterator(walKeyRangeId)) {
-                    int batchId = kvEngine.startBatch();
-                    // truncate log entry
-                    kvEngine.clearSubRange(batchId, walKeyRangeId,
-                        KVRangeWALKeys.logEntriesKeyPrefixInfix(rangeId, 0),
-                        KVRangeWALKeys.logEntryKey(rangeId, logEntriesKeyInfix, truncateBeforeIndex));
-                    // truncate config entry indexes
-                    for (it.seek(KVRangeWALKeys.configEntriesKeyPrefixInfix(rangeId, 0));
-                         it.isValid() &&
-                             it.key().startsWith(KVRangeWALKeys.configEntriesKeyPrefix(rangeId)) &&
-                             it.value().asReadOnlyByteBuffer().getLong() < truncateBeforeIndex;
-                         it.next()) {
-                        kvEngine.delete(batchId, walKeyRangeId, it.key());
-                    }
-                    kvEngine.endBatch(batchId);
-                    flush();
-                } catch (Throwable e) {
-                    log.error("Unexpected error during truncating log: rangeId={}, storeId={}",
-                        toShortString(rangeId), storeId, e);
-                } finally {
-                    log.debug("Logs truncated before index[{}]: rangeId={}, storeId={}",
-                        truncateBeforeIndex, toShortString(rangeId), storeId);
+            log.trace("Truncating logs before index[{}]: rangeId={}, storeId={}",
+                truncateBeforeIndex, toShortString(rangeId), storeId);
+            try (IKVEngineIterator it = kvEngine.newIterator(walKeyRangeId)) {
+                int batchId = kvEngine.startBatch();
+                // truncate log entry
+                kvEngine.clearSubRange(batchId, walKeyRangeId,
+                    KVRangeWALKeys.logEntriesKeyPrefixInfix(rangeId, 0),
+                    KVRangeWALKeys.logEntryKey(rangeId, logEntriesKeyInfix, truncateBeforeIndex));
+                // truncate config entry indexes
+                for (it.seek(KVRangeWALKeys.configEntriesKeyPrefixInfix(rangeId, 0));
+                     it.isValid() &&
+                         it.key().startsWith(KVRangeWALKeys.configEntriesKeyPrefix(rangeId)) &&
+                         it.value().asReadOnlyByteBuffer().getLong() < truncateBeforeIndex;
+                     it.next()) {
+                    kvEngine.delete(batchId, walKeyRangeId, it.key());
                 }
-            };
-            taskRunner.add(truncateTask);
+                kvEngine.endBatch(batchId);
+                flushNotifier.notifyFlush();
+            } catch (Throwable e) {
+                log.error("Unexpected error during truncating log: rangeId={}, storeId={}",
+                    toShortString(rangeId), storeId, e);
+            } finally {
+                log.debug("Logs truncated before index[{}]: rangeId={}, storeId={}",
+                    truncateBeforeIndex, toShortString(rangeId), storeId);
+            }
         } else {
             // the snapshot represents a different history, it happens when installing snapshot from leader
             // save snapshot
@@ -311,10 +301,12 @@ class KVRangeWALStore implements IRaftStateStore {
     }
 
     @Override
-    public CompletableFuture<Void> stop() {
+    public void stop() {
         log.debug("Stop range wal storage: rangeId={}, storeId={}", toShortString(rangeId), storeId);
         stableListener = DEFAULT_STABLE_LISTENER;
-        return taskRunner.awaitDone().toCompletableFuture();
+        if (!stabilizingIndices.isEmpty()) {
+            flush();
+        }
     }
 
     public void destroy() {

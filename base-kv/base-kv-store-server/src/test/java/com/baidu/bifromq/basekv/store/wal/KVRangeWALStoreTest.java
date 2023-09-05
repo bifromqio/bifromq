@@ -14,9 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
-import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
@@ -25,13 +23,10 @@ import com.baidu.bifromq.basekv.raft.BasicStateStoreTest;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.common.util.concurrent.MoreExecutors;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
@@ -39,14 +34,10 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
     private static final String DB_NAME = "testDB";
     private static final String DB_CHECKPOINT_DIR = "testDB_cp";
     private KVRangeWALStorageEngine stateStorageEngine;
-    private ScheduledExecutorService bgMgmtTaskExecutor;
-
     public Path dbRootDir;
 
     @BeforeMethod
     public void setup() throws IOException {
-        bgMgmtTaskExecutor =
-            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
         KVEngineConfigurator<?> walConfigurator;
         if (isDevEnv()) {
             walConfigurator = new InMemoryKVEngineConfigurator();
@@ -57,12 +48,11 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
                 .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
         }
         stateStorageEngine = new KVRangeWALStorageEngine("testcluster", null, walConfigurator);
-        stateStorageEngine.start(bgMgmtTaskExecutor);
+        stateStorageEngine.start();
     }
 
     @AfterMethod
     public void teardown() {
-        MoreExecutors.shutdownAndAwaitTermination(bgMgmtTaskExecutor, 5, TimeUnit.SECONDS);
         stateStorageEngine.stop();
         if (dbRootDir != null) {
             TestUtil.deleteDir(dbRootDir.toString());

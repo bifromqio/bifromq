@@ -40,7 +40,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         assertEquals(storeIds.size(), 2);
         storeIds.remove(leader);
         cluster.shutdownStore(storeIds.get(0));
-        await().ignoreExceptions().until(() -> {
+        await().ignoreExceptions().forever().until(() -> {
             KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });
@@ -48,7 +48,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         cluster.recover(leader).toCompletableFuture().join();
         await().until(() -> {
             KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
-            return s != null && s.followers.size() == 0 && s.leader.equals(leader);
+            return s != null && s.followers.isEmpty() && s.leader.equals(leader);
         });
     }
 
@@ -72,9 +72,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         cluster.recover(leader).toCompletableFuture().join();
         await().until(() -> {
             KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
-            return s != null &&
-                s.followers.size() == 0 &&
-                s.leader.equals(leader);
+            return s != null && s.followers.isEmpty() && s.leader.equals(leader);
         });
     }
 }
