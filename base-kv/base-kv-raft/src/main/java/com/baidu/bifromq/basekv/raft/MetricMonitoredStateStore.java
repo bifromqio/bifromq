@@ -23,7 +23,6 @@ import io.micrometer.core.instrument.Timer;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 public class MetricMonitoredStateStore implements IRaftStateStore {
     private final IRaftStateStore delegate;
@@ -105,11 +104,12 @@ public class MetricMonitoredStateStore implements IRaftStateStore {
     }
 
     @Override
-    public CompletableFuture<Void> stop() {
-        return delegate.stop().whenComplete((v, e) -> metricManager.close());
+    public void stop() {
+        delegate.stop();
+        metricManager.close();
     }
 
-    private class MetricManager {
+    private static class MetricManager {
         final Timer currentTermTimer;
 
         final Timer saveTermTimer;

@@ -172,5 +172,5 @@ public interface IRaftStateStore {
      * This method will be called by RaftNode on stop, implementation should make unstable index stabilized, and should
      * NEVER call listener thereafter
      */
-    CompletableFuture<Void> stop();
+    void stop();
 }

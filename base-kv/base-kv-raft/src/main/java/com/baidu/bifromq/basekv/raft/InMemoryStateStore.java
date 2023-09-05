@@ -24,7 +24,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -230,7 +229,7 @@ public final class InMemoryStateStore implements IRaftStateStore {
         stableListener = listener;
     }
 
-    public CompletableFuture<Void> stop() {
+    public void stop() {
         flusher.shutdown();
         try {
             flusher.awaitTermination(5, TimeUnit.SECONDS);
@@ -238,7 +237,6 @@ public final class InMemoryStateStore implements IRaftStateStore {
         } finally {
             stableListener = DEFAULT_STABLE_LISTENER;
         }
-        return CompletableFuture.completedFuture(null);
     }
 
     int offset(long index) {
