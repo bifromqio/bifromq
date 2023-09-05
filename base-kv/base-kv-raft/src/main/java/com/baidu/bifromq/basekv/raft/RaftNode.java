@@ -25,6 +25,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -311,8 +312,9 @@ public final class RaftNode implements IRaftNode {
         this.stateStorage = new MetricMonitoredStateStore(stateStore, Tags.of(tags));
         this.id = stateStorage.local();
         this.config = config.toBuilder().build();
-        this.raftExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-            new LinkedTransferQueue<>(), threadFactory);
+        this.raftExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedTransferQueue<>(), threadFactory), "raft-executor");
         stateStore.addStableListener(this::onStabilized);
     }
 
@@ -492,12 +494,11 @@ public final class RaftNode implements IRaftNode {
                     Runnable stop = () -> {
                         assert status.get() == Status.STARTED;
                         status.set(Status.STOPPING);
-                        stateStorage.stop().whenComplete((v, e) -> {
-                            metricMgr.close();
-                            status.set(Status.STOPPED);
-                            log.debug("Raft node[{}] stopped", id());
-                            lastTask.complete(null);
-                        });
+                        stateStorage.stop();
+                        metricMgr.close();
+                        status.set(Status.STOPPED);
+                        log.debug("Raft node[{}] stopped", id());
+                        lastTask.complete(null);
                     };
                     raftExecutor.execute(stop);
                 }
