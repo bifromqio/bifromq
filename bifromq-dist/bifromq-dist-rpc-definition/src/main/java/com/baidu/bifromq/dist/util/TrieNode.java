@@ -30,7 +30,7 @@ public class TrieNode {
     private final Map<String, TrieNode> childMap = new HashMap<>();
     private boolean isLastTopicLevel;
     private Iterable<TopicMessage> messages;
-    private List<TrieNode> sortecChildList;
+    private List<TrieNode> sortedChildList;
 
     public TrieNode() {
         this(TopicUtil.NUL);
@@ -62,11 +62,11 @@ public class TrieNode {
     }
 
     public List<TrieNode> children() {
-        if (sortecChildList == null) {
-            sortecChildList = Lists.newArrayList(childMap.values());
-            sortecChildList.sort(Comparator.comparing(TrieNode::levelName));
+        if (sortedChildList == null) {
+            sortedChildList = Lists.newArrayList(childMap.values());
+            sortedChildList.sort(Comparator.comparing(TrieNode::levelName));
         }
-        return sortecChildList;
+        return sortedChildList;
     }
 
     public boolean add(List<String> topicLevels, Iterable<TopicMessage> messages) {
@@ -74,7 +74,7 @@ public class TrieNode {
         String childLevelName = topicLevels.get(0);
         TrieNode child = childMap.computeIfAbsent(childLevelName, k -> {
             // new child added, reset the sorted list
-            sortecChildList = null;
+            sortedChildList = null;
             return new TrieNode(k);
         });
         if (topicLevels.size() > 1) {
