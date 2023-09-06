@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.testng.Assert;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class ReplicaCntBalancerTest {
@@ -40,19 +39,16 @@ public class ReplicaCntBalancerTest {
 
     private ReplicaCntBalancer balancer;
 
-    @BeforeMethod
-    public void setup() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3);
-    }
-
     @Test
     public void balanceWithoutUpdate() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         Optional<BalanceCommand> balance = balancer.balance();
         Assert.assertTrue(balance.isEmpty());
     }
 
     @Test
     public void balanceWithOneStore() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<KVRangeDescriptor> rangeDescriptors =
             DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(LOCAL_STORE_ID), Sets.newHashSet());
@@ -67,6 +63,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithTwoStore() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<KVRangeDescriptor> rangeDescriptors =
             DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(LOCAL_STORE_ID), Sets.newHashSet());
@@ -91,6 +88,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithThreeStore() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
         List<String> learners = Lists.newArrayList();
@@ -121,6 +119,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithFourStore() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList();
@@ -151,27 +150,130 @@ public class ReplicaCntBalancerTest {
     }
 
     @Test
-    public void balanceWithFourLearners() {
+    public void balanceWithFourStore2() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 0);
         KVRangeId id = KVRangeIdUtil.generate();
-        List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store2", "store3");
-        List<String> learners = Lists.newArrayList("store4", "store5", "store6", "store7");
+        List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
+        List<String> learners = Lists.newArrayList();
         List<KVRangeDescriptor> rangeDescriptors =
             DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        for (int i = 0; i < voters.size() + learners.size(); i++) {
+        for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
-                .setId(i < voters.size() ? voters.get(i) : learners.get(i - voters.size()))
+                .setId(voters.get(i))
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
-        // 7 store with 4 voters
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store2")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(1.0)))
+            .build());
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store3")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(2.0)))
+            .build());
+        // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
         Optional<BalanceCommand> commandOptional = balancer.balance();
-        Assert.assertFalse(commandOptional.isPresent());
+        Assert.assertTrue(commandOptional.isPresent());
+        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        Assert.assertEquals(3, changeConfigCommand.getVoters().size());
+        Assert.assertEquals(0, changeConfigCommand.getLearners().size());
+
+        Set<String> expectedVoters = Sets.newHashSet(voters);
+        expectedVoters.add("store2");
+        Set<String> expectedLearners = Sets.newHashSet();
+        Assert.assertEquals(expectedVoters, changeConfigCommand.getVoters());
+        Assert.assertEquals(expectedLearners, changeConfigCommand.getLearners());
+    }
+
+    @Test
+    public void balanceWithFiveStore() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 1);
+        KVRangeId id = KVRangeIdUtil.generate();
+        List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
+        List<String> learners = Lists.newArrayList();
+        List<KVRangeDescriptor> rangeDescriptors =
+            DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        for (int i = 0; i < voters.size(); i++) {
+            storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+                .setId(voters.get(i))
+                .addRanges(rangeDescriptors.get(i))
+                .build());
+        }
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store2")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(1.0)))
+            .build());
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store3")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(2.0)))
+            .build());
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store4")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(3.0)))
+            .build());
+        // four store, config with three voters and no learner
+        balancer.update(storeDescriptors);
+        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Assert.assertTrue(commandOptional.isPresent());
+        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        Assert.assertEquals(3, changeConfigCommand.getVoters().size());
+        Assert.assertEquals(1, changeConfigCommand.getLearners().size());
+
+        Set<String> expectedVoters = Sets.newHashSet(voters);
+        expectedVoters.add("store2");
+        Set<String> expectedLearners = Sets.newHashSet("store3");
+        Assert.assertEquals(expectedVoters, changeConfigCommand.getVoters());
+        Assert.assertEquals(expectedLearners, changeConfigCommand.getLearners());
+    }
+
+    @Test
+    public void balanceWithFiveStore2() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, -1);
+        KVRangeId id = KVRangeIdUtil.generate();
+        List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
+        List<String> learners = Lists.newArrayList();
+        List<KVRangeDescriptor> rangeDescriptors =
+            DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        for (int i = 0; i < voters.size(); i++) {
+            storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+                .setId(voters.get(i))
+                .addRanges(rangeDescriptors.get(i))
+                .build());
+        }
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store2")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(1.0)))
+            .build());
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store3")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(2.0)))
+            .build());
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store4")
+            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(3.0)))
+            .build());
+        // four store, config with three voters and no learner
+        balancer.update(storeDescriptors);
+        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Assert.assertTrue(commandOptional.isPresent());
+        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        Assert.assertEquals(3, changeConfigCommand.getVoters().size());
+        Assert.assertEquals(2, changeConfigCommand.getLearners().size());
+
+        Set<String> expectedVoters = Sets.newHashSet(voters);
+        expectedVoters.add("store2");
+        Set<String> expectedLearners = Sets.newHashSet("store3", "store4");
+        Assert.assertEquals(expectedVoters, changeConfigCommand.getVoters());
+        Assert.assertEquals(expectedLearners, changeConfigCommand.getLearners());
     }
 
     @Test
     public void balanceWithTwoVotersAndThreeLearners() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store2");
         List<String> learners = Lists.newArrayList("store3", "store4", "store5");
@@ -195,6 +297,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void rangeWithThreeVAndTwoAliveAndOneStoreSpare() throws InterruptedException {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList();
@@ -210,10 +313,8 @@ public class ReplicaCntBalancerTest {
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
-        balancer.update(Sets.newHashSet(storeDescriptors));
         storeDescriptors.remove(storeDescriptors.size() - 1);
         balancer.update(Sets.newHashSet(storeDescriptors));
-        Thread.sleep(250);
         Optional<BalanceCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
         ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
@@ -228,6 +329,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void rangeWithThreeVAndThreeL() {
+        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList("store3", "store4", "store5");
@@ -265,4 +367,5 @@ public class ReplicaCntBalancerTest {
         Assert.assertEquals(expectedVoters, changeConfigCommand.getVoters());
         Assert.assertEquals(expectedLearners, changeConfigCommand.getLearners());
     }
+
 }
