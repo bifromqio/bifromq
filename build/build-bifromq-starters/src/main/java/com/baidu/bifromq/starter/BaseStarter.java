@@ -28,7 +28,6 @@ import io.micrometer.core.instrument.binder.jvm.JvmInfoMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
 import io.micrometer.core.instrument.binder.netty4.NettyAllocatorMetrics;
-import io.micrometer.core.instrument.binder.system.FileDescriptorMetrics;
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
 import io.micrometer.core.instrument.binder.system.UptimeMetrics;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -130,7 +129,8 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
     @Override
     public void start() {
         // os metrics
-        new FileDescriptorMetrics().bindTo(Metrics.globalRegistry);
+        // disable file descriptor metrics since its too heavy
+//        new FileDescriptorMetrics().bindTo(Metrics.globalRegistry);
         new UptimeMetrics().bindTo(Metrics.globalRegistry);
         new ProcessorMetrics().bindTo(Metrics.globalRegistry);
         // jvm metrics
