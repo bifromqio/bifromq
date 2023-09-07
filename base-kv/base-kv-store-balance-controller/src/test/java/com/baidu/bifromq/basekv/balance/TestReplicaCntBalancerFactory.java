@@ -19,6 +19,6 @@ public class TestReplicaCntBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, 3);
+        return new ReplicaCntBalancer(localStoreId, 3, 0);
     }
 }
