@@ -23,6 +23,6 @@ public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, RETAIN_STORE_VOTER_COUNT.get());
+        return new ReplicaCntBalancer(localStoreId, RETAIN_STORE_VOTER_COUNT.get(), -1);
     }
 }

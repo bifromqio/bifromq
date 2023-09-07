@@ -34,12 +34,14 @@ import lombok.extern.slf4j.Slf4j;
 public class ReplicaCntBalancer extends StoreBalancer {
 
     private final int voterCount;
+    private final int learnerCount; // -1 represent no limit
 
     private Set<KVRangeStoreDescriptor> latestStoreDescriptors = new HashSet<>();
 
-    public ReplicaCntBalancer(String localStoreId, int voterCount) {
+    public ReplicaCntBalancer(String localStoreId, int voterCount, int learnerCount) {
         super(localStoreId);
         this.voterCount = voterCount;
+        this.learnerCount = learnerCount;
     }
 
     @Override
@@ -79,13 +81,9 @@ public class ReplicaCntBalancer extends StoreBalancer {
         for (KVRangeDescriptor rangeDescriptor : localLeaderRangeDescriptors) {
             Set<String> votersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getVotersList());
             Set<String> learnersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getLearnersList());
-            Set<String> newVoters = Sets.newHashSet(votersInConfig).stream()
-                .filter(sortedAliveStore::contains)
-                .collect(Collectors.toSet());
-            checkVotersCount(sortedAliveStore, newVoters);
-            Set<String> newLearners = sortedAliveStore.stream()
-                .filter(l -> !newVoters.contains(l))
-                .collect(Collectors.toSet());
+            Set<String> newVoters = getNewVoters(sortedAliveStore, votersInConfig);
+            sortedAliveStore.removeIf(newVoters::contains);
+            Set<String> newLearners = addLearners(sortedAliveStore, newVoters, learnersInConfig);
             if (!votersInConfig.equals(newVoters) || !learnersInConfig.equals(newLearners)) {
                 ChangeConfigCommand changeConfigCommand = ChangeConfigCommand.builder()
                     .toStore(localStoreId)
@@ -100,18 +98,42 @@ public class ReplicaCntBalancer extends StoreBalancer {
         return Optional.empty();
     }
 
-    private void checkVotersCount(List<String> sortedAliveStores, Set<String> voters) {
-        if (voters.size() < voterCount) {
-            // Add voters from less hot store
-            for (String s : sortedAliveStores) {
-                if (voters.size() == voterCount) {
-                    break;
-                }
-                voters.add(s);
+    private Set<String> getNewVoters(List<String> sortedCandidateStores, Set<String> oldVoters) {
+        Set<String> newVoters = oldVoters.stream()
+            .filter(sortedCandidateStores::contains)
+            .collect(Collectors.toSet());
+        // Add voter from less hot store
+        for (String s : sortedCandidateStores) {
+            if (newVoters.size() == voterCount) {
+                break;
             }
+            newVoters.add(s);
         }
+        return newVoters;
     }
 
+    private Set<String> addLearners(List<String> sortedCandidateStores, Set<String> voters, Set<String> oldLearners) {
+        if (learnerCount < 0) {
+            return Sets.newHashSet(sortedCandidateStores);
+        } else if (learnerCount > 0) {
+            Set<String> newLearners = oldLearners.stream()
+                .filter(l -> !voters.contains(l))
+                .filter(sortedCandidateStores::contains)
+                .collect(Collectors.toSet());
+            // Add some learners from less hot store
+            for (String storeId : sortedCandidateStores) {
+                if (newLearners.size() == learnerCount) {
+                    break;
+                }
+                if (!voters.contains(storeId)) {
+                    newLearners.add(storeId);
+                }
+            }
+            return newLearners;
+        } else {
+            return Sets.newHashSet();
+        }
+    }
 
     private double calStoreLoad(KVRangeStoreDescriptor descriptor) {
         return descriptor.getRangesList()
