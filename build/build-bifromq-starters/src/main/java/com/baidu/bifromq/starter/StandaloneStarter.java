@@ -122,7 +122,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         StandaloneConfigConsolidator.consolidate(config);
         log.info("Consolidated Config: \n{}", ConfigUtil.serialize(config));
 
-        Metrics.globalRegistry.config().commonTags("env", config.getClusterConfig().getEnv());
+        if (!Strings.isNullOrEmpty(config.getClusterConfig().getEnv())) {
+            Metrics.globalRegistry.config()
+                .commonTags("env", config.getClusterConfig().getEnv());
+        }
 
         pluginMgr = new BifroMQPluginManager();
         pluginMgr.loadPlugins();
