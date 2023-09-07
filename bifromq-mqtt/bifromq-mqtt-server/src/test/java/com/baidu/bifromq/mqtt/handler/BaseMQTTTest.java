@@ -159,7 +159,7 @@ public abstract class BaseMQTTTest {
     protected int remotePort = 8888;
     protected PublishSubject<Quit> kickSubject = PublishSubject.create();
     protected long disconnectDelay = 5000;
-    protected BiConsumer<Fetched, Throwable> inboxFetchConsumer;
+    protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
 
     private AutoCloseable closeable;

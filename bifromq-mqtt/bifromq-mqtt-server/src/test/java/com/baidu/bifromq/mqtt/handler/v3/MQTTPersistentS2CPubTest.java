@@ -83,7 +83,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     @Test
     public void qoS0Pub() {
         mockAuthCheck(true);
-        inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE), null);
+        inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -99,7 +99,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         // not by pass
         mockAuthCheck(false);
         mockDistUnmatch(true);
-        inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE), null);
+        inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -113,7 +113,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     public void qoS0PubAndHintChange() {
         mockAuthCheck(true);
         int messageCount = 2;
-        inboxFetchConsumer.accept(fetch(messageCount, 64 * 1024, QoS.AT_MOST_ONCE), null);
+        inboxFetchConsumer.accept(fetch(messageCount, 64 * 1024, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -129,7 +129,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         mockAuthCheck(true);
         mockInboxCommit(AT_LEAST_ONCE);
         int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE), null);
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
         channel.runPendingTasks();
         // s2c pub received and ack
         for (int i = 0; i < messageCount; i++) {
@@ -148,7 +148,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         mockAuthCheck(true);
         mockInboxCommit(AT_LEAST_ONCE);
         int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE), null);
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
         channel.runPendingTasks();
         // s2c pub received and ack
         for (int i = 0; i < messageCount; i++) {
@@ -169,7 +169,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         mockAuthCheck(false);
         mockDistUnmatch(true);
         int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE), null);
+        inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -184,7 +184,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         mockAuthCheck(true);
         mockInboxCommit(EXACTLY_ONCE);
         int messageCount = 2;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE), null);
+        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
         channel.runPendingTasks();
         // s2c pub received and rec
         for (int i = 0; i < messageCount; i++) {
@@ -211,7 +211,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         mockAuthCheck(false);
         mockDistUnmatch(true);
         int messageCount = 3;
-        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE), null);
+        inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -285,7 +285,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             .addAllQos2Seq(Lists.newArrayList(1L, 2L, 3L, 4L))
             .setResult(Result.OK)
             .build();
-        inboxFetchConsumer.accept(fetched, null);
+        inboxFetchConsumer.accept(fetched);
         channel.runPendingTasks();
         // should receive two messages from client1 and client2
         MqttPublishMessage message = channel.readOutbound();
@@ -304,7 +304,15 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void fetchError() {
-        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build(), null);
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        verifyEvent(1, CLIENT_CONNECTED);
+    }
+
+    @Test
+    public void fetchNoInbox() {
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.NO_INBOX).build());
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         verifyEvent(2, CLIENT_CONNECTED, INBOX_TRANSIENT_ERROR);
