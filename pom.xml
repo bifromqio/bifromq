@@ -81,8 +81,8 @@
 
     <properties>
         <javax.annotation.api.version>1.3.2</javax.annotation.api.version>
+        <pf4j.version>3.10.0</pf4j.version>
         <javax.ws.rs-api.version>2.1.1</javax.ws.rs-api.version>
-        <pf4j.version>3.8.0</pf4j.version>
         <reflections.verion>0.10.2</reflections.verion>
         <apache.commons.cli.version>1.5.0</apache.commons.cli.version>
         <apache.commons.lang.version>3.12.0</apache.commons.lang.version>
