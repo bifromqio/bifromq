@@ -82,7 +82,6 @@ public class ReplicaCntBalancer extends StoreBalancer {
             Set<String> votersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getVotersList());
             Set<String> learnersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getLearnersList());
             Set<String> newVoters = getNewVoters(sortedAliveStore, votersInConfig);
-            sortedAliveStore.removeIf(newVoters::contains);
             Set<String> newLearners = addLearners(sortedAliveStore, newVoters, learnersInConfig);
             if (!votersInConfig.equals(newVoters) || !learnersInConfig.equals(newLearners)) {
                 ChangeConfigCommand changeConfigCommand = ChangeConfigCommand.builder()
@@ -114,7 +113,9 @@ public class ReplicaCntBalancer extends StoreBalancer {
 
     private Set<String> addLearners(List<String> sortedCandidateStores, Set<String> voters, Set<String> oldLearners) {
         if (learnerCount < 0) {
-            return Sets.newHashSet(sortedCandidateStores);
+            return sortedCandidateStores.stream()
+                .filter(s -> !voters.contains(s))
+                .collect(Collectors.toSet());
         } else if (learnerCount > 0) {
             Set<String> newLearners = oldLearners.stream()
                 .filter(l -> !voters.contains(l))
