@@ -241,7 +241,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     public CompletableFuture<RespT> invoke(ReqT req) {
         RequestTask<ReqT, RespT> newRequest = new RequestTask<>(req);
         switch (state.get()) {
-            case Normal: {
+            case Normal -> {
                 int currentCount = taskCount.get();
                 trace("ReqPipeline@{} of {} queue request: queueSize={},req={}",
                     this.hashCode(), methodDescriptor.getBareMethodName(), currentCount, req);
@@ -249,9 +249,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 sendUntilStreamNotReadyOrNoTask();
                 RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqAcceptCount);
                 RPCMeters.recordSummary(meterKey, RPCMetric.ReqPipelineDepth, currentCount);
-                break;
             }
-            case ServiceUnavailable: {
+            case ServiceUnavailable -> {
                 int currentCount = taskCount.get();
                 trace("ReqPipeline@{} of {} queue request: queueSize={},req={}",
                     this.hashCode(), methodDescriptor.getBareMethodName(), currentCount, req);
@@ -261,14 +260,13 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 } else {
                     abortFlightRequests(new ServiceUnavailableException("Service unavailable now"));
                 }
-                break;
             }
-            case Closed:
+            case Closed -> {
                 trace("ReqPipeline@{} of {} drop request due to already close: req={}",
                     this.hashCode(), methodDescriptor.getBareMethodName(), req);
                 // pipeline has already closed, finish it with close reason
                 newRequest.finish(new RequestRejectedException("Pipeline has closed"));
-                break;
+            }
         }
         return newRequest.future;
     }
@@ -324,7 +322,11 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     private void scheduleSignal(long delay, TimeUnit timeUnit) {
         log.debug("ReqPipeline@{} of {} schedule targeting in {} ms",
             this.hashCode(), methodDescriptor.getBareMethodName(), delay);
-        disposables.add(Observable.timer(delay, timeUnit).subscribe(t -> signal.onNext(System.nanoTime())));
+        disposables.add(Observable.timer(delay, timeUnit).subscribe(t -> {
+            if (!isClosed()) {
+                signal.onNext(System.nanoTime());
+            }
+        }));
     }
 
     private void scheduleSignal() {

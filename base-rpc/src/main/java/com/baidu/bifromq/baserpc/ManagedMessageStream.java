@@ -210,15 +210,14 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     @Override
     public void ack(AckT ack) {
         switch (state.get()) {
-            case Normal:
+            case Normal -> {
                 ackSendingBuffers.offer(ack);
                 // check if pipeline is still open
                 sendUntilStreamNotReadyOrNoTask();
                 RPCMeters.recordCount(meterKey, RPCMetric.StreamAckAcceptCount);
-                break;
-            case ServiceUnavailable:
-                throw new ServiceUnavailableException("Service unavailable");
-            case Closed:
+            }
+            case ServiceUnavailable -> throw new ServiceUnavailableException("Service unavailable");
+            case Closed ->
                 // pipeline has already closed, finish it with close reason
                 throw new RequestRejectedException("Pipeline has closed");
         }
@@ -272,7 +271,11 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     }
 
     private void scheduleSignal(long delay, TimeUnit timeUnit) {
-        Observable.timer(delay, timeUnit).subscribe(t -> signal.onNext(System.nanoTime()));
+        disposables.add(Observable.timer(delay, timeUnit).subscribe(t -> {
+            if (!isClosed()) {
+                signal.onNext(System.nanoTime());
+            }
+        }));
     }
 
     private void scheduleSignal() {
