@@ -4,18 +4,16 @@
 # providing a helpful reference for writing and customizing this file.
 
 # if the node is responsible for cluster bootstrap. NOTE: there must be EXACTLY ONE bootstrap node in cluster deployment
-bootstrap: false
+bootstrap: true
 
 mqttServerConfig:
   tcpListener:
-    port: 8883
-  wsListener:
-    enable: false
+    port: 1883
 
 # config for building BifroMQ cluster
 clusterConfig:
   # The environment of the cluster, cluster member under same env can communicate with each other
-  env:
+  env: "Test"
   # The host address to bind for inter-member communication. If left blank, a site-local address will be used if available
   host:
   # This is the port for listening to cluster membership-related messages. If left blank, the operating system will help find an available one automatically.
