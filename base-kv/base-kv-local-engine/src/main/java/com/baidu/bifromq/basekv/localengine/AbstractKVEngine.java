@@ -94,9 +94,9 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
 
     @Override
     public final void stop() {
+        flush();
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             try {
-                flush();
                 if (gcFuture != null) {
                     gcFuture.cancel(true);
                     if (!gcFuture.isCancelled()) {
