@@ -201,9 +201,11 @@ public class KVRange implements IKVRange {
             this.mgmtExecutor = mgmtExecutor;
             this.mgmtTaskRunner = new AsyncRunner(mgmtExecutor);
             this.coProc = coProcFactory.create(id, () -> accessor.getReader(true), loadEstimator);
-            this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor);
+
+            long lastAppliedIndex = accessor.getReader(false).lastAppliedIndex();
+            this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex);
             this.queryRunner = new KVRangeQueryRunner(accessor, coProc, queryExecutor, linearizer);
-            this.commitLogSubscription = wal.subscribe(accessor.getReader(false).lastAppliedIndex(),
+            this.commitLogSubscription = wal.subscribe(lastAppliedIndex,
                 new IKVRangeWALSubscriber() {
                     @Override
                     public CompletableFuture<Void> apply(LogEntry log) {
@@ -760,10 +762,8 @@ public class KVRange implements IKVRange {
                                                     String.format("Config change aborted[taskId=%s] due to %s", taskId,
                                                         e.getMessage());
                                                 log.debug(errorMessage);
-                                                if (e.getClass() !=
-                                                    ClusterConfigChangeException.NotLeaderException.class &&
-                                                    e.getCause().getClass() !=
-                                                        ClusterConfigChangeException.NotLeaderException.class) {
+                                                if (e instanceof ClusterConfigChangeException.NotLeaderException ||
+                                                    e.getCause() instanceof ClusterConfigChangeException.NotLeaderException) {
                                                     finishCommandWithError(taskId,
                                                         new KVRangeException.TryLater(errorMessage));
                                                 }

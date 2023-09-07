@@ -13,24 +13,24 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVRangeQueryLinearizerTest {
     @Mock
     private Supplier<CompletableFuture<Long>> readIndexSupplier;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -42,9 +42,25 @@ public class KVRangeQueryLinearizerTest {
     }
 
     @Test
+    public void linearizeAfterInit() {
+        KVRangeQueryLinearizer linearizer =
+            new KVRangeQueryLinearizer(readIndexSupplier, MoreExecutors.directExecutor(), 3);
+        when(readIndexSupplier.get())
+            .thenReturn(CompletableFuture.completedFuture(1L),
+                CompletableFuture.completedFuture(2L),
+                CompletableFuture.completedFuture(3L));
+        CompletableFuture<Void> t1 = linearizer.linearize().toCompletableFuture();
+        CompletableFuture<Void> t2 = linearizer.linearize().toCompletableFuture();
+        CompletableFuture<Void> t3 = linearizer.linearize().toCompletableFuture();
+        assertTrue(t1.isDone());
+        assertTrue(t2.isDone());
+        assertTrue(t3.isDone());
+    }
+
+    @Test
     public void linearize() {
         KVRangeQueryLinearizer linearizer =
-            new KVRangeQueryLinearizer(readIndexSupplier, MoreExecutors.directExecutor());
+            new KVRangeQueryLinearizer(readIndexSupplier, MoreExecutors.directExecutor(), 0);
         when(readIndexSupplier.get())
             .thenReturn(CompletableFuture.completedFuture(1L),
                 CompletableFuture.completedFuture(1L),

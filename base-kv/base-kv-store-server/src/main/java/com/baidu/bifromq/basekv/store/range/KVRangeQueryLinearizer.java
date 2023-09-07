@@ -33,9 +33,11 @@ class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
     private final AtomicBoolean linearizing = new AtomicBoolean();
     private volatile long lastAppliedIndex = 0;
 
-    KVRangeQueryLinearizer(Supplier<CompletableFuture<Long>> readIndexProvider, Executor executor) {
+    KVRangeQueryLinearizer(Supplier<CompletableFuture<Long>> readIndexProvider, Executor executor,
+                           long lastAppliedIndex) {
         this.readIndexProvider = readIndexProvider;
         this.executor = executor;
+        this.lastAppliedIndex = lastAppliedIndex;
     }
 
     @Override
