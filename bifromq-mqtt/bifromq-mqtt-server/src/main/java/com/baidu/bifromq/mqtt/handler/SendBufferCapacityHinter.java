@@ -39,11 +39,13 @@ public final class SendBufferCapacityHinter {
         lastHint = -1;
         lastHintRemaining = -1;
         lastMsgSize = 0;
+        sendHint(100);
     }
 
     // callback to receive hint update
     public void hint(IntConsumer hintConsumer) {
         this.hintConsumer = hintConsumer;
+        sendHint(100);
     }
 
     public boolean hasCapacity() {

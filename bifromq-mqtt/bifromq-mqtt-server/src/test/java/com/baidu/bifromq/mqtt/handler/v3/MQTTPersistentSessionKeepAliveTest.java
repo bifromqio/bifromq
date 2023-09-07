@@ -11,23 +11,22 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.server;
+package com.baidu.bifromq.mqtt.handler.v3;
 
-public interface IInboxQueueFetcher {
+import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
-    String delivererKey();
+public class MQTTPersistentSessionKeepAliveTest extends BaseMQTTTest {
+    @BeforeMethod
+    public void setup() {
+        super.setup();
+        connectAndVerify(false);
+    }
 
-    String tenantId();
+    @AfterMethod
+    public void clean() throws Exception {
+        super.clean();
+    }
 
-    String inboxId();
-
-    long lastFetchTS();
-
-    long lastFetchQoS0Seq();
-
-    void signalFetch();
-
-    void touch();
-
-    void close();
 }

@@ -11,20 +11,24 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.server.scheduler;
+package com.baidu.bifromq.inbox.server;
 
-import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.storage.proto.FetchParams;
-import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.google.protobuf.ByteString;
-import lombok.AllArgsConstructor;
+public interface IInboxFetcher {
+    String tenantId();
 
-public interface IInboxFetchScheduler extends IBatchCallScheduler<IInboxFetchScheduler.InboxFetch, Fetched> {
+    String delivererKey();
 
+    @Deprecated
+    String inboxId();
 
-    @AllArgsConstructor
-    class InboxFetch {
-        public final ByteString scopedInboxId;
-        public final FetchParams params;
-    }
+    long lastFetchTS();
+
+    @Deprecated
+    void signalFetch();
+
+    void signalFetch(String inboxId);
+
+    void touch();
+
+    void close();
 }

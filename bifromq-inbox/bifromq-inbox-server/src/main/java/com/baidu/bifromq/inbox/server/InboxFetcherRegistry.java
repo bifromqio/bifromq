@@ -25,17 +25,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
-    private final ConcurrentMap<String, Map<String, IInboxQueueFetcher>> fetchers = new ConcurrentHashMap<>();
+final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
+    private final ConcurrentMap<String, Map<String, IInboxFetcher>> fetchers = new ConcurrentHashMap<>();
 
-    void reg(IInboxQueueFetcher fetcher) {
+    void reg(IInboxFetcher fetcher) {
         fetchers.compute(fetcher.tenantId(), (key, val) -> {
             if (val == null) {
                 val = new HashMap<>();
                 gauging(fetcher.tenantId(), InboxFetcherGauge,
                     () -> fetchers.getOrDefault(fetcher.tenantId(), emptyMap()).size());
             }
-            IInboxQueueFetcher prevFetcher = val.put(fetcher.inboxId(), fetcher);
+            IInboxFetcher prevFetcher = val.put(fetcher.delivererKey(), fetcher);
             if (prevFetcher != null) {
                 // close previous fetcher if any
                 prevFetcher.close();
@@ -44,11 +44,11 @@ final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
         });
     }
 
-    void unreg(IInboxQueueFetcher fetcher) {
+    void unreg(IInboxFetcher fetcher) {
         fetchers.compute(fetcher.tenantId(), (tenantId, m) -> {
             if (m != null) {
-                m.remove(fetcher.inboxId(), fetcher);
-                if (m.size() == 0) {
+                m.remove(fetcher.delivererKey(), fetcher);
+                if (m.isEmpty()) {
                     stopGauging(fetcher.tenantId(), InboxFetcherGauge);
                     return null;
                 }
@@ -57,12 +57,12 @@ final class InboxFetcherRegistry implements Iterable<IInboxQueueFetcher> {
         });
     }
 
-    IInboxQueueFetcher get(String tenantId, String inboxId) {
+    IInboxFetcher get(String tenantId, String inboxId) {
         return fetchers.getOrDefault(tenantId, emptyMap()).get(inboxId);
     }
 
     @Override
-    public Iterator<IInboxQueueFetcher> iterator() {
+    public Iterator<IInboxFetcher> iterator() {
         return Iterators.concat(fetchers.values().stream().map(m -> m.values().iterator()).iterator());
     }
 }

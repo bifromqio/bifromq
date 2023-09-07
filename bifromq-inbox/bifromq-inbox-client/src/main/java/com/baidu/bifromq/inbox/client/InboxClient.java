@@ -31,7 +31,11 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 final class InboxClient implements IInboxClient {
     private final AtomicBoolean hasStopped = new AtomicBoolean();
     private final IRPCClient rpcClient;
+    private final LoadingCache<FetchPipelineKey, InboxFetchPipeline> fetchPipelineCache;
 
     InboxClient(InboxClientBuilder builder) {
         this.rpcClient = IRPCClient.newBuilder()
@@ -50,6 +55,15 @@ final class InboxClient implements IInboxClient {
             .crdtService(builder.crdtService)
             .sslContext(builder.sslContext)
             .build();
+        fetchPipelineCache = Caffeine.newBuilder()
+            .weakValues()
+            .executor(MoreExecutors.directExecutor())
+            .removalListener((RemovalListener<FetchPipelineKey, InboxFetchPipeline>) (key, value, cause) -> {
+                if (value != null) {
+                    value.close();
+                }
+            })
+            .build(key -> new InboxFetchPipeline(key.tenantId, key.delivererKey, rpcClient));
     }
 
     @Override
@@ -65,7 +79,8 @@ final class InboxClient implements IInboxClient {
 
     @Override
     public IInboxReader openInboxReader(String tenantId, String inboxId) {
-        return new InboxFetchPipeline(tenantId, inboxId, getDelivererKey(inboxId), rpcClient);
+        return new InboxReader(inboxId,
+            fetchPipelineCache.get(new FetchPipelineKey(tenantId, getDelivererKey(inboxId))));
     }
 
     @Override
@@ -157,9 +172,13 @@ final class InboxClient implements IInboxClient {
     public void close() {
         if (hasStopped.compareAndSet(false, true)) {
             log.info("Closing inbox client");
+            fetchPipelineCache.invalidateAll();
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.info("Inbox client closed");
         }
+    }
+
+    private record FetchPipelineKey(String tenantId, String delivererKey) {
     }
 }

@@ -19,7 +19,7 @@ service InboxService {
   rpc sub(SubRequest) returns (SubReply);
   rpc unsub(UnsubRequest) returns (UnsubReply);
   rpc receive (stream SendRequest) returns (stream SendReply);
-  rpc fetch(stream FetchHint) returns (stream Fetched);
+  rpc fetchInbox(stream InboxFetchHint) returns (stream InboxFetched);
   rpc commit(CommitRequest) returns(CommitReply);
 }
 
@@ -142,6 +142,20 @@ message SendReply {
 
 message FetchHint {
   uint32 capacity = 1;
+}
+
+message InboxFetchHint {
+  uint64 incarnation = 1;
+  string inboxId = 2;
+  uint32 capacity = 3;
+  uint64 lastFetchQoS0Seq = 4;
+  uint64 lastFetchQoS1Seq = 5;
+  uint64 lastFetchQoS2Seq = 6;
+}
+
+message InboxFetched{
+  string inboxId = 1;
+  Fetched fetched = 2;
 }
 
 message CommitRequest {

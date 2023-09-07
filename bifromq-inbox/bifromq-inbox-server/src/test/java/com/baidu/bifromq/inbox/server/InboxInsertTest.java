@@ -74,10 +74,11 @@ public class InboxInsertTest extends InboxServiceTest {
         assertEquals(result.get(subInfo), DeliveryResult.OK);
 
         IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
+        reader.hint(100);
 
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
-        reader.fetch((fetched, throwable) -> {
+        reader.fetch(fetched -> {
             fetchedRef.set(fetched);
             latch.countDown();
         });
@@ -143,9 +144,10 @@ public class InboxInsertTest extends InboxServiceTest {
         assertEquals(result3.get(subInfo), DeliveryResult.OK);
 
         IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
+        reader.hint(100);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
-        reader.fetch((fetched, throwable) -> {
+        reader.fetch(fetched -> {
             fetchedRef.set(fetched);
             latch.countDown();
         });

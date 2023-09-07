@@ -22,7 +22,7 @@ import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public interface IInboxClient extends ISubBroker, IConnectable {
 
@@ -50,9 +50,11 @@ public interface IInboxClient extends ISubBroker, IConnectable {
     IInboxReader openInboxReader(String tenantId, String inboxId);
 
     interface IInboxReader {
-        void fetch(BiConsumer<Fetched, Throwable> consumer);
+        void fetch(Consumer<Fetched> consumer);
 
         void hint(int bufferCapacity);
+
+        void touch();
 
         CompletableFuture<CommitReply> commit(long reqId, QoS qos, long upToSeq);
 

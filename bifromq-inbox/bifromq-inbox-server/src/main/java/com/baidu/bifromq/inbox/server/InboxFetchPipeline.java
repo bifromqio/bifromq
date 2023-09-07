@@ -13,91 +13,76 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_INBOX_ID;
-import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ;
-import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
+import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 
 import com.baidu.bifromq.baserpc.AckStream;
 import com.baidu.bifromq.baserpc.RPCContext;
-import com.baidu.bifromq.baserpc.utils.Backoff;
-import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
+import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
+import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
 import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.util.KeyUtil;
-import com.google.common.util.concurrent.RateLimiter;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
-import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.disposables.Disposable;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> implements IInboxQueueFetcher {
+final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> implements IInboxFetcher {
     private static final int NOT_KNOWN_CAPACITY = -1;
+    private final String delivererKey;
+    private final Cache<ByteString, FetchState> inboxFetchStates;
     private final Fetcher fetcher;
     private final Function<ByteString, CompletableFuture<Void>> toucher;
-    private final AtomicBoolean fetchStarted = new AtomicBoolean(false);
-
-    private final String delivererKey;
-    private final String inboxId;
-    // indicate downstream free buffer capacity, -1 stands for capacity not known yet
-    private final AtomicInteger downStreamCapacity = new AtomicInteger(NOT_KNOWN_CAPACITY);
-    private final ByteString scopedInboxId;
-    private final Backoff reFetchBackoff = new Backoff(5, 10, 10000);
-    private final AtomicReference<Disposable> delayFetch = new AtomicReference<>();
     private volatile boolean closed = false;
-    private volatile long fetchStartTS = 0;
-    private volatile long signalTS = 0;
-    private volatile long lastFetchQoS0Seq = -1;
-    private volatile long lastFetchQoS1Seq = -1;
-    private volatile long lastFetchQoS2Seq = -1;
 
-    public InboxFetchPipeline(StreamObserver<Fetched> responseObserver,
+    public InboxFetchPipeline(StreamObserver<InboxFetched> responseObserver,
                               Fetcher fetcher,
                               Function<ByteString, CompletableFuture<Void>> toucher,
-                              InboxFetcherRegistry registry,
-                              RateLimiter limiter) {
+                              InboxFetcherRegistry registry) {
         super(responseObserver);
         this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
-        this.inboxId = metadata.get(PIPELINE_ATTR_KEY_INBOX_ID);
+
+        inboxFetchStates = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofSeconds(60))
+            .build();
         this.fetcher = fetcher;
         this.toucher = toucher;
-        scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
-        if (limiter.tryAcquire()) {
-            if (hasMetadata(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ)) {
-                lastFetchQoS0Seq = Long.parseLong(metadata(PIPELINE_ATTR_KEY_QOS0_LAST_FETCH_SEQ));
-            }
-            if (hasMetadata(PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ)) {
-                lastFetchQoS2Seq = Long.parseLong(metadata(PIPELINE_ATTR_KEY_QOS2_LAST_FETCH_SEQ));
-            }
-            registry.reg(this);
-            ack().doFinally(() -> {
-                    touch();
-                    registry.unreg(this);
-                    closed = true;
-                })
-                .subscribe(fetchHint -> {
-                    log.trace("Got hint: tenantId={}, inboxId={}, capacity={}",
-                        tenantId, inboxId, fetchHint.getCapacity());
-                    downStreamCapacity.set(Math.max(0, fetchHint.getCapacity()));
-                    signalFetch();
+        registry.reg(this);
+        ack().doFinally(() -> {
+                touch();
+                registry.unreg(this);
+                closed = true;
+            })
+            .subscribe(fetchHint -> {
+                String inboxId = fetchHint.getInboxId();
+                log.trace("Got hint: tenantId={}, inboxId={}\n{}", tenantId, inboxId, fetchHint);
+                ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
+                FetchState fetchState = inboxFetchStates.asMap().compute(scopedInboxId, (k, v) -> {
+                    if (v == null) {
+                        v = new FetchState(fetchHint.getIncarnation());
+                    } else if (v.incarnation.get() < fetchHint.getIncarnation()) {
+                        v.reset(fetchHint.getIncarnation());
+                    }
+                    v.lastFetchQoS0Seq.set(Math.max(fetchHint.getLastFetchQoS0Seq(), v.lastFetchQoS0Seq.get()));
+                    v.lastFetchQoS1Seq.set(Math.max(fetchHint.getLastFetchQoS1Seq(), v.lastFetchQoS1Seq.get()));
+                    v.lastFetchQoS2Seq.set(Math.max(fetchHint.getLastFetchQoS2Seq(), v.lastFetchQoS2Seq.get()));
+                    v.downStreamCapacity.set(Math.max(0, fetchHint.getCapacity()));
+                    return v;
                 });
-            signalFetch();
-        } else {
-            close();
-        }
-    }
-
-    @Override
-    public String delivererKey() {
-        return delivererKey;
+                log.trace("Fetch state update: tenantId={}, inbox={}\n{}", tenantId, inboxId, fetchState);
+                fetch(scopedInboxId, fetchState);
+            });
     }
 
     @Override
@@ -106,119 +91,153 @@ public final class InboxFetchPipeline extends AckStream<FetchHint, Fetched> impl
     }
 
     @Override
+    public String delivererKey() {
+        return delivererKey;
+    }
+
+    @Override
     public String inboxId() {
-        return inboxId;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public long lastFetchTS() {
-        return fetchStartTS;
-    }
-
-    @Override
-    public long lastFetchQoS0Seq() {
-        return lastFetchQoS0Seq;
+        return 0;
     }
 
     @Override
     public void signalFetch() {
-        log.trace("Signal fetch: tenantId={}, inboxId={}, hint={}, fetching={}",
-            tenantId, inboxId, downStreamCapacity.get(), fetchStarted.get());
-        signalTS = System.nanoTime();
-        if (!closed && fetchStarted.compareAndSet(false, true)) {
-            int capacity = downStreamCapacity.get();
-            // fetch 100 messages if capacity not known yet
-            int batchSize = capacity == NOT_KNOWN_CAPACITY ? 100 : downStreamCapacity.get();
-            if (batchSize > 0) {
-                fetch(batchSize);
-            } else {
-                fetchStarted.set(false);
-            }
+//        log.trace("Signal fetch: tenantId={}, fetching={}", tenantId, fetchStarted.get());
+//        if (!closed && fetchStarted.compareAndSet(false, true)) {
+//            fetch(buildInboxFetchList());
+//        }
+    }
+
+    @Override
+    public void signalFetch(String inboxId) {
+        log.trace("Signal fetch: tenantId={}, inboxId={}", tenantId, inboxId);
+        // signal fetch won't refresh expiry
+        FetchState fetchState = inboxFetchStates.getIfPresent(scopedInboxId(tenantId, inboxId));
+        if (fetchState != null) {
+            fetchState.hasMore.set(true);
+            fetchState.signalFetchTS.set(System.nanoTime());
+            fetch(scopedInboxId(tenantId, inboxId), fetchState);
         }
     }
 
     @Override
     public void touch() {
-        toucher.apply(scopedInboxId);
+        // touch won't refresh expiry
+        inboxFetchStates.asMap().keySet().forEach(toucher::apply);
     }
 
     @Override
     public void close() {
         super.close();
-        Disposable disposable = delayFetch.get();
-        if (disposable != null) {
-            disposable.dispose();
+    }
+
+    private void fetch(ByteString scopedInboxId) {
+        FetchState fetchState = inboxFetchStates.getIfPresent(scopedInboxId);
+        if (fetchState != null) {
+            fetch(scopedInboxId, fetchState);
         }
     }
 
-    private void delayFetch() {
-        delayFetch.compareAndSet(null,
-            Observable.timer(reFetchBackoff.backoff(), TimeUnit.MILLISECONDS).subscribe(t -> {
-                delayFetch.set(null);
-                signalFetch();
-            })
-        );
-    }
-
-    private void fetch(int batchSize) {
-        FetchParams.Builder fb = FetchParams.newBuilder().setMaxFetch(batchSize);
-        if (lastFetchQoS0Seq >= 0) {
-            fb.setQos0StartAfter(lastFetchQoS0Seq);
+    private void fetch(ByteString scopedInboxId, FetchState fetchState) {
+        if (closed) {
+            return;
         }
-        if (lastFetchQoS1Seq >= 0) {
-            fb.setQos1StartAfter(lastFetchQoS1Seq);
-        }
-        if (lastFetchQoS2Seq >= 0) {
-            fb.setQos2StartAfter(lastFetchQoS2Seq);
-        }
-        fetcher.fetch(new IInboxFetchScheduler.InboxFetch(scopedInboxId, fb.build()))
-            .whenComplete((reply, e) -> {
+        if (fetchState.fetching.compareAndSet(false, true)) {
+            String inboxId = parseInboxId(scopedInboxId);
+            log.trace("Fetching inbox: tenantId={}, inboxId={}", tenantId, inboxId);
+            IInboxFetchScheduler.InboxFetch inboxFetch =
+                new IInboxFetchScheduler.InboxFetch(scopedInboxId, FetchParams.newBuilder()
+                    .setMaxFetch(fetchState.downStreamCapacity.get())
+                    .setQos0StartAfter(fetchState.lastFetchQoS0Seq.get())
+                    .setQos1StartAfter(fetchState.lastFetchQoS1Seq.get())
+                    .setQos2StartAfter(fetchState.lastFetchQoS2Seq.get())
+                    .build());
+            long fetchTS = System.nanoTime();
+            fetcher.fetch(inboxFetch).whenComplete((fetched, e) -> {
                 if (e != null) {
-                    log.debug("Fetch failed and retry: tenantId={}, inboxId={}", tenantId, inboxId, e);
-                    fetchStarted.set(false);
-                    delayFetch();
-                    return;
-                }
-                reFetchBackoff.reset();
-                log.trace("Fetch success: tenantId={}, inboxId={}\n{}", tenantId, inboxId, reply);
-                int fetchedCount = 0;
-                if (reply.getQos0MsgCount() > 0 || reply.getQos1MsgCount() > 0 || reply.getQos2MsgCount() > 0) {
-                    if (reply.getQos0MsgCount() > 0) {
-                        fetchedCount += reply.getQos0MsgCount();
-                        downStreamCapacity.accumulateAndGet(reply.getQos0MsgCount(),
-                            (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
-                        lastFetchQoS0Seq = reply.getQos0Seq(reply.getQos0SeqCount() - 1);
-                    }
-                    if (reply.getQos1MsgCount() > 0) {
-                        fetchedCount += reply.getQos1MsgCount();
-                        downStreamCapacity.accumulateAndGet(reply.getQos1MsgCount(),
-                            (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
-                        lastFetchQoS1Seq = reply.getQos1Seq(reply.getQos1SeqCount() - 1);
-                    }
-                    if (reply.getQos2MsgCount() > 0) {
-                        fetchedCount += reply.getQos2MsgCount();
-                        downStreamCapacity.accumulateAndGet(reply.getQos2MsgCount(),
-                            (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
-                        lastFetchQoS2Seq = reply.getQos2Seq(reply.getQos2SeqCount() - 1);
-                    }
-                    if (!closed) {
-                        send(reply);
-                    }
-                    fetchStarted.set(false);
-                    if (downStreamCapacity.get() > 0 && fetchedCount >= batchSize) {
-                        signalFetch();
-                    }
+                    log.error("Failed to fetch inbox: tenantId={}, inboxId={}", tenantId, inboxId, e);
+                    inboxFetchStates.invalidate(scopedInboxId);
+                    send(InboxFetched.newBuilder()
+                        .setInboxId(inboxId)
+                        .setFetched(Fetched.newBuilder()
+                            .setResult(Fetched.Result.ERROR)
+                            .build())
+                        .build());
                 } else {
-                    fetchStarted.set(false);
-                    if (signalTS >= fetchStartTS) {
-                        signalFetch();
+                    log.trace("Fetched inbox: tenantId={}, inboxId={}", tenantId, inboxId);
+                    int fetchedCount = 0;
+                    if (fetched.getQos0MsgCount() > 0 ||
+                        fetched.getQos1MsgCount() > 0 ||
+                        fetched.getQos2MsgCount() > 0) {
+                        if (fetched.getQos0MsgCount() > 0) {
+                            fetchedCount += fetched.getQos0MsgCount();
+                            fetchState.downStreamCapacity.accumulateAndGet(fetched.getQos0MsgCount(),
+                                (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
+                            fetchState.lastFetchQoS0Seq.set(fetched.getQos0Seq(fetched.getQos0SeqCount() - 1));
+                        }
+                        if (fetched.getQos1MsgCount() > 0) {
+                            fetchedCount += fetched.getQos1MsgCount();
+                            fetchState.downStreamCapacity.accumulateAndGet(fetched.getQos1MsgCount(),
+                                (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
+                            fetchState.lastFetchQoS1Seq.set(fetched.getQos1Seq(fetched.getQos1SeqCount() - 1));
+                        }
+                        if (fetched.getQos2MsgCount() > 0) {
+                            fetchedCount += fetched.getQos2MsgCount();
+                            fetchState.downStreamCapacity.accumulateAndGet(fetched.getQos2MsgCount(),
+                                (a, b) -> a == NOT_KNOWN_CAPACITY ? a : Math.max(a - b, 0));
+                            fetchState.lastFetchQoS2Seq.set(fetched.getQos2Seq(fetched.getQos2SeqCount() - 1));
+                        }
+                        fetchState.hasMore.set(fetchedCount >= inboxFetch.params.getMaxFetch() ||
+                            fetchState.signalFetchTS.get() > fetchTS);
+                    } else {
+                        fetchState.hasMore.set(fetchState.signalFetchTS.get() > fetchTS);
+                    }
+                    send(InboxFetched.newBuilder()
+                        .setInboxId(inboxId)
+                        .setFetched(fetched)
+                        .build());
+                    fetchState.fetching.set(false);
+                    inboxFetchStates.put(scopedInboxId, fetchState);
+                    if (fetchState.downStreamCapacity.get() > 0 && fetchState.hasMore.get()) {
+                        fetch(scopedInboxId);
                     }
                 }
             });
-        fetchStartTS = System.nanoTime();
+        }
     }
 
     interface Fetcher {
         CompletableFuture<Fetched> fetch(IInboxFetchScheduler.InboxFetch fetch);
+    }
+
+    @ToString
+    private static class FetchState {
+        final AtomicLong incarnation = new AtomicLong();
+        final AtomicBoolean fetching = new AtomicBoolean(false);
+        final AtomicBoolean hasMore = new AtomicBoolean(true);
+        final AtomicLong signalFetchTS = new AtomicLong();
+        final AtomicInteger downStreamCapacity = new AtomicInteger(NOT_KNOWN_CAPACITY);
+        final AtomicLong lastFetchQoS0Seq = new AtomicLong(-1);
+        final AtomicLong lastFetchQoS1Seq = new AtomicLong(-1);
+        final AtomicLong lastFetchQoS2Seq = new AtomicLong(-1);
+
+        FetchState(long incarnation) {
+            this.incarnation.set(incarnation);
+        }
+
+        void reset(long incarnation) {
+            this.incarnation.set(incarnation);
+            hasMore.set(true);
+            signalFetchTS.set(0);
+            downStreamCapacity.set(NOT_KNOWN_CAPACITY);
+            lastFetchQoS0Seq.set(-1);
+            lastFetchQoS1Seq.set(-1);
+            lastFetchQoS2Seq.set(-1);
+        }
     }
 }

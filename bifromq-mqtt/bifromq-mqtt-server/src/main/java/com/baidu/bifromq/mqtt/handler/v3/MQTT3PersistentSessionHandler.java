@@ -45,6 +45,8 @@ import io.netty.handler.codec.mqtt.MqttTopicSubscription;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -58,6 +60,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     private long qos1ConfirmUpToSeq;
     private long qos2ConfirmUpToSeq;
     private IInboxClient.IInboxReader inboxReader;
+    private ScheduledFuture<?> touchTimeout;
 
     @Builder
     public MQTT3PersistentSessionHandler(ClientInfo clientInfo, int keepAliveTimeSeconds, WillMessage willMessage,
@@ -87,6 +90,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
+        touchTimeout.cancel(true);
         if (inboxReader != null) {
             inboxReader.close();
         }
@@ -109,6 +113,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                 confirmQoS1();
             }
         }
+        rescheduleTouch();
     }
 
     @Override
@@ -127,10 +132,12 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                 confirmQoS2();
             }
         }
+        rescheduleTouch();
     }
 
     @Override
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
+        rescheduleTouch();
         String inboxId = userSessionId(clientInfo());
         QoS qos = QoS.forNumber(topicSub.qualityOfService().value());
         return sessionCtx.inboxClient.sub(reqId, clientInfo().getTenantId(), inboxId, topicSub.topicName(), qos)
@@ -147,6 +154,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
 
     @Override
     protected CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
+        rescheduleTouch();
         String inboxId = userSessionId(clientInfo());
         return sessionCtx.inboxClient.unsub(reqId, clientInfo().getTenantId(), inboxId, topicFilter)
             .handle((v, e) -> {
@@ -192,19 +200,26 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         bufferCapacityHinter.hint(inboxReader::hint);
         // resume channel read after inbox being setup
         resumeChannelRead();
+        rescheduleTouch();
     }
 
-    private void consume(Fetched fetched, Throwable throwable) {
-        if (throwable != null) {
-            log.trace("Got exception when fetch, refresh hinter: tenantId={}, inboxId={}", clientInfo().getTenantId(),
-                clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), throwable);
-            bufferCapacityHinter.reset();
-        } else if (fetched != null) {
-            log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, qos1={}, qos2={}", clientInfo().getTenantId(),
-                clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0SeqCount(),
-                fetched.getQos1SeqCount(), fetched.getQos2SeqCount());
-            ctx.channel().eventLoop().execute(() -> {
-                if (fetched.getResult() == Fetched.Result.OK) {
+    private void rescheduleTouch() {
+        if (touchTimeout != null) {
+            touchTimeout.cancel(true);
+        }
+        touchTimeout = ctx.channel().eventLoop().schedule(() -> {
+            inboxReader.touch();
+            rescheduleTouch();
+        }, 1, TimeUnit.MINUTES);
+    }
+
+    private void consume(Fetched fetched) {
+        log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, qos1={}, qos2={}", clientInfo().getTenantId(),
+            clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0SeqCount(),
+            fetched.getQos1SeqCount(), fetched.getQos2SeqCount());
+        ctx.channel().eventLoop().execute(() -> {
+            switch (fetched.getResult()) {
+                case OK -> {
                     long timestamp = HLC.INST.getPhysical();
                     // deal with qos0
                     assert fetched.getQos0SeqCount() == fetched.getQos0MsgCount();
@@ -240,11 +255,14 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                                 timestamp);
                         }
                     }
-                } else {
-                    closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
+                    rescheduleTouch();
                 }
-            });
-        }
+                case ERROR -> bufferCapacityHinter.reset();
+                case NO_INBOX ->
+                    closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
+            }
+        });
+
     }
 
     protected void pubQoS0Message(String topicFilter, TopicMessage topicMsg, boolean flush, long timestamp) {

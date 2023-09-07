@@ -29,9 +29,10 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
-import com.baidu.bifromq.inbox.rpc.proto.FetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
+import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
@@ -58,12 +59,10 @@ import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxUnSubScheduler;
-import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Metrics;
@@ -75,7 +74,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -346,37 +344,11 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     .addAllResult(v)
                     .build());
         }, responseObserver);
-//        return new InboxWriterPipeline(registry, request -> {
-//            Map<SubInfo, List<TopicMessagePack>> msgsByInbox = new HashMap<>();
-//            request.getInboxMsgPackList().forEach(inboxMsgPack ->
-//                inboxMsgPack.getSubInfoList().forEach(subInfo ->
-//                    msgsByInbox.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(inboxMsgPack.getMessages())));
-//            List<CompletableFuture<SendResult>> replyFutures = msgsByInbox.entrySet()
-//                .stream()
-//                .map(entry -> comSertScheduler.schedule(
-//                        new IInboxComSertScheduler.InsertCall(MessagePack.newBuilder()
-//                            .setSubInfo(entry.getKey())
-//                            .addAllMessages(entry.getValue())
-//                            .build()))
-//                    .handle((v, e) -> SendResult.newBuilder()
-//                        .setSubInfo(entry.getKey())
-//                        .setResult(e != null ?
-//                            SendResult.Result.ERROR : ((IInboxComSertScheduler.InsertResult) v).result)
-//                        .build()))
-//                .toList();
-//            return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
-//                .thenApply(v -> replyFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
-//                .thenApply(v -> SendReply.newBuilder()
-//                    .setReqId(request.getReqId())
-//                    .addAllResult(v)
-//                    .build());
-//        }, responseObserver);
     }
 
     @Override
-    public StreamObserver<FetchHint> fetch(StreamObserver<Fetched> responseObserver) {
-        return new InboxFetchPipeline(responseObserver,
-            fetchScheduler::schedule,
+    public StreamObserver<InboxFetchHint> fetchInbox(StreamObserver<InboxFetched> responseObserver) {
+        return new InboxFetchPipeline(responseObserver, fetchScheduler::schedule,
             scopedInboxId -> touchScheduler.schedule(new IInboxTouchScheduler.Touch(scopedInboxId))
                 .exceptionally(e -> Collections.emptyList())
                 .thenCompose(topicFilters -> {
@@ -402,7 +374,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                 return null;
                             });
                     }
-                }), registry, fetcherCreationLimiter);
+                }), registry);
     }
 
     @Override
@@ -412,12 +384,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                 .setReqId(request.getReqId())
                 .setResult(CommitReply.Result.ERROR)
                 .build()), responseObserver);
-//        response(tenantId -> comSertScheduler.schedule(new IInboxComSertScheduler.CommitCall(request))
-//            .thenApply(v -> ((IInboxComSertScheduler.CommitResult) v).result)
-//            .exceptionally(e -> CommitReply.newBuilder()
-//                .setReqId(request.getReqId())
-//                .setResult(CommitReply.Result.ERROR)
-//                .build()), responseObserver);
     }
 
     public void start() {
@@ -439,9 +405,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     log.error("Failed to stop touch task");
                 }
             }
-            for (IInboxQueueFetcher fetcher : registry) {
+            for (IInboxFetcher fetcher : registry) {
                 fetcher.close();
             }
+            checkScheduler.close();
+            checkScheduler.close();
+            fetchScheduler.close();
+            insertScheduler.close();
+            commitScheduler.close();
+            createScheduler.close();
+            subScheduler.close();
+            unsubScheduler.close();
+            touchScheduler.close();
             if (bgTaskExecutorOwner) {
                 bgTaskExecutor.shutdownNow();
             }
@@ -460,16 +435,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         if (state.get() != State.STARTED) {
             return;
         }
-        long now = System.nanoTime();
-        Set<String> touched = Sets.newHashSet();
-        for (IInboxQueueFetcher fetcher : registry) {
-            if (Duration.ofNanos(now - fetcher.lastFetchTS()).compareTo(touchIdle) > 0) {
-                if (!touched.contains(fetcher.tenantId() + fetcher.inboxId())) {
-                    log.debug("Touch inbox: tenantId={}, inboxId={}", fetcher.tenantId(), fetcher.inboxId());
-                    fetcher.touch();
-                    touched.add(fetcher.tenantId() + fetcher.inboxId());
-                }
-            }
+        for (IInboxFetcher fetcher : registry) {
+            log.debug("Touch inbox: tenantId={}, delivererKey={}", fetcher.tenantId(), fetcher.delivererKey());
+            fetcher.touch();
         }
         scheduleTouchIdle();
     }

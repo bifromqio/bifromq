@@ -121,7 +121,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertEquals(message.variableHeader().topicName(), "testTopic");
         }
         verifyEvent(3, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED);
-        assertEquals(fetchHints.size(), 2);
+        assertEquals(fetchHints.size(), 1);
     }
 
     @Test

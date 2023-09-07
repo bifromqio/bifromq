@@ -259,12 +259,14 @@ public class MQTTPubSubTest {
         subClientOpts.setCleanSession(false);
         subClientOpts.setUserName(tenantId + "/subClient");
 
+        log.info("Connect sub client and disconnect");
         // make a offline subscription
         MqttTestClient subClient = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
         subClient.connect(subClientOpts);
         subClient.subscribe(topic, subQoS);
         subClient.disconnect();
 
+        log.info("Connect pub client and pub some message");
         MqttConnectOptions pubClientOpts = new MqttConnectOptions();
         pubClientOpts.setCleanSession(true);
         pubClientOpts.setUserName(tenantId + "/pubClient");
@@ -272,6 +274,7 @@ public class MQTTPubSubTest {
         pubClient.connect(pubClientOpts);
         pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
 
+        log.info("Reconnect sub client");
         subClient.connect(subClientOpts);
         MqttMsg msg = subClient.messageArrived().blockingFirst();
         assertEquals(msg.topic, topic);

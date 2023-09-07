@@ -92,6 +92,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -338,7 +339,7 @@ public abstract class BaseMQTTTest {
         doAnswer(invocationOnMock -> {
             inboxFetchConsumer = invocationOnMock.getArgument(0);
             return null;
-        }).when(inboxReader).fetch(any(BiConsumer.class));
+        }).when(inboxReader).fetch(any(Consumer.class));
         lenient().doAnswer(invocationOnMock -> {
             fetchHints.add(invocationOnMock.getArgument(0));
             return null;

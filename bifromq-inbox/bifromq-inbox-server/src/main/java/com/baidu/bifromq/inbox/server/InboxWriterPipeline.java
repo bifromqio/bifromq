@@ -23,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
+class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
     private final InboxFetcherRegistry registry;
     private final RequestHandler handler;
     private final String delivererKey;
@@ -42,10 +42,10 @@ public class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply
         return handler.handle(request).thenApply(v -> {
             for (SendResult result : v.getResultList()) {
                 if (result.getResult() == SendResult.Result.OK) {
-                    IInboxQueueFetcher f =
-                        registry.get(result.getSubInfo().getTenantId(), result.getSubInfo().getInboxId());
+                    IInboxFetcher f =
+                        registry.get(result.getSubInfo().getTenantId(), delivererKey);
                     if (f != null) {
-                        f.signalFetch();
+                        f.signalFetch(result.getSubInfo().getInboxId());
                     }
                 }
             }

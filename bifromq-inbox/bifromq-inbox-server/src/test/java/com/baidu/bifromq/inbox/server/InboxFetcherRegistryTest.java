@@ -29,11 +29,11 @@ import org.testng.annotations.Test;
 
 public class InboxFetcherRegistryTest {
     @Mock
-    private IInboxQueueFetcher fetcher1;
+    private IInboxFetcher fetcher1;
     @Mock
-    private IInboxQueueFetcher fetcher2;
+    private IInboxFetcher fetcher2;
     @Mock
-    private IInboxQueueFetcher fetcher3;
+    private IInboxFetcher fetcher3;
 
     private AutoCloseable closeable;
 
@@ -53,9 +53,9 @@ public class InboxFetcherRegistryTest {
         InboxFetcherRegistry registry = new InboxFetcherRegistry();
         mockFetcher(fetcher1, "tenantA", "inbox1");
         registry.reg(fetcher1);
-        assertEquals(registry.get(fetcher1.tenantId(), fetcher1.inboxId()), fetcher1);
+        assertEquals(registry.get(fetcher1.tenantId(), fetcher1.delivererKey()), fetcher1);
         registry.unreg(fetcher1);
-        assertNull(registry.get(fetcher1.tenantId(), fetcher1.inboxId()));
+        assertNull(registry.get(fetcher1.tenantId(), fetcher1.delivererKey()));
     }
 
     @Test
@@ -77,12 +77,12 @@ public class InboxFetcherRegistryTest {
         registry.reg(fetcher1);
         registry.reg(fetcher2);
         registry.reg(fetcher3);
-        Set<IInboxQueueFetcher> fetchers = Sets.newHashSet(registry.iterator());
+        Set<IInboxFetcher> fetchers = Sets.newHashSet(registry.iterator());
         assertEquals(fetchers, Sets.newHashSet(fetcher1, fetcher2, fetcher3));
     }
 
-    private void mockFetcher(IInboxQueueFetcher fetcher, String tenantId, String inboxId) {
+    private void mockFetcher(IInboxFetcher fetcher, String tenantId, String delivererKey) {
         when(fetcher.tenantId()).thenReturn(tenantId);
-        when(fetcher.inboxId()).thenReturn(inboxId);
+        when(fetcher.delivererKey()).thenReturn(delivererKey);
     }
 }
