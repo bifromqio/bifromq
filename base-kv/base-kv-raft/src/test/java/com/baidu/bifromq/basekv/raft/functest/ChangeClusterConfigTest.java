@@ -44,9 +44,30 @@ import org.testng.annotations.Test;
 @Slf4j
 @Listeners(RaftGroupTestListener.class)
 public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
+    @Cluster(v = "V1,V2")
+    @Test(groups = "integration")
+    public void testChangeToDisjointVoterSet() {
+        String leader = group.currentLeader().get();
+        group.addRaftNode("V3", 0, 0, ClusterConfig.newBuilder().build(), raftConfig());
+        group.connect("V3");
+        Set<String> newVoters = new HashSet<>() {{
+            add("V3");
+        }};
+        CompletableFuture<Void> done = group.changeClusterConfig(leader, "cId", newVoters, Collections.emptySet());
+        await().until(done::isDone);
+        await().until(() ->
+            group.latestClusterConfig(leader).getVotersList().size() == 1 &&
+                group.latestClusterConfig(leader).getNextVotersList().isEmpty() &&
+                group.latestClusterConfig(leader).equals(group.latestClusterConfig("V3")) &&
+                group.latestClusterConfig("V2").equals(group.latestClusterConfig("V3")));
+        log.info("V1 Config: {}", group.latestClusterConfig(leader));
+        log.info("V2 Config: {}", group.latestClusterConfig("V2"));
+        log.info("V3 Config: {}", group.latestClusterConfig("V3"));
+    }
+
     @Test(groups = "integration")
     public void testChangeClusterConfigByFollower() {
-        Set<String> newVoters = new HashSet<String>(Arrays.asList("V1", "V2", "V3", "V4"));
+        Set<String> newVoters = new HashSet<>(Arrays.asList("V1", "V2", "V3", "V4"));
         String follower = group.currentFollowers().get(0);
         try {
             group.changeClusterConfig(follower, newVoters, Collections.emptySet()).join();
@@ -62,7 +83,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("V4", 0, 0, ClusterConfig.newBuilder().addVoters("V4").build(), raftConfig());
         group.connect("V4");
 
-        Set<String> newVoters = new HashSet<String>() {{
+        Set<String> newVoters = new HashSet<>() {{
             add("V1");
             add("V2");
             add("V3");
@@ -99,7 +120,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("V4", 0, 0, ClusterConfig.newBuilder().addVoters("V4").build(), raftConfig());
         group.connect("V4");
 
-        Set<String> newVoters = new HashSet<String>() {{
+        Set<String> newVoters = new HashSet<>() {{
             add("V1");
             add("V4");
         }};
@@ -132,7 +153,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("V5", 0, 0, ClusterConfig.newBuilder().addVoters("V5").build(), raftConfig());
         group.connect("V5");
 
-        Set<String> newVoters = new HashSet<String>() {{
+        Set<String> newVoters = new HashSet<>() {{
             add("V1");
             add("V2");
             add("V3");
@@ -141,7 +162,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         }};
         CompletableFuture<Void> done = group.changeClusterConfig(leader, newVoters, Collections.emptySet());
 
-        List<RaftNodeSyncState> leaderStatusLog = Arrays.asList(RaftNodeSyncState.Replicating);
+        List<RaftNodeSyncState> leaderStatusLog = List.of(RaftNodeSyncState.Replicating);
         List<RaftNodeSyncState> nonLeaderStatusLog =
             Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating);
         for (String peerId : newVoters) {
@@ -167,7 +188,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("L5", 0, 0, ClusterConfig.newBuilder().addLearners("L5").build(), raftConfig());
         group.connect("L5");
 
-        Set<String> newLearners = new HashSet<String>() {{
+        Set<String> newLearners = new HashSet<>() {{
             add("L4");
             add("L5");
         }};
@@ -197,14 +218,14 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("L5", 0, 0, ClusterConfig.newBuilder().addLearners("L5").build(), raftConfig());
         group.connect("L5");
 
-        Set<String> newVoters = new HashSet<String>() {{
+        Set<String> newVoters = new HashSet<>() {{
             add("V1");
             add("V2");
             add("V3");
             add("V4");
             add("V5");
         }};
-        Set<String> newLearners = new HashSet<String>() {{
+        Set<String> newLearners = new HashSet<>() {{
             add("L4");
             add("L5");
         }};
@@ -243,14 +264,14 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("L2", 0, 0, ClusterConfig.newBuilder().addLearners("L2").build(), raftConfig());
         group.connect("L2");
 
-        Set<String> newVoters = new HashSet<String>() {{
+        Set<String> newVoters = new HashSet<>() {{
             add("V1");
             add("V2");
             add("V3");
             add("V4");
             add("V5");
         }};
-        Set<String> newLearners = new HashSet<String>() {{
+        Set<String> newLearners = new HashSet<>() {{
             add("L1");
             add("L2");
         }};
@@ -258,7 +279,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         CompletableFuture<Void> done = group.changeClusterConfig(leader, newVoters, newLearners);
         assertFalse(done.isDone());
 
-        List<RaftNodeSyncState> leaderStatusLog = Arrays.asList(RaftNodeSyncState.Replicating);
+        List<RaftNodeSyncState> leaderStatusLog = List.of(RaftNodeSyncState.Replicating);
         List<RaftNodeSyncState> nonLeaderStatusLog =
             Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating);
         for (String peerId : newVoters) {
@@ -300,14 +321,14 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         group.addRaftNode("L2", 0, 0, ClusterConfig.newBuilder().addLearners("L2").build(), raftConfig());
         group.connect("L2");
 
-        Set<String> newVoters = new HashSet<String>() {{
+        Set<String> newVoters = new HashSet<>() {{
             add("V1");
             add("V2");
             add("V3");
             add("V4");
             add("V5");
         }};
-        Set<String> newLearners = new HashSet<String>() {{
+        Set<String> newLearners = new HashSet<>() {{
             add("L1");
             add("L2");
         }};
@@ -317,11 +338,11 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         assertFalse(done.isDone());
         group.propose(leader, ByteString.copyFromUtf8("appCommand6"));
 
-        List<RaftNodeSyncState> leaderStatusLog = Arrays.asList(RaftNodeSyncState.Replicating);
+        List<RaftNodeSyncState> leaderStatusLog = List.of(RaftNodeSyncState.Replicating);
         List<RaftNodeSyncState> nonLeaderStatusLog =
             Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating);
 
-        Set<String> oldVoters = new HashSet<String>() {{
+        Set<String> oldVoters = new HashSet<>() {{
             add("V1");
             add("V2");
             add("V3");
@@ -368,7 +389,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         assertFalse(done.isDone());
 
         assertTrue(group.awaitIndexCommitted(leader, 3));
-        assertEquals(group.syncStateLogs(leader), Arrays.asList(RaftNodeSyncState.Replicating));
+        assertEquals(group.syncStateLogs(leader), List.of(RaftNodeSyncState.Replicating));
         assertTrue(group.awaitIndexCommitted(normalFollower, 3));
         assertEquals(group.syncStateLogs(normalFollower),
             Arrays.asList(RaftNodeSyncState.Probing, RaftNodeSyncState.Replicating));
@@ -467,8 +488,8 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
         Set<String> newVoters = new HashSet<>(clusterConfig().getVotersList());
         newVoters.remove(toRemovedVoter1);
         newVoters.remove(toRemovedVoter2);
-        group.changeClusterConfig(leader, newVoters, Collections.EMPTY_SET);
-        log.info("New config submitted: newVoters={}, newLearners={}", newVoters, Collections.EMPTY_SET);
+        group.changeClusterConfig(leader, newVoters, Collections.emptySet());
+        log.info("New config submitted: newVoters={}, newLearners={}", newVoters, Collections.emptySet());
         assertTrue(group.awaitIndexCommitted(leader, 3));
         assertTrue(group.awaitIndexCommitted(normalFollower1, 3));
         assertTrue(group.awaitIndexCommitted(normalFollower2, 3));
@@ -558,7 +579,7 @@ public class ChangeClusterConfigTest extends SharedRaftConfigTestTemplate {
 
         String leader = group.currentLeader().get();
         log.info("Change cluster config to voters=[V1,V2]");
-        group.changeClusterConfig(leader, new HashSet<>(Arrays.asList("V1", "V2")), Collections.EMPTY_SET).join();
+        group.changeClusterConfig(leader, new HashSet<>(Arrays.asList("V1", "V2")), Collections.emptySet()).join();
 
         assertTrue(group.awaitIndexCommitted("V1", 3));
         assertTrue(group.awaitIndexCommitted("V2", 3));

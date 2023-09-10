@@ -18,6 +18,9 @@
             <Pattern>%d{HH:mm:ss.SSS} [%thread][%X{cluster}-%X{rangeId}-%X{id}] %-5level %logger{36} - %msg%n</Pattern>
         </encoder>
     </appender>
+
+    <logger name="com.baidu.bifromq.basekv.raft" level="debug"/>
+
     <root level="info">
         <appender-ref ref="STDOUT"/>
     </root>
