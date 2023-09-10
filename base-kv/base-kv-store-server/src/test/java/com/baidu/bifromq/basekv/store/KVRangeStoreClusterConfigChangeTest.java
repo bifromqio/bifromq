@@ -222,6 +222,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         String newStore2 = cluster.addStore();
         String newStore3 = cluster.addStore();
         Set<String> newReplicas = Sets.newHashSet(newStore1, newStore2, newStore3);
+        log.info("Config change from {} to {}", rangeSettings.allReplicas, newReplicas);
         await().ignoreExceptions().until(() -> {
             KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
             if (newReplicas.containsAll(setting.allReplicas)) {
@@ -232,7 +233,34 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
             setting = cluster.kvRangeSetting(rangeId);
             return newReplicas.containsAll(setting.allReplicas);
         });
+        await().until(
+            () -> rangeSettings.allReplicas.stream().noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
+        log.info("Test done");
     }
+
+    @Cluster(initNodes = 1)
+    @Test(groups = "integration")
+    public void moveHostingStore() {
+        KVRangeId rangeId = cluster.genesisKVRangeId();
+        KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 5000);
+        String newStore = cluster.addStore();
+        Set<String> newReplicas = Sets.newHashSet(newStore);
+        log.info("Config change from {} to {}", rangeSettings.allReplicas, newReplicas);
+        await().ignoreExceptions().until(() -> {
+            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
+            if (newReplicas.containsAll(setting.allReplicas)) {
+                return true;
+            }
+            cluster.changeReplicaConfig(setting.leader, setting.ver, rangeId, newReplicas, emptySet())
+                .toCompletableFuture().join();
+            setting = cluster.kvRangeSetting(rangeId);
+            return newReplicas.containsAll(setting.allReplicas);
+        });
+        await().until(
+            () -> rangeSettings.allReplicas.stream().noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
+        log.info("Test done");
+    }
+
 
     @Test(groups = "integration")
     public void jointChangeReplicasFromNonLeaderStore() {
@@ -253,7 +281,11 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
             cluster.changeReplicaConfig(nonLeaderStore(rangeSettings), newSettings.ver, rangeId, newReplicas,
                 emptySet()).toCompletableFuture().join();
             newSettings = cluster.kvRangeSetting(rangeId);
-            return newReplicas.contains(newSettings.allReplicas);
+            return newReplicas.containsAll(newSettings.allReplicas);
         });
+        await().until(
+            () -> rangeSettings.allReplicas.stream().noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
+        log.info("Test done");
+
     }
 }

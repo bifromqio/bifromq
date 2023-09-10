@@ -248,6 +248,11 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     @Override
+    public boolean isHosting(KVRangeId rangeId) {
+        return kvRangeMap.containsKey(rangeId);
+    }
+
+    @Override
     public CompletionStage<Void> recover() {
         checkStarted();
         metricsManager.runningRecoverNum.increment();

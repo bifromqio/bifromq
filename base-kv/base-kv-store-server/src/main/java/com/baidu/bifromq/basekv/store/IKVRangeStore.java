@@ -40,6 +40,7 @@ public interface IKVRangeStore {
      */
     boolean bootstrap();
 
+    boolean isHosting(KVRangeId rangeId);
     /**
      * Recover unwritable ranges hosted in current store
      *

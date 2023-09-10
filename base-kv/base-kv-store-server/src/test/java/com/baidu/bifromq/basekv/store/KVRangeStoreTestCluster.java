@@ -116,6 +116,11 @@ public class KVRangeStoreTestCluster {
         rangeStoreMsgSourceMap.remove(storeId).onComplete();
     }
 
+    public boolean isHosting(String storeId, KVRangeId rangeId) {
+        checkStore(storeId);
+        return rangeStoreMap.get(storeId).isHosting(rangeId);
+    }
+
     public CompletionStage<Void> recover(String storeId) {
         checkStore(storeId);
         return rangeStoreMap.get(storeId).recover();
