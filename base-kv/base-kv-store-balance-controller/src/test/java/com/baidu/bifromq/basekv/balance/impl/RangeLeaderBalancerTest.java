@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
+import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.CommandType;
 import com.baidu.bifromq.basekv.balance.utils.DescriptorUtils;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -102,5 +103,34 @@ public class RangeLeaderBalancerTest {
         Assert.assertEquals(CommandType.CHANGE_CONFIG, commandOptional.get().type());
     }
 
+    @Test
+    public void balanceWithOneVoterLeader() {
+        List<String> voters = Lists.newArrayList(LOCAL_STORE_ID);
+        List<String> learners = Lists.newArrayList();
+        List<List<KVRangeDescriptor>> allRangeDescriptors = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            KVRangeId id = KVRangeIdUtil.generate();
+            List<KVRangeDescriptor> rangeDescriptors =
+                DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
+            allRangeDescriptors.add(rangeDescriptors);
+        }
+        List<KVRangeStoreDescriptor> storeDescriptors = new ArrayList<>();
+        for (int i = 0; i < voters.size(); i++) {
+            Builder builder = KVRangeStoreDescriptor.newBuilder();
+            builder.setId(voters.get(i));
+            for (int j = 0; j < 2; j++) {
+                builder.addRanges(allRangeDescriptors.get(j).get(i));
+            }
+            storeDescriptors.add(builder.build());
+        }
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store_spare")
+            .build());
+        balancer.update(Sets.newHashSet(storeDescriptors));
+        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Assert.assertTrue(commandOptional.isPresent());
+        Assert.assertEquals(CommandType.CHANGE_CONFIG, commandOptional.get().type());
+        Assert.assertEquals(1, ((ChangeConfigCommand) commandOptional.get()).getVoters().size());
+    }
 
 }
