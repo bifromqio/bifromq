@@ -11,15 +11,9 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.service;
+package com.baidu.bifromq.mqtt.inbox;
 
-import com.baidu.bifromq.dist.client.IDistClient;
-import lombok.Setter;
-import lombok.experimental.Accessors;
-
-@Accessors(fluent = true)
-@Setter
-abstract class AbstractLocalSessionServerBuilder<T extends AbstractLocalSessionServerBuilder<T>>
-    implements ILocalSessionServerBuilder {
-    IDistClient distClient;
+public enum MqttSubResult {
+    OK,
+    ERROR;
 }

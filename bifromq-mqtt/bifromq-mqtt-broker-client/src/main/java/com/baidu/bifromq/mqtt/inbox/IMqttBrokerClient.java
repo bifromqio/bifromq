@@ -15,11 +15,18 @@ package com.baidu.bifromq.mqtt.inbox;
 
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
+import com.baidu.bifromq.type.QoS;
+
+import java.util.concurrent.CompletableFuture;
 
 public interface IMqttBrokerClient extends ISubBroker, IConnectable {
     static MqttBrokerClientBuilder newBuilder() {
         return new MqttBrokerClientBuilder();
     }
+
+    CompletableFuture<MqttSubResult> sub(long reqId, String tenantId, String inboxId, String topicFilter, QoS qos);
+
+    CompletableFuture<MqttUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter);
 
     @Override
     default int id() {

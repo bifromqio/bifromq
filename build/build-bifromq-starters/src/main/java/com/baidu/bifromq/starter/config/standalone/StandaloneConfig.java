@@ -18,6 +18,7 @@ import com.baidu.bifromq.starter.config.standalone.model.ClusterConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RPCClientConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RPCServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.StateStoreConfig;
+import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
@@ -43,4 +44,6 @@ public class StandaloneConfig implements StarterConfig {
     private RPCServerConfig baseKVRpcServerConfig;
     @JsonSetter(nulls = Nulls.SKIP)
     private StateStoreConfig stateStoreConfig = new StateStoreConfig();
+    @JsonSetter(nulls = Nulls.SKIP)
+    private APIServerConfig apiServerConfig = new APIServerConfig();
 }

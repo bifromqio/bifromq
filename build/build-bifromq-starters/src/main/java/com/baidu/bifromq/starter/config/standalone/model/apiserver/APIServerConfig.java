@@ -11,20 +11,22 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config;
+package com.baidu.bifromq.starter.config.standalone.model.apiserver;
 
-import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
+import com.baidu.bifromq.starter.config.standalone.model.apiserver.listener.HttpsListenerConfig;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
 public class APIServerConfig {
-    private boolean enable = false;
+    private boolean enable = true;
     private String host; // optional, if null host address will be used for listening api calls
     private int httpPort = 8090; // the listening port for http api
-    private int httpsPort; // optional, if null host address will be used for listening api calls
     private int apiBossThreads = 1;
     private int apiWorkerThreads = 2;
-    private ServerSSLContextConfig serverSSLCtxConfig = new ServerSSLContextConfig();
+    @JsonSetter(nulls = Nulls.SKIP)
+    private HttpsListenerConfig httpsListenerConfig = new HttpsListenerConfig();
 }

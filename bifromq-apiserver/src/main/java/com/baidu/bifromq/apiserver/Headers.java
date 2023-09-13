@@ -20,7 +20,6 @@ public enum Headers {
     HEADER_TOPIC_FILTER("topic_filter"),
     HEADER_SUB_QOS("sub_qoS"),
     HEADER_INBOX_ID("inbox_id"),
-    HEADER_DELIVERER_KEY("deliverer_key"),
     HEADER_SUBBROKER_ID("subbroker_id"),
     HEADER_CLIENT_TYPE("client_type"),
     HEADER_CLIENT_META_PREFIX("client_meta_"),

@@ -25,7 +25,7 @@ abstract class AbstractLocalSessionServer<T extends AbstractLocalSessionServerBu
     protected final LocalSessionBrokerService service;
 
     public AbstractLocalSessionServer(T builder) {
-        service = new LocalSessionBrokerService();
+        service = new LocalSessionBrokerService(builder.distClient);
     }
 
     @Override

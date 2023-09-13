@@ -18,8 +18,10 @@ import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.handler.HTTPRequestHandlersFactory;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.google.common.base.Preconditions;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -32,10 +34,11 @@ import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.epoll.EpollMode;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.ssl.SslContext;
+import lombok.extern.slf4j.Slf4j;
+
 import java.net.InetSocketAddress;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class APIServer implements IAPIServer {
@@ -57,14 +60,17 @@ public class APIServer implements IAPIServer {
                      EventLoopGroup workerGroup,
                      SslContext sslContext,
                      IDistClient distClient,
-                     ISessionDictionaryClient sessionDictClient,
+                     IMqttBrokerClient mqttBrokerClient,
+                     IInboxClient inboxClient,
+                     ISessionDictClient sessionDictClient,
                      ISettingProvider settingProvider) {
         Preconditions.checkArgument(port >= 0);
         Preconditions.checkArgument(tlsPort >= 0);
         this.host = host;
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
-        IHTTPRouteMap routeMap = new HTTPRouteMap(new HTTPRequestHandlersFactory(sessionDictClient, distClient));
+        IHTTPRouteMap routeMap = new HTTPRouteMap(new HTTPRequestHandlersFactory(sessionDictClient,
+                distClient, mqttBrokerClient, inboxClient));
         this.serverChannel =
             buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider));
         if (sslContext != null) {

@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.plugin.subbroker;
 
-import java.util.concurrent.CompletableFuture;
 import org.pf4j.ExtensionPoint;
 
 /**

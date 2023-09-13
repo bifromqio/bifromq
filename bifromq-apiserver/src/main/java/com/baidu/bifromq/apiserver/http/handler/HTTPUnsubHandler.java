@@ -13,16 +13,11 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_DELIVERER_KEY;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
-import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
-import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.inbox.client.InboxUnsubResult;
+import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.baidu.bifromq.mqtt.inbox.MqttUnsubResult;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -35,18 +30,28 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import java.util.concurrent.CompletableFuture;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
-@Path("/sub")
-public final class HTTPUnsubHandler implements IHTTPRequestHandler {
-    private final IDistClient distClient;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.Path;
+import java.util.concurrent.CompletableFuture;
 
-    public HTTPUnsubHandler(IDistClient distClient) {
-        this.distClient = distClient;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
+import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+
+@Slf4j
+@Path("/unsub")
+public final class HTTPUnsubHandler implements IHTTPRequestHandler {
+    private final IMqttBrokerClient mqttBrokerClient;
+    private final IInboxClient inboxClient;
+
+    public HTTPUnsubHandler(IMqttBrokerClient mqttBrokerClient, IInboxClient inboxClient) {
+        this.mqttBrokerClient = mqttBrokerClient;
+        this.inboxClient = inboxClient;
     }
 
     @DELETE
@@ -56,7 +61,6 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
         @Parameter(name = "topic_filter", in = ParameterIn.HEADER, required = true, description = "the topic filter to remove"),
         @Parameter(name = "inbox_id", in = ParameterIn.HEADER, required = true, description = "the inbox for receiving subscribed messages"),
-        @Parameter(name = "deliverer_key", in = ParameterIn.HEADER, required = true, description = "the key of the deliverer for the inbox"),
         @Parameter(name = "subbroker_id", in = ParameterIn.HEADER, required = true, schema = @Schema(implementation = Integer.class), description = "the id of the subbroker hosting the inbox"),
     })
     @RequestBody(required = false)
@@ -72,14 +76,29 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
         try {
             String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
             String inboxId = getHeader(HEADER_INBOX_ID, req, true);
-            String delivererKey = getHeader(HEADER_DELIVERER_KEY, req, true);
             int subBrokerId = getRequiredSubBrokerId(req);
             log.trace(
-                "Handling http unsub request: reqId={}, tenantId={}, topicFilter={}, inboxId={}, delivererKey={}, subBrokerId={}",
-                reqId, tenantId, topicFilter, inboxId, delivererKey, subBrokerId);
-            return distClient.unsub(reqId, tenantId, topicFilter, inboxId, delivererKey, subBrokerId)
-                .thenApply(
-                    v -> new DefaultFullHttpResponse(req.protocolVersion(), v ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
+                "Handling http unsub request: reqId={}, tenantId={}, topicFilter={}, inboxId={}, subBrokerId={}",
+                reqId, tenantId, topicFilter, inboxId, subBrokerId);
+            CompletableFuture<FullHttpResponse> future;
+            switch (subBrokerId) {
+                case 0:
+                    future = mqttBrokerClient.unsub(reqId, tenantId, inboxId, topicFilter)
+                            .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(),
+                                    v == MqttUnsubResult.OK ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER)
+                            );
+                    break;
+                case 1:
+                    future = inboxClient.unsub(reqId, tenantId, inboxId, topicFilter)
+                            .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(),
+                                    v == InboxUnsubResult.OK ? OK : NOT_FOUND,
+                                    Unpooled.EMPTY_BUFFER)
+                            );
+                    break;
+                default:
+                    throw new RuntimeException("Unknown subBrokerId: " + subBrokerId);
+            }
+            return future;
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);
         }

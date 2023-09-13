@@ -13,6 +13,19 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
+import com.baidu.bifromq.type.ClientInfo;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.testng.annotations.Test;
+
+import java.util.concurrent.CompletableFuture;
+
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_ID;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_META_PREFIX;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
@@ -25,21 +38,9 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
-import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
-import com.baidu.bifromq.type.ClientInfo;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import java.util.concurrent.CompletableFuture;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.testng.annotations.Test;
-
 public class HTTPKickHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKickHandler> {
     @Mock
-    private ISessionDictionaryClient sessionDictClient;
+    private ISessionDictClient sessionDictClient;
 
     @Override
     protected Class<HTTPKickHandler> handlerClass() {

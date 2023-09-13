@@ -13,16 +13,8 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_USER_ID;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClientMeta;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
-import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -36,18 +28,27 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import lombok.extern.slf4j.Slf4j;
+
 import javax.ws.rs.DELETE;
 import javax.ws.rs.Path;
-import lombok.extern.slf4j.Slf4j;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_ID;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_USER_ID;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClientMeta;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
+import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 @Slf4j
 @Path("/kill")
 public final class HTTPKickHandler implements IHTTPRequestHandler {
-    private final ISessionDictionaryClient sessionDictClient;
+    private final ISessionDictClient sessionDictClient;
 
-    public HTTPKickHandler(ISessionDictionaryClient sessionDictClient) {
+    public HTTPKickHandler(ISessionDictClient sessionDictClient) {
         this.sessionDictClient = sessionDictClient;
     }
 

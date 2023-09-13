@@ -13,15 +13,6 @@
 
 package com.baidu.bifromq.mqtt;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
-
 import com.baidu.bifromq.mqtt.client.MqttMsg;
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
@@ -32,11 +23,21 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
-import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
+
+import java.util.concurrent.CompletableFuture;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 @Slf4j
 public class MQTTLastWillTest {
@@ -87,8 +88,7 @@ public class MQTTLastWillTest {
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
 
         log.info("Kill client");
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey, ClientInfo.getDefaultInstance()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
         assertEquals(msg.topic, willTopic);
@@ -125,8 +125,7 @@ public class MQTTLastWillTest {
         lwtPubConnOpts.setUserName(userName);
         MqttTestClient lwtPubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey, ClientInfo.getDefaultInstance()).join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);
@@ -184,8 +183,7 @@ public class MQTTLastWillTest {
         lwtSubClient.connect(lwtSubConnOpts);
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2);
 
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey, ClientInfo.getDefaultInstance()).join();
 
         MqttMsg msg = topicSub.blockingFirst();
         assertEquals(msg.topic, willTopic);
@@ -216,8 +214,7 @@ public class MQTTLastWillTest {
         lwtPubConnOpts.setUserName(userName);
         MqttTestClient lwtPubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey, ClientInfo.getDefaultInstance()).join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);

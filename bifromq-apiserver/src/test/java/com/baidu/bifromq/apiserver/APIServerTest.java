@@ -13,6 +13,26 @@
 
 package com.baidu.bifromq.apiserver;
 
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import lombok.SneakyThrows;
+import org.mockito.Mock;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.concurrent.CompletableFuture;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -20,30 +40,17 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.sessiondict.client.ISessionDictionaryClient;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.concurrent.CompletableFuture;
-import lombok.SneakyThrows;
-import org.mockito.Mock;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 public class APIServerTest extends MockableTest {
     private final String host = "127.0.0.1";
     private APIServer apiServer;
     @Mock
     private IDistClient distClient;
     @Mock
-    private ISessionDictionaryClient sessionDictClient;
+    private IMqttBrokerClient mqttBrokerClient;
+    @Mock
+    private IInboxClient inboxClient;
+    @Mock
+    private ISessionDictClient sessionDictClient;
     private ISettingProvider settingProvider = Setting::current;
 
     @BeforeMethod
@@ -52,7 +59,8 @@ public class APIServerTest extends MockableTest {
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         apiServer = new APIServer(host, 0, 0,
-            bossGroup, workerGroup, null, distClient, sessionDictClient, settingProvider);
+            bossGroup, workerGroup, null, distClient, mqttBrokerClient, inboxClient,
+                sessionDictClient, settingProvider);
         apiServer.start();
     }
 
