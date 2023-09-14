@@ -19,14 +19,17 @@ import static com.baidu.bifromq.metrics.TenantMetric.InboxFetcherGauge;
 import static java.util.Collections.emptyMap;
 
 import com.google.common.collect.Iterators;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
-    private final ConcurrentMap<String, Map<String, IInboxFetcher>> fetchers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Map<String, Map<String, IInboxFetcher>>> fetchers = new ConcurrentHashMap<>();
 
     void reg(IInboxFetcher fetcher) {
         fetchers.compute(fetcher.tenantId(), (key, val) -> {
@@ -35,9 +38,9 @@ final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
                 gauging(fetcher.tenantId(), InboxFetcherGauge,
                     () -> fetchers.getOrDefault(fetcher.tenantId(), emptyMap()).size());
             }
-            IInboxFetcher prevFetcher = val.put(fetcher.delivererKey(), fetcher);
+            IInboxFetcher prevFetcher = val.computeIfAbsent(fetcher.delivererKey(), k -> new HashMap<>())
+                .put(fetcher.id(), fetcher);
             if (prevFetcher != null) {
-                // close previous fetcher if any
                 prevFetcher.close();
             }
             return val;
@@ -47,7 +50,13 @@ final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
     void unreg(IInboxFetcher fetcher) {
         fetchers.compute(fetcher.tenantId(), (tenantId, m) -> {
             if (m != null) {
-                m.remove(fetcher.delivererKey(), fetcher);
+                m.computeIfPresent(fetcher.delivererKey(), (k, v) -> {
+                    v.remove(fetcher.id(), fetcher);
+                    if (v.isEmpty()) {
+                        return null;
+                    }
+                    return v;
+                });
                 if (m.isEmpty()) {
                     stopGauging(fetcher.tenantId(), InboxFetcherGauge);
                     return null;
@@ -57,12 +66,19 @@ final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
         });
     }
 
-    IInboxFetcher get(String tenantId, String inboxId) {
-        return fetchers.getOrDefault(tenantId, emptyMap()).get(inboxId);
+    Collection<IInboxFetcher> get(String tenantId, String delivererKey) {
+        return fetchers.getOrDefault(tenantId, emptyMap()).getOrDefault(delivererKey, emptyMap()).values();
     }
 
     @Override
     public Iterator<IInboxFetcher> iterator() {
-        return Iterators.concat(fetchers.values().stream().map(m -> m.values().iterator()).iterator());
+        return Iterators.concat(
+            Iterators.transform(
+                Iterators.concat(
+                    fetchers.values().stream().map(m -> m.values().iterator()).iterator()
+                ),
+                e -> e.values().iterator()
+            )
+        );
     }
 }

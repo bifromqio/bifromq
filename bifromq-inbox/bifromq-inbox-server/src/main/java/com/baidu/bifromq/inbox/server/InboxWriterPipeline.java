@@ -42,10 +42,10 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
         return handler.handle(request).thenApply(v -> {
             for (SendResult result : v.getResultList()) {
                 if (result.getResult() == SendResult.Result.OK) {
-                    IInboxFetcher f =
-                        registry.get(result.getSubInfo().getTenantId(), delivererKey);
-                    if (f != null) {
-                        f.signalFetch(result.getSubInfo().getInboxId());
+                    for (IInboxFetcher fetcher : registry.get(result.getSubInfo().getTenantId(), delivererKey)) {
+                        if (fetcher.signalFetch(result.getSubInfo().getInboxId())) {
+                            break;
+                        }
                     }
                 }
             }

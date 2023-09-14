@@ -14,19 +14,13 @@
 package com.baidu.bifromq.inbox.server;
 
 public interface IInboxFetcher {
+    String id();
+
     String tenantId();
 
     String delivererKey();
 
-    @Deprecated
-    String inboxId();
-
-    long lastFetchTS();
-
-    @Deprecated
-    void signalFetch();
-
-    void signalFetch(String inboxId);
+    boolean signalFetch(String inboxId);
 
     void touch();
 

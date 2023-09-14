@@ -17,8 +17,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 import com.google.common.collect.Sets;
+import java.util.Collections;
 import java.util.Set;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
@@ -53,9 +55,9 @@ public class InboxFetcherRegistryTest {
         InboxFetcherRegistry registry = new InboxFetcherRegistry();
         mockFetcher(fetcher1, "tenantA", "inbox1");
         registry.reg(fetcher1);
-        assertEquals(registry.get(fetcher1.tenantId(), fetcher1.delivererKey()), fetcher1);
+        assertEquals(registry.get(fetcher1.tenantId(), fetcher1.delivererKey()), Collections.singleton(fetcher1));
         registry.unreg(fetcher1);
-        assertNull(registry.get(fetcher1.tenantId(), fetcher1.delivererKey()));
+        assertTrue(registry.get(fetcher1.tenantId(), fetcher1.delivererKey()).isEmpty());
     }
 
     @Test

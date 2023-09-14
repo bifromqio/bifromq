@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import static java.util.Collections.emptyMap;
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
+import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -27,6 +28,7 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -43,7 +45,8 @@ class InboxFetchPipeline {
     InboxFetchPipeline(String tenantId, String delivererKey, IRPCClient rpcClient) {
         this.tenantId = tenantId;
         this.rpcClient = rpcClient;
-        ppln = rpcClient.createMessageStream(tenantId, null, delivererKey, emptyMap(),
+        ppln = rpcClient.createMessageStream(tenantId, null, delivererKey,
+            singletonMap(PIPELINE_ATTR_KEY_ID, UUID.randomUUID().toString()),
             InboxServiceGrpc.getFetchInboxMethod());
         doFetch();
     }

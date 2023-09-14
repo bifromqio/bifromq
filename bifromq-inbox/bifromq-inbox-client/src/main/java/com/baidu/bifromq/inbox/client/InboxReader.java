@@ -19,7 +19,9 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class InboxReader implements IInboxClient.IInboxReader {
     private final String inboxId;
     private final InboxFetchPipeline ppln;
@@ -57,11 +59,19 @@ class InboxReader implements IInboxClient.IInboxReader {
     @Override
     public void hint(int bufferCapacity) {
         latestBufferCapacity = bufferCapacity;
-        ppln.hint(hlc, inboxId, bufferCapacity, lastFetchQoS0Seq, lastFetchQoS1Seq, lastFetchQoS2Seq);
+        try {
+            ppln.hint(hlc, inboxId, bufferCapacity, lastFetchQoS0Seq, lastFetchQoS1Seq, lastFetchQoS2Seq);
+        } catch (Throwable e) {
+            log.warn("Failed to send hint: inboxId={}", inboxId, e);
+        }
     }
 
     public void touch() {
-        ppln.hint(hlc, inboxId, latestBufferCapacity, lastFetchQoS0Seq, lastFetchQoS1Seq, lastFetchQoS2Seq);
+        try {
+            ppln.hint(hlc, inboxId, latestBufferCapacity, lastFetchQoS0Seq, lastFetchQoS1Seq, lastFetchQoS2Seq);
+        } catch (Throwable e) {
+            log.warn("Failed to send hint: inboxId={}", inboxId, e);
+        }
     }
 
     @Override
