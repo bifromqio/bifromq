@@ -37,15 +37,11 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
     @Override
     protected CompletableFuture<KVRangeRWReply> handleRequest(String s, KVRangeRWRequest request) {
         log.trace("Handling rw range request:req={}", request);
-        switch (request.getRequestTypeCase()) {
-            case DELETE:
-                return mutate(request, this::delete).toCompletableFuture();
-            case PUT:
-                return mutate(request, this::put).toCompletableFuture();
-            case RWCOPROC:
-            default:
-                return mutate(request, this::mutateCoProc).toCompletableFuture();
-        }
+        return switch (request.getRequestTypeCase()) {
+            case DELETE -> mutate(request, this::delete).toCompletableFuture();
+            case PUT -> mutate(request, this::put).toCompletableFuture();
+            default -> mutate(request, this::mutateCoProc).toCompletableFuture();
+        };
     }
 
     private CompletionStage<KVRangeRWReply> delete(KVRangeRWRequest request) {
@@ -99,7 +95,7 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
                         .setCode(ReplyCode.BadRequest)
                         .build();
                 }
-                log.error("Handle rw request error: reqId={}", request.getReqId(), e);
+                log.debug("Handle rw request error: reqId={}", request.getReqId(), e);
                 return KVRangeRWReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.InternalError)

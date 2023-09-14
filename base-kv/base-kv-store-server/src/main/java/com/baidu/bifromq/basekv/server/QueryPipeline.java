@@ -87,7 +87,7 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                                 .setCode(ReplyCode.BadRequest)
                                 .build();
                         }
-                        log.error("query range error: reqId={}", request.getReqId(), e);
+                        log.debug("query range error: reqId={}", request.getReqId(), e);
                         return KVRangeROReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setCode(ReplyCode.InternalError)
