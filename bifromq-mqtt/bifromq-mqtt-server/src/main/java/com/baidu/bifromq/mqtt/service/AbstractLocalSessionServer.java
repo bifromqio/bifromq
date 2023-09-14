@@ -53,7 +53,6 @@ abstract class AbstractLocalSessionServer<T extends AbstractLocalSessionServerBu
 
     @Override
     public final void add(String sessionId, IMQTTSession session) {
-        log.info("--- get sessionId: {} ---", sessionId);
         service.reg(sessionId, session);
     }
 
