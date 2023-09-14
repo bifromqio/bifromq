@@ -32,19 +32,17 @@ public abstract class AckStream<AckT, MsgT> extends AbstractStreamObserver<AckT,
         return ackSubject;
     }
 
-    public boolean send(MsgT message) {
-        if (responseObserver.isReady()) {
-            responseObserver.onNext(message);
-            RPCMeters.recordCount(meterKey, RPCMetric.StreamMsgSendCount);
-            return true;
-        }
-        return false;
+    public void send(MsgT message) {
+        responseObserver.onNext(message);
+        RPCMeters.recordCount(meterKey, RPCMetric.StreamMsgSendCount);
     }
 
     public void close() {
         if (closed.compareAndSet(false, true)) {
             ackSubject.onComplete();
-            responseObserver.onCompleted();
+            if (!responseObserver.isCancelled()) {
+                responseObserver.onCompleted();
+            }
         }
     }
 
@@ -56,7 +54,7 @@ public abstract class AckStream<AckT, MsgT> extends AbstractStreamObserver<AckT,
 
     @Override
     public final void onError(Throwable t) {
-        this.onCompleted();
+        close();
     }
 
     @Override

@@ -16,7 +16,7 @@ package com.baidu.bifromq.baserpc;
 import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 
 import com.baidu.bifromq.baserpc.exception.RequestRejectedException;
-import com.baidu.bifromq.baserpc.exception.ServiceUnavailableException;
+import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.baserpc.metrics.RPCMeters;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.baserpc.utils.Backoff;
@@ -46,6 +46,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
 
     private enum State {
         Normal,
+        ServerNotFound,
         ServiceUnavailable,
         Closed
     }
@@ -127,7 +128,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                                 assert desiredServerId.get().equals(selectedServerId.get());
                             }
                         } else {
-                            state.set(State.ServiceUnavailable);
+                            state.set(State.ServerNotFound);
                             if (selectedServerId.get() != null) {
                                 log.debug("MsgStream@{} stop targeting to server[{}]",
                                     this.hashCode(), selectedServerId.get());
@@ -210,13 +211,13 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     @Override
     public void ack(AckT ack) {
         switch (state.get()) {
-            case Normal -> {
+            case Normal, ServiceUnavailable -> {
                 ackSendingBuffers.offer(ack);
                 // check if pipeline is still open
                 sendUntilStreamNotReadyOrNoTask();
                 RPCMeters.recordCount(meterKey, RPCMetric.StreamAckAcceptCount);
             }
-            case ServiceUnavailable -> throw new ServiceUnavailableException("Service unavailable");
+            case ServerNotFound -> throw new ServerNotFoundException("Server not found");
             case Closed ->
                 // pipeline has already closed, finish it with close reason
                 throw new RequestRejectedException("Pipeline has closed");
