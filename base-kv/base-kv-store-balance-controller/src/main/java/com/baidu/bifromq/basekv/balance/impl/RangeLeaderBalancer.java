@@ -22,6 +22,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.State.StateType;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.google.common.collect.Sets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -105,17 +106,22 @@ public class RangeLeaderBalancer extends StoreBalancer {
                 // destination store is not in voter list, changeConfig first
                 Set<String> voters = new HashSet<>(rangeToBalance.getConfig().getVotersList());
                 Set<String> learners = new HashSet<>(rangeToBalance.getConfig().getLearnersList());
-                Iterator<String> iterator = voters.iterator();
                 String voterToRemove = null;
-                while (iterator.hasNext()) {
-                    String voter = iterator.next();
-                    if (!localStoreId.equals(voter)) {
-                        voterToRemove = voter;
-                        iterator.remove();
-                        break;
+                if (voters.size() == 1) {
+                    voterToRemove = localStoreId;
+                    voters = Sets.newHashSet(storeToTransfer);
+                } else {
+                    Iterator<String> iterator = voters.iterator();
+                    while (iterator.hasNext()) {
+                        String voter = iterator.next();
+                        if (!localStoreId.equals(voter)) {
+                            voterToRemove = voter;
+                            iterator.remove();
+                            break;
+                        }
                     }
+                    voters.add(storeToTransfer);
                 }
-                voters.add(storeToTransfer);
                 if (learners.remove(storeToTransfer)) {
                     learners.add(voterToRemove);
                 }
@@ -147,8 +153,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
             .filter(d -> d.getState() == StateType.Normal)
-            .sorted((o1, o2) -> (int) (o1.getId().getId() + o1.getId().getEpoch() - o2.getId().getId() +
-                o2.getId().getEpoch()))
+            .sorted((o1, o2) -> (int) (o1.getId().getId() - o2.getId().getId()))
             .toList();
     }
 
