@@ -161,6 +161,10 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-session-dict-server</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-apiserver</artifactId>
+        </dependency>
     </dependencies>
 
     <profiles>

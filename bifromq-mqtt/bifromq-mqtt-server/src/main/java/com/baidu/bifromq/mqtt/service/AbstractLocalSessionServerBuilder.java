@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
+import com.baidu.bifromq.dist.client.IDistClient;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
@@ -20,4 +21,5 @@ import lombok.experimental.Accessors;
 @Setter
 abstract class AbstractLocalSessionServerBuilder<T extends AbstractLocalSessionServerBuilder<T>>
     implements ILocalSessionServerBuilder {
+    IDistClient distClient;
 }

@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "commontype/QoS.proto";
 import "commontype/SubInfo.proto";
 import "commontype/TopicMessage.proto";
 
@@ -10,6 +11,8 @@ package mqttbroker;
 
 service OnlineInboxBroker {
   rpc write (stream WriteRequest) returns (stream WriteReply);
+  rpc sub(SubRequest) returns (SubReply);
+  rpc unsub(UnsubRequest) returns (UnsubReply);
 }
 
 message WritePack{
@@ -35,4 +38,40 @@ message WriteResult{
 message WriteReply {
   uint64 reqId = 1;
   repeated WriteResult result = 2;
+}
+
+message SubRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string inboxId = 3;
+  string topicFilter = 4;
+  commontype.QoS subQoS = 5;
+}
+
+message SubReply {
+  enum Result {
+    NO_INBOX = 0;
+    OK = 1;
+    EXCEED_LIMIT = 2;
+    ERROR = 3;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message UnsubRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string inboxId = 3;
+  string topicFilter = 4;
+}
+
+message UnsubReply {
+  enum Result {
+    NO_INBOX = 0;
+    OK = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
 }

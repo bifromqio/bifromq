@@ -13,7 +13,13 @@
 
 package com.baidu.bifromq.mqtt.service;
 
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.mqtt.handler.v3.MQTT3TransientSessionHandler;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
@@ -29,14 +35,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.extern.slf4j.Slf4j;
 
+import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_CONNECTED_SERVER_ID;
+
 @Slf4j
 final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxBrokerImplBase {
     private final ConcurrentMap<String, IMQTTSession> sessionMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, IMQTT3TransientSession> transientSessionMap = new ConcurrentHashMap<>();
-
     private final Gauge connCountGauge;
+    private final IDistClient distClient;
 
-    public LocalSessionBrokerService() {
+    public LocalSessionBrokerService(IDistClient distClient) {
+        this.distClient = distClient;
         connCountGauge = Gauge.builder("mqtt.server.connection.gauge", sessionMap::size)
             .register(Metrics.globalRegistry);
     }
@@ -44,6 +55,83 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
     @Override
     public StreamObserver<WriteRequest> write(StreamObserver<WriteReply> responseObserver) {
         return new LocalSessionWritePipeline(transientSessionMap, responseObserver);
+    }
+
+    @Override
+    public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
+        response(tenantId -> {
+            if (!transientSessionMap.containsKey(request.getInboxId())) {
+                return CompletableFuture.completedFuture(SubReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(SubReply.Result.NO_INBOX)
+                        .build());
+            }else {
+                MQTT3TransientSessionHandler session = (MQTT3TransientSessionHandler) transientSessionMap
+                        .get(request.getInboxId());
+                String serverId = session.clientInfo().getMetadataMap().get(MQTT_CLIENT_CONNECTED_SERVER_ID);
+                if (!session.checkTopicFilters()) {
+                    return CompletableFuture.completedFuture(SubReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(SubReply.Result.EXCEED_LIMIT)
+                            .build());
+                }
+                return distClient.match(request.getReqId(), tenantId, request.getTopicFilter(),
+                                request.getSubQoS(), request.getInboxId(),
+                                toDelivererKey(request.getInboxId(), serverId), 0)
+                        .thenApply(matchResult -> {
+                            SubReply.Builder subReplyBuilder = SubReply.newBuilder();
+                            switch (matchResult) {
+                                case OK :
+                                    session.addTopicFilter(request.getTopicFilter());
+                                    subReplyBuilder.setResult(SubReply.Result.OK);
+                                    break;
+                                case EXCEED_LIMIT:
+                                    subReplyBuilder.setResult(SubReply.Result.EXCEED_LIMIT);
+                                    break;
+                                default:
+                                    subReplyBuilder.setResult(SubReply.Result.ERROR);
+                                    break;
+                            }
+                            return subReplyBuilder.build();
+                        });
+            }
+        }, responseObserver);
+    }
+
+    @Override
+    public void unsub(UnsubRequest request, StreamObserver<UnsubReply> responseObserver) {
+        response(tenantId -> {
+            if (!transientSessionMap.containsKey(request.getInboxId())) {
+                return CompletableFuture.completedFuture(UnsubReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(UnsubReply.Result.NO_INBOX)
+                        .build());
+            }else {
+                MQTT3TransientSessionHandler session = (MQTT3TransientSessionHandler) transientSessionMap
+                        .get(request.getInboxId());
+                String serverId = session.clientInfo().getMetadataMap().get(MQTT_CLIENT_CONNECTED_SERVER_ID);
+                if (!session.removeTopicFilter(request.getTopicFilter())) {
+                    return CompletableFuture.completedFuture(UnsubReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(UnsubReply.Result.ERROR)
+                            .build());
+                }
+                return distClient.unmatch(request.getReqId(), tenantId, request.getTopicFilter(), request.getInboxId(),
+                                toDelivererKey(request.getInboxId(), serverId), 0)
+                        .thenApply(unmatchResult -> {
+                            UnsubReply.Builder unsubBuilder = UnsubReply.newBuilder();
+                            unsubBuilder.setReqId(request.getReqId());
+                            switch (unmatchResult) {
+                                case OK:
+                                    unsubBuilder.setResult(UnsubReply.Result.OK);
+                                    break;
+                                case ERROR:
+                                    unsubBuilder.setResult(UnsubReply.Result.ERROR);
+                            }
+                            return unsubBuilder.build();
+                        });
+            }
+        }, responseObserver);
     }
 
     void reg(String sessionId, IMQTTSession session) {

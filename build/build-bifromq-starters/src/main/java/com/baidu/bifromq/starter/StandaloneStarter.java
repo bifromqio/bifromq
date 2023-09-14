@@ -17,6 +17,8 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_LOAD_TRACKING_SECO
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_MAX_RANGE_LOAD;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_SPLIT_KEY_EST_THRESHOLD;
 
+import com.baidu.bifromq.apiserver.APIServer;
+import com.baidu.bifromq.apiserver.IAPIServer;
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -53,6 +55,7 @@ import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.starter.config.standalone.StandaloneConfig;
 import com.baidu.bifromq.starter.config.standalone.StandaloneConfigConsolidator;
 import com.baidu.bifromq.starter.config.standalone.model.StateStoreConfig;
+import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
 import com.baidu.bifromq.starter.utils.ConfigUtil;
 import com.google.common.base.Strings;
@@ -112,6 +115,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private IMqttBrokerClient mqttBrokerClient;
     private IMQTTBroker mqttBroker;
     private ISubBrokerManager subBrokerManager;
+    private IAPIServer apiServer;
 
     @Override
     protected void init(StandaloneConfig config) {
@@ -450,6 +454,11 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .sslContext(buildServerSslContext(mqttServerConfig.getWssListener().getSslConfig()))
                 .buildListener();
         }
+
+        APIServerConfig apiServerConfig = config.getApiServerConfig();
+        if (apiServerConfig.isEnable()) {
+            apiServer = buildAPIServer(apiServerConfig);
+        }
         sharedBaseKVRpcServer = sharedBaseKVRPCServerBuilder.build();
         mqttBroker = brokerBuilder.build();
         sharedIORpcServer = sharedIORPCServerBuilder.build();
@@ -484,6 +493,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         sharedBaseKVRpcServer.start();
 
         mqttBroker.start();
+        if (apiServer != null) {
+            apiServer.start();
+        }
         Observable.combineLatest(
                 distWorkerClient.connState(),
                 inboxClient.connState(),
@@ -512,6 +524,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
     public void stop() {
         mqttBroker.shutdown();
+        if (apiServer != null) {
+            apiServer.shutdown();
+        }
         sharedIORpcServer.shutdown();
         sharedBaseKVRpcServer.shutdown();
 
@@ -576,6 +591,22 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         pluginMgr.unloadPlugins();
         log.info("Standalone broker stopped");
         super.stop();
+    }
+
+    private IAPIServer buildAPIServer(APIServerConfig apiServerConfig) {
+        String apiHost = Strings.isNullOrEmpty(apiServerConfig.getHost()) ?
+                "0.0.0.0" : apiServerConfig.getHost();
+        EventLoopGroup bossELG = NettyUtil.createEventLoopGroup(apiServerConfig.getApiBossThreads(),
+                EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
+        EventLoopGroup workerELG = NettyUtil.createEventLoopGroup(apiServerConfig.getApiWorkerThreads(),
+                EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
+        SslContext sslContext = null;
+        if (apiServerConfig.getHttpsListenerConfig().isEnable()) {
+            sslContext = buildServerSslContext(apiServerConfig.getHttpsListenerConfig().getSslConfig());
+        }
+        return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsListenerConfig().getPort(),
+                bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
+                inboxClient, sessionDictClient, settingProviderMgr);
     }
 
     public static void main(String[] args) {

@@ -24,6 +24,7 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadByt
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_CONNECTED_SERVER_ID;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
@@ -198,6 +199,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                             .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
                             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
                                 clientAddr.map(InetSocketAddress::toString).orElse(""))
+                            .putMetadata(MQTT_CLIENT_CONNECTED_SERVER_ID, sessionCtx.serverId)
                             .build();
                         Long ibbw = settingProvider.provide(InBoundBandWidth, clientInfo.getTenantId());
                         long inBandWidth = Math.max(ibbw, 0);

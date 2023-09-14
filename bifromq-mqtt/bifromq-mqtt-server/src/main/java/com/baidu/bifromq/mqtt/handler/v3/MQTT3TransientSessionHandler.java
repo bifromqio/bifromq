@@ -266,4 +266,18 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
             }, ctx.channel().eventLoop());
         return true;
     }
+
+    public boolean removeTopicFilter(String topicFilter) {
+        return topicFilters.remove(topicFilter);
+    }
+
+    public void addTopicFilter(String topicFilter) {
+        topicFilters.add(topicFilter);
+    }
+
+    public boolean checkTopicFilters() {
+        int maxTopicFiltersPerInbox = settingProvider.provide(Setting.MaxTopicFiltersPerInbox,
+                clientInfo().getTenantId());
+        return topicFilters.size() < maxTopicFiltersPerInbox;
+    }
 }
