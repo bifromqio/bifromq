@@ -153,8 +153,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
             .filter(d -> d.getState() == StateType.Normal)
-            .sorted((o1, o2) -> (int) (o1.getId().getId() + o1.getId().getEpoch() - o2.getId().getId() +
-                o2.getId().getEpoch()))
+            .sorted((o1, o2) -> (int) (o1.getId().getId() - o2.getId().getId()))
             .toList();
     }
 
