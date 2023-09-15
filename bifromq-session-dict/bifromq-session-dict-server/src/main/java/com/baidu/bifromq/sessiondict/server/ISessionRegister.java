@@ -19,14 +19,11 @@ public interface ISessionRegister {
     record ClientKey(String userId, String clientId) {
     }
 
-    record SessionKey(String tenantId, ClientKey clientKey) {
-    }
-
     interface IRegistrationListener {
         void on(ClientInfo owner, boolean reg, ISessionRegister register);
     }
 
-    boolean kick(SessionKey sessionKey, ClientInfo kicker);
+    boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker);
 
     void stop();
 }

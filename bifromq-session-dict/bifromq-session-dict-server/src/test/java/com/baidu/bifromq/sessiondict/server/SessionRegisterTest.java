@@ -182,8 +182,7 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
-            register.kick(new ISessionRegister.SessionKey(tenantId, new ISessionRegister.ClientKey(userId, clientId)),
-                killer);
+            register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer);
             ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
             verify(responseObserver).onNext(quitCaptor.capture());
             Quit quit = quitCaptor.getValue();
@@ -201,9 +200,7 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
-            register.kick(
-                new ISessionRegister.SessionKey(tenantId, new ISessionRegister.ClientKey(userId, "FakeClientId")),
-                killer);
+            register.kick(tenantId, new ISessionRegister.ClientKey(userId, "FakeClientId"), killer);
             verify(responseObserver, times(0)).onNext(any());
         });
     }

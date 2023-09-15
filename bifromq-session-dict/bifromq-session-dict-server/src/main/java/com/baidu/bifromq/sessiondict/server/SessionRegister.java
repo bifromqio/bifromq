@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
-import static com.baidu.bifromq.metrics.TenantMeter.gauging;
-import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectionGauge;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 
@@ -25,7 +22,6 @@ import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.type.ClientInfo;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.Disposable;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,20 +44,17 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
                 clientKeys.values().forEach(clientInfo -> regListener.on(clientInfo, false, this))))
             .subscribe(session -> {
                 ClientInfo owner = session.getOwner();
-                SessionKey sessionKey = new SessionKey(owner.getTenantId(),
-                    new ClientKey(owner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
-                        owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, "")));
+                String tenantId = owner.getTenantId();
+                ClientKey clientKey = new ClientKey(owner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+                    owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
                 if (session.getKeep()) {
                     try {
-                        boolean kicked = kick(sessionKey, owner);
-                        registeredSession.compute(owner.getTenantId(), (t, m) -> {
+                        boolean kicked = kick(tenantId, clientKey, owner);
+                        registeredSession.compute(tenantId, (t, m) -> {
                             if (m == null) {
                                 m = new HashMap<>();
-                                gauging(owner.getTenantId(), MqttConnectionGauge,
-                                    () -> registeredSession.getOrDefault(owner.getTenantId(), Collections.emptyMap())
-                                        .size());
                             }
-                            m.put(sessionKey.clientKey(), session.getOwner());
+                            m.put(clientKey, session.getOwner());
                             return m;
                         });
                         if (!kicked) {
@@ -75,12 +68,10 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
                     AtomicBoolean found = new AtomicBoolean();
                     registeredSession.compute(owner.getTenantId(), (t, m) -> {
                         if (m == null) {
-                            stopGauging(owner.getTenantId(), MqttConnectionGauge);
                             return null;
                         } else {
-                            found.set(m.remove(sessionKey.clientKey(), owner));
+                            found.set(m.remove(clientKey, owner));
                             if (m.isEmpty()) {
-                                stopGauging(owner.getTenantId(), MqttConnectionGauge);
                                 m = null;
                             }
                             return m;
@@ -94,12 +85,11 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
     }
 
     @Override
-    public boolean kick(SessionKey sessionKey, ClientInfo kicker) {
+    public boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker) {
         AtomicReference<ClientInfo> found = new AtomicReference<>();
-        registeredSession.computeIfPresent(sessionKey.tenantId(), (k, v) -> {
-            found.set(v.remove(sessionKey.clientKey()));
+        registeredSession.computeIfPresent(tenantId, (k, v) -> {
+            found.set(v.remove(clientKey));
             if (v.isEmpty()) {
-                stopGauging(sessionKey.tenantId(), MqttConnectionGauge);
                 v = null;
             }
             return v;
