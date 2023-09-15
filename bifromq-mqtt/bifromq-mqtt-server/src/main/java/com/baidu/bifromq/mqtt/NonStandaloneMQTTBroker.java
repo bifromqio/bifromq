@@ -15,7 +15,6 @@ package com.baidu.bifromq.mqtt;
 
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.ILocalSessionServer;
-import com.baidu.bifromq.mqtt.service.NonStandaloneLocalSessionServerBuilder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -25,8 +24,7 @@ final class NonStandaloneMQTTBroker extends AbstractMQTTBroker<NonStandaloneMQTT
 
     public NonStandaloneMQTTBroker(NonStandaloneMQTTBrokerBuilder builder) {
         super(builder);
-        sessionServer = ((NonStandaloneLocalSessionServerBuilder) (ILocalSessionServer.nonStandaloneBuilder()
-                .distClient(builder.distClient)))
+        sessionServer = ILocalSessionServer.nonStandaloneBuilder()
                 .rpcServerBuilder(builder.rpcServerBuilder)
                 .build();
     }

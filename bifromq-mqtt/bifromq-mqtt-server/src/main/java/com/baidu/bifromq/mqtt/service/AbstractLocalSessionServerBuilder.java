@@ -21,5 +21,4 @@ import lombok.experimental.Accessors;
 @Setter
 abstract class AbstractLocalSessionServerBuilder<T extends AbstractLocalSessionServerBuilder<T>>
     implements ILocalSessionServerBuilder {
-    IDistClient distClient;
 }

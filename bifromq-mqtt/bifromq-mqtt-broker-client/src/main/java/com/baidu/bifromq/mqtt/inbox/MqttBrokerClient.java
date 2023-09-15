@@ -36,12 +36,13 @@ import com.google.common.collect.Iterables;
 import io.reactivex.rxjava3.core.Observable;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +61,7 @@ final class MqttBrokerClient implements IMqttBrokerClient {
             .sslContext(builder.sslContext)
             .crdtService(builder.crdtService)
             .build();
-        this.mqttBrokers = new HashSet<>();
+        this.mqttBrokers = new CopyOnWriteArraySet<>();
         this.rpcClient.serverList().subscribe(servers -> {
             mqttBrokers.clear();
             mqttBrokers.addAll(servers.keySet());
@@ -91,21 +92,24 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     public CompletableFuture<MqttSubResult> sub(long reqId, String tenantId, String inboxId,
                                                 String topicFilter, QoS qos) {
         List<CompletableFuture<SubReply>> futures = new ArrayList<>();
-        mqttBrokers.forEach(broker -> futures.add(rpcClient.invoke(tenantId, broker, SubRequest.newBuilder()
-                        .setReqId(reqId)
-                        .setTenantId(tenantId)
-                        .setInboxId(inboxId)
-                        .setTopicFilter(topicFilter)
-                        .setSubQoS(qos)
-                        .build(),
-                OnlineInboxBrokerGrpc.getSubMethod())));
+        Iterator<String> itr = mqttBrokers.iterator();
+        while (itr.hasNext()) {
+            futures.add(rpcClient.invoke(tenantId, itr.next(), SubRequest.newBuilder()
+                            .setReqId(reqId)
+                            .setTenantId(tenantId)
+                            .setInboxId(inboxId)
+                            .setTopicFilter(topicFilter)
+                            .setSubQoS(qos)
+                            .build(),
+                    OnlineInboxBrokerGrpc.getSubMethod()));
+        }
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
                 .thenApply(v -> {
-                    Optional<SubReply.Result> allOfSub = futures.stream()
+                    boolean allOfSub = futures.stream()
                             .map(CompletableFuture::join)
                             .map(SubReply::getResult)
-                            .max(Enum::compareTo);
-                    if (allOfSub.isPresent() && allOfSub.get() == SubReply.Result.OK) {
+                            .anyMatch(Boolean::booleanValue);
+                    if (allOfSub) {
                         return MqttSubResult.OK;
                     }else {
                         return MqttSubResult.ERROR;
@@ -116,13 +120,16 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     @Override
     public CompletableFuture<MqttUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter) {
         List<CompletableFuture<UnsubReply>> futures = new ArrayList<>();
-        mqttBrokers.forEach(broker -> futures.add(rpcClient.invoke(tenantId, broker, UnsubRequest.newBuilder()
-                        .setReqId(reqId)
-                        .setTenantId(tenantId)
-                        .setInboxId(inboxId)
-                        .setTopicFilter(topicFilter)
-                        .build(),
-                OnlineInboxBrokerGrpc.getUnsubMethod())));
+        Iterator<String> itr = mqttBrokers.iterator();
+        while (itr.hasNext()) {
+            futures.add(rpcClient.invoke(tenantId, itr.next(), UnsubRequest.newBuilder()
+                            .setReqId(reqId)
+                            .setTenantId(tenantId)
+                            .setInboxId(inboxId)
+                            .setTopicFilter(topicFilter)
+                            .build(),
+                    OnlineInboxBrokerGrpc.getUnsubMethod()));
+        }
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
                 .thenApply(v -> {
                     Optional<UnsubReply.Result> allOfUnsub = futures.stream()

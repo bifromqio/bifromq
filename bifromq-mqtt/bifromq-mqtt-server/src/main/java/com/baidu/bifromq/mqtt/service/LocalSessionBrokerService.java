@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3TransientSessionHandler;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
@@ -28,26 +27,25 @@ import com.google.common.util.concurrent.RateLimiter;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
+import io.netty.handler.codec.mqtt.MqttQoS;
+import io.netty.handler.codec.mqtt.MqttTopicSubscription;
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import lombok.extern.slf4j.Slf4j;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_CONNECTED_SERVER_ID;
 
 @Slf4j
 final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxBrokerImplBase {
     private final ConcurrentMap<String, IMQTTSession> sessionMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, IMQTT3TransientSession> transientSessionMap = new ConcurrentHashMap<>();
     private final Gauge connCountGauge;
-    private final IDistClient distClient;
 
-    public LocalSessionBrokerService(IDistClient distClient) {
-        this.distClient = distClient;
+    public LocalSessionBrokerService() {
         connCountGauge = Gauge.builder("mqtt.server.connection.gauge", sessionMap::size)
             .register(Metrics.globalRegistry);
     }
@@ -63,36 +61,21 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
             if (!transientSessionMap.containsKey(request.getInboxId())) {
                 return CompletableFuture.completedFuture(SubReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setResult(SubReply.Result.NO_INBOX)
+                        .setResult(false)
                         .build());
             }else {
                 MQTT3TransientSessionHandler session = (MQTT3TransientSessionHandler) transientSessionMap
                         .get(request.getInboxId());
-                String serverId = session.clientInfo().getMetadataMap().get(MQTT_CLIENT_CONNECTED_SERVER_ID);
-                if (!session.checkTopicFilters()) {
-                    return CompletableFuture.completedFuture(SubReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(SubReply.Result.EXCEED_LIMIT)
-                            .build());
-                }
-                return distClient.match(request.getReqId(), tenantId, request.getTopicFilter(),
-                                request.getSubQoS(), request.getInboxId(),
-                                toDelivererKey(request.getInboxId(), serverId), 0)
-                        .thenApply(matchResult -> {
-                            SubReply.Builder subReplyBuilder = SubReply.newBuilder();
-                            switch (matchResult) {
-                                case OK :
-                                    session.addTopicFilter(request.getTopicFilter());
-                                    subReplyBuilder.setResult(SubReply.Result.OK);
-                                    break;
-                                case EXCEED_LIMIT:
-                                    subReplyBuilder.setResult(SubReply.Result.EXCEED_LIMIT);
-                                    break;
-                                default:
-                                    subReplyBuilder.setResult(SubReply.Result.ERROR);
-                                    break;
+                MqttTopicSubscription topicSubscription =
+                        new MqttTopicSubscription(request.getTopicFilter(), MqttQoS.valueOf(request.getSubQoSValue()));
+                SubReply.Builder builder = SubReply.newBuilder();
+                builder.setReqId(request.getReqId());
+                return session.doSubscribe(request.getReqId(), topicSubscription)
+                        .thenApply(qos -> {
+                            if (qos == MqttQoS.FAILURE) {
+                                return builder.setResult(false).build();
                             }
-                            return subReplyBuilder.build();
+                            return builder.setResult(true).build();
                         });
             }
         }, responseObserver);
@@ -109,27 +92,9 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
             }else {
                 MQTT3TransientSessionHandler session = (MQTT3TransientSessionHandler) transientSessionMap
                         .get(request.getInboxId());
-                String serverId = session.clientInfo().getMetadataMap().get(MQTT_CLIENT_CONNECTED_SERVER_ID);
-                if (!session.removeTopicFilter(request.getTopicFilter())) {
-                    return CompletableFuture.completedFuture(UnsubReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(UnsubReply.Result.ERROR)
-                            .build());
-                }
-                return distClient.unmatch(request.getReqId(), tenantId, request.getTopicFilter(), request.getInboxId(),
-                                toDelivererKey(request.getInboxId(), serverId), 0)
-                        .thenApply(unmatchResult -> {
-                            UnsubReply.Builder unsubBuilder = UnsubReply.newBuilder();
-                            unsubBuilder.setReqId(request.getReqId());
-                            switch (unmatchResult) {
-                                case OK:
-                                    unsubBuilder.setResult(UnsubReply.Result.OK);
-                                    break;
-                                case ERROR:
-                                    unsubBuilder.setResult(UnsubReply.Result.ERROR);
-                            }
-                            return unsubBuilder.build();
-                        });
+                return session.doUnsubscribe(request.getReqId(), request.getTopicFilter())
+                        .thenApply(r -> r ? UnsubReply.newBuilder().setResult(UnsubReply.Result.OK).build()
+                                : UnsubReply.newBuilder().setResult(UnsubReply.Result.ERROR).build());
             }
         }, responseObserver);
     }

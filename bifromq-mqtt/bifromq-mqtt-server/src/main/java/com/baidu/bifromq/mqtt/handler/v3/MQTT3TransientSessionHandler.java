@@ -93,7 +93,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     }
 
     @Override
-    protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
+    public CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
         int maxTopicFiltersPerInbox = settingProvider.provide(Setting.MaxTopicFiltersPerInbox,
             clientInfo().getTenantId());
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
@@ -112,7 +112,7 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     }
 
     @Override
-    protected CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
+    public CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
         if (!topicFilters.remove(topicFilter)) {
             return CompletableFuture.completedFuture(false);
         }
@@ -267,17 +267,4 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
         return true;
     }
 
-    public boolean removeTopicFilter(String topicFilter) {
-        return topicFilters.remove(topicFilter);
-    }
-
-    public void addTopicFilter(String topicFilter) {
-        topicFilters.add(topicFilter);
-    }
-
-    public boolean checkTopicFilters() {
-        int maxTopicFiltersPerInbox = settingProvider.provide(Setting.MaxTopicFiltersPerInbox,
-                clientInfo().getTenantId());
-        return topicFilters.size() < maxTopicFiltersPerInbox;
-    }
 }

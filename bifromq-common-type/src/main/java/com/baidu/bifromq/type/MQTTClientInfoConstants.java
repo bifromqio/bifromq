@@ -10,5 +10,4 @@ public class MQTTClientInfoConstants {
     public static final String MQTT_CLIENT_ID_KEY = "clientId";
     public static final String MQTT_CHANNEL_ID_KEY = "channelId";
     public static final String MQTT_CLIENT_ADDRESS_KEY = "address";
-    public static final String MQTT_CLIENT_CONNECTED_SERVER_ID = "serverId";
 }

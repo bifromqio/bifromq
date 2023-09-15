@@ -49,14 +49,8 @@ message SubRequest {
 }
 
 message SubReply {
-  enum Result {
-    NO_INBOX = 0;
-    OK = 1;
-    EXCEED_LIMIT = 2;
-    ERROR = 3;
-  }
   uint64 reqId = 1;
-  Result result = 2;
+  bool result = 2;
 }
 
 message UnsubRequest {

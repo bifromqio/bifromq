@@ -21,5 +21,5 @@ import lombok.Setter;
 public class TCPListenerConfig {
     private boolean enable = true;
     private String host = "0.0.0.0";
-    private int port = 8387;
+    private int port = 1883;
 }
