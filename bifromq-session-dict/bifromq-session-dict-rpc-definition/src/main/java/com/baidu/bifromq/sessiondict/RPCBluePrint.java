@@ -15,15 +15,15 @@ package com.baidu.bifromq.sessiondict;
 
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
-import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictionaryServiceGrpc;
+import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
-        .serviceDescriptor(SessionDictionaryServiceGrpc.getServiceDescriptor())
-        .methodSemantic(SessionDictionaryServiceGrpc.getJoinMethod(), BluePrint.WCHStreamingMethod.getInstance())
-        .methodSemantic(SessionDictionaryServiceGrpc.getKillMethod(),
+        .serviceDescriptor(SessionDictServiceGrpc.getServiceDescriptor())
+        .methodSemantic(SessionDictServiceGrpc.getDictMethod(), BluePrint.WCHStreamingMethod.getInstance())
+        .methodSemantic(SessionDictServiceGrpc.getKillMethod(),
             BluePrint.WCHUnaryMethod.<KillRequest>builder()
-                .keyHashFunc(r -> WCHKeyUtil.toWCHKey(r.getUserId(), r.getClientId()))
+                .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))
                 .build())
         .build();
 }

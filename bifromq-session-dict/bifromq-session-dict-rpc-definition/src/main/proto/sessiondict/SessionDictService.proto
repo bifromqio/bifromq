@@ -6,27 +6,32 @@ package sessiondict;
 
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.sessiondict.rpc.proto";
-option java_outer_classname = "SessionDictionaryServiceProtos";
+option java_outer_classname = "SessionDictServiceProtos";
 option optimize_for = SPEED;
 
-service SessionDictionaryService {
-  rpc join (stream Ping) returns (stream Quit);
+service SessionDictService {
+  rpc dict (stream Session) returns (stream Quit);
   rpc kill (KillRequest) returns(KillReply);
 }
 
-message Ping {
+message Session {
+  uint64  reqId = 1;
+  commontype.ClientInfo owner = 2;
+  bool keep = 3;
 }
 
 message Quit {
   uint64  reqId = 1;
-  commontype.ClientInfo killer = 2; // could be anything meaningful. e.g. kicker's address
+  commontype.ClientInfo owner = 2;
+  commontype.ClientInfo killer = 3;
 }
 
 message KillRequest {
   uint64 reqId = 1;
-  string userId = 2;
-  string clientId = 3;
-  commontype.ClientInfo killer = 4;
+  string tenantId = 2;
+  string userId = 3;
+  string clientId = 4;
+  commontype.ClientInfo killer = 5;
 }
 
 message KillReply {

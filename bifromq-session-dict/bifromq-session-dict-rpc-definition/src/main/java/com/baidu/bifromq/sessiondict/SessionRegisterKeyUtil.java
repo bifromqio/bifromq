@@ -13,18 +13,26 @@
 
 package com.baidu.bifromq.sessiondict;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.SESSION_REGISTERS;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 
 import com.baidu.bifromq.type.ClientInfo;
+import java.util.Objects;
 
-public class WCHKeyUtil {
-    public static String toWCHKey(ClientInfo clientInfo) {
-        return toWCHKey(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
-            clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
+public class SessionRegisterKeyUtil {
+    private static final int SESSION_REGISTER_NUM = SESSION_REGISTERS.get();
+
+    public static String toRegisterKey(ClientInfo owner) {
+        return toRegisterKey(owner.getTenantId(), owner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+            owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
     }
 
-    public static String toWCHKey(String userId, String clientId) {
-        return userId + clientId;
+    public static String toRegisterKey(String tenantId, String userId, String clientId) {
+        int key = Objects.hash(tenantId, userId, clientId) % SESSION_REGISTER_NUM;
+        if (key < 0) {
+            key += SESSION_REGISTER_NUM;
+        }
+        return Integer.toString(key);
     }
 }

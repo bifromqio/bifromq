@@ -34,7 +34,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
-import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import java.nio.ByteBuffer;
@@ -88,17 +87,11 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         connectAndVerify(true, false, 30, true, false);
         mockAuthCheck(true);
         mockDistDist(true);
-        kickSubject.onNext(
-            Quit.newBuilder()
-                .setKiller(
-                    ClientInfo.newBuilder()
-                        .setTenantId("sys")
-                        .putMetadata("agent", "sys")
-                        .putMetadata("clientId", clientId)
-                        .build()
-                )
-                .build()
-        );
+        onKick.get().accept(ClientInfo.newBuilder()
+            .setTenantId("sys")
+            .putMetadata("agent", "sys")
+            .putMetadata("clientId", clientId)
+            .build());
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, KICKED, WILL_DISTED);

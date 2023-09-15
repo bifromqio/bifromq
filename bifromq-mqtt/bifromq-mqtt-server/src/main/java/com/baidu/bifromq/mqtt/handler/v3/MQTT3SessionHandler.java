@@ -56,7 +56,6 @@ import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.metrics.TenantMeter;
 import com.baidu.bifromq.mqtt.handler.MPSThrottler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
@@ -112,8 +111,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainM
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.SubAcked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.UnsubAcked;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
-import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
-import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
+import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -135,10 +133,6 @@ import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
-import io.reactivex.rxjava3.annotations.NonNull;
-import io.reactivex.rxjava3.disposables.Disposable;
-import io.reactivex.rxjava3.observers.DisposableObserver;
-import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
@@ -176,8 +170,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     private ScheduledFuture<?> idleTimeoutTask;
     private ScheduledFuture<?> resendUnconfirmedTask;
     private MPSThrottler throttler;
-    private IRPCClient.IMessageStream<Quit, Ping> sessionDictEntry;
-    private Disposable sessionKickDisposable;
+    private ISessionRegister sessionRegister;
     private int publishPacketId = 0;
     private long lastActiveAtNanos;
     private int maxTopicLevelLength;
@@ -215,8 +208,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         retainMatchLimit = settingProvider.provide(RetainMessageMatchLimit, tenantId);
 
         throttler = new MPSThrottler(Math.max(mps, 1));
-        sessionDictEntry = sessionCtx.sessionDictClient.reg(clientInfo);
-        handleSessionKick(ctx);
+        sessionRegister = sessionCtx.sessionDictClient.reg(clientInfo, this::kick);
         tenantMeter.recordCount(MqttConnectCount);
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.channel().eventLoop()
@@ -239,8 +231,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
         sessionCtx.localSessionRegistry.remove(channelId(), this);
-        sessionKickDisposable.dispose();
-        sessionDictEntry.close();
+        sessionRegister.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
     }
 
@@ -330,30 +321,9 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         return sessionPresent;
     }
 
-    private void handleSessionKick(ChannelHandlerContext ctx) {
-        if (ctx.channel().isActive()) {
-            sessionKickDisposable = sessionDictEntry.msg()
-                .observeOn(Schedulers.from(ctx.channel().eventLoop()))
-                .subscribeWith(new DisposableObserver<Quit>() {
-                    @Override
-                    public void onNext(@NonNull Quit quit) {
-                        if (log.isTraceEnabled()) {
-                            log.trace("Received quit request:reqId={},killer={}", quit.getReqId(), quit.getKiller());
-                        }
-                        closeConnectionNow(getLocal(Kicked.class).kicker(quit.getKiller()).clientInfo(clientInfo));
-                    }
-
-                    @Override
-                    public void onError(@NonNull Throwable e) {
-                        handleSessionKick(ctx);
-                    }
-
-                    @Override
-                    public void onComplete() {
-                        handleSessionKick(ctx);
-                    }
-                });
-        }
+    private void kick(ClientInfo kicker) {
+        ctx.channel().eventLoop().execute(() ->
+            closeConnectionNow(getLocal(Kicked.class).kicker(kicker).clientInfo(clientInfo)));
     }
 
     private void handlePubMsg(MqttPublishMessage mqttMessage) {

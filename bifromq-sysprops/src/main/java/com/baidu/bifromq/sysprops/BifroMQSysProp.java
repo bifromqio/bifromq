@@ -26,6 +26,7 @@ public enum BifroMQSysProp {
     // further check if utf8 string contains any control character or non character according to [MQTT-1.5.3]
     MQTT_UTF8_SANITY_CHECK("mqtt_utf8_sanity_check", false, BooleanParser.INSTANCE),
     MAX_CLIENT_ID_LENGTH("max_client_id_length", 65535, IntegerParser.from(23, 65536)),
+    SESSION_REGISTERS("session_registers", 1000, IntegerParser.POSITIVE),
     DATA_PLANE_TOLERABLE_LATENCY_MS("data_plane_tolerable_latency_ms", 50L, LongParser.POSITIVE),
     DATA_PLANE_BURST_LATENCY_MS("data_plane_burst_latency_ms", 1000L, LongParser.POSITIVE),
     CONTROL_PLANE_TOLERABLE_LATENCY_MS("control_plane_tolerant_latency_ms", 100L, LongParser.POSITIVE),
@@ -48,7 +49,7 @@ public enum BifroMQSysProp {
     INBOX_MAX_RANGE_LOAD("inbox_store_max_range_load", 2_000_000, IntegerParser.POSITIVE),
     INBOX_SPLIT_KEY_EST_THRESHOLD("inbox_store_split_key_threshold", 0.7D, DoubleParser.from(0.0, 1.0, true)),
     INBOX_LOAD_TRACKING_SECONDS("inbox_store_load_tracking_seconds", 5, IntegerParser.POSITIVE),
-    INBOX_STORE_VOTER_COUNT("inbox_store_replica_voter_count", 3, IntegerParser.POSITIVE),
+    INBOX_STORE_VOTER_COUNT("inbox_store_replica_voter_count", 1, IntegerParser.POSITIVE),
     INBOX_STORE_RECOVERY_TIMEOUT_MILLIS("inbox_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
     MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server", 4, IntegerParser.POSITIVE),
     RETAIN_STORE_VOTER_COUNT("retain_store_replica_voter_count", 3, IntegerParser.POSITIVE),

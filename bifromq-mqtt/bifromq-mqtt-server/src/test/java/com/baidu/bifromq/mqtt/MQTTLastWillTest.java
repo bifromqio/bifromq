@@ -66,7 +66,7 @@ public class MQTTLastWillTest {
             .thenReturn(CompletableFuture.completedFuture(true));
 
         doAnswer(invocationOnMock -> {
-            Event event = invocationOnMock.getArgument(0);
+            Event<?> event = invocationOnMock.getArgument(0);
             log.info("event: {}", event);
             return null;
         }).when(mqttTest.eventCollector).report(any(Event.class));

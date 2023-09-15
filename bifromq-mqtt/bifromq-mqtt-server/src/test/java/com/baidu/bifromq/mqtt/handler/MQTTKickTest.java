@@ -16,11 +16,18 @@ package com.baidu.bifromq.mqtt.handler;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.KICKED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
+import com.baidu.bifromq.sessiondict.client.ISessionRegister;
+import com.baidu.bifromq.type.ClientInfo;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import org.mockito.stubbing.Answer;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -37,7 +44,9 @@ public class MQTTKickTest extends BaseMQTTTest {
         Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
 
         // kick
-        kickSubject.onNext(Quit.newBuilder().build());
+
+        onKick.get().accept(ClientInfo.newBuilder().build());
+
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(2, CLIENT_CONNECTED, KICKED);

@@ -11,22 +11,22 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.sessiondict.client;
+package com.baidu.bifromq.sessiondict.server;
 
-import com.baidu.bifromq.baserpc.IConnectable;
-import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.type.ClientInfo;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
-public interface ISessionDictClient extends IConnectable {
-    static SessionDictClientBuilder newBuilder() {
-        return new SessionDictClientBuilder();
+public interface ISessionRegister {
+    record ClientKey(String userId, String clientId) {
     }
 
-    ISessionRegister reg(ClientInfo owner, Consumer<ClientInfo> onKick);
+    record SessionKey(String tenantId, ClientKey clientKey) {
+    }
 
-    CompletableFuture<KillReply> kill(long reqId, String tenantId, String userId, String clientId, ClientInfo killer);
+    interface IRegistrationListener {
+        void on(ClientInfo owner, boolean reg, ISessionRegister register);
+    }
+
+    boolean kick(SessionKey sessionKey, ClientInfo kicker);
 
     void stop();
 }

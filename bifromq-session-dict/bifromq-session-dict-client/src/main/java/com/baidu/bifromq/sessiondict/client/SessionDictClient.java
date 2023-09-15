@@ -13,29 +13,31 @@
 
 package com.baidu.bifromq.sessiondict.client;
 
-import static com.baidu.bifromq.sessiondict.WCHKeyUtil.toWCHKey;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.sessiondict.PipelineUtil;
 import com.baidu.bifromq.sessiondict.RPCBluePrint;
+import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
-import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
-import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictionaryServiceGrpc;
+import com.baidu.bifromq.sessiondict.rpc.proto.Session;
+import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.RemovalListener;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class SessionDictClient implements ISessionDictClient {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final IRPCClient rpcClient;
+    private final LoadingCache<String, IRPCClient.IMessageStream<Quit, Session>> regPipeline;
 
     SessionDictClient(SessionDictClientBuilder builder) {
         this.rpcClient = IRPCClient.newBuilder()
@@ -45,6 +47,20 @@ final class SessionDictClient implements ISessionDictClient {
             .sslContext(builder.sslContext)
             .crdtService(builder.crdtService)
             .build();
+        regPipeline = Caffeine.newBuilder()
+            .weakValues()
+            .executor(MoreExecutors.directExecutor())
+            .removalListener(
+                (RemovalListener<String, IRPCClient.IMessageStream<Quit, Session>>) (key, value, cause) -> {
+                    if (value != null) {
+                        value.close();
+                    }
+                })
+            .build(registerKey -> rpcClient.createMessageStream("",
+                null,
+                registerKey,
+                Collections.emptyMap(),
+                SessionDictServiceGrpc.getDictMethod()));
     }
 
     @Override
@@ -53,15 +69,9 @@ final class SessionDictClient implements ISessionDictClient {
     }
 
     @Override
-    public IRPCClient.IMessageStream<Quit, Ping> reg(ClientInfo clientInfo) {
-        assert MQTT_TYPE_VALUE.equalsIgnoreCase(clientInfo.getType());
-        Map<String, String> metadata = new HashMap<>();
-        metadata.put(PipelineUtil.CLIENT_INFO, PipelineUtil.encode(clientInfo));
-        return rpcClient.createMessageStream(clientInfo.getTenantId(),
-            null,
-            toWCHKey(clientInfo),
-            metadata,
-            SessionDictionaryServiceGrpc.getJoinMethod());
+    public ISessionRegister reg(ClientInfo owner, Consumer<ClientInfo> onKick) {
+        return new SessionRegister(owner, onKick,
+            regPipeline.get(SessionRegisterKeyUtil.toRegisterKey(owner)));
     }
 
     @Override
@@ -72,10 +82,11 @@ final class SessionDictClient implements ISessionDictClient {
                                              ClientInfo killer) {
         return rpcClient.invoke(tenantId, null, KillRequest.newBuilder()
                 .setReqId(reqId)
+                .setTenantId(tenantId)
                 .setUserId(userId)
                 .setClientId(clientId)
                 .setKiller(killer)
-                .build(), SessionDictionaryServiceGrpc.getKillMethod())
+                .build(), SessionDictServiceGrpc.getKillMethod())
             .exceptionally(e -> KillReply.newBuilder()
                 .setReqId(reqId)
                 .setResult(KillReply.Result.ERROR)
@@ -86,6 +97,7 @@ final class SessionDictClient implements ISessionDictClient {
     public void stop() {
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping session dict client");
+            regPipeline.invalidateAll();
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.info("Session dict client stopped");

@@ -41,7 +41,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
@@ -72,7 +71,7 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
+import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -91,12 +90,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -118,9 +118,11 @@ public abstract class BaseMQTTTest {
     @Mock
     protected ISessionDictClient sessionDictClient;
     @Mock
-    protected IRPCClient.IMessageStream<Quit, Ping> kickStream;
+    protected ISessionRegister sessionRegister;
     @Mock
     protected IInboxClient.IInboxReader inboxReader;
+
+    protected AtomicReference<Consumer<ClientInfo>> onKick = new AtomicReference<>();
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
     protected ILocalSessionRegistry sessionRegistry = new ILocalSessionRegistry() {
@@ -157,7 +159,6 @@ public abstract class BaseMQTTTest {
     protected String delivererKey = "testGroupKey";
     protected String remoteIp = "127.0.0.1";
     protected int remotePort = 8888;
-    protected PublishSubject<Quit> kickSubject = PublishSubject.create();
     protected long disconnectDelay = 5000;
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
@@ -330,8 +331,11 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockSessionReg() {
-        when(sessionDictClient.reg(any(ClientInfo.class))).thenReturn(kickStream);
-        when(kickStream.msg()).thenReturn(kickSubject);
+        when(sessionDictClient.reg(any(), any())).thenAnswer(
+            (Answer<ISessionRegister>) invocation -> {
+                onKick.set(invocation.getArgument(1));
+                return sessionRegister;
+            });
     }
 
     protected void mockInboxReader() {

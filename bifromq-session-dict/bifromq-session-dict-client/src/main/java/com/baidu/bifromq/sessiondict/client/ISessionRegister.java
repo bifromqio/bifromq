@@ -11,21 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.sessiondict;
+package com.baidu.bifromq.sessiondict.client;
 
-import com.baidu.bifromq.type.ClientInfo;
-import java.util.Base64;
-import lombok.SneakyThrows;
-
-public class PipelineUtil {
-    public static final String CLIENT_INFO = "0";
-
-    public static String encode(ClientInfo clientInfo) {
-        return Base64.getEncoder().encodeToString(clientInfo.toByteArray());
-    }
-
-    @SneakyThrows
-    public static ClientInfo decode(String clientInfoBase64) {
-        return ClientInfo.parseFrom(Base64.getDecoder().decode(clientInfoBase64));
-    }
+public interface ISessionRegister {
+    void stop();
 }

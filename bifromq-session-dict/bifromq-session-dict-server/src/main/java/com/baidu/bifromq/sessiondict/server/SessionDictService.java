@@ -14,66 +14,64 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-import static com.baidu.bifromq.metrics.TenantMeter.gauging;
-import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectionGauge;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static com.github.benmanes.caffeine.cache.RemovalCause.EXPIRED;
-import static com.github.benmanes.caffeine.cache.RemovalCause.SIZE;
 
-import com.baidu.bifromq.baserpc.AckStream;
-import com.baidu.bifromq.sessiondict.PipelineUtil;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
-import com.baidu.bifromq.sessiondict.rpc.proto.Ping;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
-import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictionaryServiceGrpc;
-import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.sessiondict.rpc.proto.Session;
+import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import io.grpc.stub.StreamObserver;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class SessionDictService extends SessionDictionaryServiceGrpc.SessionDictionaryServiceImplBase {
+class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBase {
+    private final Cache<ISessionRegister.SessionKey, ISessionRegister> sessions;
 
-    private final Cache<AckStream<Ping, Quit>, ClientInfo> kickedPipelines = Caffeine.newBuilder()
-        .expireAfterWrite(5, TimeUnit.SECONDS)
-        .maximumSize(1000_000)
-        .removalListener((RemovalListener<AckStream<Ping, Quit>, ClientInfo>) (key, value, cause) -> {
-            if (cause == EXPIRED || cause == SIZE) {
-                if (key != null) {
-                    key.send(Quit.newBuilder().setKiller(value).build());
-                    key.onCompleted();
-                }
-            }
-        })
-        .build();
-    // tenantId -> userId/clientId -> AckPipeline<Ping, Quit>
-    private final Map<String, Map<String, Registration>> registry = new ConcurrentHashMap<>();
+    SessionDictService() {
+        sessions = Caffeine.newBuilder()
+            .weakValues()
+            .build();
+    }
 
     @Override
-    public StreamObserver<Ping> join(StreamObserver<Quit> responseObserver) {
-        return new Registration(responseObserver);
+    public StreamObserver<Session> dict(StreamObserver<Quit> responseObserver) {
+        return new SessionRegister(((sessionOwner, reg, register) -> {
+            ISessionRegister.SessionKey sessionKey = new ISessionRegister.SessionKey(sessionOwner.getTenantId(),
+                new ISessionRegister.ClientKey(sessionOwner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+                    sessionOwner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, "")));
+            if (reg) {
+                ISessionRegister prevRegister = sessions.asMap().put(sessionKey, register);
+                if (prevRegister != null) {
+                    // kick the session registered via previous register
+                    prevRegister.kick(sessionKey, sessionOwner);
+                }
+            } else {
+                sessions.asMap().remove(sessionKey, register);
+            }
+        }), responseObserver);
     }
 
     @Override
     public void kill(KillRequest request, StreamObserver<KillReply> responseObserver) {
         response(tenantId -> {
-            Registration reg = registry.getOrDefault(tenantId, Collections.emptyMap())
-                .get(toRegKey(request.getUserId(), request.getClientId()));
+            ISessionRegister.SessionKey sessionKey = new ISessionRegister.SessionKey(request.getTenantId(),
+                new ISessionRegister.ClientKey(request.getUserId(), request.getClientId()));
+            ISessionRegister reg = sessions.asMap().remove(sessionKey);
             if (reg != null) {
-                reg.quit(request.getKiller());
+                try {
+                    reg.kick(sessionKey, request.getKiller());
+                } catch (Throwable e) {
+                    log.debug("Failed to kick", e);
+                    return CompletableFuture.completedFuture(KillReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(KillReply.Result.ERROR)
+                        .build());
+                }
             }
             return CompletableFuture.completedFuture(KillReply.newBuilder()
                 .setReqId(request.getReqId())
@@ -83,74 +81,6 @@ public class SessionDictService extends SessionDictionaryServiceGrpc.SessionDict
     }
 
     void close() {
-        registry.forEach((tenantId, sessions) ->
-            sessions.forEach((sessionId, ackPipeline) -> ackPipeline.onCompleted()));
-    }
-
-    private class Registration extends AckStream<Ping, Quit> {
-        private final String regKey;
-        private final ClientInfo clientInfo;
-
-        protected Registration(StreamObserver<Quit> responseObserver) {
-            super(responseObserver);
-            clientInfo = PipelineUtil.decode(metadata.get(PipelineUtil.CLIENT_INFO));
-            assert MQTT_TYPE_VALUE.equals(clientInfo.getType());
-            log.trace("Receive session registering, tenantId={}, userId={}, clientId={}, addr={}",
-                tenantId, clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
-                clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""),
-                clientInfo.getMetadataOrDefault(MQTT_CLIENT_ADDRESS_KEY, ""));
-            regKey =
-                toRegKey(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
-                    clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
-            registry.compute(tenantId, (t, m) -> {
-                if (m == null) {
-                    m = new HashMap<>();
-                    gauging(tenantId, MqttConnectionGauge,
-                        () -> registry.getOrDefault(tenantId, Collections.emptyMap()).size());
-                }
-                m.compute(regKey, (r, oldPipeline) -> {
-                    if (oldPipeline != null) {
-                        oldPipeline.quit(clientInfo);
-                        kickedPipelines.put(oldPipeline, clientInfo);
-                    }
-                    return this;
-                });
-                return m;
-            });
-
-            this.ack().doOnComplete(this::leave).subscribe();
-        }
-
-        public void quit(ClientInfo killer) {
-            long reqId = System.nanoTime();
-            if (log.isTraceEnabled()) {
-                log.trace("Quit pipeline: reqId={}, tenantId={}, userId={}, clientId={}, addr={}",
-                    reqId, tenantId, clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
-                    clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""),
-                    clientInfo.getMetadataOrDefault(MQTT_CLIENT_ADDRESS_KEY, ""));
-            }
-            send(Quit.newBuilder().setKiller(killer).build());
-        }
-
-        private void leave() {
-            registry.compute(tenantId, (t, m) -> {
-                if (m == null) {
-                    stopGauging(tenantId, MqttConnectionGauge);
-                    return null;
-                } else {
-                    m.remove(regKey, this);
-                    if (m.size() == 0) {
-                        stopGauging(tenantId, MqttConnectionGauge);
-                        return null;
-                    }
-                    return m;
-                }
-            });
-            kickedPipelines.invalidate(this);
-        }
-    }
-
-    private String toRegKey(String userId, String clientId) {
-        return userId + "/" + clientId;
+        sessions.asMap().forEach((sessionKey, register) -> register.stop());
     }
 }
