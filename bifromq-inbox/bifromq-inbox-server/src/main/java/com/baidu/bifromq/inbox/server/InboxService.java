@@ -163,6 +163,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .thenApply(v -> unsubFutures.stream().map(CompletableFuture::join).toList())
                         .handle((unsubResults, e) -> {
                             if (e != null) {
+                                log.debug("Failed to create inbox", e);
                                 return CreateInboxReply.newBuilder()
                                     .setReqId(request.getReqId())
                                     .setResult(CreateInboxReply.Result.ERROR)
@@ -183,10 +184,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         });
                 }
             })
-            .exceptionally(e -> CreateInboxReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setResult(CreateInboxReply.Result.ERROR)
-                .build()), responseObserver);
+            .exceptionally(e -> {
+                log.debug("Failed to create inbox", e);
+                return CreateInboxReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(CreateInboxReply.Result.ERROR)
+                    .build();
+            }), responseObserver);
     }
 
     @Override

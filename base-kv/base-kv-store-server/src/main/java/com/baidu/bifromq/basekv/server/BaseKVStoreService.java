@@ -169,14 +169,14 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     @Override
     public void split(KVRangeSplitRequest request, StreamObserver<KVRangeSplitReply> responseObserver) {
         response(tenantId -> kvRangeStore.split(request.getVer(), request.getKvRangeId(), request.getSplitKey())
-            .thenApply(result -> KVRangeSplitReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(ReplyCode.Ok)
-                .build())
-            .exceptionally(e -> KVRangeSplitReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(convertKVRangeException(e))
-                .build()),
+                .thenApply(result -> KVRangeSplitReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ReplyCode.Ok)
+                    .build())
+                .exceptionally(e -> KVRangeSplitReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(convertKVRangeException(e))
+                    .build()),
             responseObserver);
     }
 
@@ -218,6 +218,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
         if (e instanceof BadRequest || e.getCause() instanceof BadRequest) {
             return ReplyCode.BadRequest;
         }
+        log.error("Internal Error", e);
         return ReplyCode.InternalError;
     }
 }

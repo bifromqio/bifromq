@@ -57,6 +57,7 @@ import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
+import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -65,6 +66,7 @@ import com.google.protobuf.ByteString;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -98,6 +100,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final MethodDescriptor<KVRangeRWRequest, KVRangeRWReply> executeMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> linearizedQueryMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> queryMethod;
+    private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(Maps.newHashMap());
 
     // key: serverId, val: storeId
     private volatile Map<String, String> serverToStoreMap = Maps.newHashMap();
@@ -224,10 +227,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, transferLeadershipMethod)
-            .exceptionally(e -> TransferLeadershipReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(ReplyCode.InternalError)
-                .build());
+            .exceptionally(e -> {
+                log.error("Failed to transfer leader", e);
+                return TransferLeadershipReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ReplyCode.InternalError)
+                    .build();
+            });
     }
 
     @Override
@@ -239,10 +245,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, changeReplicaConfigMethod)
-            .exceptionally(e -> ChangeReplicaConfigReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(ReplyCode.InternalError)
-                .build());
+            .exceptionally(e -> {
+                log.error("Failed to change config", e);
+                return ChangeReplicaConfigReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ReplyCode.InternalError)
+                    .build();
+            });
     }
 
     @Override
@@ -253,10 +262,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, splitMethod)
-            .exceptionally(e -> KVRangeSplitReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(ReplyCode.InternalError)
-                .build());
+            .exceptionally(e -> {
+                log.error("Failed to split", e);
+                return KVRangeSplitReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ReplyCode.InternalError)
+                    .build();
+            });
     }
 
     @Override
@@ -267,10 +279,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return rpcClient.invoke("", serverId, request, mergeMethod)
-            .exceptionally(e -> KVRangeMergeReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(ReplyCode.InternalError)
-                .build());
+            .exceptionally(e -> {
+                log.error("Failed to merge", e);
+                return KVRangeMergeReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ReplyCode.InternalError)
+                    .build();
+            });
     }
 
     @Override
@@ -320,30 +335,69 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public IExecutionPipeline createExecutionPipeline(String storeId) {
-        String serverId = storeToServerMap.get(storeId);
-        if (serverId == null) {
-            throw new NullPointerException("No hosting server found for store: " + storeId);
-        }
-        return new ExecPipeline(serverId);
+        return new ManagedExecutionPipeline(storeToServerSubject.map(m -> {
+            String serverId = m.get(storeId);
+            if (serverId == null) {
+                return new IRPCClient.IRequestPipeline<>() {
+                    @Override
+                    public boolean isClosed() {
+                        return false;
+                    }
+
+                    @Override
+                    public CompletableFuture<KVRangeRWReply> invoke(KVRangeRWRequest req) {
+                        return CompletableFuture.failedFuture(
+                            new ServerNotFoundException("No hosting server found for store: " + storeId));
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                };
+            }
+            return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), executeMethod);
+        }));
     }
 
     @Override
     public IQueryPipeline createQueryPipeline(String storeId) {
-        String serverId = storeToServerMap.get(storeId);
-        if (serverId == null) {
-            throw new NullPointerException("No hosting server found for store: " + storeId);
-        }
-
-        return new QueryPipeline(serverId, false);
+        return createQueryPipeline(storeId, false);
     }
 
     @Override
     public IQueryPipeline createLinearizedQueryPipeline(String storeId) {
-        String serverId = storeToServerMap.get(storeId);
-        if (serverId == null) {
-            throw new NullPointerException("No hosting server found for store: " + storeId);
-        }
-        return new QueryPipeline(serverId, true);
+        return createQueryPipeline(storeId, true);
+    }
+
+    private IQueryPipeline createQueryPipeline(String storeId, boolean linearized) {
+        return new ManagedQueryPipeline(storeToServerSubject.map(m -> {
+            String serverId = m.get(storeId);
+            if (serverId == null) {
+                return new IRPCClient.IRequestPipeline<>() {
+                    @Override
+                    public boolean isClosed() {
+                        return false;
+                    }
+
+                    @Override
+                    public CompletableFuture<KVRangeROReply> invoke(KVRangeRORequest req) {
+                        return CompletableFuture.failedFuture(
+                            new ServerNotFoundException("No hosting server found for store: " + storeId));
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                };
+            }
+            if (linearized) {
+                return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), linearizedQueryMethod);
+            } else {
+                return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), queryMethod);
+            }
+        }));
     }
 
     @Override
@@ -431,6 +485,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         clusterInfo.serverToStoreMap.forEach((server, store) -> newStoreToServerMap.put(store, server));
         serverToStoreMap = clusterInfo.serverToStoreMap;
         storeToServerMap = newStoreToServerMap;
+        storeToServerSubject.onNext(newStoreToServerMap);
         return true;
     }
 

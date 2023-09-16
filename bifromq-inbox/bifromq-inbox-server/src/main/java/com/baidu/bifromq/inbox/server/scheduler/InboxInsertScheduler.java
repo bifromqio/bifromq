@@ -80,6 +80,7 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
                     .thenApply(InboxServiceRWCoProcOutput::getBatchInsert)
                     .handle((v, e) -> {
                         if (e != null) {
+                            log.debug("Failed to insert", e);
                             CallTask<MessagePack, SendResult.Result> task;
                             while ((task = inboxInserts.poll()) != null) {
                                 task.callResult.complete(SendResult.Result.ERROR);

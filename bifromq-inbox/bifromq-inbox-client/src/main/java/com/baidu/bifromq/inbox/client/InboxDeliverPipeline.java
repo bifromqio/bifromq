@@ -50,17 +50,12 @@ class InboxDeliverPipeline implements IDeliverer {
                         .build()))
                 .build())
             .thenApply(sendReply -> sendReply.getResultList().stream()
-                .collect(Collectors.toMap(SendResult::getSubInfo, e -> {
+                .collect(Collectors.toMap(SendResult::getSubInfo, e ->
                     switch (e.getResult()) {
-                        case OK:
-                            return DeliveryResult.OK;
-                        case NO_INBOX:
-                            return DeliveryResult.NO_INBOX;
-                        case ERROR:
-                        default:
-                            return DeliveryResult.FAILED;
-                    }
-                })));
+                        case OK -> DeliveryResult.OK;
+                        case NO_INBOX -> DeliveryResult.NO_INBOX;
+                        default -> DeliveryResult.FAILED;
+                    })));
     }
 
     @Override

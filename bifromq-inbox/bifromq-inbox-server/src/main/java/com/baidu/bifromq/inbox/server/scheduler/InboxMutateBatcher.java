@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IExecutionPipeline;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
@@ -24,7 +25,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class InboxMutateBatcher<Req, Resp> extends Batcher<Req, Resp, KVRangeSetting> {
-    private final IBaseKVStoreClient.IExecutionPipeline execPipeline;
+    private final IExecutionPipeline execPipeline;
 
     InboxMutateBatcher(String name,
                        long tolerableLatencyNanos,

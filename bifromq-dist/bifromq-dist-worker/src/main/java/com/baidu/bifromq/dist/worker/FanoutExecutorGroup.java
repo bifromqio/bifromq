@@ -143,6 +143,7 @@ class FanoutExecutorGroup {
         DeliveryRequest request = new DeliveryRequest(sub, subBrokerId, delivererKey, msgPack);
         scheduler.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
+                log.debug("Failed to deliver", e);
                 eventCollector.report(getLocal(DeliverError.class)
                     .brokerId(subBrokerId)
                     .delivererKey(delivererKey)

@@ -18,6 +18,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_TOLERABLE_
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IExecutionPipeline;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
@@ -49,7 +50,7 @@ public abstract class MutateCallScheduler<Req, Resp> extends BatchCallScheduler<
     protected abstract ByteString rangeKey(Req call);
 
     protected abstract static class MutateCallBatcher<Req, Resp> extends Batcher<Req, Resp, KVRangeSetting> {
-        private final IBaseKVStoreClient.IExecutionPipeline executionPipeline;
+        private final IExecutionPipeline executionPipeline;
 
         protected MutateCallBatcher(String name,
                                     long tolerableLatencyNanos,

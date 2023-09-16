@@ -100,9 +100,12 @@ final class InboxClient implements IInboxClient {
                 .setInboxId(inboxId)
                 .setClientInfo(owner)
                 .build(), InboxServiceGrpc.getCreateInboxMethod())
-            .exceptionally(e -> CreateInboxReply.newBuilder()
-                .setReqId(reqId)
-                .setResult(CreateInboxReply.Result.ERROR).build());
+            .exceptionally(e -> {
+                log.debug("Failed to create inbox", e);
+                return CreateInboxReply.newBuilder()
+                    .setReqId(reqId)
+                    .setResult(CreateInboxReply.Result.ERROR).build();
+            });
     }
 
     @Override

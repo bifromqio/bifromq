@@ -19,6 +19,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LAT
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IExecutionPipeline;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
@@ -147,7 +148,7 @@ public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, Retai
             }
         }
 
-        private final IBaseKVStoreClient.IExecutionPipeline executionPipeline;
+        private final IExecutionPipeline executionPipeline;
 
         protected RetainCallBatcher(KVRangeSetting range,
                                     String name,

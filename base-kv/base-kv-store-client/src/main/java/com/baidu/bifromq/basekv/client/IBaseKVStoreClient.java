@@ -40,18 +40,6 @@ public interface IBaseKVStoreClient extends IKVRangeRouter, IConnectable {
         return new BaseKVStoreClientBuilder();
     }
 
-    interface IExecutionPipeline {
-        CompletableFuture<KVRangeRWReply> execute(KVRangeRWRequest request);
-
-        void close();
-    }
-
-    interface IQueryPipeline {
-        CompletableFuture<KVRangeROReply> query(KVRangeRORequest request);
-
-        void close();
-    }
-
     String clusterId();
 
     Observable<Set<KVRangeStoreDescriptor>> describe();
