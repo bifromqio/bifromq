@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.Constants.EMPTY_RANGE;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.KVRangeSetting.regInProcStore;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.rangeNotFound;
@@ -174,6 +175,7 @@ public class KVRangeStore implements IKVRangeStore {
                 disposable.add(messenger.receive().subscribe(this::receive));
                 loadExisting();
                 scheduleTick(0);
+                regInProcStore(clusterId, id);
             } catch (Throwable e) {
                 status.set(Status.FATAL_FAILURE);
                 throw new KVRangeStoreException("Failed to start kv range store", e);

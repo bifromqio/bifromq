@@ -486,7 +486,7 @@ public class KVRangeStoreTestCluster {
                 rangeDescriptor.getState() == State.StateType.Normal &&
                 rangeDescriptor.getConfig().getNextVotersCount() == 0 &&
                 rangeDescriptor.getConfig().getNextLearnersCount() == 0) {
-                KVRangeSetting settings = new KVRangeSetting(storeDescriptor.getId(), rangeDescriptor);
+                KVRangeSetting settings = new KVRangeSetting(CLUSTER, storeDescriptor.getId(), rangeDescriptor);
                 rangeSettingMap.compute(rangeDescriptor.getId(), (id, oldSettings) -> {
                     if (oldSettings != null) {
                         if (oldSettings.ver <= rangeDescriptor.getVer()) {

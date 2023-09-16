@@ -86,7 +86,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final ICRDTService crdtService;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final KVRangeRouter router = new KVRangeRouter();
+    private final KVRangeRouter router;
     private final int queryPipelinesPerStore;
     private final IORMap storeDescriptorCRDT;
     private final MethodDescriptor<BootstrapRequest, BootstrapReply> bootstrapMethod;
@@ -115,6 +115,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
         this.clusterId = builder.clusterId;
+        router = new KVRangeRouter(clusterId);
         BluePrint bluePrint = RPCBluePrint.build(clusterId);
         this.bootstrapMethod = bluePrint.methodDesc(
             toScopedFullMethodName(clusterId, getBootstrapMethod().getFullMethodName()));

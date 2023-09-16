@@ -31,6 +31,7 @@ import java.util.List;
 import org.testng.annotations.Test;
 
 public class KVRangeRouterTest {
+    private String clusterId = "test_cluster";
     private KVRangeStoreDescriptor bucket_full_range = KVRangeStoreDescriptor.newBuilder()
         .setId("bucket_full_range")
         .addRanges(KVRangeDescriptor.newBuilder()
@@ -90,7 +91,7 @@ public class KVRangeRouterTest {
 
     @Test
     public void testUpsert() {
-        KVRangeRouter router = new KVRangeRouter();
+        KVRangeRouter router = new KVRangeRouter(clusterId);
         router.upsert(bucket__a);
         router.upsert(bucket_a_c);
         router.upsert(bucket_c_e);
@@ -125,7 +126,7 @@ public class KVRangeRouterTest {
 
     @Test
     public void testUpsertWithFullRange() {
-        KVRangeRouter router = new KVRangeRouter();
+        KVRangeRouter router = new KVRangeRouter(clusterId);
         router.upsert(bucket_e_);
         router.upsert(bucket_full_range);
         assertEquals(router.findByRange(FULL_RANGE).size(), 1);
@@ -134,7 +135,7 @@ public class KVRangeRouterTest {
 
     @Test
     public void testFindByKey() {
-        KVRangeRouter router = new KVRangeRouter();
+        KVRangeRouter router = new KVRangeRouter(clusterId);
         assertFalse(router.findByKey(copyFromUtf8("abc")).isPresent());
         router.upsert(bucket__a);
         router.upsert(bucket_a_c);
@@ -148,7 +149,7 @@ public class KVRangeRouterTest {
 
     @Test
     public void testFindByRange() {
-        KVRangeRouter router = new KVRangeRouter();
+        KVRangeRouter router = new KVRangeRouter(clusterId);
         router.upsert(bucket__a);
         router.upsert(bucket_a_c);
         router.upsert(bucket_c_e);
@@ -202,7 +203,7 @@ public class KVRangeRouterTest {
 
     @Test
     public void testFindByStore() {
-        KVRangeRouter router = new KVRangeRouter();
+        KVRangeRouter router = new KVRangeRouter(clusterId);
         router.upsert(bucket__a);
         router.upsert(bucket_a_c);
         router.upsert(bucket_c_e);
@@ -223,7 +224,7 @@ public class KVRangeRouterTest {
 
     @Test
     public void testReset() {
-        KVRangeRouter router = new KVRangeRouter();
+        KVRangeRouter router = new KVRangeRouter(clusterId);
         router.upsert(bucket__a);
         router.upsert(bucket_a_c);
         router.upsert(bucket_c_e);
@@ -235,7 +236,7 @@ public class KVRangeRouterTest {
 
     @Test
     public void testFullRangeCoverCheck() {
-        KVRangeRouter router = new KVRangeRouter();
+        KVRangeRouter router = new KVRangeRouter(clusterId);
         assertFalse(router.isFullRangeCovered());
         router.upsert(bucket__a);
         assertFalse(router.isFullRangeCovered());
@@ -250,6 +251,6 @@ public class KVRangeRouterTest {
     }
 
     private KVRangeSetting convert(KVRangeStoreDescriptor storeDescriptor) {
-        return new KVRangeSetting(storeDescriptor.getId(), storeDescriptor.getRanges(0));
+        return new KVRangeSetting(clusterId, storeDescriptor.getId(), storeDescriptor.getRanges(0));
     }
 }

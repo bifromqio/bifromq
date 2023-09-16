@@ -39,12 +39,17 @@ import lombok.ToString;
 
 @ToString(onlyExplicitlyIncluded = true)
 public final class KVRangeRouter implements IKVRangeRouter {
+    private final String clusterId;
     private final StampedLock stampedLock = new StampedLock();
     private final Comparator<ByteString> comparator = unsignedLexicographicalComparator();
     @ToString.Include
     private final NavigableMap<ByteString, KVRangeSetting> rangeTable = new TreeMap<>(comparator);
     private final Map<String, Set<KVRangeSetting>> rangesToStoreMap = new HashMap<>();
     private final Map<KVRangeId, KVRangeSetting> rangeMap = new HashMap<>();
+
+    public KVRangeRouter(String clusterId) {
+        this.clusterId = clusterId;
+    }
 
     public void reset(KVRangeStoreDescriptor storeDescriptor) {
         final long stamp = stampedLock.writeLock();
@@ -167,13 +172,11 @@ public final class KVRangeRouter implements IKVRangeRouter {
             return false;
         }
         switch (descriptor.getState()) {
-            case Removed:
-            case Purged:
-            case Merged:
-            case MergedQuiting:
+            case Removed, Purged, Merged, MergedQuiting -> {
                 return false;
+            }
         }
-        KVRangeSetting setting = new KVRangeSetting(storeId, descriptor);
+        KVRangeSetting setting = new KVRangeSetting(clusterId, storeId, descriptor);
 
         List<KVRangeSetting> overlapped = findByRangeWithoutLock(setting.range);
         if (overlapped.isEmpty()) {

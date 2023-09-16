@@ -29,8 +29,8 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.type.ClientInfo;
@@ -47,7 +47,6 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -210,7 +209,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
             }
 
             private String selectStore(KVRangeSetting setting) {
-                return setting.allReplicas.get(ThreadLocalRandom.current().nextInt(setting.allReplicas.size()));
+                return setting.randomReplica();
             }
 
             private Map<String, DistPack> buildDistPack() {
