@@ -75,13 +75,17 @@ public class RangeUtil {
     }
 
     public static ByteString upperBound(ByteString key) {
-        return UnsafeByteOperations.unsafeWrap(upperBound(key.toByteArray()));
+        return UnsafeByteOperations.unsafeWrap(upperBoundInternal(key.toByteArray()));
     }
 
     public static byte[] upperBound(byte[] key) {
         byte[] upperBound = new byte[key.length];
         System.arraycopy(key, 0, upperBound, 0, key.length);
-        int i = key.length;
+        return upperBoundInternal(upperBound);
+    }
+
+    private static byte[] upperBoundInternal(byte[] upperBound) {
+        int i = upperBound.length;
         while (--i >= 0) {
             byte b = upperBound[i];
             if (compare(new byte[] {b}, new byte[] {(byte) 0xFF}) < 0) {

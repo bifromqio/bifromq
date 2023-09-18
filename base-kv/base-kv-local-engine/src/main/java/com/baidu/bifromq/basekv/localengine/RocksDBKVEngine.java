@@ -765,10 +765,27 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         public void deleteRange(KeyRange range, ByteString startKey, ByteString endKey) {
             try {
                 ranges.add(range);
-                batch.deleteRange(cfHandles.get(range.ns),
-                    startKey != null ? startKey.toByteArray() : null, endKey != null ? endKey.toByteArray() : null);
-                range.recordDeleteRange(batchId);
-            } catch (RocksDBException e) {
+                if (startKey == null || endKey == null) {
+                    try (IKVEngineIterator itr = newIterator(startKey, endKey, range)) {
+                        if (startKey == null) {
+                            itr.seekToFirst();
+                            if (itr.isValid()) {
+                                startKey = itr.key();
+                            }
+                        }
+                        if (endKey == null) {
+                            itr.seekToLast();
+                            if (itr.isValid()) {
+                                endKey = upperBound(itr.key());
+                            }
+                        }
+                    }
+                }
+                if (startKey != null && endKey != null) {
+                    batch.deleteRange(cfHandles.get(range.ns), startKey.toByteArray(), endKey.toByteArray());
+                    range.recordDeleteRange(batchId);
+                }
+            } catch (Throwable e) {
                 throw new KVEngineException("Delete range in batch failed", e);
             }
         }

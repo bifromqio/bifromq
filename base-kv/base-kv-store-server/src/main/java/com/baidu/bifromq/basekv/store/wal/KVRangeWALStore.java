@@ -19,7 +19,6 @@ import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static java.lang.String.format;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
 import com.baidu.bifromq.basekv.localengine.RangeUtil;
@@ -30,13 +29,10 @@ import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.raft.proto.Voting;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.nio.ByteBuffer;
 import java.util.Deque;
 import java.util.Iterator;
@@ -45,10 +41,6 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedTransferQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -67,8 +59,6 @@ class KVRangeWALStore implements IRaftStateStore {
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
     private final FlushNotifier flushNotifier;
     private final Deque<StabilizingIndex> stabilizingIndices = new ConcurrentLinkedDeque<>();
-    private final ExecutorService compactionExecutor;
-    private final AsyncRunner compactionTaskRunner;
     private long currentTerm = 0;
     private Voting currentVoting;
     private Snapshot latestSnapshot;
@@ -86,11 +76,6 @@ class KVRangeWALStore implements IRaftStateStore {
         this.storeId = kvEngine.id();
         this.walKeyRangeId = walKeyRangeId;
         this.flushNotifier = flushNotifier;
-        compactionExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("wal-compact-executor")), "wal-compact-executor");
-        compactionTaskRunner = new AsyncRunner(compactionExecutor);
         load();
     }
 
@@ -185,9 +170,6 @@ class KVRangeWALStore implements IRaftStateStore {
         } else {
             // the snapshot represents a different history, it happens when installing snapshot from leader
             // save snapshot
-            // wait previous compaction task finish
-            compactionTaskRunner.cancelAll();
-            compactionTaskRunner.awaitDone().toCompletableFuture().join();
             kvEngine.put(walKeyRangeId, KVRangeWALKeys.latestSnapshotKey(rangeId), snapshot.toByteString());
             latestSnapshot = snapshot;
             lastIndex = latestSnapshot.getIndex();
@@ -324,7 +306,6 @@ class KVRangeWALStore implements IRaftStateStore {
         if (!stabilizingIndices.isEmpty()) {
             flush();
         }
-        compactionExecutor.shutdown();
     }
 
     public void destroy() {
