@@ -37,6 +37,7 @@ public interface IRPCServiceTrafficDirector {
         public final SocketAddress hostAddr;
         public final Set<String> groupTags;
         public final Map<String, String> attrs;
+        public final boolean inProc;
 
         public Server(RPCServer server) {
             this.id = server.getId();
@@ -44,6 +45,7 @@ public interface IRPCServiceTrafficDirector {
             this.groupTags = Sets.newHashSet(server.getGroupList());
             this.hostAddr = GPID.equals(server.getGpid()) ?
                 new InProcSocketAddress(server.getId()) : new InetSocketAddress(server.getHost(), server.getPort());
+            this.inProc = GPID.equals(server.getGpid());
         }
     }
 

@@ -36,6 +36,7 @@ public class Constants {
         Attributes.Key.create("TrafficDirective");
     public static final Attributes.Key<String> SERVER_ID_ATTR_KEY = Attributes.Key.create("ServerId");
     public static final Attributes.Key<Set<String>> SERVER_GROUP_TAG_ATTR_KEY = Attributes.Key.create("ServerGroupTag");
+    public static final Attributes.Key<Boolean> IN_PROC_SERVER_ATTR_KEY = Attributes.Key.create("InProc");
 
     public static final Metadata.Key<String> TENANT_ID_META_KEY =
         Metadata.Key.of("tenant_id", Metadata.ASCII_STRING_MARSHALLER);

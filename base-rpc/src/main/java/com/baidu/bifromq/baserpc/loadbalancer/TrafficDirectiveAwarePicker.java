@@ -25,6 +25,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import io.grpc.LoadBalancer;
 import io.grpc.MethodDescriptor;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,13 +46,15 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
         private final List<String> serverLists;
         private final ConsistentHashRouter<Map.Entry<String, Integer>> chRouter;
         private final AtomicInteger rrIndex = new AtomicInteger(0);
+        private final String inProcServerId;
 
-        WeightedServerSelector(SortedMap<String, Integer> weightedServers) {
+        WeightedServerSelector(SortedMap<String, Integer> weightedServers, String inProcServerId) {
             this.weightedServers = weightedServers;
             List<LBUtils.Tuple<String>> tuples = Lists.newArrayList();
             weightedServers.forEach((server, weight) -> tuples.add(LBUtils.Tuple.of(weight, server)));
             serverLists = LBUtils.toWeightedRRSequence(tuples);
             chRouter = new ConsistentHashRouter<>(weightedServers.entrySet(), e -> e.getKey() + e.getValue(), 60);
+            this.inProcServerId = inProcServerId;
         }
 
         boolean contains(String serverId) {
@@ -62,7 +65,9 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
             if (serverLists.isEmpty()) {
                 return Optional.empty();
             }
-            String selected = serverLists.get(ThreadLocalRandom.current().nextInt(0, serverLists.size()));
+            // prefer in-proc server
+            String selected = inProcServerId != null ?
+                inProcServerId : serverLists.get(ThreadLocalRandom.current().nextInt(0, serverLists.size()));
             return Optional.of(new Map.Entry<>() {
                 @Override
                 public String getKey() {
@@ -87,13 +92,19 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
             if (size == 0) {
                 return Optional.empty();
             }
-            int i = rrIndex.incrementAndGet();
-            if (i >= size) {
-                int oldi = i;
-                i %= size;
-                rrIndex.compareAndSet(oldi, i);
+            String selected;
+            // prefer in-proc server
+            if (inProcServerId != null) {
+                selected = inProcServerId;
+            } else {
+                int i = rrIndex.incrementAndGet();
+                if (i >= size) {
+                    int oldi = i;
+                    i %= size;
+                    rrIndex.compareAndSet(oldi, i);
+                }
+                selected = serverLists.get(i);
             }
-            String selected = serverLists.get(i);
             return Optional.of(new Map.Entry<>() {
                 @Override
                 public String getKey() {
@@ -125,12 +136,20 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
 
     private static class TrafficMatcher implements ITrafficMatcher {
         private final TrieMap<WeightedServerSelector> matcher = new TrieMap<>();
-
         private final Map<String, List<LoadBalancer.Subchannel>> subchannelMap;
 
         TrafficMatcher(Map<String, Map<String, Integer>> directive,
-                       Map<String, List<LoadBalancer.Subchannel>> subchannelMap,
+                       Map<TrafficDirectiveLoadBalancer.ServerKey, List<LoadBalancer.Subchannel>> subchannelMap,
                        Map<String, Set<String>> lbGroupAssignment) {
+            this.subchannelMap = new HashMap<>();
+            String inProcServerId = null;
+            for (TrafficDirectiveLoadBalancer.ServerKey serverKey : subchannelMap.keySet()) {
+                this.subchannelMap.put(serverKey.serverId(), subchannelMap.get(serverKey));
+                if (serverKey.inProc()) {
+                    inProcServerId = serverKey.serverId();
+                }
+            }
+
             Set<String> defaultLBGroup = Sets.newHashSet();
             Map<String, Set<String>> lbGroups = Maps.newHashMap();
             for (String serverId : lbGroupAssignment.keySet()) {
@@ -145,17 +164,17 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
             }
             // default group is used as fallback assignment
             // make sure there is always a matcher for any tenantId
-            prepareMatcher("", singletonMap("", 1), singletonMap("", defaultLBGroup));
+            prepareMatcher("", singletonMap("", 1), singletonMap("", defaultLBGroup), inProcServerId);
 
             for (String tenantIdPrefix : directive.keySet()) {
-                prepareMatcher(tenantIdPrefix, directive.get(tenantIdPrefix), lbGroups);
+                prepareMatcher(tenantIdPrefix, directive.get(tenantIdPrefix), lbGroups, inProcServerId);
             }
-            this.subchannelMap = Maps.newHashMap(subchannelMap);
         }
 
         private void prepareMatcher(String tenantIdPrefix,
                                     Map<String, Integer> trafficAssignment,
-                                    Map<String, Set<String>> groupAssignment) {
+                                    Map<String, Set<String>> groupAssignment,
+                                    String inProcServerId) {
             SortedMap<String, Integer> weightedServers = Maps.newTreeMap();
             for (String group : trafficAssignment.keySet()) {
                 int weight = Math.abs(trafficAssignment.get(group)) % 11; // weight range: 0-11
@@ -168,8 +187,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
                         return w;
                     }));
             }
-            matcher.put(tenantIdPrefix, new WeightedServerSelector(weightedServers));
-
+            matcher.put(tenantIdPrefix, new WeightedServerSelector(weightedServers, inProcServerId));
         }
 
         public WeightedServerSelector match(String tenantId) {
@@ -198,7 +216,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
     }
 
     public void refresh(Map<String, Map<String, Integer>> trafficDirective,
-                        Map<String, List<LoadBalancer.Subchannel>> subchannelMap,
+                        Map<TrafficDirectiveLoadBalancer.ServerKey, List<LoadBalancer.Subchannel>> subchannelMap,
                         Map<String, Set<String>> lbGroupAssighment) {
         currentMatcher.set(new TrafficMatcher(trafficDirective, subchannelMap, lbGroupAssighment));
     }

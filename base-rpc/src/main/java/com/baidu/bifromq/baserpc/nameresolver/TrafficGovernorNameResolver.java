@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.baserpc.nameresolver;
 
+import static com.baidu.bifromq.baserpc.loadbalancer.Constants.IN_PROC_SERVER_ATTR_KEY;
 import static com.baidu.bifromq.baserpc.loadbalancer.Constants.SERVER_GROUP_TAG_ATTR_KEY;
 
 import com.baidu.bifromq.baserpc.loadbalancer.Constants;
@@ -71,6 +72,7 @@ class TrafficGovernorNameResolver extends NameResolver {
         return servers.stream().map(s -> new EquivalentAddressGroup(s.hostAddr, Attributes.newBuilder()
                 .set(Constants.SERVER_ID_ATTR_KEY, s.id)
                 .set(SERVER_GROUP_TAG_ATTR_KEY, s.groupTags)
+                .set(IN_PROC_SERVER_ATTR_KEY, s.inProc)
                 .build()))
             .collect(Collectors.toList());
     }

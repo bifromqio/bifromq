@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.baserpc.loadbalancer;
 
+import static com.baidu.bifromq.baserpc.loadbalancer.Constants.IN_PROC_SERVER_ATTR_KEY;
 import static com.baidu.bifromq.baserpc.loadbalancer.Constants.SERVER_GROUP_TAG_ATTR_KEY;
 import static com.baidu.bifromq.baserpc.loadbalancer.Constants.SERVER_ID_ATTR_KEY;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -47,6 +48,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TrafficDirectiveLoadBalancer extends LoadBalancer {
 
+    record ServerKey(String serverId, boolean inProc) {
+    }
+
     private final Helper helper;
 
     private final IUpdateListener updateListener;
@@ -56,9 +60,7 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
     private final AtomicBoolean balancingStateUpdateScheduled = new AtomicBoolean(false);
 
     private volatile Map<String, Map<String, Integer>> currentTrafficDirective;
-
-    // serverId->subchannelRegistry
-    private final Map<String, List<Subchannel>> subchannelRegistry = Maps.newHashMap();
+    private final Map<ServerKey, List<Subchannel>> subchannelRegistry = Maps.newHashMap();
     private final Map<String, Set<String>> lbGroupAssignment = Maps.newHashMap();
 
     TrafficDirectiveLoadBalancer(Helper helper, BluePrint bluePrint,
@@ -71,12 +73,15 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
     @Override
     public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
         log.debug("Handle traffic change: resolvedAddresses={}", resolvedAddresses);
-        Map<String, EquivalentAddressGroup> newResolved = resolvedAddresses
+        Map<ServerKey, EquivalentAddressGroup> newResolved = resolvedAddresses
             .getAddresses()
             .stream()
             .collect(Collectors
                 .toMap(
-                    eag -> eag.getAttributes().get(SERVER_ID_ATTR_KEY),
+                    eag -> new ServerKey(
+                        eag.getAttributes().get(SERVER_ID_ATTR_KEY),
+                        eag.getAttributes().get(IN_PROC_SERVER_ATTR_KEY)
+                    ),
                     eag -> eag
                 )
             );
@@ -89,41 +94,41 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
             .get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY).equals(currentTrafficDirective));
         currentTrafficDirective = resolvedAddresses.getAttributes().get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY);
         int requested = Math.min(5, EnvProvider.INSTANCE.availableProcessors());
-        Set<String> currentServers = subchannelRegistry.keySet();
-        Set<String> latestServers = newResolved.keySet();
-        Set<String> addedServers = setsDifference(latestServers, currentServers);
-        Set<String> removedServers = setsDifference(currentServers, latestServers);
+        Set<ServerKey> currentServers = subchannelRegistry.keySet();
+        Set<ServerKey> latestServers = newResolved.keySet();
+        Set<ServerKey> addedServers = setsDifference(latestServers, currentServers);
+        Set<ServerKey> removedServers = setsDifference(currentServers, latestServers);
 
         // make sure enough subchannelRegistry opened for existing servers.
-        for (String serverId : currentServers) {
-            if (!removedServers.contains(serverId)) {
-                int openNow = subchannelRegistry.get(serverId).size();
+        for (ServerKey serverKey : currentServers) {
+            if (!removedServers.contains(serverKey)) {
+                int openNow = subchannelRegistry.get(serverKey).size();
                 if (requested > openNow) {
                     updatePicker = true;
                     IntStream.range(0, requested - openNow).forEach(
-                        i -> subchannelRegistry.get(serverId)
-                            .add(setupSubchannel(serverId, newResolved.get(serverId))));
+                        i -> subchannelRegistry.get(serverKey)
+                            .add(setupSubchannel(serverKey, newResolved.get(serverKey))));
                 }
             }
         }
 
         // Create new subchannelRegistry for new servers.
-        for (String serverId : addedServers) {
-            subchannelRegistry.compute(serverId, (k, v) -> {
+        for (ServerKey serverKey : addedServers) {
+            subchannelRegistry.compute(serverKey, (k, v) -> {
                 if (v != null) {
-                    log.error("Illegal state: new server already exists: serverId={}", serverId);
+                    log.error("Illegal state: new server already exists: serverId={}", serverKey);
                     return v;
                 } else {
                     return IntStream.range(0, requested)
-                        .mapToObj(i -> setupSubchannel(serverId, newResolved.get(serverId)))
+                        .mapToObj(i -> setupSubchannel(serverKey, newResolved.get(serverKey)))
                         .collect(Collectors.toList());
                 }
             });
         }
 
         ArrayList<Subchannel> removedSubchannels = new ArrayList<>();
-        for (String serverId : removedServers) {
-            removedSubchannels.addAll(subchannelRegistry.remove(serverId));
+        for (ServerKey serverKey : removedServers) {
+            removedSubchannels.addAll(subchannelRegistry.remove(serverKey));
         }
 
         // Shutdown removed subchannelRegistry
@@ -211,14 +216,15 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         return connectivityState;
     }
 
-    private Subchannel setupSubchannel(String serverId, EquivalentAddressGroup equivalentAddressGroup) {
+    private Subchannel setupSubchannel(ServerKey serverKey, EquivalentAddressGroup equivalentAddressGroup) {
         final Subchannel subchannel = checkNotNull(
             helper.createSubchannel(CreateSubchannelArgs.newBuilder()
                 .setAddresses(equivalentAddressGroup)
                 .setAttributes(Attributes.newBuilder()
                     .set(Constants.STATE_INFO,
                         new AtomicReference<>(ConnectivityStateInfo.forNonError(IDLE)))
-                    .set(SERVER_ID_ATTR_KEY, serverId)
+                    .set(IN_PROC_SERVER_ATTR_KEY, serverKey.inProc)
+                    .set(SERVER_ID_ATTR_KEY, serverKey.serverId)
                     .build())
                 .build()),
             "subchannel");
