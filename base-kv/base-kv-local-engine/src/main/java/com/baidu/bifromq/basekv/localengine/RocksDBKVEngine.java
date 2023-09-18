@@ -324,20 +324,13 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     }
 
     protected void doDelete(KeyRange range, ByteString key) {
-        try {
-            instance.singleDelete(cfHandles.get(range.ns), writeOptions, key.toByteArray());
-            range.recordDelete();
-        } catch (RocksDBException rocksDBException) {
-            throw new KVEngineException("Delete failed", rocksDBException);
-        }
+        int batchId = startBatch();
+        delete(batchId, range, key);
+        endBatch(batchId);
     }
 
     protected void clearSubRange(int batchId, KeyRange range, ByteString start, ByteString end) {
-        try (IKVEngineIterator itr = new RocksDBKVEngineIterator(instance, cfHandles.get(range.ns), start, end)) {
-            for (itr.seekToFirst(); itr.isValid(); itr.next()) {
-                getBatch(batchId).delete(range, itr.key());
-            }
-        }
+        getBatch(batchId).deleteRange(range, start, end);
     }
 
     protected void doClearSubRange(KeyRange range, ByteString start, ByteString end) {
@@ -353,12 +346,9 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
 
     protected void doInsert(KeyRange range, ByteString key, ByteString value) {
         assert !exist(key, range);
-        try {
-            instance.put(cfHandles.get(range.ns), writeOptions, key.toByteArray(), value.toByteArray());
-            range.recordInsert();
-        } catch (RocksDBException rocksDBException) {
-            throw new KVEngineException("Insert failed", rocksDBException);
-        }
+        int batchId = startBatch();
+        insert(batchId, range, key, value);
+        endBatch(batchId);
     }
 
     protected void put(int batchId, KeyRange range, ByteString key, ByteString value) {
@@ -663,6 +653,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     public class KeyRange extends AbstractKeyRange {
         private final AtomicInteger keyCount = new AtomicInteger();
         private final AtomicInteger tombstoneCount = new AtomicInteger();
+        private final AtomicInteger deleteRangeCount = new AtomicInteger();
 
         private final ConcurrentHashMap<Integer, AtomicInteger[]> batch = new ConcurrentHashMap<>();
 
@@ -670,39 +661,33 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             super(id, ns, start, end);
         }
 
-        void recordPut() {
-            keyCount.incrementAndGet();
-            tombstoneCount.incrementAndGet();
-            compactIfNeeded();
-        }
-
         void recordPut(int batchId) {
             AtomicInteger[] counters =
-                batch.computeIfAbsent(batchId, k -> new AtomicInteger[] {new AtomicInteger(), new AtomicInteger()});
+                batch.computeIfAbsent(batchId,
+                    k -> new AtomicInteger[] {new AtomicInteger(), new AtomicInteger(), new AtomicInteger()});
             counters[0].incrementAndGet();
             counters[1].incrementAndGet();
-        }
-
-        void recordInsert() {
-            keyCount.incrementAndGet();
-            compactIfNeeded();
         }
 
         void recordInsert(int batchId) {
             AtomicInteger[] counters =
-                batch.computeIfAbsent(batchId, k -> new AtomicInteger[] {new AtomicInteger(), new AtomicInteger()});
+                batch.computeIfAbsent(batchId,
+                    k -> new AtomicInteger[] {new AtomicInteger(), new AtomicInteger(), new AtomicInteger()});
             counters[0].incrementAndGet();
-        }
-
-        void recordDelete() {
-            tombstoneCount.incrementAndGet();
-            compactIfNeeded();
         }
 
         void recordDelete(int batchId) {
             AtomicInteger[] counters =
-                batch.computeIfAbsent(batchId, k -> new AtomicInteger[] {new AtomicInteger(), new AtomicInteger()});
+                batch.computeIfAbsent(batchId,
+                    k -> new AtomicInteger[] {new AtomicInteger(), new AtomicInteger(), new AtomicInteger()});
             counters[1].incrementAndGet();
+        }
+
+        void recordDeleteRange(int batchId) {
+            AtomicInteger[] counters =
+                batch.computeIfAbsent(batchId,
+                    k -> new AtomicInteger[] {new AtomicInteger(), new AtomicInteger(), new AtomicInteger()});
+            counters[2].incrementAndGet();
         }
 
         void endBatch(int batchId) {
@@ -710,6 +695,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             AtomicInteger[] counters = batch.remove(batchId);
             keyCount.addAndGet(counters[0].get());
             tombstoneCount.addAndGet(counters[1].get());
+            deleteRangeCount.addAndGet(counters[2].get());
             compactIfNeeded();
         }
 
@@ -720,10 +706,14 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         private void compactIfNeeded() {
             int totalDeleteKeys = tombstoneCount.get();
             int totalKeys = keyCount.get();
-            if (totalDeleteKeys > configurator.getCompactMinTombstoneKeys() &&
-                (double) totalDeleteKeys / (totalKeys + totalDeleteKeys) >= configurator.getCompactTombstonePercent()) {
+            int totalDeleteRanges = deleteRangeCount.get();
+            if (totalDeleteRanges > 0 ||
+                (totalDeleteKeys > configurator.getCompactMinTombstoneKeys() &&
+                    (double) totalDeleteKeys / (totalKeys + totalDeleteKeys) >=
+                        configurator.getCompactTombstonePercent())) {
                 tombstoneCount.set(0);
                 keyCount.set(0);
+                deleteRangeCount.set(0);
                 submitRangeCompactionTask(DEFAULT_NS, start, end);
             }
         }
@@ -769,6 +759,17 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                 range.recordDelete(batchId);
             } catch (RocksDBException e) {
                 throw new KVEngineException("Single delete in batch failed", e);
+            }
+        }
+
+        public void deleteRange(KeyRange range, ByteString startKey, ByteString endKey) {
+            try {
+                ranges.add(range);
+                batch.deleteRange(cfHandles.get(range.ns),
+                    startKey != null ? startKey.toByteArray() : null, endKey != null ? endKey.toByteArray() : null);
+                range.recordDeleteRange(batchId);
+            } catch (RocksDBException e) {
+                throw new KVEngineException("Delete range in batch failed", e);
             }
         }
 

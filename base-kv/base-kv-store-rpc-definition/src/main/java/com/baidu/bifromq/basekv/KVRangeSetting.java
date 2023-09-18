@@ -18,8 +18,8 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -63,12 +63,12 @@ public class KVRangeSetting {
         ver = desc.getVer();
         range = desc.getRange();
         leader = leaderStoreId;
-        List<String> voters = new ArrayList<>();
-        List<String> inProcVoters = new ArrayList<>();
-        List<String> followers = new ArrayList<>();
-        List<String> inProcFollowers = new ArrayList<>();
-        List<String> allReplicas = new ArrayList<>();
-        List<String> inProcReplicas = new ArrayList<>();
+        Set<String> voters = new HashSet<>();
+        Set<String> inProcVoters = new HashSet<>();
+        Set<String> followers = new HashSet<>();
+        Set<String> inProcFollowers = new HashSet<>();
+        Set<String> allReplicas = new HashSet<>();
+        Set<String> inProcReplicas = new HashSet<>();
 
         Set<String> allVoters =
             Sets.newHashSet(Iterables.concat(desc.getConfig().getVotersList(), desc.getConfig().getNextVotersList()));
@@ -101,12 +101,12 @@ public class KVRangeSetting {
                 }
             }
         }
-        this.voters = Collections.unmodifiableList(voters);
-        this.inProcVoters = Collections.unmodifiableList(inProcVoters);
-        this.followers = Collections.unmodifiableList(followers);
-        this.inProcFollowers = Collections.unmodifiableList(inProcFollowers);
-        this.allReplicas = Collections.unmodifiableList(allReplicas);
-        this.inProcReplicas = Collections.unmodifiableList(inProcReplicas);
+        this.voters = Collections.unmodifiableList(Lists.newArrayList(voters));
+        this.inProcVoters = Collections.unmodifiableList(Lists.newArrayList(inProcVoters));
+        this.followers = Collections.unmodifiableList(Lists.newArrayList(followers));
+        this.inProcFollowers = Collections.unmodifiableList(Lists.newArrayList(inProcFollowers));
+        this.allReplicas = Collections.unmodifiableList(Lists.newArrayList(allReplicas));
+        this.inProcReplicas = Collections.unmodifiableList(Lists.newArrayList(inProcReplicas));
     }
 
     public String randomReplica() {
