@@ -64,13 +64,11 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
                         .setResult(false)
                         .build());
             }else {
-                MQTT3TransientSessionHandler session = (MQTT3TransientSessionHandler) transientSessionMap
-                        .get(request.getInboxId());
-                MqttTopicSubscription topicSubscription =
-                        new MqttTopicSubscription(request.getTopicFilter(), MqttQoS.valueOf(request.getSubQoSValue()));
+                IMQTT3TransientSession session = transientSessionMap.get(request.getInboxId());
                 SubReply.Builder builder = SubReply.newBuilder();
                 builder.setReqId(request.getReqId());
-                return session.doSubscribe(request.getReqId(), topicSubscription)
+                return session.subscribe(request.getReqId(), request.getTopicFilter(),
+                                MqttQoS.valueOf(request.getSubQoSValue()))
                         .thenApply(qos -> {
                             if (qos == MqttQoS.FAILURE) {
                                 return builder.setResult(false).build();
@@ -90,9 +88,8 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
                         .setResult(UnsubReply.Result.NO_INBOX)
                         .build());
             }else {
-                MQTT3TransientSessionHandler session = (MQTT3TransientSessionHandler) transientSessionMap
-                        .get(request.getInboxId());
-                return session.doUnsubscribe(request.getReqId(), request.getTopicFilter())
+                IMQTT3TransientSession session = transientSessionMap.get(request.getInboxId());
+                return session.unsubscribe(request.getReqId(), request.getTopicFilter())
                         .thenApply(r -> r ? UnsubReply.newBuilder().setResult(UnsubReply.Result.OK).build()
                                 : UnsubReply.newBuilder().setResult(UnsubReply.Result.ERROR).build());
             }

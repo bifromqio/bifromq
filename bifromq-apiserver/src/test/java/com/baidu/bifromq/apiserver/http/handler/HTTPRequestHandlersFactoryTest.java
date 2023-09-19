@@ -20,6 +20,8 @@ import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import java.util.Collection;
 import org.mockito.Mock;
@@ -34,11 +36,15 @@ public class HTTPRequestHandlersFactoryTest extends MockableTest {
     private IInboxClient inboxClient;
     @Mock
     private ISessionDictClient sessionDictClient;
+    @Mock
+    private IRetainClient retainClient;
+    @Mock
+    private ISettingProvider settingProvider;
 
     @Test
     public void build() {
         HTTPRequestHandlersFactory handlersFactory = new HTTPRequestHandlersFactory(sessionDictClient,
-                distClient, mqttBrokerClient, inboxClient);
+                distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider);
         Collection<IHTTPRequestHandler> handlers = handlersFactory.build();
         assertEquals(handlers.size(), 4);
     }

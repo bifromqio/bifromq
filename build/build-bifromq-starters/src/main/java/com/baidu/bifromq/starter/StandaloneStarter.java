@@ -606,7 +606,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         }
         return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsListenerConfig().getPort(),
                 bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
-                inboxClient, sessionDictClient, settingProviderMgr);
+                inboxClient, sessionDictClient, retainClient, settingProviderMgr);
     }
 
     public static void main(String[] args) {

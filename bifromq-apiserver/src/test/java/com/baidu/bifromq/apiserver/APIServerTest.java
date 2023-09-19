@@ -25,6 +25,8 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -50,6 +52,8 @@ public class APIServerTest extends MockableTest {
     private IInboxClient inboxClient;
     @Mock
     private ISessionDictClient sessionDictClient;
+    @Mock
+    private IRetainClient retainClient;
     private ISettingProvider settingProvider = Setting::current;
 
     @BeforeMethod
@@ -59,7 +63,7 @@ public class APIServerTest extends MockableTest {
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         apiServer = new APIServer(host, 0, 0,
             bossGroup, workerGroup, null, distClient, mqttBrokerClient, inboxClient,
-                sessionDictClient, settingProvider);
+                sessionDictClient, retainClient, settingProvider);
         apiServer.start();
     }
 
@@ -78,10 +82,13 @@ public class APIServerTest extends MockableTest {
             .header(Headers.HEADER_TENANT_ID.header, "BifroMQ-Dev")
             .header(Headers.HEADER_TOPIC.header, "/greeting")
             .header(Headers.HEADER_CLIENT_TYPE.header, "BifroMQ Fan")
+            .header(Headers.HEADER_RETAIN.header,"true" )
             .POST(HttpRequest.BodyPublishers.ofString("Hello BifroMQ"))
             .build();
         when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
             CompletableFuture.completedFuture(null));
+        when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
+            CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
         HttpResponse<?> resp = httpClient.send(pubRequest, HttpResponse.BodyHandlers.discarding());
         assertEquals(resp.statusCode(), 200);
     }

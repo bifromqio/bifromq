@@ -18,6 +18,8 @@ import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import java.util.Collection;
 import java.util.HashMap;
@@ -29,11 +31,13 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
     public HTTPRequestHandlersFactory(ISessionDictClient sessionDictClient,
                                       IDistClient distClient,
                                       IMqttBrokerClient mqttBrokerClient,
-                                      IInboxClient inboxClient) {
+                                      IInboxClient inboxClient,
+                                      IRetainClient retainClient,
+                                      ISettingProvider settingProvider) {
         register(new HTTPKickHandler(sessionDictClient));
-        register(new HTTPPubHandler(distClient));
-        register(new HTTPSubHandler(mqttBrokerClient, inboxClient));
-        register(new HTTPUnsubHandler(mqttBrokerClient, inboxClient));
+        register(new HTTPPubHandler(distClient, retainClient, settingProvider));
+        register(new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider));
+        register(new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider));
     }
 
     @Override

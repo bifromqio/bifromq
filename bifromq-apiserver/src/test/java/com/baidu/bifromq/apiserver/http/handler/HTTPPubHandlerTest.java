@@ -26,6 +26,9 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import io.netty.buffer.ByteBuf;
@@ -43,6 +46,9 @@ import org.testng.annotations.Test;
 public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHandler> {
     @Mock
     private IDistClient distClient;
+    @Mock
+    private IRetainClient retainClient;
+    private ISettingProvider settingProvider = Setting::current;
 
     @Override
     protected Class<HTTPPubHandler> handlerClass() {
@@ -53,7 +59,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient);
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -68,7 +74,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient);
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<Long> reqIdCap = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<String> topicCap = ArgumentCaptor.forClass(String.class);
@@ -82,7 +88,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         assertEquals(topicCap.getValue(), req.headers().get(HEADER_TOPIC.header));
         ClientInfo killer = killerCap.getValue();
         assertEquals(killer.getTenantId(), tenantId);
-        assertEquals(qosCap.getValue(), QoS.AT_LEAST_ONCE);
+        assertEquals(qosCap.getValue(), QoS.AT_MOST_ONCE);
         assertEquals(payloadCap.getValue(), content.nioBuffer());
         assertEquals(expiryCap.getValue(), Integer.MAX_VALUE);
         assertEquals(killer.getType(), req.headers().get(HEADER_CLIENT_TYPE.header));
@@ -99,7 +105,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient);
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
 
         when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any()))
             .thenReturn(CompletableFuture.completedFuture(null));

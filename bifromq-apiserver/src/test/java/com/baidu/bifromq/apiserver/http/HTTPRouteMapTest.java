@@ -20,6 +20,9 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.apiserver.MockableTest;
 import com.baidu.bifromq.apiserver.http.handler.HTTPPubHandler;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -35,6 +38,9 @@ import org.testng.annotations.Test;
 public class HTTPRouteMapTest extends MockableTest {
     @Mock
     private IDistClient distClient;
+    @Mock
+    private IRetainClient retainClient;
+    private ISettingProvider settingProvider = Setting::current;
     @Mock
     private IHTTPRequestHandlersFactory handlersFactory;
 
@@ -53,7 +59,7 @@ public class HTTPRouteMapTest extends MockableTest {
 
     @Test
     public void getHandler() {
-        HTTPPubHandler pubHandler = new HTTPPubHandler(distClient);
+        HTTPPubHandler pubHandler = new HTTPPubHandler(distClient, retainClient, settingProvider);
         Collection<IHTTPRequestHandler> ret = Collections.singleton(pubHandler);
         when(handlersFactory.build()).thenReturn(ret);
         HTTPRouteMap routeMap = new HTTPRouteMap(handlersFactory);

@@ -19,13 +19,16 @@ import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
+import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.apiserver.utils.TopicUtil;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxSubResult;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.mqtt.inbox.MqttSubResult;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.QoS;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -52,10 +55,12 @@ import lombok.extern.slf4j.Slf4j;
 public final class HTTPSubHandler implements IHTTPRequestHandler {
     private final IMqttBrokerClient mqttClient;
     private final IInboxClient inboxClient;
+    private final ISettingProvider settingProvider;
 
-    public HTTPSubHandler(IMqttBrokerClient mqttClient, IInboxClient inboxClient) {
+    public HTTPSubHandler(IMqttBrokerClient mqttClient, IInboxClient inboxClient, ISettingProvider settingProvider) {
         this.mqttClient = mqttClient;
         this.inboxClient = inboxClient;
+        this.settingProvider = settingProvider;
     }
 
     @PUT
@@ -87,6 +92,12 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
             log.trace("Handling http sub request: reqId={}, tenantId={}, topicFilter={}, subQoS={}, inboxId={}, " +
                     "subBrokerId={}", reqId, tenantId, topicFilter, subQoS, inboxId, subBrokerId);
             CompletableFuture<FullHttpResponse> future;
+            if (!TopicUtil.checkTopicFilter(topicFilter, tenantId, settingProvider)) {
+                DefaultFullHttpResponse resp =
+                        new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER);
+                resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
+                return CompletableFuture.completedFuture(resp);
+            }
             switch (subBrokerId) {
                 case 0:
                     future = mqttClient.sub(reqId, tenantId, inboxId, topicFilter, subQoS)

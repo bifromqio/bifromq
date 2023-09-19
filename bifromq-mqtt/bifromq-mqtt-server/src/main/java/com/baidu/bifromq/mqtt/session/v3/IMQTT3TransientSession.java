@@ -15,8 +15,13 @@ package com.baidu.bifromq.mqtt.session.v3;
 
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import io.netty.handler.codec.mqtt.MqttQoS;
+
+import java.util.concurrent.CompletableFuture;
 
 public interface IMQTT3TransientSession extends IMQTT3Session {
 
     boolean publish(SubInfo subInfo, TopicMessagePack messagePack);
+    CompletableFuture<MqttQoS> subscribe(long reqId, String topicFilter, MqttQoS qos);
+    CompletableFuture<Boolean> unsubscribe(long reqId, String topicFilter);
 }

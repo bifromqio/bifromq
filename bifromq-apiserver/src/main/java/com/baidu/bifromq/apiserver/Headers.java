@@ -24,7 +24,8 @@ public enum Headers {
     HEADER_CLIENT_TYPE("client_type"),
     HEADER_CLIENT_META_PREFIX("client_meta_"),
     HEADER_USER_ID("user_id"),
-    HEADER_CLIENT_ID("client_id");
+    HEADER_CLIENT_ID("client_id"),
+    HEADER_RETAIN("retain");
     public final String header;
 
     Headers(String header) {

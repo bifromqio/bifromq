@@ -14,10 +14,12 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.apiserver.utils.TopicUtil;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxUnsubResult;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.mqtt.inbox.MqttUnsubResult;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -40,6 +42,7 @@ import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
+import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
@@ -48,10 +51,14 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 public final class HTTPUnsubHandler implements IHTTPRequestHandler {
     private final IMqttBrokerClient mqttBrokerClient;
     private final IInboxClient inboxClient;
+    private final ISettingProvider settingProvider;
 
-    public HTTPUnsubHandler(IMqttBrokerClient mqttBrokerClient, IInboxClient inboxClient) {
+    public HTTPUnsubHandler(IMqttBrokerClient mqttBrokerClient,
+                            IInboxClient inboxClient,
+                            ISettingProvider settingProvider) {
         this.mqttBrokerClient = mqttBrokerClient;
         this.inboxClient = inboxClient;
+        this.settingProvider = settingProvider;
     }
 
     @DELETE
@@ -80,6 +87,10 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
             log.trace(
                 "Handling http unsub request: reqId={}, tenantId={}, topicFilter={}, inboxId={}, subBrokerId={}",
                 reqId, tenantId, topicFilter, inboxId, subBrokerId);
+            if (!TopicUtil.checkTopicFilter(topicFilter, tenantId, settingProvider)) {
+                return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(),
+                        FORBIDDEN, Unpooled.EMPTY_BUFFER));
+            }
             CompletableFuture<FullHttpResponse> future;
             switch (subBrokerId) {
                 case 0:

@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.mqtt.inbox;
 
-import static java.util.Collections.emptyMap;
-
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
@@ -34,6 +32,7 @@ import com.baidu.bifromq.type.SubInfo;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import io.reactivex.rxjava3.core.Observable;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -42,10 +41,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+
+import static java.util.Collections.emptyMap;
 
 @Slf4j
 final class MqttBrokerClient implements IMqttBrokerClient {
@@ -61,7 +61,7 @@ final class MqttBrokerClient implements IMqttBrokerClient {
             .sslContext(builder.sslContext)
             .crdtService(builder.crdtService)
             .build();
-        this.mqttBrokers = new CopyOnWriteArraySet<>();
+        this.mqttBrokers = ConcurrentHashMap.newKeySet();
         this.rpcClient.serverList().subscribe(servers -> {
             mqttBrokers.clear();
             mqttBrokers.addAll(servers.keySet());

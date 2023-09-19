@@ -17,6 +17,8 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxUnsubResult;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.mqtt.inbox.MqttUnsubResult;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
@@ -43,6 +45,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
     private IMqttBrokerClient mqttBrokerClient;
     @Mock
     private IInboxClient inboxClient;
+    private ISettingProvider settingProvider = Setting::current;
 
     @Override
     protected Class<HTTPUnsubHandler> handlerClass() {
@@ -52,7 +55,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -66,7 +69,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.OK));
         handler.handle(reqId, tenantId, req);
@@ -94,7 +97,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.OK));
 
@@ -115,7 +118,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
         when(inboxClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.OK));
 
@@ -136,7 +139,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.ERROR));
 
@@ -157,7 +160,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
         when(inboxClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.ERROR));
 

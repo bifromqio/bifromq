@@ -21,6 +21,7 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.google.common.base.Preconditions;
 import io.netty.bootstrap.ServerBootstrap;
@@ -62,6 +63,7 @@ public class APIServer implements IAPIServer {
                      IMqttBrokerClient mqttBrokerClient,
                      IInboxClient inboxClient,
                      ISessionDictClient sessionDictClient,
+                     IRetainClient retainClient,
                      ISettingProvider settingProvider) {
         Preconditions.checkArgument(port >= 0);
         Preconditions.checkArgument(tlsPort >= 0);
@@ -69,7 +71,7 @@ public class APIServer implements IAPIServer {
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
         IHTTPRouteMap routeMap = new HTTPRouteMap(new HTTPRequestHandlersFactory(sessionDictClient,
-                distClient, mqttBrokerClient, inboxClient));
+                distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider));
         this.serverChannel =
             buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider));
         if (sslContext != null) {
