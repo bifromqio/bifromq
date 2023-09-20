@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
+import com.baidu.bifromq.dist.client.IDistClient;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 

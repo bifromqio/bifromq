@@ -25,8 +25,8 @@ final class NonStandaloneMQTTBroker extends AbstractMQTTBroker<NonStandaloneMQTT
     public NonStandaloneMQTTBroker(NonStandaloneMQTTBrokerBuilder builder) {
         super(builder);
         sessionServer = ILocalSessionServer.nonStandaloneBuilder()
-            .rpcServerBuilder(builder.rpcServerBuilder)
-            .build();
+                .rpcServerBuilder(builder.rpcServerBuilder)
+                .build();
     }
 
     @Override

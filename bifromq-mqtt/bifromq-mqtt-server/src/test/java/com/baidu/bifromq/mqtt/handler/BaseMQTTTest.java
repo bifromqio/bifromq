@@ -149,6 +149,7 @@ public abstract class BaseMQTTTest {
         }
     };
     protected EmbeddedChannel channel;
+    protected String serverId = "testServerId";
     protected String tenantId = "testTenantA";
     protected String userId = "testDeviceKey";
     protected String clientId = "testClientId";
@@ -180,6 +181,7 @@ public abstract class BaseMQTTTest {
             .defaultKeepAliveTimeSeconds(300)
             .qos2ConfirmWindowSeconds(300)
             .ticker(testTicker)
+            .serverId(serverId)
             .build();
         channel = new EmbeddedChannel(true, true, channelInitializer());
         channel.freezeTime();

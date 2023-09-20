@@ -20,5 +20,7 @@ public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
         .serviceDescriptor(OnlineInboxBrokerGrpc.getServiceDescriptor())
         .methodSemantic(OnlineInboxBrokerGrpc.getWriteMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
+        .methodSemantic(OnlineInboxBrokerGrpc.getSubMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(OnlineInboxBrokerGrpc.getUnsubMethod(), BluePrint.DDUnaryMethod.getInstance())
         .build();
 }
