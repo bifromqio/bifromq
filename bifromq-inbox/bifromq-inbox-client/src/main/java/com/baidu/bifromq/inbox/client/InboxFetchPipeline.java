@@ -13,10 +13,8 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
-import static java.util.Collections.singletonMap;
-
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
@@ -25,10 +23,7 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.type.QoS;
 import io.reactivex.rxjava3.annotations.NonNull;
-import io.reactivex.rxjava3.disposables.CompositeDisposable;
-import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -36,19 +31,18 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxFetchPipeline {
-    private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> ppln;
-    private final CompositeDisposable consumptions = new CompositeDisposable();
+    private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream;
     private final String tenantId;
     private final IRPCClient rpcClient;
     private final Map<String, Consumer<Fetched>> fetcherMap = new ConcurrentHashMap<>();
 
-    InboxFetchPipeline(String tenantId, String delivererKey, IRPCClient rpcClient) {
+    InboxFetchPipeline(String tenantId,
+                       IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream,
+                       IRPCClient rpcClient) {
         this.tenantId = tenantId;
         this.rpcClient = rpcClient;
-        ppln = rpcClient.createMessageStream(tenantId, null, delivererKey,
-            singletonMap(PIPELINE_ATTR_KEY_ID, UUID.randomUUID().toString()),
-            InboxServiceGrpc.getFetchInboxMethod());
-        doFetch();
+        this.messageStream = messageStream;
+        new FetchObserver(messageStream, fetcherMap).observe();
     }
 
     public void fetch(String inboxId, Consumer<Fetched> consumer) {
@@ -59,46 +53,10 @@ class InboxFetchPipeline {
         fetcherMap.remove(inboxId);
     }
 
-    private void doFetch() {
-        if (!ppln.isClosed()) {
-            consumptions.add(ppln.msg()
-                .subscribeWith(new DisposableObserver<InboxFetched>() {
-                    @Override
-                    public void onNext(@NonNull InboxFetched inboxFetched) {
-
-                        Consumer<Fetched> fetcher = fetcherMap.get(inboxFetched.getInboxId());
-                        if (fetcher != null) {
-                            Fetched fetched = inboxFetched.getFetched();
-                            fetcher.accept(fetched);
-                        }
-                    }
-
-                    @Override
-                    public void onError(@NonNull Throwable e) {
-                        consumptions.remove(this);
-                        fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
-                            .setResult(Fetched.Result.ERROR)
-                            .build()));
-                        doFetch();
-                    }
-
-                    @Override
-                    public void onComplete() {
-                        consumptions.remove(this);
-                        fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
-                            .setResult(Fetched.Result.ERROR)
-                            .build()));
-                        doFetch();
-                    }
-                })
-            );
-        }
-    }
-
     public void hint(long incarnation, String inboxId, int bufferCapacity, long lastFetchQoS0Seq, long lastFetchQoS1Seq,
                      long lastFetchQoS2Seq) {
         log.trace("Send hint: inboxId={}, capacity={}, client={}", inboxId, bufferCapacity, tenantId);
-        ppln.ack(InboxFetchHint.newBuilder()
+        messageStream.ack(InboxFetchHint.newBuilder()
             .setIncarnation(incarnation)
             .setInboxId(inboxId)
             .setCapacity(bufferCapacity)
@@ -128,8 +86,48 @@ class InboxFetchPipeline {
             });
     }
 
-    public void close() {
-        consumptions.dispose();
-        ppln.close();
+    private static class FetchObserver {
+        private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> stream;
+        private final Map<String, Consumer<Fetched>> fetcherMap;
+
+        public FetchObserver(IMessageStream<InboxFetched, InboxFetchHint> stream,
+                             Map<String, Consumer<Fetched>> fetcherMap) {
+            this.stream = stream;
+            this.fetcherMap = fetcherMap;
+        }
+
+        private void observe() {
+            if (!stream.isClosed()) {
+                stream.msg()
+                    .subscribeWith(new io.reactivex.rxjava3.observers.DisposableObserver<InboxFetched>() {
+                        @Override
+                        public void onNext(@NonNull InboxFetched inboxFetched) {
+                            Consumer<Fetched> fetcher = fetcherMap.get(inboxFetched.getInboxId());
+                            if (fetcher != null) {
+                                Fetched fetched = inboxFetched.getFetched();
+                                fetcher.accept(fetched);
+                            }
+                        }
+
+                        @Override
+                        public void onError(@NonNull Throwable e) {
+                            dispose();
+                            fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
+                                .setResult(Fetched.Result.ERROR)
+                                .build()));
+                            observe();
+                        }
+
+                        @Override
+                        public void onComplete() {
+                            dispose();
+                            fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
+                                .setResult(Fetched.Result.ERROR)
+                                .build()));
+                            observe();
+                        }
+                    });
+            }
+        }
     }
 }

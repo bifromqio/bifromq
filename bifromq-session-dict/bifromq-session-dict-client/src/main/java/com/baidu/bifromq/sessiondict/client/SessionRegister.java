@@ -13,13 +13,7 @@
 
 package com.baidu.bifromq.sessiondict.client;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
-import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.type.ClientInfo;
-import io.reactivex.rxjava3.annotations.NonNull;
-import io.reactivex.rxjava3.disposables.CompositeDisposable;
-import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
@@ -32,55 +26,22 @@ public class SessionRegister implements ISessionRegister {
 
     private final AtomicReference<State> state;
     private final ClientInfo owner;
-    private final IRPCClient.IMessageStream<Quit, Session> regPipeline;
-    private final Consumer<ClientInfo> onKick;
-    private final CompositeDisposable consumptions = new CompositeDisposable();
+    private final SessionRegPipeline regPipeline;
 
     public SessionRegister(ClientInfo owner, Consumer<ClientInfo> onKick,
-                           IRPCClient.IMessageStream<Quit, Session> regPipeline) {
+                           SessionRegPipeline regPipeline) {
         this.owner = owner;
         this.regPipeline = regPipeline;
-        this.onKick = onKick;
         this.state = new AtomicReference<>(State.Registered);
-        reg();
-    }
-
-    private void reg() {
-        if (state.get() != State.Registered) {
-            return;
-        }
-        regPipeline.ack(Session.newBuilder()
-            .setReqId(System.nanoTime())
-            .setOwner(owner)
-            .setKeep(true)
-            .build());
-        consumptions.add(regPipeline.msg()
-            .subscribeWith(new DisposableObserver<Quit>() {
-                @Override
-                public void onNext(@NonNull Quit quit) {
-                    if (quit.getOwner().equals(owner)) {
-                        if (log.isTraceEnabled()) {
-                            log.trace("Received quit request:reqId={},killer={}", quit.getReqId(), quit.getKiller());
-                        }
-                        onKick.accept(quit.getKiller());
-                        state.set(State.Kicked);
-                        stop();
-                    }
-                }
-
-                @Override
-                public void onError(@NonNull Throwable e) {
-                    consumptions.remove(this);
-                    reg();
-                }
-
-                @Override
-                public void onComplete() {
-                    consumptions.remove(this);
-                    reg();
-                }
-            })
-        );
+        this.regPipeline.reg(owner, quit -> {
+            if (log.isTraceEnabled()) {
+                log.trace("Received quit request:reqId={},killer={}", quit.getReqId(), quit.getKiller());
+            }
+            onKick.accept(quit.getKiller());
+            state.set(State.Kicked);
+            stop();
+        });
+        this.regPipeline.sendRegInfo(owner, true);
     }
 
     @Override
@@ -89,13 +50,9 @@ public class SessionRegister implements ISessionRegister {
             return;
         }
         if (state.get() == State.Registered) {
-            regPipeline.ack(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(false)
-                .build());
+            this.regPipeline.sendRegInfo(owner, false);
         }
-        consumptions.dispose();
+        regPipeline.unReg(owner);
         state.set(State.Quit);
     }
 }

@@ -47,7 +47,8 @@ public class SessionRegisterTest {
     @Mock
     private Consumer<ClientInfo> onKick;
     @Mock
-    private IRPCClient.IMessageStream<Quit, Session> regPipeline;
+    private IRPCClient.IMessageStream<Quit, Session> messageStream;
+    private SessionRegPipeline regPipeline;
     private final String tenantId = "tenantId";
     private final String userId = "userId";
     private final String clientId = "clientId";
@@ -62,10 +63,11 @@ public class SessionRegisterTest {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        when(regPipeline.msg()).thenAnswer((Answer<Observable<Quit>>) invocation -> {
+        when(messageStream.msg()).thenAnswer((Answer<Observable<Quit>>) invocation -> {
             quitSubject.set(PublishSubject.create());
             return quitSubject.get();
         });
+        regPipeline = new SessionRegPipeline(messageStream);
     }
 
     @AfterMethod
@@ -76,36 +78,36 @@ public class SessionRegisterTest {
 
     @Test
     public void regAfterInit() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline).ack(argCaptor.capture());
+        verify(messageStream).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
         assertTrue(argCaptor.getValue().getKeep());
     }
 
     @Test
     public void reRegAfterError() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         quitSubject.get().onError(new RuntimeException("Test Exception"));
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline, times(2)).ack(argCaptor.capture());
+        verify(messageStream, times(2)).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
         assertTrue(argCaptor.getValue().getKeep());
     }
 
     @Test
     public void reRegAfterComplete() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         quitSubject.get().onComplete();
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline, times(2)).ack(argCaptor.capture());
+        verify(messageStream, times(2)).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
         assertTrue(argCaptor.getValue().getKeep());
     }
 
     @Test
     public void quitAndStop() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner)
@@ -119,7 +121,7 @@ public class SessionRegisterTest {
 
     @Test
     public void ignoreQuit() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner.toBuilder().putMetadata(MQTT_CLIENT_ID_KEY, "FakeClient").build())
@@ -127,7 +129,7 @@ public class SessionRegisterTest {
             .build();
         quitSubject.get().onNext(quit);
         verify(onKick, times(0)).accept(any());
-        verify(regPipeline, times(1)).ack(any());
+        verify(messageStream, times(1)).ack(any());
     }
 
     @Test
@@ -135,7 +137,7 @@ public class SessionRegisterTest {
         SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
         register.stop();
         ArgumentCaptor<Session> sessionCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline, times(2)).ack(sessionCaptor.capture());
+        verify(messageStream, times(2)).ack(sessionCaptor.capture());
         Session session = sessionCaptor.getAllValues().get(1);
         assertEquals(session.getOwner(), owner);
         assertFalse(session.getKeep());

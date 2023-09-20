@@ -14,14 +14,19 @@
 package com.baidu.bifromq.inbox.client;
 
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
+import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
 import com.baidu.bifromq.inbox.RPCBluePrint;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
+import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
@@ -33,16 +38,19 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
+import java.lang.ref.Cleaner;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class InboxClient implements IInboxClient {
+    private static final Cleaner CLEANER = Cleaner.create();
+
     private final AtomicBoolean hasStopped = new AtomicBoolean();
     private final IRPCClient rpcClient;
     private final LoadingCache<FetchPipelineKey, InboxFetchPipeline> fetchPipelineCache;
@@ -58,12 +66,15 @@ final class InboxClient implements IInboxClient {
         fetchPipelineCache = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
-            .removalListener((RemovalListener<FetchPipelineKey, InboxFetchPipeline>) (key, value, cause) -> {
-                if (value != null) {
-                    value.close();
-                }
-            })
-            .build(key -> new InboxFetchPipeline(key.tenantId, key.delivererKey, rpcClient));
+            .build(key -> {
+                IMessageStream<InboxFetched, InboxFetchHint> messageStream =
+                    rpcClient.createMessageStream(key.tenantId, null, key.delivererKey,
+                        singletonMap(PIPELINE_ATTR_KEY_ID, UUID.randomUUID().toString()),
+                        InboxServiceGrpc.getFetchInboxMethod());
+                InboxFetchPipeline inboxFetchPipeline = new InboxFetchPipeline(key.tenantId, messageStream, rpcClient);
+                CLEANER.register(inboxFetchPipeline, new PipelineCloseAction(messageStream));
+                return inboxFetchPipeline;
+            });
     }
 
     @Override
@@ -183,5 +194,18 @@ final class InboxClient implements IInboxClient {
     }
 
     private record FetchPipelineKey(String tenantId, String delivererKey) {
+    }
+
+    private static class PipelineCloseAction implements Runnable {
+        private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream;
+
+        private PipelineCloseAction(IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream) {
+            this.messageStream = messageStream;
+        }
+
+        @Override
+        public void run() {
+            messageStream.close();
+        }
     }
 }

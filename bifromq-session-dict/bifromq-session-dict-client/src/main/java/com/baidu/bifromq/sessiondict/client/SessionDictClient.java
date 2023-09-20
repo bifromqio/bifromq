@@ -14,6 +14,7 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
 import com.baidu.bifromq.sessiondict.RPCBluePrint;
 import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
@@ -24,9 +25,9 @@ import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
+import java.lang.ref.Cleaner;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,9 +36,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class SessionDictClient implements ISessionDictClient {
+    private static final Cleaner CLEANER = Cleaner.create();
+
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final IRPCClient rpcClient;
-    private final LoadingCache<String, IRPCClient.IMessageStream<Quit, Session>> regPipeline;
+    private final LoadingCache<String, SessionRegPipeline> regPipeline;
 
     SessionDictClient(SessionDictClientBuilder builder) {
         this.rpcClient = IRPCClient.newBuilder()
@@ -50,17 +53,16 @@ final class SessionDictClient implements ISessionDictClient {
         regPipeline = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
-            .removalListener(
-                (RemovalListener<String, IRPCClient.IMessageStream<Quit, Session>>) (key, value, cause) -> {
-                    if (value != null) {
-                        value.close();
-                    }
-                })
-            .build(registerKey -> rpcClient.createMessageStream("",
-                null,
-                registerKey,
-                Collections.emptyMap(),
-                SessionDictServiceGrpc.getDictMethod()));
+            .build(registerKey -> {
+                IMessageStream<Quit, Session> messageStream = rpcClient.createMessageStream("",
+                    null,
+                    registerKey,
+                    Collections.emptyMap(),
+                    SessionDictServiceGrpc.getDictMethod());
+                SessionRegPipeline sessionRegPipeline = new SessionRegPipeline(messageStream);
+                CLEANER.register(sessionRegPipeline, new PipelineCloseAction(messageStream));
+                return sessionRegPipeline;
+            });
     }
 
     @Override
@@ -70,8 +72,7 @@ final class SessionDictClient implements ISessionDictClient {
 
     @Override
     public ISessionRegister reg(ClientInfo owner, Consumer<ClientInfo> onKick) {
-        return new SessionRegister(owner, onKick,
-            regPipeline.get(SessionRegisterKeyUtil.toRegisterKey(owner)));
+        return new SessionRegister(owner, onKick, regPipeline.get(SessionRegisterKeyUtil.toRegisterKey(owner)));
     }
 
     @Override
@@ -101,6 +102,19 @@ final class SessionDictClient implements ISessionDictClient {
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.info("Session dict client stopped");
+        }
+    }
+
+    private static class PipelineCloseAction implements Runnable {
+        private final IMessageStream<Quit, Session> messageStream;
+
+        private PipelineCloseAction(IMessageStream<Quit, Session> messageStream) {
+            this.messageStream = messageStream;
+        }
+
+        @Override
+        public void run() {
+            messageStream.close();
         }
     }
 }
