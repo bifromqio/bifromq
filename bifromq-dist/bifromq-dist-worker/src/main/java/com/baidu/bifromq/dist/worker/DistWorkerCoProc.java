@@ -40,12 +40,16 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
-import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
@@ -71,7 +75,6 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -113,30 +116,30 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         this.subBrokerManager = subBrokerManager;
         this.scheduler = scheduler;
         this.routeCache = new SubscriptionCache(id, readClientProvider, matchExecutor, loadTracker);
-        fanoutExecutorGroup = new FanoutExecutorGroup(this.subBrokerManager, scheduler, eventCollector, distClient,
-            DIST_FAN_OUT_PARALLELISM.get());
+        fanoutExecutorGroup =
+            new FanoutExecutorGroup(scheduler, eventCollector, distClient, DIST_FAN_OUT_PARALLELISM.get());
     }
 
     @Override
-    public CompletableFuture<ByteString> query(ByteString input, IKVReader reader) {
+    public CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader reader) {
         try {
-            CodedInputStream cis = input.newCodedInput();
-            cis.enableAliasing(true);
-            DistServiceROCoProcInput coProcInput = DistServiceROCoProcInput.parseFrom(cis);
+            DistServiceROCoProcInput coProcInput = input.getDistService();
             switch (coProcInput.getInputCase()) {
                 case BATCHDIST -> {
                     return batchDist(coProcInput.getBatchDist(), reader)
-                        .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
-                            .setBatchDist(v).build().toByteString());
+                        .thenApply(
+                            v -> ROCoProcOutput.newBuilder().setDistService(DistServiceROCoProcOutput.newBuilder()
+                                .setBatchDist(v).build()).build());
                 }
                 case COLLECTMETRICS -> {
                     return collect(coProcInput.getCollectMetrics().getReqId(), reader)
-                        .thenApply(v -> DistServiceROCoProcOutput.newBuilder()
-                            .setCollectMetrics(v).build().toByteString());
+                        .thenApply(
+                            v -> ROCoProcOutput.newBuilder().setDistService(DistServiceROCoProcOutput.newBuilder()
+                                .setCollectMetrics(v).build()).build());
                 }
                 default -> {
                     log.error("Unknown co proc type {}", coProcInput.getInputCase());
-                    CompletableFuture<ByteString> f = new CompletableFuture<>();
+                    CompletableFuture<ROCoProcOutput> f = new CompletableFuture<>();
                     f.completeExceptionally(
                         new IllegalStateException("Unknown co proc type " + coProcInput.getInputCase()));
                     return f;
@@ -144,7 +147,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             }
         } catch (Throwable e) {
             log.error("Unable to parse ro co-proc", e);
-            CompletableFuture<ByteString> f = new CompletableFuture<>();
+            CompletableFuture<ROCoProcOutput> f = new CompletableFuture<>();
             f.completeExceptionally(new IllegalStateException("Unable to parse ro co-proc", e));
             return f;
         }
@@ -152,10 +155,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
     @SneakyThrows
     @Override
-    public Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter writer) {
-        CodedInputStream cis = input.newCodedInput();
-        cis.enableAliasing(true);
-        DistServiceRWCoProcInput coProcInput = DistServiceRWCoProcInput.parseFrom(cis);
+    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
+        DistServiceRWCoProcInput coProcInput = input.getDistService();
         log.trace("Receive rw co-proc request\n{}", coProcInput);
         Set<String> touchedTenants = Sets.newHashSet();
         Set<ScopedTopic> touchedTopics = Sets.newHashSet();
@@ -166,7 +167,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             case BATCHUNMATCH -> outputBuilder.setBatchUnmatch(
                 batchUnmatch(coProcInput.getBatchUnmatch(), reader, writer, touchedTenants, touchedTopics));
         }
-        ByteString output = outputBuilder.build().toByteString();
+        RWCoProcOutput output = RWCoProcOutput.newBuilder().setDistService(outputBuilder.build()).build();
         return () -> {
             touchedTopics.forEach(routeCache::invalidate);
             touchedTenants.forEach(routeCache::touch);

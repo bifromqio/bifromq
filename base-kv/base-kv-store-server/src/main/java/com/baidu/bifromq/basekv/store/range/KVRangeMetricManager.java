@@ -16,6 +16,8 @@ package com.baidu.bifromq.basekv.store.range;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -186,7 +188,7 @@ class KVRangeMetricManager {
         return recordDuration(supplier, deleteTimer);
     }
 
-    CompletableFuture<ByteString> recordMutateCoProc(Supplier<CompletableFuture<ByteString>> supplier) {
+    CompletableFuture<RWCoProcOutput> recordMutateCoProc(Supplier<CompletableFuture<RWCoProcOutput>> supplier) {
         return recordDuration(supplier, mutateCoProcTimer);
     }
 
@@ -198,7 +200,7 @@ class KVRangeMetricManager {
         return recordDuration(supplier, getTimer);
     }
 
-    CompletableFuture<ByteString> recordQueryCoProc(Supplier<CompletableFuture<ByteString>> supplier) {
+    CompletableFuture<ROCoProcOutput> recordQueryCoProc(Supplier<CompletableFuture<ROCoProcOutput>> supplier) {
         return recordDuration(supplier, queryCoProcTimer);
     }
 

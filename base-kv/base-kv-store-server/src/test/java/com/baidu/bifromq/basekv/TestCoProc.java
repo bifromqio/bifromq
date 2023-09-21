@@ -18,6 +18,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -31,20 +35,22 @@ public class TestCoProc implements IKVRangeCoProc {
     }
 
     @Override
-    public CompletableFuture<ByteString> query(ByteString input, IKVReader reader) {
+    public CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader reader) {
         // get
-        return CompletableFuture.completedFuture(reader.get(input).orElse(ByteString.EMPTY));
+        return CompletableFuture.completedFuture(ROCoProcOutput.newBuilder()
+            .setRaw(reader.get(input.getRaw()).orElse(ByteString.EMPTY))
+            .build());
     }
 
     @Override
-    public Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter client) {
-        String[] str = input.toStringUtf8().split("_");
+    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter client) {
+        String[] str = input.getRaw().toStringUtf8().split("_");
         ByteString key = ByteString.copyFromUtf8(str[0]);
         ByteString value = ByteString.copyFromUtf8(str[1]);
         // update
         Optional<ByteString> existing = reader.get(key);
         client.put(key, value);
-        return () -> existing.orElse(ByteString.EMPTY);
+        return () -> RWCoProcOutput.newBuilder().setRaw(existing.orElse(ByteString.EMPTY)).build();
     }
 
     @Override

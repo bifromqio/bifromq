@@ -23,6 +23,7 @@ import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
@@ -32,7 +33,6 @@ import com.baidu.bifromq.basescheduler.ICallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
-import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -145,22 +145,17 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                 .setReqId(reqId)
                                 .setVer(range.ver)
                                 .setKvRangeId(range.id)
-                                .setRoCoProcInput(buildBatchDistRequest(batchDist).toByteString())
+                                .setRoCoProcInput(ROCoProcInput.newBuilder()
+                                    .setDistService(buildBatchDistRequest(batchDist))
+                                    .build())
                                 .build(), batchDist.getOrderKey())
                             .thenApply(v -> {
                                 if (v.getCode() == ReplyCode.Ok) {
-                                    try {
-                                        BatchDistReply batchDistReply =
-                                            DistServiceROCoProcOutput.parseFrom(
-                                                    v.getRoCoProcResult())
-                                                .getBatchDist();
-                                        assert batchDistReply.getReqId() == reqId;
-                                        return batchDistReply;
-                                    } catch (Throwable e) {
-                                        log.error("Unable to parse ro co-proc output", e);
-                                        throw new RuntimeException("Unable to parse rw co-proc output",
-                                            e);
-                                    }
+                                    BatchDistReply batchDistReply = v.getRoCoProcResult()
+                                        .getDistService()
+                                        .getBatchDist();
+                                    assert batchDistReply.getReqId() == reqId;
+                                    return batchDistReply;
                                 }
                                 log.warn("Failed to exec ro co-proc[code={}]", v.getCode());
                                 throw new RuntimeException("Failed to exec rw co-proc");

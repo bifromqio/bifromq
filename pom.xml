@@ -299,6 +299,11 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-retain-coproc-proto</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-retain-rpc-definition</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -316,6 +321,11 @@
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-inbox-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-inbox-coproc-proto</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -352,6 +362,11 @@
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-dist-rpc-definition</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-dist-coproc-proto</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

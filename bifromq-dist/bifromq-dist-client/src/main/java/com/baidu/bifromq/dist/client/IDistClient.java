@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.client;
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import java.nio.ByteBuffer;
+import com.google.protobuf.ByteString;
 import java.util.concurrent.CompletableFuture;
 
 public interface IDistClient extends IConnectable {
@@ -37,7 +37,7 @@ public interface IDistClient extends IConnectable {
      * @param publisher     the publisher of the message which must have non-null tenantId and type field
      * @return a future for tracking the publishing process asynchronously
      */
-    CompletableFuture<Void> pub(long reqId, String topic, QoS qos, ByteBuffer payload, int expirySeconds,
+    CompletableFuture<Void> pub(long reqId, String topic, QoS qos, ByteString payload, int expirySeconds,
                                 ClientInfo publisher);
 
     /**

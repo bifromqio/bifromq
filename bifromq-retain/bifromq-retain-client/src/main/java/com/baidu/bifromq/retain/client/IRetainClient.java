@@ -18,6 +18,7 @@ import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
@@ -31,7 +32,7 @@ public interface IRetainClient extends IConnectable {
     CompletableFuture<RetainReply> retain(long reqId,
                                           String topic,
                                           QoS qos,
-                                          ByteBuffer payload,
+                                          ByteString payload,
                                           int expirySeconds,
                                           ClientInfo publisher);
 

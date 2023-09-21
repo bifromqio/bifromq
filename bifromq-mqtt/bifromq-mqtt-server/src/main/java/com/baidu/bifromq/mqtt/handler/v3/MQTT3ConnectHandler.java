@@ -13,6 +13,28 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.mqtt.handler.v3.MQTTSessionIdUtil.userSessionId;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
+
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxCheckResult;
@@ -39,38 +61,15 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Strings;
-import io.netty.buffer.Unpooled;
+import com.google.protobuf.UnsafeByteOperations;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectReturnCode;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
-import lombok.extern.slf4j.Slf4j;
-
 import java.net.InetSocketAddress;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-
-import static com.baidu.bifromq.mqtt.handler.v3.MQTTSessionIdUtil.userSessionId;
-import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class MQTT3ConnectHandler extends MQTTMessageHandler {
@@ -233,7 +232,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                 .topic(connMsg.payload().willTopic())
                                 .qos(QoS.forNumber(connMsg.variableHeader().willQos()))
                                 .retain(connMsg.variableHeader().isWillRetain())
-                                .payload(Unpooled.wrappedBuffer(connMsg.payload().willMessageInBytes()))
+                                .payload(UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()))
                                 .build();
                         }
 

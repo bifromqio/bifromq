@@ -20,6 +20,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LAT
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
@@ -32,8 +33,6 @@ import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.MatchResultPack;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
-import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -97,20 +96,16 @@ public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchRe
                     .setReqId(reqId)
                     .setVer(batcherKey.ver)
                     .setKvRangeId(batcherKey.id)
-                    .setRoCoProcInput(RetainServiceROCoProcInput.newBuilder()
-                        .setBatchMatch(reqBuilder.build())
-                        .build().toByteString())
+                    .setRoCoProcInput(ROCoProcInput.newBuilder()
+                        .setRetainService(RetainServiceROCoProcInput.newBuilder()
+                            .setBatchMatch(reqBuilder.build())
+                            .build()).build())
                     .build();
                 return retainStoreClient.linearizedQuery(batcherKey.leader, request)
                     .thenApply(reply -> {
                         if (reply.getCode() == ReplyCode.Ok) {
-                            try {
-                                return RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult()).getBatchMatch()
-                                    .getResultPackMap();
-                            } catch (InvalidProtocolBufferException e) {
-                                log.error("Unable to parse rw co-proc output", e);
-                                throw new RuntimeException(e);
-                            }
+                            return reply.getRoCoProcResult().getRetainService().getBatchMatch()
+                                .getResultPackMap();
                         }
                         log.warn("Failed to exec ro co-proc[code={}]", reply.getCode());
                         throw new RuntimeException();

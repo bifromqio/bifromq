@@ -1,6 +1,7 @@
 syntax = "proto3";
 import "basekv/Type.proto";
 import "basekv/raft/ClusterConfig.proto";
+import "basekv/CoProc.proto";
 
 package basekv;
 
@@ -72,6 +73,6 @@ message KVRangeCommand{
 
     Delete delete = 12;
     Put put = 13;
-    bytes rwCoProc = 14;
+    RWCoProcInput rwCoProc = 14;
   }
 }

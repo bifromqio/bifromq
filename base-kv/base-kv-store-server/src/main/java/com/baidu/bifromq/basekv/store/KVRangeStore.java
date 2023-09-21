@@ -40,6 +40,10 @@ import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.range.IKVRange;
 import com.baidu.bifromq.basekv.store.range.KVRange;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
@@ -382,8 +386,8 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     @Override
-    public CompletionStage<ByteString> queryCoProc(long ver, KVRangeId id, ByteString query,
-                                                   boolean linearized) {
+    public CompletionStage<ROCoProcOutput> queryCoProc(long ver, KVRangeId id, ROCoProcInput query,
+                                                       boolean linearized) {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
@@ -415,7 +419,7 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     @Override
-    public CompletionStage<ByteString> mutateCoProc(long ver, KVRangeId id, ByteString mutate) {
+    public CompletionStage<RWCoProcOutput> mutateCoProc(long ver, KVRangeId id, RWCoProcInput mutate) {
         checkStarted();
         IKVRange kvRange = kvRangeMap.get(id);
         if (kvRange != null) {

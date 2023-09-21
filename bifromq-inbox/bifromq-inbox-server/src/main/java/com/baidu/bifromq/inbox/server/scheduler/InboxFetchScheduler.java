@@ -17,6 +17,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_QUEUES_PER_R
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
@@ -26,7 +27,6 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -108,26 +108,21 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
                             .setReqId(reqId)
                             .setVer(batcherKey.ver)
                             .setKvRangeId(batcherKey.id)
-                            .setRoCoProcInput(InboxServiceROCoProcInput.newBuilder()
-                                .setReqId(reqId)
-                                .setBatchFetch(BatchFetchRequest.newBuilder()
-                                    .putAllInboxFetch(inboxFetches)
+                            .setRoCoProcInput(ROCoProcInput.newBuilder()
+                                .setInboxService(InboxServiceROCoProcInput.newBuilder()
+                                    .setReqId(reqId)
+                                    .setBatchFetch(BatchFetchRequest.newBuilder()
+                                        .putAllInboxFetch(inboxFetches)
+                                        .build())
                                     .build())
-                                .build()
-                                .toByteString())
+                                .build())
                             .build(), orderKey)
                     .thenApply(v -> {
                         switch (v.getCode()) {
                             case Ok:
-                                try {
-                                    InboxServiceROCoProcOutput output = InboxServiceROCoProcOutput.parseFrom(
-                                        v.getRoCoProcResult());
-                                    assert output.getReqId() == reqId;
-                                    return output.getBatchFetch();
-                                } catch (InvalidProtocolBufferException e) {
-                                    log.error("Unable to parse rw co-proc output", e);
-                                    throw new RuntimeException("Unable to parse rw co-proc output", e);
-                                }
+                                InboxServiceROCoProcOutput output = v.getRoCoProcResult().getInboxService();
+                                assert output.getReqId() == reqId;
+                                return output.getBatchFetch();
                             default:
                                 throw new RuntimeException(
                                     String.format("Failed to exec ro co-proc[code=%s]", v.getCode()));

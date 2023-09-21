@@ -41,6 +41,19 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-kv-raft-type</artifactId>
         </dependency>
+        <!--CoProc definition -->
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-dist-coproc-proto</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-inbox-coproc-proto</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-retain-coproc-proto</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>

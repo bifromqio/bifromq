@@ -27,7 +27,6 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -67,7 +66,7 @@ public class DistTest extends DistServiceTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
         long reqId = System.nanoTime();
-        ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
+        ByteString payload = ByteString.EMPTY;
         ClientInfo clientInfo;
         int total = 10;
         CountDownLatch latch = new CountDownLatch(total);
@@ -104,7 +103,7 @@ public class DistTest extends DistServiceTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
         long reqId = System.nanoTime();
-        ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
+        ByteString payload = ByteString.EMPTY;
         ClientInfo clientInfo;
         int total = 1;
         for (int i = 0; i < total; i++) {
@@ -144,7 +143,7 @@ public class DistTest extends DistServiceTest {
                 return CompletableFuture.completedFuture(resultMap);
             });
         long reqId = System.nanoTime();
-        ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
+        ByteString payload = ByteString.EMPTY;
         ClientInfo clientInfo;
         int totalSub = 5;
         int totalMsg = 1;
@@ -190,7 +189,7 @@ public class DistTest extends DistServiceTest {
             });
 
         long reqId = System.nanoTime();
-        ByteBuffer payload = ByteString.EMPTY.asReadOnlyByteBuffer();
+        ByteString payload = ByteString.EMPTY;
         int totalInbox = 100;
         for (int i = 0; i < totalInbox; i++) {
             distClient().match(reqId, tenantId, "/sport/tennis", QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0)

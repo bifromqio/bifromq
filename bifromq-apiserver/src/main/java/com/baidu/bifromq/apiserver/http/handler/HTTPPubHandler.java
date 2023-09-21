@@ -14,18 +14,10 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_RETAIN;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClientMeta;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRetain;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static java.util.concurrent.CompletableFuture.allOf;
@@ -39,7 +31,7 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import io.netty.buffer.ByteBuf;
+import com.google.protobuf.ByteString;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -53,9 +45,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.POST;
@@ -102,35 +91,34 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                 reqId, tenantId, topic, clientType, clientMeta);
             if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
                 return CompletableFuture.completedFuture(
-                        new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER));
+                    new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER));
             }
             ClientInfo clientInfo = ClientInfo.newBuilder()
-                    .setTenantId(tenantId)
-                    .setType(clientType)
-                    .putAllMetadata(clientMeta)
-                    .build();
+                .setTenantId(tenantId)
+                .setType(clientType)
+                .putAllMetadata(clientMeta)
+                .build();
             CompletableFuture<Void> distFuture = distClient.pub(reqId, topic, QoS.AT_MOST_ONCE,
-                    req.content().duplicate().nioBuffer(),
-                    Integer.MAX_VALUE, clientInfo);
+                toRetainedByteBuffer(req.content()),
+                Integer.MAX_VALUE, clientInfo);
             CompletableFuture<Boolean> retainFuture = isRetain ?
-                    retainMessage(reqId, topic, req.content().duplicate().nioBuffer(), clientInfo) :
-                    CompletableFuture.completedFuture(true);
+                retainMessage(reqId, topic, toRetainedByteBuffer(req.content()), clientInfo) :
+                CompletableFuture.completedFuture(true);
             return allOf(retainFuture, distFuture)
-                    .thenApply((v) -> new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER));
+                .thenApply((v) -> new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER));
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);
         }
     }
 
     private CompletableFuture<Boolean> retainMessage(long reqId, String topic,
-                                                     ByteBuffer payload, ClientInfo clientInfo) {
-        return retainClient.retain(reqId, topic, QoS.AT_MOST_ONCE,
-                payload, Integer.MAX_VALUE, clientInfo)
-                .thenApply(v -> {
-                   if (v.getResult() != RetainReply.Result.ERROR) {
-                       return true;
-                   }
-                   return false;
-                });
+                                                     ByteString payload, ClientInfo clientInfo) {
+        return retainClient.retain(reqId, topic, QoS.AT_MOST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
+            .thenApply(v -> {
+                if (v.getResult() != RetainReply.Result.ERROR) {
+                    return true;
+                }
+                return false;
+            });
     }
 }

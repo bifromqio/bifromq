@@ -46,6 +46,8 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
@@ -364,15 +366,19 @@ public class KVRangeStoreTest {
 
         {
             log.info("Test exec ReadOnly Co-Proc");
-            assertEquals(rangeStore.queryCoProc(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join(),
+            assertEquals(
+                rangeStore.queryCoProc(1, id, toInput(copyFromUtf8("key1")), true).toCompletableFuture().join()
+                    .getRaw(),
                 copyFromUtf8("hello"));
-            assertEquals(rangeStore.queryCoProc(1, id, copyFromUtf8("key1"), false).toCompletableFuture().join(),
+            assertEquals(
+                rangeStore.queryCoProc(1, id, toInput(copyFromUtf8("key1")), false).toCompletableFuture().join()
+                    .getRaw(),
                 copyFromUtf8("hello"));
         }
         {
             log.info("Test exec ReadOnly CoProc with version mismatch");
             try {
-                rangeStore.queryCoProc(0, id, copyFromUtf8("key1"), true).toCompletableFuture().join();
+                rangeStore.queryCoProc(0, id, toInput(copyFromUtf8("key1")), true).toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.BadVersion);
@@ -381,7 +387,7 @@ public class KVRangeStoreTest {
         {
             log.info("Test exec ReadOnly Range with wrong ranges");
             try {
-                rangeStore.queryCoProc(1, id, copyFromUtf8("key4"), true).toCompletableFuture().join();
+                rangeStore.queryCoProc(1, id, toInput(copyFromUtf8("key4")), true).toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.InternalException);
@@ -400,7 +406,9 @@ public class KVRangeStoreTest {
 
         {
             log.info("Test exec ReadWrite Co-Proc");
-            assertEquals(rangeStore.mutateCoProc(1, id, copyFromUtf8("key1_world")).toCompletableFuture().join(),
+            assertEquals(
+                rangeStore.mutateCoProc(1, id, RWCoProcInput.newBuilder().setRaw(copyFromUtf8("key1_world")).build())
+                    .toCompletableFuture().join().getRaw(),
                 copyFromUtf8("hello"));
 
             assertTrue(rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().isPresent());
@@ -408,7 +416,8 @@ public class KVRangeStoreTest {
         {
             log.info("Test exec ReadWrite CoProc with version mismatch");
             try {
-                rangeStore.mutateCoProc(0, id, copyFromUtf8("key1_hello")).toCompletableFuture().join();
+                rangeStore.mutateCoProc(0, id, RWCoProcInput.newBuilder().setRaw(copyFromUtf8("key1_hello")).build())
+                    .toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.BadVersion);
@@ -417,7 +426,8 @@ public class KVRangeStoreTest {
         {
             log.info("Test exec ReadWrite Range with wrong ranges");
             try {
-                rangeStore.mutateCoProc(1, id, copyFromUtf8("key4")).toCompletableFuture().join();
+                rangeStore.mutateCoProc(1, id, RWCoProcInput.newBuilder().setRaw(copyFromUtf8("key4")).build())
+                    .toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.InternalException);
@@ -552,5 +562,9 @@ public class KVRangeStoreTest {
             return Optional.of(descriptor);
         }
         return Optional.empty();
+    }
+
+    private ROCoProcInput toInput(ByteString raw) {
+        return ROCoProcInput.newBuilder().setRaw(raw).build();
     }
 }

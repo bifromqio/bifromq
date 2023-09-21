@@ -25,7 +25,6 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Delivered;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -49,8 +48,7 @@ class FanoutExecutorGroup {
     private final ExecutorService[] phaseOneExecutorGroup;
     private final ExecutorService[] phaseTwoExecutorGroup;
 
-    FanoutExecutorGroup(ISubBrokerManager subBrokerMgr,
-                        IDeliveryScheduler scheduler,
+    FanoutExecutorGroup(IDeliveryScheduler scheduler,
                         IEventCollector eventCollector,
                         IDistClient distClient,
                         int groupSize) {

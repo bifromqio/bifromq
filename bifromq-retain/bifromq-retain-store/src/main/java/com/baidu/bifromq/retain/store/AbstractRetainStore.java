@@ -26,13 +26,13 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.retain.rpc.proto.CollectMetricsReply;
-import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
 import com.baidu.bifromq.retain.utils.MessageUtil;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
@@ -163,7 +163,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRwCoProc(MessageUtil.buildGCRequest(reqId).toByteString())
+                .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(MessageUtil.buildGCRequest(reqId)).build())
                 .build())
             .thenAccept(reply -> log.debug("Range gc succeed: serverId={}, rangeId={}, ver={}",
                 leaderReplica.leader, leaderReplica.id, leaderReplica.ver))
@@ -233,17 +233,14 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRoCoProcInput(buildCollectMetricsRequest(reqId).toByteString())
+                .setRoCoProcInput(ROCoProcInput.newBuilder()
+                    .setRetainService(buildCollectMetricsRequest(reqId))
+                    .build())
                 .build())
             .thenApply(reply -> {
                 log.debug("Range metrics collected: serverId={}, rangeId={}, ver={}",
                     leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-
-                try {
-                    return RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult()).getCollectMetrics();
-                } catch (InvalidProtocolBufferException e) {
-                    throw new IllegalStateException("Unable to parse CollectMetricReply", e);
-                }
+                return reply.getRoCoProcResult().getRetainService().getCollectMetrics();
             })
             .exceptionally(e -> {
                 log.error("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",

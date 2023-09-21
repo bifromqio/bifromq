@@ -17,11 +17,11 @@ import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.IExecutionPipeline;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class InboxMutateBatcher<Req, Resp> extends Batcher<Req, Resp, KVRangeSetting> {
@@ -41,15 +41,11 @@ public abstract class InboxMutateBatcher<Req, Resp> extends Batcher<Req, Resp, K
                 .setReqId(request.getReqId())
                 .setVer(batcherKey.ver)
                 .setKvRangeId(batcherKey.id)
-                .setRwCoProc(request.toByteString())
+                .setRwCoProc(RWCoProcInput.newBuilder().setInboxService(request).build())
                 .build())
             .thenApply(reply -> {
                 if (reply.getCode() == ReplyCode.Ok) {
-                    try {
-                        return InboxServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-                    } catch (InvalidProtocolBufferException e) {
-                        throw new RuntimeException(e);
-                    }
+                    return reply.getRwCoProcResult().getInboxService();
                 }
                 throw new RuntimeException(reply.getCode().name());
             });

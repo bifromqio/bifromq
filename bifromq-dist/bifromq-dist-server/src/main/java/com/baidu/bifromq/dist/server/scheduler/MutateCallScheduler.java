@@ -20,13 +20,13 @@ import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.IExecutionPipeline;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -66,16 +66,11 @@ public abstract class MutateCallScheduler<Req, Resp> extends BatchCallScheduler<
                     .setReqId(reqId)
                     .setVer(batcherKey.ver)
                     .setKvRangeId(batcherKey.id)
-                    .setRwCoProc(input.toByteString())
+                    .setRwCoProc(RWCoProcInput.newBuilder().setDistService(input).build())
                     .build())
                 .thenApply(reply -> {
                     if (reply.getCode() == ReplyCode.Ok) {
-                        try {
-                            return DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-                        } catch (InvalidProtocolBufferException e) {
-                            log.error("Unable to parse rw co-proc output", e);
-                            throw new RuntimeException(e);
-                        }
+                        return reply.getRwCoProcResult().getDistService();
                     }
                     log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
                     throw new RuntimeException();

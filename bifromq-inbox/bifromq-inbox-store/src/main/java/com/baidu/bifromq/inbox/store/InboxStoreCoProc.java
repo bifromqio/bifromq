@@ -44,6 +44,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
@@ -141,9 +145,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     @Override
-    public CompletableFuture<ByteString> query(ByteString input, IKVReader reader) {
+    public CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader reader) {
         try {
-            InboxServiceROCoProcInput coProcInput = InboxServiceROCoProcInput.parseFrom(input);
+            InboxServiceROCoProcInput coProcInput = input.getInboxService();
             InboxServiceROCoProcOutput.Builder outputBuilder = InboxServiceROCoProcOutput.newBuilder()
                 .setReqId(coProcInput.getReqId());
             switch (coProcInput.getInputCase()) {
@@ -153,7 +157,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     outputBuilder.setCollectedMetrics(collect(coProcInput.getCollectMetrics(), reader));
                 case GC -> outputBuilder.setGc(gcScan(coProcInput.getGc(), reader));
             }
-            return CompletableFuture.completedFuture(outputBuilder.build().toByteString());
+            return CompletableFuture.completedFuture(ROCoProcOutput.newBuilder()
+                .setInboxService(outputBuilder.build())
+                .build());
         } catch (Throwable e) {
             log.error("Query co-proc failed", e);
             return CompletableFuture.failedFuture(new IllegalStateException("Query co-proc failed", e));
@@ -162,8 +168,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     @SneakyThrows
     @Override
-    public Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter writer) {
-        InboxServiceRWCoProcInput coProcInput = InboxServiceRWCoProcInput.parseFrom(input);
+    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
+        InboxServiceRWCoProcInput coProcInput = input.getInboxService();
         InboxServiceRWCoProcOutput.Builder outputBuilder =
             InboxServiceRWCoProcOutput.newBuilder().setReqId(coProcInput.getReqId());
         AtomicReference<Runnable> afterMutate = new AtomicReference<>();
@@ -199,7 +205,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 outputBuilder.setBatchCommit(replyBuilder);
             }
         }
-        ByteString output = outputBuilder.build().toByteString();
+        RWCoProcOutput output = RWCoProcOutput.newBuilder().setInboxService(outputBuilder.build()).build();
         return () -> {
             afterMutate.get().run();
             return output;

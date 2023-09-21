@@ -25,11 +25,10 @@ import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.dist.rpc.proto.CollectMetricsReply;
-import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
@@ -187,18 +186,14 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRoCoProcInput(buildCollectMetricsRequest(reqId).toByteString())
+                .setRoCoProcInput(ROCoProcInput.newBuilder().setDistService(buildCollectMetricsRequest(reqId)).build())
                 .build())
             .thenApply(reply -> {
                 log.debug("Range metrics collected: serverId={}, rangeId={}, ver={}",
                     leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
 
-                try {
-                    return DistServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult())
-                        .getCollectMetrics();
-                } catch (InvalidProtocolBufferException e) {
-                    throw new IllegalStateException("Unable to parse CollectMetricReply", e);
-                }
+                return reply.getRoCoProcResult().getDistService()
+                    .getCollectMetrics();
             })
             .exceptionally(e -> {
                 log.error("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",

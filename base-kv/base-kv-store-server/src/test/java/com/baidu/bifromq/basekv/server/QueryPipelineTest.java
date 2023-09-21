@@ -13,16 +13,18 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
@@ -33,12 +35,11 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class QueryPipelineTest {
     @Mock
@@ -46,7 +47,9 @@ public class QueryPipelineTest {
 
     @Mock
     private ServerCallStreamObserver streamObserver;
+
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -120,7 +123,7 @@ public class QueryPipelineTest {
     private void queryCoProc(boolean linearized) {
         QueryPipeline pipeline = new QueryPipeline(rangeStore, linearized, streamObserver);
         KVRangeId rangeId = KVRangeIdUtil.generate();
-        ByteString coProcInput = ByteString.copyFromUtf8("coProc");
+        ROCoProcInput coProcInput = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("coProc")).build();
         KVRangeRORequest coProcRequest = KVRangeRORequest.newBuilder()
             .setReqId(1)
             .setVer(1)
@@ -129,13 +132,14 @@ public class QueryPipelineTest {
             .build();
 
         when(rangeStore.queryCoProc(1, rangeId, coProcInput, linearized))
-            .thenReturn(CompletableFuture.completedFuture(ByteString.empty()));
+            .thenReturn(
+                CompletableFuture.completedFuture(ROCoProcOutput.newBuilder().setRaw(ByteString.empty()).build()));
 
         KVRangeROReply coProcReply = pipeline.handleRequest("_", coProcRequest).join();
 
         assertEquals(coProcReply.getReqId(), 1);
         assertEquals(coProcReply.getCode(), ReplyCode.Ok);
-        assertEquals(coProcReply.getRoCoProcResult(), ByteString.empty());
+        assertEquals(coProcReply.getRoCoProcResult().getRaw(), ByteString.empty());
     }
 
 

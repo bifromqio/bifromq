@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.retain.client;
 
-import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
-
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.retain.RPCBluePrint;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -25,8 +23,8 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -77,7 +75,7 @@ final class RetainClient implements IRetainClient {
     }
 
     @Override
-    public CompletableFuture<RetainReply> retain(long reqId, String topic, QoS qos, ByteBuffer payload,
+    public CompletableFuture<RetainReply> retain(long reqId, String topic, QoS qos, ByteString payload,
                                                  int expirySeconds, ClientInfo publisher) {
         long now = System.currentTimeMillis();
         long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE : now +
@@ -88,7 +86,7 @@ final class RetainClient implements IRetainClient {
             .setMessage(Message.newBuilder()
                 .setMessageId(reqId)
                 .setPubQoS(qos)
-                .setPayload(unsafeWrap(payload))
+                .setPayload(payload)
                 .setTimestamp(now)
                 .setExpireTimestamp(expiry)
                 .build())

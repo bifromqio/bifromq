@@ -1,6 +1,7 @@
 syntax = "proto3";
 import "basekv/Type.proto";
 import "basekv/Command.proto";
+import "basekv/CoProc.proto";
 package basekv;
 
 option java_multiple_files = true;
@@ -112,7 +113,7 @@ message KVRangeRWRequest{
   oneof RequestType{
     bytes delete = 4;
     Put put = 5;
-    bytes rwCoProc = 6;
+    basekv.RWCoProcInput rwCoProc = 6;
   }
 }
 
@@ -122,7 +123,7 @@ message KVRangeRWReply{
   oneof ReplyType{// only available when Code == Ok
     bytes deleteResult = 3;
     bytes putResult = 4;
-    bytes rwCoProcResult = 5;
+    basekv.RWCoProcOutput rwCoProcResult = 5;
   }
 }
 
@@ -133,7 +134,7 @@ message KVRangeRORequest{
   oneof Type{
     bytes existKey = 4;
     bytes getKey = 5;
-    bytes roCoProcInput = 6;
+    basekv.ROCoProcInput roCoProcInput = 6;
   }
 }
 
@@ -143,6 +144,6 @@ message KVRangeROReply{
   oneof ReplyType{// only available when Code == Ok
     bool existResult = 3;
     NullableValue getResult = 4;
-    bytes roCoProcResult = 5;
+    basekv.ROCoProcOutput roCoProcResult = 5;
   }
 }

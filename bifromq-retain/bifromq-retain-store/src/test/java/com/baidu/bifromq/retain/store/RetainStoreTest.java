@@ -34,6 +34,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -55,7 +57,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.File;
@@ -213,89 +214,77 @@ public class RetainStoreTest {
     }
 
     protected RetainResult requestRetain(String tenantId, TopicMessage topicMsg) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
-            KVRangeSetting s = storeClient.findByKey(tenantNS).get();
-            String topic = topicMsg.getTopic();
-            Message message = topicMsg.getMessage();
-            BatchRetainRequest request = BatchRetainRequest.newBuilder()
-                .setReqId(message.getMessageId())
-                .putRetainMessagePack(tenantId, RetainMessagePack.newBuilder()
-                    .putTopicMessages(topic, RetainMessage.newBuilder()
-                        .setMessage(message)
-                        .setPublisher(topicMsg.getPublisher())
-                        .build())
+        long reqId = ThreadLocalRandom.current().nextInt();
+        ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+        KVRangeSetting s = storeClient.findByKey(tenantNS).get();
+        String topic = topicMsg.getTopic();
+        Message message = topicMsg.getMessage();
+        BatchRetainRequest request = BatchRetainRequest.newBuilder()
+            .setReqId(message.getMessageId())
+            .putRetainMessagePack(tenantId, RetainMessagePack.newBuilder()
+                .putTopicMessages(topic, RetainMessage.newBuilder()
+                    .setMessage(message)
+                    .setPublisher(topicMsg.getPublisher())
                     .build())
-                .build();
-            RetainServiceRWCoProcInput input = MessageUtil.buildRetainRequest(request);
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            RetainServiceRWCoProcOutput output = RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasBatchRetain());
-            assertEquals(output.getBatchRetain().getReqId(), message.getMessageId());
-            return output.getBatchRetain().getResultsMap().get(tenantId).getResultsMap().get(topic);
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
+                .build())
+            .build();
+        RetainServiceRWCoProcInput input = MessageUtil.buildRetainRequest(request);
+        KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+            .setReqId(reqId)
+            .setVer(s.ver)
+            .setKvRangeId(s.id)
+            .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(input).build())
+            .build()).join();
+        assertEquals(reply.getReqId(), reqId);
+        assertEquals(reply.getCode(), ReplyCode.Ok);
+        RetainServiceRWCoProcOutput output = reply.getRwCoProcResult().getRetainService();
+        assertTrue(output.hasBatchRetain());
+        assertEquals(output.getBatchRetain().getReqId(), message.getMessageId());
+        return output.getBatchRetain().getResultsMap().get(tenantId).getResultsMap().get(topic);
     }
 
     protected MatchResult requestMatch(String tenantId, String topicFilter, int limit) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
-            KVRangeSetting s = storeClient.findByKey(tenantNS).get();
-            BatchMatchRequest request = BatchMatchRequest.newBuilder()
-                .setReqId(reqId)
-                .putMatchParams(tenantId, MatchParam.newBuilder()
-                    .putTopicFilters(topicFilter, limit)
-                    .build())
-                .build();
-            RetainServiceROCoProcInput input = MessageUtil.buildMatchRequest(request);
-            KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRoCoProcInput(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            RetainServiceROCoProcOutput output = RetainServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasBatchMatch());
-            assertEquals(output.getBatchMatch().getReqId(), reqId);
-            return output.getBatchMatch().getResultPackMap().get(tenantId).getResultsMap().get(topicFilter);
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
+        long reqId = ThreadLocalRandom.current().nextInt();
+        ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+        KVRangeSetting s = storeClient.findByKey(tenantNS).get();
+        BatchMatchRequest request = BatchMatchRequest.newBuilder()
+            .setReqId(reqId)
+            .putMatchParams(tenantId, MatchParam.newBuilder()
+                .putTopicFilters(topicFilter, limit)
+                .build())
+            .build();
+        RetainServiceROCoProcInput input = MessageUtil.buildMatchRequest(request);
+        KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
+            .setReqId(reqId)
+            .setVer(s.ver)
+            .setKvRangeId(s.id)
+            .setRoCoProcInput(ROCoProcInput.newBuilder().setRetainService(input).build())
+            .build()).join();
+        assertEquals(reply.getReqId(), reqId);
+        assertEquals(reply.getCode(), ReplyCode.Ok);
+        RetainServiceROCoProcOutput output = reply.getRoCoProcResult().getRetainService();
+        assertTrue(output.hasBatchMatch());
+        assertEquals(output.getBatchMatch().getReqId(), reqId);
+        return output.getBatchMatch().getResultPackMap().get(tenantId).getResultsMap().get(topicFilter);
     }
 
     protected GCReply requestGC(String tenantId) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
-            KVRangeSetting s = storeClient.findByKey(tenantNS).get();
-            RetainServiceRWCoProcInput input = MessageUtil.buildGCRequest(reqId);
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            RetainServiceRWCoProcOutput output = RetainServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult());
-            assertTrue(output.hasGc());
-            assertEquals(output.getGc().getReqId(), reqId);
-            return output.getGc();
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
+        long reqId = ThreadLocalRandom.current().nextInt();
+        ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+        KVRangeSetting s = storeClient.findByKey(tenantNS).get();
+        RetainServiceRWCoProcInput input = MessageUtil.buildGCRequest(reqId);
+        KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+            .setReqId(reqId)
+            .setVer(s.ver)
+            .setKvRangeId(s.id)
+            .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(input).build())
+            .build()).join();
+        assertEquals(reply.getReqId(), reqId);
+        assertEquals(reply.getCode(), ReplyCode.Ok);
+        RetainServiceRWCoProcOutput output = reply.getRwCoProcResult().getRetainService();
+        assertTrue(output.hasGc());
+        assertEquals(output.getGc().getReqId(), reqId);
+        return output.getGc();
     }
 
     protected void clearMessage(String tenantId, String topic) {

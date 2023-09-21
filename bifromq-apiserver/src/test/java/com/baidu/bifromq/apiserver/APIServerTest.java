@@ -56,7 +56,7 @@ public class APIServerTest extends MockableTest {
     private IRetainClient retainClient;
     private ISettingProvider settingProvider = Setting::current;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setup() {
         super.setup();
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
@@ -67,7 +67,7 @@ public class APIServerTest extends MockableTest {
         apiServer.start();
     }
 
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void teardown() {
         super.teardown();
         apiServer.shutdown();

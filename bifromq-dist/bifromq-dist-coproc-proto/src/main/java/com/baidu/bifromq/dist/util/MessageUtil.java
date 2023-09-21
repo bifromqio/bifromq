@@ -20,7 +20,9 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 public class MessageUtil {
 
     public static DistServiceROCoProcInput buildBatchDistRequest(BatchDistRequest request) {
-        return DistServiceROCoProcInput.newBuilder().setBatchDist(request).build();
+        return DistServiceROCoProcInput.newBuilder()
+            .setBatchDist(request)
+            .build();
     }
 
     public static DistServiceROCoProcInput buildCollectMetricsRequest(long reqId) {

@@ -31,6 +31,7 @@ import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -79,7 +80,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         ArgumentCaptor<Long> reqIdCap = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<String> topicCap = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<QoS> qosCap = ArgumentCaptor.forClass(QoS.class);
-        ArgumentCaptor<ByteBuffer> payloadCap = ArgumentCaptor.forClass(ByteBuffer.class);
+        ArgumentCaptor<ByteString> payloadCap = ArgumentCaptor.forClass(ByteString.class);
         ArgumentCaptor<Integer> expiryCap = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
         verify(distClient).pub(reqIdCap.capture(), topicCap.capture(), qosCap.capture(), payloadCap.capture(),
@@ -89,7 +90,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         ClientInfo killer = killerCap.getValue();
         assertEquals(killer.getTenantId(), tenantId);
         assertEquals(qosCap.getValue(), QoS.AT_MOST_ONCE);
-        assertEquals(payloadCap.getValue(), content.nioBuffer());
+        assertEquals(payloadCap.getValue(), ByteString.copyFrom(content.nioBuffer()));
         assertEquals(expiryCap.getValue(), Integer.MAX_VALUE);
         assertEquals(killer.getType(), req.headers().get(HEADER_CLIENT_TYPE.header));
         assertEquals(killer.getMetadataCount(), 1);

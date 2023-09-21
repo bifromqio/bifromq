@@ -1,0 +1,45 @@
+syntax = "proto3";
+import "distservice/DistCoProc.proto";
+import "inboxservice/InboxCoProc.proto";
+import "retainservice/RetainCoProc.proto";
+package basekv;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.store.proto";
+option optimize_for = SPEED;
+
+message ROCoProcInput{
+  oneof Kind{
+    bytes raw = 1;
+    distservice.DistServiceROCoProcInput distService = 2;
+    inboxservice.InboxServiceROCoProcInput inboxService = 3;
+    retainservice.RetainServiceROCoProcInput retainService = 4;
+  }
+}
+
+message ROCoProcOutput{
+  oneof Kind{
+    bytes raw = 1;
+    distservice.DistServiceROCoProcOutput distService = 2;
+    inboxservice.InboxServiceROCoProcOutput inboxService = 3;
+    retainservice.RetainServiceROCoProcOutput retainService = 4;
+  }
+}
+
+message RWCoProcInput{
+  oneof Kind{
+    bytes raw = 1;
+    distservice.DistServiceRWCoProcInput distService = 2;
+    inboxservice.InboxServiceRWCoProcInput inboxService = 3;
+    retainservice.RetainServiceRWCoProcInput retainService = 4;
+  }
+}
+
+message RWCoProcOutput{
+  oneof Kind{
+    bytes raw = 1;
+    distservice.DistServiceRWCoProcOutput distService = 2;
+    inboxservice.InboxServiceRWCoProcOutput inboxService = 3;
+    retainservice.RetainServiceRWCoProcOutput retainService = 4;
+  }
+}

@@ -75,6 +75,7 @@ import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -318,14 +319,14 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockDistDist(boolean success) {
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class)))
             .thenReturn(success ? CompletableFuture.completedFuture(null) :
                 CompletableFuture.failedFuture(new RuntimeException("Mock error")));
     }
 
     protected void mockDistDrop() {
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class)))
             .thenReturn(CompletableFuture.failedFuture(new ExceedLimitException("Mock exceed limit exception")));
     }
@@ -358,7 +359,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockRetainPipeline(RetainReply.Result result) {
-        when(retainClient.retain(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(retainClient.retain(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(result).build()));
     }

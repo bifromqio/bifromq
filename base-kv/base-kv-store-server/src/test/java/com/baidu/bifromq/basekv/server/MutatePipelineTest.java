@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Put;
@@ -23,17 +23,18 @@ import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.ServerCallStreamObserver;
 import java.util.concurrent.CompletableFuture;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class MutatePipelineTest {
     @Mock
@@ -42,6 +43,7 @@ public class MutatePipelineTest {
     @Mock
     private ServerCallStreamObserver streamObserver;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -104,7 +106,7 @@ public class MutatePipelineTest {
     public void mutateCoProc() {
         MutatePipeline pipeline = new MutatePipeline(rangeStore, streamObserver);
         KVRangeId rangeId = KVRangeIdUtil.generate();
-        ByteString mutateCoProcInput = ByteString.copyFromUtf8("mutate");
+        RWCoProcInput mutateCoProcInput = RWCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("mutate")).build();
         KVRangeRWRequest mutateRequest = KVRangeRWRequest.newBuilder()
             .setReqId(1)
             .setVer(1)
@@ -113,13 +115,13 @@ public class MutatePipelineTest {
             .build();
 
         when(rangeStore.mutateCoProc(1, rangeId, mutateCoProcInput)).thenReturn(
-            CompletableFuture.completedFuture(ByteString.empty()));
+            CompletableFuture.completedFuture(RWCoProcOutput.newBuilder().setRaw(ByteString.empty()).build()));
 
         KVRangeRWReply mutateReply = pipeline.handleRequest("_", mutateRequest).join();
 
         assertEquals(mutateReply.getReqId(), 1);
         assertEquals(mutateReply.getCode(), ReplyCode.Ok);
-        assertTrue(mutateReply.getRwCoProcResult().isEmpty());
+        assertTrue(mutateReply.getRwCoProcResult().getRaw().isEmpty());
     }
 
     @Test

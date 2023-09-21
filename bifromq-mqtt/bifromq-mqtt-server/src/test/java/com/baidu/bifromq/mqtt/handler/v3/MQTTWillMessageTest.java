@@ -36,6 +36,7 @@ import static org.mockito.Mockito.verify;
 import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -106,7 +107,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(3, CLIENT_CONNECTED, IDLE, PUB_ACTION_DISALLOW);
-        verify(distClient, times(0)).pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        verify(distClient, times(0)).pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class));
     }
 

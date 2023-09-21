@@ -79,6 +79,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.VerUtil;
@@ -465,7 +469,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletableFuture<ByteString> queryCoProc(long ver, ByteString query, boolean linearized) {
+    public CompletableFuture<ROCoProcOutput> queryCoProc(long ver, ROCoProcInput query, boolean linearized) {
         if (!isWorking()) {
             // treat un-opened range as not exist
             return CompletableFuture.failedFuture(
@@ -493,7 +497,7 @@ public class KVRange implements IKVRange {
     }
 
     @Override
-    public CompletableFuture<ByteString> mutateCoProc(long ver, ByteString mutate) {
+    public CompletableFuture<RWCoProcOutput> mutateCoProc(long ver, RWCoProcInput mutate) {
         return metricManager.recordMutateCoProc(() -> submitCommand(KVRangeCommand.newBuilder()
             .setVer(ver)
             .setTaskId(nextTaskId())
@@ -1230,7 +1234,7 @@ public class KVRange implements IKVRange {
                                         onDone.complete(() -> finishCommand(taskId, value.orElse(ByteString.EMPTY)));
                                     }
                                     case RWCOPROC -> {
-                                        Supplier<ByteString> outputSupplier = coProc.mutate(command.getRwCoProc(),
+                                        Supplier<RWCoProcOutput> outputSupplier = coProc.mutate(command.getRwCoProc(),
                                             rangeReader.kvReader(),
                                             rangeWriter.kvWriter());
                                         onDone.complete(() -> finishCommand(taskId, outputSupplier.get()));

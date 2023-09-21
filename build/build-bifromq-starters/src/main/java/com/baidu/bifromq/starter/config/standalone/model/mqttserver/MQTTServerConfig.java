@@ -35,7 +35,7 @@ public class MQTTServerConfig {
     private int defaultKeepAliveSec = 300;
     private int qos2ConfirmWindowSec = 5;
     private int bossELGThreads = 1;
-    private int workerELGThreads = EnvProvider.INSTANCE.availableProcessors();
+    private int workerELGThreads = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 2);
 
     @JsonSetter(nulls = Nulls.SKIP)
     private TCPListenerConfig tcpListener = new TCPListenerConfig();

@@ -27,16 +27,15 @@ import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.util.MessageUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
@@ -180,18 +179,15 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRoCoProcInput(MessageUtil.buildGCRequest(reqId, scopedInboxId, limit).toByteString())
+                .setRoCoProcInput(ROCoProcInput.newBuilder()
+                    .setInboxService(MessageUtil.buildGCRequest(reqId, scopedInboxId, limit))
+                    .build())
                 .build())
             .thenApply(v -> {
-                try {
-                    if (v.getCode() == ReplyCode.Ok) {
-                        return InboxServiceROCoProcOutput.parseFrom(v.getRoCoProcResult()).getGc()
-                            .getScopedInboxIdList();
-                    }
-                    throw new RuntimeException("BaseKV Query failed:" + v.getCode().name());
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
+                if (v.getCode() == ReplyCode.Ok) {
+                    return v.getRoCoProcResult().getInboxService().getGc().getScopedInboxIdList();
                 }
+                throw new RuntimeException("BaseKV Query failed:" + v.getCode().name());
             })
             .exceptionally(e -> {
                 log.error("[InboxGC] scan failed: serverId={}, rangeId={}, ver={}",
@@ -295,17 +291,15 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRoCoProcInput(buildCollectMetricsRequest(reqId).toByteString())
+                .setRoCoProcInput(ROCoProcInput.newBuilder()
+                    .setInboxService(buildCollectMetricsRequest(reqId))
+                    .build())
                 .build())
             .thenApply(reply -> {
                 log.debug("Range metrics collected: serverId={}, rangeId={}, ver={}",
                     leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
 
-                try {
-                    return InboxServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult()).getCollectedMetrics();
-                } catch (InvalidProtocolBufferException e) {
-                    throw new IllegalStateException("Unable to parse CollectMetricReply", e);
-                }
+                return reply.getRoCoProcResult().getInboxService().getCollectedMetrics();
             })
             .exceptionally(e -> {
                 log.error("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",

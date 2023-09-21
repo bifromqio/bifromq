@@ -30,6 +30,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
@@ -56,7 +60,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Clock;
 import java.util.LinkedList;
 import java.util.List;
@@ -82,40 +85,37 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     }
 
     @Override
-    public CompletableFuture<ByteString> query(ByteString input, IKVReader reader) {
-        try {
-            RetainServiceROCoProcInput coProcInput = RetainServiceROCoProcInput.parseFrom(input);
-            switch (coProcInput.getTypeCase()) {
-                case BATCHMATCH:
-                    return batchMatch(coProcInput.getBatchMatch(), reader)
-                        .thenApply(v -> RetainServiceROCoProcOutput.newBuilder()
-                            .setBatchMatch(v).build().toByteString());
-                case COLLECTMETRICS:
-                    return CompletableFuture.completedFuture(RetainServiceROCoProcOutput.newBuilder()
-                        .setCollectMetrics(collectMetrics(coProcInput.getCollectMetrics(), reader)).build()
-                        .toByteString());
-                default:
-                    log.error("Unknown co proc type {}", coProcInput.getTypeCase());
-                    return CompletableFuture.failedFuture(
-                        new IllegalStateException("Unknown co proc type " + coProcInput.getTypeCase()));
-
+    public CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader reader) {
+        RetainServiceROCoProcInput coProcInput = input.getRetainService();
+        return switch (coProcInput.getTypeCase()) {
+            case BATCHMATCH -> batchMatch(coProcInput.getBatchMatch(), reader)
+                .thenApply(v -> ROCoProcOutput.newBuilder()
+                    .setRetainService(RetainServiceROCoProcOutput.newBuilder()
+                        .setBatchMatch(v).build()).build());
+            case COLLECTMETRICS -> CompletableFuture.completedFuture(
+                ROCoProcOutput.newBuilder()
+                    .setRetainService(RetainServiceROCoProcOutput.newBuilder()
+                        .setCollectMetrics(collectMetrics(coProcInput.getCollectMetrics(), reader))
+                        .build())
+                    .build());
+            default -> {
+                log.error("Unknown co proc type {}", coProcInput.getTypeCase());
+                yield CompletableFuture.failedFuture(
+                    new IllegalStateException("Unknown co proc type " + coProcInput.getTypeCase()));
             }
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Unable to parse ro co-proc", e);
-            return CompletableFuture.failedFuture(new IllegalStateException("Unable to parse ro co-proc", e));
-        }
+        };
     }
 
     @SneakyThrows
     @Override
-    public Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter writer) {
-        RetainServiceRWCoProcInput coProcInput = RetainServiceRWCoProcInput.parseFrom(input);
-        final ByteString output = switch (coProcInput.getTypeCase()) {
-            case BATCHRETAIN -> RetainServiceRWCoProcOutput.newBuilder()
-                .setBatchRetain(batchRetain(coProcInput.getBatchRetain(), reader, writer)).build()
-                .toByteString();
-            case GC -> RetainServiceRWCoProcOutput.newBuilder()
-                .setGc(gc(coProcInput.getGc(), reader, writer)).build().toByteString();
+    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
+        RetainServiceRWCoProcInput coProcInput = input.getRetainService();
+        final RWCoProcOutput output = switch (coProcInput.getTypeCase()) {
+            case BATCHRETAIN -> RWCoProcOutput.newBuilder().setRetainService(RetainServiceRWCoProcOutput.newBuilder()
+                    .setBatchRetain(batchRetain(coProcInput.getBatchRetain(), reader, writer)).build())
+                .build();
+            case GC -> RWCoProcOutput.newBuilder().setRetainService(RetainServiceRWCoProcOutput.newBuilder()
+                .setGc(gc(coProcInput.getGc(), reader, writer)).build()).build();
             default -> {
                 log.error("Unknown co proc type {}", coProcInput.getTypeCase());
                 throw new IllegalStateException("Unknown co proc type " + coProcInput.getTypeCase());

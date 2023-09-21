@@ -27,6 +27,7 @@
 
     <modules>
         <module>bifromq-retain-client</module>
+        <module>bifromq-retain-coproc-proto</module>
         <module>bifromq-retain-rpc-definition</module>
         <module>bifromq-retain-store</module>
         <module>bifromq-retain-server</module>

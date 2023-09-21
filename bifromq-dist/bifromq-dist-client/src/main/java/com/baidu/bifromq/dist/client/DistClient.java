@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.dist.client;
 
-import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
-
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.RPCBluePrint;
@@ -27,8 +25,8 @@ import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -57,7 +55,7 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<Void> pub(long reqId, String topic, QoS qos, ByteBuffer payload,
+    public CompletableFuture<Void> pub(long reqId, String topic, QoS qos, ByteString payload,
                                        int expirySeconds, ClientInfo publisher) {
         long now = HLC.INST.getPhysical();
         long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE :
@@ -65,7 +63,7 @@ final class DistClient implements IDistClient {
         return reqScheduler.schedule(new DistServerCall(publisher, topic, Message.newBuilder()
             .setMessageId(reqId)
             .setPubQoS(qos)
-            .setPayload(unsafeWrap(payload))
+            .setPayload(payload)
             .setTimestamp(now)
             .setExpireTimestamp(expiry)
             .build()));

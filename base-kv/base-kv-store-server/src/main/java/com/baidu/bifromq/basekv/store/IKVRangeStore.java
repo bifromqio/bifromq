@@ -15,6 +15,10 @@ package com.baidu.bifromq.basekv.store;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Optional;
@@ -75,11 +79,11 @@ public interface IKVRangeStore {
 
     CompletionStage<Optional<ByteString>> get(long ver, KVRangeId id, ByteString key, boolean linearized);
 
-    CompletionStage<ByteString> queryCoProc(long ver, KVRangeId id, ByteString query, boolean linearized);
+    CompletionStage<ROCoProcOutput> queryCoProc(long ver, KVRangeId id, ROCoProcInput query, boolean linearized);
 
     CompletionStage<ByteString> put(long ver, KVRangeId id, ByteString key, ByteString value);
 
     CompletionStage<ByteString> delete(long ver, KVRangeId id, ByteString key);
 
-    CompletionStage<ByteString> mutateCoProc(long ver, KVRangeId id, ByteString mutate);
+    CompletionStage<RWCoProcOutput> mutateCoProc(long ver, KVRangeId id, RWCoProcInput mutate);
 }

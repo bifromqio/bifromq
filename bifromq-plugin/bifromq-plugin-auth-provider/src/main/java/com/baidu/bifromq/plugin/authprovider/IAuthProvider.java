@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.plugin.authprovider;
 
+
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;

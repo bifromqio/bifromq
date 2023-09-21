@@ -13,7 +13,10 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.google.protobuf.ByteString;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -24,7 +27,7 @@ public interface IKVRangeCoProc {
      * @param input
      * @return
      */
-    CompletableFuture<ByteString> query(ByteString input, IKVReader client);
+    CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader client);
 
     /**
      * Execute a mutation co-proc, returns a supplier of mutation output. The supplier will be called after mutation is
@@ -35,7 +38,7 @@ public interface IKVRangeCoProc {
      * @param writer
      * @return
      */
-    Supplier<ByteString> mutate(ByteString input, IKVReader reader, IKVWriter writer);
+    Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer);
 
     /**
      * Close the coproc instance, and release all related resources

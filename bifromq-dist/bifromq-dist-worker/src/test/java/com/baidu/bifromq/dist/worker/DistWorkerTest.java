@@ -40,21 +40,21 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
-import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
+import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
-import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
-import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -68,11 +68,13 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -92,6 +94,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 @Slf4j
 public abstract class DistWorkerTest {
@@ -267,91 +270,79 @@ public abstract class DistWorkerTest {
 
     protected BatchMatchReply.Result sub(String tenantId, String topicFilter, QoS subQoS,
                                          int subBroker, String inboxId, String delivererKey) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
-            KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
-            String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
-            DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
-                .setBatchMatch(BatchMatchRequest.newBuilder()
-                    .setReqId(reqId)
-                    .putScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter), subQoS)
-                    .build())
-                .build();
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+        long reqId = ThreadLocalRandom.current().nextInt();
+        String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
+        KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
+        String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
+        DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
+            .setBatchMatch(BatchMatchRequest.newBuilder()
                 .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            BatchMatchReply batchMatchReply =
-                DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchMatch();
-            assertEquals(batchMatchReply.getReqId(), reqId);
-            return batchMatchReply.getResultsMap().get(scopedTopicFilter);
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
+                .putScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter), subQoS)
+                .build())
+            .build();
+        KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+            .setReqId(reqId)
+            .setVer(s.ver)
+            .setKvRangeId(s.id)
+            .setRwCoProc(RWCoProcInput.newBuilder().setDistService(input).build())
+            .build()).join();
+        assertEquals(reply.getReqId(), reqId);
+        assertEquals(reply.getCode(), ReplyCode.Ok);
+        BatchMatchReply batchMatchReply = reply.getRwCoProcResult().getDistService().getBatchMatch();
+        assertEquals(batchMatchReply.getReqId(), reqId);
+        return batchMatchReply.getResultsMap().get(scopedTopicFilter);
     }
 
     protected BatchUnmatchReply.Result unsub(String tenantId, String topicFilter, int subBroker, String inboxId,
                                              String delivererKey) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
-            KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
-            String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
-            DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
-                .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
-                    .setReqId(reqId)
-                    .addScopedTopicFilter(scopedTopicFilter)
-                    .build()).build();
-            KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+        long reqId = ThreadLocalRandom.current().nextInt();
+        String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
+        KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
+        String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
+        DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
+            .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
                 .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRwCoProc(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            BatchUnmatchReply batchUnmatchReply =
-                DistServiceRWCoProcOutput.parseFrom(reply.getRwCoProcResult()).getBatchUnmatch();
-            assertEquals(batchUnmatchReply.getReqId(), reqId);
-            return batchUnmatchReply.getResultsMap().get(scopedTopicFilter);
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
+                .addScopedTopicFilter(scopedTopicFilter)
+                .build()).build();
+        KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
+            .setReqId(reqId)
+            .setVer(s.ver)
+            .setKvRangeId(s.id)
+            .setRwCoProc(RWCoProcInput.newBuilder().setDistService(input).build())
+            .build()).join();
+        assertEquals(reply.getReqId(), reqId);
+        assertEquals(reply.getCode(), ReplyCode.Ok);
+        BatchUnmatchReply batchUnmatchReply = reply.getRwCoProcResult().getDistService().getBatchUnmatch();
+        assertEquals(batchUnmatchReply.getReqId(), reqId);
+        return batchUnmatchReply.getResultsMap().get(scopedTopicFilter);
     }
 
     protected BatchDistReply dist(String tenantId, List<TopicMessagePack> msgs, String orderKey) {
-        try {
-            long reqId = ThreadLocalRandom.current().nextInt();
-            KVRangeSetting s = storeClient.findByKey(EntityUtil.matchRecordKeyPrefix(tenantId)).get();
-            BatchDistRequest request = BatchDistRequest.newBuilder()
-                .setReqId(reqId)
-                .addDistPack(DistPack.newBuilder()
-                    .setTenantId(tenantId)
-                    .addAllMsgPack(msgs)
-                    .build())
-                .setOrderKey(orderKey)
-                .build();
-            DistServiceROCoProcInput input = MessageUtil.buildBatchDistRequest(request);
-            KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(s.ver)
-                .setKvRangeId(s.id)
-                .setRoCoProcInput(input.toByteString())
-                .build()).join();
-            assertEquals(reply.getReqId(), reqId);
-            assertEquals(reply.getCode(), ReplyCode.Ok);
-            DistServiceROCoProcOutput output = DistServiceROCoProcOutput.parseFrom(reply.getRoCoProcResult());
-            assertTrue(output.hasBatchDist());
-            assertEquals(output.getBatchDist().getReqId(), reqId);
-            return output.getBatchDist();
-        } catch (InvalidProtocolBufferException e) {
-            throw new AssertionError(e);
-        }
+        long reqId = ThreadLocalRandom.current().nextInt();
+        KVRangeSetting s = storeClient.findByKey(EntityUtil.matchRecordKeyPrefix(tenantId)).get();
+        BatchDistRequest request = BatchDistRequest.newBuilder()
+            .setReqId(reqId)
+            .addDistPack(DistPack.newBuilder()
+                .setTenantId(tenantId)
+                .addAllMsgPack(msgs)
+                .build())
+            .setOrderKey(orderKey)
+            .build();
+        ROCoProcInput input = ROCoProcInput.newBuilder()
+            .setDistService(MessageUtil.buildBatchDistRequest(request))
+            .build();
+        KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
+            .setReqId(reqId)
+            .setVer(s.ver)
+            .setKvRangeId(s.id)
+            .setRoCoProcInput(input)
+            .build()).join();
+        assertEquals(reply.getReqId(), reqId);
+        assertEquals(reply.getCode(), ReplyCode.Ok);
+        DistServiceROCoProcOutput output = reply.getRoCoProcResult().getDistService();
+        assertTrue(output.hasBatchDist());
+        assertEquals(output.getBatchDist().getReqId(), reqId);
+        return output.getBatchDist();
     }
 
     protected BatchDistReply dist(String tenantId, QoS qos, String topic, ByteString payload, String orderKey) {

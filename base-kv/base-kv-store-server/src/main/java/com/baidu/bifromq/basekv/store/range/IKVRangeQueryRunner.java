@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -23,7 +25,7 @@ public interface IKVRangeQueryRunner {
 
     CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized);
 
-    CompletableFuture<ByteString> queryCoProc(long ver, ByteString query, boolean linearized);
+    CompletableFuture<ROCoProcOutput> queryCoProc(long ver, ROCoProcInput query, boolean linearized);
 
     void close();
 }

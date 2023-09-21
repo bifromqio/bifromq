@@ -51,7 +51,8 @@ public enum BifroMQSysProp {
     INBOX_LOAD_TRACKING_SECONDS("inbox_store_load_tracking_seconds", 5, IntegerParser.POSITIVE),
     INBOX_STORE_VOTER_COUNT("inbox_store_replica_voter_count", 1, IntegerParser.POSITIVE),
     INBOX_STORE_RECOVERY_TIMEOUT_MILLIS("inbox_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
-    MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server", 4, IntegerParser.POSITIVE),
+    MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server",
+        Math.max(2, Runtime.getRuntime().availableProcessors() / 8), IntegerParser.POSITIVE),
     RETAIN_STORE_VOTER_COUNT("retain_store_replica_voter_count", 3, IntegerParser.POSITIVE),
     RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS("retain_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE);
 

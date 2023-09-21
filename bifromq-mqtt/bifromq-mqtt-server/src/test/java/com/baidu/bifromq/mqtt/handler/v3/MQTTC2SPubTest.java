@@ -45,12 +45,12 @@ import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttMessageType;
 import io.netty.handler.codec.mqtt.MqttPubAckMessage;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -67,7 +67,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         verifyEvent(1, CLIENT_CONNECTED);
-        verify(distClient, times(1)).pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        verify(distClient, times(1)).pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class));
     }
 
@@ -154,7 +154,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         connectAndVerify(true);
         mockAuthCheck(true);
         CompletableFuture<Void> distResult = new CompletableFuture<>();
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -227,7 +227,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         connectAndVerify(true);
         mockAuthCheck(true);
         CompletableFuture<Void> distResult = new CompletableFuture<>();
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteBuffer.class), anyInt(),
+        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class))).thenReturn(distResult);
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
 

@@ -22,6 +22,8 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
@@ -69,7 +71,7 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     }
 
     @Override
-    public CompletableFuture<ByteString> queryCoProc(long ver, ByteString query, boolean linearized) {
+    public CompletableFuture<ROCoProcOutput> queryCoProc(long ver, ROCoProcInput query, boolean linearized) {
         return submit(ver, rangeReader -> coProc.query(query, rangeReader.kvReader())
             .exceptionally(e -> {
                 throw new InternalError("Query CoProc failed", e);

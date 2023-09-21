@@ -30,6 +30,8 @@ import com.baidu.bifromq.basekv.proto.StoreMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -294,7 +296,9 @@ public class KVRangeStoreTestCluster {
     private void queryCoProc(String storeId, KVRangeId kvRangeId, ByteString coProc,
                              CompletableFuture<ByteString> onDone) {
         checkStore(storeId);
-        rangeStoreMap.get(storeId).queryCoProc(kvRangeSetting(kvRangeId).ver, kvRangeId, coProc, true)
+        rangeStoreMap.get(storeId).queryCoProc(kvRangeSetting(kvRangeId).ver, kvRangeId, ROCoProcInput.newBuilder()
+                .setRaw(coProc)
+                .build(), true)
             .whenComplete((v, e) -> {
                 if (e != null) {
                     if (shouldRetry(e)) {
@@ -303,7 +307,7 @@ public class KVRangeStoreTestCluster {
                         onDone.completeExceptionally(e);
                     }
                 } else {
-                    onDone.complete(v);
+                    onDone.complete(v.getRaw());
                 }
             });
     }
@@ -367,7 +371,8 @@ public class KVRangeStoreTestCluster {
     private void mutateCoProc(String storeId, KVRangeId kvRangeId, ByteString key,
                               CompletableFuture<ByteString> onDone) {
         checkStore(storeId);
-        rangeStoreMap.get(storeId).mutateCoProc(kvRangeSetting(kvRangeId).ver, kvRangeId, key)
+        rangeStoreMap.get(storeId)
+            .mutateCoProc(kvRangeSetting(kvRangeId).ver, kvRangeId, RWCoProcInput.newBuilder().setRaw(key).build())
             .whenComplete((v, e) -> {
                 if (e != null) {
                     if (shouldRetry(e)) {
@@ -376,7 +381,7 @@ public class KVRangeStoreTestCluster {
                         onDone.completeExceptionally(e);
                     }
                 } else {
-                    onDone.complete(v);
+                    onDone.complete(v.getRaw());
                 }
             });
     }

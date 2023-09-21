@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttChannelLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttDisconnectCount;
@@ -117,6 +118,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
+import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -224,7 +226,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             .lastWill(willMessage != null ? new ClientConnected.WillInfo().topic(willMessage.topic)
                 .isRetain(willMessage.retain)
                 .qos(willMessage.qos)
-                .payload(willMessage.payload.nioBuffer()) : null));
+                .payload(willMessage.payload.asReadOnlyByteBuffer()) : null));
     }
 
     @Override
@@ -1229,7 +1231,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         tenantMeter.recordSummary(MqttQoS0IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Void> distTask = cancelOnInactive(
-            sessionCtx.distClient.pub(reqId, topic, AT_MOST_ONCE, payload.duplicate().nioBuffer(),
+            sessionCtx.distClient.pub(reqId, topic, AT_MOST_ONCE, toRetainedByteBuffer(payload),
                     Integer.MAX_VALUE, clientInfo)
                 .handleAsync((v, e) -> {
                     if (e != null) {
@@ -1260,7 +1262,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         tenantMeter.recordSummary(MqttQoS1IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Boolean> distTask = cancelOnInactive(
-            sessionCtx.distClient.pub(reqId, topic, AT_LEAST_ONCE, payload.duplicate().nioBuffer(),
+            sessionCtx.distClient.pub(reqId, topic, AT_LEAST_ONCE, toRetainedByteBuffer(payload),
                     Integer.MAX_VALUE, clientInfo)
                 .handleAsync((v, e) -> {
                     if (e != null) {
@@ -1293,7 +1295,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         tenantMeter.recordSummary(MqttQoS2IngressBytes,
             MQTTMessageSizer.sizePublishMsg(topic, payload.readableBytes()));
         CompletableFuture<Boolean> distTask = cancelOnInactive(
-            sessionCtx.distClient.pub(reqId, topic, EXACTLY_ONCE, payload.duplicate().nioBuffer(),
+            sessionCtx.distClient.pub(reqId, topic, EXACTLY_ONCE, toRetainedByteBuffer(payload),
                     Integer.MAX_VALUE, clientInfo)
                 .handleAsync((v, e) -> {
                     if (e != null) {
@@ -1336,8 +1338,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     }
 
     private CompletableFuture<Void> distWillMessage(long reqId, WillMessage willMessage) {
-        return sessionCtx.distClient.pub(reqId, willMessage.topic, willMessage.qos,
-                willMessage.payload.duplicate().nioBuffer(), Integer.MAX_VALUE, clientInfo)
+        return sessionCtx.distClient.pub(reqId, willMessage.topic, willMessage.qos, willMessage.payload,
+                Integer.MAX_VALUE, clientInfo)
             .handleAsync((v, e) -> {
                 if (e != null) {
                     eventCollector.report(getLocal(WillDistError.class)
@@ -1345,14 +1347,14 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                         .reqId(reqId)
                         .topic(willMessage.topic)
                         .qos(willMessage.qos)
-                        .size(willMessage.payload.readableBytes()));
+                        .size(willMessage.payload.size()));
                 } else {
                     eventCollector.report(getLocal(WillDisted.class)
                         .clientInfo(clientInfo)
                         .reqId(reqId)
                         .topic(willMessage.topic)
                         .qos(willMessage.qos)
-                        .size(willMessage.payload.readableBytes()));
+                        .size(willMessage.payload.size()));
                 }
                 return null;
             }, ctx.channel().eventLoop());
@@ -1371,7 +1373,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     reqId,
                     topic,
                     qos,
-                    payload.duplicate().nioBuffer(),
+                    toRetainedByteBuffer(payload),
                     Integer.MAX_VALUE,
                     clientInfo)
                 .thenApplyAsync(v -> {
@@ -1421,13 +1423,13 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         }
         String topic = willMessage.topic;
         QoS qos = willMessage.qos;
-        ByteBuf payload = willMessage.payload;
+        ByteString payload = willMessage.payload;
 
         return sessionCtx.retainClient.retain(
                 reqId,
                 topic,
                 willMessage.qos,
-                payload.duplicate().nioBuffer(),
+                payload,
                 Integer.MAX_VALUE,
                 clientInfo)
             .handleAsync((v, e) -> {
@@ -1437,7 +1439,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                         .topic(topic)
                         .isLastWill(true)
                         .qos(qos)
-                        .size(payload.readableBytes())
+                        .size(payload.size())
                         .clientInfo(clientInfo));
                     case CLEARED -> eventCollector.report(getLocal(RetainMsgCleared.class)
                         .reqId(v.getReqId())
@@ -1450,8 +1452,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                         .topic(topic)
                         .isLastWill(true)
                         .qos(qos)
-                        .payload(payload.duplicate().nioBuffer())
-                        .size(payload.readableBytes()));
+                        .payload(payload.asReadOnlyByteBuffer())
+                        .size(payload.size()));
                 }
                 return null;
             }, ctx.channel().eventLoop());
@@ -1621,7 +1623,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         public final String topic;
         public final QoS qos;
         public final boolean retain;
-        public final ByteBuf payload;
+        public final ByteString payload;
     }
 
     @Builder
