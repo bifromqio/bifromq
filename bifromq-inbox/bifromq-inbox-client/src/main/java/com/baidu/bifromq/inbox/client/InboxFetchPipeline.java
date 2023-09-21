@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.inbox.client;
 
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
+import static java.util.Collections.singletonMap;
+
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -23,7 +26,10 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.type.QoS;
 import io.reactivex.rxjava3.annotations.NonNull;
+import java.lang.ref.Cleaner;
+import java.lang.ref.Cleaner.Cleanable;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -31,17 +37,21 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxFetchPipeline {
+    private static final Cleaner CLEANER = Cleaner.create();
+
     private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream;
     private final String tenantId;
     private final IRPCClient rpcClient;
     private final Map<String, Consumer<Fetched>> fetcherMap = new ConcurrentHashMap<>();
+    private final Cleanable cleanable;
 
-    InboxFetchPipeline(String tenantId,
-                       IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream,
-                       IRPCClient rpcClient) {
+    InboxFetchPipeline(String tenantId, String delivererKey, IRPCClient rpcClient) {
         this.tenantId = tenantId;
         this.rpcClient = rpcClient;
-        this.messageStream = messageStream;
+        this.messageStream = rpcClient.createMessageStream(tenantId, null, delivererKey,
+            singletonMap(PIPELINE_ATTR_KEY_ID, UUID.randomUUID().toString()),
+            InboxServiceGrpc.getFetchInboxMethod());
+        this.cleanable = CLEANER.register(this, new PipelineCloseAction(messageStream));
         new FetchObserver(messageStream, fetcherMap).observe();
     }
 
@@ -86,6 +96,12 @@ class InboxFetchPipeline {
             });
     }
 
+    public void close() {
+        if (cleanable != null) {
+            cleanable.clean();
+        }
+    }
+
     private static class FetchObserver {
         private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> stream;
         private final Map<String, Consumer<Fetched>> fetcherMap;
@@ -128,6 +144,19 @@ class InboxFetchPipeline {
                         }
                     });
             }
+        }
+    }
+
+    private static class PipelineCloseAction implements Runnable {
+        private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream;
+
+        private PipelineCloseAction(IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream) {
+            this.messageStream = messageStream;
+        }
+
+        @Override
+        public void run() {
+            messageStream.close();
         }
     }
 }

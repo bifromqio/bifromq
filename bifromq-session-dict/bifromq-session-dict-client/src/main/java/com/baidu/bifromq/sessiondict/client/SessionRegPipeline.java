@@ -14,11 +14,16 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
+import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.observers.DisposableObserver;
+import java.lang.ref.Cleaner;
+import java.lang.ref.Cleaner.Cleanable;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -26,13 +31,16 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class SessionRegPipeline {
+    private static final Cleaner CLEANER = Cleaner.create();
 
     private final IRPCClient.IMessageStream<Quit, Session> messageStream;
-    private final Map<ClientInfo, Consumer<Quit>> sessions;
+    private final Map<ClientInfo, Consumer<Quit>> sessions = new ConcurrentHashMap<>();
+    private final Cleanable cleanable;
 
-    public SessionRegPipeline(IRPCClient.IMessageStream<Quit, Session> messageStream) {
-        this.messageStream = messageStream;
-        this.sessions = new ConcurrentHashMap<>();
+    public SessionRegPipeline(String registerKey, IRPCClient rpcClient) {
+        this.messageStream = rpcClient.createMessageStream("", null, registerKey,
+            Collections.emptyMap(), SessionDictServiceGrpc.getDictMethod());
+        this.cleanable = CLEANER.register(this, new PipelineCloseAction(messageStream));
         new QuitObserver(messageStream, sessions).initObserve();
     }
 
@@ -50,6 +58,12 @@ public class SessionRegPipeline {
 
     public void unReg(ClientInfo owner) {
         sessions.remove(owner);
+    }
+
+    public void close() {
+        if (cleanable != null) {
+            cleanable.clean();
+        }
     }
 
     private static class QuitObserver {
@@ -94,6 +108,19 @@ public class SessionRegPipeline {
                         }
                     });
             }
+        }
+    }
+
+    private static class PipelineCloseAction implements Runnable {
+        private final IMessageStream<Quit, Session> messageStream;
+
+        private PipelineCloseAction(IMessageStream<Quit, Session> messageStream) {
+            this.messageStream = messageStream;
+        }
+
+        @Override
+        public void run() {
+            messageStream.close();
         }
     }
 }
