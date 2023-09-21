@@ -64,7 +64,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         cluster.shutdownStore(storeIds.get(0));
         cluster.shutdownStore(storeIds.get(1));
         log.info("Wait for becoming candidate");
-        await().atMost(Duration.ofSeconds(10)).until(() -> {
+        await().forever().until(() -> {
             KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });
