@@ -33,7 +33,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
@@ -58,11 +57,6 @@ final class InboxClient implements IInboxClient {
         fetchPipelineCache = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
-            .removalListener((RemovalListener<FetchPipelineKey, InboxFetchPipeline>) (key, value, cause) -> {
-                if (value != null) {
-                    value.close();
-                }
-            })
             .build(key -> new InboxFetchPipeline(key.tenantId, key.delivererKey, rpcClient));
     }
 

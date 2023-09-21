@@ -16,7 +16,10 @@ package com.baidu.bifromq.sessiondict.client;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,6 +30,7 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
+import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
@@ -47,8 +51,12 @@ public class SessionRegisterTest {
     @Mock
     private Consumer<ClientInfo> onKick;
     @Mock
-    private IRPCClient.IMessageStream<Quit, Session> regPipeline;
+    private IRPCClient rpcClient;
+    @Mock
+    private IRPCClient.IMessageStream<Quit, Session> messageStream;
+    private SessionRegPipeline regPipeline;
     private final String tenantId = "tenantId";
+    private final String registryKey = "registryKey";
     private final String userId = "userId";
     private final String clientId = "clientId";
     private final ClientInfo owner = ClientInfo.newBuilder()
@@ -62,10 +70,13 @@ public class SessionRegisterTest {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        when(regPipeline.msg()).thenAnswer((Answer<Observable<Quit>>) invocation -> {
+        when(rpcClient.createMessageStream(eq(""), any(), eq(registryKey), anyMap(),
+            eq(SessionDictServiceGrpc.getDictMethod()))).thenReturn(messageStream);
+        when(messageStream.msg()).thenAnswer((Answer<Observable<Quit>>) invocation -> {
             quitSubject.set(PublishSubject.create());
             return quitSubject.get();
         });
+        regPipeline = new SessionRegPipeline(registryKey, rpcClient);
     }
 
     @AfterMethod
@@ -76,36 +87,36 @@ public class SessionRegisterTest {
 
     @Test
     public void regAfterInit() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline).ack(argCaptor.capture());
+        verify(messageStream).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
         assertTrue(argCaptor.getValue().getKeep());
     }
 
     @Test
     public void reRegAfterError() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         quitSubject.get().onError(new RuntimeException("Test Exception"));
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline, times(2)).ack(argCaptor.capture());
+        verify(messageStream, times(2)).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
         assertTrue(argCaptor.getValue().getKeep());
     }
 
     @Test
     public void reRegAfterComplete() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         quitSubject.get().onComplete();
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline, times(2)).ack(argCaptor.capture());
+        verify(messageStream, times(2)).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
         assertTrue(argCaptor.getValue().getKeep());
     }
 
     @Test
     public void quitAndStop() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner)
@@ -119,7 +130,7 @@ public class SessionRegisterTest {
 
     @Test
     public void ignoreQuit() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegister(owner, onKick, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner.toBuilder().putMetadata(MQTT_CLIENT_ID_KEY, "FakeClient").build())
@@ -127,7 +138,7 @@ public class SessionRegisterTest {
             .build();
         quitSubject.get().onNext(quit);
         verify(onKick, times(0)).accept(any());
-        verify(regPipeline, times(1)).ack(any());
+        verify(messageStream, times(1)).ack(any());
     }
 
     @Test
@@ -135,9 +146,33 @@ public class SessionRegisterTest {
         SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
         register.stop();
         ArgumentCaptor<Session> sessionCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(regPipeline, times(2)).ack(sessionCaptor.capture());
+        verify(messageStream, times(2)).ack(sessionCaptor.capture());
         Session session = sessionCaptor.getAllValues().get(1);
         assertEquals(session.getOwner(), owner);
         assertFalse(session.getKeep());
+    }
+
+    @Test
+    public void registerGC() throws InterruptedException {
+        SessionRegister register = new SessionRegister(owner, onKick, new SessionRegPipeline(registryKey, rpcClient));
+        register.stop();
+        register = null;
+        System.gc();
+        Thread.sleep(10);
+        await().until(() -> {
+            verify(messageStream, times(1)).close();
+            return true;
+        });
+    }
+
+    @Test
+    public void regPipelineClose() throws InterruptedException {
+        SessionRegPipeline sessionRegPipeline = new SessionRegPipeline(registryKey, rpcClient);
+        sessionRegPipeline.close();
+        Thread.sleep(10);
+        await().until(() -> {
+            verify(messageStream, times(1)).close();
+            return true;
+        });
     }
 }

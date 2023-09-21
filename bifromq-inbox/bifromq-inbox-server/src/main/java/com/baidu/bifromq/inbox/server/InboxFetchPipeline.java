@@ -71,20 +71,24 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                 String inboxId = fetchHint.getInboxId();
                 log.trace("Got hint: tenantId={}, inboxId={}\n{}", tenantId, inboxId, fetchHint);
                 ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
-                FetchState fetchState = inboxFetchStates.asMap().compute(scopedInboxId, (k, v) -> {
-                    if (v == null) {
-                        v = new FetchState(fetchHint.getIncarnation());
-                    } else if (v.incarnation.get() < fetchHint.getIncarnation()) {
-                        v.reset(fetchHint.getIncarnation());
-                    }
-                    v.lastFetchQoS0Seq.set(fetchHint.getLastFetchQoS0Seq());
-                    v.lastFetchQoS1Seq.set(fetchHint.getLastFetchQoS1Seq());
-                    v.lastFetchQoS2Seq.set(fetchHint.getLastFetchQoS2Seq());
-                    v.downStreamCapacity.set(Math.max(0, fetchHint.getCapacity()));
-                    return v;
-                });
-                log.trace("Fetch state update: tenantId={}, inbox={}\n{}", tenantId, inboxId, fetchState);
-                fetch(scopedInboxId, fetchState);
+                if (fetchHint.getCapacity() < 0) {
+                    inboxFetchStates.invalidate(scopedInboxId);
+                } else {
+                    FetchState fetchState = inboxFetchStates.asMap().compute(scopedInboxId, (k, v) -> {
+                        if (v == null) {
+                            v = new FetchState(fetchHint.getIncarnation());
+                        } else if (v.incarnation.get() < fetchHint.getIncarnation()) {
+                            v.reset(fetchHint.getIncarnation());
+                        }
+                        v.lastFetchQoS0Seq.set(fetchHint.getLastFetchQoS0Seq());
+                        v.lastFetchQoS1Seq.set(fetchHint.getLastFetchQoS1Seq());
+                        v.lastFetchQoS2Seq.set(fetchHint.getLastFetchQoS2Seq());
+                        v.downStreamCapacity.set(Math.max(0, fetchHint.getCapacity()));
+                        return v;
+                    });
+                    log.trace("Fetch state update: tenantId={}, inbox={}\n{}", tenantId, inboxId, fetchState);
+                    fetch(scopedInboxId, fetchState);
+                }
             });
     }
 

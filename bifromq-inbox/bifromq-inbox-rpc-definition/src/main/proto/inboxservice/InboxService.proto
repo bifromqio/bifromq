@@ -140,14 +140,11 @@ message SendReply {
   repeated SendResult result = 2;
 }
 
-message FetchHint {
-  uint32 capacity = 1;
-}
 
 message InboxFetchHint {
   uint64 incarnation = 1;
   string inboxId = 2;
-  uint32 capacity = 3;
+  int32 capacity = 3;
   uint64 lastFetchQoS0Seq = 4;
   uint64 lastFetchQoS1Seq = 5;
   uint64 lastFetchQoS2Seq = 6;

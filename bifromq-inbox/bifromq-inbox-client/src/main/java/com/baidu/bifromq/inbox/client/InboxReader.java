@@ -81,6 +81,8 @@ class InboxReader implements IInboxClient.IInboxReader {
 
     @Override
     public void close() {
+        // tell server side to remove FetchState
+        hint(-1);
         ppln.stopFetch(inboxId);
     }
 }
