@@ -30,14 +30,17 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
     public static final String DATA_DIR_PROP = "DATA_DIR";
 
     protected KVEngineConfigurator<?> buildDataEngineConf(StorageEngineConfig config, String name) {
-        return buildEngineConf(config, name, true);
+        return buildEngineConf(config, name, true, true);
     }
 
     protected KVEngineConfigurator<?> buildWALEngineConf(StorageEngineConfig config, String name) {
-        return buildEngineConf(config, name, false);
+        return buildEngineConf(config, name, false, false);
     }
 
-    private KVEngineConfigurator<?> buildEngineConf(StorageEngineConfig config, String name, boolean disableWAL) {
+    private KVEngineConfigurator<?> buildEngineConf(StorageEngineConfig config,
+                                                    String name,
+                                                    boolean disableWAL,
+                                                    boolean atomicFlush) {
         if (config instanceof InMemEngineConfig) {
             return InMemoryKVEngineConfigurator.builder()
                 .gcInterval(config.getGcIntervalInSec())
@@ -64,6 +67,9 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
                 .compactMinTombstoneKeys(rocksDBConfig.compactMinTombstoneKeys())
                 .compactTombstonePercent(rocksDBConfig.compactTombstonePercent())
                 .disableWAL(disableWAL)
+                .atomicFlush(atomicFlush)
+                .asyncWALFlush(rocksDBConfig.asyncWALFlush())
+                .fsyncWAL(rocksDBConfig.fsyncWAL())
                 .build();
         }
     }

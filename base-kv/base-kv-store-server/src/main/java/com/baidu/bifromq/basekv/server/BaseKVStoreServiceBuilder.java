@@ -33,7 +33,6 @@ public class BaseKVStoreServiceBuilder<P extends AbstractBaseKVStoreServerBuilde
     IKVRangeCoProcFactory coProcFactory;
     IAgentHost agentHost;
     Executor queryExecutor;
-    Executor mutationExecutor;
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
 

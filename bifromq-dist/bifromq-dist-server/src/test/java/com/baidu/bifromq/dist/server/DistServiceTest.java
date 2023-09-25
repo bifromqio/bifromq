@@ -21,7 +21,6 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -33,20 +32,13 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.plugin.subbroker.CheckResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -63,7 +55,6 @@ public abstract class DistServiceTest {
     private IDistClient distClient;
     private IBaseKVStoreClient workerClient;
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private ISettingProvider settingProvider = Setting::current;
@@ -89,22 +80,9 @@ public abstract class DistServiceTest {
         closeable = MockitoAnnotations.openMocks(this);
         when(subBrokerMgr.get(anyInt())).thenReturn(inboxBroker);
         when(inboxBroker.open(anyString())).thenReturn(inboxDeliverer);
-        queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(2, 2, 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("query-executor")),
-            "query-executor");
-        mutationExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(2, 2, 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("mutation-executor")),
-            "mutation-executor");
-        tickTaskExecutor = ExecutorServiceMetrics
-            .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(2,
-                EnvProvider.INSTANCE.newThreadFactory("tick-task-executor")), "tick-task-executor");
-        bgTaskExecutor = ExecutorServiceMetrics
-            .monitor(Metrics.globalRegistry, new ScheduledThreadPoolExecutor(1,
-                EnvProvider.INSTANCE.newThreadFactory("bg-task-executor")), "bg-task-executor");
+        queryExecutor = Executors.newFixedThreadPool(2);
+        tickTaskExecutor = Executors.newScheduledThreadPool(2);
+        bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -143,7 +121,6 @@ public abstract class DistServiceTest {
             .storeClient(workerClient)
             .statsInterval(Duration.ofSeconds(5))
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(kvRangeStoreOptions)
@@ -177,7 +154,6 @@ public abstract class DistServiceTest {
             serverCrdtService.stop();
             agentHost.shutdown();
             queryExecutor.shutdown();
-            mutationExecutor.shutdown();
             tickTaskExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();

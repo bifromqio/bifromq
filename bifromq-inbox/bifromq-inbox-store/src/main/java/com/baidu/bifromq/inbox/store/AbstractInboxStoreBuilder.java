@@ -38,7 +38,6 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions;
     Executor queryExecutor;
-    Executor mutationExecutor;
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
     Duration statsInterval = Duration.ofSeconds(30);
@@ -103,11 +102,6 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
 
     public T queryExecutor(Executor queryExecutor) {
         this.queryExecutor = queryExecutor;
-        return thisT();
-    }
-
-    public T mutationExecutor(Executor mutationExecutor) {
-        this.mutationExecutor = mutationExecutor;
         return thisT();
     }
 

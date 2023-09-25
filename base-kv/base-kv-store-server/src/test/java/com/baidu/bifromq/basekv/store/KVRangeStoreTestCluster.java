@@ -82,9 +82,6 @@ public class KVRangeStoreTestCluster {
     private final ExecutorService queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
         TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
         EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-    private final ExecutorService mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-        TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-        EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
     private final ScheduledExecutorService tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
         EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
     private final ScheduledExecutorService bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
@@ -443,7 +440,6 @@ public class KVRangeStoreTestCluster {
                 options,
                 new TestCoProcFactory(),
                 queryExecutor,
-                mutationExecutor,
                 tickTaskExecutor,
                 bgTaskExecutor);
         PublishSubject<StoreMessage> storeMsgSource = PublishSubject.create();

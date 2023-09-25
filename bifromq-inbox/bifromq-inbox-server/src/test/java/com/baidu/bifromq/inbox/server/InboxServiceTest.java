@@ -23,7 +23,6 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -39,11 +38,8 @@ import com.baidu.bifromq.plugin.settingprovider.Setting;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
@@ -68,7 +64,6 @@ public abstract class InboxServiceTest {
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
@@ -97,17 +92,9 @@ public abstract class InboxServiceTest {
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
-        queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
-        tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
-        bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
-
+        queryExecutor = Executors.newFixedThreadPool(2);
+        tickTaskExecutor = Executors.newScheduledThreadPool(2);
+        bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
@@ -124,7 +111,6 @@ public abstract class InboxServiceTest {
             .storeOptions(kvRangeStoreOptions)
             .balanceControllerOptions(controllerOptions)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
@@ -155,7 +141,6 @@ public abstract class InboxServiceTest {
             serverCrdtService.stop();
             agentHost.shutdown();
             queryExecutor.shutdown();
-            mutationExecutor.shutdown();
             tickTaskExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();

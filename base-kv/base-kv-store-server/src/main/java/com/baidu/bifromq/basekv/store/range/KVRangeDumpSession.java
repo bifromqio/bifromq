@@ -62,7 +62,7 @@ class KVRangeDumpSession {
         this.peerStoreId = peerStoreId;
         this.request = request;
         this.messenger = messenger;
-        this.runner = new AsyncRunner(executor);
+        this.runner = new AsyncRunner("basekv.runner.sessiondump", executor);
         this.maxIdleDuration = maxIdleDuration;
         this.recorder = recorder;
         rateLimiter = RateLimiter.create(bandwidth);

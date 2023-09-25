@@ -51,6 +51,8 @@ class KVRangeMetricManager {
     private final Timer getTimer;
     private final Timer queryCoProcTimer;
     private final Timer compactionTimer;
+    private final Timer applyLogTimer;
+    private final Timer installSnapshotTimer;
     private final AtomicReference<KVRangeDescriptor> currentDesc = new AtomicReference<>();
     private final AtomicLong currentLastAppliedIndex = new AtomicLong(-1);
 
@@ -141,6 +143,12 @@ class KVRangeMetricManager {
         compactionTimer = Timer.builder("basekv.cmd.compact")
             .tags(tags)
             .register(Metrics.globalRegistry);
+        applyLogTimer = Timer.builder("basekv.applylog")
+            .tags(tags)
+            .register(Metrics.globalRegistry);
+        installSnapshotTimer = Timer.builder("basekv.installsnapshot")
+            .tags(tags)
+            .register(Metrics.globalRegistry);
     }
 
     void report(KVRangeDescriptor descriptor) {
@@ -208,6 +216,14 @@ class KVRangeMetricManager {
         return recordDuration(supplier, compactionTimer);
     }
 
+    CompletableFuture<Void> recordLogApply(Supplier<CompletableFuture<Void>> supplier) {
+        return recordDuration(supplier, applyLogTimer);
+    }
+
+    CompletableFuture<Void> recordSnapshotInstall(Supplier<CompletableFuture<Void>> supplier) {
+        return recordDuration(supplier, installSnapshotTimer);
+    }
+
     void close() {
         Metrics.globalRegistry.removeByPreFilterId(dumpBytesSummary.getId());
         Metrics.globalRegistry.removeByPreFilterId(restoreBytesSummary.getId());
@@ -228,5 +244,7 @@ class KVRangeMetricManager {
         Metrics.globalRegistry.removeByPreFilterId(getTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(queryCoProcTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(compactionTimer.getId());
+        Metrics.globalRegistry.removeByPreFilterId(applyLogTimer.getId());
+        Metrics.globalRegistry.removeByPreFilterId(installSnapshotTimer.getId());
     }
 }

@@ -33,7 +33,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     IAgentHost agentHost;
     ICRDTService crdtService;
     Executor queryExecutor;
-    Executor mutationExecutor;
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
     IEventCollector eventCollector;
@@ -75,11 +74,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
 
     public T queryExecutor(Executor queryExecutor) {
         this.queryExecutor = queryExecutor;
-        return thisT();
-    }
-
-    public T mutationExecutor(Executor mutationExecutor) {
-        this.mutationExecutor = mutationExecutor;
         return thisT();
     }
 

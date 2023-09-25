@@ -85,7 +85,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
         } else {
             jobScheduler = builder.bgTaskExecutor;
         }
-        jobRunner = new AsyncRunner(jobScheduler);
+        jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "retainstore");
     }
 
     protected abstract IBaseKVStoreServer storeServer();
@@ -137,7 +137,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     }
 
     private void scheduleGC() {
-        jobScheduler.schedule(this::gc, gcInterval.toMinutes(), TimeUnit.MINUTES);
+        jobScheduler.schedule(this::gc, gcInterval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void gc() {

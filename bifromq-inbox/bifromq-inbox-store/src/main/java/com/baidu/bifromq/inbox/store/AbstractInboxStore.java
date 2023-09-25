@@ -92,7 +92,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         } else {
             jobScheduler = builder.bgTaskExecutor;
         }
-        jobRunner = new AsyncRunner(jobScheduler);
+        jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "inboxstore");
     }
 
     protected abstract IBaseKVStoreServer storeServer();

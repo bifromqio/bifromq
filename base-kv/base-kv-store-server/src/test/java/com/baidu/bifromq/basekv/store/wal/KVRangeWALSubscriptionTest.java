@@ -25,6 +25,7 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Iterators;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
@@ -64,6 +65,7 @@ public class KVRangeWALSubscriptionTest {
         closeable = MockitoAnnotations.openMocks(this);
         executor = Executors.newSingleThreadScheduledExecutor();
         when(wal.snapshotInstallTask()).thenReturn(snapshotSource);
+        when(wal.rangeId()).thenReturn(KVRangeIdUtil.generate());
     }
 
     @AfterMethod

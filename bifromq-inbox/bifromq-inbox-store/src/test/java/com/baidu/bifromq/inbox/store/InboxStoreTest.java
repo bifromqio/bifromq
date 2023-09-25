@@ -120,7 +120,6 @@ abstract class InboxStoreTest {
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     public Path dbRootDir;
@@ -172,9 +171,6 @@ abstract class InboxStoreTest {
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
             EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
@@ -199,7 +195,6 @@ abstract class InboxStoreTest {
             .storeOptions(options)
             .balanceControllerOptions(controllerOptions)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(1))
@@ -229,7 +224,6 @@ abstract class InboxStoreTest {
                 log.error("Failed to delete db root dir", e);
             }
             queryExecutor.shutdown();
-            mutationExecutor.shutdown();
             tickTaskExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();

@@ -13,10 +13,13 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import lombok.AllArgsConstructor;
@@ -25,14 +28,29 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class AsyncRunner {
     private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
+
     private final ConcurrentLinkedDeque<Task<?>> taskQueue;
     private final Executor executor;
     private final AtomicReference<State> state = new AtomicReference<>(State.EMPTY_STOP);
+    private final Timer queueingTimer;
+    private final Timer execTimer;
     private volatile CompletableFuture<Void> whenDone = DONE;
 
     public AsyncRunner(Executor executor) {
+        this("async.runner", executor);
+    }
+
+    public AsyncRunner(String name, Executor executor, String... tags) {
         this.taskQueue = new ConcurrentLinkedDeque<>();
         this.executor = executor;
+        this.queueingTimer = Timer.builder(name)
+            .tags("type", "queueing")
+            .tags(tags)
+            .register(Metrics.globalRegistry);
+        this.execTimer = Timer.builder(name)
+            .tags("type", "exec")
+            .tags(tags)
+            .register(Metrics.globalRegistry);
     }
 
     public CompletableFuture<Void> add(Runnable runnable) {
@@ -95,13 +113,14 @@ public final class AsyncRunner {
         taskQueue.descendingIterator().forEachRemaining(t -> t.future.cancel(true));
     }
 
-    private void runTask() {
+    private <T> void runTask() {
         while (true) {
             if (state.compareAndSet(State.NONEMPTY_STOP, State.NONEMPTY_RUNNING)
                 || state.get() == State.NONEMPTY_RUNNING) {
-                Task task = taskQueue.peek();
+                @SuppressWarnings("unchecked")
+                Task<T> task = (Task<T>) taskQueue.peek();
                 if (task != null) {
-                    Supplier<CompletableFuture<?>> taskSupplier = task.supplier;
+                    Supplier<CompletableFuture<T>> taskSupplier = task.supplier;
                     executor.execute(() -> {
                         if (task.future.isDone()) {
                             taskQueue.removeFirstOccurrence(task);
@@ -109,7 +128,9 @@ public final class AsyncRunner {
                             return;
                         }
                         try {
-                            CompletableFuture<?> taskFuture = taskSupplier.get();
+                            long now = System.nanoTime();
+                            queueingTimer.record(now - task.submitAtNanos, TimeUnit.NANOSECONDS);
+                            CompletableFuture<T> taskFuture = taskSupplier.get();
                             task.future.whenCompleteAsync((v, e) -> {
                                 if (task.future.isCancelled()) {
                                     taskFuture.cancel(true);
@@ -120,6 +141,7 @@ public final class AsyncRunner {
                                     if (e != null) {
                                         task.future.completeExceptionally(e);
                                     } else {
+                                        execTimer.record(System.nanoTime() - now, TimeUnit.NANOSECONDS);
                                         task.future.complete(v);
                                     }
                                 }
@@ -151,12 +173,17 @@ public final class AsyncRunner {
 
     public CompletionStage<Void> awaitDone() {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
-        whenDone.whenComplete((v, e) -> onDone.complete(null));
+        whenDone.whenComplete((v, e) -> {
+            onDone.complete(null);
+            Metrics.globalRegistry.remove(queueingTimer);
+            Metrics.globalRegistry.remove(execTimer);
+        });
         return onDone;
     }
 
     @AllArgsConstructor
     private static class Task<T> {
+        final long submitAtNanos = System.nanoTime();
         final Supplier<CompletableFuture<T>> supplier;
         final CompletableFuture<T> future;
     }

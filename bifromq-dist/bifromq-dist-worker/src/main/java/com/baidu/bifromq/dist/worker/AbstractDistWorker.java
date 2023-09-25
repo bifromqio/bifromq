@@ -83,7 +83,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
         } else {
             jobScheduler = builder.bgTaskExecutor;
         }
-        jobRunner = new AsyncRunner(jobScheduler);
+        jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "distworker");
     }
 
     protected abstract IBaseKVStoreServer storeServer();

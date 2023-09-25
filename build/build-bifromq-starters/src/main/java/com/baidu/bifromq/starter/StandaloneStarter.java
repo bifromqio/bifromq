@@ -68,6 +68,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
@@ -87,7 +88,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private ExecutorService ioClientExecutor;
     private ExecutorService ioServerExecutor;
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AuthProviderManager authProviderMgr;
@@ -146,11 +146,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 config.getStateStoreConfig().getQueryThreads(), 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("query-executor")), "query-executor");
-        mutationExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(config.getStateStoreConfig().getMutationThreads(),
-                config.getStateStoreConfig().getMutationThreads(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("mutation-executor")), "mutation-executor");
         tickTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ScheduledThreadPoolExecutor(config.getStateStoreConfig().getTickerThreads(),
                 EnvProvider.INSTANCE.newThreadFactory("tick-task-executor")), "tick-task-executor");
@@ -266,9 +261,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
+            .purgeDelay(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getPurgeDelaySeconds()))
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
             )
@@ -321,9 +317,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .settingProvider(settingProviderMgr)
             .storeClient(retainStoreClient)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getRetainStoreConfig().getGcIntervalSeconds()))
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig())
             )
@@ -377,7 +373,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .distClient(distClient)
             .storeClient(distWorkerClient)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -578,10 +573,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             queryExecutor.shutdownNow();
             log.debug("Shutdown query executor");
         }
-        if (mutationExecutor != null) {
-            mutationExecutor.shutdownNow();
-            log.debug("Shutdown mutation executor");
-        }
         if (tickTaskExecutor != null) {
             tickTaskExecutor.shutdownNow();
             log.debug("Shutdown tick task executor");
@@ -598,18 +589,18 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
     private IAPIServer buildAPIServer(APIServerConfig apiServerConfig) {
         String apiHost = Strings.isNullOrEmpty(apiServerConfig.getHost()) ?
-                "0.0.0.0" : apiServerConfig.getHost();
+            "0.0.0.0" : apiServerConfig.getHost();
         EventLoopGroup bossELG = NettyUtil.createEventLoopGroup(apiServerConfig.getApiBossThreads(),
-                EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
+            EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
         EventLoopGroup workerELG = NettyUtil.createEventLoopGroup(apiServerConfig.getApiWorkerThreads(),
-                EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
+            EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
         SslContext sslContext = null;
         if (apiServerConfig.getHttpsListenerConfig().isEnable()) {
             sslContext = buildServerSslContext(apiServerConfig.getHttpsListenerConfig().getSslConfig());
         }
         return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsListenerConfig().getPort(),
-                bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
-                inboxClient, sessionDictClient, retainClient, settingProviderMgr);
+            bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
+            inboxClient, sessionDictClient, retainClient, settingProviderMgr);
     }
 
     public static void main(String[] args) {

@@ -67,6 +67,8 @@ public class StateStoreConfig {
     public static class InboxStoreConfig {
         private int queryPipelinePerStore = 100;
         private int compactWALThreshold = 2000;
+        private int gcIntervalSeconds = 600;
+        private int purgeDelaySeconds = 180;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
@@ -86,6 +88,7 @@ public class StateStoreConfig {
     public static class RetainStoreConfig {
         private int queryPipelinePerStore = 100;
         private int compactWALThreshold = 2000;
+        private int gcIntervalSeconds = 600;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)

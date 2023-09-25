@@ -38,7 +38,6 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     Executor queryExecutor;
-    Executor mutationExecutor;
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
     Duration statsInterval = Duration.ofSeconds(30);
@@ -108,11 +107,6 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
 
     public T queryExecutor(Executor queryExecutor) {
         this.queryExecutor = queryExecutor;
-        return thisT();
-    }
-
-    public T mutationExecutor(Executor mutationExecutor) {
-        this.mutationExecutor = mutationExecutor;
         return thisT();
     }
 

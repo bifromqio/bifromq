@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.store.wal;
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
@@ -29,19 +28,10 @@ import com.baidu.bifromq.basekv.store.util.KVUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.MoreExecutors;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.concurrent.NotThreadSafe;
 import lombok.extern.slf4j.Slf4j;
@@ -55,16 +45,10 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     private static final int CF_NUM = 100;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final Map<KVRangeId, KVRangeWALStore> instances = Maps.newConcurrentMap();
-    private final ExecutorService flushExecutor;
-    private final AtomicBoolean flushing = new AtomicBoolean();
     private final IKVEngine kvEngine;
 
     public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, KVEngineConfigurator<?> configurator) {
         kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
-        flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("wal-flusher")),
-            "basekv[" + kvEngine.id() + "]-wal-flusher", Tags.of("clusterId", clusterId));
     }
 
     @Override
@@ -74,7 +58,6 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
                 log.debug("Stopping WALStoreEngine[{}]", kvEngine.id());
                 instances.values().forEach(KVRangeWALStore::stop);
                 kvEngine.stop();
-                MoreExecutors.shutdownAndAwaitTermination(flushExecutor, 5, TimeUnit.SECONDS);
                 state.set(State.STOPPED);
             } catch (Throwable e) {
                 log.warn("Failed to stop wal engine", e);
@@ -112,15 +95,15 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     @Override
     public IRaftStateStore newRaftStateStorage(KVRangeId kvRangeId, Snapshot initSnapshot) {
         checkState();
+        String ns = raftGroupNS(kvRangeId);
         instances.computeIfAbsent(kvRangeId, id -> {
             KVRangeWALKeys.cache(kvRangeId);
-            String ns = raftGroupNS(kvRangeId);
             int walKeyRangeId = kvEngine.registerKeyRange(ns, KVRangeWALKeys.walStartKey(kvRangeId),
                 KVRangeWALKeys.walEndKey(kvRangeId));
             kvEngine.put(walKeyRangeId, KVRangeWALKeys.latestSnapshotKey(kvRangeId), initSnapshot.toByteString());
-            return new KVRangeWALStore(kvRangeId, kvEngine, walKeyRangeId, this::scheduleFlush);
+            kvEngine.flush(ns).join();
+            return new KVRangeWALStore(kvRangeId, kvEngine, ns, walKeyRangeId);
         });
-        flush();
         return instances.get(kvRangeId);
     }
 
@@ -162,12 +145,6 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         Preconditions.checkState(state.get() == State.STARTED, "Not started");
     }
 
-    private void scheduleFlush() {
-        if (flushing.compareAndSet(false, true)) {
-            flushExecutor.execute(this::flush);
-        }
-    }
-
     private List<String> kvNamespaces() {
         List<String> ns = new ArrayList<>();
         ns.add(DEFAULT_NS);
@@ -188,8 +165,8 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
                         KVRangeWALKeys.walEndKey(kvRangeId));
                     instances.put(kvRangeId, new KVRangeWALStore(kvRangeId,
                         kvEngine,
-                        walKeyRangeId,
-                        this::scheduleFlush));
+                        ns,
+                        walKeyRangeId));
                     log.debug("WAL loaded: kvRangeId={}", toShortString(kvRangeId));
                     it.seek(KVRangeWALKeys.walEndKey(kvRangeId));
                 }
@@ -199,18 +176,6 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
 
     private String raftGroupNS(KVRangeId kvRangeId) {
         return Long.toString(Math.abs(kvRangeId.getEpoch()) % CF_NUM);
-    }
-
-    private void flush() {
-        try {
-            long flushTime = System.nanoTime();
-            kvEngine.flush();
-            flushing.set(false);
-            instances.values().forEach(stateStore -> stateStore.onStable(flushTime));
-        } catch (Throwable e) {
-            log.error("Unexpected error during flushing", e);
-            flushing.set(false);
-        }
     }
 
     private enum State {

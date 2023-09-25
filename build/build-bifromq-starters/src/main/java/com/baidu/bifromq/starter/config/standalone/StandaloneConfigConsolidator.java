@@ -40,6 +40,9 @@ public class StandaloneConfigConsolidator {
         if (clusterConfig.getHost() == null) {
             clusterConfig.setHost(resolveHost(config));
         }
+        if (Strings.isNullOrEmpty(clusterConfig.getEnv())) {
+            throw new IllegalArgumentException("Cluster env cannot be null or empty string");
+        }
     }
 
     private static void consolidateMQTTServerConfig(StandaloneConfig config) {

@@ -34,7 +34,7 @@ public abstract class StatsCollector implements IStatsCollector {
 
     public StatsCollector(Duration interval, Executor executor) {
         this.interval = interval;
-        this.executor = new AsyncRunner(executor);
+        this.executor = new AsyncRunner("basekv.runner.statscollect", executor);
     }
 
     @Override

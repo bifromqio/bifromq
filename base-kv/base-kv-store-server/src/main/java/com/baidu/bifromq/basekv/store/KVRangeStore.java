@@ -107,7 +107,6 @@ public class KVRangeStore implements IKVRangeStore {
     private final IStatsCollector storeStatsCollector;
     private final CompositeDisposable disposable = new CompositeDisposable();
     private final Executor queryExecutor;
-    private final Executor mutationExecutor;
     private final ScheduledExecutorService tickExecutor;
     private volatile ScheduledFuture<?> tickFuture;
     private final ScheduledExecutorService bgTaskExecutor;
@@ -121,7 +120,6 @@ public class KVRangeStore implements IKVRangeStore {
                         KVRangeStoreOptions opts,
                         IKVRangeCoProcFactory coProcFactory,
                         @NonNull Executor queryExecutor,
-                        @NonNull Executor mutationExecutor,
                         @NonNull ScheduledExecutorService tickExecutor,
                         @NonNull ScheduledExecutorService bgTaskExecutor) {
         this.clusterId = clusterId;
@@ -139,12 +137,11 @@ public class KVRangeStore implements IKVRangeStore {
         kvRangeEngine = KVEngineFactory.create(null, List.of(DEFAULT_NS),
             this::check, opts.getDataEngineConfigurator());
         this.queryExecutor = queryExecutor;
-        this.mutationExecutor = mutationExecutor;
         this.tickExecutor = tickExecutor;
         this.bgTaskExecutor = bgTaskExecutor;
         this.rangeMgmtTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("kvstore-mgmt-executor")),
-            "kvstore-mgmt-executor", Tags.of("storeId", id));
+            "kvstore[" + id + "]-mgmt-executor");
         this.rangeMgmtTaskRunner = new AsyncRunner(rangeMgmtTaskExecutor);
         this.metricsManager = new MetricsManager(clusterId, id);
         storeStatsCollector =
@@ -486,7 +483,6 @@ public class KVRangeStore implements IKVRangeStore {
             kvRangeEngine,
             walStorageEngine,
             queryExecutor,
-            mutationExecutor,
             rangeMgmtTaskExecutor,
             bgTaskExecutor,
             opts.getKvRangeOptions(),

@@ -33,6 +33,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.collect.Sets.union;
 import static java.util.Collections.singleton;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.proto.CancelMerging;
@@ -96,6 +97,8 @@ import com.baidu.bifromq.basekv.utils.KeyRangeUtil;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -115,6 +118,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -144,7 +150,7 @@ public class KVRange implements IKVRange {
     private final IKVRangeWAL wal;
     private final IKVRangeWALSubscription commitLogSubscription;
     private final IStatsCollector statsCollector;
-    private final Executor fsmExecutor;
+    private final ExecutorService fsmExecutor;
     private final Executor mgmtExecutor;
     private final AsyncRunner mgmtTaskRunner;
     private final IKVRangeCoProc coProc;
@@ -175,7 +181,6 @@ public class KVRange implements IKVRange {
                    IKVEngine rangeEngine,
                    IKVRangeWALStoreEngine walStateStorageEngine,
                    Executor queryExecutor,
-                   Executor fsmExecutor,
                    Executor mgmtExecutor,
                    Executor bgExecutor,
                    KVRangeOptions opts,
@@ -201,29 +206,34 @@ public class KVRange implements IKVRange {
                 walStateStorageEngine,
                 opts.getWalRaftConfig(),
                 opts.getMaxWALFatchBatchSize());
-            this.fsmExecutor = fsmExecutor;
+            this.fsmExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(1, 1,
+                    0L, TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("basekv-range-executor")),
+                "basekv-range-mutator");
             this.mgmtExecutor = mgmtExecutor;
-            this.mgmtTaskRunner = new AsyncRunner(mgmtExecutor);
+            this.mgmtTaskRunner =
+                new AsyncRunner("basekv.runner.rangemgmt", mgmtExecutor, "rangeId", KVRangeIdUtil.toString(id));
             this.coProc = coProcFactory.create(id, () -> accessor.getReader(true), loadEstimator);
 
             long lastAppliedIndex = accessor.getReader(false).lastAppliedIndex();
             this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex);
             this.queryRunner = new KVRangeQueryRunner(accessor, coProc, queryExecutor, linearizer);
+            this.statsCollector = new KVRangeStatsCollector(accessor,
+                wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
+            this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
             this.commitLogSubscription = wal.subscribe(lastAppliedIndex,
                 new IKVRangeWALSubscriber() {
                     @Override
                     public CompletableFuture<Void> apply(LogEntry log) {
-                        return KVRange.this.apply(log);
+                        return metricManager.recordLogApply(() -> KVRange.this.apply(log));
                     }
 
                     @Override
                     public CompletableFuture<Void> apply(KVRangeSnapshot snapshot) {
-                        return KVRange.this.apply(snapshot);
+                        return metricManager.recordSnapshotInstall(() -> KVRange.this.apply(snapshot));
                     }
                 }, fsmExecutor);
-            this.statsCollector = new KVRangeStatsCollector(accessor,
-                wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
-            this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
         } catch (InvalidProtocolBufferException e) {
             throw new KVRangeStoreException("Unable to restore from Snapshot", e);
         }
@@ -343,6 +353,7 @@ public class KVRange implements IKVRange {
                         .thenComposeAsync(v -> wal.close(), mgmtExecutor)
                         .whenCompleteAsync((v, e) -> {
                             metricManager.close();
+                            fsmExecutor.shutdown();
                             lifecycle.set(Closed);
                             closeSignal.complete(null);
                         }, mgmtExecutor);
@@ -579,6 +590,7 @@ public class KVRange implements IKVRange {
                         } else {
                             rangeWriter.setLastAppliedIndex(entry.getIndex());
                             rangeWriter.close();
+
                             callback.run();
                             linearizer.afterLogApplied(entry.getIndex());
                             metricManager.reportLastAppliedIndex(entry.getIndex());

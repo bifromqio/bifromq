@@ -48,16 +48,12 @@ class KVRangeWALStore implements IRaftStateStore {
     private static final StableListener DEFAULT_STABLE_LISTENER = stabledIndex -> {
     };
 
-    interface FlushNotifier {
-        void notifyFlush();
-    }
-
     private final String storeId;
     private final KVRangeId rangeId;
     private final IKVEngine kvEngine;
+    private final String namespace;
     private final int walKeyRangeId;
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
-    private final FlushNotifier flushNotifier;
     private final Deque<StabilizingIndex> stabilizingIndices = new ConcurrentLinkedDeque<>();
     private long currentTerm = 0;
     private Voting currentVoting;
@@ -69,13 +65,13 @@ class KVRangeWALStore implements IRaftStateStore {
 
     KVRangeWALStore(KVRangeId rangeId,
                     IKVEngine kvEngine,
-                    int walKeyRangeId,
-                    FlushNotifier flushNotifier) {
+                    String namespace,
+                    int walKeyRangeId) {
         this.rangeId = rangeId;
         this.kvEngine = kvEngine;
         this.storeId = kvEngine.id();
+        this.namespace = namespace;
         this.walKeyRangeId = walKeyRangeId;
-        this.flushNotifier = flushNotifier;
         load();
     }
 
@@ -159,7 +155,8 @@ class KVRangeWALStore implements IRaftStateStore {
                     kvEngine.delete(batchId, walKeyRangeId, it.key());
                 }
                 kvEngine.endBatch(batchId);
-                flushNotifier.notifyFlush();
+                // clear sub range will trigger compaction and implicit flush
+//                flushNotifier.notifyFlush();
             } catch (Throwable e) {
                 log.error("Unexpected error during truncating log: rangeId={}, storeId={}",
                     toShortString(rangeId), storeId, e);
@@ -290,7 +287,7 @@ class KVRangeWALStore implements IRaftStateStore {
         if (flush) {
             flush();
         } else {
-            flushNotifier.notifyFlush();
+            asyncFlush();
         }
     }
 
@@ -303,9 +300,6 @@ class KVRangeWALStore implements IRaftStateStore {
     public void stop() {
         log.debug("Stop range wal storage: rangeId={}, storeId={}", toShortString(rangeId), storeId);
         stableListener = DEFAULT_STABLE_LISTENER;
-        if (!stabilizingIndices.isEmpty()) {
-            flush();
-        }
     }
 
     public void destroy() {
@@ -315,7 +309,7 @@ class KVRangeWALStore implements IRaftStateStore {
         kvEngine.unregisterKeyRange(walKeyRangeId);
     }
 
-    public void onStable(long flushTime) {
+    private void onStable(long flushTime) {
         StabilizingIndex stabilizingIndex;
         while ((stabilizingIndex = stabilizingIndices.poll()) != null) {
             if (stabilizingIndex.ts < flushTime) {
@@ -327,14 +321,29 @@ class KVRangeWALStore implements IRaftStateStore {
             }
         }
         if (!stabilizingIndices.isEmpty()) {
-            flushNotifier.notifyFlush();
+            asyncFlush();
         }
     }
 
     private void flush() {
-        long flushTime = System.nanoTime();
-        kvEngine.flush();
-        onStable(flushTime);
+        try {
+            long flushTime = kvEngine.flush(namespace).join();
+            onStable(flushTime);
+        } catch (Throwable e) {
+            log.warn("Flush error, try again", e);
+        }
+    }
+
+    private void asyncFlush() {
+        kvEngine.flush(namespace)
+            .whenComplete((ts, e) -> {
+                if (e != null) {
+                    log.warn("Flush error, try again", e);
+                    asyncFlush();
+                } else {
+                    onStable(ts);
+                }
+            });
     }
 
     private void load() {

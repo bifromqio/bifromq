@@ -21,7 +21,6 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
@@ -29,7 +28,6 @@ import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.IRPCServer;
 import com.baidu.bifromq.baserpc.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
@@ -54,11 +52,8 @@ import io.reactivex.rxjava3.core.Observable;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -100,7 +95,6 @@ class MQTTTest {
     private ISubBrokerManager inboxBrokerMgr;
     private PluginManager pluginMgr;
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
@@ -122,16 +116,10 @@ class MQTTTest {
         closeable = MockitoAnnotations.openMocks(this);
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         pluginMgr = new DefaultPluginManager();
-        bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
-        tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
-        queryExecutor = new ThreadPoolExecutor(1, 1, 10, TimeUnit.SECONDS,
-            new LinkedBlockingDeque<>(20_000),
-            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        mutationExecutor = new ThreadPoolExecutor(1, 1, 10, TimeUnit.SECONDS,
-            new LinkedBlockingDeque<>(20_000),
-            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
+        queryExecutor = Executors.newFixedThreadPool(2);
+        tickTaskExecutor = Executors.newScheduledThreadPool(2);
+        bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
+
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -184,7 +172,6 @@ class MQTTTest {
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
@@ -221,7 +208,6 @@ class MQTTTest {
             .settingProvider(settingProvider)
             .storeClient(retainStoreKVStoreClient)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
@@ -253,7 +239,6 @@ class MQTTTest {
             .distClient(distClient)
             .storeClient(distWorkerStoreClient)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())

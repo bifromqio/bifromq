@@ -70,11 +70,8 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -94,7 +91,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
 
 @Slf4j
 public abstract class DistWorkerTest {
@@ -136,7 +132,6 @@ public abstract class DistWorkerTest {
     protected String tenantA = "tenantA";
     protected String tenantB = "tenantB";
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
@@ -167,9 +162,6 @@ public abstract class DistWorkerTest {
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
             EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
@@ -229,7 +221,6 @@ public abstract class DistWorkerTest {
             .distClient(distClient)
             .storeClient(storeClient)
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(balanceControllerOptions)
@@ -238,7 +229,6 @@ public abstract class DistWorkerTest {
             .subBrokerManager(receiverManager)
             .build();
         testWorker.start();
-
         storeClient.join();
         log.info("Setup finished, and start testing");
     }
@@ -261,7 +251,6 @@ public abstract class DistWorkerTest {
                 log.error("Failed to delete db root dir", e);
             }
             queryExecutor.shutdown();
-            mutationExecutor.shutdown();
             tickTaskExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();

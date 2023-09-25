@@ -85,7 +85,6 @@ public class KVRangeStoreTest {
     private IStoreMessenger messenger;
     private PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
 
@@ -101,9 +100,6 @@ public class KVRangeStoreTest {
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
             EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
@@ -128,7 +124,6 @@ public class KVRangeStoreTest {
                 options,
                 new TestCoProcFactory(),
                 queryExecutor,
-                mutationExecutor,
                 tickTaskExecutor,
                 bgTaskExecutor);
         messenger = new IStoreMessenger() {
@@ -167,7 +162,6 @@ public class KVRangeStoreTest {
     public void teardown() throws Exception {
         rangeStore.stop();
         queryExecutor.shutdownNow();
-        mutationExecutor.shutdownNow();
         tickTaskExecutor.shutdownNow();
         bgTaskExecutor.shutdownNow();
         if (dbRootDir != null) {

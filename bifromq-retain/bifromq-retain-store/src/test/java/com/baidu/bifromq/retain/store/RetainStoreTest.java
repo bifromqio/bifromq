@@ -97,7 +97,6 @@ public class RetainStoreTest {
     protected IRetainStore testStore;
     protected IBaseKVStoreClient storeClient;
     private ExecutorService queryExecutor;
-    private ExecutorService mutationExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
@@ -144,9 +143,6 @@ public class RetainStoreTest {
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        mutationExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("mutation-executor"));
         tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
             EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
@@ -168,7 +164,6 @@ public class RetainStoreTest {
             .storeOptions(options)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .queryExecutor(queryExecutor)
-            .mutationExecutor(mutationExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(1))
@@ -197,7 +192,6 @@ public class RetainStoreTest {
             log.error("Failed to delete db root dir", e);
         }
         queryExecutor.shutdown();
-        mutationExecutor.shutdown();
         tickTaskExecutor.shutdown();
         bgTaskExecutor.shutdown();
         closeable.close();

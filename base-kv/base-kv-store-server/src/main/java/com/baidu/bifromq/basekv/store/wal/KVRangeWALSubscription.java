@@ -50,8 +50,10 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
         this.maxFetchBytes = maxFetchBytes;
         this.wal = wal;
         this.executor = executor;
-        this.fetchRunner = new AsyncRunner(executor);
-        this.applyRunner = new AsyncRunner(executor);
+        this.fetchRunner = new AsyncRunner("basekv.runner.walfetch", executor,
+            "rangeId", KVRangeIdUtil.toString(wal.rangeId()));
+        this.applyRunner = new AsyncRunner("basekv.runner.fsmapply", executor,
+            "rangeId", KVRangeIdUtil.toString(wal.rangeId()));
         this.subscriber = subscriber;
         this.lastFetchedIdx.set(lastFetchedIndex);
         this.subscriber.onSubscribe(this);

@@ -30,7 +30,6 @@ final class NonStandaloneRetainStore extends AbstractRetainStore<NonStandaloneRe
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
             .queryExecutor(builder.queryExecutor)
-            .mutationExecutor(builder.mutationExecutor)
             .tickTaskExecutor(builder.tickTaskExecutor)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()
