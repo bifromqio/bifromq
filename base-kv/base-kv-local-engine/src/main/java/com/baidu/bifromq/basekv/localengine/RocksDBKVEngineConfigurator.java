@@ -199,6 +199,9 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
 
     private String dbCheckpointRootDir;
     private boolean disableWAL = false;
+    private boolean atomicFlush = false;
+    private boolean asyncWALFlush = false;
+    private boolean fsyncWAL = false;
 
     private int compactMinTombstoneKeys = 500000;
 
@@ -220,7 +223,8 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         DBOptions targetOption = new DBOptions();
         dbOptionsConfigurator.config((DBOptionsInterface) targetOption);
         dbOptionsConfigurator.config((MutableDBOptionsInterface) targetOption);
-        targetOption.setAtomicFlush(disableWAL); // if wal enabled no need to atomic flush
+        targetOption.setAtomicFlush(atomicFlush);
+        targetOption.setManualWalFlush(asyncWALFlush);
         return targetOption;
     }
 
@@ -238,6 +242,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
             .dbRootDir(this.dbRootDir)
             .dbCheckpointRootDir(this.dbCheckpointRootDir)
             .disableWAL(this.disableWAL)
+            .atomicFlush(this.atomicFlush)
             .gcInterval(this.gcIntervalInSec);
     }
 
@@ -248,7 +253,10 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         private CFOptionsConfigurator cfOptionsConfigurator;
         private String dbRootDir;
         private String dbCheckpointRootDir;
+        private boolean atomicFlush;
         private boolean disableWAL;
+        private boolean asyncWALFlush;
+        private boolean fsyncWAL;
         private int compactMinTombstoneKeys;
         private double compactTombstonePercent;
         private long gcInterval;
@@ -282,6 +290,21 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
             return this;
         }
 
+        public RocksDBKVEngineConfiguratorBuilder atomicFlush(boolean atomicFlush) {
+            this.atomicFlush = atomicFlush;
+            return this;
+        }
+
+        public RocksDBKVEngineConfiguratorBuilder asyncWALFlush(boolean asyncWALFlush) {
+            this.asyncWALFlush = asyncWALFlush;
+            return this;
+        }
+
+        public RocksDBKVEngineConfiguratorBuilder fsyncWAL(boolean walSync) {
+            this.fsyncWAL = walSync;
+            return this;
+        }
+
         public RocksDBKVEngineConfiguratorBuilder compactMinTombstoneKeys(int compactMinTombstoneKeys) {
             this.compactMinTombstoneKeys = compactMinTombstoneKeys;
             return this;
@@ -299,7 +322,9 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
 
         public RocksDBKVEngineConfigurator build() {
             return new RocksDBKVEngineConfigurator(dbOptionsConfigurator, cfOptionsConfigurator, dbRootDir,
-                dbCheckpointRootDir, disableWAL, compactMinTombstoneKeys, compactTombstonePercent, gcInterval);
+                dbCheckpointRootDir, disableWAL, atomicFlush, asyncWALFlush, fsyncWAL, compactMinTombstoneKeys,
+                compactTombstonePercent,
+                gcInterval);
         }
     }
 

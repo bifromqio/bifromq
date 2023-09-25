@@ -28,6 +28,7 @@ import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -294,6 +295,11 @@ public class InMemoryKVEngine extends AbstractKVEngine<InMemoryKVEngine.KeyRange
             approximateKVCountMap.put(namespace, approximateKVCountMap.get(namespace) + 1);
         }
         calculateAverageKVSize(namespace, key, value);
+    }
+
+    @Override
+    protected CompletableFuture<Long> doFlush(String namespace) {
+        return CompletableFuture.completedFuture(System.nanoTime());
     }
 
     @Override

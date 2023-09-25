@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.localengine;
 
 import com.google.protobuf.ByteString;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 public interface IKVEngine {
     String DEFAULT_NS = "default";
@@ -223,7 +224,7 @@ public interface IKVEngine {
 
     void put(String namespace, ByteString key, ByteString value);
 
-    void flush();
+    CompletableFuture<Long> flush(String namespace);
 
     void start(String... metricTags);
 

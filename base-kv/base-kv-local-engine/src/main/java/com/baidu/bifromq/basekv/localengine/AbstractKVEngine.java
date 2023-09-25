@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -94,7 +95,6 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
 
     @Override
     public final void stop() {
-        flush();
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             try {
                 if (gcFuture != null) {
@@ -609,14 +609,13 @@ public abstract class AbstractKVEngine<K extends AbstractKeyRange, B extends Abs
     protected abstract void doPut(K range, ByteString key, ByteString value);
 
     @Override
-    public final void flush() {
+    public final CompletableFuture<Long> flush(String namespace) {
         checkState();
-        metricMgr.flushCallTimer.record(this::doFlush);
+        Timer.Sample start = Timer.start();
+        return doFlush(namespace).whenComplete((v, e) -> start.stop(metricMgr.flushCallTimer));
     }
 
-    protected void doFlush() {
-
-    }
+    protected abstract CompletableFuture<Long> doFlush(String namespace);
 
     protected void checkState() {
         assert state.get() == State.STARTED : "Not started";

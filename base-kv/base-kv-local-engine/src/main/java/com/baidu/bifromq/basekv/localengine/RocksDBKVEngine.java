@@ -63,11 +63,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -106,10 +108,12 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
     // key: namespace, subKey: rangeStart, value: rangeEnd
     private final Map<String, NavigableMap<ByteString, ByteString>> rangeCompactionQueue = new HashMap<>();
     private final AtomicBoolean compacting = new AtomicBoolean();
+    private final Map<String, AtomicReference<CompletableFuture<Long>>> cfPendingFlushFutures = new HashMap<>();
     private MetricManager metricMgr;
     private OptimisticTransactionDB instance;
     private String identity;
     private ExecutorService compactionExecutor;
+    private ExecutorService flushExecutor;
     private final File dbRootDir;
     private final File dbCheckPointRootDir;
     private final Duration checkpointAge;
@@ -134,6 +138,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                     new ConcurrentSkipListMap<>(ByteString.unsignedLexicographicalComparator()));
             }
         });
+        cfDescs.keySet().forEach(ns -> cfPendingFlushFutures.put(ns, new AtomicReference<>()));
         openedCheckpoints = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
             .expireAfterAccess(10, TimeUnit.MINUTES)
@@ -147,6 +152,9 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
             .build(cpPath -> new OpenedCheckpoint(cpPath, configurator));
         dbOptions = configurator.config();
         writeOptions = new WriteOptions().setDisableWAL(configurator.isDisableWAL());
+        if (!configurator.isDisableWAL() && !configurator.isAsyncWALFlush()) {
+            writeOptions.setSync(configurator.isFsyncWAL());
+        }
         dbRootDir = new File(configurator.getDbRootDir());
         dbCheckPointRootDir = new File(configurator.getDbCheckpointRootDir());
         try {
@@ -206,7 +214,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         start = start == null ? EMPTY : start;
         end = end == null ? leastUpperBound(instance, range) : end;
         if (compare(start, end) < 0) {
-            try (Slice startSlice = new Slice(start.toByteArray()); Slice endSlice = new Slice(end.toByteArray());) {
+            try (Slice startSlice = new Slice(start.toByteArray()); Slice endSlice = new Slice(end.toByteArray())) {
                 Range rocksDBRange = new Range(startSlice, endSlice);
                 return instance.getApproximateSizes(cfHandles.get(range.ns),
                     singletonList(rocksDBRange),
@@ -361,19 +369,55 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         endBatch(batchId);
     }
 
-    protected void doFlush() {
+    protected CompletableFuture<Long> doFlush(String namespace) {
         checkState();
-        try {
-            if (!writeOptions.disableWAL()) {
-                instance.flushWal(true);
-            } else {
-                try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
-                    instance.flush(flushOptions);
-                }
+        CompletableFuture<Long> flushFuture;
+        if (cfPendingFlushFutures.get(namespace).compareAndSet(null, flushFuture = new CompletableFuture<>())) {
+            flushCF(namespace, flushFuture);
+        } else {
+            flushFuture = cfPendingFlushFutures.get(namespace).get();
+            if (flushFuture == null) {
+                // try again
+                return doFlush(namespace);
             }
-        } catch (Throwable e) {
-            log.error("Flush error", e);
-            throw new KVEngineException("Flush error", e);
+        }
+        return flushFuture;
+    }
+
+    private void flushCF(String namespace, CompletableFuture<Long> onDone) {
+        if (configurator.isDisableWAL()) {
+            flushExecutor.submit(() -> {
+                long flashStartAt = System.nanoTime();
+                log.debug("Flush[{}] start", namespace);
+                try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
+                    instance.flush(flushOptions, cfHandles.get(namespace));
+                    log.debug("Flush[{}] complete", namespace);
+                    cfPendingFlushFutures.get(namespace).compareAndSet(onDone, null);
+                    onDone.complete(flashStartAt);
+                } catch (Throwable e) {
+                    log.error("Flush column family[{}] error", namespace, e);
+                    cfPendingFlushFutures.get(namespace).compareAndSet(onDone, null);
+                    onDone.completeExceptionally(new KVEngineException("Flush column family error", e));
+                }
+            });
+        } else if (configurator.isAsyncWALFlush()) {
+            flushExecutor.submit(() -> {
+                long flashStartAt = System.nanoTime();
+                log.debug("Flush[{}] wal start", namespace);
+                try {
+                    instance.flushWal(configurator.isFsyncWAL());
+                    cfPendingFlushFutures.get(namespace).compareAndSet(onDone, null);
+                    log.debug("Flush[{}] complete", namespace);
+                    onDone.complete(flashStartAt);
+                } catch (Throwable e) {
+                    log.error("Flush error", e);
+                    cfPendingFlushFutures.get(namespace).compareAndSet(onDone, null);
+                    onDone.completeExceptionally(new KVEngineException("Flush error", e));
+                }
+            });
+        } else {
+            cfPendingFlushFutures.get(namespace).compareAndSet(onDone, null);
+            onDone.complete(System.nanoTime());
         }
     }
 
@@ -420,6 +464,8 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("compaction-executor")),
             "compaction-executor-" + Tags.of(metricTags));
+        flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ForkJoinPool(cfDescs.size()), "flush-executor-" + Tags.of(metricTags));
         metricMgr = new MetricManager(metricTags);
     }
 
@@ -440,6 +486,7 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
         dbOptions.close();
         writeOptions.close();
         compactionExecutor.shutdown();
+        flushExecutor.shutdown();
     }
 
     private void submitRangeCompactionTask(String namespace, ByteString start, ByteString end) {
