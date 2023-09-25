@@ -426,9 +426,12 @@ public final class RaftNode implements IRaftNode {
     public Boolean stepDown() {
         return unwrap(submit(onDone -> {
             RaftNodeState state = stateRef.get();
-            RaftNodeState nextState = state.stepDown(onDone);
+            RaftNodeState nextState = state.stepDown();
             if (nextState != state) {
                 stateRef.set(nextState);
+                onDone.complete(true);
+            } else {
+                onDone.complete(false);
             }
         }));
     }
