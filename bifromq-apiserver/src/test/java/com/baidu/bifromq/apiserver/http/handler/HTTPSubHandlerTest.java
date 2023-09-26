@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxSubResult;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
@@ -26,24 +28,13 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.util.concurrent.CompletableFuture;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUBBROKER_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
+import static com.baidu.bifromq.apiserver.Headers.*;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -54,6 +45,8 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
     private IMqttBrokerClient mqttBrokerClient;
     @Mock
     private IInboxClient inboxClient;
+    @Mock
+    private IDistClient distClient;
     private ISettingProvider settingProvider = Setting::current;
 
     @Override
@@ -64,7 +57,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -78,7 +71,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
         handler.handle(reqId, tenantId, req);
@@ -107,7 +100,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
@@ -129,7 +122,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(inboxClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(CompletableFuture.completedFuture(InboxSubResult.OK));
@@ -151,7 +144,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(CompletableFuture.completedFuture(MqttSubResult.ERROR));
@@ -173,7 +166,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(inboxClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(CompletableFuture.completedFuture(InboxSubResult.NO_INBOX));
@@ -182,6 +175,28 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.OK);
         assertEquals(response.headers().get(HEADER_SUB_QOS.header), "128");
+        assertEquals(response.content().readableBytes(), 0);
+    }
+
+    @Test
+    public void subOtherSubBroker() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
+        req.headers().set(HEADER_SUB_QOS.header, "0");
+        req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
+        req.headers().set(HEADER_SUBBROKER_ID.header, "3");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
+
+        when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
+                .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+
+        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), HttpResponseStatus.OK);
+        assertEquals(response.headers().get(HEADER_SUB_QOS.header), "0");
         assertEquals(response.content().readableBytes(), 0);
     }
 

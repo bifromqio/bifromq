@@ -36,8 +36,8 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
                                       ISettingProvider settingProvider) {
         register(new HTTPKickHandler(sessionDictClient));
         register(new HTTPPubHandler(distClient, retainClient, settingProvider));
-        register(new HTTPSubHandler(mqttBrokerClient, inboxClient, settingProvider));
-        register(new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider));
+        register(new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider));
+        register(new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider));
     }
 
     @Override

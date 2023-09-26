@@ -15,6 +15,8 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxUnsubResult;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
@@ -38,10 +40,10 @@ import javax.ws.rs.DELETE;
 import javax.ws.rs.Path;
 import java.util.concurrent.CompletableFuture;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
+import static com.baidu.bifromq.apiserver.Headers.*;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
+import static com.baidu.bifromq.apiserver.utils.TopicUtil.generateDeliverKey;
 import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
@@ -51,13 +53,16 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 public final class HTTPUnsubHandler implements IHTTPRequestHandler {
     private final IMqttBrokerClient mqttBrokerClient;
     private final IInboxClient inboxClient;
+    private final IDistClient distClient;
     private final ISettingProvider settingProvider;
 
     public HTTPUnsubHandler(IMqttBrokerClient mqttBrokerClient,
                             IInboxClient inboxClient,
+                            IDistClient distClient,
                             ISettingProvider settingProvider) {
         this.mqttBrokerClient = mqttBrokerClient;
         this.inboxClient = inboxClient;
+        this.distClient = distClient;
         this.settingProvider = settingProvider;
     }
 
@@ -68,6 +73,7 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
         @Parameter(name = "topic_filter", in = ParameterIn.HEADER, required = true, description = "the topic filter to remove"),
         @Parameter(name = "inbox_id", in = ParameterIn.HEADER, required = true, description = "the inbox for receiving subscribed messages"),
+        @Parameter(name = "deliver_key", in = ParameterIn.HEADER, description = "deliver key for subBroker"),
         @Parameter(name = "subbroker_id", in = ParameterIn.HEADER, required = true, schema = @Schema(implementation = Integer.class), description = "the id of the subbroker hosting the inbox"),
     })
     @RequestBody(required = false)
@@ -83,6 +89,7 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
         try {
             String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
             String inboxId = getHeader(HEADER_INBOX_ID, req, true);
+            String deliverKey = getHeader(HEADER_DELIVER_KEY, req, false);
             int subBrokerId = getRequiredSubBrokerId(req);
             log.trace(
                 "Handling http unsub request: reqId={}, tenantId={}, topicFilter={}, inboxId={}, subBrokerId={}",
@@ -107,7 +114,13 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
                             );
                     break;
                 default:
-                    throw new RuntimeException("Unknown subBrokerId: " + subBrokerId);
+                    if (deliverKey == null) {
+                        deliverKey = generateDeliverKey(inboxId);
+                    }
+                    future = distClient.unmatch(reqId, tenantId, topicFilter, inboxId, deliverKey, subBrokerId)
+                            .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(),
+                                    v == UnmatchResult.OK ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER)
+                            );
             }
             return future;
         } catch (Throwable e) {
