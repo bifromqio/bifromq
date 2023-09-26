@@ -107,8 +107,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                         // Begin to use partitioned index filters
                         // https://github.com/facebook/rocksdb/wiki/Partitioned-Index-Filters#how-to-use-it
                         .setIndexType(IndexType.kTwoLevelIndexSearch) //
-                        .setFilterPolicy(
-                            gcable(new BloomFilter(16, false)))
+                        .setFilterPolicy(gcable(new BloomFilter(16, false)))
                         .setPartitionFilters(true) //
                         .setMetadataBlockSize(8 * SizeUnit.KB) //
                         .setCacheIndexAndFilterBlocks(true) //
@@ -121,8 +120,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                         .setDataBlockHashTableUtilRatio(0.75)
                         // End of partitioned index filters settings.
                         .setBlockSize(4 * SizeUnit.KB)//
-                        .setBlockCache(
-                            gcable(new LRUCache(512 * SizeUnit.MB, 8))))
+                        .setBlockCache(gcable(new LRUCache(32 * SizeUnit.MB, 8))))
                 // https://github.com/facebook/rocksdb/pull/5744
                 .setForceConsistencyChecks(true)
                 .setCompactionStyle(CompactionStyle.LEVEL);
@@ -135,13 +133,13 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // Flushing options:
                 // write_buffer_size sets the size of a single mem_table. Once mem_table exceeds
                 // this size, it is marked immutable and a new one is created.
-                .setWriteBufferSize(128 * SizeUnit.MB)
+                .setWriteBufferSize(16 * SizeUnit.MB)
                 // Flushing options:
                 // max_write_buffer_number sets the maximum number of mem_tables, both active
                 // and immutable.  If the active mem_table fills up and the total number of
                 // mem_tables is larger than max_write_buffer_number we stall further writes.
                 // This may happen if the flush process is slower than the write rate.
-                .setMaxWriteBufferNumber(6)
+                .setMaxWriteBufferNumber(4)
                 // Flushing options:
                 // min_write_buffer_number_to_merge is the minimum number of mem_tables to be
                 // merged before flushing to storage. For example, if this option is set to 2,

@@ -1012,17 +1012,17 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
                     try {
                         return instance.getLongProperty("rocksdb.estimate-table-readers-mem");
                     } catch (RocksDBException e) {
-                        log.warn("Unable to get long property {}", "rocksdb.block-cache-usage");
+                        log.warn("Unable to get long property {}", "rocksdb.estimate-table-readers-mem");
                         return 0;
                     }
                 })
-                .tags(tags.and("kind", "indexfilters"))
+                .tags(tags.and("kind", "tablereader"))
                 .baseUnit("bytes")
                 .register(Metrics.globalRegistry);
 
             memtableSizeGauges = Gauge.builder("basekv.le.rocksdb.memusage", () -> {
                     try {
-                        return instance.getLongProperty("rocksdb.block-cache-usage");
+                        return instance.getLongProperty("rocksdb.cur-size-all-mem-tables");
                     } catch (RocksDBException e) {
                         log.warn("Unable to get long property {}", "rocksdb.cur-size-all-mem-tables");
                         return 0;
@@ -1034,13 +1034,14 @@ public class RocksDBKVEngine extends AbstractKVEngine<RocksDBKVEngine.KeyRange, 
 
             pinedMemorySizeGauges = Gauge.builder("basekv.le.rocksdb.memusage", () -> {
                     try {
-                        return instance.getLongProperty("rocksdb.cur-size-all-mem-tables");
+                        return instance.getLongProperty("rocksdb.size-all-mem-tables") -
+                            instance.getLongProperty("rocksdb.cur-size-all-mem-tables");
                     } catch (RocksDBException e) {
-                        log.warn("Unable to get long property {}", "rocksdb.block-cache-pinned-usage");
+                        log.warn("Unable to get long property {}", "rocksdb.size-all-mem-tables");
                         return 0;
                     }
                 })
-                .tags(tags.and("kind", "pinedblocks"))
+                .tags(tags.and("kind", "pinned"))
                 .baseUnit("bytes")
                 .register(Metrics.globalRegistry);
 
