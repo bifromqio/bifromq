@@ -116,7 +116,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
         return id;
     }
 
-    abstract RaftNodeState stepDown(CompletableFuture<Boolean> onDone);
+    abstract RaftNodeState stepDown();
 
     abstract RaftNodeState recover(CompletableFuture<Void> onDone);
 

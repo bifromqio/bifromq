@@ -82,8 +82,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
     }
 
     @Override
-    RaftNodeState stepDown(CompletableFuture<Boolean> onDone) {
-        onDone.complete(false);
+    RaftNodeState stepDown() {
         return this;
     }
 

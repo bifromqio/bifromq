@@ -140,7 +140,7 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     @Override
-    RaftNodeState stepDown(CompletableFuture<Boolean> onDone) {
+    RaftNodeState stepDown() {
         logDebug("leader is asked to step down to follower");
         RaftNodeState nextState = new RaftNodeStateFollower(
             currentTerm(),
@@ -157,7 +157,6 @@ class RaftNodeStateLeader extends RaftNodeState {
             tags);
         configChanger.abort();
         readProgressTracker.abort();
-        onDone.complete(true);
         return nextState;
     }
 
