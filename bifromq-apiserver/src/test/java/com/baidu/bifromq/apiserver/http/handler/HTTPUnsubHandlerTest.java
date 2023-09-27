@@ -31,10 +31,7 @@ import org.testng.annotations.Test;
 
 import java.util.concurrent.CompletableFuture;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUBBROKER_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
+import static com.baidu.bifromq.apiserver.Headers.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -181,6 +178,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         req.headers().set(HEADER_SUB_QOS.header, "1");
         req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
         req.headers().set(HEADER_SUBBROKER_ID.header, "3");
+        req.headers().set(HEADER_DELIVERER_KEY.header, "delivererKey");
         long reqId = 123;
         String tenantId = "bifromq_dev";
 

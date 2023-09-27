@@ -185,6 +185,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         req.headers().set(HEADER_SUB_QOS.header, "0");
         req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
         req.headers().set(HEADER_SUBBROKER_ID.header, "3");
+        req.headers().set(HEADER_DELIVERER_KEY.header, "delivererKey");
         long reqId = 123;
         String tenantId = "bifromq_dev";
 

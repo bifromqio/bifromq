@@ -26,7 +26,7 @@ public enum Headers {
     HEADER_USER_ID("user_id"),
     HEADER_CLIENT_ID("client_id"),
     HEADER_RETAIN("retain"),
-    HEADER_DELIVER_KEY("deliver_key");
+    HEADER_DELIVERER_KEY("deliverer_key");
     public final String header;
 
     Headers(String header) {

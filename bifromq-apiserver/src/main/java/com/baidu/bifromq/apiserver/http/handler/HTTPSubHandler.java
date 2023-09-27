@@ -14,10 +14,7 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.*;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
-import static com.baidu.bifromq.apiserver.utils.TopicUtil.generateDeliverKey;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.*;
 import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
@@ -78,7 +75,7 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
         @Parameter(name = "sub_qos", in = ParameterIn.HEADER, schema = @Schema(allowableValues = {"0", "1",
             "2"}), required = true, description = "the qos of the subscription"),
         @Parameter(name = "inbox_id", in = ParameterIn.HEADER, required = true, description = "the inbox for receiving subscribed messages"),
-        @Parameter(name = "deliverer_key", in = ParameterIn.HEADER, description = "deliveryKey to subBroker"),
+        @Parameter(name = "deliverer_key", in = ParameterIn.HEADER, description = "deliverer key for subBroker"),
         @Parameter(name = "subbroker_id", in = ParameterIn.HEADER, required = true, schema = @Schema(implementation = Integer.class), description = "the id of the subbroker hosting the inbox"),
     })
     @RequestBody(required = false)
@@ -95,8 +92,8 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
             String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
             QoS subQoS = getRequiredSubQoS(req);
             String inboxId = getHeader(HEADER_INBOX_ID, req, true);
-            String deliverKey = getHeader(HEADER_DELIVER_KEY, req, false);
             int subBrokerId = getRequiredSubBrokerId(req);
+            String delivererKey = getDelivererKey(HEADER_DELIVERER_KEY, req, subBrokerId);
             log.trace("Handling http sub request: reqId={}, tenantId={}, topicFilter={}, subQoS={}, inboxId={}, " +
                     "subBrokerId={}", reqId, tenantId, topicFilter, subQoS, inboxId, subBrokerId);
             CompletableFuture<FullHttpResponse> future;
@@ -134,10 +131,7 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
                             });
                     break;
                 default:
-                    if (deliverKey == null) {
-                        deliverKey = generateDeliverKey(inboxId);
-                    }
-                    future = distClient.match(reqId, tenantId, topicFilter, subQoS, inboxId, deliverKey, subBrokerId)
+                    future = distClient.match(reqId, tenantId, topicFilter, subQoS, inboxId, delivererKey, subBrokerId)
                             .thenApply(v -> {
                                 DefaultFullHttpResponse resp =
                                         new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
