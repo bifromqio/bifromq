@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.client.InboxUnsubResult;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
@@ -29,12 +31,8 @@ import org.testng.annotations.Test;
 
 import java.util.concurrent.CompletableFuture;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUBBROKER_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static com.baidu.bifromq.apiserver.Headers.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -45,6 +43,8 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
     private IMqttBrokerClient mqttBrokerClient;
     @Mock
     private IInboxClient inboxClient;
+    @Mock
+    private IDistClient distClient;
     private ISettingProvider settingProvider = Setting::current;
 
     @Override
@@ -55,7 +55,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -69,7 +69,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.OK));
         handler.handle(reqId, tenantId, req);
@@ -97,7 +97,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.OK));
 
@@ -118,7 +118,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(inboxClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.OK));
 
@@ -139,7 +139,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.ERROR));
 
@@ -160,13 +160,35 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, settingProvider);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(inboxClient.unsub(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.ERROR));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.NOT_FOUND);
+        assertEquals(response.content().readableBytes(), 0);
+    }
+
+    @Test
+    public void unsubOtherSubBroker() {
+        DefaultFullHttpRequest req = buildRequest();
+
+        req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
+        req.headers().set(HEADER_SUB_QOS.header, "1");
+        req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
+        req.headers().set(HEADER_SUBBROKER_ID.header, "3");
+        req.headers().set(HEADER_DELIVERER_KEY.header, "delivererKey");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+                .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
+
+        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), HttpResponseStatus.OK);
         assertEquals(response.content().readableBytes(), 0);
     }
 

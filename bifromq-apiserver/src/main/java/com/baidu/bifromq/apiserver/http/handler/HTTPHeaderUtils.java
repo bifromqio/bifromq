@@ -13,12 +13,6 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_META_PREFIX;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_REQ_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_RETAIN;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUBBROKER_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
-
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.type.QoS;
@@ -26,6 +20,8 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.HashMap;
 import java.util.Map;
+
+import static com.baidu.bifromq.apiserver.Headers.*;
 
 public final class HTTPHeaderUtils {
     public static long getOptionalReqId(FullHttpRequest req) {
@@ -69,6 +65,14 @@ public final class HTTPHeaderUtils {
             throw new NullPointerException("header not found: " + header);
         }
         return headerText;
+    }
+
+    public static String getDelivererKey(Headers header, HttpRequest req, int subBrokerId) {
+        String delivererKey = req.headers().get(header.header);
+        if (delivererKey == null && subBrokerId != 0 && subBrokerId != 1) {
+            throw new NullPointerException("header not found: " + header);
+        }
+        return delivererKey;
     }
 
     public static boolean getRetain(HttpRequest req) {
