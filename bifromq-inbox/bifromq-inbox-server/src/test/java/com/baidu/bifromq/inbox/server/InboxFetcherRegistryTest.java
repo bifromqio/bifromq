@@ -53,7 +53,7 @@ public class InboxFetcherRegistryTest {
     @Test
     public void regAndUnReg() {
         InboxFetcherRegistry registry = new InboxFetcherRegistry();
-        mockFetcher(fetcher1, "tenantA", "inbox1");
+        mockFetcher(fetcher1, "tenantA", "inbox1", "fetcher1");
         registry.reg(fetcher1);
         assertEquals(registry.get(fetcher1.tenantId(), fetcher1.delivererKey()), Collections.singleton(fetcher1));
         registry.unreg(fetcher1);
@@ -63,8 +63,8 @@ public class InboxFetcherRegistryTest {
     @Test
     public void kick() {
         InboxFetcherRegistry registry = new InboxFetcherRegistry();
-        mockFetcher(fetcher1, "tenantA", "inbox1");
-        mockFetcher(fetcher2, "tenantA", "inbox1");
+        mockFetcher(fetcher1, "tenantA", "inbox1", "fetcher1");
+        mockFetcher(fetcher2, "tenantA", "inbox1", "fetcher1");
         registry.reg(fetcher1);
         registry.reg(fetcher2);
         verify(fetcher1).close();
@@ -73,9 +73,9 @@ public class InboxFetcherRegistryTest {
     @Test
     public void iterator() {
         InboxFetcherRegistry registry = new InboxFetcherRegistry();
-        mockFetcher(fetcher1, "tenantA", "inbox1");
-        mockFetcher(fetcher2, "tenantA", "inbox2");
-        mockFetcher(fetcher3, "tenantB", "inbox3");
+        mockFetcher(fetcher1, "tenantA", "inbox1", "fetcher1");
+        mockFetcher(fetcher2, "tenantA", "inbox2", "fetcher2");
+        mockFetcher(fetcher3, "tenantB", "inbox3", "fetcher3");
         registry.reg(fetcher1);
         registry.reg(fetcher2);
         registry.reg(fetcher3);
@@ -83,8 +83,9 @@ public class InboxFetcherRegistryTest {
         assertEquals(fetchers, Sets.newHashSet(fetcher1, fetcher2, fetcher3));
     }
 
-    private void mockFetcher(IInboxFetcher fetcher, String tenantId, String delivererKey) {
+    private void mockFetcher(IInboxFetcher fetcher, String tenantId, String delivererKey, String fetcherId) {
         when(fetcher.tenantId()).thenReturn(tenantId);
         when(fetcher.delivererKey()).thenReturn(delivererKey);
+        when(fetcher.id()).thenReturn(fetcherId);
     }
 }
