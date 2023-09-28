@@ -65,8 +65,7 @@ public abstract class AgentTestTemplate {
     public void teardown() {
         if (storeMgr != null) {
             log.info("Shutting down test cluster");
-            // run in a separate thread to avoid blocking the test thread
-            new Thread(() -> storeMgr.shutdown()).start();
+            storeMgr.shutdown();
         }
     }
 
