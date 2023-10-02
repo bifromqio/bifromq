@@ -18,7 +18,6 @@ import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
@@ -33,7 +32,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSetting.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> getValue = cluster.get(rangeSetting.leader, rangeId, copyFromUtf8("key" + i));
@@ -44,7 +43,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSetting.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> getValue = cluster.get(nonLeaderStore(rangeSetting), rangeId, copyFromUtf8("key" + i));
@@ -55,7 +54,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readWhenReplicaRestart() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         String restartStoreId = nonLeaderStore(rangeSetting);
 
         log.info("Shutdown store {}", restartStoreId);
@@ -66,7 +65,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
             assertEquals(resp.get(), copyFromUtf8("value" + i));
         }
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
             cluster.changeReplicaConfig(rangeSetting.leader,
                 setting.ver,
                 rangeId,
@@ -74,21 +73,23 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
                 emptySet()
             ).toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return setting.allReplicas.size() == 2 && !setting.allReplicas.contains(restartStoreId);
+            return setting.clusterConfig.getVotersCount() == 2 &&
+                !setting.clusterConfig.getVotersList().contains(restartStoreId);
         });
         log.info("Restart store {}", restartStoreId);
         cluster.startStore(restartStoreId);
 
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
-            cluster.changeReplicaConfig(rangeSetting.leader,
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            cluster.changeReplicaConfig(setting.leader,
                 setting.ver,
                 rangeId,
                 Sets.newHashSet(cluster.allStoreIds()),
                 emptySet()
             ).toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return setting.allReplicas.size() == 3 && setting.allReplicas.contains(restartStoreId);
+            return setting.clusterConfig.getVotersCount() == 3 &&
+                setting.clusterConfig.getVotersList().contains(restartStoreId);
         });
 
         cluster.awaitKVRangeReady(restartStoreId, rangeId);
@@ -101,7 +102,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readWhileAddNewReplica() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
 
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSettings.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
@@ -112,7 +113,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
         log.info("Add new store: {}", storeId);
         log.info("Change replica set to: {}", cluster.allStoreIds());
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
             cluster.changeReplicaConfig(rangeSettings.leader,
                 setting.ver,
                 rangeId,
@@ -120,7 +121,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
                 Sets.newHashSet()
             ).toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return setting.allReplicas.contains(storeId);
+            return setting.clusterConfig.getVotersList().contains(storeId);
         });
         cluster.awaitKVRangeReady(storeId, rangeId);
         log.info("New store ready");

@@ -19,6 +19,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
@@ -70,7 +71,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider, ILoadTracker loadTracker) {
+    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> rangeReaderProvider, ILoadTracker loadTracker) {
         return new DistWorkerCoProc(id, rangeReaderProvider, eventCollector, settingProvider, distClient,
             subBrokerManager, scheduler, matchExecutor, loadTracker);
     }

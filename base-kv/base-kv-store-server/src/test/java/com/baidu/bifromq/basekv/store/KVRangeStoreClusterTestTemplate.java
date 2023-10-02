@@ -18,15 +18,15 @@ import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.fail;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
@@ -40,9 +40,9 @@ public abstract class KVRangeStoreClusterTestTemplate {
     public void createClusterByAnnotation(Method testMethod) {
         Cluster cluster = testMethod.getAnnotation(Cluster.class);
         options = new KVRangeStoreOptions();
-        if (isDevEnv()) {
-            options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
-            options.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
+        if (!isDevEnv()) {
+            options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
+            options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         }
         if (cluster != null) {
             Preconditions.checkArgument(cluster.initNodes() > 0,
@@ -74,16 +74,17 @@ public abstract class KVRangeStoreClusterTestTemplate {
             long start = System.currentTimeMillis();
             log.info("Preparing replica config for testing");
             await().ignoreExceptions().forever().until(() -> {
-                KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
+                KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
                 String leader = setting.leader;
-                if (setting.allReplicas.containsAll(voters)) {
+                if (setting.clusterConfig.getVotersList().containsAll(voters)) {
                     return true;
                 }
                 cluster.changeReplicaConfig(leader, setting.ver, rangeId, voters, Sets.newHashSet())
                     .toCompletableFuture().join();
                 setting = cluster.kvRangeSetting(rangeId);
-                log.info("Config change succeed: {}, {}, {}", setting, voters, setting.allReplicas.containsAll(voters));
-                return setting.allReplicas.containsAll(voters);
+                log.info("Config change succeed: {}, {}, {}", setting, voters,
+                    setting.clusterConfig.getVotersList().containsAll(voters));
+                return setting.clusterConfig.getVotersList().containsAll(voters);
             });
             cluster.awaitAllKVRangeReady(rangeId, voters.size() == 1 ? 0 : 2, 5000);
             log.info("KVRange[{}] ready in {}ms start testing", toShortString(rangeId),
@@ -102,10 +103,17 @@ public abstract class KVRangeStoreClusterTestTemplate {
         }
     }
 
-    public String nonLeaderStore(KVRangeSetting setting) {
-        if (setting.followers.isEmpty()) {
+    public String nonLeaderStore(KVRangeConfig setting) {
+        Set<String> followerStores = followStores(setting);
+        if (followerStores.isEmpty()) {
             throw new RuntimeException("No non-leader store");
         }
-        return setting.followers.get(0);
+        return followerStores.iterator().next();
+    }
+
+    public Set<String> followStores(KVRangeConfig setting) {
+        Set<String> voters = new HashSet<>(setting.clusterConfig.getVotersList());
+        voters.remove(setting.leader);
+        return voters;
     }
 }

@@ -13,26 +13,14 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.proto.State;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
  * Thread-Unsafe reader to access the consistent view of KVRange
  */
 @NotThreadSafe
-public interface IKVRangeReader {
-    long ver();
+public interface IKVRangeReader extends IKVRangeMetadata {
 
-    State state();
-
-    long lastAppliedIndex();
-
-    IKVReader kvReader();
-
-    /**
-     * Refresh to access the latest consistent view
-     */
-    void refresh();
-
-    void close();
+    IKVReader newDataReader();
 }

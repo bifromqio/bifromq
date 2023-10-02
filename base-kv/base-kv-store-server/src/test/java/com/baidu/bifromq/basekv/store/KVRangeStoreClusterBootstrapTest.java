@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.store;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static org.awaitility.Awaitility.await;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import lombok.extern.slf4j.Slf4j;
@@ -32,11 +31,11 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
     public void testBootstrap1StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
-            KVRangeSetting rangeSetting = cluster.kvRangeSetting(rangeId);
+            KVRangeConfig rangeSetting = cluster.kvRangeSetting(rangeId);
             if (rangeSetting == null) {
                 return false;
             }
-            return rangeSetting.allReplicas.size() == 1;
+            return rangeSetting.clusterConfig.getVotersCount() == 1;
         });
     }
 
@@ -45,13 +44,12 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
     public void testBootstrap2StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
-            KVRangeSetting rangeSetting = cluster.kvRangeSetting(rangeId);
+            KVRangeConfig rangeSetting = cluster.kvRangeSetting(rangeId);
             if (rangeSetting == null) {
                 return false;
             }
             return rangeSetting.ver >= 2 &&
-                FULL_RANGE.equals(rangeSetting.range) &&
-                rangeSetting.allReplicas.size() == 2;
+                FULL_RANGE.equals(rangeSetting.range) && rangeSetting.clusterConfig.getVotersCount() == 2;
         });
     }
 
@@ -59,13 +57,12 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
     public void testBootstrap3StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         await().until(() -> {
-            KVRangeSetting rangeSetting = cluster.kvRangeSetting(rangeId);
+            KVRangeConfig rangeSetting = cluster.kvRangeSetting(rangeId);
             if (rangeSetting == null) {
                 return false;
             }
             return rangeSetting.ver >= 2 &&
-                FULL_RANGE.equals(rangeSetting.range) &&
-                rangeSetting.allReplicas.size() == 3;
+                FULL_RANGE.equals(rangeSetting.range) && rangeSetting.clusterConfig.getVotersCount() == 3;
         });
     }
 }

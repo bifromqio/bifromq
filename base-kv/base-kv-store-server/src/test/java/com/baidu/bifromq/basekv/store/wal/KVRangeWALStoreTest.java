@@ -16,9 +16,9 @@ package com.baidu.bifromq.basekv.store.wal;
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 
 import com.baidu.bifromq.basekv.TestUtil;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.raft.BasicStateStoreTest;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
@@ -40,7 +40,7 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
     public void setup() throws IOException {
         KVEngineConfigurator<?> walConfigurator;
         if (isDevEnv()) {
-            walConfigurator = new InMemoryKVEngineConfigurator();
+            walConfigurator = new InMemKVEngineConfigurator();
         } else {
             dbRootDir = Files.createTempDirectory("");
             walConfigurator = new RocksDBKVEngineConfigurator()

@@ -14,6 +14,8 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
@@ -27,7 +29,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -71,12 +72,12 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class RetainStoreCoProc implements IKVRangeCoProc {
-    private final Supplier<IKVRangeReader> rangeReaderProvider;
+    private final Supplier<IKVReader> rangeReaderProvider;
     private final ISettingProvider settingProvider;
     private final Clock clock;
 
     RetainStoreCoProc(KVRangeId id,
-                      Supplier<IKVRangeReader> rangeReaderProvider,
+                      Supplier<IKVReader> rangeReaderProvider,
                       ISettingProvider settingProvider,
                       Clock clock) {
         this.rangeReaderProvider = rangeReaderProvider;
@@ -160,37 +161,36 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             .setStartKey(tenantNS)
             .setEndKey(upperBound(tenantNS))
             .build();
-        try (IKVIterator itr = reader.iterator()) {
-            itr.seek(range.getStartKey());
-            if (!itr.isValid()) {
-                return emptyList();
-            }
-            if (!isWildcardTopicFilter(topicFilter)) {
-                Optional<ByteString> val = reader.get(KeyUtil.retainKey(tenantNS, topicFilter));
-                if (val.isPresent()) {
-                    TopicMessage message = TopicMessage.parseFrom(val.get());
-                    if (message.getMessage().getExpireTimestamp() > clock.millis()) {
-                        return singletonList(message);
-                    }
-                }
-                return emptyList();
-            }
-            // deal with wildcard topic filter
-            List<String> matchLevels = TopicUtil.parse(topicFilter, false);
-            List<TopicMessage> messages = new LinkedList<>();
-            itr.seek(KeyUtil.retainKeyPrefix(tenantNS, matchLevels));
-            while (itr.isValid() && compare(itr.key(), range.getEndKey()) < 0 && messages.size() < limit) {
-                List<String> topicLevels = KeyUtil.parseTopic(itr.key());
-                if (TopicUtil.match(topicLevels, matchLevels)) {
-                    TopicMessage message = TopicMessage.parseFrom(itr.value());
-                    if (message.getMessage().getExpireTimestamp() > clock.millis()) {
-                        messages.add(message);
-                    }
-                }
-                itr.next();
-            }
-            return messages;
+        IKVIterator itr = reader.iterator();
+        itr.seek(range.getStartKey());
+        if (!itr.isValid()) {
+            return emptyList();
         }
+        if (!isWildcardTopicFilter(topicFilter)) {
+            Optional<ByteString> val = reader.get(KeyUtil.retainKey(tenantNS, topicFilter));
+            if (val.isPresent()) {
+                TopicMessage message = TopicMessage.parseFrom(val.get());
+                if (message.getMessage().getExpireTimestamp() > clock.millis()) {
+                    return singletonList(message);
+                }
+            }
+            return emptyList();
+        }
+        // deal with wildcard topic filter
+        List<String> matchLevels = TopicUtil.parse(topicFilter, false);
+        List<TopicMessage> messages = new LinkedList<>();
+        itr.seek(KeyUtil.retainKeyPrefix(tenantNS, matchLevels));
+        while (itr.isValid() && compare(itr.key(), range.getEndKey()) < 0 && messages.size() < limit) {
+            List<String> topicLevels = KeyUtil.parseTopic(itr.key());
+            if (TopicUtil.match(topicLevels, matchLevels)) {
+                TopicMessage message = TopicMessage.parseFrom(itr.value());
+                if (message.getMessage().getExpireTimestamp() > clock.millis()) {
+                    messages.add(message);
+                }
+            }
+            itr.next();
+        }
+        return messages;
     }
 
     private BatchRetainReply batchRetain(BatchRetainRequest request, IKVReader reader, IKVWriter writer) {
@@ -356,34 +356,34 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Range range = Range.newBuilder().setStartKey(tenantNS).setEndKey(upperBound(tenantNS)).build();
-        try (IKVIterator itr = reader.iterator()) {
-            itr.seek(range.getStartKey());
-            itr.next();
-            int expires = 0;
-            long earliestExp = Long.MAX_VALUE;
-            for (; itr.isValid() && compare(itr.key(), range.getEndKey()) < 0; itr.next()) {
-                long expireTime = TopicMessage.parseFrom(itr.value()).getMessage().getExpireTimestamp();
-                if (expireTime <= now) {
-                    writer.delete(itr.key());
-                    expires++;
-                } else {
-                    earliestExp = Math.min(expireTime, earliestExp);
-                }
+        IKVIterator itr = reader.iterator();
+        itr.seek(range.getStartKey());
+        itr.next();
+        int expires = 0;
+        long earliestExp = Long.MAX_VALUE;
+        for (; itr.isValid() && compare(itr.key(), range.getEndKey()) < 0; itr.next()) {
+            long expireTime = TopicMessage.parseFrom(itr.value()).getMessage().getExpireTimestamp();
+            if (expireTime <= now) {
+                writer.delete(itr.key());
+                expires++;
+            } else {
+                earliestExp = Math.min(expireTime, earliestExp);
             }
-            metadata = metadata.toBuilder()
-                .setCount(metadata.getCount() - expires)
-                .setEstExpire(earliestExp == Long.MAX_VALUE ? now : earliestExp)
-                .build();
-            if (metadata.getCount() == 0) {
-                writer.delete(tenantNS);
-            }
+        }
+        metadata = metadata.toBuilder()
+            .setCount(metadata.getCount() - expires)
+            .setEstExpire(earliestExp == Long.MAX_VALUE ? now : earliestExp)
+            .build();
+        if (metadata.getCount() == 0) {
+            writer.delete(tenantNS);
         }
         return metadata;
     }
 
     private GCReply gc(GCRequest request, IKVReader reader, IKVWriter writer) {
         long now = clock.millis();
-        try (IKVIterator itr = reader.iterator()) {
+        try {
+            IKVIterator itr = reader.iterator();
             itr.seekToFirst();
             while (itr.isValid()) {
                 ByteString tenantNS = KeyUtil.parseTenantNS(itr.key());
@@ -405,19 +405,16 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     private CollectMetricsReply collectMetrics(CollectMetricsRequest request, IKVReader reader) {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
-        try (IKVIterator itr = reader.iterator()) {
-            for (itr.seekToFirst(); itr.isValid(); ) {
-                ByteString startKey = itr.key();
-                ByteString endKey = upperBound(itr.key());
-                builder.putUsedSpaces(parseTenantId(startKey),
-                    reader.size(intersect(reader.range(), Range.newBuilder()
-                        .setStartKey(startKey)
-                        .setEndKey(endKey)
-                        .build())));
-                itr.seek(endKey);
-            }
-        } catch (Exception e) {
-            // never happens
+        IKVIterator itr = reader.iterator();
+        for (itr.seekToFirst(); itr.isValid(); ) {
+            ByteString startKey = itr.key();
+            ByteString endKey = upperBound(itr.key());
+            builder.putUsedSpaces(parseTenantId(startKey),
+                reader.size(toBoundary(intersect(toRange(reader.boundary()), Range.newBuilder()
+                    .setStartKey(startKey)
+                    .setEndKey(endKey)
+                    .build()))));
+            itr.seek(endKey);
         }
         return builder.build();
     }

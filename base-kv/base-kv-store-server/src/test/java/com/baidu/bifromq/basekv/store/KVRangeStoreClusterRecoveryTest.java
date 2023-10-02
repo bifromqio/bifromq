@@ -17,10 +17,8 @@ import static com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus.Candidate;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import java.time.Duration;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Listeners;
@@ -34,21 +32,21 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
     @Test(groups = "integration")
     public void recoveryFromTwoToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSetting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
         String leader = rangeSetting.leader;
         List<String> storeIds = cluster.allStoreIds();
         assertEquals(storeIds.size(), 2);
         storeIds.remove(leader);
         cluster.shutdownStore(storeIds.get(0));
         await().ignoreExceptions().forever().until(() -> {
-            KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
+            KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });
 
         cluster.recover(leader).toCompletableFuture().join();
         await().until(() -> {
-            KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
-            return s != null && s.followers.isEmpty() && s.leader.equals(leader);
+            KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
+            return s != null && followStores(s).isEmpty() && s.leader.equals(leader);
         });
     }
 
@@ -56,7 +54,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
     @Test(groups = "integration")
     public void recoveryFromThreeToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeSetting setting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
+        KVRangeConfig setting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
         String leader = setting.leader;
         List<String> storeIds = cluster.allStoreIds();
         assertEquals(storeIds.size(), 3);
@@ -65,14 +63,14 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         cluster.shutdownStore(storeIds.get(1));
         log.info("Wait for becoming candidate");
         await().forever().until(() -> {
-            KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
+            KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });
 
         cluster.recover(leader).toCompletableFuture().join();
         await().until(() -> {
-            KVRangeSetting s = cluster.kvRangeSetting(genesisKVRangeId);
-            return s != null && s.followers.isEmpty() && s.leader.equals(leader);
+            KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
+            return s != null && followStores(s).isEmpty() && s.leader.equals(leader);
         });
     }
 }

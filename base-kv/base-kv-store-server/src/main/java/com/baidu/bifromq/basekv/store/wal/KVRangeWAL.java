@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
-import static java.util.Collections.EMPTY_MAP;
+import static java.util.Collections.emptyMap;
 import static org.slf4j.LoggerFactory.getLogger;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
@@ -64,7 +64,7 @@ public class KVRangeWAL implements IKVRangeWAL {
     private final BehaviorSubject<RaftNodeStatus> statusPublisher = BehaviorSubject.create();
     private final PublishSubject<Map<String, List<RaftMessage>>> raftMessagesPublisher = PublishSubject.create();
     private final BehaviorSubject<Map<String, RaftNodeSyncState>> syncStatePublisher =
-        BehaviorSubject.createDefault(EMPTY_MAP);
+        BehaviorSubject.createDefault(emptyMap());
     private final KVRangeId rangeId;
     private final String localId;
     private final IKVRangeWALStoreEngine stateStoreEngine;
@@ -165,7 +165,7 @@ public class KVRangeWAL implements IKVRangeWAL {
                         return CompletableFuture.failedFuture(new KVRangeException("Canceled once"));
                     }
                 }, executor);
-        onDone.whenComplete((v, e) -> walSub.stop());
+        onDone.whenCompleteAsync((v, e) -> walSub.stop(), executor);
         return onDone;
     }
 

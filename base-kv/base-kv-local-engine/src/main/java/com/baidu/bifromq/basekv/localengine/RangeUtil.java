@@ -15,8 +15,10 @@ package com.baidu.bifromq.basekv.localengine;
 
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
+import javax.annotation.Nullable;
 
 public class RangeUtil {
     public static boolean isValid(ByteString start, ByteString end) {
@@ -24,6 +26,10 @@ public class RangeUtil {
             return true;
         }
         return compare(start, end) <= 0;
+    }
+
+    public static boolean isValid(KeyBoundary boundary) {
+        return isValid(startKey(boundary), endKey(boundary));
     }
 
     public static boolean inRange(ByteString key, ByteString start, ByteString end) {
@@ -41,7 +47,18 @@ public class RangeUtil {
         return compare(start, key) <= 0 && compare(key, end) < 0;
     }
 
-    public static boolean inRange(ByteString start1, ByteString end1, ByteString start2, ByteString end2) {
+    public static boolean inRange(ByteString key, KeyBoundary boundary) {
+        return inRange(key, startKey(boundary), endKey(boundary));
+    }
+
+    public static boolean inRange(KeyBoundary boundary1, KeyBoundary boundary2) {
+        return inRange(startKey(boundary1), endKey(boundary2), startKey(boundary2), endKey(boundary2));
+    }
+
+    public static boolean inRange(@Nullable ByteString start1,
+                                  @Nullable ByteString end1,
+                                  @Nullable ByteString start2,
+                                  @Nullable ByteString end2) {
         assert isValid(start1, end1) && isValid(start2, end2);
 
         if (start2 == null && end2 == null) {
@@ -102,5 +119,21 @@ public class RangeUtil {
 
     public static int compare(ByteString a, ByteString b) {
         return ByteString.unsignedLexicographicalComparator().compare(a, b);
+    }
+
+    public static ByteString startKey(KeyBoundary boundary) {
+        return boundary.hasStartKey() ? boundary.getStartKey() : null;
+    }
+
+    public static ByteString endKey(KeyBoundary boundary) {
+        return boundary.hasEndKey() ? boundary.getEndKey() : null;
+    }
+
+    public static byte[] startKeyBytes(KeyBoundary boundary) {
+        return boundary.hasStartKey() ? boundary.getStartKey().toByteArray() : null;
+    }
+
+    public static byte[] endKeyBytes(KeyBoundary boundary) {
+        return boundary.hasEndKey() ? boundary.getEndKey().toByteArray() : null;
     }
 }

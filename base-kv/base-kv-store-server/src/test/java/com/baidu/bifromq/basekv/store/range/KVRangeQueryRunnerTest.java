@@ -24,7 +24,6 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -42,9 +41,7 @@ import org.testng.annotations.Test;
 
 public class KVRangeQueryRunnerTest {
     @Mock
-    private IKVRangeState accessor;
-    @Mock
-    private IKVRangeReader rangeReader;
+    private IKVRange accessor;
     @Mock
     private IKVReader kvReader;
     @Mock
@@ -66,12 +63,12 @@ public class KVRangeQueryRunnerTest {
     @Test
     public void badVersionQuery() {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
-        when(accessor.borrow()).thenReturn(rangeReader);
-        when(rangeReader.ver()).thenReturn(1L);
+        when(accessor.borrowDataReader()).thenReturn(kvReader);
+        when(accessor.version()).thenReturn(1L);
 
         CompletableFuture<ROCoProcOutput> queryFuture = runner.queryCoProc(0, ROCoProcInput.newBuilder()
             .setRaw(ByteString.copyFromUtf8("key")).build(), false);
-        verify(accessor).returnBorrowed(rangeReader);
+        verify(accessor).returnDataReader(kvReader);
         try {
             queryFuture.join();
             fail();
@@ -97,12 +94,12 @@ public class KVRangeQueryRunnerTest {
 
     private void internalErrorByWrongState(State.StateType stateType) {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
-        when(accessor.borrow()).thenReturn(rangeReader);
-        when(rangeReader.state()).thenReturn(State.newBuilder().setType(stateType).build());
+        when(accessor.borrowDataReader()).thenReturn(kvReader);
+        when(accessor.state()).thenReturn(State.newBuilder().setType(stateType).build());
 
         CompletableFuture<ROCoProcOutput> queryFuture =
             runner.queryCoProc(0, ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build(), false);
-        verify(accessor).returnBorrowed(rangeReader);
+        verify(accessor).returnDataReader(kvReader);
         try {
             queryFuture.join();
             fail();
@@ -114,13 +111,12 @@ public class KVRangeQueryRunnerTest {
     @Test
     public void get() {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
-        when(accessor.borrow()).thenReturn(rangeReader);
-        when(rangeReader.kvReader()).thenReturn(kvReader);
-        when(rangeReader.ver()).thenReturn(0L);
-        when(rangeReader.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
+        when(accessor.borrowDataReader()).thenReturn(kvReader);
+        when(accessor.version()).thenReturn(0L);
+        when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
         when(kvReader.get(any(ByteString.class))).thenReturn(Optional.empty());
         CompletionStage<Optional<ByteString>> queryFuture = runner.get(0, ByteString.copyFromUtf8("key"), false);
-        verify(accessor).returnBorrowed(rangeReader);
+        verify(accessor).returnDataReader(kvReader);
         try {
             Optional<ByteString> result = queryFuture.toCompletableFuture().join();
             assertFalse(result.isPresent());
@@ -132,13 +128,12 @@ public class KVRangeQueryRunnerTest {
     @Test
     public void exist() {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
-        when(accessor.borrow()).thenReturn(rangeReader);
-        when(rangeReader.kvReader()).thenReturn(kvReader);
-        when(rangeReader.ver()).thenReturn(0L);
-        when(rangeReader.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
+        when(accessor.borrowDataReader()).thenReturn(kvReader);
+        when(accessor.version()).thenReturn(0L);
+        when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
         when(kvReader.exist(any(ByteString.class))).thenReturn(false);
         CompletionStage<Boolean> queryFuture = runner.exist(0, ByteString.copyFromUtf8("key"), false);
-        verify(accessor).returnBorrowed(rangeReader);
+        verify(accessor).returnDataReader(kvReader);
         try {
             assertFalse(queryFuture.toCompletableFuture().join());
         } catch (Throwable e) {
@@ -151,14 +146,13 @@ public class KVRangeQueryRunnerTest {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
-        when(accessor.borrow()).thenReturn(rangeReader);
-        when(rangeReader.kvReader()).thenReturn(kvReader);
-        when(rangeReader.ver()).thenReturn(0L);
-        when(rangeReader.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
+        when(accessor.borrowDataReader()).thenReturn(kvReader);
+        when(accessor.version()).thenReturn(0L);
+        when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
         when(coProc.query(any(ROCoProcInput.class), any(IKVReader.class)))
             .thenReturn(CompletableFuture.completedFuture(value));
         CompletableFuture<ROCoProcOutput> queryFuture = runner.queryCoProc(0, key, false);
-        verify(accessor).returnBorrowed(rangeReader);
+        verify(accessor).returnDataReader(kvReader);
         ArgumentCaptor<ROCoProcInput> inputCap = ArgumentCaptor.forClass(ROCoProcInput.class);
         ArgumentCaptor<IKVReader> kvReaderCap = ArgumentCaptor.forClass(IKVReader.class);
         verify(coProc).query(inputCap.capture(), kvReaderCap.capture());
@@ -176,15 +170,14 @@ public class KVRangeQueryRunnerTest {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
-        when(accessor.borrow()).thenReturn(rangeReader);
-        when(rangeReader.kvReader()).thenReturn(kvReader);
-        when(rangeReader.ver()).thenReturn(0L);
-        when(rangeReader.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
+        when(accessor.borrowDataReader()).thenReturn(kvReader);
+        when(accessor.version()).thenReturn(0L);
+        when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
         when(coProc.query(any(ROCoProcInput.class), any(IKVReader.class)))
             .thenReturn(CompletableFuture.completedFuture(value));
         when(linearizer.linearize()).thenReturn(CompletableFuture.completedFuture(null));
         CompletableFuture<ROCoProcOutput> queryFuture = runner.queryCoProc(0, key, true);
-        verify(accessor).returnBorrowed(rangeReader);
+        verify(accessor).returnDataReader(kvReader);
         ArgumentCaptor<ROCoProcInput> inputCap = ArgumentCaptor.forClass(ROCoProcInput.class);
         ArgumentCaptor<IKVReader> kvReaderCap = ArgumentCaptor.forClass(IKVReader.class);
         verify(coProc).query(inputCap.capture(), kvReaderCap.capture());
@@ -201,10 +194,9 @@ public class KVRangeQueryRunnerTest {
     public void close() {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
-        when(accessor.borrow()).thenReturn(rangeReader);
-        when(rangeReader.kvReader()).thenReturn(kvReader);
-        when(rangeReader.ver()).thenReturn(0L);
-        when(rangeReader.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
+        when(accessor.borrowDataReader()).thenReturn(kvReader);
+        when(accessor.version()).thenReturn(0L);
+        when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
 
         when(linearizer.linearize()).thenReturn(new CompletableFuture<>());
         when(coProc.query(any(ROCoProcInput.class), any(IKVReader.class))).thenReturn(new CompletableFuture<>());

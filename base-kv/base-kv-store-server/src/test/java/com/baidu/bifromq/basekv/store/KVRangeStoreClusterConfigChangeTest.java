@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.store;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.common.collect.Lists;
@@ -35,21 +34,20 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void removeNonLeaderReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting setting = await().until(() -> cluster.kvRangeSetting(rangeId), obj ->
-            obj != null && obj.allReplicas.size() == 3);
+        KVRangeConfig setting = await().until(() -> cluster.kvRangeSetting(rangeId), obj ->
+            obj != null && obj.clusterConfig.getVotersCount() == 3);
         log.info("Start to change config");
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
+            KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);
             String remainStore = nonLeaderStore(setting);
-            if (newSetting.allReplicas.size() == 2) {
+            if (newSetting.clusterConfig.getVotersCount() == 2) {
                 return true;
             }
             try {
-                cluster.changeReplicaConfig(remainStore, newSetting.ver, rangeId,
-                        Sets.newHashSet(setting.followers), emptySet())
+                cluster.changeReplicaConfig(remainStore, newSetting.ver, rangeId, followStores(setting), emptySet())
                     .toCompletableFuture().join();
                 newSetting = cluster.kvRangeSetting(rangeId);
-                return newSetting.allReplicas.size() == 2;
+                return newSetting.clusterConfig.getVotersCount() == 2;
             } catch (Throwable e) {
                 log.info("Change config failed", e);
                 return false;
@@ -60,117 +58,117 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void removeNonLeaderReplicaFromHostingStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting setting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig setting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         String leaderStore = setting.leader;
         String remainStore = nonLeaderStore(setting);
-        String removedStore = setting.followers
+        String removedStore = followStores(setting)
             .stream()
             .filter(storeId -> !storeId.equals(remainStore))
             .collect(Collectors.joining());
 
         log.info("Remove replica[{}]", removedStore);
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
-            if (newSetting.allReplicas.size() == 2 &&
-                !newSetting.allReplicas.contains(removedStore)) {
+            KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);
+            if (newSetting.clusterConfig.getVotersCount() == 2 &&
+                !newSetting.clusterConfig.getVotersList().contains(removedStore)) {
                 return true;
             }
             cluster.changeReplicaConfig(remainStore, newSetting.ver, rangeId, Sets.newHashSet(leaderStore, remainStore),
                 emptySet()).toCompletableFuture().join();
             newSetting = cluster.kvRangeSetting(rangeId);
             return
-                newSetting.allReplicas.size() == 2 &&
-                    !newSetting.allReplicas.contains(removedStore);
+                newSetting.clusterConfig.getVotersCount() == 2 &&
+                    !newSetting.clusterConfig.getVotersList().contains(removedStore);
         });
     }
 
     @Test(groups = "integration")
     public void removeLeaderReplicaFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = await().until(() -> cluster.kvRangeSetting(rangeId), Objects::nonNull);
+        KVRangeConfig rangeSettings = await().until(() -> cluster.kvRangeSetting(rangeId), Objects::nonNull);
         String leaderStore = rangeSettings.leader;
-        List<String> remainStores = rangeSettings.followers;
+        Set<String> remainStores = followStores(rangeSettings);
         log.info("Remove: {}, remain: {}", leaderStore, remainStores);
 
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
-            if (remainStores.containsAll(setting.allReplicas)) {
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            if (remainStores.containsAll(setting.clusterConfig.getVotersList())) {
                 return true;
             }
             cluster.changeReplicaConfig(leaderStore, setting.ver, rangeId, Sets.newHashSet(remainStores), emptySet())
                 .toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return remainStores.containsAll(setting.allReplicas);
+            return remainStores.containsAll(setting.clusterConfig.getVotersList());
         });
     }
 
     @Test(groups = "integration")
     public void removeFailedReplica() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.kvRangeSetting(rangeId);
+        KVRangeConfig rangeSettings = cluster.kvRangeSetting(rangeId);
         String leaderStore = rangeSettings.leader;
         String failureStore = nonLeaderStore(rangeSettings);
         log.info("shutdown store {}", failureStore);
         cluster.shutdownStore(failureStore);
 
-        List<String> remainStores = Lists.newArrayList(rangeSettings.allReplicas);
+        List<String> remainStores = Lists.newArrayList(rangeSettings.clusterConfig.getVotersList());
         remainStores.remove(failureStore);
         log.info("Remain: {}", remainStores);
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
-            if (remainStores.containsAll(setting.allReplicas)) {
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            if (remainStores.containsAll(setting.clusterConfig.getVotersList())) {
                 return true;
             }
             cluster.changeReplicaConfig(leaderStore, setting.ver, rangeId, Sets.newHashSet(remainStores), emptySet())
                 .toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return remainStores.containsAll(setting.allReplicas);
+            return remainStores.containsAll(setting.clusterConfig.getVotersList());
         });
     }
 
     @Test(groups = "integration")
     public void removeNonLeaderReplicaFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         String leaderStore = rangeSettings.leader;
         String remainStore = nonLeaderStore(rangeSettings);
 
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
-            if (newSetting.allReplicas.size() == 2 &&
-                newSetting.allReplicas.contains(leaderStore) &&
-                newSetting.allReplicas.contains(remainStore)) {
+            KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);
+            if (newSetting.clusterConfig.getVotersCount() == 2 &&
+                newSetting.clusterConfig.getVotersList().contains(leaderStore) &&
+                newSetting.clusterConfig.getVotersList().contains(remainStore)) {
                 return true;
             }
             cluster.changeReplicaConfig(remainStore, newSetting.ver, rangeId, Sets.newHashSet(leaderStore, remainStore),
                 emptySet()).toCompletableFuture().join();
             newSetting = cluster.kvRangeSetting(rangeId);
-            return newSetting.allReplicas.size() == 2 &&
-                newSetting.allReplicas.contains(leaderStore) &&
-                newSetting.allReplicas.contains(remainStore);
+            return newSetting.clusterConfig.getVotersCount() == 2 &&
+                newSetting.clusterConfig.getVotersList().contains(leaderStore) &&
+                newSetting.clusterConfig.getVotersList().contains(remainStore);
         });
     }
 
     @Test(groups = "integration")
     public void removeLeaderReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.kvRangeSetting(rangeId);
+        KVRangeConfig rangeSettings = cluster.kvRangeSetting(rangeId);
         String leaderStore = rangeSettings.leader;
-        List<String> remainStores = Lists.newArrayList(rangeSettings.allReplicas);
+        List<String> remainStores = Lists.newArrayList(rangeSettings.clusterConfig.getVotersList());
         remainStores.remove(leaderStore);
         log.info("Remain: {}", remainStores);
 
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting newSetting = cluster.kvRangeSetting(rangeId);
-            if (newSetting.allReplicas.size() == 2 &&
-                !newSetting.allReplicas.contains(leaderStore)) {
+            KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);
+            if (newSetting.clusterConfig.getVotersCount() == 2 &&
+                !newSetting.clusterConfig.getVotersList().contains(leaderStore)) {
                 return true;
             }
             cluster.changeReplicaConfig(remainStores.get(0), newSetting.ver, rangeId, Sets.newHashSet(remainStores),
                 emptySet()).toCompletableFuture().join();
             newSetting = cluster.kvRangeSetting(rangeId);
-            return newSetting.allReplicas.size() == 2 &&
-                !newSetting.allReplicas.contains(leaderStore);
+            return newSetting.clusterConfig.getVotersCount() == 2 &&
+                !newSetting.clusterConfig.getVotersList().contains(leaderStore);
         });
     }
 
@@ -182,14 +180,14 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         log.info("add replica {}", newStore);
 
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
-            if (setting.allReplicas.size() == 2) {
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            if (setting.clusterConfig.getVotersCount() == 2) {
                 return true;
             }
             cluster.changeReplicaConfig(setting.leader, setting.ver, rangeId, Sets.newHashSet(setting.leader, newStore),
                 emptySet()).toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return setting.allReplicas.size() == 2;
+            return setting.clusterConfig.getVotersCount() == 2;
         });
     }
 
@@ -197,44 +195,47 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void addReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         String newStore = cluster.addStore();
-        Set<String> newReplicas = Sets.newHashSet(rangeSettings.allReplicas);
+        Set<String> newReplicas = Sets.newHashSet(rangeSettings.clusterConfig.getVotersList());
         newReplicas.add(newStore);
 
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
-            if (setting.allReplicas.size() == 3 && setting.allReplicas.contains(newStore)) {
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            if (setting.clusterConfig.getVotersCount() == 3 &&
+                setting.clusterConfig.getVotersList().contains(newStore)) {
                 return true;
             }
             cluster.changeReplicaConfig(nonLeaderStore(setting), setting.ver, rangeId, newReplicas, emptySet())
                 .toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return setting.allReplicas.size() == 3 && setting.allReplicas.contains(newStore);
+            return setting.clusterConfig.getVotersCount() == 3 &&
+                setting.clusterConfig.getVotersList().contains(newStore);
         });
     }
 
     @Test(groups = "integration")
     public void jointChangeReplicasFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         String newStore1 = cluster.addStore();
         String newStore2 = cluster.addStore();
         String newStore3 = cluster.addStore();
         Set<String> newReplicas = Sets.newHashSet(newStore1, newStore2, newStore3);
-        log.info("Config change from {} to {}", rangeSettings.allReplicas, newReplicas);
+        log.info("Config change from {} to {}", rangeSettings.clusterConfig.getVotersList(), newReplicas);
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
-            if (newReplicas.containsAll(setting.allReplicas)) {
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            if (newReplicas.containsAll(setting.clusterConfig.getVotersList())) {
                 return true;
             }
             cluster.changeReplicaConfig(setting.leader, setting.ver, rangeId, newReplicas, emptySet())
                 .toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return newReplicas.containsAll(setting.allReplicas);
+            return newReplicas.containsAll(setting.clusterConfig.getVotersList());
         });
         await().until(
-            () -> rangeSettings.allReplicas.stream().noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
+            () -> rangeSettings.clusterConfig.getVotersList().stream()
+                .noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
         log.info("Test done");
     }
 
@@ -242,22 +243,23 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void moveHostingStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 5000);
         String newStore = cluster.addStore();
         Set<String> newReplicas = Sets.newHashSet(newStore);
-        log.info("Config change from {} to {}", rangeSettings.allReplicas, newReplicas);
+        log.info("Config change from {} to {}", rangeSettings.clusterConfig.getVotersList(), newReplicas);
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting setting = cluster.kvRangeSetting(rangeId);
-            if (newReplicas.containsAll(setting.allReplicas)) {
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            if (newReplicas.containsAll(setting.clusterConfig.getVotersList())) {
                 return true;
             }
             cluster.changeReplicaConfig(setting.leader, setting.ver, rangeId, newReplicas, emptySet())
                 .toCompletableFuture().join();
             setting = cluster.kvRangeSetting(rangeId);
-            return newReplicas.containsAll(setting.allReplicas);
+            return newReplicas.containsAll(setting.clusterConfig.getVotersList());
         });
         await().until(
-            () -> rangeSettings.allReplicas.stream().noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
+            () -> rangeSettings.clusterConfig.getVotersList().stream()
+                .noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
         log.info("Test done");
     }
 
@@ -265,26 +267,27 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void jointChangeReplicasFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeSetting rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
         String newStore1 = cluster.addStore();
         String newStore2 = cluster.addStore();
         String newStore3 = cluster.addStore();
         Set<String> newReplicas = Sets.newHashSet(newStore1, newStore2, newStore3);
 
-        log.info("Current config: {}", rangeSettings.allReplicas);
+        log.info("Current config: {}", rangeSettings.clusterConfig.getVotersList());
         await().ignoreExceptions().until(() -> {
-            KVRangeSetting newSettings = cluster.kvRangeSetting(rangeId);
-            if (newReplicas.containsAll(newSettings.allReplicas)) {
+            KVRangeConfig newSettings = cluster.kvRangeSetting(rangeId);
+            if (newReplicas.containsAll(newSettings.clusterConfig.getVotersList())) {
                 return true;
             }
             log.info("Joint-Config change to {}", newReplicas);
             cluster.changeReplicaConfig(nonLeaderStore(rangeSettings), newSettings.ver, rangeId, newReplicas,
                 emptySet()).toCompletableFuture().join();
             newSettings = cluster.kvRangeSetting(rangeId);
-            return newReplicas.containsAll(newSettings.allReplicas);
+            return newReplicas.containsAll(newSettings.clusterConfig.getVotersList());
         });
         await().until(
-            () -> rangeSettings.allReplicas.stream().noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
+            () -> rangeSettings.clusterConfig.getVotersList().stream()
+                .noneMatch(storeId -> cluster.isHosting(storeId, rangeId)));
         log.info("Test done");
 
     }

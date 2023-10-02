@@ -13,18 +13,20 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.proto.Range;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 
 public interface IKVReader {
-    Range range();
+    KeyBoundary boundary();
 
-    long size(Range range);
+    long size(KeyBoundary range);
 
     boolean exist(ByteString key);
 
     Optional<ByteString> get(ByteString key);
 
     IKVIterator iterator();
+
+    void refresh();
 }

@@ -23,7 +23,7 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -100,8 +100,8 @@ public abstract class DistServiceTest {
         distClient = IDistClient.newBuilder().crdtService(clientCrdtService).build();
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
-        kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
-        kvRangeStoreOptions.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
+        kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
+        kvRangeStoreOptions.setWalEngineConfigurator(new InMemKVEngineConfigurator());
 
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
         workerClient = IBaseKVStoreClient

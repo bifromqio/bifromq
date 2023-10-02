@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.stats.StatsCollector;
 import java.io.File;

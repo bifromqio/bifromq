@@ -16,8 +16,9 @@ package com.baidu.bifromq.basekv.localengine.benchmark;
 
 import static com.baidu.bifromq.basekv.localengine.TestUtil.toByteString;
 
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.google.protobuf.ByteString;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
@@ -26,20 +27,23 @@ import org.openjdk.jmh.annotations.State;
 public class ContinuousKeySingleDeleteAndSeekState extends BenchmarkState {
     int keyCount = 1000000;
     ByteString key = ByteString.copyFromUtf8("key");
-    IKVEngineIterator itr;
-    int rangeId;
+    private IKVSpace kvSpace;
+    IKVSpaceIterator itr;
+    private String rangeId = "testRange";
 
     @Override
     protected void afterSetup() {
-        int rangeId = kvEngine.registerKeyRange(IKVEngine.DEFAULT_NS, null, null);
-        int batchId = kvEngine.startBatch();
+        kvSpace = kvEngine.createIfMissing(rangeId);
+        itr = kvSpace.newIterator();
+        IKVSpaceWriter writer = kvSpace.toWriter();
+
         for (int i = 0; i < keyCount; i++) {
-            kvEngine.put(batchId, rangeId, key.concat(toByteString(i)), ByteString.EMPTY);
-            kvEngine.delete(batchId, rangeId, key.concat(toByteString(i)));
+            writer.put(key.concat(toByteString(i)), ByteString.EMPTY);
+            writer.delete(key.concat(toByteString(i)));
         }
-        kvEngine.put(batchId, rangeId, key.concat(toByteString(keyCount)), ByteString.EMPTY);
-        kvEngine.endBatch(batchId);
-        itr = kvEngine.newIterator(rangeId);
+        writer.put(key.concat(toByteString(keyCount)), ByteString.EMPTY);
+        writer.done();
+        itr = kvSpace.newIterator();
     }
 
     @Override

@@ -13,85 +13,60 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
-import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.google.protobuf.ByteString;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
+import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.store.api.IKVReader;
 import io.reactivex.rxjava3.core.Observable;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
-public interface IKVRange {
+public interface IKVRange extends IKVRangeReader {
+    record KVRangeMeta(long ver, State state, KeyBoundary boundary) {
+    }
 
-    KVRangeId id();
-
-    boolean isOccupying(String checkpointId);
 
     /**
-     * If the range is ready to quit from the store. This happens after config changing or merging operation
+     * Get the observable of metadata
      *
-     * @return
+     * @return the observable
      */
-    boolean readyToQuit();
-
-    Observable<KVRangeDescriptor> describe();
-
-    void open(IKVRangeMessenger messenger);
-
-    void tick();
+    Observable<KVRangeMeta> metadata();
 
     /**
-     * Close the range, all activity of the range will be stopped after closed
+     * Make a checkpoint of current state and return a descriptor
      *
-     * @return
+     * @return the descriptor of the checkpoint
      */
-    CompletionStage<Void> close();
+    KVRangeSnapshot checkpoint();
 
     /**
-     * Quit the range from the store, if the range is ready to quit. The range will be closed implicitly.
+     * Check if the given checkpoint exists
      *
-     * @return
+     * @param checkpoint the descriptor
+     * @return bool
      */
-    CompletionStage<Void> quit();
+    boolean hasCheckpoint(KVRangeSnapshot checkpoint);
 
     /**
-     * Destroy the range from store, all range related data will be purged from the store. The range will be closed
-     * implicitly
+     * Open an iterator for accessing the checkpoint data
      *
-     * @return
+     * @param checkpoint the descriptor
+     * @return the checkpoint reader
      */
-    CompletionStage<Void> destroy();
+    IKVRangeReader open(KVRangeSnapshot checkpoint);
+
+    IKVReader borrowDataReader();
+
+    void returnDataReader(IKVReader borrowed);
 
     /**
-     * Recover the range quorum, if it's unable to do election
+     * Get a writer for updating the range
      *
-     * @return
+     * @return the range writer
      */
-    CompletableFuture<Void> recover();
+    IKVRangeWriter<?> toWriter();
 
-    CompletableFuture<Void> transferLeadership(long ver, String newLeader);
+    IKVReseter toReseter(KVRangeSnapshot snapshot);
 
-    CompletableFuture<Void> changeReplicaConfig(long ver, Set<String> newVoters, Set<String> newLearners);
-
-    CompletableFuture<Void> split(long ver, ByteString splitKey);
-
-    CompletableFuture<Void> merge(long ver, KVRangeId mergeeId);
-
-    CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized);
-
-    CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized);
-
-    CompletableFuture<ROCoProcOutput> queryCoProc(long ver, ROCoProcInput query, boolean linearized);
-
-    CompletableFuture<ByteString> put(long ver, ByteString key, ByteString value);
-
-    CompletableFuture<ByteString> delete(long ver, ByteString key);
-
-    CompletableFuture<RWCoProcOutput> mutateCoProc(long ver, RWCoProcInput mutate);
-
+    void destroy();
 }

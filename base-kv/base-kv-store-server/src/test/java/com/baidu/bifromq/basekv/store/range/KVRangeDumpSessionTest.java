@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
@@ -29,30 +29,37 @@ import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
+import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.time.Duration;
 import lombok.SneakyThrows;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
 
 public class KVRangeDumpSessionTest {
     @Mock
-    private IKVRangeState rangeAccessor;
+    private IKVRange rangeAccessor;
     @Mock
     private IKVRangeMessenger messenger;
     @Mock
-    private IKVIterator snapItr;
+    private IKVRangeReader rangeCPReader;
+    @Mock
+    private IKVReader rangeCPDataReader;
+    @Mock
+    private IKVIterator rangeCPDataItr;
 
     @Mock
     private KVRangeDumpSession.DumpBytesRecorder dumpBytesRecorder;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -144,17 +151,19 @@ public class KVRangeDumpSessionTest {
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
-        when(rangeAccessor.open(snapshot)).thenReturn(snapItr);
+        when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
+        when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
+        when(rangeCPDataReader.iterator()).thenReturn(rangeCPDataItr);
         when(messenger.receive()).thenReturn(incomingMsgs);
 
-        when(snapItr.isValid()).thenReturn(true, false);
-        when(snapItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
-        when(snapItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
+        when(rangeCPDataItr.isValid()).thenReturn(true, false);
+        when(rangeCPDataItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
+        when(rangeCPDataItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofSeconds(5), 1024, dumpBytesRecorder);
         assertEquals(dumpSession.checkpointId(), checkpointId);
-        verify(snapItr).seekToFirst();
-        verify(snapItr).next();
+        verify(rangeCPDataItr).seekToFirst();
+        verify(rangeCPDataItr).next();
         assertFalse(dumpSession.awaitDone().toCompletableFuture().isDone());
         ArgumentCaptor<KVRangeMessage> messageCap = ArgumentCaptor.forClass(KVRangeMessage.class);
         verify(messenger).send(messageCap.capture());
@@ -189,12 +198,15 @@ public class KVRangeDumpSessionTest {
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
-        when(rangeAccessor.open(snapshot)).thenReturn(snapItr);
+        when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
+        when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
+        when(rangeCPDataReader.iterator()).thenReturn(rangeCPDataItr);
+
         when(messenger.receive()).thenReturn(incomingMsgs);
 
-        when(snapItr.isValid()).thenReturn(true);
-        when(snapItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
-        when(snapItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
+        when(rangeCPDataItr.isValid()).thenReturn(true);
+        when(rangeCPDataItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
+        when(rangeCPDataItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofMillis(100), 5, dumpBytesRecorder);
         ArgumentCaptor<KVRangeMessage> messageCap = ArgumentCaptor.forClass(KVRangeMessage.class);
@@ -220,12 +232,15 @@ public class KVRangeDumpSessionTest {
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
-        when(rangeAccessor.open(snapshot)).thenReturn(snapItr);
+        when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
+        when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
+        when(rangeCPDataReader.iterator()).thenReturn(rangeCPDataItr);
+
         when(messenger.receive()).thenReturn(incomingMsgs);
 
-        when(snapItr.isValid()).thenReturn(true, false);
-        when(snapItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
-        when(snapItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
+        when(rangeCPDataItr.isValid()).thenReturn(true, false);
+        when(rangeCPDataItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
+        when(rangeCPDataItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofMillis(100), 1024, dumpBytesRecorder);
         Thread.sleep(60);
@@ -253,12 +268,15 @@ public class KVRangeDumpSessionTest {
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
-        when(rangeAccessor.open(snapshot)).thenReturn(snapItr);
+        when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
+        when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
+        when(rangeCPDataReader.iterator()).thenReturn(rangeCPDataItr);
+
         when(messenger.receive()).thenReturn(incomingMsgs);
 
-        when(snapItr.isValid()).thenReturn(true, false);
-        when(snapItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
-        when(snapItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
+        when(rangeCPDataItr.isValid()).thenReturn(true, false);
+        when(rangeCPDataItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
+        when(rangeCPDataItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofMillis(10), 1024, dumpBytesRecorder);
         Thread.sleep(20);
@@ -284,12 +302,15 @@ public class KVRangeDumpSessionTest {
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
-        when(rangeAccessor.open(snapshot)).thenReturn(snapItr);
+        when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
+        when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
+        when(rangeCPDataReader.iterator()).thenReturn(rangeCPDataItr);
+
         when(messenger.receive()).thenReturn(incomingMsgs);
 
-        when(snapItr.isValid()).thenReturn(true, false);
-        when(snapItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
-        when(snapItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
+        when(rangeCPDataItr.isValid()).thenReturn(true, false);
+        when(rangeCPDataItr.key()).thenReturn(ByteString.copyFromUtf8("key"));
+        when(rangeCPDataItr.value()).thenReturn(ByteString.copyFromUtf8("value"));
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofMillis(10), 1024, dumpBytesRecorder);
         assertFalse(dumpSession.awaitDone().toCompletableFuture().isDone());

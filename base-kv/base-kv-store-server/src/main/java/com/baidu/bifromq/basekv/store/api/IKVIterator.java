@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.store.api;
 
 import com.google.protobuf.ByteString;
 
-public interface IKVIterator extends AutoCloseable {
+public interface IKVIterator {
     ByteString key();
 
     ByteString value();

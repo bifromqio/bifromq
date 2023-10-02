@@ -14,9 +14,9 @@
 package com.baidu.bifromq.basekv.localengine.benchmark;
 
 
-import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.localengine.TestUtil.toByteStringNativeOrder;
 
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Scope;
@@ -26,12 +26,14 @@ import org.openjdk.jmh.annotations.State;
 @State(Scope.Group)
 public class SingleKeyUpdateAndGetState extends BenchmarkState {
     ByteString key = ByteString.copyFromUtf8("key");
-    int rangeId;
+    private String rangeId = "testRange";
+    IKVSpace kvSpace;
+
 
     @Override
     protected void afterSetup() {
-        rangeId = kvEngine.registerKeyRange(DEFAULT_NS, null, null);
-        kvEngine.insert(rangeId, key, toByteStringNativeOrder(-1024));
+        kvSpace = kvEngine.createIfMissing(rangeId);
+        kvSpace.toWriter().insert(key, toByteStringNativeOrder(-1024)).done();
     }
 
     @Override

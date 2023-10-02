@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.proto.Range;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.google.protobuf.ByteString;
 
 public interface IKVWriter {
 
     void delete(ByteString key);
 
-    void deleteRange(Range range);
+    void clear(KeyBoundary boundary);
 
     /**
      * Insert a non-exist key value pair, if the key is already exist, the result is undefined.

@@ -14,6 +14,8 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.inbox.util.KeyUtil.buildMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxMetadataKey;
@@ -37,11 +39,11 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedTopicFilter;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -129,7 +131,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private final Cache<ByteString, Optional<InboxMetadata>> inboxMetadataCache;
 
     InboxStoreCoProc(KVRangeId id,
-                     Supplier<IKVRangeReader> rangeReaderProvider,
+                     Supplier<IKVReader> rangeReaderProvider,
                      ISettingProvider settingProvider,
                      IEventCollector eventCollector,
                      Clock clock,
@@ -507,46 +509,47 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         long start = System.nanoTime();
         long yieldThreshold = TimeUnit.NANOSECONDS.convert(100, TimeUnit.MILLISECONDS);
         GCReply.Builder replyBuilder = GCReply.newBuilder().setReqId(request.getReqId());
-        try (IKVIterator itr = reader.iterator()) {
-            if (request.hasScopedInboxId()) {
-                itr.seek(request.getScopedInboxId());
-            } else {
-                itr.seekToFirst();
+        IKVIterator itr = reader.iterator();
+        if (request.hasScopedInboxId()) {
+            itr.seek(request.getScopedInboxId());
+        } else {
+            itr.seekToFirst();
+        }
+        while (itr.isValid() && System.nanoTime() - start < yieldThreshold) {
+            ByteString scopedInboxId = parseScopedInboxId(itr.key());
+            if (request.hasScopedInboxId() &&
+                request.getScopedInboxId().equals(scopedInboxId)) {
+                // skip the cursor
+                continue;
             }
-            while (itr.isValid() && System.nanoTime() - start < yieldThreshold) {
-                ByteString scopedInboxId = parseScopedInboxId(itr.key());
-                if (request.hasScopedInboxId() &&
-                    request.getScopedInboxId().equals(scopedInboxId)) {
-                    // skip the cursor
-                    continue;
-                }
-                if (isInboxMetadataKey(itr.key())) {
-                    InboxMetadata metadata = InboxMetadata.parseFrom(itr.value());
-                    if (isGCable(metadata)) {
-                        if (replyBuilder.getScopedInboxIdCount() < request.getLimit()) {
-                            replyBuilder.addScopedInboxId(scopedInboxId);
-                        } else {
-                            break;
-                        }
+            if (isInboxMetadataKey(itr.key())) {
+                InboxMetadata metadata = InboxMetadata.parseFrom(itr.value());
+                if (isGCable(metadata)) {
+                    if (replyBuilder.getScopedInboxIdCount() < request.getLimit()) {
+                        replyBuilder.addScopedInboxId(scopedInboxId);
+                    } else {
+                        break;
                     }
                 }
-                itr.seek(upperBound(scopedInboxId));
             }
+            itr.seek(upperBound(scopedInboxId));
         }
         return replyBuilder.build();
     }
 
     private CollectMetricsReply collect(CollectMetricsRequest request, IKVReader reader) {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
-        try (IKVIterator itr = reader.iterator()) {
+        try {
+            IKVIterator itr = reader.iterator();
             for (itr.seekToFirst(); itr.isValid(); ) {
                 String tenantId = parseTenantId(itr.key());
                 ByteString startKey = tenantPrefix(tenantId);
                 ByteString endKey = upperBound(tenantPrefix(tenantId));
-                builder.putUsedSpaces(tenantId, reader.size(intersect(reader.range(), Range.newBuilder()
-                    .setStartKey(startKey)
-                    .setEndKey(endKey)
-                    .build())));
+                builder.putUsedSpaces(tenantId,
+                    reader.size(toBoundary(intersect(toRange(reader.boundary()), Range.newBuilder()
+                        .setStartKey(startKey)
+                        .setEndKey(endKey)
+                        .build()))));
                 itr.seek(endKey);
             }
         } catch (Exception e) {
@@ -723,7 +726,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             if (dropCount > 0) {
                 if (dropCount >= currCount) {
                     // drop all
-                    writer.deleteRange(Range.newBuilder()
+                    writer.clear(KeyBoundary.newBuilder()
                         .setStartKey(keyGenerator.apply(scopedInboxId, startSeq))
                         .setEndKey(keyGenerator.apply(scopedInboxId, nextSeq))
                         .build());
@@ -742,7 +745,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     msgListBuilder
                         .addAllMessage(msgList.subList((int) (startSeq + dropCount - beginSeq), msgList.size()))
                         .addAllMessage(messages);
-                    writer.deleteRange(Range.newBuilder()
+                    writer.clear(KeyBoundary.newBuilder()
                         .setStartKey(keyGenerator.apply(scopedInboxId, startSeq))
                         .setEndKey(keyGenerator.apply(scopedInboxId, startSeq + dropCount))
                         .build());
@@ -996,7 +999,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 writer.insert(keyGenerator.apply(scopedInboxId, commitSeq + 1),
                     InboxMessageList.newBuilder().addAllMessage(msgList).build().toByteString());
             }
-            writer.deleteRange(Range.newBuilder()
+            writer.clear(KeyBoundary.newBuilder()
                 .setStartKey(keyGenerator.apply(scopedInboxId, startSeq))
                 .setEndKey(keyGenerator.apply(scopedInboxId, commitSeq + 1))
                 .build());

@@ -13,111 +13,61 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
-import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
-import com.baidu.bifromq.basekv.store.util.KVUtil;
-import com.baidu.bifromq.basekv.store.util.VerUtil;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 
-public class KVRangeWriter implements IKVRangeWriter {
-    private final KVRangeId rangeId;
-    private final IKVEngine kvEngine;
-    private final IKVRangeMetadataAccessor metadata;
-    private final IKVWriter writer;
+public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWriter>
+    implements IKVRangeWriter<KVRangeWriter> {
+    private final IKVSpaceWriter keyRangeWriter;
     private final ILoadTracker loadTracker;
-    private final int batchId;
-    private final KVRangeStateAccessor.KVRangeWriterMutator mutator;
-    private long updatedVersion;
-    private State updatedState;
-    private volatile boolean done;
 
-    public KVRangeWriter(KVRangeId rangeId,
-                         IKVRangeMetadataAccessor metadata,
-                         IKVEngine kvEngine,
-                         KVRangeStateAccessor.KVRangeWriterMutator mutator,
-                         ILoadTracker loadTracker) {
+    public KVRangeWriter(IKVSpaceWriter rangeWriter, ILoadTracker loadTracker) {
+        super(rangeWriter);
+        this.keyRangeWriter = rangeWriter;
         this.loadTracker = loadTracker;
-        this.rangeId = rangeId;
-        this.kvEngine = kvEngine;
-        metadata.refresh();
-        this.metadata = metadata;
-        this.batchId = kvEngine.startBatch();
-        this.mutator = mutator;
-        this.writer = new KVWriter(batchId, metadata, kvEngine, loadTracker);
-        this.updatedVersion = metadata.version();
-        this.updatedState = metadata.state();
     }
 
     @Override
-    public void abort() {
-        assert !done;
-        kvEngine.abortBatch(batchId);
-        done = true;
+    protected IKVSpaceWriter keyRangeWriter() {
+        return keyRangeWriter;
     }
 
     @Override
-    public int size() {
-        assert !done;
-        return kvEngine.batchSize(batchId);
+    public IKVRangeMetadataUpdatable<?> migrateTo(KVRangeId targetRangeId, KeyBoundary boundary) {
+        return new KVRangeMetadataUpdatable(keyRangeWriter.migrateTo(KVRangeIdUtil.toString(targetRangeId), boundary));
     }
 
     @Override
-    public void close() {
-        assert !done;
-        if (updatedVersion > metadata.version() || !updatedState.equals(metadata.state())) {
-            mutator.run(() -> {
-                kvEngine.endBatch(batchId);
-                metadata.refresh();
-            });
-        } else {
-            mutator.run(() -> kvEngine.endBatch(batchId));
-        }
-        done = true;
-    }
-
-    @Override
-    public IKVRangeWriter bumpVer(boolean toOdd) {
-        assert !done;
-        resetVer(VerUtil.bump(metadata.version(), toOdd));
-        return this;
-    }
-
-    @Override
-    public IKVRangeWriter resetVer(long ver) {
-        assert !done;
-        kvEngine.put(batchId, IKVEngine.DEFAULT_NS, KVRangeKeys.verKey(rangeId), KVUtil.toByteStringNativeOrder(ver));
-        updatedVersion = ver;
-        return this;
-    }
-
-    @Override
-    public IKVRangeWriter setLastAppliedIndex(long lastAppliedIndex) {
-        assert !done;
-        kvEngine.put(batchId, IKVEngine.DEFAULT_NS, KVRangeKeys.lastAppliedIndexKey(rangeId),
-            KVUtil.toByteString(lastAppliedIndex));
-        return this;
-    }
-
-    @Override
-    public IKVRangeWriter setRange(Range range) {
-        assert !done;
-        kvEngine.put(batchId, IKVEngine.DEFAULT_NS, KVRangeKeys.rangeKey(rangeId), range.toByteString());
-        return this;
-    }
-
-    @Override
-    public IKVRangeWriter setState(State state) {
-        assert !done;
-        kvEngine.put(batchId, IKVEngine.DEFAULT_NS, KVRangeKeys.stateKey(rangeId), state.toByteString());
-        updatedState = state;
-        return this;
+    public IKVRangeMetadataUpdatable<?> migrateFrom(KVRangeId fromRangeId, KeyBoundary boundary) {
+        return new KVRangeMetadataUpdatable(keyRangeWriter.migrateFrom(KVRangeIdUtil.toString(fromRangeId), boundary));
     }
 
     @Override
     public IKVWriter kvWriter() {
-        assert !done;
-        return writer;
+        return new KVWriter(keyRangeWriter, loadTracker);
+    }
+
+    @Override
+    public IKVReader newDataReader() {
+        return new KVReader(keyRangeWriter, this, loadTracker);
+    }
+
+    @Override
+    public void abort() {
+        keyRangeWriter().abort();
+    }
+
+    @Override
+    public int count() {
+        return keyRangeWriter().count();
+    }
+
+    @Override
+    public void done() {
+        keyRangeWriter().done();
     }
 }

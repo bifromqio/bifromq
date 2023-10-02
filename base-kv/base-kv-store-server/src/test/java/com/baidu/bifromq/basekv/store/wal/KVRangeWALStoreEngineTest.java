@@ -20,9 +20,9 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.TestUtil;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -49,7 +49,7 @@ public class KVRangeWALStoreEngineTest {
     @BeforeMethod
     public void setup() throws IOException {
         if (isDevEnv()) {
-            engineConfigurator = InMemoryKVEngineConfigurator.builder().build();
+            engineConfigurator = InMemKVEngineConfigurator.builder().build();
         } else {
             dbRootDir = Files.createTempDirectory("");
             dbPath = Paths.get(dbRootDir.toString(), DB_NAME).toString();
@@ -119,7 +119,7 @@ public class KVRangeWALStoreEngineTest {
 
     @Test
     public void testLoadExistingRaftStateStorage() {
-        if (engineConfigurator instanceof InMemoryKVEngineConfigurator) {
+        if (engineConfigurator instanceof InMemKVEngineConfigurator) {
             return;
         }
 
@@ -154,7 +154,7 @@ public class KVRangeWALStoreEngineTest {
 
     @Test
     public void testDestroyRaftStateStorage() {
-        if (engineConfigurator instanceof InMemoryKVEngineConfigurator) {
+        if (engineConfigurator instanceof InMemKVEngineConfigurator) {
             return;
         }
 

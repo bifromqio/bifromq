@@ -17,11 +17,10 @@ import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.TestCoProcFactory;
 import com.baidu.bifromq.basekv.TestUtil;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -75,7 +74,7 @@ public class KVRangeStoreTestCluster {
     private final Map<String, KVRangeStore> rangeStoreMap = Maps.newConcurrentMap();
     private final Map<String, PublishSubject<StoreMessage>> rangeStoreMsgSourceMap = Maps.newConcurrentMap();
     private final Map<String, KVRangeStoreDescriptor> storeDescriptorMap = Maps.newConcurrentMap();
-    private final Map<KVRangeId, KVRangeSetting> rangeSettingMap = Maps.newConcurrentMap();
+    private final Map<KVRangeId, KVRangeConfig> rangeConfigMap = Maps.newConcurrentMap();
     private final Map<String, Set<String>> cutMap = Maps.newConcurrentMap();
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final KVRangeStoreOptions optionsTpl;
@@ -159,22 +158,22 @@ public class KVRangeStoreTestCluster {
     }
 
     public List<KVRangeId> allKVRangeIds() {
-        return Lists.newArrayList(rangeSettingMap.keySet());
+        return Lists.newArrayList(rangeConfigMap.keySet());
     }
 
-    public KVRangeSetting kvRangeSetting(KVRangeId kvRangeId) {
+    public KVRangeConfig kvRangeSetting(KVRangeId kvRangeId) {
         checkKVRangeId(kvRangeId);
-        return rangeSettingMap.get(kvRangeId);
+        return rangeConfigMap.get(kvRangeId);
     }
 
     public void awaitKVRangeReady(String storeId, KVRangeId kvRangeId) {
         await().atMost(Duration.ofSeconds(10)).until(() -> {
-            KVRangeSetting kvRangeSetting = rangeSettingMap.get(kvRangeId);
+            KVRangeConfig kvRangeSetting = rangeConfigMap.get(kvRangeId);
             return hasKVRange(storeId, kvRangeId) && kvRangeSetting != null;
         });
     }
 
-    public KVRangeSetting awaitAllKVRangeReady(KVRangeId kvRangeId, long atLeastVer, long timeoutInMS) {
+    public KVRangeConfig awaitAllKVRangeReady(KVRangeId kvRangeId, long atLeastVer, long timeoutInMS) {
         await().atMost(Duration.ofMillis(timeoutInMS)).until(() -> {
             boolean allReady = true;
             for (KVRangeStoreDescriptor storeDescriptor : storeDescriptorMap.values()) {
@@ -188,7 +187,7 @@ public class KVRangeStoreTestCluster {
             }
             return allReady;
         });
-        return rangeSettingMap.get(kvRangeId);
+        return rangeConfigMap.get(kvRangeId);
     }
 
     public CompletionStage<Void> transferLeader(String storeId, long ver, KVRangeId kvRangeId, String newLeader) {
@@ -383,7 +382,6 @@ public class KVRangeStoreTestCluster {
             });
     }
 
-
     public void shutdown() {
         disposables.dispose();
         rangeStoreMap.values().forEach(IKVRangeStore::stop);
@@ -418,7 +416,7 @@ public class KVRangeStoreTestCluster {
     private void loadStore(String storeId) {
         String uuid = storePathMap.get(storeId);
         KVRangeStoreOptions options = optionsTpl.toBuilder().build();
-        if (options.getWalEngineConfigurator() instanceof InMemoryKVEngineConfigurator) {
+        if (options.getWalEngineConfigurator() instanceof InMemKVEngineConfigurator) {
             options.setOverrideIdentity(storeId);
         }
         if (options.getDataEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
@@ -487,8 +485,8 @@ public class KVRangeStoreTestCluster {
                 rangeDescriptor.getState() == State.StateType.Normal &&
                 rangeDescriptor.getConfig().getNextVotersCount() == 0 &&
                 rangeDescriptor.getConfig().getNextLearnersCount() == 0) {
-                KVRangeSetting settings = new KVRangeSetting(CLUSTER, storeDescriptor.getId(), rangeDescriptor);
-                rangeSettingMap.compute(rangeDescriptor.getId(), (id, oldSettings) -> {
+                KVRangeConfig settings = new KVRangeConfig(CLUSTER, storeDescriptor.getId(), rangeDescriptor);
+                rangeConfigMap.compute(rangeDescriptor.getId(), (id, oldSettings) -> {
                     if (oldSettings != null) {
                         if (oldSettings.ver <= rangeDescriptor.getVer()) {
                             return settings;
@@ -506,7 +504,7 @@ public class KVRangeStoreTestCluster {
     }
 
     private void checkKVRangeId(KVRangeId kvRangeId) {
-        Preconditions.checkArgument(rangeSettingMap.containsKey(kvRangeId));
+        Preconditions.checkArgument(rangeConfigMap.containsKey(kvRangeId));
     }
 
     private boolean shouldRetry(Throwable e) {

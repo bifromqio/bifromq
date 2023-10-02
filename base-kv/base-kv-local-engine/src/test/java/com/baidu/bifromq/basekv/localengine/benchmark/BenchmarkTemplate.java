@@ -13,20 +13,18 @@
 
 package com.baidu.bifromq.basekv.localengine.benchmark;
 
-import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static java.lang.Math.max;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
-import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Setup;
@@ -77,7 +75,7 @@ public abstract class BenchmarkTemplate {
                     .setManualWalFlush(true)
                     .setRecycleLogFileNum(10)
                     .setAvoidUnnecessaryBlockingIO(true)
-                    .setStatistics(gcable(new Statistics()));
+                    .setStatistics(gcable(new Statistics(), targetOption));
             }
 
             @Override
@@ -97,7 +95,7 @@ public abstract class BenchmarkTemplate {
                             // https://github.com/facebook/rocksdb/wiki/Partitioned-Index-Filters#how-to-use-it
                             .setIndexType(IndexType.kTwoLevelIndexSearch) //
                             .setFilterPolicy(
-                                gcable(new BloomFilter(16, false)))
+                                gcable(new BloomFilter(16, false), targetOption))
                             .setPartitionFilters(true) //
                             .setMetadataBlockSize(8 * SizeUnit.KB) //
                             .setCacheIndexAndFilterBlocks(true) //
@@ -107,7 +105,7 @@ public abstract class BenchmarkTemplate {
                             // End of partitioned index filters settings.
                             .setBlockSize(4 * SizeUnit.KB)//
                             .setBlockCache(
-                                gcable(new LRUCache(512 * SizeUnit.MB, 8))))
+                                gcable(new LRUCache(512 * SizeUnit.MB, 8), targetOption)))
                     .optimizeLevelStyleCompaction()
                     .setCompactionStyle(CompactionStyle.LEVEL) //
                     // Flushing options:
@@ -131,7 +129,7 @@ public abstract class BenchmarkTemplate {
             }
         }).setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), uuid, DB_CHECKPOINT_DIR).toString())
             .setDbRootDir(Paths.get(dbRootDir.toString(), uuid, DB_NAME).toString());
-        kvEngine = KVEngineFactory.create(null, List.of(DEFAULT_NS), cpId -> true, configurator);
+        kvEngine = KVEngineFactory.create(null, configurator);
         kvEngine.start();
         doSetup();
     }

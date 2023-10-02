@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static org.mockito.Mockito.doNothing;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
@@ -35,8 +35,6 @@ public class KVRangeStatsCollectorTest {
     @Mock
     private IKVRangeWAL rangeWAL;
     @Mock
-    private IKVRangeState accessor;
-    @Mock
     private IKVRangeReader rangeReader;
     @Mock
     private IKVReader kvReader;
@@ -54,19 +52,17 @@ public class KVRangeStatsCollectorTest {
 
     @Test
     public void testScrap() {
-        when(accessor.getReader(false)).thenReturn(rangeReader);
-        when(rangeReader.kvReader()).thenReturn(kvReader);
-        when(kvReader.range()).thenReturn(FULL_RANGE);
-        doNothing().when(rangeReader).refresh();
-        when(kvReader.size(FULL_RANGE)).thenReturn(0L);
+        when(rangeReader.newDataReader()).thenReturn(kvReader);
+        when(kvReader.boundary()).thenReturn(toBoundary(FULL_RANGE));
+        when(kvReader.size(toBoundary(FULL_RANGE))).thenReturn(0L);
         when(rangeWAL.logDataSize()).thenReturn(0L);
-        KVRangeStatsCollector statsCollector = new KVRangeStatsCollector(accessor, rangeWAL,
+        KVRangeStatsCollector statsCollector = new KVRangeStatsCollector(rangeReader, rangeWAL,
             Duration.ofSeconds(1), MoreExecutors.directExecutor());
         TestObserver<Map<String, Double>> statsObserver = TestObserver.create();
         statsCollector.collect().subscribe(statsObserver);
         statsObserver.awaitCount(1);
         Map<String, Double> stats = statsObserver.values().get(0);
-        assertEquals(0.0, 0.0, stats.get("dataSize"));
-        assertEquals(0.0, 0.0, stats.get("walSize"));
+        assertEquals(0.0, stats.get("dataSize"));
+        assertEquals(0.0, stats.get("walSize"));
     }
 }

@@ -53,7 +53,7 @@ class KVRangeDumpSession {
 
     KVRangeDumpSession(String peerStoreId,
                        SnapshotSyncRequest request,
-                       IKVRangeState accessor,
+                       IKVRange accessor,
                        IKVRangeMessenger messenger,
                        Executor executor,
                        Duration maxIdleDuration,
@@ -88,7 +88,7 @@ class KVRangeDumpSession {
                 .build());
             executor.execute(() -> doneSignal.complete(null));
         } else {
-            snapshotItr = accessor.open(request.getSnapshot());
+            snapshotItr = accessor.open(request.getSnapshot()).newDataReader().iterator();
             snapshotItr.seekToFirst();
             Disposable disposable = messenger.receive()
                 .mapOptional(m -> {
@@ -101,14 +101,7 @@ class KVRangeDumpSession {
                     return Optional.empty();
                 })
                 .subscribe(this::handleReply);
-            doneSignal.whenComplete((v, e) -> {
-                try {
-                    snapshotItr.close();
-                } catch (Exception ex) {
-                    log.error("Unable to close snapshot iterator", e);
-                }
-                disposable.dispose();
-            });
+            doneSignal.whenComplete((v, e) -> disposable.dispose());
             nextSaveRequest();
         }
     }

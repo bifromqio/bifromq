@@ -13,21 +13,6 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import com.baidu.bifromq.basekv.proto.Range;
-import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
-import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
-import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
-import com.google.protobuf.ByteString;
-import lombok.SneakyThrows;
-import org.mockito.ArgumentCaptor;
-import org.testng.Assert;
-import org.testng.annotations.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos1InboxMsgKey;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +20,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.AssertJUnit.fail;
+
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
+import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
+import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
+import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
+import com.google.protobuf.ByteString;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import lombok.SneakyThrows;
+import org.mockito.ArgumentCaptor;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 public class MockedInboxCommitTest extends MockedInboxStoreTest {
 
@@ -49,7 +48,7 @@ public class MockedInboxCommitTest extends MockedInboxStoreTest {
     public void testCommitQoS0InboxWithNoEntry() {
         try {
             BatchCommitReply commitReply = requestRW(getCommitInput(10, 0, 0))
-                    .getBatchCommit();
+                .getBatchCommit();
             Assert.assertTrue(!commitReply.getResultMap().get(scopedInboxIdUtf8));
         } catch (Exception exception) {
             fail();
@@ -66,7 +65,7 @@ public class MockedInboxCommitTest extends MockedInboxStoreTest {
 
         try {
             BatchCommitReply commitReply = requestRW(getCommitInput(10, 0, 0))
-                    .getBatchCommit();
+                .getBatchCommit();
             Assert.assertTrue(!commitReply.getResultMap().get(scopedInboxIdUtf8));
         } catch (Exception exception) {
             fail();
@@ -92,7 +91,7 @@ public class MockedInboxCommitTest extends MockedInboxStoreTest {
 
         try {
             BatchCommitReply commitReply = requestRW(getCommitInput(10, 0, 0))
-                    .getBatchCommit();
+                .getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
             ArgumentCaptor<ByteString> argCap = ArgumentCaptor.forClass(ByteString.class);
@@ -126,11 +125,11 @@ public class MockedInboxCommitTest extends MockedInboxStoreTest {
 
         try {
             BatchCommitReply commitReply = requestRW(getCommitInput(qos0UpToSeq, 0, 0))
-                    .getBatchCommit();
+                .getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
-            ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
-            verify(writer).deleteRange(rangeCaptor.capture());
+            ArgumentCaptor<KeyBoundary> rangeCaptor = ArgumentCaptor.forClass(KeyBoundary.class);
+            verify(writer).clear(rangeCaptor.capture());
             assertEquals(qos0InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
             assertEquals(qos0InboxMsgKey(scopedInboxId, 2), rangeCaptor.getValue().getEndKey());
 
@@ -177,12 +176,12 @@ public class MockedInboxCommitTest extends MockedInboxStoreTest {
                 .build().toByteString());
 
         try {
-            BatchCommitReply commitReply = requestRW(getCommitInput(qos0UpToSeq, 0 , 0))
-                    .getBatchCommit();
+            BatchCommitReply commitReply = requestRW(getCommitInput(qos0UpToSeq, 0, 0))
+                .getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
-            ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
-            verify(writer).deleteRange(rangeCaptor.capture());
+            ArgumentCaptor<KeyBoundary> rangeCaptor = ArgumentCaptor.forClass(KeyBoundary.class);
+            verify(writer).clear(rangeCaptor.capture());
             assertEquals(qos0InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
             assertEquals(qos0InboxMsgKey(scopedInboxId, 12), rangeCaptor.getValue().getEndKey());
 
@@ -221,11 +220,11 @@ public class MockedInboxCommitTest extends MockedInboxStoreTest {
 
         try {
             BatchCommitReply commitReply = requestRW(getCommitInput(0, qos1UpToSeq, 0))
-                    .getBatchCommit();
+                .getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
-            ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
-            verify(writer).deleteRange(rangeCaptor.capture());
+            ArgumentCaptor<KeyBoundary> rangeCaptor = ArgumentCaptor.forClass(KeyBoundary.class);
+            verify(writer).clear(rangeCaptor.capture());
             assertEquals(qos1InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
             assertEquals(qos1InboxMsgKey(scopedInboxId, 2), rangeCaptor.getValue().getEndKey());
 
@@ -275,11 +274,11 @@ public class MockedInboxCommitTest extends MockedInboxStoreTest {
 
         try {
             BatchCommitReply commitReply = requestRW(getCommitInput(0, qos1UpToSeq, 0))
-                    .getBatchCommit();
+                .getBatchCommit();
             Assert.assertTrue(commitReply.getResultMap().get(scopedInboxIdUtf8));
 
-            ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
-            verify(writer).deleteRange(rangeCaptor.capture());
+            ArgumentCaptor<KeyBoundary> rangeCaptor = ArgumentCaptor.forClass(KeyBoundary.class);
+            verify(writer).clear(rangeCaptor.capture());
             assertEquals(qos1InboxMsgKey(scopedInboxId, 0), rangeCaptor.getValue().getStartKey());
             assertEquals(qos1InboxMsgKey(scopedInboxId, 12), rangeCaptor.getValue().getEndKey());
 

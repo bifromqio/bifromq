@@ -13,23 +13,21 @@
 
 package com.baidu.bifromq.basekv.store.wal;
 
-import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
+import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.KEY_LATEST_SNAPSHOT_BYTES;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
-import com.baidu.bifromq.basekv.store.util.KVUtil;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,13 +40,12 @@ import lombok.extern.slf4j.Slf4j;
 @NotThreadSafe
 @Slf4j
 public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
-    private static final int CF_NUM = 100;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final Map<KVRangeId, KVRangeWALStore> instances = Maps.newConcurrentMap();
     private final IKVEngine kvEngine;
 
     public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, KVEngineConfigurator<?> configurator) {
-        kvEngine = KVEngineFactory.create(overrideIdentity, kvNamespaces(), cpId -> false, configurator);
+        kvEngine = KVEngineFactory.create(overrideIdentity, configurator);
     }
 
     @Override
@@ -95,14 +92,12 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     @Override
     public IRaftStateStore newRaftStateStorage(KVRangeId kvRangeId, Snapshot initSnapshot) {
         checkState();
-        String ns = raftGroupNS(kvRangeId);
         instances.computeIfAbsent(kvRangeId, id -> {
-            KVRangeWALKeys.cache(kvRangeId);
-            int walKeyRangeId = kvEngine.registerKeyRange(ns, KVRangeWALKeys.walStartKey(kvRangeId),
-                KVRangeWALKeys.walEndKey(kvRangeId));
-            kvEngine.put(walKeyRangeId, KVRangeWALKeys.latestSnapshotKey(kvRangeId), initSnapshot.toByteString());
-            kvEngine.flush(ns).join();
-            return new KVRangeWALStore(kvRangeId, kvEngine, ns, walKeyRangeId);
+            IKVSpace kvSpace = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
+            kvSpace.toWriter().put(KEY_LATEST_SNAPSHOT_BYTES, initSnapshot.toByteString())
+                .done();
+            kvSpace.flush().join();
+            return new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace);
         });
         return instances.get(kvRangeId);
     }
@@ -122,8 +117,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     @Override
     public long storageSize(KVRangeId kvRangeId) {
         checkState();
-        return kvEngine.size(raftGroupNS(kvRangeId),
-            KVRangeWALKeys.logEntriesKeyPrefix(kvRangeId), KVRangeWALKeys.logEntriesKeyPrefix(KVUtil.cap(kvRangeId)));
+        return instances.get(kvRangeId).size();
     }
 
     @Override
@@ -133,7 +127,6 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
             try {
                 log.debug("Destroy range wal storage: storeId={}, rangeId={}", id(), toShortString(rangeId));
                 v.destroy();
-                KVRangeWALKeys.uncache(rangeId);
             } catch (Throwable e) {
                 log.error("Failed to destroy KVRangeWALStorage[{}]", toShortString(rangeId), e);
             }
@@ -145,37 +138,13 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         Preconditions.checkState(state.get() == State.STARTED, "Not started");
     }
 
-    private List<String> kvNamespaces() {
-        List<String> ns = new ArrayList<>();
-        ns.add(DEFAULT_NS);
-        for (int i = 0; i < CF_NUM; i++) {
-            ns.add(String.valueOf(i));
-        }
-        return ns;
-    }
-
     private void loadExisting() {
-        for (int i = 0; i < CF_NUM; i++) {
-            String ns = Integer.toString(i);
-            try (IKVEngineIterator it = kvEngine.newIterator(ns)) {
-                for (it.seekToFirst(); it.isValid(); ) {
-                    KVRangeId kvRangeId = KVRangeWALKeys.parseKVRangeId(it.key());
-                    KVRangeWALKeys.cache(kvRangeId);
-                    int walKeyRangeId = kvEngine.registerKeyRange(ns, KVRangeWALKeys.walStartKey(kvRangeId),
-                        KVRangeWALKeys.walEndKey(kvRangeId));
-                    instances.put(kvRangeId, new KVRangeWALStore(kvRangeId,
-                        kvEngine,
-                        ns,
-                        walKeyRangeId));
-                    log.debug("WAL loaded: kvRangeId={}", toShortString(kvRangeId));
-                    it.seek(KVRangeWALKeys.walEndKey(kvRangeId));
-                }
-            }
-        }
-    }
+        kvEngine.ranges().forEach((String id, IKVSpace kvSpace) -> {
+            KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
+            instances.put(kvRangeId, new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace));
+            log.debug("WAL loaded: kvRangeId={}", toShortString(kvRangeId));
 
-    private String raftGroupNS(KVRangeId kvRangeId) {
-        return Long.toString(Math.abs(kvRangeId.getEpoch()) % CF_NUM);
+        });
     }
 
     private enum State {

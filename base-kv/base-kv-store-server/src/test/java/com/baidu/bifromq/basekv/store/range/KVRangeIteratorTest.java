@@ -17,13 +17,10 @@ import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_ITR_
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.google.protobuf.ByteString;
-import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -35,7 +32,7 @@ public class KVRangeIteratorTest {
     @Mock
     private ILoadTracker loadTracker;
     @Mock
-    private IKVEngineIterator engineIterator;
+    private IKVSpaceIterator rangeIterator;
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -48,23 +45,12 @@ public class KVRangeIteratorTest {
         closeable.close();
     }
 
-    @SneakyThrows
-    @Test
-    public void close() {
-        ByteString userKey = ByteString.copyFromUtf8("key");
-        when(engineIterator.key()).thenReturn(KVRangeKeys.dataKey(userKey));
-        AtomicBoolean closed = new AtomicBoolean();
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator, () -> closed.set(true));
-        itr.close();
-        assertTrue(closed.get());
-    }
-
     @Test
     public void key() {
         ByteString userKey = ByteString.copyFromUtf8("key");
-        when(engineIterator.isValid()).thenReturn(true);
-        when(engineIterator.key()).thenReturn(KVRangeKeys.dataKey(userKey));
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        when(rangeIterator.isValid()).thenReturn(true);
+        when(rangeIterator.key()).thenReturn(userKey);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.seekToFirst();
         assertEquals(itr.key(), userKey);
         verify(loadTracker).track(userKey, KEY_ITR_GET);
@@ -73,72 +59,72 @@ public class KVRangeIteratorTest {
     @Test
     public void value() {
         ByteString userKey = ByteString.copyFromUtf8("key");
-        when(engineIterator.isValid()).thenReturn(true);
-        when(engineIterator.key()).thenReturn(KVRangeKeys.dataKey(userKey));
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        when(rangeIterator.isValid()).thenReturn(true);
+        when(rangeIterator.key()).thenReturn(userKey);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.seekToFirst();
         itr.value();
-        verify(engineIterator).value();
+        verify(rangeIterator).value();
     }
 
     @Test
     public void isValid() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.isValid();
-        verify(engineIterator).isValid();
+        verify(rangeIterator).isValid();
     }
 
     @Test
     public void next() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.next();
-        verify(engineIterator).next();
-        verify(engineIterator).isValid();
+        verify(rangeIterator).next();
+        verify(rangeIterator).isValid();
     }
 
     @Test
     public void prev() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.prev();
-        verify(engineIterator).prev();
-        verify(engineIterator).isValid();
+        verify(rangeIterator).prev();
+        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seekToFirst() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.seekToFirst();
-        verify(engineIterator).seekToFirst();
-        verify(engineIterator).isValid();
+        verify(rangeIterator).seekToFirst();
+        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seekToLast() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.seekToLast();
-        verify(engineIterator).seekToLast();
-        verify(engineIterator).isValid();
+        verify(rangeIterator).seekToLast();
+        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seek() {
         ByteString userKey = ByteString.copyFromUtf8("key");
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.seek(userKey);
         ArgumentCaptor<ByteString> captor = ArgumentCaptor.forClass(ByteString.class);
-        verify(engineIterator).seek(captor.capture());
-        assertEquals(captor.getValue(), KVRangeKeys.dataKey(userKey));
-        verify(engineIterator).isValid();
+        verify(rangeIterator).seek(captor.capture());
+        assertEquals(captor.getValue(), userKey);
+        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seekForPrev() {
         ByteString userKey = ByteString.copyFromUtf8("key");
-        IKVIterator itr = new KVRangeIterator(loadTracker, () -> engineIterator);
+        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
         itr.seekForPrev(userKey);
         ArgumentCaptor<ByteString> captor = ArgumentCaptor.forClass(ByteString.class);
-        verify(engineIterator).seekForPrev(captor.capture());
-        assertEquals(captor.getValue(), KVRangeKeys.dataKey(userKey));
-        verify(engineIterator).isValid();
+        verify(rangeIterator).seekForPrev(captor.capture());
+        assertEquals(captor.getValue(), userKey);
+        verify(rangeIterator).isValid();
     }
 }

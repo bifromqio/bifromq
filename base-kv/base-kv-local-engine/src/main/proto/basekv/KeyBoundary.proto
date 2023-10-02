@@ -1,0 +1,11 @@
+syntax = "proto3";
+package basekv;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.basekv.localengine.proto";
+option optimize_for = SPEED;
+
+message KeyBoundary{
+  optional bytes startKey = 1;
+  optional bytes endKey = 2;
+}

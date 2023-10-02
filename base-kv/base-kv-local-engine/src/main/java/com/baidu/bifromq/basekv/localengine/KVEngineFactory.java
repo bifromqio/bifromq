@@ -13,21 +13,19 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import java.util.List;
-import java.util.function.Predicate;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngine;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngine;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 
 public class KVEngineFactory {
     public static IKVEngine create(String overrideIdentity,
-                                   List<String> namespaces,
-                                   Predicate<String> checkpointInUse,
                                    KVEngineConfigurator<?> configurator) {
-        if (configurator instanceof InMemoryKVEngineConfigurator) {
-            return new InMemoryKVEngine(overrideIdentity, namespaces, checkpointInUse,
-                (InMemoryKVEngineConfigurator) configurator);
+        if (configurator instanceof InMemKVEngineConfigurator) {
+            return new InMemKVEngine(overrideIdentity, (InMemKVEngineConfigurator) configurator);
         }
         if (configurator instanceof RocksDBKVEngineConfigurator) {
-            return new RocksDBKVEngine(overrideIdentity, namespaces, checkpointInUse,
-                (RocksDBKVEngineConfigurator) configurator);
+            return new RocksDBKVEngine(overrideIdentity, (RocksDBKVEngineConfigurator) configurator);
         }
         throw new UnsupportedOperationException();
     }

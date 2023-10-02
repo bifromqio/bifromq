@@ -23,5 +23,5 @@ public interface IKVRangeCoProcFactory {
         return key;
     }
 
-    IKVRangeCoProc create(KVRangeId id, Supplier<IKVRangeReader> readerProvider, ILoadTracker loadTracker);
+    IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> readerProvider, ILoadTracker loadTracker);
 }

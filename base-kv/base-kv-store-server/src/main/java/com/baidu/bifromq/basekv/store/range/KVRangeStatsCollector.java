@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.stats.StatsCollector;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWAL;
 import java.time.Duration;
@@ -26,20 +25,18 @@ final class KVRangeStatsCollector extends StatsCollector {
 
     private final IKVRangeWAL wal;
 
-    public KVRangeStatsCollector(IKVRangeState rangeState,
+    public KVRangeStatsCollector(IKVRangeReader rangeState,
                                  IKVRangeWAL wal,
                                  Duration interval,
                                  Executor executor) {
         super(interval, executor);
-        this.reader = rangeState.getReader(false);
+        this.reader = rangeState;
         this.wal = wal;
         tick();
     }
 
     protected void scrap(Map<String, Double> stats) {
-        reader.refresh();
-        IKVReader kvReader = reader.kvReader();
-        stats.put("dataSize", (double) kvReader.size(kvReader.range()));
+        stats.put("dataSize", (double) reader.size());
         stats.put("walSize", (double) wal.logDataSize());
     }
 }

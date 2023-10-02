@@ -13,11 +13,10 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import com.google.protobuf.ByteString;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.Map;
 
 public interface IKVEngine {
+
     String DEFAULT_NS = "default";
 
     /**
@@ -28,206 +27,29 @@ public interface IKVEngine {
     String id();
 
     /**
-     * Register a key range of particular namespace for accessing KV within it. It is allowed to register ranges with
-     * boundary overlapping at the same time. The range is used for internal statistics and bookkeeping at runtime, and
-     * it will not be persisted.
+     * Find all currently available ranges
      *
-     * @param namespace the namespace
-     * @param start     the left end of the range, null for left open end
-     * @param end       the right end of the range, null for right open end
-     * @return unique
+     * @return key range list
      */
-    int registerKeyRange(String namespace, ByteString start, ByteString end);
+    Map<String, IKVSpace> ranges();
 
     /**
-     * Unregister a range
+     * Create a new key range with specified rangeId and boundary or get existing key range
      *
-     * @param rangeId the id identifying the registered range
+     * @param rangeId the range id
+     * @return the key range created
      */
-    void unregisterKeyRange(int rangeId);
-
-    ByteString skip(String namespace, long count);
-
-    ByteString skip(int rangeId, long count);
-
-    long size(String namespace);
-
-    long size(String namespace, ByteString start, ByteString end);
-
-    long size(int rangeId);
-
-    long size(String checkpointId, String namespace);
-
-    long size(String checkpointId, String namespace, ByteString start, ByteString end);
-
-    long size(String checkpointId, int rangeId);
-
-    String checkpoint();
-
-    boolean hasCheckpoint(String checkpointId);
-
-    boolean exist(String namespace, ByteString key);
-
-    boolean exist(int rangeId, ByteString key);
-
-    boolean exist(String checkpointId, int rangeId, ByteString key);
-
-    boolean exist(String checkpointId, String namespace, ByteString key);
-
-    Optional<ByteString> get(String namespace, ByteString key);
-
-    Optional<ByteString> get(int rangeId, ByteString key);
-
-    Optional<ByteString> get(String checkpointId, int rangeId, ByteString key);
-
-    Optional<ByteString> get(String checkpointId, String namespace, ByteString key);
-
-    IKVEngineIterator newIterator(String namespace);
-
-    IKVEngineIterator newIterator(String namespace, ByteString start, ByteString end);
+    IKVSpace createIfMissing(String rangeId);
 
     /**
-     * Create a iterator for the range
+     * Start the kv engine and specifying additional tags for generated metrics
      *
-     * @param rangeId
-     * @return
+     * @param metricTags the additional metric tags
      */
-    IKVEngineIterator newIterator(int rangeId);
-
-    /**
-     * Create a sub-range iterator
-     *
-     * @param rangeId the id of the range
-     * @param start   the left end of the range, null for left open end
-     * @param end     the right end of the range, null for right open end
-     * @return
-     */
-    IKVEngineIterator newIterator(int rangeId, ByteString start, ByteString end);
-
-    IKVEngineIterator newIterator(String checkpointId, String namespace);
-
-    IKVEngineIterator newIterator(String checkpointId, int rangeId);
-
-    IKVEngineIterator newIterator(String checkpointId, int rangeId, ByteString start, ByteString end);
-
-    /**
-     * Start a batch operation
-     *
-     * @return
-     */
-    int startBatch();
-
-    /**
-     * End the batch operation
-     *
-     * @param batchId
-     */
-    void endBatch(int batchId);
-
-    /**
-     * Abort the batch operation
-     *
-     * @param batchId
-     */
-    void abortBatch(int batchId);
-
-    /**
-     * Number of operations contained in the batch
-     *
-     * @param batchId
-     * @return
-     */
-    int batchSize(int batchId);
-
-    /**
-     * Delete the key. The key must be within the range.
-     *
-     * @param batchId
-     * @param rangeId
-     * @param key
-     */
-    void delete(int batchId, int rangeId, ByteString key);
-
-    void delete(int batchId, String namespace, ByteString key);
-
-    void delete(int rangeId, ByteString key);
-
-    void delete(String namespace, ByteString key);
-
-    void clearRange(String namespace);
-
-    /**
-     * Delete all keys in the range
-     *
-     * @param rangeId
-     */
-    void clearRange(int rangeId);
-
-    void clearRange(int batchId, int rangeId);
-
-    void clearRange(int batchId, String namespace);
-
-    /**
-     * Delete all keys in sub-range
-     *
-     * @param batchId
-     * @param rangeId
-     * @param start
-     * @param end
-     */
-    void clearSubRange(int batchId, int rangeId, ByteString start, ByteString end);
-
-    void clearSubRange(int batchId, String namespace, ByteString start, ByteString end);
-
-    /**
-     * Delete all keys in sub-range
-     *
-     * @param rangeId
-     * @param start
-     * @param end
-     */
-    void clearSubRange(int rangeId, ByteString start, ByteString end);
-
-    void clearSubRange(String namespace, ByteString start, ByteString end);
-
-    /**
-     * Insert a key-value, the key must be within the range and do not exist otherwise it will not be deleted correctly
-     * later. An assertion of non-existent is made using java language-level assert statement, which causing a little
-     * more cpu overhead and can be controlled using -ea jvm options.
-     *
-     * @param batchId
-     * @param rangeId
-     * @param key
-     * @param value
-     */
-    void insert(int batchId, int rangeId, ByteString key, ByteString value);
-
-    void insert(int batchId, String namespace, ByteString key, ByteString value);
-
-    void insert(int rangeId, ByteString key, ByteString value);
-
-    void insert(String namespace, ByteString key, ByteString value);
-
-    /**
-     * Put a key-value. Unlike Insert, the key could be overwritten with new value.
-     *
-     * @param batchId
-     * @param rangeId
-     * @param key
-     * @param value
-     */
-    void put(int batchId, int rangeId, ByteString key, ByteString value);
-
-    void put(int batchId, String namespace, ByteString key, ByteString value);
-
-    void put(int rangeId, ByteString key, ByteString value);
-
-    void put(String namespace, ByteString key, ByteString value);
-
-    CompletableFuture<Long> flush(String namespace);
-
     void start(String... metricTags);
 
+    /**
+     * Stop the engine
+     */
     void stop();
-
 }

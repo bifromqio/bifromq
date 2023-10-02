@@ -16,8 +16,10 @@ package com.baidu.bifromq.basekv.localengine.benchmark;
 
 import static com.baidu.bifromq.basekv.localengine.TestUtil.toByteString;
 
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.google.protobuf.ByteString;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +40,10 @@ import org.openjdk.jmh.annotations.State;
 public class ContinuousKeyDeleteAndSeek_Benchmark extends BenchmarkTemplate {
     private static int keyCount = 1000000;
     private static ByteString key = ByteString.copyFromUtf8("key");
-    private int rangeId;
+    private IKVSpace kvSpace;
+    private IKVSpaceIterator itr;
+    private String rangeId = "testRange";
+
 //    IKVEngineIterator itr;
 
     @State(Scope.Thread)
@@ -53,18 +58,17 @@ public class ContinuousKeyDeleteAndSeek_Benchmark extends BenchmarkTemplate {
 
     @Override
     protected void doSetup() {
-        rangeId = kvEngine.registerKeyRange(IKVEngine.DEFAULT_NS, null, null);
-
-//        itr = kvEngine.newIterator(DEFAULT_NS);
-        int batchId = kvEngine.startBatch();
+        kvSpace = kvEngine.createIfMissing(rangeId);
+        itr = kvSpace.newIterator();
+        IKVSpaceWriter writer = kvSpace.toWriter();
         for (int i = 0; i < keyCount; i++) {
-            kvEngine.insert(batchId, rangeId, key.concat(toByteString(i)), ByteString.copyFromUtf8("val" + i));
-            kvEngine.delete(batchId, rangeId, key.concat(toByteString(i)));
+            writer.insert(key.concat(toByteString(i)), ByteString.copyFromUtf8("val" + i));
+            writer.delete(key.concat(toByteString(i)));
 //            kvEngine.deleteRange(batchId, DEFAULT_NS, key.concat(toByteString(i)), key.concat(toByteString(i + 1)));
         }
-        kvEngine.put(batchId, rangeId, key.concat(toByteString(keyCount)), ByteString.EMPTY);
+        writer.put(key.concat(toByteString(keyCount)), ByteString.EMPTY);
 //        kvEngine.deleteRange(batchId, DEFAULT_NS, key.concat(toByteString(0)), key.concat(toByteString(keyCount)));
-        kvEngine.endBatch(batchId);
+        writer.done();
     }
 
 //    @Benchmark
@@ -82,8 +86,10 @@ public class ContinuousKeyDeleteAndSeek_Benchmark extends BenchmarkTemplate {
     @BenchmarkMode(Mode.Throughput)
     @OutputTimeUnit(TimeUnit.SECONDS)
     public boolean iterator(BenchmarkThreadState state) {
-        IKVEngineIterator itr = kvEngine.newIterator(rangeId, key.concat(toByteString(state.i)),
-            key.concat(toByteString(state.i + 1)));
+        IKVSpaceIterator itr = kvSpace.newIterator(KeyBoundary.newBuilder()
+            .setStartKey(key.concat(toByteString(state.i)))
+            .setEndKey(key.concat(toByteString(state.i + 1)))
+            .build());
 //        IKVEngineIterator itr = kvEngine.newIterator(DEFAULT_NS);
 //        itr.seekToFirst();
         itr.seek(key.concat(toByteString(state.i)));

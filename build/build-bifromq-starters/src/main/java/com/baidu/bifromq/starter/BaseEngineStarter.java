@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.starter;
 
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.starter.config.StarterConfig;
 import com.baidu.bifromq.starter.config.standalone.model.InMemEngineConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RocksDBEngineConfig;
@@ -30,7 +30,7 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
     public static final String DATA_DIR_PROP = "DATA_DIR";
 
     protected KVEngineConfigurator<?> buildDataEngineConf(StorageEngineConfig config, String name) {
-        return buildEngineConf(config, name, true, true);
+        return buildEngineConf(config, name, true, false);
     }
 
     protected KVEngineConfigurator<?> buildWALEngineConf(StorageEngineConfig config, String name) {
@@ -42,7 +42,7 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
                                                     boolean disableWAL,
                                                     boolean atomicFlush) {
         if (config instanceof InMemEngineConfig) {
-            return InMemoryKVEngineConfigurator.builder()
+            return InMemKVEngineConfigurator.builder()
                 .gcInterval(config.getGcIntervalInSec())
                 .build();
         } else {
@@ -65,7 +65,8 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
                 .dbCheckpointRootDir(dataCheckpointRootDir.toString())
                 .gcInterval(config.getGcIntervalInSec())
                 .compactMinTombstoneKeys(rocksDBConfig.compactMinTombstoneKeys())
-                .compactTombstonePercent(rocksDBConfig.compactTombstonePercent())
+                .compactMinTombstoneRanges(rocksDBConfig.compactMinTombstoneRanges())
+                .compactTombstoneRatio(rocksDBConfig.compactTombstoneRatio())
                 .disableWAL(disableWAL)
                 .atomicFlush(atomicFlush)
                 .asyncWALFlush(rocksDBConfig.asyncWALFlush())

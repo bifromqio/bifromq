@@ -13,382 +13,383 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
-import static com.google.protobuf.ByteString.EMPTY;
-import static com.google.protobuf.ByteString.copyFromUtf8;
-import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+import java.util.Optional;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-@Slf4j
 public abstract class AbstractKVEngineTest {
-    protected static final String NS = "test-namespace";
-    protected final AtomicReference<String> cp = new AtomicReference<>();
-    protected IKVEngine kvEngine;
-
-    public static long toLong(ByteString b) {
-        assert b.size() == Long.BYTES;
-        ByteBuffer buffer = b.asReadOnlyByteBuffer();
-        return buffer.getLong();
-    }
+    protected IKVEngine engine;
 
     @BeforeMethod
-    public abstract void setup() throws IOException;
+    public void setup() throws IOException {
+        engine = newEngine();
+        engine.start();
+    }
 
     @AfterMethod
-    public abstract void teardown();
+    public void teardown() {
+        engine.stop();
+    }
+
+    protected abstract IKVEngine newEngine();
 
     @Test
-    public void testIdentity() {
-        assertFalse(kvEngine.id().isEmpty());
+    public void createIfMissing() {
+        String rangeId = "test_range1";
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        IKVSpace keyRange1 = engine.createIfMissing(rangeId);
+        assertEquals(keyRange1, keyRange);
     }
 
     @Test
-    public void testRange() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-        kvEngine.unregisterKeyRange(rangeId);
+    public void size() {
+        String rangeId = "test_range1";
+        String rangeId1 = "test_range2";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        assertEquals(keyRange.size(), 0);
+        keyRange.toWriter().put(key, value).done();
+        assertTrue(keyRange.size() > 0);
+
+        IKVSpace keyRange1 = engine.createIfMissing(rangeId1);
+        assertEquals(keyRange1.size(), 0);
     }
 
     @Test
-    public void testBatch() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-        try {
-            int batchId = kvEngine.startBatch();
-            assertEquals(kvEngine.batchSize(batchId), 0);
-            kvEngine.insert(batchId, rangeId, copyFromUtf8("key"), copyFromUtf8("value"));
-            assertFalse(kvEngine.exist(rangeId, copyFromUtf8("key")));
-            assertEquals(kvEngine.batchSize(batchId), 1);
-            kvEngine.endBatch(batchId);
-        } catch (Exception e) {
-            fail();
-        }
-        assertTrue(kvEngine.exist(rangeId, copyFromUtf8("key")));
-
-        try {
-            int batchId = kvEngine.startBatch();
-            kvEngine.put(batchId, rangeId, copyFromUtf8("key1"), copyFromUtf8("value"));
-            assertFalse(kvEngine.exist(rangeId, copyFromUtf8("key1")));
-            kvEngine.abortBatch(batchId);
-        } catch (Exception e) {
-            fail();
-        }
-        assertFalse(kvEngine.exist(rangeId, copyFromUtf8("key1")));
+    public void metadata() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        keyRange.toWriter().metadata(key, value).done();
+        assertTrue(keyRange.metadata(key).isPresent());
+        assertEquals(keyRange.metadata(key).get(), value);
     }
 
     @Test
-    public void testEmptyKey() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-        ByteString value = copyFromUtf8("value");
-        kvEngine.put(rangeId, EMPTY, value);
-        assertTrue(kvEngine.exist(rangeId, EMPTY));
-        assertEquals(kvEngine.get(rangeId, EMPTY).get(), value);
-        try (IKVEngineIterator itr = kvEngine.newIterator(rangeId)) {
-            itr.seekToFirst();
-            assertEquals(itr.key(), EMPTY);
-            assertEquals(itr.value(), value);
-        }
-        try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, null, EMPTY)) {
-            itr.seekToFirst();
-            assertFalse(itr.isValid());
-        }
-        try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, EMPTY, null)) {
-            itr.seekToFirst();
-            assertEquals(itr.key(), EMPTY);
-            assertEquals(itr.value(), value);
-        }
-        kvEngine.delete(rangeId, EMPTY);
-        assertFalse(kvEngine.exist(rangeId, EMPTY));
+    public void describe() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        KVSpaceDescriptor descriptor = keyRange.describe();
+        assertEquals(descriptor.id(), rangeId);
+        assertEquals(descriptor.metrics().get("size"), 0);
+
+        keyRange.toWriter().put(key, value).metadata(key, value).done();
+        descriptor = keyRange.describe();
+        assertTrue(descriptor.metrics().get("size") > 0);
     }
 
     @Test
-    public void testSkip() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-        int batchId = kvEngine.startBatch();
-        for (long i = 0; i < 1000; i++) {
-            kvEngine.put(batchId, rangeId, toByteString(i), copyFromUtf8("value" + i));
-        }
-        kvEngine.endBatch(batchId);
-        assertTrue(toLong(kvEngine.skip(rangeId, 500)) > 490);
-
-        rangeId = kvEngine.registerKeyRange(NS, null, toByteString(500));
-        assertTrue(toLong(kvEngine.skip(rangeId, 100)) > 90);
-
-        rangeId = kvEngine.registerKeyRange(NS, toByteString(0), null);
-        assertTrue(toLong(kvEngine.skip(rangeId, 100)) > 90);
-
-        rangeId = kvEngine.registerKeyRange(NS, toByteString(100), toByteString(500));
-        assertTrue(toLong(kvEngine.skip(rangeId, 100)) > 190);
+    public void keyRangeDestroy() {
+        String rangeId = "test_range1";
+        IKVSpace range = engine.createIfMissing(rangeId);
+        assertTrue(engine.ranges().containsKey(rangeId));
+        range.destroy();
+        assertTrue(engine.ranges().isEmpty());
+        assertFalse(engine.ranges().containsKey(rangeId));
     }
 
     @Test
-    public void testStats() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-        long size = kvEngine.size(rangeId);
-        assertEquals(size, 0);
+    public void keyRangeDestroyAndCreate() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace range = engine.createIfMissing(rangeId);
+        range.toWriter().put(key, value).done();
+        range.destroy();
 
-        int batchId = kvEngine.startBatch();
-        kvEngine.put(batchId, rangeId, copyFromUtf8("key1"), copyFromUtf8("value"));
-        kvEngine.put(batchId, rangeId, copyFromUtf8("key2"), copyFromUtf8("value"));
-        kvEngine.put(batchId, rangeId, copyFromUtf8("key3"), copyFromUtf8("value"));
-        kvEngine.endBatch(batchId);
-
-        rangeId = kvEngine.registerKeyRange(NS, copyFromUtf8("key1"), copyFromUtf8("key100"));
-        size = kvEngine.size(rangeId);
-        assertTrue(size > 0);
-
-        rangeId = kvEngine.registerKeyRange(NS, copyFromUtf8("key1"), null);
-        size = kvEngine.size(rangeId);
-        assertTrue(size > 0);
-
-        rangeId = kvEngine.registerKeyRange(NS, null, upperBound(copyFromUtf8("key")));
-        size = kvEngine.size(rangeId);
-        assertTrue(size > 0);
-
-        rangeId = kvEngine.registerKeyRange(NS, EMPTY, copyFromUtf8("key1"));
-        size = kvEngine.size(rangeId);
-        assertEquals(size, 0);
-
-        rangeId = kvEngine.registerKeyRange(NS, EMPTY, EMPTY);
-        size = kvEngine.size(rangeId);
-        assertEquals(size, 0);
+        range = engine.createIfMissing(rangeId);
+        assertFalse(range.exist(key));
     }
 
     @Test
-    public void testCheckpoint() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
+    public void checkpoint() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        assertFalse(keyRange.latestCheckpoint().isPresent());
 
-        ByteString key = copyFromUtf8("key1");
-        ByteString value1 = copyFromUtf8("value1");
-        ByteString value2 = copyFromUtf8("value2");
-        kvEngine.put(rangeId, key, value1);
-        String cpId = kvEngine.checkpoint();
-        assertTrue(kvEngine.hasCheckpoint(cpId));
+        String checkpointId = keyRange.checkpoint();
+        assertEquals(checkpointId, keyRange.latestCheckpoint().get());
+        Optional<IKVSpaceReader> checkpoint = keyRange.open(checkpointId);
+        assertTrue(checkpoint.isPresent());
+        assertEquals(checkpoint.get(), keyRange.open(checkpointId).get());
 
-        kvEngine.put(rangeId, key, value2);
+        keyRange.toWriter().put(key, value).done();
+        assertFalse(checkpoint.get().exist(key));
 
-        try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
-            kvItr.seekToFirst();
-            assertTrue(kvItr.isValid());
-            assertEquals(kvItr.key(), key);
-            assertEquals(kvItr.value(), value1);
-        }
-        assertTrue(kvEngine.exist(cpId, rangeId, key));
-        assertEquals(kvEngine.get(cpId, rangeId, key).get(), value1);
+        checkpoint = keyRange.open(keyRange.checkpoint());
+        assertTrue(checkpoint.isPresent());
+        assertTrue(checkpoint.get().exist(key));
     }
 
     @Test
-    public void testInsert() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
+    public void gc() {
+        String rangeId = "test_range1";
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        String checkpointId = keyRange.checkpoint();
+        Optional<IKVSpaceReader> checkpoint = keyRange.open(checkpointId);
+        String checkpointId1 = keyRange.checkpoint();
+        assertNotEquals(checkpointId1, checkpointId);
 
-        assertFalse(kvEngine.exist(rangeId, copyFromUtf8("key1")));
-        kvEngine.insert(rangeId, copyFromUtf8("key1"), copyFromUtf8("value1"));
-        assertTrue(kvEngine.exist(rangeId, copyFromUtf8("key1")));
-        assertEquals(kvEngine.get(rangeId, copyFromUtf8("key1")).get(), copyFromUtf8("value1"));
-        try {
-            kvEngine.insert(rangeId, copyFromUtf8("key1"), copyFromUtf8("value2"));
-            fail();
-        } catch (Throwable e) {
-            assertTrue(e instanceof AssertionError);
-        }
-    }
-
-    @Test
-    public void testPut() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-        kvEngine.put(rangeId, copyFromUtf8("key1"), copyFromUtf8("value1"));
-        assertEquals(kvEngine.get(rangeId, copyFromUtf8("key1")).get(), copyFromUtf8("value1"));
-        assertTrue(kvEngine.exist(rangeId, copyFromUtf8("key1")));
-
-        kvEngine.put(rangeId, copyFromUtf8("key1"), copyFromUtf8("value2"));
-        assertEquals(kvEngine.get(rangeId, copyFromUtf8("key1")).get(), copyFromUtf8("value2"));
-    }
-
-    @Test
-    public void testNull() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-
-        assertFalse(kvEngine.get(rangeId, EMPTY).isPresent());
-        kvEngine.put(rangeId, EMPTY, EMPTY);
-        assertTrue(kvEngine.get(rangeId, EMPTY).isPresent());
-    }
-
-    @Test
-    public void testIteratorWithOpenRange() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-
-        for (long i = 1; i <= 100; i++) {
-            kvEngine.put(rangeId, toByteString(i), EMPTY);
-        }
-        try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, EMPTY, EMPTY)) {
-            itr.seekToFirst();
-            assertFalse(itr.isValid());
-        }
-        try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, null, toByteString(1))) {
-            itr.seekToFirst();
-            assertFalse(itr.isValid());
-        }
-        try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, toByteString(1), upperBound(copyFromUtf8("Key")))) {
-            itr.seekToFirst();
-            assertTrue(itr.isValid());
-            assertEquals(toLong(itr.key()), 1);
-        }
-        try (IKVEngineIterator itr = kvEngine.newIterator(rangeId, null, upperBound(copyFromUtf8("Key")))) {
-            itr.seekToFirst();
-            assertTrue(itr.isValid());
-            assertEquals(toLong(itr.key()), 1);
-        }
-    }
-
-    @Test
-    public void testIteratorRefresh() {
-        ByteString key = copyFromUtf8("key1");
-        ByteString val = copyFromUtf8("value1");
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-        IKVEngineIterator itr = kvEngine.newIterator(rangeId);
-        itr.seek(key);
-        assertFalse(itr.isValid());
-
-        kvEngine.put(rangeId, key, val);
-
-        itr.seek(key);
-        assertFalse(itr.isValid());
-
-        itr.refresh();
-        itr.seek(key);
-        assertTrue(itr.isValid());
-    }
-
-    @Test
-    public void testOpenMultipleIteratorsOfSameCheckpoint() throws InterruptedException {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
-
-        ByteString key = copyFromUtf8("key1");
-        ByteString value1 = copyFromUtf8("value1");
-        ByteString value2 = copyFromUtf8("value2");
-        kvEngine.put(rangeId, key, value1);
-        String cpId = kvEngine.checkpoint();
-        assertTrue(kvEngine.hasCheckpoint(cpId));
-
-        kvEngine.put(rangeId, key, value2);
-        CountDownLatch countDownLatch = new CountDownLatch(3);
-        ForkJoinPool.commonPool().submit(() -> {
-            try {
-                try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
-                    kvItr.seekToFirst();
-                    assertTrue(kvItr.isValid());
-                    assertEquals(kvItr.key(), key);
-                    assertEquals(kvItr.value(), value1);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            countDownLatch.countDown();
+        checkpoint = null;
+        await().forever().until(() -> {
+            System.gc();
+            return keyRange.open(checkpointId).isEmpty();
         });
-        ForkJoinPool.commonPool().submit(() -> {
-            try {
-                try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
-                    kvItr.seekToFirst();
-                    assertTrue(kvItr.isValid());
-                    assertEquals(kvItr.key(), key);
-                    assertEquals(kvItr.value(), value1);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            countDownLatch.countDown();
-        });
-        ForkJoinPool.commonPool().submit(() -> {
-            try {
-                try (IKVEngineIterator kvItr = kvEngine.newIterator(cpId, rangeId)) {
-                    kvItr.seekToFirst();
-                    assertTrue(kvItr.isValid());
-                    assertEquals(kvItr.key(), key);
-                    assertEquals(kvItr.value(), value1);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            countDownLatch.countDown();
-        });
-        countDownLatch.await();
     }
 
     @Test
-    public void testCheckpointGC() {
-        String cpId1 = kvEngine.checkpoint();
-        String cpId2 = kvEngine.checkpoint();
-        cp.set(cpId1);
-        // latest cp always treated as in-use
-        await().until(
-            () -> kvEngine.hasCheckpoint(cpId1) && !kvEngine.hasCheckpoint(cpId2));
+    public void exist() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        assertFalse(keyRange.exist(key));
+
+        IKVSpaceWriter rangeWriter = keyRange.toWriter().put(key, value);
+        assertFalse(keyRange.exist(key));
+
+        rangeWriter.done();
+        assertTrue(keyRange.exist(key));
     }
 
     @Test
-    public void testClearRange() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
+    public void get() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        assertFalse(keyRange.get(key).isPresent());
 
-        ByteString skey = copyFromUtf8("Key1");
-        ByteString ekey = copyFromUtf8("Key10");
-        kvEngine.put(rangeId, skey, ByteString.EMPTY);
-        kvEngine.clearSubRange(rangeId, skey, ekey);
-        assertFalse(kvEngine.exist(rangeId, skey));
+        IKVSpaceWriter rangeWriter = keyRange.toWriter().put(key, value);
+        assertFalse(keyRange.get(key).isPresent());
 
-        kvEngine.put(rangeId, skey, ByteString.EMPTY);
-        assertTrue(kvEngine.exist(rangeId, skey));
-        kvEngine.clearRange(rangeId);
-        assertFalse(kvEngine.exist(rangeId, skey));
-
-        kvEngine.put(rangeId, skey, ByteString.EMPTY);
-        assertTrue(kvEngine.exist(rangeId, skey));
-        kvEngine.clearSubRange(rangeId, skey, upperBound(copyFromUtf8("Key")));
-        assertFalse(kvEngine.exist(rangeId, skey));
-
-        kvEngine.put(rangeId, skey, ByteString.EMPTY);
-        assertTrue(kvEngine.exist(rangeId, skey));
-        kvEngine.clearSubRange(rangeId, copyFromUtf8("Key2"), upperBound(copyFromUtf8("Key")));
-        assertTrue(kvEngine.exist(rangeId, skey));
-
-        kvEngine.put(rangeId, skey, ByteString.EMPTY);
-        assertTrue(kvEngine.exist(rangeId, skey));
-        kvEngine.clearSubRange(rangeId, copyFromUtf8("Key3"), upperBound(copyFromUtf8("Key")));
-        assertTrue(kvEngine.exist(rangeId, skey));
+        rangeWriter.done();
+        assertTrue(keyRange.get(key).isPresent());
+        assertEquals(keyRange.get(key).get(), value);
     }
 
     @Test
-    public void testClearRangeThenInsert() {
-        int rangeId = kvEngine.registerKeyRange(NS, null, null);
+    public void iterator() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
 
-        ByteString key1 = copyFromUtf8("key1");
-        ByteString key2 = copyFromUtf8("key2");
-        ByteString value1 = copyFromUtf8("def");
-        kvEngine.put(rangeId, key1, value1);
-        assertTrue(kvEngine.exist(rangeId, key1));
-        int batchId = kvEngine.startBatch();
-        kvEngine.clearSubRange(batchId, rangeId, key1, key2);
-        kvEngine.put(batchId, rangeId, key1, value1);
-        kvEngine.endBatch(batchId);
-        assertTrue(kvEngine.exist(rangeId, key1));
+        try (IKVSpaceIterator keyRangeIterator = keyRange.newIterator()) {
+            keyRangeIterator.seekToFirst();
+            assertFalse(keyRangeIterator.isValid());
+            keyRange.toWriter().put(key, value).done();
+
+            keyRangeIterator.seekToFirst();
+            assertFalse(keyRangeIterator.isValid());
+            keyRangeIterator.refresh();
+
+            keyRangeIterator.seekToFirst();
+            assertTrue(keyRangeIterator.isValid());
+            assertEquals(keyRangeIterator.key(), key);
+            assertEquals(keyRangeIterator.value(), value);
+            keyRangeIterator.next();
+            assertFalse(keyRangeIterator.isValid());
+
+            keyRangeIterator.seekToLast();
+            assertTrue(keyRangeIterator.isValid());
+            assertEquals(keyRangeIterator.key(), key);
+            assertEquals(keyRangeIterator.value(), value);
+            keyRangeIterator.next();
+            assertFalse(keyRangeIterator.isValid());
+
+            keyRangeIterator.seekForPrev(key);
+            assertTrue(keyRangeIterator.isValid());
+            assertEquals(keyRangeIterator.key(), key);
+            assertEquals(keyRangeIterator.value(), value);
+            keyRangeIterator.next();
+            assertFalse(keyRangeIterator.isValid());
+        }
     }
 
-    protected boolean isUsed(String checkpointId) {
-        return checkpointId.equals(cp.get());
+    @Test
+    public void iterateSubBoundary() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+
+        try (IKVSpaceIterator keyRangeIterator = keyRange.newIterator(KeyBoundary.newBuilder()
+            .setStartKey(key)
+            .build())) {
+            keyRangeIterator.seekToFirst();
+            assertFalse(keyRangeIterator.isValid());
+            keyRange.toWriter().put(key, value).done();
+
+            keyRangeIterator.seekToFirst();
+            assertFalse(keyRangeIterator.isValid());
+            keyRangeIterator.refresh();
+
+            keyRangeIterator.seekToFirst();
+            assertTrue(keyRangeIterator.isValid());
+            assertEquals(keyRangeIterator.key(), key);
+            assertEquals(keyRangeIterator.value(), value);
+            keyRangeIterator.next();
+            assertFalse(keyRangeIterator.isValid());
+
+            keyRangeIterator.seekToLast();
+            assertTrue(keyRangeIterator.isValid());
+            assertEquals(keyRangeIterator.key(), key);
+            assertEquals(keyRangeIterator.value(), value);
+            keyRangeIterator.next();
+            assertFalse(keyRangeIterator.isValid());
+
+            keyRangeIterator.seekForPrev(key);
+            assertTrue(keyRangeIterator.isValid());
+            assertEquals(keyRangeIterator.key(), key);
+            assertEquals(keyRangeIterator.value(), value);
+            keyRangeIterator.next();
+            assertFalse(keyRangeIterator.isValid());
+        }
+        try (IKVSpaceIterator keyRangeIterator = keyRange.newIterator(KeyBoundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("0"))
+            .setEndKey(ByteString.copyFromUtf8("9"))
+            .build())) {
+            keyRangeIterator.seekToFirst();
+            assertFalse(keyRangeIterator.isValid());
+
+            keyRange.toWriter().put(key, value).done();
+
+            keyRangeIterator.refresh();
+
+            keyRangeIterator.seekToFirst();
+            assertFalse(keyRangeIterator.isValid());
+        }
     }
 
-    private ByteString toByteString(long l) {
-        return unsafeWrap(ByteBuffer.allocate(Long.BYTES).putLong(l).array());
+    @Test
+    public void writer() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        keyRange.toWriter()
+            .metadata(key, value)
+            .put(key, value)
+            .delete(key).done();
+        assertFalse(keyRange.exist(key));
+
+        IKVSpaceWriter rangeWriter = keyRange.toWriter();
+        assertEquals(rangeWriter.metadata(key).get(), value);
+        rangeWriter.insert(key, value).done();
+        assertTrue(keyRange.exist(key));
+
+        keyRange.toWriter().clear().done();
+        assertFalse(keyRange.exist(key));
+    }
+
+    @Test
+    public void clearSubBoundary() {
+        String rangeId = "test_range1";
+        ByteString key = ByteString.copyFromUtf8("key");
+        ByteString value = ByteString.copyFromUtf8("value");
+        IKVSpace keyRange = engine.createIfMissing(rangeId);
+        keyRange.toWriter().put(key, value).done();
+
+        keyRange.toWriter()
+            .clear(KeyBoundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("0"))
+                .setEndKey(ByteString.copyFromUtf8("9"))
+                .build())
+            .done();
+        assertTrue(keyRange.exist(key));
+    }
+
+    @Test
+    public void migrateTo() {
+        String leftRangeId = "test_range1";
+        String rightRangeId = "test_range2";
+        ByteString key1 = ByteString.copyFromUtf8("1");
+        ByteString value1 = ByteString.copyFromUtf8("1");
+        ByteString key2 = ByteString.copyFromUtf8("6");
+        ByteString value2 = ByteString.copyFromUtf8("6");
+        ByteString splitKey = ByteString.copyFromUtf8("5");
+
+        ByteString metaKey = ByteString.copyFromUtf8("metaKey");
+        ByteString metaVal = ByteString.copyFromUtf8("metaVal");
+
+
+        IKVSpace leftRange = engine.createIfMissing(leftRangeId);
+        leftRange.toWriter()
+            .put(key1, value1)
+            .put(key2, value2)
+            .done();
+        IKVSpaceWriter leftRangeWriter = leftRange.toWriter();
+        leftRangeWriter
+            .migrateTo(rightRangeId, KeyBoundary.newBuilder().setStartKey(splitKey).build())
+            .metadata(metaKey, metaVal);
+        leftRangeWriter.done();
+
+        IKVSpace rightRange = engine.createIfMissing(rightRangeId);
+
+        assertFalse(leftRange.metadata(metaKey).isPresent());
+        assertTrue(rightRange.metadata(metaKey).isPresent());
+        assertEquals(rightRange.metadata(metaKey).get(), metaVal);
+        assertFalse(leftRange.exist(key2));
+        assertTrue(rightRange.exist(key2));
+    }
+
+    @Test
+    public void migrateFrom() {
+        String leftRangeId = "test_range1";
+        String rightRangeId = "test_range2";
+        ByteString key1 = ByteString.copyFromUtf8("1");
+        ByteString value1 = ByteString.copyFromUtf8("1");
+        ByteString key2 = ByteString.copyFromUtf8("6");
+        ByteString value2 = ByteString.copyFromUtf8("6");
+        ByteString splitKey = ByteString.copyFromUtf8("5");
+
+        ByteString metaKey = ByteString.copyFromUtf8("metaKey");
+        ByteString metaVal = ByteString.copyFromUtf8("metaVal");
+
+
+        IKVSpace leftRange = engine.createIfMissing(leftRangeId);
+        leftRange.toWriter()
+            .put(key1, value1)
+            .done();
+        assertFalse(leftRange.exist(key2));
+        IKVSpace rightRange = engine.createIfMissing(rightRangeId);
+        rightRange.toWriter()
+            .put(key2, value2)
+            .done();
+        assertTrue(rightRange.exist(key2));
+
+        IKVSpaceWriter leftRangeWriter = leftRange.toWriter();
+        leftRangeWriter
+            .migrateFrom(rightRangeId, KeyBoundary.newBuilder().setStartKey(splitKey).build())
+            .metadata(metaKey, metaVal);
+        leftRangeWriter
+            .metadata(metaKey, metaVal)
+            .done();
+
+        assertTrue(leftRange.metadata(metaKey).isPresent());
+        assertTrue(rightRange.metadata(metaKey).isPresent());
+
+        assertEquals(rightRange.metadata(metaKey).get(), metaVal);
+        assertEquals(rightRange.metadata(metaKey).get(), metaVal);
+
+        assertTrue(leftRange.exist(key2));
+        assertFalse(rightRange.exist(key2));
     }
 }

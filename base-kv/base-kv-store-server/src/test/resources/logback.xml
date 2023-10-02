@@ -19,7 +19,8 @@
         </encoder>
     </appender>
 
-    <logger name="com.baidu.bifromq.basekv" level="debug"/>
+    <logger name="com.baidu.bifromq.basekv" level="info"/>
+    <logger name="com.baidu.bifromq.basekv.store" level="debug"/>
 
     <root level="info">
         <appender-ref ref="STDOUT"/>

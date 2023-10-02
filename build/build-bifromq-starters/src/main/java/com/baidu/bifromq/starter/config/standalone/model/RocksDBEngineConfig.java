@@ -23,7 +23,8 @@ import lombok.experimental.Accessors;
 public class RocksDBEngineConfig extends StorageEngineConfig {
     private String dataPathRoot = "";
     private int compactMinTombstoneKeys = 200000;
-    private double compactTombstonePercent = 0.3; // 30%
+    private int compactMinTombstoneRanges = 100000;
+    private double compactTombstoneRatio = 0.3; // 30%
     private boolean asyncWALFlush = false; // only work for wal engine
     private boolean fsyncWAL = false; // only work for wal engine
 }

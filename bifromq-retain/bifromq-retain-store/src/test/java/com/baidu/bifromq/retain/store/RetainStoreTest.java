@@ -27,8 +27,8 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
@@ -128,8 +128,8 @@ public class RetainStoreTest {
         String uuid = UUID.randomUUID().toString();
         KVRangeStoreOptions options = new KVRangeStoreOptions();
         if (!runOnMac()) {
-            options.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
-            options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
+            options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
+            options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
         } else {
             ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
                 .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)

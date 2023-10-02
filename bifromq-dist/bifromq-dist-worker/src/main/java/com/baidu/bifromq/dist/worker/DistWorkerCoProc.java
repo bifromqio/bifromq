@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.dist.worker;
 
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.isEmptyRange;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
@@ -37,7 +39,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -102,7 +103,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final FanoutExecutorGroup fanoutExecutorGroup;
 
     public DistWorkerCoProc(KVRangeId id,
-                            Supplier<IKVRangeReader> readClientProvider,
+                            Supplier<IKVReader> readClientProvider,
                             IEventCollector eventCollector,
                             ISettingProvider settingProvider,
                             IDistClient distClient,
@@ -201,7 +202,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         touchedTopics.add(ScopedTopic.builder()
                             .tenantId(tenantId)
                             .topic(topicFilter)
-                            .range(reader.range())
+                            .range(toRange(reader.boundary()))
                             .build());
                     }
                 }
@@ -256,7 +257,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     touchedTopics.add(ScopedTopic.builder()
                         .tenantId(parseTenantId(groupMatchRecordKey))
                         .topic(groupTopicFilter)
-                        .range(reader.range())
+                        .range(toRange(reader.boundary()))
                         .build());
                 }
             }
@@ -286,7 +287,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         touchedTopics.add(ScopedTopic.builder()
                             .tenantId(tenantId)
                             .topic(topicFilter)
-                            .range(reader.range())
+                            .range(toRange(reader.boundary()))
                             .build());
                     }
                     replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.OK);
@@ -335,7 +336,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         touchedTopics.add(ScopedTopic.builder()
                             .tenantId(parseTenantId(groupMatchRecordKey))
                             .topic(groupTopicFilter)
-                            .range(reader.range())
+                            .range(toRange(reader.boundary()))
                             .build());
                     }
                 }
@@ -362,7 +363,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             Range range = intersect(Range.newBuilder()
                 .setStartKey(matchRecordKeyPrefix(tenantId))
                 .setEndKey(tenantUpperBound(tenantId))
-                .build(), reader.range());
+                .build(), toRange(reader.boundary()));
             if (isEmptyRange(range)) {
                 continue;
             }
@@ -371,7 +372,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 ScopedTopic scopedTopic = ScopedTopic.builder()
                     .tenantId(tenantId)
                     .topic(topic)
-                    .range(reader.range())
+                    .range(toRange(reader.boundary()))
                     .build();
                 Map<ClientInfo, TopicMessagePack.PublisherPack> senderMsgPackMap = topicMsgPack.getMessageList()
                     .stream().collect(Collectors.toMap(TopicMessagePack.PublisherPack::getPublisher, e -> e));
@@ -400,14 +401,15 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
     private CompletableFuture<CollectMetricsReply> collect(long reqId, IKVReader reader) {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(reqId);
-        try (IKVIterator itr = reader.iterator()) {
+        try {
+            IKVIterator itr = reader.iterator();
             for (itr.seekToFirst(); itr.isValid(); ) {
                 String tenantId = parseTenantId(itr.key());
                 builder.putUsedSpaces(tenantId,
-                    reader.size(intersect(reader.range(), Range.newBuilder()
+                    reader.size(toBoundary(intersect(toRange(reader.boundary()), Range.newBuilder()
                         .setStartKey(tenantPrefix(tenantId))
                         .setEndKey(tenantUpperBound(tenantId))
-                        .build())));
+                        .build()))));
                 itr.seek(tenantUpperBound(tenantId));
             }
         } catch (Exception e) {

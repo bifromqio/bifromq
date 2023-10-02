@@ -26,7 +26,6 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.ILoadEstimator;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
@@ -52,13 +51,11 @@ import org.testng.annotations.Test;
 public class SubscriptionCacheTest {
     private KVRangeId id = KVRangeIdUtil.generate();
     @Mock
-    private IKVRangeReader rangeReader;
-    @Mock
-    private IKVReader kvReader;
+    private IKVReader rangeReader;
     @Mock
     private IKVIterator kvIterator;
     @Mock
-    private Supplier<IKVRangeReader> rangeReaderProvider;
+    private Supplier<IKVReader> rangeReaderProvider;
     @Mock
     private ILoadEstimator loadTracker;
     private ExecutorService matchExecutor;
@@ -69,9 +66,8 @@ public class SubscriptionCacheTest {
         closeable = MockitoAnnotations.openMocks(this);
         id = KVRangeIdUtil.generate();
         System.setProperty(DIST_TOPIC_MATCH_EXPIRY.propKey, "1");
-        when(kvReader.iterator()).thenReturn(kvIterator);
-        when(rangeReader.kvReader()).thenReturn(kvReader);
         when(rangeReaderProvider.get()).thenReturn(rangeReader);
+        when(rangeReader.iterator()).thenReturn(kvIterator);
         matchExecutor = MoreExecutors.newDirectExecutorService();
     }
 

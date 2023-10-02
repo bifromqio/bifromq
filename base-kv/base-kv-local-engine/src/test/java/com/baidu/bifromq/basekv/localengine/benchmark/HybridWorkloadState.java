@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.localengine.benchmark;
 
-import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
-
-import com.baidu.bifromq.basekv.localengine.IKVEngineIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,12 +27,15 @@ import org.openjdk.jmh.annotations.State;
 @Slf4j
 @State(Scope.Benchmark)
 public class HybridWorkloadState extends BenchmarkState {
-    int rangeId;
-    ConcurrentHashMap<Long, IKVEngineIterator> itrMap = new ConcurrentHashMap<>();
+    private String rangeId = "testRange";
+    private IKVSpace kvSpace;
+    private IKVSpaceWriter writer;
+
+    ConcurrentHashMap<Long, IKVSpaceIterator> itrMap = new ConcurrentHashMap<>();
 
     @Override
     protected void afterSetup() {
-        rangeId = kvEngine.registerKeyRange(DEFAULT_NS, null, null);
+        kvSpace = kvEngine.createIfMissing(rangeId);
 //        itr = kvEngine.newIterator(rangeId);
     }
 
@@ -40,44 +43,42 @@ public class HybridWorkloadState extends BenchmarkState {
     @Override
     protected void beforeTeardown() {
 //        itr.close();
-        itrMap.values().forEach(IKVEngineIterator::close);
-        kvEngine.unregisterKeyRange(rangeId);
+        itrMap.values().forEach(IKVSpaceIterator::close);
     }
 
     public void randomPut() {
-        kvEngine.put(rangeId, randomBS(), randomBS());
+        writer.put(randomBS(), randomBS());
     }
 
     public void randomDelete() {
-        kvEngine.delete(rangeId, randomBS());
+        writer.delete(randomBS());
     }
 
     public void randomPutAndDelete() {
         ByteString key = randomBS();
-        int batchId = kvEngine.startBatch();
-        kvEngine.put(batchId, rangeId, key, randomBS());
-        kvEngine.delete(batchId, rangeId, key);
-        kvEngine.endBatch(batchId);
+        writer.put(key, randomBS());
+        writer.delete(key);
+        writer.done();
     }
 
     public Optional<ByteString> randomGet() {
-        return kvEngine.get(rangeId, randomBS());
+        return kvSpace.get(randomBS());
     }
 
     public boolean randomExist() {
-        return kvEngine.exist(rangeId, randomBS());
+        return kvSpace.exist(randomBS());
     }
 
     public void seekToFirst() {
-        IKVEngineIterator itr = itrMap.computeIfAbsent(Thread.currentThread().getId(),
-            k -> kvEngine.newIterator(rangeId));
+        IKVSpaceIterator itr = itrMap.computeIfAbsent(Thread.currentThread().getId(),
+            k -> kvSpace.newIterator());
         itr.refresh();
         itr.seekToFirst();
     }
 
     public void randomSeek() {
-        IKVEngineIterator itr = itrMap.computeIfAbsent(Thread.currentThread().getId(),
-            k -> kvEngine.newIterator(rangeId));
+        IKVSpaceIterator itr = itrMap.computeIfAbsent(Thread.currentThread().getId(),
+            k -> kvSpace.newIterator());
         itr.refresh();
         itr.seek(randomBS());
     }

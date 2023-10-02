@@ -17,55 +17,47 @@ import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_DEL;
 import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_INSERT;
 import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_PUT;
 
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.proto.Range;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
-import com.baidu.bifromq.basekv.utils.KeyRangeUtil;
 import com.google.protobuf.ByteString;
 
 public class KVWriter implements IKVWriter {
-    private final int batchId;
-    private final IKVEngine kvEngine;
-    private final IKVRangeMetadataAccessor metadata;
-    private final int keyRangeId;
+    private final IKVSpaceWriter writer;
     private final ILoadTracker loadTracker;
 
-    public KVWriter(int batchId, IKVRangeMetadataAccessor metadata, IKVEngine kvEngine, ILoadTracker loadTracker) {
-        this.batchId = batchId;
-        this.kvEngine = kvEngine;
-        this.keyRangeId = metadata.dataBoundId();
-        this.metadata = metadata;
+    public KVWriter(IKVSpaceWriter writer, ILoadTracker loadTracker) {
+        this.writer = writer;
         this.loadTracker = loadTracker;
     }
 
 
     @Override
     public void delete(ByteString key) {
-        assert KeyRangeUtil.inRange(key, metadata.range());
-        kvEngine.delete(batchId, keyRangeId, KVRangeKeys.dataKey(key));
+        writer.delete(key);
         loadTracker.track(key, KEY_DEL);
     }
 
     @Override
-    public void deleteRange(Range range) {
-        assert KeyRangeUtil.contains(range, metadata.range());
-        Range bound = KVRangeKeys.dataBound(range);
-        kvEngine.clearSubRange(batchId, keyRangeId, bound.getStartKey(), bound.getEndKey());
-        loadTracker.track(bound.getStartKey(), KEY_DEL);
-        loadTracker.track(bound.getEndKey(), KEY_DEL);
+    public void clear(KeyBoundary boundary) {
+        writer.clear(boundary);
+        if (boundary.hasStartKey()) {
+            loadTracker.track(boundary.getStartKey(), KEY_DEL);
+        }
+        if (boundary.hasEndKey()) {
+            loadTracker.track(boundary.getEndKey(), KEY_DEL);
+        }
     }
 
     @Override
     public void insert(ByteString key, ByteString value) {
-        assert KeyRangeUtil.inRange(key, metadata.range());
-        kvEngine.insert(batchId, keyRangeId, KVRangeKeys.dataKey(key), value);
+        writer.insert(key, value);
         loadTracker.track(key, KEY_INSERT);
     }
 
     @Override
     public void put(ByteString key, ByteString value) {
-        assert KeyRangeUtil.inRange(key, metadata.range());
-        kvEngine.put(batchId, keyRangeId, KVRangeKeys.dataKey(key), value);
+        writer.put(key, value);
         loadTracker.track(key, KEY_PUT);
     }
 }

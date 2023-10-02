@@ -25,7 +25,7 @@ import static java.util.Collections.singleton;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
+import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.entity.GroupMatching;
@@ -74,13 +74,13 @@ public class SubscriptionCache {
     private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
-    private final ThreadLocal<IKVRangeReader> threadLocalReader;
+    private final ThreadLocal<IKVReader> threadLocalReader;
     private final ILoadTracker loadTracker;
     private final Timer externalMatchTimer;
     private final Timer internalMatchTimer;
 
     SubscriptionCache(KVRangeId id,
-                      Supplier<IKVRangeReader> rangeReaderProvider,
+                      Supplier<IKVReader> rangeReaderProvider,
                       Executor matchExecutor,
                       ILoadTracker loadTracker) {
         int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
@@ -249,7 +249,7 @@ public class SubscriptionCache {
             .topic(topic)
             .range(matchRecordRange)
             .build(), new MatchResult(tenantVer)));
-        IKVRangeReader rangeReader = threadLocalReader.get();
+        IKVReader rangeReader = threadLocalReader.get();
         rangeReader.refresh();
 
         TopicTrie topicTrie = new TopicTrie();
@@ -258,53 +258,50 @@ public class SubscriptionCache {
         Map<String, Set<String>> matched = Maps.newHashMap();
         TopicFilterMatcher matcher = new TopicFilterMatcher(topicTrie);
         int probe = 0;
-        try (IKVIterator itr = rangeReader.kvReader().iterator()) {
-            // track seek
-            itr.seek(matchRecordRange.getStartKey());
-            while (itr.isValid() && compare(itr.key(), matchRecordRange.getEndKey()) < 0) {
-                // track itr.key()
-                Matching matching = parseMatchRecord(itr.key(), itr.value());
-                // key: topic
-                Set<String> matchedTopics = matched.get(matching.escapedTopicFilter);
-                if (matchedTopics == null) {
-                    Optional<Map<String, Iterable<TopicMessage>>> clientMsgs =
-                        matcher.match(matching.escapedTopicFilter);
-                    if (clientMsgs.isPresent()) {
-                        matchedTopics = clientMsgs.get().keySet();
-                        matched.put(matching.escapedTopicFilter, matchedTopics);
-                        itr.next();
-                        probe = 0;
-                    } else {
-                        Optional<String> higherFilter = matcher.higher(matching.escapedTopicFilter);
-                        if (higherFilter.isPresent()) {
-                            // next() is much cheaper than seek(), we probe following 20 entries
-                            if (probe++ < 20) {
-                                // probe next
-                                itr.next();
-                            } else {
-                                // seek to match next topic filter
-                                ByteString nextMatch = matchRecordTopicFilterPrefix(tenantId, higherFilter.get());
-                                itr.seek(nextMatch);
-                            }
-                            continue;
-                        } else {
-                            break; // no more topic filter to match, stop here
-                        }
-                    }
-                } else {
+        IKVIterator itr = rangeReader.iterator();
+        // track seek
+        itr.seek(matchRecordRange.getStartKey());
+        while (itr.isValid() && compare(itr.key(), matchRecordRange.getEndKey()) < 0) {
+            // track itr.key()
+            Matching matching = parseMatchRecord(itr.key(), itr.value());
+            // key: topic
+            Set<String> matchedTopics = matched.get(matching.escapedTopicFilter);
+            if (matchedTopics == null) {
+                Optional<Map<String, Iterable<TopicMessage>>> clientMsgs =
+                    matcher.match(matching.escapedTopicFilter);
+                if (clientMsgs.isPresent()) {
+                    matchedTopics = clientMsgs.get().keySet();
+                    matched.put(matching.escapedTopicFilter, matchedTopics);
                     itr.next();
+                    probe = 0;
+                } else {
+                    Optional<String> higherFilter = matcher.higher(matching.escapedTopicFilter);
+                    if (higherFilter.isPresent()) {
+                        // next() is much cheaper than seek(), we probe following 20 entries
+                        if (probe++ < 20) {
+                            // probe next
+                            itr.next();
+                        } else {
+                            // seek to match next topic filter
+                            ByteString nextMatch = matchRecordTopicFilterPrefix(tenantId, higherFilter.get());
+                            itr.seek(nextMatch);
+                        }
+                        continue;
+                    } else {
+                        break; // no more topic filter to match, stop here
+                    }
                 }
-                matchedTopics.forEach(t -> routes.get(ScopedTopic.builder()
-                        .tenantId(tenantId)
-                        .topic(t)
-                        .range(matchRecordRange)
-                        .build())
-                    .routes.add(matching));
+            } else {
+                itr.next();
             }
-            sample.stop(internalMatchTimer);
-        } catch (Exception e) {
-            // never happens
+            matchedTopics.forEach(t -> routes.get(ScopedTopic.builder()
+                    .tenantId(tenantId)
+                    .topic(t)
+                    .range(matchRecordRange)
+                    .build())
+                .routes.add(matching));
         }
+        sample.stop(internalMatchTimer);
         return routes;
     }
 

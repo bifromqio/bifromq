@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -28,9 +27,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 public class TestCoProc implements IKVRangeCoProc {
-    private final Supplier<IKVRangeReader> rangeReaderProvider;
+    private final Supplier<IKVReader> rangeReaderProvider;
 
-    public TestCoProc(KVRangeId id, Supplier<IKVRangeReader> rangeReaderProvider) {
+    public TestCoProc(KVRangeId id, Supplier<IKVReader> rangeReaderProvider) {
         this.rangeReaderProvider = rangeReaderProvider;
     }
 

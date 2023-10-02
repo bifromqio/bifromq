@@ -23,7 +23,7 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.IRPCServer;
@@ -176,8 +176,8 @@ class MQTTTest {
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
-                .setDataEngineConfigurator(new InMemoryKVEngineConfigurator())
-                .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
+                .setDataEngineConfigurator(new InMemKVEngineConfigurator())
+                .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
             .build();
         distClient = IDistClient.newBuilder()
             .crdtService(clientCrdtService)
@@ -212,8 +212,8 @@ class MQTTTest {
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
-                .setDataEngineConfigurator(new InMemoryKVEngineConfigurator())
-                .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
+                .setDataEngineConfigurator(new InMemKVEngineConfigurator())
+                .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
             .build();
         retainServer = IRetainServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
@@ -243,8 +243,8 @@ class MQTTTest {
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
-                .setDataEngineConfigurator(new InMemoryKVEngineConfigurator())
-                .setWalEngineConfigurator(new InMemoryKVEngineConfigurator()))
+                .setDataEngineConfigurator(new InMemKVEngineConfigurator())
+                .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
             .balanceControllerOptions(balanceControllerOptions)
             .subBrokerManager(inboxBrokerMgr)
             .build();

@@ -13,20 +13,12 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.proto.Range;
-import com.baidu.bifromq.basekv.proto.State;
-import com.baidu.bifromq.basekv.store.api.IKVWriter;
+import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 
-public interface IKVRangeWriter extends IKVRangeUpdater {
-    IKVRangeWriter bumpVer(boolean toOdd);
+public interface IKVRangeWriter<T extends IKVRangeWriter<T>> extends IKVRangeReader, IKVRangeWritable<T> {
+    void done();
 
-    IKVRangeWriter resetVer(long ver);
+    void abort();
 
-    IKVRangeWriter setLastAppliedIndex(long lastAppliedIndex);
-
-    IKVRangeWriter setRange(Range range);
-
-    IKVRangeWriter setState(State state);
-
-    IKVWriter kvWriter();
+    int count();
 }

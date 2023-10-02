@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.store;
 import static com.baidu.bifromq.basekv.Constants.EMPTY_RANGE;
 import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.basekv.KVRangeSetting.regInProcStore;
-import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.rangeNotFound;
 import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
@@ -25,6 +24,7 @@ import static java.util.Collections.emptyList;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.proto.EnsureRange;
 import com.baidu.bifromq.basekv.proto.EnsureRangeReply;
@@ -44,8 +44,8 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basekv.store.range.IKVRange;
-import com.baidu.bifromq.basekv.store.range.KVRange;
+import com.baidu.bifromq.basekv.store.range.IKVRangeFSM;
+import com.baidu.bifromq.basekv.store.range.KVRangeFSM;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWALStorageEngine;
@@ -97,8 +97,8 @@ public class KVRangeStore implements IKVRangeStore {
     private final String clusterId;
     private final String id;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
-    private final Map<KVRangeId, IKVRange> kvRangeMap = Maps.newConcurrentMap();
-    private final Set<IKVRange> quitRanges = Sets.newConcurrentHashSet();
+    private final Map<KVRangeId, IKVRangeFSM> kvRangeMap = Maps.newConcurrentMap();
+    private final Set<IKVRangeFSM> quitRanges = Sets.newConcurrentHashSet();
     private final Subject<List<Observable<KVRangeDescriptor>>> descriptorListSubject =
         BehaviorSubject.<List<Observable<KVRangeDescriptor>>>create().toSerialized();
     private final IKVRangeCoProcFactory coProcFactory;
@@ -134,8 +134,7 @@ public class KVRangeStore implements IKVRangeStore {
             log.warn("KVRangeStore has been initialized with identity[{}], the override[{}] is ignored",
                 id, opts.getOverrideIdentity());
         }
-        kvRangeEngine = KVEngineFactory.create(null, List.of(DEFAULT_NS),
-            this::check, opts.getDataEngineConfigurator());
+        kvRangeEngine = KVEngineFactory.create(null, opts.getDataEngineConfigurator());
         this.queryExecutor = queryExecutor;
         this.tickExecutor = tickExecutor;
         this.bgTaskExecutor = bgTaskExecutor;
@@ -188,8 +187,10 @@ public class KVRangeStore implements IKVRangeStore {
 
     private void loadExisting() {
         rangeMgmtTaskRunner.add(() -> {
-            walStorageEngine.allKVRangeIds()
-                .forEach(kvRangeId -> kvRangeMap.computeIfAbsent(kvRangeId, key -> initKVRange(key, null)));
+            kvRangeEngine.ranges().forEach((id, keyRange) -> {
+                KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
+                kvRangeMap.computeIfAbsent(kvRangeId, key -> loadKVRange(key, keyRange));
+            });
             updateDescriptorList();
         }).toCompletableFuture().join();
     }
@@ -200,7 +201,7 @@ public class KVRangeStore implements IKVRangeStore {
             try {
                 log.debug("Stop KVRange store[{}]", id);
                 CompletableFuture.allOf(kvRangeMap.values().stream()
-                        .map(IKVRange::close)
+                        .map(IKVRangeFSM::close)
                         .toArray(CompletableFuture[]::new))
                     .join();
                 disposable.dispose();
@@ -316,7 +317,7 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<Void> transferLeadership(long ver, KVRangeId rangeId, String newLeader) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(rangeId);
+        IKVRangeFSM kvRange = kvRangeMap.get(rangeId);
         if (kvRange != null) {
             metricsManager.runningTransferLeaderNum.increment();
             return kvRange.transferLeadership(ver, newLeader)
@@ -330,7 +331,7 @@ public class KVRangeStore implements IKVRangeStore {
                                                      Set<String> newVoters,
                                                      Set<String> newLearners) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(rangeId);
+        IKVRangeFSM kvRange = kvRangeMap.get(rangeId);
         if (kvRange != null) {
             metricsManager.runningConfigChangeNum.increment();
             return kvRange.changeReplicaConfig(ver, newVoters, newLearners)
@@ -342,7 +343,7 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<Void> split(long ver, KVRangeId rangeId, ByteString splitKey) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(rangeId);
+        IKVRangeFSM kvRange = kvRangeMap.get(rangeId);
         if (kvRange != null) {
             metricsManager.runningSplitNum.increment();
             return kvRange.split(ver, splitKey).whenComplete((v, e) -> metricsManager.runningSplitNum.decrement());
@@ -353,7 +354,7 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<Void> merge(long ver, KVRangeId mergerId, KVRangeId mergeeId) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(mergerId);
+        IKVRangeFSM kvRange = kvRangeMap.get(mergerId);
         if (kvRange != null) {
             metricsManager.runningMergeNum.increment();
             return kvRange.merge(ver, mergeeId).whenComplete((v, e) -> metricsManager.runningMergeNum.decrement());
@@ -364,7 +365,7 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<Boolean> exist(long ver, KVRangeId id, ByteString key, boolean linearized) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(id);
+        IKVRangeFSM kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
             return kvRange.exist(ver, key, linearized);
         }
@@ -375,7 +376,7 @@ public class KVRangeStore implements IKVRangeStore {
     public CompletionStage<Optional<ByteString>> get(long ver, KVRangeId id, ByteString key,
                                                      boolean linearized) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(id);
+        IKVRangeFSM kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
             return kvRange.get(ver, key, linearized);
         }
@@ -386,7 +387,7 @@ public class KVRangeStore implements IKVRangeStore {
     public CompletionStage<ROCoProcOutput> queryCoProc(long ver, KVRangeId id, ROCoProcInput query,
                                                        boolean linearized) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(id);
+        IKVRangeFSM kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
             metricsManager.runningQueryNum.increment();
             return kvRange.queryCoProc(ver, query, linearized)
@@ -398,7 +399,7 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<ByteString> put(long ver, KVRangeId id, ByteString key, ByteString value) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(id);
+        IKVRangeFSM kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
             return kvRange.put(ver, key, value);
         }
@@ -408,7 +409,7 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<ByteString> delete(long ver, KVRangeId id, ByteString key) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(id);
+        IKVRangeFSM kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
             return kvRange.delete(ver, key);
         }
@@ -418,7 +419,7 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public CompletionStage<RWCoProcOutput> mutateCoProc(long ver, KVRangeId id, RWCoProcInput mutate) {
         checkStarted();
-        IKVRange kvRange = kvRangeMap.get(id);
+        IKVRangeFSM kvRange = kvRangeMap.get(id);
         if (kvRange != null) {
             metricsManager.runningMutateNum.increment();
             return kvRange.mutateCoProc(ver, mutate)
@@ -442,7 +443,7 @@ public class KVRangeStore implements IKVRangeStore {
                 quitKVRange(r);
             }
         });
-        quitRanges.forEach(IKVRange::tick);
+        quitRanges.forEach(IKVRangeFSM::tick);
         storeStatsCollector.tick();
         scheduleTick(opts.getKvRangeOptions().getTickUnitInMS());
     }
@@ -451,15 +452,50 @@ public class KVRangeStore implements IKVRangeStore {
         return rangeMgmtTaskRunner.add(() -> addKVRange(rangeId, snapshot));
     }
 
-    private void addKVRange(KVRangeId rangeId, Snapshot snapshot) {
-        kvRangeMap.computeIfAbsent(rangeId, k -> {
-            log.debug("Init range[{}] in store[{}]", toShortString(rangeId), id);
-            return initKVRange(k, snapshot);
+    private void addKVRange(KVRangeId kvRangeId, Snapshot snapshot) {
+        kvRangeMap.computeIfAbsent(kvRangeId, k -> {
+            IKVSpace keyRange = kvRangeEngine.ranges().get(KVRangeIdUtil.toString(kvRangeId));
+            KVRangeFSM kvRange;
+            if (keyRange == null) {
+                log.debug("Init range[{}] in store[{}]", toShortString(kvRangeId), id);
+                kvRange = new KVRangeFSM(clusterId,
+                    id,
+                    kvRangeId,
+                    coProcFactory,
+                    this::checkSnapshot,
+                    kvRangeEngine.createIfMissing(KVRangeIdUtil.toString(kvRangeId)),
+                    walStorageEngine,
+                    queryExecutor,
+                    rangeMgmtTaskExecutor,
+                    bgTaskExecutor,
+                    opts.getKvRangeOptions(),
+                    snapshot);
+            } else {
+                log.debug("Load range[{}] in store[{}]", toShortString(kvRangeId), id);
+                if (!walStorageEngine.has(kvRangeId)) {
+                    walStorageEngine.newRaftStateStorage(kvRangeId, snapshot);
+                }
+                kvRange = new KVRangeFSM(clusterId,
+                    id,
+                    kvRangeId,
+                    coProcFactory,
+                    this::checkSnapshot,
+                    keyRange,
+                    walStorageEngine,
+                    queryExecutor,
+                    rangeMgmtTaskExecutor,
+                    bgTaskExecutor,
+                    opts.getKvRangeOptions(),
+                    null);
+            }
+            log.debug("Open range: storeId={}, rangeId={}", id, toShortString(kvRange.id()));
+            kvRange.open(new KVRangeMessenger(id, kvRange.id(), messenger));
+            return kvRange;
         });
         updateDescriptorList();
     }
 
-    private void quitKVRange(IKVRange range) {
+    private void quitKVRange(IKVRangeFSM range) {
         quitRanges.add(range);
         rangeMgmtTaskRunner.add(() -> range.quit()
             .whenCompleteAsync((v, e) -> {
@@ -472,28 +508,29 @@ public class KVRangeStore implements IKVRangeStore {
             }, rangeMgmtTaskExecutor));
     }
 
-    private KVRange initKVRange(KVRangeId kvRangeId, Snapshot initSnapshot) {
+    private KVRangeFSM loadKVRange(KVRangeId kvRangeId, IKVSpace keyRange) {
         checkStarted();
-        log.debug("Create range: storeId={}, rangeId={}", id, toShortString(kvRangeId));
-        KVRange kvRange = new KVRange(clusterId,
+        log.debug("Load existing kv range: storeId={}, rangeId={}", id, toShortString(kvRangeId));
+        KVRangeFSM kvRange = new KVRangeFSM(clusterId,
             id,
             kvRangeId,
             coProcFactory,
             this::checkSnapshot,
-            kvRangeEngine,
+            keyRange,
             walStorageEngine,
             queryExecutor,
             rangeMgmtTaskExecutor,
             bgTaskExecutor,
             opts.getKvRangeOptions(),
-            initSnapshot);
+            null);
         log.debug("Open range: storeId={}, rangeId={}", id, toShortString(kvRange.id()));
         kvRange.open(new KVRangeMessenger(id, kvRange.id(), messenger));
         return kvRange;
     }
 
     private void updateDescriptorList() {
-        descriptorListSubject.onNext(kvRangeMap.values().stream().map(IKVRange::describe).collect(Collectors.toList()));
+        descriptorListSubject.onNext(
+            kvRangeMap.values().stream().map(IKVRangeFSM::describe).collect(Collectors.toList()));
     }
 
     private CompletionStage<Void> checkSnapshot(KVRangeSnapshot snapshot) {

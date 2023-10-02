@@ -20,7 +20,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.AssertJUnit.fail;
 
-import com.baidu.bifromq.basekv.proto.Range;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
@@ -30,11 +30,9 @@ import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 
@@ -45,7 +43,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxWithNoInbox() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE, "test-1");
+            QoS.AT_MOST_ONCE, "test-1");
         try {
             BatchInsertReply reply = requestRW(input).getBatchInsert();
             assertEquals(reply.getResultsList().size(), 1);
@@ -58,7 +56,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxWithExpiration() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1");
+            QoS.AT_MOST_ONCE, "test-1");
 
         when(reader.get(any())).thenReturn(Optional.of(InboxMetadata.newBuilder()
             .setQos0NextSeq(10)
@@ -78,7 +76,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertWithNoSub() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1");
+            QoS.AT_MOST_ONCE, "test-1");
         int nextSeq = 10;
 
         when(kvIterator.isValid())
@@ -107,7 +105,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxNormallyForDropOldestPolicy() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1");
+            QoS.AT_MOST_ONCE, "test-1");
         int nextSeq = 10;
 
         when(kvIterator.isValid())
@@ -149,7 +147,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxWithDropOldestPartially() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1", "test-2");
+            QoS.AT_MOST_ONCE, "test-1", "test-2");
         int nextSeq = 10;
 
         when(kvIterator.isValid())
@@ -175,17 +173,17 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
         try {
             BatchInsertReply reply = requestRW(input).getBatchInsert();
 
-            ArgumentCaptor<Range> rangeCaptor = ArgumentCaptor.forClass(Range.class);
+            ArgumentCaptor<KeyBoundary> rangeCaptor = ArgumentCaptor.forClass(KeyBoundary.class);
             ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
-            verify(writer).deleteRange(rangeCaptor.capture());
+            verify(writer).clear(rangeCaptor.capture());
             verify(writer).insert(argumentCaptor.capture(), argumentCaptor.capture());
             verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
             List<ByteString> args = argumentCaptor.getAllValues();
 
             assertEquals(rangeCaptor.getValue().getStartKey(),
-                    qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0));
+                qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 0));
             assertEquals(rangeCaptor.getValue().getEndKey(),
-                    qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1));
+                qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), 1));
 
             assertEquals(reply.getResultsCount(), 1);
             assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
@@ -204,7 +202,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxWithDropOldestPartiallyAndMultiEntries() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1", "test-2", "test-3");
+            QoS.AT_MOST_ONCE, "test-1", "test-2", "test-3");
         int nextSeq = 5;
 
         when(kvIterator.isValid())
@@ -235,8 +233,8 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
         try {
             BatchInsertReply reply = requestRW(input).getBatchInsert();
 
-            ArgumentCaptor<Range> rangeArgsCap = ArgumentCaptor.forClass(Range.class);
-            verify(writer).deleteRange(rangeArgsCap.capture());
+            ArgumentCaptor<KeyBoundary> rangeArgsCap = ArgumentCaptor.forClass(KeyBoundary.class);
+            verify(writer).clear(rangeArgsCap.capture());
             assertEquals(rangeArgsCap.getValue().getStartKey(), qos0InboxMsgKey(scopedInboxId, 0));
             assertEquals(rangeArgsCap.getValue().getEndKey(), qos0InboxMsgKey(scopedInboxId, 4));
 
@@ -270,7 +268,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxWithDropOldestFully() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1", "test-2", "test-3");
+            QoS.AT_MOST_ONCE, "test-1", "test-2", "test-3");
         int nextSeq = 2;
 
         when(kvIterator.isValid())
@@ -323,7 +321,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxNormallyWithDropYoungestPolicy() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1");
+            QoS.AT_MOST_ONCE, "test-1");
         int nextSeq = 10;
 
         when(kvIterator.isValid())
@@ -350,7 +348,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
             List<ByteString> args = argumentCaptor.getAllValues();
             assertEquals(args.size(), 4);
             assertEquals(qos0InboxMsgKey(ByteString.copyFromUtf8(scopedInboxIdUtf8), nextSeq),
-                    args.get(0));
+                args.get(0));
 
             assertEquals(reply.getResultsCount(), 1);
             assertEquals(reply.getResults(0).getResult(), InsertResult.Result.OK);
@@ -365,7 +363,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxWithDropYoungestPartially() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1", "test-2", "test-3");
+            QoS.AT_MOST_ONCE, "test-1", "test-2", "test-3");
         int nextSeq = 10;
         int limit = 12;
 
@@ -428,7 +426,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
     @Test
     public void testInsertQoS0InboxWithDropYoungestFully() {
         InboxServiceRWCoProcInput input = getInsertInput(topicFilter, topic, QoS.AT_MOST_ONCE,
-                QoS.AT_MOST_ONCE,"test-1", "test-2", "test-3");
+            QoS.AT_MOST_ONCE, "test-1", "test-2", "test-3");
         int nextSeq = 10;
         int limit = 10;
 

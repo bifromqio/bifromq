@@ -13,12 +13,11 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.proto.Range;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.google.protobuf.ByteString;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -28,9 +27,7 @@ import org.testng.annotations.Test;
 
 public class KVWriterTest {
     @Mock
-    private IKVEngine engine;
-    @Mock
-    private IKVRangeMetadataAccessor metadata;
+    private IKVSpaceWriter keyRangeWriter;
     @Mock
     private ILoadTracker loadTracker;
     private AutoCloseable closeable;
@@ -47,36 +44,31 @@ public class KVWriterTest {
 
     @Test
     public void write() {
-        int batchId = 1;
-        int dataBoundId = 2;
-        when(metadata.dataBoundId()).thenReturn(dataBoundId);
-        when(metadata.range()).thenReturn(FULL_RANGE);
-        KVWriter writer = new KVWriter(batchId, metadata, engine, loadTracker);
+        IKVWriter writer = new KVWriter(keyRangeWriter, loadTracker);
 
         // delete
         ByteString delKey = ByteString.copyFromUtf8("delKey");
         writer.delete(delKey);
-        verify(engine).delete(batchId, dataBoundId, KVRangeKeys.dataKey(delKey));
+        verify(keyRangeWriter).delete(delKey);
 
         // insert
         ByteString insKey = ByteString.copyFromUtf8("insertKey");
         ByteString insValue = ByteString.copyFromUtf8("insertValue");
         writer.insert(insKey, insValue);
-        verify(engine).insert(batchId, dataBoundId, KVRangeKeys.dataKey(insKey), insValue);
+        verify(keyRangeWriter).insert(insKey, insValue);
 
         // put
         ByteString putKey = ByteString.copyFromUtf8("putKey");
         ByteString putValue = ByteString.copyFromUtf8("putValue");
         writer.put(putKey, putValue);
-        verify(engine).put(batchId, dataBoundId, KVRangeKeys.dataKey(putKey), putValue);
+        verify(keyRangeWriter).put(putKey, putValue);
 
         // delete range
-        Range delRange = Range.newBuilder()
+        KeyBoundary delRange = KeyBoundary.newBuilder()
             .setStartKey(ByteString.copyFromUtf8("a"))
             .setStartKey(ByteString.copyFromUtf8("z"))
             .build();
-        Range bound = KVRangeKeys.dataBound(delRange);
-        writer.deleteRange(delRange);
-        verify(engine).clearSubRange(batchId, dataBoundId, bound.getStartKey(), bound.getEndKey());
+        writer.clear(delRange);
+        verify(keyRangeWriter).clear(delRange);
     }
 }

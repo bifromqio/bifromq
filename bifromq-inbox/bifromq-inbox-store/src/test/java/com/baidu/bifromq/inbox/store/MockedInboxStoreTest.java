@@ -18,7 +18,6 @@ import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -78,7 +77,7 @@ public abstract class MockedInboxStoreTest {
     @Mock
     protected final IEventCollector eventCollector = event -> {
     };
-    private final Supplier<IKVRangeReader> rangeReaderProvider = () -> null;
+    private final Supplier<IKVReader> rangeReaderProvider = () -> null;
     private final ISettingProvider settingProvider = Setting::current;
     protected final String tenantId = "tenantA";
     protected final String inboxId = "inboxId";

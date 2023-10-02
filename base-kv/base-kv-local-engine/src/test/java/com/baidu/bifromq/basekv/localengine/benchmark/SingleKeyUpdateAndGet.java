@@ -50,7 +50,7 @@ public class SingleKeyUpdateAndGet {
     @BenchmarkMode(Mode.Throughput)
     @OutputTimeUnit(TimeUnit.SECONDS)
     public void get(SingleKeyUpdateAndGetState state, Blackhole blackhole) {
-        blackhole.consume(state.kvEngine.get(state.rangeId, state.key).get());
+        blackhole.consume(state.kvSpace.get(state.key).get());
     }
 
     @Benchmark
@@ -59,7 +59,7 @@ public class SingleKeyUpdateAndGet {
     @BenchmarkMode(Mode.Throughput)
     @OutputTimeUnit(TimeUnit.SECONDS)
     public void update(SingleKeyUpdateAndGetState state) {
-        state.kvEngine.put(state.rangeId, state.key,
-            toByteStringNativeOrder(ThreadLocalRandom.current().nextInt(1024)));
+        state.kvSpace.toWriter().put(state.key,
+            toByteStringNativeOrder(ThreadLocalRandom.current().nextInt(1024))).done();
     }
 }

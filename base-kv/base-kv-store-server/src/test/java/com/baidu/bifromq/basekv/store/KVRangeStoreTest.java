@@ -29,8 +29,8 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.TestCoProcFactory;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.EnsureRange;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -105,9 +105,9 @@ public class KVRangeStoreTest {
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
-        if (isDevEnv()) {
-            options.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
-            options.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
+        if (!isDevEnv()) {
+            options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
+            options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         } else {
             dbRootDir = Files.createTempDirectory("");
             (((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator()))
@@ -438,7 +438,7 @@ public class KVRangeStoreTest {
             log.info("Normal split test");
             // normal split
             rangeStore.split(0, id, copyFromUtf8("a")).toCompletableFuture().join();
-            List<KVRangeDescriptor> ls = await().until(() -> rangeStore.describe().blockingFirst(),
+            List<KVRangeDescriptor> ls = await().forever().until(() -> rangeStore.describe().blockingFirst(),
                 storeDescriptor -> storeDescriptor.getRangesList().size() == 2).getRangesList();
             assertEquals(combine(ls.get(0).getRange(), ls.get(1).getRange()), FULL_RANGE);
         }

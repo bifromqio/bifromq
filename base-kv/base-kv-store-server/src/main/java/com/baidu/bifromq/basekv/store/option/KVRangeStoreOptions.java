@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.store.option;
 
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.util.ProcessUtil;
 import java.nio.file.Paths;
 import lombok.AccessLevel;

@@ -25,7 +25,7 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.localengine.InMemoryKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -90,8 +90,8 @@ public abstract class InboxServiceTest {
 
         KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
-        kvRangeStoreOptions.setDataEngineConfigurator(new InMemoryKVEngineConfigurator());
-        kvRangeStoreOptions.setWalEngineConfigurator(new InMemoryKVEngineConfigurator());
+        kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
+        kvRangeStoreOptions.setWalEngineConfigurator(new InMemKVEngineConfigurator());
         queryExecutor = Executors.newFixedThreadPool(2);
         tickTaskExecutor = Executors.newScheduledThreadPool(2);
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
