@@ -23,6 +23,7 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.UnmatchResult;
+import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -196,10 +197,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     @Override
     public void deleteInbox(DeleteInboxRequest request, StreamObserver<DeleteInboxReply> responseObserver) {
         response(tenantId -> touchScheduler.schedule(new IInboxTouchScheduler.Touch(request))
-            .exceptionally(e -> Collections.emptyList())
             .thenCompose(topicFilters -> {
                 if (topicFilters.isEmpty()) {
-                    return CompletableFuture.completedFuture(null);
+                    return CompletableFuture.completedFuture(UnmatchReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(UnmatchReply.Result.OK)
+                            .build());
                 } else {
                     long reqId = System.nanoTime();
                     List<CompletableFuture<UnmatchResult>> unsubFutures = topicFilters.stream().map(
@@ -212,17 +215,29 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     return CompletableFuture.allOf(unsubFutures.toArray(CompletableFuture[]::new))
                         .thenApply(v -> unsubFutures.stream().map(CompletableFuture::join).toList())
                         .handle((unsubResults, e) -> {
+                            UnmatchReply.Builder builder = UnmatchReply.newBuilder();
+                            builder.setReqId(request.getReqId());
                             if (e != null) {
                                 log.error("Touch inbox error", e);
+                                builder.setResult(UnmatchReply.Result.ERROR);
+                            }else if (unsubResults.stream().allMatch(r -> r == UnmatchResult.OK)) {
+                                builder.setResult(UnmatchReply.Result.OK);
+                            }else {
+                                builder.setResult(UnmatchReply.Result.ERROR);
                             }
-                            return null;
+                            return builder.build();
                         });
                 }
             })
-            .handle((v, e) -> DeleteInboxReply.newBuilder()
+            .thenApply(v -> DeleteInboxReply.newBuilder()
                 .setReqId(request.getReqId())
-                .setResult(e == null ? DeleteInboxReply.Result.OK : DeleteInboxReply.Result.ERROR)
-                .build()), responseObserver);
+                .setResult(v.getResult() == UnmatchReply.Result.OK ?
+                        DeleteInboxReply.Result.OK : DeleteInboxReply.Result.ERROR)
+                .build())
+            .exceptionally(e -> DeleteInboxReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(DeleteInboxReply.Result.ERROR)
+                    .build()), responseObserver);
     }
 
     @Override

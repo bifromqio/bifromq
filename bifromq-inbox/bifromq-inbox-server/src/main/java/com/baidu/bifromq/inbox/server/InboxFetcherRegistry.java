@@ -38,7 +38,7 @@ final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
                 gauging(fetcher.tenantId(), InboxFetcherGauge,
                     () -> fetchers.getOrDefault(fetcher.tenantId(), emptyMap()).size());
             }
-            IInboxFetcher prevFetcher = val.computeIfAbsent(fetcher.delivererKey(), k -> new HashMap<>())
+            IInboxFetcher prevFetcher = val.computeIfAbsent(fetcher.delivererKey(), k -> new ConcurrentHashMap<>())
                 .put(fetcher.id(), fetcher);
             if (prevFetcher != null) {
                 prevFetcher.close();

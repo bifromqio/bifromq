@@ -121,7 +121,6 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
                         switch (v.getCode()) {
                             case Ok:
                                 InboxServiceROCoProcOutput output = v.getRoCoProcResult().getInboxService();
-                                assert output.getReqId() == reqId;
                                 return output.getBatchFetch();
                             default:
                                 throw new RuntimeException(

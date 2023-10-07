@@ -100,7 +100,6 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
                         switch (v.getCode()) {
                             case Ok:
                                 InboxServiceROCoProcOutput reply = v.getRoCoProcResult().getInboxService();
-                                assert reply.getReqId() == reqId;
                                 return reply.getBatchCheck();
                             default:
                                 log.warn("Failed to exec rw co-proc[code={}]", v.getCode());
