@@ -17,32 +17,24 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basescheduler.BatchCallScheduler;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallScheduler;
 import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
-import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 
-public abstract class InboxReadScheduler<Req, Resp> extends BatchCallScheduler<Req, Resp, InboxReadBatcherKey> {
-    protected final IBaseKVStoreClient inboxStoreClient;
-    private final int queuesPerRange;
+public abstract class InboxReadScheduler<Req, Resp> extends QueryCallScheduler<Req, Resp> {
+    protected final int queuesPerRange;
 
     public InboxReadScheduler(int queuesPerRange, IBaseKVStoreClient inboxStoreClient, String name) {
-        super(name, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+        super(name, inboxStoreClient, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofSeconds(DATA_PLANE_BURST_LATENCY_MS.get()));
         Preconditions.checkArgument(queuesPerRange > 0, "Queues per range must be positive");
-        this.inboxStoreClient = inboxStoreClient;
         this.queuesPerRange = queuesPerRange;
-
     }
 
-    protected abstract int selectQueue(int maxQueueIdx, Req request);
-
-    protected abstract ByteString rangeKey(Req request);
-
     @Override
-    protected Optional<InboxReadBatcherKey> find(Req req) {
-        return inboxStoreClient.findByKey(rangeKey(req)).map(
-            range -> new InboxReadBatcherKey(range.leader, range.id, range.ver, selectQueue(queuesPerRange, req)));
+    protected int selectQueue(Req request) {
+        return ThreadLocalRandom.current().nextInt(0, queuesPerRange);
     }
 }

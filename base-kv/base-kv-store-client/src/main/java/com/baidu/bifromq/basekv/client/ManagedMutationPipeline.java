@@ -22,11 +22,11 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class ManagedExecutionPipeline implements IExecutionPipeline {
+class ManagedMutationPipeline implements IMutationPipeline {
     private final Disposable disposable;
     private volatile IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> ppln;
 
-    ManagedExecutionPipeline(Observable<IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply>> pplnObservable) {
+    ManagedMutationPipeline(Observable<IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply>> pplnObservable) {
         disposable = pplnObservable.subscribe(next -> {
             IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> old = ppln;
             ppln = next;

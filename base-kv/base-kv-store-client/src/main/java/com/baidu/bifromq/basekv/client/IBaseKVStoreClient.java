@@ -117,7 +117,7 @@ public interface IBaseKVStoreClient extends IKVRangeRouter, IConnectable {
      * @param storeId
      * @return
      */
-    IExecutionPipeline createExecutionPipeline(String storeId);
+    IMutationPipeline createMutationPipeline(String storeId);
 
     /**
      * Create a caller-managed pipeline for execute ro command orderly

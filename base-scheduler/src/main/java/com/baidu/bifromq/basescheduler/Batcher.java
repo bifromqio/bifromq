@@ -34,8 +34,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class Batcher<Call, CallResult, BatcherKey> {
-    private final Queue<IBatchCall<Call, CallResult>> batchPool;
-    private final Queue<CallTask<Call, CallResult>> callTaskBuffers = new ConcurrentLinkedQueue<>();
+    private final Queue<IBatchCall<Call, CallResult, BatcherKey>> batchPool;
+    private final Queue<CallTask<Call, CallResult, BatcherKey>> callTaskBuffers = new ConcurrentLinkedQueue<>();
     protected final String name;
     protected final BatcherKey batcherKey;
     private final AtomicBoolean triggering = new AtomicBoolean();
@@ -100,9 +100,9 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         return this;
     }
 
-    public final CompletableFuture<CallResult> submit(Call request) {
+    public final CompletableFuture<CallResult> submit(BatcherKey batcherKey, Call request) {
         if (avgLatencyNanos.estimate() < burstLatencyNanos) {
-            CallTask<Call, CallResult> callTask = new CallTask<>(request);
+            CallTask<Call, CallResult, BatcherKey> callTask = new CallTask<>(batcherKey, request);
             boolean offered = callTaskBuffers.offer(callTask);
             assert offered;
             trigger();
@@ -114,10 +114,13 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     }
 
     public void close() {
-        // don't remove metrics since it's shared by all batchers
+        IBatchCall<Call, CallResult, BatcherKey> batchCall;
+        while ((batchCall = batchPool.poll()) != null) {
+            batchCall.destroy();
+        }
     }
 
-    protected abstract IBatchCall<Call, CallResult> newBatch();
+    protected abstract IBatchCall<Call, CallResult, BatcherKey> newBatch();
 
     private void trigger() {
         if (triggering.compareAndSet(false, true)) {
@@ -139,11 +142,11 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     private void batchAndEmit() {
         pipelineDepth.incrementAndGet();
         long buildStart = System.nanoTime();
-        IBatchCall<Call, CallResult> batchCall = batchPool.poll();
+        IBatchCall<Call, CallResult, BatcherKey> batchCall = batchPool.poll();
         assert batchCall != null;
         int batchSize = 0;
-        LinkedList<CallTask<Call, CallResult>> batchedTasks = new LinkedList<>();
-        CallTask<Call, CallResult> callTask;
+        LinkedList<CallTask<Call, CallResult, BatcherKey>> batchedTasks = new LinkedList<>();
+        CallTask<Call, CallResult, BatcherKey> callTask;
         while (batchSize < maxBatchSize && (callTask = callTaskBuffers.poll()) != null) {
             batchCall.add(callTask);
             batchedTasks.add(callTask);

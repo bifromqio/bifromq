@@ -129,7 +129,7 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
     }
 
     private CompletionStage<KVRangeROReply> roCoproc(KVRangeRORequest request) {
-        return kvRangeStore.queryCoProc(request.getVer(), request.getKvRangeId(), request.getRoCoProcInput(),
+        return kvRangeStore.queryCoProc(request.getVer(), request.getKvRangeId(), request.getRoCoProc(),
                 linearized)
             .thenApply(result -> KVRangeROReply.newBuilder()
                 .setReqId(request.getReqId())

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.localengine;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
@@ -84,6 +85,7 @@ public abstract class AbstractKVEngine implements IKVEngine {
                 if (gcJob != null && !gcJob.isDone()) {
                     gcJob.join();
                 }
+                MoreExecutors.shutdownAndAwaitTermination(gcExecutor, 5, TimeUnit.SECONDS);
                 doStop();
                 Metrics.globalRegistry.remove(gauge);
             } finally {

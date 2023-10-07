@@ -45,13 +45,26 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
 
     public BatchCallScheduler(String name, Duration tolerableLatency, Duration burstLatency) {
         this(name, new ICallScheduler<>() {
-        }, tolerableLatency, burstLatency);
+        }, tolerableLatency, burstLatency, Duration.ofSeconds(BATCHER_EXPIRY_SECONDS));
+    }
+
+    public BatchCallScheduler(String name, Duration tolerableLatency, Duration burstLatency, Duration batcherExpiry) {
+        this(name, new ICallScheduler<>() {
+        }, tolerableLatency, burstLatency, batcherExpiry);
     }
 
     public BatchCallScheduler(String name,
                               ICallScheduler<Call> reqScheduler,
                               Duration tolerableLatency,
                               Duration burstLatency) {
+        this(name, reqScheduler, tolerableLatency, burstLatency, Duration.ofSeconds(BATCHER_EXPIRY_SECONDS));
+    }
+
+    public BatchCallScheduler(String name,
+                              ICallScheduler<Call> reqScheduler,
+                              Duration tolerableLatency,
+                              Duration burstLatency,
+                              Duration batcherExpiry) {
         Preconditions.checkArgument(!tolerableLatency.isNegative() && !tolerableLatency.isZero(),
             "latency must be positive");
         Preconditions.checkArgument(!burstLatency.isNegative() && !burstLatency.isZero(),
@@ -63,7 +76,7 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
         this.burstLatencyNanos = burstLatency.toNanos();
         batchers = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
-            .expireAfterAccess(Duration.ofSeconds(BATCHER_EXPIRY_SECONDS))
+            .expireAfterAccess(batcherExpiry)
             .removalListener((RemovalListener<BatcherKey, Batcher<Call, CallResult, BatcherKey>>)
                 (key, value, removalCause) -> {
                     if (value != null) {
@@ -99,10 +112,11 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
         return callScheduler.submit(request)
             .thenCompose(req -> {
                 try {
-                    Optional<Batcher<Call, CallResult, BatcherKey>> builderOpt = find(req).map(batchers::get);
-                    if (builderOpt.isPresent()) {
+                    Optional<BatcherKey> batcherKey = find(req);
+                    if (batcherKey.isPresent()) {
+                        Batcher<Call, CallResult, BatcherKey> builder = batchers.get(batcherKey.get());
                         callSubmitCounter.increment();
-                        return builderOpt.get().submit(req);
+                        return builder.submit(batcherKey.get(), req);
                     } else {
                         return CompletableFuture.failedFuture(new BatcherUnavailableException("Batcher not found"));
                     }

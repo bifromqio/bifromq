@@ -17,141 +17,58 @@ import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basescheduler.BatchCallScheduler;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
-import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
-import com.baidu.bifromq.retain.rpc.proto.MatchResult;
-import com.baidu.bifromq.retain.rpc.proto.MatchResultPack;
-import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
+import com.google.protobuf.ByteString;
 import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class MatchCallScheduler extends BatchCallScheduler<MatchRequest, MatchReply, KVRangeSetting>
-    implements IMatchCallScheduler {
-    private final IBaseKVStoreClient retainStoreClient;
-
+public class MatchCallScheduler extends QueryCallScheduler<MatchRequest, MatchReply> implements IMatchCallScheduler {
     public MatchCallScheduler(IBaseKVStoreClient retainStoreClient) {
-        super("retain_server_match_batcher", Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
-            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
-        this.retainStoreClient = retainStoreClient;
+        super("retain_server_match_batcher", retainStoreClient,
+            Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofSeconds(DATA_PLANE_BURST_LATENCY_MS.get()));
     }
 
     @Override
-    protected Batcher<MatchRequest, MatchReply, KVRangeSetting> newBatcher(String name,
-                                                                           long tolerableLatencyNanos,
-                                                                           long burstLatencyNanos,
-                                                                           KVRangeSetting range) {
-        return new MatchCallBatcher(range, name, tolerableLatencyNanos, burstLatencyNanos, retainStoreClient);
+    protected Batcher<MatchRequest, MatchReply, QueryCallBatcherKey> newBatcher(String name,
+                                                                                long tolerableLatencyNanos,
+                                                                                long burstLatencyNanos,
+                                                                                QueryCallBatcherKey batcherKey) {
+        return new MatchCallBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
     }
 
     @Override
-    protected Optional<KVRangeSetting> find(MatchRequest matchRequest) {
-        return retainStoreClient.findByKey(tenantNS(matchRequest.getTenantId()));
+    protected int selectQueue(MatchRequest request) {
+        return ThreadLocalRandom.current().nextInt(5);
     }
 
-    public static class MatchCallBatcher extends Batcher<MatchRequest, MatchReply, KVRangeSetting> {
-        private class BatchMatchCall implements IBatchCall<MatchRequest, MatchReply> {
-            private Queue<CallTask<MatchRequest, MatchReply>> batchedTasks = new ArrayDeque<>();
-            private Map<String, MatchParam.Builder> matchParamBuilders = new HashMap<>(128);
+    @Override
+    protected ByteString rangeKey(MatchRequest request) {
+        return tenantNS(request.getTenantId());
+    }
 
-            @Override
-            public void add(CallTask<MatchRequest, MatchReply> task) {
-                MatchRequest request = task.call;
-                batchedTasks.add(task);
-                matchParamBuilders.computeIfAbsent(request.getTenantId(), k -> MatchParam.newBuilder())
-                    .putTopicFilters(request.getTopicFilter(), request.getLimit());
-            }
+    public static class MatchCallBatcher extends QueryCallBatcher<MatchRequest, MatchReply> {
 
-            @Override
-            public void reset() {
-                matchParamBuilders = new HashMap<>(128);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                BatchMatchRequest.Builder reqBuilder = BatchMatchRequest
-                    .newBuilder()
-                    .setReqId(reqId);
-                matchParamBuilders.forEach((tenantId, matchParamsBuilder) ->
-                    reqBuilder.putMatchParams(tenantId, matchParamsBuilder.build()));
-                KVRangeRORequest request = KVRangeRORequest.newBuilder()
-                    .setReqId(reqId)
-                    .setVer(batcherKey.ver)
-                    .setKvRangeId(batcherKey.id)
-                    .setRoCoProcInput(ROCoProcInput.newBuilder()
-                        .setRetainService(RetainServiceROCoProcInput.newBuilder()
-                            .setBatchMatch(reqBuilder.build())
-                            .build()).build())
-                    .build();
-                return retainStoreClient.linearizedQuery(batcherKey.leader, request)
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            return reply.getRoCoProcResult().getRetainService().getBatchMatch()
-                                .getResultPackMap();
-                        }
-                        log.warn("Failed to exec ro co-proc[code={}]", reply.getCode());
-                        throw new RuntimeException();
-                    })
-                    .handle((reply, e) -> {
-                        if (e != null) {
-                            CallTask<MatchRequest, MatchReply> task;
-                            while ((task = batchedTasks.poll()) != null) {
-                                task.callResult.complete(MatchReply.newBuilder()
-                                    .setReqId(task.call.getReqId())
-                                    .setResult(MatchReply.Result.ERROR)
-                                    .build());
-                            }
-                        } else {
-                            CallTask<MatchRequest, MatchReply> task;
-                            while ((task = batchedTasks.poll()) != null) {
-                                task.callResult.complete(MatchReply.newBuilder()
-                                    .setReqId(task.call.getReqId())
-                                    .setResult(MatchReply.Result.OK)
-                                    .addAllMessages(reply.getOrDefault(task.call.getTenantId(),
-                                            MatchResultPack.getDefaultInstance())
-                                        .getResultsOrDefault(task.call.getTopicFilter(),
-                                            MatchResult.getDefaultInstance()).getOk()
-                                        .getMessagesList())
-                                    .build());
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
-        private final IBaseKVStoreClient retainStoreClient;
-
-        protected MatchCallBatcher(KVRangeSetting range,
+        protected MatchCallBatcher(QueryCallBatcherKey batcherKey,
                                    String name,
                                    long tolerableLatencyNanos,
                                    long burstLatencyNanos,
-                                   IBaseKVStoreClient retainStoreClient) {
-            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.retainStoreClient = retainStoreClient;
+                                   IBaseKVStoreClient storeClient) {
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
         }
 
         @Override
-        protected IBatchCall<MatchRequest, MatchReply> newBatch() {
-            return new BatchMatchCall();
+        protected IBatchCall<MatchRequest, MatchReply, QueryCallBatcherKey> newBatch() {
+            return new BatchMatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

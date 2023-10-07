@@ -128,7 +128,7 @@ public class QueryPipelineTest {
             .setReqId(1)
             .setVer(1)
             .setKvRangeId(rangeId)
-            .setRoCoProcInput(coProcInput)
+            .setRoCoProc(coProcInput)
             .build();
 
         when(rangeStore.queryCoProc(1, rangeId, coProcInput, linearized))

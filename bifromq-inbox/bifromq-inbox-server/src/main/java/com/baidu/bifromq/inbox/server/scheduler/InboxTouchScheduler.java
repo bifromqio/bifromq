@@ -13,35 +13,34 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_TOLERABLE_LATENCY_MS;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
 import com.google.protobuf.ByteString;
-import java.util.ArrayDeque;
+import java.time.Duration;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchScheduler.Touch, List<String>>
+public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchScheduler.Touch, List<String>>
     implements IInboxTouchScheduler {
     public InboxTouchScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super(inboxStoreClient, "inbox_server_touch");
+        super("inbox_server_touch", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
     }
 
     @Override
-    protected Batcher<Touch, List<String>, KVRangeSetting> newBatcher(String name,
-                                                                      long tolerableLatencyNanos,
-                                                                      long burstLatencyNanos,
-                                                                      KVRangeSetting range) {
-        return new InboxTouchBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+    protected Batcher<Touch, List<String>, MutationCallBatcherKey> newBatcher(String name,
+                                                                              long tolerableLatencyNanos,
+                                                                              long burstLatencyNanos,
+                                                                              MutationCallBatcherKey batchKey) {
+        return new InboxTouchBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, storeClient);
     }
 
     @Override
@@ -49,61 +48,18 @@ public class InboxTouchScheduler extends InboxMutateScheduler<IInboxTouchSchedul
         return ByteString.copyFromUtf8(request.scopedInboxIdUtf8);
     }
 
-    private static class InboxTouchBatcher extends InboxMutateBatcher<Touch, List<String>> {
-        private class InboxTouchBatch implements IBatchCall<Touch, List<String>> {
-            private final Queue<CallTask<Touch, List<String>>> batchedTasks = new ArrayDeque<>();
-            private BatchTouchRequest.Builder reqBuilder = BatchTouchRequest.newBuilder();
-
-            @Override
-            public void reset() {
-                reqBuilder = BatchTouchRequest.newBuilder();
-            }
-
-            @Override
-            public void add(CallTask<Touch, List<String>> callTask) {
-                Touch request = callTask.call;
-                batchedTasks.add(callTask);
-                reqBuilder.putScopedInboxId(request.scopedInboxIdUtf8,
-                    request.keep && reqBuilder.getScopedInboxIdOrDefault(request.scopedInboxIdUtf8, true));
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                return mutate(InboxServiceRWCoProcInput.newBuilder()
-                    .setReqId(reqId)
-                    .setBatchTouch(reqBuilder.build())
-                    .build())
-                    .thenApply(InboxServiceRWCoProcOutput::getBatchTouch)
-                    .handle((v, e) -> {
-                        if (e != null) {
-                            CallTask<Touch, List<String>> callTask;
-                            while ((callTask = batchedTasks.poll()) != null) {
-                                callTask.callResult.completeExceptionally(e);
-                            }
-                        } else {
-                            CallTask<Touch, List<String>> callTask;
-                            while ((callTask = batchedTasks.poll()) != null) {
-                                callTask.callResult.complete(v.getSubsOrDefault(callTask.call.scopedInboxIdUtf8,
-                                    TopicFilterList.getDefaultInstance()).getTopicFiltersList());
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
+    private static class InboxTouchBatcher extends MutationCallBatcher<Touch, List<String>> {
         InboxTouchBatcher(String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
-                          KVRangeSetting range,
-                          IBaseKVStoreClient inboxStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+                          MutationCallBatcherKey range,
+                          IBaseKVStoreClient storeClient) {
+            super(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
         }
 
         @Override
-        protected IBatchCall<Touch, List<String>> newBatch() {
-            return new InboxTouchBatch();
+        protected IBatchCall<Touch, List<String>, MutationCallBatcherKey> newBatch() {
+            return new BatchTouchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

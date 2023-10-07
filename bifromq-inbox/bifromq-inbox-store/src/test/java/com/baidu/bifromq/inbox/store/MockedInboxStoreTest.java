@@ -16,6 +16,7 @@ package com.baidu.bifromq.inbox.store;
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static org.mockito.Mockito.when;
 
+import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -100,6 +101,7 @@ public abstract class MockedInboxStoreTest {
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         when(reader.iterator()).thenReturn(kvIterator);
+        when(reader.boundary()).thenReturn(KeyBoundary.newBuilder().build());
         id = KVRangeIdUtil.generate();
         coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
             clock, Duration.ofMinutes(30), loadTracker);

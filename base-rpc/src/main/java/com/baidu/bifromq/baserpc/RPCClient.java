@@ -127,7 +127,7 @@ final class RPCClient implements IRPCClient {
 
                     @Override
                     public void onError(Throwable throwable) {
-                        log.error("Unary call of method {} failure:",
+                        log.debug("Unary call of method {} failure:",
                             methodDesc.getFullMethodName(), throwable);
                         future.completeExceptionally(Constants.toConcreteException(throwable));
                         RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqAbortCount);

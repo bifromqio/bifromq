@@ -233,7 +233,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRoCoProcInput(ROCoProcInput.newBuilder()
+                .setRoCoProc(ROCoProcInput.newBuilder()
                     .setRetainService(buildCollectMetricsRequest(reqId))
                     .build())
                 .build())

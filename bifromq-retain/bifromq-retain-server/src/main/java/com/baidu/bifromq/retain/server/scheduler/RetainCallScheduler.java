@@ -17,152 +17,55 @@ import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.IExecutionPipeline;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basescheduler.BatchCallScheduler;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
-import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
-import com.baidu.bifromq.retain.rpc.proto.RetainMessagePack;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
-import com.baidu.bifromq.retain.rpc.proto.RetainResult;
-import com.baidu.bifromq.retain.rpc.proto.RetainResultPack;
-import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
+import com.google.protobuf.ByteString;
 import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class RetainCallScheduler extends BatchCallScheduler<RetainRequest, RetainReply, KVRangeSetting>
+public class RetainCallScheduler extends MutationCallScheduler<RetainRequest, RetainReply>
     implements IRetainCallScheduler {
     private final IBaseKVStoreClient retainStoreClient;
 
     public RetainCallScheduler(IBaseKVStoreClient retainStoreClient) {
-        super("retain_server_retain_batcher", Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+        super("retain_server_retain_batcher", retainStoreClient,
+            Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
         this.retainStoreClient = retainStoreClient;
     }
 
     @Override
-    protected Batcher<RetainRequest, RetainReply, KVRangeSetting> newBatcher(String name, long tolerableLatencyNanos,
-                                                                             long burstLatencyNanos,
-                                                                             KVRangeSetting range) {
-        return new RetainCallBatcher(range, name, tolerableLatencyNanos, burstLatencyNanos, retainStoreClient);
+    protected Batcher<RetainRequest, RetainReply, MutationCallBatcherKey> newBatcher(String name,
+                                                                                     long tolerableLatencyNanos,
+                                                                                     long burstLatencyNanos,
+                                                                                     MutationCallBatcherKey batchKey) {
+        return new RetainCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, retainStoreClient);
     }
 
     @Override
-    protected Optional<KVRangeSetting> find(RetainRequest request) {
-        return retainStoreClient.findByKey(tenantNS(request.getPublisher().getTenantId()));
+    protected ByteString rangeKey(RetainRequest request) {
+        return tenantNS(request.getPublisher().getTenantId());
     }
 
-    private static class RetainCallBatcher extends Batcher<RetainRequest, RetainReply, KVRangeSetting> {
-        private class BatchRetainCall implements IBatchCall<RetainRequest, RetainReply> {
-            private final Queue<CallTask<RetainRequest, RetainReply>> batchedTasks = new ArrayDeque<>();
-            private Map<String, RetainMessagePack.Builder> retainMsgPackBuilders = new HashMap<>(128);
-
-            @Override
-            public void add(CallTask<RetainRequest, RetainReply> task) {
-                RetainRequest request = task.call;
-                batchedTasks.add(task);
-                retainMsgPackBuilders.computeIfAbsent(request.getPublisher().getTenantId(),
-                        k -> RetainMessagePack.newBuilder())
-                    .putTopicMessages(request.getTopic(), RetainMessage.newBuilder()
-                        .setMessage(request.getMessage())
-                        .setPublisher(request.getPublisher())
-                        .build());
-            }
-
-            @Override
-            public void reset() {
-                retainMsgPackBuilders = new HashMap<>(128);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                BatchRetainRequest.Builder reqBuilder = BatchRetainRequest.newBuilder().setReqId(reqId);
-                retainMsgPackBuilders.forEach((tenantId, retainMsgPackBuilder) ->
-                    reqBuilder.putRetainMessagePack(tenantId, retainMsgPackBuilder.build()));
-                return executionPipeline.execute(KVRangeRWRequest.newBuilder()
-                        .setReqId(reqId)
-                        .setVer(batcherKey.ver)
-                        .setKvRangeId(batcherKey.id)
-                        .setRwCoProc(RWCoProcInput.newBuilder()
-                            .setRetainService(RetainServiceRWCoProcInput.newBuilder()
-                                .setBatchRetain(reqBuilder.build())
-                                .build()).build())
-                        .build())
-                    .thenApply(reply -> {
-                        if (reply.getCode() == ReplyCode.Ok) {
-                            return reply.getRwCoProcResult().getRetainService().getBatchRetain()
-                                .getResultsMap();
-                        }
-                        log.warn("Failed to exec rw co-proc[code={}]", reply.getCode());
-                        throw new RuntimeException();
-                    })
-                    .handle((v, e) -> {
-                        if (e != null) {
-                            CallTask<RetainRequest, RetainReply> task;
-                            while ((task = batchedTasks.poll()) != null) {
-                                task.callResult.complete(RetainReply.newBuilder()
-                                    .setReqId(task.call.getReqId())
-                                    .setResult(RetainReply.Result.ERROR)
-                                    .build());
-                            }
-                        } else {
-                            CallTask<RetainRequest, RetainReply> task;
-                            while ((task = batchedTasks.poll()) != null) {
-                                RetainReply.Builder replyBuilder = RetainReply.newBuilder()
-                                    .setReqId(task.call.getReqId());
-                                RetainResult result =
-                                    v.getOrDefault(task.call.getPublisher().getTenantId(),
-                                            RetainResultPack.getDefaultInstance())
-                                        .getResultsOrDefault(task.call.getTopic(), RetainResult.ERROR);
-                                switch (result) {
-                                    case RETAINED -> replyBuilder.setResult(RetainReply.Result.RETAINED);
-                                    case CLEARED -> replyBuilder.setResult(RetainReply.Result.CLEARED);
-                                    case ERROR -> replyBuilder.setResult(RetainReply.Result.ERROR);
-                                }
-                                task.callResult.complete(replyBuilder.build());
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
-        private final IExecutionPipeline executionPipeline;
-
-        protected RetainCallBatcher(KVRangeSetting range,
+    private static class RetainCallBatcher extends MutationCallBatcher<RetainRequest, RetainReply> {
+        protected RetainCallBatcher(MutationCallBatcherKey batchKey,
                                     String name,
                                     long tolerableLatencyNanos,
                                     long burstLatencyNanos,
                                     IBaseKVStoreClient retainStoreClient) {
-            super(range, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.executionPipeline = retainStoreClient.createExecutionPipeline(range.leader);
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, retainStoreClient);
         }
 
         @Override
-        public void close() {
-            super.close();
-            executionPipeline.close();
-        }
-
-        @Override
-        protected IBatchCall<RetainRequest, RetainReply> newBatch() {
-            return new BatchRetainCall();
+        protected IBatchCall<RetainRequest, RetainReply, MutationCallBatcherKey> newBatch() {
+            return new BatchRetainCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

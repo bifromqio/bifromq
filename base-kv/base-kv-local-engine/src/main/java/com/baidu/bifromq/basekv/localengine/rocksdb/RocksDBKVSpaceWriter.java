@@ -140,11 +140,15 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
         RocksDBKVSpace toKeyRange = (RocksDBKVSpace) engine.createIfMissing(targetRangeId);
         try {
             // move data
+            int c = 0;
             try (IKVSpaceIterator itr = newIterator(boundary)) {
                 for (itr.seekToFirst(); itr.isValid(); itr.next()) {
                     helper.put(toKeyRange.cfHandle(), itr.key(), itr.value());
+                    c++;
                 }
             }
+            log.debug("Migrate {} kv to range[{}] from range[{}]: startKey={}, endKey={}",
+                c, targetRangeId, id, boundary.getStartKey().toStringUtf8(), boundary.getEndKey().toStringUtf8());
             // clear moved data in left range
             helper.clear(cfHandle(), boundary);
             return toKeyRange.toWriter(helper);

@@ -15,12 +15,14 @@ package com.baidu.bifromq.basescheduler;
 
 import java.util.concurrent.CompletableFuture;
 
-public class CallTask<Call, CallResult> {
+public class CallTask<Call, CallResult, BatcherKey> {
+    public final BatcherKey batcherKey;
     public final Call call;
     public final CompletableFuture<CallResult> callResult = new CompletableFuture<>();
     public final long ts = System.nanoTime();
 
-    CallTask(Call call) {
+    CallTask(BatcherKey batcherKey, Call call) {
+        this.batcherKey = batcherKey;
         this.call = call;
     }
 }

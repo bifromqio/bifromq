@@ -252,7 +252,7 @@ public class RetainStoreTest {
             .setReqId(reqId)
             .setVer(s.ver)
             .setKvRangeId(s.id)
-            .setRoCoProcInput(ROCoProcInput.newBuilder().setRetainService(input).build())
+            .setRoCoProc(ROCoProcInput.newBuilder().setRetainService(input).build())
             .build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);

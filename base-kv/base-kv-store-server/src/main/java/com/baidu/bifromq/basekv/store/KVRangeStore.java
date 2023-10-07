@@ -63,6 +63,7 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -200,10 +201,20 @@ public class KVRangeStore implements IKVRangeStore {
         if (status.compareAndSet(Status.STARTED, Status.CLOSING)) {
             try {
                 log.debug("Stop KVRange store[{}]", id);
-                CompletableFuture.allOf(kvRangeMap.values().stream()
-                        .map(IKVRangeFSM::close)
-                        .toArray(CompletableFuture[]::new))
-                    .join();
+                List<CompletableFuture<Void>> closeFutures = new ArrayList<>();
+                try {
+                    for (IKVRangeFSM rangeFSM : kvRangeMap.values()) {
+                        closeFutures.add(rangeFSM.close());
+                    }
+                } catch (Throwable e) {
+                    log.error("Failed to close range", e);
+                }
+
+                CompletableFuture.allOf(closeFutures.toArray(CompletableFuture[]::new)).join();
+//                CompletableFuture.allOf(kvRangeMap.values().stream()
+//                        .map(IKVRangeFSM::close)
+//                        .toArray(CompletableFuture[]::new))
+//                    .join();
                 disposable.dispose();
                 storeStatsCollector.stop().toCompletableFuture().join();
                 rangeMgmtTaskRunner.awaitDone().toCompletableFuture().join();
@@ -462,7 +473,7 @@ public class KVRangeStore implements IKVRangeStore {
                     id,
                     kvRangeId,
                     coProcFactory,
-                    this::checkSnapshot,
+                    this::ensureCompatibility,
                     kvRangeEngine.createIfMissing(KVRangeIdUtil.toString(kvRangeId)),
                     walStorageEngine,
                     queryExecutor,
@@ -479,7 +490,7 @@ public class KVRangeStore implements IKVRangeStore {
                     id,
                     kvRangeId,
                     coProcFactory,
-                    this::checkSnapshot,
+                    this::ensureCompatibility,
                     keyRange,
                     walStorageEngine,
                     queryExecutor,
@@ -515,7 +526,7 @@ public class KVRangeStore implements IKVRangeStore {
             id,
             kvRangeId,
             coProcFactory,
-            this::checkSnapshot,
+            this::ensureCompatibility,
             keyRange,
             walStorageEngine,
             queryExecutor,
@@ -533,25 +544,30 @@ public class KVRangeStore implements IKVRangeStore {
             kvRangeMap.values().stream().map(IKVRangeFSM::describe).collect(Collectors.toList()));
     }
 
-    private CompletionStage<Void> checkSnapshot(KVRangeSnapshot snapshot) {
+    private CompletableFuture<List<IKVRangeFSM>> checkCompatibility(KVRangeSnapshot snapshot,
+                                                                    Set<KVRangeId> ignoreRanges) {
         return rangeMgmtTaskRunner.add(() -> {
-                CompletableFuture<List<KVRangeDescriptor>> onDone = new CompletableFuture<>();
-                List<KVRangeDescriptor> overlapped = kvRangeMap.values().stream()
-                    .map(r -> r.describe().blockingFirst())
-                    .filter(r -> KeyRangeUtil.isOverlap(r.getRange(), snapshot.getRange())
-                        && !r.getId().equals(snapshot.getId()))
-                    .collect(Collectors.toList());
-                if (overlapped.stream().anyMatch(r -> r.getVer() > snapshot.getVer())) {
-                    onDone.completeExceptionally(new KVRangeStoreException("Staled snapshot"));
-                } else {
-                    onDone.complete(overlapped);
-                    // destroy overlapped staled range
-                }
-                return onDone;
-            })
+            CompletableFuture<List<IKVRangeFSM>> onDone = new CompletableFuture<>();
+            List<KVRangeDescriptor> overlapped = kvRangeMap.values().stream()
+                .map(r -> r.describe().blockingFirst())
+                .filter(r -> !ignoreRanges.contains(r.getId()) &&
+                    KeyRangeUtil.isOverlap(r.getRange(), snapshot.getRange()) &&
+                    !r.getId().equals(snapshot.getId()))
+                .toList();
+            if (overlapped.stream().anyMatch(r -> r.getVer() > snapshot.getVer())) {
+                onDone.completeExceptionally(new KVRangeStoreException("Staled snapshot"));
+            } else {
+                onDone.complete(overlapped.stream().map(r -> kvRangeMap.get(r.getId())).toList());
+            }
+            return onDone;
+        });
+    }
+
+    private CompletableFuture<Void> ensureCompatibility(KVRangeSnapshot snapshot, Set<KVRangeId> ignoreRanges) {
+        return checkCompatibility(snapshot, ignoreRanges)
             .thenCompose(overlapped -> rangeMgmtTaskRunner.add(() ->
                 CompletableFuture.allOf(overlapped.stream()
-                        .map(r -> kvRangeMap.remove(r.getId()).destroy())
+                        .map(r -> r.destroy().whenComplete((v, e) -> kvRangeMap.remove(r.id(), r)))
                         .toArray(CompletableFuture[]::new))
                     .thenApply(v -> overlapped)))
             .thenCompose(overlapped -> {
@@ -559,14 +575,15 @@ public class KVRangeStore implements IKVRangeStore {
                     return CompletableFuture.completedFuture(null);
                 }
                 return rangeMgmtTaskRunner.add(() -> {
-                    for (KVRangeDescriptor r : overlapped) {
-                        addKVRange(r.getId(), Snapshot.newBuilder()
+                    // add overlapped ranges to initial state
+                    for (IKVRangeFSM r : overlapped) {
+                        addKVRange(r.id(), Snapshot.newBuilder()
                             .setClusterConfig(ClusterConfig.getDefaultInstance())
                             .setTerm(0)
                             .setIndex(0)
                             .setData(KVRangeSnapshot.newBuilder()
                                 .setVer(0)
-                                .setId(r.getId())
+                                .setId(r.id())
                                 .setLastAppliedIndex(0)
                                 .setRange(EMPTY_RANGE)
                                 .setState(State.newBuilder().setType(Normal).build())
@@ -576,17 +593,6 @@ public class KVRangeStore implements IKVRangeStore {
                     }
                 });
             });
-    }
-
-    private boolean check(String checkpointId) {
-        return kvRangeMap.values().stream().anyMatch(tb -> {
-            try {
-                return tb.isOccupying(checkpointId);
-            } catch (Throwable e) {
-                log.error("Failed to check checkpoint's[{}] occupation", checkpointId, e);
-                return true;
-            }
-        });
     }
 
     private void checkStarted() {

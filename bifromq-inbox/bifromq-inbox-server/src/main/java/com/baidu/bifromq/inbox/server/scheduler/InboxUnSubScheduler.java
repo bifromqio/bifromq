@@ -14,37 +14,36 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedTopicFilter;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_TOLERABLE_LATENCY_MS;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.google.protobuf.ByteString;
-import java.util.ArrayDeque;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxUnSubScheduler extends InboxMutateScheduler<UnsubRequest, UnsubReply>
+public class InboxUnSubScheduler extends MutationCallScheduler<UnsubRequest, UnsubReply>
     implements IInboxUnsubScheduler {
     public InboxUnSubScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super(inboxStoreClient, "inbox_server_unsub");
+        super("inbox_server_unsub", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
+
     }
 
     @Override
-    protected Batcher<UnsubRequest, UnsubReply, KVRangeSetting> newBatcher(String name,
-                                                                           long tolerableLatencyNanos,
-                                                                           long burstLatencyNanos,
-                                                                           KVRangeSetting range) {
-        return new InboxUnSubBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+    protected Batcher<UnsubRequest, UnsubReply, MutationCallBatcherKey> newBatcher(String name,
+                                                                                   long tolerableLatencyNanos,
+                                                                                   long burstLatencyNanos,
+                                                                                   MutationCallBatcherKey batchKey) {
+        return new InboxUnSubBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, storeClient);
     }
 
     @Override
@@ -52,71 +51,18 @@ public class InboxUnSubScheduler extends InboxMutateScheduler<UnsubRequest, Unsu
         return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
-    private static class InboxUnSubBatcher extends InboxMutateBatcher<UnsubRequest, UnsubReply> {
-        private class InboxBatchUnSub implements IBatchCall<UnsubRequest, UnsubReply> {
-            private final Queue<CallTask<UnsubRequest, UnsubReply>> batchTasks = new ArrayDeque<>();
-            private BatchUnsubRequest.Builder reqBuilder = BatchUnsubRequest.newBuilder();
-
-            @Override
-            public void add(CallTask<UnsubRequest, UnsubReply> task) {
-                batchTasks.add(task);
-                UnsubRequest request = task.call;
-                reqBuilder.addTopicFilters(
-                    scopedTopicFilter(request.getTenantId(), request.getInboxId(),
-                        request.getTopicFilter()));
-            }
-
-            @Override
-            public void reset() {
-                reqBuilder = BatchUnsubRequest.newBuilder();
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                return mutate(InboxServiceRWCoProcInput.newBuilder()
-                    .setReqId(reqId)
-                    .setBatchUnsub(reqBuilder.setReqId(reqId).build())
-                    .build())
-                    .thenApply(InboxServiceRWCoProcOutput::getBatchUnsub)
-                    .handle((v, e) -> {
-                        if (e != null) {
-                            CallTask<UnsubRequest, UnsubReply> task;
-                            while ((task = batchTasks.poll()) != null) {
-                                task.callResult.complete(UnsubReply.newBuilder()
-                                    .setReqId(task.call.getReqId())
-                                    .setResult(UnsubReply.Result.ERROR)
-                                    .build());
-                            }
-                        } else {
-                            CallTask<UnsubRequest, UnsubReply> task;
-                            while ((task = batchTasks.poll()) != null) {
-                                task.callResult.complete(UnsubReply.newBuilder()
-                                    .setReqId(task.call.getReqId())
-                                    .setResult(UnsubReply.Result.forNumber(v
-                                        .getResultsMap()
-                                        .get(scopedTopicFilter(task.call.getTenantId(),
-                                            task.call.getInboxId(), task.call.getTopicFilter()).toStringUtf8())
-                                        .getNumber()))
-                                    .build());
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
+    private static class InboxUnSubBatcher extends MutationCallBatcher<UnsubRequest, UnsubReply> {
         InboxUnSubBatcher(String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
-                          KVRangeSetting range,
+                          MutationCallBatcherKey batchKey,
                           IBaseKVStoreClient inboxStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, inboxStoreClient);
         }
 
         @Override
-        protected IBatchCall<UnsubRequest, UnsubReply> newBatch() {
-            return new InboxBatchUnSub();
+        protected IBatchCall<UnsubRequest, UnsubReply, MutationCallBatcherKey> newBatch() {
+            return new BatchUnsubCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

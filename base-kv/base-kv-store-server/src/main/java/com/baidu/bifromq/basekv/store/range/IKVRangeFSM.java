@@ -24,13 +24,10 @@ import io.reactivex.rxjava3.core.Observable;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 public interface IKVRangeFSM {
 
     KVRangeId id();
-
-    boolean isOccupying(String checkpointId);
 
     /**
      * If the range is ready to quit from the store. This happens after config changing or merging operation
@@ -50,14 +47,14 @@ public interface IKVRangeFSM {
      *
      * @return
      */
-    CompletionStage<Void> close();
+    CompletableFuture<Void> close();
 
     /**
      * Quit the range from the store, if the range is ready to quit. The range will be closed implicitly.
      *
      * @return
      */
-    CompletionStage<Void> quit();
+    CompletableFuture<Void> quit();
 
     /**
      * Destroy the range from store, all range related data will be purged from the store. The range will be closed
@@ -65,7 +62,7 @@ public interface IKVRangeFSM {
      *
      * @return
      */
-    CompletionStage<Void> destroy();
+    CompletableFuture<Void> destroy();
 
     /**
      * Recover the range quorum, if it's unable to do election

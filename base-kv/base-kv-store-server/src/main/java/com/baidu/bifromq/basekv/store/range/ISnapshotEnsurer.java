@@ -13,9 +13,16 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
-import java.util.concurrent.CompletionStage;
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
-public interface IKVRangeSnapshotChecker {
-    CompletionStage<Void> check(KVRangeSnapshot snapshot);
+public interface ISnapshotEnsurer {
+    CompletableFuture<Void> ensure(KVRangeSnapshot snapshot, Set<KVRangeId> ignoreRanges);
+
+    default CompletableFuture<Void> ensure(KVRangeSnapshot snapshot) {
+        return ensure(snapshot, Collections.emptySet());
+    }
 }

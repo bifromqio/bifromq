@@ -14,40 +14,36 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.CommitParams;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, CommitReply>
+public class InboxCommitScheduler extends MutationCallScheduler<CommitRequest, CommitReply>
     implements IInboxCommitScheduler {
     public InboxCommitScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super(inboxStoreClient, "inbox_server_commit");
+        super("inbox_server_commit", inboxStoreClient, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
+
     }
 
     @Override
-    protected Batcher<CommitRequest, CommitReply, KVRangeSetting> newBatcher(String name,
-                                                                             long tolerableLatencyNanos,
-                                                                             long burstLatencyNanos,
-                                                                             KVRangeSetting range) {
-        return new InboxCommitBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+    protected Batcher<CommitRequest, CommitReply, MutationCallBatcherKey> newBatcher(String name,
+                                                                                     long tolerableLatencyNanos,
+                                                                                     long burstLatencyNanos,
+                                                                                     MutationCallBatcherKey batchKey) {
+        return new InboxCommitBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, storeClient);
     }
 
     @Override
@@ -55,89 +51,18 @@ public class InboxCommitScheduler extends InboxMutateScheduler<CommitRequest, Co
         return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
-    private static class InboxCommitBatcher extends InboxMutateBatcher<CommitRequest, CommitReply> {
-        private class InboxBatchCommit implements IBatchCall<CommitRequest, CommitReply> {
-            private final Queue<CallTask<CommitRequest, CommitReply>> batchTasks = new ArrayDeque<>();
-            // key: scopedInboxIdUtf8, value: [qos0, qos1, qos2]
-            private Map<String, Long[]> commitParamsMap = new HashMap<>(128);
-
-            @Override
-            public void reset() {
-                commitParamsMap = new HashMap<>(128);
-            }
-
-            @Override
-            public void add(CallTask<CommitRequest, CommitReply> callTask) {
-                String tenantId = callTask.call.getTenantId();
-                String scopedInboxIdUtf8 = scopedInboxId(tenantId, callTask.call.getInboxId()).toStringUtf8();
-                Long[] upToSeqs = commitParamsMap.computeIfAbsent(scopedInboxIdUtf8, k -> new Long[3]);
-                QoS qos = callTask.call.getQos();
-                upToSeqs[qos.ordinal()] = upToSeqs[qos.ordinal()] == null ?
-                    callTask.call.getUpToSeq() : Math.max(upToSeqs[qos.ordinal()], callTask.call.getUpToSeq());
-                batchTasks.add(callTask);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                BatchCommitRequest.Builder reqBuilder = BatchCommitRequest.newBuilder();
-                commitParamsMap.forEach((k, v) -> {
-                    CommitParams.Builder cb = CommitParams.newBuilder();
-                    if (v[0] != null) {
-                        cb.setQos0UpToSeq(v[0]);
-                    }
-                    if (v[1] != null) {
-                        cb.setQos1UpToSeq(v[1]);
-                    }
-                    if (v[2] != null) {
-                        cb.setQos2UpToSeq(v[2]);
-                    }
-                    reqBuilder.putInboxCommit(k, cb.build());
-                });
-                return mutate(InboxServiceRWCoProcInput.newBuilder()
-                    .setReqId(reqId)
-                    .setBatchCommit(reqBuilder.build())
-                    .build())
-                    .thenApply(InboxServiceRWCoProcOutput::getBatchCommit)
-                    .handle((v, e) -> {
-                        if (e != null) {
-                            CallTask<CommitRequest, CommitReply> task;
-                            while ((task = batchTasks.poll()) != null) {
-                                task.callResult.complete(CommitReply.newBuilder()
-                                    .setReqId(task.call.getReqId())
-                                    .setResult(CommitReply.Result.ERROR)
-                                    .build());
-                            }
-                        } else {
-                            CallTask<CommitRequest, CommitReply> task;
-                            while ((task = batchTasks.poll()) != null) {
-                                task.callResult.complete(CommitReply.newBuilder()
-                                    .setReqId(task.call.getReqId())
-                                    .setResult(v.getResultMap()
-                                        .get(scopedInboxId(
-                                            task.call.getTenantId(),
-                                            task.call.getInboxId()).toStringUtf8()) ?
-                                        CommitReply.Result.OK : CommitReply.Result.ERROR)
-                                    .build());
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
-
+    private static class InboxCommitBatcher extends MutationCallBatcher<CommitRequest, CommitReply> {
         InboxCommitBatcher(String name,
                            long tolerableLatencyNanos,
                            long burstLatencyNanos,
-                           KVRangeSetting range,
+                           MutationCallBatcherKey batchKey,
                            IBaseKVStoreClient inboxStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, inboxStoreClient);
         }
 
         @Override
-        protected IBatchCall<CommitRequest, CommitReply> newBatch() {
-            return new InboxBatchCommit();
+        protected IBatchCall<CommitRequest, CommitReply, MutationCallBatcherKey> newBatch() {
+            return new BatchCommitCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

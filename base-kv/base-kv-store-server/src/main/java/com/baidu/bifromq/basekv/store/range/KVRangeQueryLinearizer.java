@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
     private final ConcurrentMap<CompletableFuture<Long>, CompletableFuture<Void>> readIndexes = Maps.newConcurrentMap();
-    private final ConcurrentLinkedDeque<ToLinearize> toBeLinearized = new ConcurrentLinkedDeque();
+    private final ConcurrentLinkedDeque<ToLinearize> toBeLinearized = new ConcurrentLinkedDeque<>();
     private final Supplier<CompletableFuture<Long>> readIndexProvider;
     private final Executor executor;
     private final AtomicBoolean linearizing = new AtomicBoolean();
@@ -47,7 +47,7 @@ class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
         readIndexes.put(readIndex, onDone);
         readIndex.whenCompleteAsync((ri, e) -> {
             if (e != null) {
-                log.error("failed to get readIndex", e);
+                log.debug("failed to get readIndex", e);
                 readIndexes.remove(readIndex).completeExceptionally(e);
             } else {
                 if (ri <= lastAppliedIndex) {

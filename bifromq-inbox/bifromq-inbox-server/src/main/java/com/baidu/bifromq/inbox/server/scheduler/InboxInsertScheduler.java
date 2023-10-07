@@ -13,40 +13,36 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.SendResult;
-import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 import com.baidu.bifromq.inbox.util.KeyUtil;
-import com.baidu.bifromq.type.SubInfo;
 import com.google.protobuf.ByteString;
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, SendResult.Result>
+public class InboxInsertScheduler extends MutationCallScheduler<MessagePack, SendResult.Result>
     implements IInboxInsertScheduler {
     public InboxInsertScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super(inboxStoreClient, "inbox_server_insert");
+        super("inbox_server_insert", inboxStoreClient, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
     }
 
     @Override
-    protected Batcher<MessagePack, SendResult.Result, KVRangeSetting> newBatcher(String name,
-                                                                                 long tolerableLatencyNanos,
-                                                                                 long burstLatencyNanos,
-                                                                                 KVRangeSetting range) {
-        return new InboxInsertBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+    protected Batcher<MessagePack, SendResult.Result, MutationCallBatcherKey> newBatcher(String name,
+                                                                                         long tolerableLatencyNanos,
+                                                                                         long burstLatencyNanos,
+                                                                                         MutationCallBatcherKey batcherKey) {
+        return new InboxInsertBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
     }
 
     @Override
@@ -54,67 +50,18 @@ public class InboxInsertScheduler extends InboxMutateScheduler<MessagePack, Send
         return KeyUtil.scopedInboxId(request.getSubInfo().getTenantId(), request.getSubInfo().getInboxId());
     }
 
-    private static class InboxInsertBatcher extends InboxMutateBatcher<MessagePack, SendResult.Result> {
-        private class InboxBatchInsert implements IBatchCall<MessagePack, SendResult.Result> {
-            // key: scopedInboxIdUtf8
-            private final Queue<CallTask<MessagePack, SendResult.Result>> inboxInserts = new ArrayDeque<>(128);
-
-            @Override
-            public void reset() {
-            }
-
-            @Override
-            public void add(CallTask<MessagePack, SendResult.Result> callTask) {
-                inboxInserts.add(callTask);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                BatchInsertRequest.Builder reqBuilder = BatchInsertRequest.newBuilder();
-                inboxInserts.forEach(insertTask -> reqBuilder.addSubMsgPack(insertTask.call));
-                return mutate(InboxServiceRWCoProcInput.newBuilder()
-                    .setReqId(reqId)
-                    .setBatchInsert(reqBuilder.build())
-                    .build())
-                    .thenApply(InboxServiceRWCoProcOutput::getBatchInsert)
-                    .handle((v, e) -> {
-                        if (e != null) {
-                            log.debug("Failed to insert", e);
-                            CallTask<MessagePack, SendResult.Result> task;
-                            while ((task = inboxInserts.poll()) != null) {
-                                task.callResult.complete(SendResult.Result.ERROR);
-                            }
-                        } else {
-                            Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-                            for (InsertResult result : v.getResultsList()) {
-                                switch (result.getResult()) {
-                                    case OK -> insertResults.put(result.getSubInfo(), SendResult.Result.OK);
-                                    case NO_INBOX -> insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
-                                    case ERROR -> insertResults.put(result.getSubInfo(), SendResult.Result.ERROR);
-                                }
-                            }
-                            CallTask<MessagePack, SendResult.Result> task;
-                            while ((task = inboxInserts.poll()) != null) {
-                                task.callResult.complete(insertResults.get(task.call.getSubInfo()));
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
+    private static class InboxInsertBatcher extends MutationCallBatcher<MessagePack, SendResult.Result> {
         InboxInsertBatcher(String name,
                            long tolerableLatencyNanos,
                            long burstLatencyNanos,
-                           KVRangeSetting range,
+                           MutationCallBatcherKey batchKey,
                            IBaseKVStoreClient inboxStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, range, inboxStoreClient);
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, inboxStoreClient);
         }
 
         @Override
-        protected IBatchCall<MessagePack, SendResult.Result> newBatch() {
-            return new InboxBatchInsert();
+        protected IBatchCall<MessagePack, SendResult.Result, MutationCallBatcherKey> newBatch() {
+            return new BatchInsertCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

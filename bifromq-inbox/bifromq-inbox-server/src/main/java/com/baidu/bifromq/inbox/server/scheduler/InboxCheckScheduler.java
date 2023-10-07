@@ -17,23 +17,14 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_CHECK_QUEUES_PER_RANGE;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.google.protobuf.ByteString;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -44,16 +35,11 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
     }
 
     @Override
-    protected Batcher<HasInboxRequest, HasInboxReply, InboxReadBatcherKey> newBatcher(String name,
+    protected Batcher<HasInboxRequest, HasInboxReply, QueryCallBatcherKey> newBatcher(String name,
                                                                                       long tolerableLatencyNanos,
                                                                                       long burstLatencyNanos,
-                                                                                      InboxReadBatcherKey batcherKey) {
-        return new InboxCheckBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, inboxStoreClient);
-    }
-
-    @Override
-    protected int selectQueue(int queueNum, HasInboxRequest request) {
-        return ThreadLocalRandom.current().nextInt(0, queueNum);
+                                                                                      QueryCallBatcherKey batcherKey) {
+        return new InboxCheckBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
     }
 
     @Override
@@ -61,92 +47,18 @@ public class InboxCheckScheduler extends InboxReadScheduler<HasInboxRequest, Has
         return scopedInboxId(request.getTenantId(), request.getInboxId());
     }
 
-    private static class InboxCheckBatcher extends Batcher<HasInboxRequest, HasInboxReply, InboxReadBatcherKey> {
-        private class BatchInboxCheck implements IBatchCall<HasInboxRequest, HasInboxReply> {
-            private Set<ByteString> checkInboxes = new HashSet<>();
-            private Map<HasInboxRequest, CompletableFuture<HasInboxReply>> onInboxChecked = new HashMap<>();
-
-            @Override
-            public void reset() {
-                checkInboxes = new HashSet<>();
-                onInboxChecked = new HashMap<>();
-            }
-
-            @Override
-            public void add(CallTask<HasInboxRequest, HasInboxReply> callTask) {
-                checkInboxes.add(
-                    scopedInboxId(callTask.call.getTenantId(), callTask.call.getInboxId()));
-                onInboxChecked.put(callTask.call, callTask.callResult);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                return inboxStoreClient.linearizedQuery(batcherKey.storeId,
-                        KVRangeRORequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(batcherKey.ver)
-                            .setKvRangeId(batcherKey.id)
-                            .setRoCoProcInput(ROCoProcInput.newBuilder()
-                                .setInboxService(InboxServiceROCoProcInput.newBuilder()
-                                    .setReqId(reqId)
-                                    .setBatchCheck(BatchCheckRequest.newBuilder()
-                                        .addAllScopedInboxId(checkInboxes)
-                                        .build())
-                                    .build()).build()
-                            )
-                            .build(), orderKey)
-                    .thenApply(v -> {
-                        switch (v.getCode()) {
-                            case Ok:
-                                InboxServiceROCoProcOutput reply = v.getRoCoProcResult().getInboxService();
-                                return reply.getBatchCheck();
-                            default:
-                                log.warn("Failed to exec rw co-proc[code={}]", v.getCode());
-                                throw new RuntimeException("Failed to exec rw co-proc");
-                        }
-                    })
-                    .handle((v, e) -> {
-                        if (e != null) {
-                            log.error("Inbox Check failed", e);
-                            onInboxChecked.forEach((req, f) -> f.completeExceptionally(e));
-                        } else {
-                            onInboxChecked.forEach((req, f) -> {
-                                Boolean exists = v.getExistsMap()
-                                    .get(scopedInboxId(req.getTenantId(),
-                                        req.getInboxId()).toStringUtf8());
-                                // if query result doesn't contain the scoped inboxId, reply error
-                                if (exists == null) {
-                                    f.completeExceptionally(new RuntimeException("Inbox not found"));
-                                } else {
-                                    f.complete(HasInboxReply.newBuilder()
-                                        .setReqId(req.getReqId())
-                                        .setResult(exists ? HasInboxReply.Result.EXIST : HasInboxReply.Result.NO_INBOX)
-                                        .build());
-                                }
-                            });
-                        }
-                        return null;
-                    });
-            }
-        }
-
-        private final String orderKey;
-        private final IBaseKVStoreClient inboxStoreClient;
-
-        InboxCheckBatcher(InboxReadBatcherKey batcherKey,
+    private static class InboxCheckBatcher extends QueryCallBatcher<HasInboxRequest, HasInboxReply> {
+        InboxCheckBatcher(QueryCallBatcherKey batcherKey,
                           String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
-                          IBaseKVStoreClient inboxStoreClient) {
-            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.inboxStoreClient = inboxStoreClient;
-            orderKey = this.hashCode() + "";
+                          IBaseKVStoreClient storeClient) {
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
         }
 
         @Override
-        protected IBatchCall<HasInboxRequest, HasInboxReply> newBatch() {
-            return new BatchInboxCheck();
+        protected IBatchCall<HasInboxRequest, HasInboxReply, QueryCallBatcherKey> newBatch() {
+            return new BatchCheckCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

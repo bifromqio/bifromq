@@ -15,13 +15,13 @@ package com.baidu.bifromq.basescheduler;
 
 import java.util.concurrent.CompletableFuture;
 
-public interface IBatchCall<Req, Resp> {
+public interface IBatchCall<Req, Resp, BatcherKey> {
     /**
      * Add a call task to the batch
      *
      * @param task the task to be fulfilled in the batch
      */
-    void add(CallTask<Req, Resp> task);
+    void add(CallTask<Req, Resp, BatcherKey> task);
 
     /**
      * Reset the batch call object to initial state to be reused again
@@ -34,5 +34,11 @@ public interface IBatchCall<Req, Resp> {
      * @return a future which will complete when batch is done
      */
     CompletableFuture<Void> execute();
+
+    /**
+     * Destroy the batch release any resources associated
+     */
+    default void destroy() {
+    }
 }
 

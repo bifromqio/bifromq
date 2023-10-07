@@ -88,12 +88,12 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
         }
 
         @Override
-        protected IBatchCall<DistWorkerCall, Map<String, Integer>> newBatch() {
+        protected IBatchCall<DistWorkerCall, Map<String, Integer>, Integer> newBatch() {
             return new BatchDistCall();
         }
 
-        private class BatchDistCall implements IBatchCall<DistWorkerCall, Map<String, Integer>> {
-            private final Queue<CallTask<DistWorkerCall, Map<String, Integer>>> tasks = new ArrayDeque<>(128);
+        private class BatchDistCall implements IBatchCall<DistWorkerCall, Map<String, Integer>, Integer> {
+            private final Queue<CallTask<DistWorkerCall, Map<String, Integer>, Integer>> tasks = new ArrayDeque<>(128);
             private Map<String, Map<String, Map<ClientInfo, Iterable<Message>>>> batch = new HashMap<>(128);
 
             @Override
@@ -102,7 +102,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
             }
 
             @Override
-            public void add(CallTask<DistWorkerCall, Map<String, Integer>> callTask) {
+            public void add(CallTask<DistWorkerCall, Map<String, Integer>, Integer> callTask) {
                 Map<String, Map<ClientInfo, Iterable<Message>>> clientMsgsByTopic =
                     batch.computeIfAbsent(callTask.call.tenantId, k -> new HashMap<>());
                 callTask.call.publisherMsgPacks.forEach(senderMsgPack ->
@@ -145,7 +145,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                 .setReqId(reqId)
                                 .setVer(range.ver)
                                 .setKvRangeId(range.id)
-                                .setRoCoProcInput(ROCoProcInput.newBuilder()
+                                .setRoCoProc(ROCoProcInput.newBuilder()
                                     .setDistService(buildBatchDistRequest(batchDist))
                                     .build())
                                 .build(), batchDist.getOrderKey())
@@ -167,7 +167,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                         .map(CompletableFuture::join)
                         .collect(Collectors.toList()))
                     .handle((replyList, e) -> {
-                        CallTask<DistWorkerCall, Map<String, Integer>> task;
+                        CallTask<DistWorkerCall, Map<String, Integer>, Integer> task;
                         if (e != null) {
                             while ((task = tasks.poll()) != null) {
                                 task.callResult.completeExceptionally(e);

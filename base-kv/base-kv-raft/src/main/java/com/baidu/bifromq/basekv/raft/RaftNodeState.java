@@ -175,11 +175,12 @@ abstract class RaftNodeState implements IRaftNodeLogger {
 
     final void compact(ByteString fsmSnapshot, long compactIndex, CompletableFuture<Void> onDone) {
         Optional<LogEntry> compactEntry = stateStorage.entryAt(compactIndex);
-        if (compactEntry.isPresent()) {
+        if (compactEntry.isPresent() || stateStorage.latestSnapshot().getIndex() == compactIndex) {
+            // allow updating existing snapshot
             Snapshot newSnapshot = Snapshot.newBuilder()
                 .setClusterConfig(stateStorage.latestClusterConfig())
                 .setIndex(compactIndex)
-                .setTerm(compactEntry.get().getTerm())
+                .setTerm(compactEntry.map(LogEntry::getTerm).orElse(stateStorage.latestSnapshot().getTerm()))
                 .setData(fsmSnapshot)
                 .build();
             try {

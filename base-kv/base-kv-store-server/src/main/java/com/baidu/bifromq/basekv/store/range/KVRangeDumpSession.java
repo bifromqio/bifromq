@@ -141,23 +141,16 @@ class KVRangeDumpSession {
         }
         SaveSnapshotDataRequest req = currentRequest.getSaveSnapshotDataRequest();
         lastReplyTS = System.nanoTime();
-        if (req != null && req.getReqId() == reply.getReqId()) {
+        if (req.getReqId() == reply.getReqId()) {
             currentRequest = null;
             switch (reply.getResult()) {
-                case OK:
+                case OK -> {
                     switch (req.getFlag()) {
-                        case More:
-                            nextSaveRequest();
-                            break;
-                        case End:
-                            runner.add(() -> doneSignal.complete(null));
-                            break;
+                        case More -> nextSaveRequest();
+                        case End -> runner.add(() -> doneSignal.complete(null));
                     }
-                    break;
-                case NoSessionFound:
-                case Error:
-                    runner.add(() -> doneSignal.complete(null));
-                    break;
+                }
+                case NoSessionFound, Error -> runner.add(() -> doneSignal.complete(null));
             }
         }
     }

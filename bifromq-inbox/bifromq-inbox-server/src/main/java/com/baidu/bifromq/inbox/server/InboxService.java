@@ -17,7 +17,6 @@ import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -64,7 +63,6 @@ import com.baidu.bifromq.inbox.storage.proto.MessagePack;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import com.google.common.util.concurrent.RateLimiter;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -109,7 +107,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxCreateScheduler createScheduler;
     private final IInboxSubScheduler subScheduler;
     private final IInboxUnsubScheduler unsubScheduler;
-    private final RateLimiter fetcherCreationLimiter;
     private final Duration touchIdle = Duration.ofMinutes(5);
     private ScheduledFuture<?> touchTask;
 
@@ -122,12 +119,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.fetchScheduler = new InboxFetchScheduler(inboxStoreClient);
         this.insertScheduler = new InboxInsertScheduler(inboxStoreClient);
         this.commitScheduler = new InboxCommitScheduler(inboxStoreClient);
-//        this.comSertScheduler = new InboxComSertScheduler2(inboxStoreClient);
         this.createScheduler = new InboxCreateScheduler(inboxStoreClient, settingProvider);
         this.subScheduler = new InboxSubScheduler(inboxStoreClient);
         this.unsubScheduler = new InboxUnSubScheduler(inboxStoreClient);
         this.touchScheduler = new InboxTouchScheduler(inboxStoreClient);
-        fetcherCreationLimiter = RateLimiter.create(INBOX_FETCH_PIPELINE_CREATION_RATE_LIMIT.get());
         this.bgTaskExecutorOwner = bgTaskExecutor == null;
         if (bgTaskExecutorOwner) {
             this.bgTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,

@@ -68,6 +68,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
@@ -230,6 +231,7 @@ public class KVRangeStoreTest {
         }
     }
 
+    @SneakyThrows
     @Test(groups = "integration")
     public void testPutKey() {
         KVRangeDescriptor rangeDescriptor = firstRangeDescriptor();

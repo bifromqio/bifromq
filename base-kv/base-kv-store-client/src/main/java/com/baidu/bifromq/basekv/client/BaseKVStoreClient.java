@@ -107,7 +107,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     // key: storeId, value serverId
     private volatile Map<String, String> storeToServerMap = Maps.newHashMap();
     // key: storeId, subKey: KVRangeId
-    private volatile Map<String, Map<KVRangeId, IExecutionPipeline>> execPplns = Maps.newHashMap();
+    private volatile Map<String, Map<KVRangeId, IMutationPipeline>> mutPplns = Maps.newHashMap();
     // key: storeId
     private volatile Map<String, List<IQueryPipeline>> queryPplns = Maps.newHashMap();
     // key: storeId
@@ -295,11 +295,11 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public CompletableFuture<KVRangeRWReply> execute(String storeId, KVRangeRWRequest request, String orderKey) {
-        IExecutionPipeline execPpln = execPplns.getOrDefault(storeId, emptyMap()).get(request.getKvRangeId());
-        if (execPpln == null) {
+        IMutationPipeline mutPpln = mutPplns.getOrDefault(storeId, emptyMap()).get(request.getKvRangeId());
+        if (mutPpln == null) {
             return CompletableFuture.failedFuture(BaseKVException.serverNotFound());
         }
-        return execPpln.execute(request);
+        return mutPpln.execute(request);
     }
 
     @Override
@@ -334,8 +334,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public IExecutionPipeline createExecutionPipeline(String storeId) {
-        return new ManagedExecutionPipeline(storeToServerSubject.map(m -> {
+    public IMutationPipeline createMutationPipeline(String storeId) {
+        return new ManagedMutationPipeline(storeToServerSubject.map(m -> {
             String serverId = m.get(storeId);
             if (serverId == null) {
                 return new IRPCClient.IRequestPipeline<>() {
@@ -425,7 +425,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             log.info("Stopping BaseKVStore client: cluster[{}]", clusterId);
             disposables.dispose();
             log.debug("Closing execution pipelines: cluster[{}]", clusterId);
-            execPplns.values().forEach(pplns -> pplns.values().forEach(IExecutionPipeline::close));
+            mutPplns.values().forEach(pplns -> pplns.values().forEach(IMutationPipeline::close));
             log.debug("Closing query pipelines: cluster[{}]", clusterId);
             queryPplns.values().forEach(pplns -> pplns.forEach(IQueryPipeline::close));
             log.debug("Closing linearizable query pipelines: cluster[{}]", clusterId);
@@ -457,7 +457,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             refreshQueryPipelines(storeToServerMap);
         }
         if (rangeRouteUpdated || storeRouteUpdated) {
-            refreshExecPipelines(storeToServerMap);
+            refreshMutPipelines(storeToServerMap);
         }
         if (rangeRouteUpdated) {
             if (router.isFullRangeCovered()) {
@@ -489,35 +489,35 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         return true;
     }
 
-    private void refreshExecPipelines(Map<String, String> newStoreToServerMap) {
-        Map<String, Map<KVRangeId, IExecutionPipeline>> nextExecPplns = Maps.newHashMap(execPplns);
-        nextExecPplns.forEach((k, v) -> nextExecPplns.put(k, Maps.newHashMap(v)));
-        Set<String> oldStoreIds = Sets.newHashSet(execPplns.keySet());
+    private void refreshMutPipelines(Map<String, String> newStoreToServerMap) {
+        Map<String, Map<KVRangeId, IMutationPipeline>> nextMutPplns = Maps.newHashMap(mutPplns);
+        nextMutPplns.forEach((k, v) -> nextMutPplns.put(k, Maps.newHashMap(v)));
+        Set<String> oldStoreIds = Sets.newHashSet(mutPplns.keySet());
 
         for (String existingStoreId : Sets.intersection(newStoreToServerMap.keySet(), oldStoreIds)) {
             Set<KVRangeId> newRangeIds = router.findByStore(existingStoreId).stream()
                 .map(setting -> setting.id).collect(Collectors.toSet());
-            Set<KVRangeId> oldRangeIds = Sets.newHashSet(nextExecPplns.get(existingStoreId).keySet());
+            Set<KVRangeId> oldRangeIds = Sets.newHashSet(nextMutPplns.get(existingStoreId).keySet());
             for (KVRangeId newRangeId : Sets.difference(newRangeIds, oldRangeIds)) {
-                nextExecPplns.get(existingStoreId)
-                    .put(newRangeId, new ExecPipeline(newStoreToServerMap.get(existingStoreId)));
+                nextMutPplns.get(existingStoreId)
+                    .put(newRangeId, new MutPipeline(newStoreToServerMap.get(existingStoreId)));
             }
             for (KVRangeId deadRangeId : Sets.difference(oldRangeIds, newRangeIds)) {
-                nextExecPplns.get(existingStoreId).remove(deadRangeId).close();
+                nextMutPplns.get(existingStoreId).remove(deadRangeId).close();
             }
         }
         for (String newStoreId : Sets.difference(newStoreToServerMap.keySet(), oldStoreIds)) {
-            Map<KVRangeId, IExecutionPipeline> rangeExecPplns =
-                nextExecPplns.computeIfAbsent(newStoreId, k -> new HashMap<>());
+            Map<KVRangeId, IMutationPipeline> rangeExecPplns =
+                nextMutPplns.computeIfAbsent(newStoreId, k -> new HashMap<>());
             for (KVRangeSetting setting : router.findByStore(newStoreId)) {
-                rangeExecPplns.put(setting.id, new ExecPipeline(newStoreToServerMap.get(newStoreId)));
+                rangeExecPplns.put(setting.id, new MutPipeline(newStoreToServerMap.get(newStoreId)));
             }
         }
 
         for (String deadStoreId : Sets.difference(oldStoreIds, newStoreToServerMap.keySet())) {
-            nextExecPplns.remove(deadStoreId).values().forEach(IExecutionPipeline::close);
+            nextMutPplns.remove(deadStoreId).values().forEach(IMutationPipeline::close);
         }
-        execPplns = nextExecPplns;
+        mutPplns = nextMutPplns;
     }
 
     private void refreshQueryPipelines(Map<String, String> newStoreToServerMap) {
@@ -553,10 +553,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         lnrQueryPplns = nextLnrQueryPplns;
     }
 
-    private class ExecPipeline implements IExecutionPipeline {
+    private class MutPipeline implements IMutationPipeline {
         private final IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> ppln;
 
-        ExecPipeline(String serverId) {
+        MutPipeline(String serverId) {
             ppln = rpcClient.createRequestPipeline("", serverId, null, emptyMap(), executeMethod);
         }
 

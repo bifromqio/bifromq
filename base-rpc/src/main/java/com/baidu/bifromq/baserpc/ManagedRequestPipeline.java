@@ -481,7 +481,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 // orphan stream
                 return;
             }
-            log.trace("ReqPipeline@{} of {} internal stream@{} error: state={}",
+            log.debug("ReqPipeline@{} of {} internal stream@{} error: state={}",
                 ManagedRequestPipeline.this.hashCode(),
                 methodDescriptor.getBareMethodName(),
                 requestStream.hashCode(), state.get(), throwable);

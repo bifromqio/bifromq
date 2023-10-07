@@ -186,7 +186,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
                 .setReqId(reqId)
                 .setKvRangeId(leaderReplica.id)
                 .setVer(leaderReplica.ver)
-                .setRoCoProcInput(ROCoProcInput.newBuilder().setDistService(buildCollectMetricsRequest(reqId)).build())
+                .setRoCoProc(ROCoProcInput.newBuilder().setDistService(buildCollectMetricsRequest(reqId)).build())
                 .build())
             .thenApply(reply -> {
                 log.debug("Range metrics collected: serverId={}, rangeId={}, ver={}",

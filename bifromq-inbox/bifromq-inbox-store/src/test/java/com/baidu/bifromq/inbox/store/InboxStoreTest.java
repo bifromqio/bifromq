@@ -325,7 +325,7 @@ abstract class InboxStoreTest {
             .setReqId(reqId)
             .setVer(s.ver)
             .setKvRangeId(s.id)
-            .setRoCoProcInput(ROCoProcInput.newBuilder().setInboxService(input).build())
+            .setRoCoProc(ROCoProcInput.newBuilder().setInboxService(input).build())
             .build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);
@@ -412,7 +412,7 @@ abstract class InboxStoreTest {
             .setReqId(reqId)
             .setVer(s.ver)
             .setKvRangeId(s.id)
-            .setRoCoProcInput(ROCoProcInput.newBuilder().setInboxService(input).build())
+            .setRoCoProc(ROCoProcInput.newBuilder().setInboxService(input).build())
             .build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);
@@ -446,7 +446,7 @@ abstract class InboxStoreTest {
             .setReqId(reqId)
             .setVer(s.ver)
             .setKvRangeId(s.id)
-            .setRoCoProcInput(ROCoProcInput.newBuilder().setInboxService(input).build())
+            .setRoCoProc(ROCoProcInput.newBuilder().setInboxService(input).build())
             .build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);
@@ -480,7 +480,7 @@ abstract class InboxStoreTest {
             .setReqId(reqId)
             .setVer(s.ver)
             .setKvRangeId(s.id)
-            .setRoCoProcInput(ROCoProcInput.newBuilder().setInboxService(input).build())
+            .setRoCoProc(ROCoProcInput.newBuilder().setInboxService(input).build())
             .build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);

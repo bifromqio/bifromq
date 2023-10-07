@@ -324,7 +324,7 @@ public abstract class DistWorkerTest {
             .setReqId(reqId)
             .setVer(s.ver)
             .setKvRangeId(s.id)
-            .setRoCoProcInput(input)
+            .setRoCoProc(input)
             .build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);

@@ -64,8 +64,8 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
     private class DeliveryCallBatcher extends Batcher<DeliveryRequest, DeliveryResult, DelivererKey> {
         private final IDeliverer deliverer;
 
-        private class DeliveryBatchCall implements IBatchCall<DeliveryRequest, DeliveryResult> {
-            private final Queue<CallTask<DeliveryRequest, DeliveryResult>> tasks = new ArrayDeque<>(128);
+        private class DeliveryBatchCall implements IBatchCall<DeliveryRequest, DeliveryResult, DelivererKey> {
+            private final Queue<CallTask<DeliveryRequest, DeliveryResult, DelivererKey>> tasks = new ArrayDeque<>(128);
             private Map<MessagePackWrapper, Set<SubInfo>> batch = new HashMap<>(128);
 
             @Override
@@ -74,7 +74,7 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
             }
 
             @Override
-            public void add(CallTask<DeliveryRequest, DeliveryResult> callTask) {
+            public void add(CallTask<DeliveryRequest, DeliveryResult, DelivererKey> callTask) {
                 batch.computeIfAbsent(callTask.call.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
                     .add(callTask.call.subInfo);
                 tasks.add(callTask);
@@ -87,12 +87,12 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
                         .collect(Collectors.toList()))
                     .handle((reply, e) -> {
                         if (e != null) {
-                            CallTask<DeliveryRequest, DeliveryResult> task;
+                            CallTask<DeliveryRequest, DeliveryResult, DelivererKey> task;
                             while ((task = tasks.poll()) != null) {
                                 task.callResult.completeExceptionally(e);
                             }
                         } else {
-                            CallTask<DeliveryRequest, DeliveryResult> task;
+                            CallTask<DeliveryRequest, DeliveryResult, DelivererKey> task;
                             while ((task = tasks.poll()) != null) {
                                 DeliveryResult result = reply.get(task.call.subInfo);
                                 if (result != null) {
@@ -118,7 +118,7 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
         }
 
         @Override
-        protected IBatchCall<DeliveryRequest, DeliveryResult> newBatch() {
+        protected IBatchCall<DeliveryRequest, DeliveryResult, DelivererKey> newBatch() {
             return new DeliveryBatchCall();
         }
 

@@ -17,7 +17,7 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import java.util.concurrent.CompletableFuture;
 
-public interface IExecutionPipeline {
+public interface IMutationPipeline {
     CompletableFuture<KVRangeRWReply> execute(KVRangeRWRequest request);
 
     void close();

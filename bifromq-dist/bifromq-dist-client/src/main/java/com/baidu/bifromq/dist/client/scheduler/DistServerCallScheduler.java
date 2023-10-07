@@ -65,7 +65,7 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
     private static class DistServerCallBatcher extends Batcher<DistServerCall, Void, BatcherKey> {
         private final IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln;
 
-        private class DistServerBatchCall implements IBatchCall<DistServerCall, Void> {
+        private class DistServerBatchCall implements IBatchCall<DistServerCall, Void, BatcherKey> {
             private final Queue<CompletableFuture<Void>> tasks = new ArrayDeque<>(64);
             private Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack =
                 new HashMap<>(128);
@@ -76,7 +76,7 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
             }
 
             @Override
-            public void add(CallTask<DistServerCall, Void> callTask) {
+            public void add(CallTask<DistServerCall, Void, BatcherKey> callTask) {
                 tasks.add(callTask.callResult);
                 clientMsgPack.computeIfAbsent(callTask.call.publisher, k -> new HashMap<>())
                     .computeIfAbsent(callTask.call.topic, k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
@@ -121,7 +121,7 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
         }
 
         @Override
-        protected IBatchCall<DistServerCall, Void> newBatch() {
+        protected IBatchCall<DistServerCall, Void, BatcherKey> newBatch() {
             return new DistServerBatchCall();
         }
 

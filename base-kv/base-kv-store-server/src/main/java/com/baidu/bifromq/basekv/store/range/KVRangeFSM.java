@@ -97,6 +97,7 @@ import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscription;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWAL;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.basekv.utils.KeyRangeUtil;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -117,13 +118,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -147,7 +148,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     };
     private final KVRangeId id;
     private final String hostStoreId;
-    private final IKVRangeSnapshotChecker snapshotChecker;
+    private final ISnapshotEnsurer CompatibilityEnsurer;
     private final IKVRange kvRange;
     private final IKVRangeWAL wal;
     private final IKVRangeWALSubscription commitLogSubscription;
@@ -169,17 +170,18 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final CompletableFuture<Void> closeSignal = new CompletableFuture<>();
     private final CompletableFuture<State.StateType> quitReason = new CompletableFuture<>();
-    private final CompletableFuture<Void> terminatedSignal = new CompletableFuture<>();
+    private final CompletableFuture<Void> destroyedSignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
     private final ILoadEstimator loadEstimator;
+    private final AtomicBoolean compacting = new AtomicBoolean();
     private IKVRangeMessenger messenger;
-    private volatile CompletableFuture<Void> checkWalSizeTask;
+    private volatile CompletableFuture<Void> compactionFuture;
 
     public KVRangeFSM(String clusterId,
                       String hostStoreId,
                       KVRangeId id,
                       IKVRangeCoProcFactory coProcFactory,
-                      IKVRangeSnapshotChecker snapshotChecker,
+                      ISnapshotEnsurer CompatibilityEnsurer,
                       IKVSpace kvSpace,
                       IKVRangeWALStoreEngine walStateStorageEngine,
                       Executor queryExecutor,
@@ -204,7 +206,7 @@ public class KVRangeFSM implements IKVRangeFSM {
             } else {
                 this.kvRange = new KVRange(kvSpace, loadEstimator);
             }
-            this.snapshotChecker = snapshotChecker;
+            this.CompatibilityEnsurer = CompatibilityEnsurer;
             this.wal = new KVRangeWAL(clusterId, id,
                 walStateStorageEngine,
                 opts.getWalRaftConfig(),
@@ -248,19 +250,6 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     @Override
-    public boolean isOccupying(String checkpointId) {
-        if (!isWorking()) {
-            return false;
-        }
-        try {
-            return checkpointId.equals(wal.latestSnapshot().getCheckpointId()) ||
-                dumpSessions.values().stream().anyMatch(s -> s.checkpointId().equals(checkpointId));
-        } catch (Throwable e) {
-            return false;
-        }
-    }
-
-    @Override
     public boolean readyToQuit() {
         return quitReason.isDone();
     }
@@ -295,12 +284,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                         wal.state().distinctUntilChanged(),
                         wal.replicationStatus().distinctUntilChanged(),
                         clusterConfigSubject.distinctUntilChanged(),
-                        statsCollector.collect().distinctUntilChanged(),
-                        (meta, role, syncStats, clusterConfig, stats) -> {
-                            LoadHint loadHint = loadEstimator.estimate();
-                            assert 0 <= loadHint.getLoad() && loadHint.getLoad() < 1.0 : "load must be in [0.0, 1.0)";
-                            assert !loadHint.hasSplitKey() || inRange(loadHint.getSplitKey(), meta.boundary()) :
-                                "splitKey must be in provided range";
+                        statsCollector.collect()
+                            .map(stats -> Lists.newArrayList(stats, loadEstimator.estimate()))
+                            .distinctUntilChanged(),
+                        (meta, role, syncStats, clusterConfig, statsAndLoadHint) -> {
+                            LoadHint loadHint = (LoadHint) statsAndLoadHint.get(1);
                             return KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver())
                                 .setId(id)
@@ -309,21 +297,21 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .setState(meta.state().getType())
                                 .setConfig(clusterConfig)
                                 .putAllSyncState(syncStats)
-                                .putAllStatistics(stats)
+                                .putAllStatistics((Map<String, Double>) statsAndLoadHint.get(0))
                                 .setLoadHint(loadHint)
                                 .setHlc(HLC.INST.get())
                                 .build();
                         })
                     .subscribe(descriptorSubject::onNext));
                 disposables.add(messenger.receive().subscribe(this::handleMessage));
-                // do compaction whenever there is a meta change
-                disposables.add(kvRange.metadata().subscribe(this::doCompactSafely));
                 clusterConfigSubject.onNext(wal.clusterConfig());
                 lifecycle.set(Open);
                 metricManager.reportLastAppliedIndex(kvRange.lastAppliedIndex());
                 // make sure latest snapshot exists
                 if (!kvRange.hasCheckpoint(wal.latestSnapshot())) {
-                    doCompact().join();
+                    log.debug("Latest snapshot not available, do compaction: rangeId={}, storeId={}\n{}",
+                        KVRangeIdUtil.toString(id), hostStoreId, wal.latestSnapshot());
+                    doCompaction().join();
                 }
             }
         });
@@ -331,7 +319,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public void tick() {
-        if (!isWorking()) {
+        if (isNotOpening()) {
             return;
         }
         wal.tick();
@@ -342,45 +330,56 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Void> close() {
-        if (lifecycle.get() == Open) {
-            mgmtTaskRunner.add(() -> {
-                if (lifecycle.compareAndSet(Open, Lifecycle.Closing)) {
-                    log.debug("Closing range[{}] from store[{}]", toShortString(id), hostStoreId);
-                    clusterConfigSubject.onComplete();
-                    descriptorSubject.onComplete();
-                    disposables.dispose();
-                    commitLogSubscription.stop();
-                    queryRunner.close();
-                    coProc.close();
-                    cmdFutures.values()
-                        .forEach(f -> f.completeExceptionally(new KVRangeException.TryLater("Range closed")));
-                    dumpSessions.values().forEach(KVRangeDumpSession::cancel);
-                    statsCollector.stop()
-                        .thenComposeAsync(v -> mgmtTaskRunner.awaitDone(), mgmtExecutor)
-                        .thenComposeAsync(v -> wal.close(), mgmtExecutor)
-                        .whenCompleteAsync((v, e) -> {
-                            metricManager.close();
-                            fsmExecutor.shutdown();
-                            lifecycle.set(Closed);
-                            closeSignal.complete(null);
-                        }, mgmtExecutor);
-                }
-            });
+        switch (lifecycle.get()) {
+            case Init -> {
+                return CompletableFuture.completedFuture(null);
+            }
+            case Opening -> {
+                return CompletableFuture.failedFuture(new IllegalStateException("Range is opening"));
+            }
+            case Open -> {
+                mgmtTaskRunner.add(() -> {
+                    if (lifecycle.compareAndSet(Open, Lifecycle.Closing)) {
+                        log.debug("Closing range[{}] from store[{}]", KVRangeIdUtil.toString(id), hostStoreId);
+                        clusterConfigSubject.onComplete();
+                        descriptorSubject.onComplete();
+                        disposables.dispose();
+                        commitLogSubscription.stop();
+                        queryRunner.close();
+                        coProc.close();
+                        cmdFutures.values()
+                            .forEach(f -> f.completeExceptionally(new KVRangeException.TryLater("Range closed")));
+                        dumpSessions.values().forEach(KVRangeDumpSession::cancel);
+                        statsCollector.stop()
+                            .thenComposeAsync(v -> mgmtTaskRunner.awaitDone(), mgmtExecutor)
+                            .thenComposeAsync(v -> wal.close(), mgmtExecutor)
+                            .whenCompleteAsync((v, e) -> {
+                                metricManager.close();
+                                fsmExecutor.shutdown();
+                                lifecycle.set(Closed);
+                                closeSignal.complete(null);
+                            }, mgmtExecutor);
+                    }
+                });
+                return closeSignal;
+            }
+            default -> {
+                return closeSignal;
+            }
         }
-        return closeSignal;
     }
 
     @Override
-    public CompletionStage<Void> destroy() {
+    public CompletableFuture<Void> destroy() {
         return close().thenCompose(v -> mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Closed, Destroying)) {
                 log.debug("Destroy range[{}] from store[{}]", toShortString(id), hostStoreId);
                 kvRange.destroy();
                 wal.destroy();
                 lifecycle.set(Destroyed);
-                terminatedSignal.complete(null);
+                destroyedSignal.complete(null);
             }
-            return terminatedSignal;
+            return destroyedSignal;
         }));
     }
 
@@ -396,9 +395,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                 kvRange.destroy();
                 wal.destroy();
                 lifecycle.set(Destroyed);
-                terminatedSignal.complete(null);
+                destroyedSignal.complete(null);
             }
-            return terminatedSignal;
+            return destroyedSignal;
         }));
     }
 
@@ -461,7 +460,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized) {
-        if (!isWorking()) {
+        if (isNotOpening()) {
             // treat un-opened range as not exist
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
@@ -471,7 +470,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized) {
-        if (!isWorking()) {
+        if (isNotOpening()) {
             // treat un-opened range as not exist
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
@@ -481,7 +480,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<ROCoProcOutput> queryCoProc(long ver, ROCoProcInput query, boolean linearized) {
-        if (!isWorking()) {
+        if (isNotOpening()) {
             // treat un-opened range as not exist
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
@@ -527,7 +526,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @SuppressWarnings("unchecked")
     private <T> CompletableFuture<T> submitCommand(KVRangeCommand command) {
-        if (!isWorking()) {
+        if (isNotOpening()) {
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
@@ -607,13 +606,12 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private CompletableFuture<Void> apply(KVRangeSnapshot ss) {
-        if (!isWorking()) {
+        if (isNotOpening()) {
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
         CompletableFuture<Void> onDone = new CompletableFuture<>();
-        snapshotChecker.check(ss)
-            .toCompletableFuture()
+        CompatibilityEnsurer.ensure(ss)
             .whenCompleteAsync((v, e) -> {
                 if (onDone.isCancelled()) {
                     return;
@@ -883,11 +881,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 KeyBoundary rightBoundary = boundary.hasEndKey() ?
                                     boundary.toBuilder().setStartKey(request.getSplitKey()).build() :
                                     KeyBoundary.newBuilder().setStartKey(request.getSplitKey()).build();
-
-                                rangeWriter.boundary(leftBoundary).bumpVer(true);
-                                IKVRangeMetadataUpdatable<?> rightRangeMetadataUpdateable =
-                                    rangeWriter.migrateTo(request.getNewId(), rightBoundary);
-
                                 KVRangeSnapshot rhsSS = KVRangeSnapshot.newBuilder()
                                     .setVer(ver + 1)
                                     .setId(request.getNewId())
@@ -899,34 +892,57 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         .setTaskId(taskId)
                                         .build())
                                     .build();
-
-                                rightRangeMetadataUpdateable.resetVer(rhsSS.getVer())
-                                    .boundary(rightBoundary)
-                                    .lastAppliedIndex(rhsSS.getLastAppliedIndex())
-                                    .state(rhsSS.getState());
-
-                                onDone.complete(() -> {
-                                    finishCommand(taskId);
-                                    log.debug(
-                                        "Sending ensure request to load right KVRange[{}]: rangeId={}, storeId={}",
-                                        toShortString(request.getNewId()), toShortString(id), hostStoreId);
-                                    messenger.send(
-                                        KVRangeMessage.newBuilder()
-                                            .setRangeId(rhsSS.getId())
-                                            .setHostStoreId(hostStoreId)
-                                            .setEnsureRange(EnsureRange.newBuilder()
-                                                .setInitSnapshot(Snapshot.newBuilder()
-                                                    .setTerm(0)
-                                                    .setIndex(rhsSS.getLastAppliedIndex())
-                                                    .setClusterConfig(wal.clusterConfig())
-                                                    .setData(rhsSS.toByteString())
-                                                    .build())
-                                                .build()).build());
-                                });
+                                // ensure the rhs range to be created is locally compatible with other ranges except the splitting one
+                                CompatibilityEnsurer.ensure(rhsSS, singleton(id))
+                                    .whenCompleteAsync((v, e) -> {
+                                        if (e != null) {
+                                            log.warn(
+                                                "The rhs range will not be compatible locally: rangeId={}, storeId={}",
+                                                KVRangeIdUtil.toString(request.getNewId()), hostStoreId, e);
+                                            onDone.completeExceptionally(e);
+                                        } else {
+                                            rangeWriter.boundary(leftBoundary).bumpVer(true);
+                                            IKVRangeMetadataUpdatable<?> rightRangeMetadataUpdateable =
+                                                rangeWriter.migrateTo(request.getNewId(), rightBoundary);
+                                            rightRangeMetadataUpdateable.resetVer(rhsSS.getVer())
+                                                .boundary(rightBoundary)
+                                                .lastAppliedIndex(rhsSS.getLastAppliedIndex())
+                                                .state(rhsSS.getState());
+                                            onDone.complete(() -> {
+                                                log.debug(
+                                                    "Sending ensure request to load right KVRange[{}]: rangeId={}, storeId={}",
+                                                    toShortString(request.getNewId()), toShortString(id), hostStoreId);
+                                                messenger.once(m -> {
+                                                    if (m.hasEnsureRangeReply()) {
+                                                        EnsureRangeReply reply = m.getEnsureRangeReply();
+                                                        return reply.getResult() == EnsureRangeReply.Result.OK;
+                                                    }
+                                                    return false;
+                                                }).whenComplete((_v, _e) -> {
+                                                    if (_e != null) {
+                                                        finishCommandWithError(taskId, _e);
+                                                    } else {
+                                                        finishCommand(taskId);
+                                                    }
+                                                });
+                                                messenger.send(KVRangeMessage.newBuilder()
+                                                    .setRangeId(rhsSS.getId())
+                                                    .setHostStoreId(hostStoreId)
+                                                    .setEnsureRange(EnsureRange.newBuilder()
+                                                        .setInitSnapshot(Snapshot.newBuilder()
+                                                            .setTerm(0)
+                                                            .setIndex(rhsSS.getLastAppliedIndex())
+                                                            .setClusterConfig(wal.clusterConfig())
+                                                            .setData(rhsSS.toByteString())
+                                                            .build())
+                                                        .build()).build());
+                                                scheduleCompaction();
+                                            });
+                                        }
+                                    }, mgmtExecutor);
                             } else {
-                                onDone.complete(
-                                    () -> finishCommandWithError(taskId,
-                                        new KVRangeException.BadRequest("Invalid split key")));
+                                onDone.complete(() -> finishCommandWithError(taskId,
+                                    new KVRangeException.BadRequest("Invalid split key")));
                             }
                         }
                         case PREPAREMERGEWITH -> {
@@ -1169,7 +1185,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                 e : new KVRangeException.InternalException(
                                                 "Failed to send MergeDone request"));
                                         } else {
-                                            onDone.complete(() -> finishCommand(taskId));
+                                            onDone.complete(() -> {
+                                                finishCommand(taskId);
+                                                scheduleCompaction();
+                                            });
                                         }
                                     }, fsmExecutor);
                                 // send merge done request to local mergee
@@ -1203,7 +1222,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         .setType(Merged)
                                         .setTaskId(taskId)
                                         .build());
-                                onDone.complete(NOOP);
+                                onDone.complete(this::scheduleCompaction);
                             } else {
                                 Map<String, Boolean> waitingList = Maps.newHashMap(state.getWaitingListMap());
                                 waitingList.put(request.getStoreId(), true);
@@ -1264,7 +1283,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                         }
                     }
                 } catch (Throwable t) {
-                    log.error("Unable to execute KVRange Command", t);
+                    log.error("Apply log error: type={}, index={}, term={}",
+                        logEntry.getTypeCase(), logEntry.getIndex(), logEntry.getTerm(), t);
                     onDone.completeExceptionally(t);
                 }
             }
@@ -1308,11 +1328,13 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     quitReason.complete(Purged);
                                 }
                                 finishCommand(taskId);
+                                scheduleCompaction();
                             });
                         } else {
                             onDone.complete(() -> {
                                 clusterConfigSubject.onNext(config);
                                 finishCommandWithError(taskId, new KVRangeException.TryLater("Retry config change"));
+                                scheduleCompaction();
                             });
                         }
                     }
@@ -1338,10 +1360,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 quitReason.complete(Removed);
                             }
                             finishCommand(taskId);
+                            scheduleCompaction();
                         });
                     }
                     default ->
-                        // target config is applied
+                        // skip internal config change triggered by leadership change
                         onDone.complete(() -> clusterConfigSubject.onNext(config));
                 }
             }
@@ -1353,54 +1376,41 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void checkWalSize() {
-        if ((checkWalSizeTask == null || checkWalSizeTask.isDone())) {
+        if ((compactionFuture == null || compactionFuture.isDone())) {
             long lastAppliedIndex = kvRange.lastAppliedIndex();
             KVRangeSnapshot snapshot = wal.latestSnapshot();
             if (lastAppliedIndex - snapshot.getLastAppliedIndex() > opts.getCompactWALThreshold()) {
-                checkWalSizeTask = doCompactSafely(kvRange.metadata().blockingFirst());
+                scheduleCompaction();
             }
         }
     }
 
-    private CompletableFuture<Void> doCompactSafely(IKVRange.KVRangeMeta meta) {
-        // FIXME: stop compaction when doing merge
-        if (!isSafeToCompact(meta.state())) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return mgmtTaskRunner.add(() -> {
-            if (!isWorking()) {
-                return CompletableFuture.completedFuture(null);
-            }
-            return metricManager.recordCompact(() -> {
-                KVRangeSnapshot snapshot = kvRange.checkpoint();
-                if (!isSafeToCompact(snapshot.getState())) {
-                    log.debug("Skip compaction using snapshot[{}]", snapshot);
+    private void scheduleCompaction() {
+        if (compacting.compareAndSet(false, true)) {
+            compactionFuture = mgmtTaskRunner.add(() -> {
+                if (isNotOpening()) {
                     return CompletableFuture.completedFuture(null);
                 }
-                return doCompact();
-            });
-        });
+                return doCompaction();
+            }).whenComplete((v, e) -> compacting.set(false));
+        }
     }
 
-    private CompletableFuture<Void> doCompact() {
+    private CompletableFuture<Void> doCompaction() {
         return metricManager.recordCompact(() -> {
             KVRangeSnapshot snapshot = kvRange.checkpoint();
             log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
                 toShortString(id), hostStoreId, snapshot);
-            return wal.compact(snapshot);
+            return wal.compact(snapshot).exceptionally(e -> {
+                log.error("Wal compaction error", e);
+                return null;
+            });
         });
     }
 
-    private boolean isWorking() {
+    private boolean isNotOpening() {
         Lifecycle state = lifecycle.get();
-        return state == Open;
-    }
-
-    private boolean isSafeToCompact(State state) {
-        return switch (state.getType()) {
-            case Normal, Merged, Removed, Purged -> true;
-            default -> false;
-        };
+        return state != Open;
     }
 
     private boolean isCompatible(ClusterConfig config1, ClusterConfig config2) {
@@ -1426,11 +1436,11 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handleWALMessages(String peerId, List<RaftMessage> messages) {
-        if (messages.stream().anyMatch(msg -> msg.hasInstallSnapshotReply()
-            && msg.getInstallSnapshotReply().getRejected())) {
+        if (messages.stream()
+            .anyMatch(msg -> msg.hasInstallSnapshotReply() && msg.getInstallSnapshotReply().getRejected())) {
             log.debug("Snapshot rejected, compact now");
             // follower reject my snapshot, probably because it's too old, let's make a new one immediately
-            doCompactSafely(kvRange.metadata().blockingFirst());
+            scheduleCompaction();
         }
         wal.receivePeerMessages(peerId, messages);
     }

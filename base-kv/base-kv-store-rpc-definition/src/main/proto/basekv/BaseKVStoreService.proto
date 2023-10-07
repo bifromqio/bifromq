@@ -134,7 +134,7 @@ message KVRangeRORequest{
   oneof Type{
     bytes existKey = 4;
     bytes getKey = 5;
-    basekv.ROCoProcInput roCoProcInput = 6;
+    basekv.ROCoProcInput roCoProc = 6;
   }
 }
 

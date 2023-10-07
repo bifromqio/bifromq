@@ -15,39 +15,38 @@ package com.baidu.bifromq.dist.server.scheduler;
 
 import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_BURST_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_TOLERABLE_LATENCY_MS;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
-import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
-import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.google.protobuf.ByteString;
-import java.util.ArrayDeque;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class UnmatchCallScheduler extends MutateCallScheduler<UnmatchRequest, UnmatchReply>
+public class UnmatchCallScheduler extends MutationCallScheduler<UnmatchRequest, UnmatchReply>
     implements IUnmatchCallScheduler {
 
     public UnmatchCallScheduler(IBaseKVStoreClient distWorkerClient) {
-        super("dist_server_unsub_batcher", distWorkerClient);
+        super("dist_server_unsub_batcher",
+            distWorkerClient,
+            Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
+            Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
     }
 
     @Override
-    protected Batcher<UnmatchRequest, UnmatchReply, KVRangeSetting> newBatcher(String name,
-                                                                               long tolerableLatencyNanos,
-                                                                               long burstLatencyNanos,
-                                                                               KVRangeSetting range) {
-        return new UnsubCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, distWorkerClient);
+    protected Batcher<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> newBatcher(String name,
+                                                                                       long tolerableLatencyNanos,
+                                                                                       long burstLatencyNanos,
+                                                                                       MutationCallBatcherKey range) {
+        return new UnsubCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
     }
 
     protected ByteString rangeKey(UnmatchRequest call) {
@@ -55,81 +54,18 @@ public class UnmatchCallScheduler extends MutateCallScheduler<UnmatchRequest, Un
         return toMatchRecordKey(call.getTenantId(), call.getTopicFilter(), qInboxId);
     }
 
-    private static class UnsubCallBatcher extends MutateCallBatcher<UnmatchRequest, UnmatchReply> {
-
-        private class UnsubCallBatch implements IBatchCall<UnmatchRequest, UnmatchReply> {
-            private final Queue<CallTask<UnmatchRequest, UnmatchReply>> batchedTasks = new ArrayDeque<>();
-            private BatchUnmatchRequest.Builder reqBuilder = BatchUnmatchRequest.newBuilder();
-
-            @Override
-            public void reset() {
-                reqBuilder = BatchUnmatchRequest.newBuilder();
-            }
-
-            @Override
-            public void add(CallTask<UnmatchRequest, UnmatchReply> callTask) {
-                UnmatchRequest subCall = callTask.call;
-                batchedTasks.add(callTask);
-                String qInboxId =
-                    toQInboxId(subCall.getBroker(), subCall.getInboxId(), subCall.getDelivererKey());
-                String scopedTopicFilter =
-                    toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
-                reqBuilder.addScopedTopicFilter(scopedTopicFilter);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-
-                return mutate(reqId, DistServiceRWCoProcInput.newBuilder()
-                    .setBatchUnmatch(reqBuilder
-                        .setReqId(reqId)
-                        .build())
-                    .build())
-                    .thenApply(DistServiceRWCoProcOutput::getBatchUnmatch)
-                    .handle((reply, e) -> {
-                        if (e != null) {
-                            CallTask<UnmatchRequest, UnmatchReply> callTask;
-                            while ((callTask = batchedTasks.poll()) != null) {
-                                callTask.callResult.complete(UnmatchReply.newBuilder()
-                                    .setReqId(callTask.call.getReqId())
-                                    .setResult(UnmatchReply.Result.ERROR)
-                                    .build());
-                            }
-                        } else {
-                            CallTask<UnmatchRequest, UnmatchReply> callTask;
-                            while ((callTask = batchedTasks.poll()) != null) {
-                                UnmatchRequest request = callTask.call;
-                                String qInboxId =
-                                    toQInboxId(request.getBroker(), request.getInboxId(),
-                                        request.getDelivererKey());
-                                String scopedTopicFilter =
-                                    toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
-                                BatchUnmatchReply.Result result =
-                                    reply.getResultsOrDefault(scopedTopicFilter, BatchUnmatchReply.Result.ERROR);
-                                callTask.callResult.complete(UnmatchReply.newBuilder()
-                                    .setReqId(callTask.call.getReqId())
-                                    .setResult(UnmatchReply.Result.forNumber(result.getNumber()))
-                                    .build());
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
-
+    private static class UnsubCallBatcher extends MutationCallBatcher<UnmatchRequest, UnmatchReply> {
         private UnsubCallBatcher(String name,
                                  long tolerableLatencyNanos,
                                  long burstLatencyNanos,
-                                 KVRangeSetting range,
+                                 MutationCallBatcherKey batcherKey,
                                  IBaseKVStoreClient distWorkerClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, range, distWorkerClient);
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, distWorkerClient);
         }
 
         @Override
-        protected IBatchCall<UnmatchRequest, UnmatchReply> newBatch() {
-            return new UnsubCallBatch();
+        protected IBatchCall<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> newBatch() {
+            return new BatchUnmatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

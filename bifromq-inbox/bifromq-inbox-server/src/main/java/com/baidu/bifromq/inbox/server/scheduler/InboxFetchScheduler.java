@@ -16,20 +16,13 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_QUEUES_PER_RANGE;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
-import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.google.protobuf.ByteString;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -40,19 +33,19 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
     }
 
     @Override
-    protected Batcher<IInboxFetchScheduler.InboxFetch, Fetched, InboxReadBatcherKey> newBatcher(String name,
+    protected Batcher<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> newBatcher(String name,
                                                                                                 long tolerableLatencyNanos,
                                                                                                 long burstLatencyNanos,
-                                                                                                InboxReadBatcherKey inboxReadBatcherKey) {
+                                                                                                QueryCallBatcherKey inboxReadBatcherKey) {
         return new InboxFetchBatcher(inboxReadBatcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
-            inboxStoreClient);
+            storeClient);
     }
 
     @Override
-    protected int selectQueue(int queueNum, IInboxFetchScheduler.InboxFetch request) {
-        int idx = request.scopedInboxId.hashCode() % queueNum;
+    protected int selectQueue(InboxFetch request) {
+        int idx = request.scopedInboxId.hashCode() % queuesPerRange;
         if (idx < 0) {
-            idx += queueNum;
+            idx += queuesPerRange;
         }
         return idx;
     }
@@ -62,103 +55,18 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
         return request.scopedInboxId;
     }
 
-    private static class InboxFetchBatcher
-        extends Batcher<IInboxFetchScheduler.InboxFetch, Fetched, InboxReadBatcherKey> {
-        private class InboxFetchBatch implements IBatchCall<InboxFetch, Fetched> {
-            // key: scopedInboxIdUtf8
-            private Map<String, FetchParams> inboxFetches = new HashMap<>(128);
-
-            // key: scopedInboxIdUtf8
-            private Map<String, CompletableFuture<Fetched>> onInboxFetched = new HashMap<>(128);
-
-            @Override
-            public void reset() {
-                inboxFetches = new HashMap<>(128);
-                onInboxFetched = new HashMap<>(128);
-            }
-
-            @Override
-            public void add(CallTask<InboxFetch, Fetched> callTask) {
-                InboxFetch request = callTask.call;
-                inboxFetches.compute(request.scopedInboxId.toStringUtf8(), (k, v) -> {
-                    if (v == null) {
-                        return request.params;
-                    }
-                    FetchParams.Builder b = v.toBuilder();
-                    if (request.params.hasQos0StartAfter()) {
-                        b.setQos0StartAfter(request.params.getQos1StartAfter());
-                    }
-                    if (request.params.hasQos1StartAfter()) {
-                        b.setQos1StartAfter(request.params.getQos1StartAfter());
-                    }
-                    if (request.params.hasQos2StartAfter()) {
-                        b.setQos2StartAfter(request.params.getQos2StartAfter());
-                    }
-                    b.setMaxFetch(request.params.getMaxFetch());
-                    return b.build();
-                });
-                onInboxFetched.put(request.scopedInboxId.toStringUtf8(), callTask.callResult);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                long reqId = System.nanoTime();
-                return inboxStoreClient.linearizedQuery(batcherKey.storeId,
-                        KVRangeRORequest.newBuilder()
-                            .setReqId(reqId)
-                            .setVer(batcherKey.ver)
-                            .setKvRangeId(batcherKey.id)
-                            .setRoCoProcInput(ROCoProcInput.newBuilder()
-                                .setInboxService(InboxServiceROCoProcInput.newBuilder()
-                                    .setReqId(reqId)
-                                    .setBatchFetch(BatchFetchRequest.newBuilder()
-                                        .putAllInboxFetch(inboxFetches)
-                                        .build())
-                                    .build())
-                                .build())
-                            .build(), orderKey)
-                    .thenApply(v -> {
-                        switch (v.getCode()) {
-                            case Ok:
-                                InboxServiceROCoProcOutput output = v.getRoCoProcResult().getInboxService();
-                                return output.getBatchFetch();
-                            default:
-                                throw new RuntimeException(
-                                    String.format("Failed to exec ro co-proc[code=%s]", v.getCode()));
-                        }
-                    })
-                    .handle((v, e) -> {
-                        if (e != null) {
-                            for (String scopedInboxIdUtf8 : onInboxFetched.keySet()) {
-                                onInboxFetched.get(scopedInboxIdUtf8).completeExceptionally(e);
-                            }
-                        } else {
-                            for (String scopedInboxIdUtf8 : onInboxFetched.keySet()) {
-                                onInboxFetched.get(scopedInboxIdUtf8)
-                                    .complete(v.getResultMap().get(scopedInboxIdUtf8));
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
-        private final String orderKey;
-        private final IBaseKVStoreClient inboxStoreClient;
-
-        InboxFetchBatcher(InboxReadBatcherKey batcherKey,
+    private static class InboxFetchBatcher extends QueryCallBatcher<InboxFetch, Fetched> {
+        InboxFetchBatcher(QueryCallBatcherKey batcherKey,
                           String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
-                          IBaseKVStoreClient inboxStoreClient) {
-            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
-            this.inboxStoreClient = inboxStoreClient;
-            orderKey = String.valueOf(this.hashCode());
+                          IBaseKVStoreClient storeClient) {
+            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
         }
 
         @Override
-        protected IBatchCall<InboxFetch, Fetched> newBatch() {
-            return new InboxFetchBatch();
+        protected IBatchCall<InboxFetch, Fetched, QueryCallBatcherKey> newBatch() {
+            return new BatchFetchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

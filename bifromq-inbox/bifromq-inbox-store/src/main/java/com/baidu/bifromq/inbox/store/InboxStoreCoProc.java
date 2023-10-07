@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.basekv.localengine.RangeUtil.inRange;
 import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
