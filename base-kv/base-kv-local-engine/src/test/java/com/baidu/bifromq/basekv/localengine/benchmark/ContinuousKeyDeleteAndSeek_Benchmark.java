@@ -19,7 +19,7 @@ import static com.baidu.bifromq.basekv.localengine.TestUtil.toByteString;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -86,7 +86,7 @@ public class ContinuousKeyDeleteAndSeek_Benchmark extends BenchmarkTemplate {
     @BenchmarkMode(Mode.Throughput)
     @OutputTimeUnit(TimeUnit.SECONDS)
     public boolean iterator(BenchmarkThreadState state) {
-        IKVSpaceIterator itr = kvSpace.newIterator(KeyBoundary.newBuilder()
+        IKVSpaceIterator itr = kvSpace.newIterator(Boundary.newBuilder()
             .setStartKey(key.concat(toByteString(state.i)))
             .setEndKey(key.concat(toByteString(state.i + 1)))
             .build());

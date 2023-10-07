@@ -13,8 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,7 +22,7 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.google.protobuf.ByteString;
@@ -64,11 +63,11 @@ public class KVReaderTest {
     public void read() {
         IKVReader reader = new KVReader(keyRangeReader, kvRangeReader, loadTracker);
         // range
-        when(kvRangeReader.boundary()).thenReturn(toBoundary(FULL_RANGE));
+        when(kvRangeReader.boundary()).thenReturn(FULL_BOUNDARY);
         reader.boundary();
 
         // size
-        KeyBoundary range = KeyBoundary.newBuilder()
+        Boundary range = Boundary.newBuilder()
             .setStartKey(ByteString.copyFromUtf8("a"))
             .setEndKey(ByteString.copyFromUtf8("z"))
             .build();

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.awaitility.Awaitility.await;
 
 import com.baidu.bifromq.basekv.annotation.Cluster;
@@ -49,7 +49,7 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
                 return false;
             }
             return rangeSetting.ver >= 2 &&
-                FULL_RANGE.equals(rangeSetting.range) && rangeSetting.clusterConfig.getVotersCount() == 2;
+                FULL_BOUNDARY.equals(rangeSetting.boundary) && rangeSetting.clusterConfig.getVotersCount() == 2;
         });
     }
 
@@ -62,7 +62,7 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
                 return false;
             }
             return rangeSetting.ver >= 2 &&
-                FULL_RANGE.equals(rangeSetting.range) && rangeSetting.clusterConfig.getVotersCount() == 3;
+                FULL_BOUNDARY.equals(rangeSetting.boundary) && rangeSetting.clusterConfig.getVotersCount() == 3;
         });
     }
 }

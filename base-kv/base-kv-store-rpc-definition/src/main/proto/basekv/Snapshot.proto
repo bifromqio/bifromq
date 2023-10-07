@@ -29,7 +29,7 @@ message KVRangeSnapshot{
   basekv.KVRangeId id = 2;
   optional string checkpointId = 3;
   uint64 lastAppliedIndex = 4;
-  basekv.Range range = 5;
+  basekv.Boundary boundary = 5;
   State state = 6;
 }
 

@@ -13,13 +13,12 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseScopedInboxId;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;

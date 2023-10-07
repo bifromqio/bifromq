@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,7 +73,7 @@ class InMemKVSpaceWriterHelper {
         batchMap.computeIfAbsent(rangeId, k -> new WriteBatch(rangeId)).delete(key);
     }
 
-    void clear(String rangeId, KeyBoundary boundary) {
+    void clear(String rangeId, Boundary boundary) {
         batchMap.computeIfAbsent(rangeId, k -> new WriteBatch(rangeId)).deleteRange(boundary);
     }
 
@@ -137,7 +137,7 @@ class InMemKVSpaceWriterHelper {
             actions.add(new WriteBatch.Delete(key));
         }
 
-        public void deleteRange(KeyBoundary boundary) {
+        public void deleteRange(Boundary boundary) {
             actions.add(new WriteBatch.DeleteRange(boundary));
         }
 
@@ -155,7 +155,7 @@ class InMemKVSpaceWriterHelper {
                     }
                     case DeleteRange -> {
                         WriteBatch.DeleteRange deleteRange = (WriteBatch.DeleteRange) action;
-                        KeyBoundary boundary = deleteRange.boundary;
+                        Boundary boundary = deleteRange.boundary;
                         NavigableSet<ByteString> inRangeKeys;
                         if (!boundary.hasStartKey() && !boundary.hasEndKey()) {
                             inRangeKeys = rangeDataMap.get(rangeId).keySet();
@@ -193,7 +193,7 @@ class InMemKVSpaceWriterHelper {
 
         }
 
-        record DeleteRange(KeyBoundary boundary) implements KVAction {
+        record DeleteRange(Boundary boundary) implements KVAction {
             @Override
             public Type type() {
                 return Type.DeleteRange;

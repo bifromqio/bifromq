@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.benchmark;
 
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
 
@@ -21,6 +20,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.KVRangeConfig;
 import com.baidu.bifromq.basekv.store.KVRangeStoreTestCluster;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
@@ -67,7 +67,8 @@ public class SingleNodeBenchmark {
         KVRangeId rangeId = cluster.genesisKVRangeId();
         long start = System.currentTimeMillis();
         cluster.awaitKVRangeReady(store0, rangeId);
-        log.info("KVRange ready in {}ms: kvRangeId={}", System.currentTimeMillis() - start, toShortString(rangeId));
+        log.info("KVRange ready in {}ms: kvRangeId={}", System.currentTimeMillis() - start,
+            KVRangeIdUtil.toString(rangeId));
         KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 5000);
         cluster.split(store0, rangeSettings.ver, rangeId, ByteString.copyFromUtf8("Key1")).toCompletableFuture()
             .join();

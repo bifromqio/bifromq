@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -23,14 +23,14 @@ import java.util.concurrent.ConcurrentSkipListMap;
 public class InMemKVSpaceIterator implements IKVSpaceIterator {
     private Map.Entry<ByteString, ByteString> currentEntry;
     private final ConcurrentSkipListMap<ByteString, ByteString> origData;
-    private final KeyBoundary boundary;
+    private final Boundary boundary;
     private ConcurrentNavigableMap<ByteString, ByteString> dataSource;
 
     public InMemKVSpaceIterator(ConcurrentSkipListMap<ByteString, ByteString> data) {
-        this(data, KeyBoundary.getDefaultInstance());
+        this(data, Boundary.getDefaultInstance());
     }
 
-    public InMemKVSpaceIterator(ConcurrentSkipListMap<ByteString, ByteString> data, KeyBoundary boundary) {
+    public InMemKVSpaceIterator(ConcurrentSkipListMap<ByteString, ByteString> data, Boundary boundary) {
         origData = data;
         this.boundary = boundary;
         refresh();

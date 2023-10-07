@@ -13,11 +13,9 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
-import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
-import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
 import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
@@ -25,8 +23,8 @@ import static com.baidu.bifromq.retain.utils.TopicUtil.isWildcardTopicFilter;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -157,7 +155,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             // TODO: report event: nothing to match
             return emptyList();
         }
-        Range range = Range.newBuilder()
+        Boundary range = Boundary.newBuilder()
             .setStartKey(tenantNS)
             .setEndKey(upperBound(tenantNS))
             .build();
@@ -355,7 +353,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     private RetainSetMetadata gc(long now, ByteString tenantNS, RetainSetMetadata metadata,
                                  IKVReader reader,
                                  IKVWriter writer) {
-        Range range = Range.newBuilder().setStartKey(tenantNS).setEndKey(upperBound(tenantNS)).build();
+        Boundary range = Boundary.newBuilder().setStartKey(tenantNS).setEndKey(upperBound(tenantNS)).build();
         IKVIterator itr = reader.iterator();
         itr.seek(range.getStartKey());
         itr.next();
@@ -410,10 +408,10 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             ByteString startKey = itr.key();
             ByteString endKey = upperBound(itr.key());
             builder.putUsedSpaces(parseTenantId(startKey),
-                reader.size(toBoundary(intersect(toRange(reader.boundary()), Range.newBuilder()
+                reader.size(intersect(reader.boundary(), Boundary.newBuilder()
                     .setStartKey(startKey)
                     .setEndKey(endKey)
-                    .build()))));
+                    .build())));
             itr.seek(endKey);
         }
         return builder.build();

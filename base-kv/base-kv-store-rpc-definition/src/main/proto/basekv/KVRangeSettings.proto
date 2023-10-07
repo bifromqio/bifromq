@@ -11,7 +11,7 @@ option optimize_for = SPEED;
 message KVRangeSettings {
   uint64 ver = 1;
   basekv.KVRangeId id = 2;
-  Range range = 3;
+  Boundary boundary = 3;
   string leader = 4; // the store hosting the leader replica among the working replicas
   raft.ClusterConfig config = 5;
   map<string, raft.RaftNodeSyncState> repStatus = 6;

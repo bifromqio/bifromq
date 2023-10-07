@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store.wal;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toByteString;
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.KEY_CONFIG_ENTRY_INDEXES_BYTES;
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.KEY_CURRENT_TERM_BYTES;
@@ -25,14 +24,14 @@ import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.configEntriesKey
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.configEntriesKeyPrefixInfix;
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.logEntriesKeyPrefixInfix;
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.logEntryKey;
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static java.lang.String.format;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -41,6 +40,7 @@ import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.raft.proto.Voting;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -124,7 +124,7 @@ class KVRangeWALStore implements IRaftStateStore {
         long snapLastTerm = snapshot.getTerm();
         Optional<LogEntry> lastEntryInSS = entryAt(snapLastIndex);
         log.debug("Compact logs using snapshot[term={}, index={}]: rangeId={}, storeId={}",
-            snapLastTerm, snapLastIndex, toShortString(rangeId), storeId);
+            snapLastTerm, snapLastIndex, KVRangeIdUtil.toString(rangeId), storeId);
         IKVSpaceWriter writer = kvSpace.toWriter();
         if (lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) {
             // the snapshot represents partial history, it happens when compacting
@@ -142,10 +142,10 @@ class KVRangeWALStore implements IRaftStateStore {
                 }
             }
             log.trace("Truncating logs before index[{}]: rangeId={}, storeId={}",
-                truncateBeforeIndex, toShortString(rangeId), storeId);
+                truncateBeforeIndex, KVRangeIdUtil.toString(rangeId), storeId);
             try (IKVSpaceIterator it = kvSpace.newIterator()) {
                 // truncate log entry
-                writer.clear(KeyBoundary.newBuilder()
+                writer.clear(Boundary.newBuilder()
                     .setStartKey(logEntriesKeyPrefixInfix(0))
                     .setEndKey(logEntryKey(logEntriesKeyInfix, truncateBeforeIndex))
                     .build());
@@ -162,10 +162,10 @@ class KVRangeWALStore implements IRaftStateStore {
 //                flushNotifier.notifyFlush();
             } catch (Throwable e) {
                 log.error("Unexpected error during truncating log: rangeId={}, storeId={}",
-                    toShortString(rangeId), storeId, e);
+                    KVRangeIdUtil.toString(rangeId), storeId, e);
             } finally {
                 log.debug("Logs truncated before index[{}]: rangeId={}, storeId={}",
-                    truncateBeforeIndex, toShortString(rangeId), storeId);
+                    truncateBeforeIndex, KVRangeIdUtil.toString(rangeId), storeId);
             }
         } else {
             // the snapshot represents a different history, it happens when installing snapshot from leader
@@ -182,22 +182,22 @@ class KVRangeWALStore implements IRaftStateStore {
             configEntryMap.clear();
 
             try {
-                log.trace("Truncating all logs: rangeId={}, storeId={}", toShortString(rangeId), storeId);
+                log.trace("Truncating all logs: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId);
                 // clear entire logs
-                writer.clear(KeyBoundary.newBuilder()
+                writer.clear(Boundary.newBuilder()
                     .setStartKey(logEntriesKeyPrefixInfix(0))
                     .setEndKey(upperBound(logEntriesKeyPrefixInfix(lastLogEntriesKeyInfix)))
                     .build());
-                writer.clear(KeyBoundary.newBuilder()
+                writer.clear(Boundary.newBuilder()
                     .setStartKey(configEntriesKeyPrefixInfix(0))
                     .setEndKey(upperBound(configEntriesKeyPrefixInfix(lastLogEntriesKeyInfix)))
                     .build());
                 writer.done();
                 flush();
-                log.debug("All logs of truncated: rangeId={}, storeId={}", toShortString(rangeId), storeId);
+                log.debug("All logs of truncated: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId);
                 // all previous index is stable after flush
             } catch (Throwable e) {
-                log.error("Log truncation failed: rangeId={}, storeId={}", toShortString(rangeId), storeId, e);
+                log.error("Log truncation failed: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId, e);
             }
         }
     }
@@ -226,7 +226,7 @@ class KVRangeWALStore implements IRaftStateStore {
             ByteString data = kvSpace.get(logEntryKey(logEntriesKeyInfix, index)).get();
             return Optional.of(LogEntry.parseFrom(data));
         } catch (InvalidProtocolBufferException e) {
-            log.error("Failed to parse log entry[index={}, rangeId={}]", index, toShortString(rangeId), e);
+            log.error("Failed to parse log entry[index={}, rangeId={}]", index, KVRangeIdUtil.toString(rangeId), e);
             return Optional.empty();
         }
     }
@@ -297,7 +297,7 @@ class KVRangeWALStore implements IRaftStateStore {
 
     @Override
     public void stop() {
-        log.debug("Stop range wal storage: rangeId={}, storeId={}", toShortString(rangeId), storeId);
+        log.debug("Stop range wal storage: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId);
         stableListener = DEFAULT_STABLE_LISTENER;
     }
 
@@ -400,7 +400,7 @@ class KVRangeWALStore implements IRaftStateStore {
             throw new KVRangeStoreException("Failed to parse", e);
         } catch (NoSuchElementException e) {
             log.error("Cluster config not found at index[{}]: kvRangeId={}, storeId={}",
-                configEntryIndex, toShortString(rangeId), storeId);
+                configEntryIndex, KVRangeIdUtil.toString(rangeId), storeId);
             throw new KVRangeStoreException("config not found", e);
         }
     }
@@ -434,7 +434,7 @@ class KVRangeWALStore implements IRaftStateStore {
             this.maxIndex = endIndex;
             this.maxSize = maxSize;
             this.iterator = kvSpace.newIterator(
-                KeyBoundary.newBuilder()
+                Boundary.newBuilder()
                     .setStartKey(logEntryKey(logEntriesKeyInfix, currentIndex))
                     .setEndKey(upperBound(logEntriesKeyPrefixInfix(logEntriesKeyInfix)))
                     .build());

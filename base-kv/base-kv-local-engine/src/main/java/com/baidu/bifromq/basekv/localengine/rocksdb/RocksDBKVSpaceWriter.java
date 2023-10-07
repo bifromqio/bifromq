@@ -21,7 +21,7 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import java.util.Optional;
@@ -121,11 +121,11 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
 
     @Override
     public IKVSpaceWriter clear() {
-        return clear(KeyBoundary.getDefaultInstance());
+        return clear(Boundary.getDefaultInstance());
     }
 
     @Override
-    public IKVSpaceWriter clear(KeyBoundary boundary) {
+    public IKVSpaceWriter clear(Boundary boundary) {
         try {
             helper.clear(cfHandle(), boundary);
             writeStatsRecorder.recordDeleteRange();
@@ -136,7 +136,7 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
     }
 
     @Override
-    public IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, KeyBoundary boundary) {
+    public IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, Boundary boundary) {
         RocksDBKVSpace toKeyRange = (RocksDBKVSpace) engine.createIfMissing(targetRangeId);
         try {
             // move data
@@ -158,7 +158,7 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
     }
 
     @Override
-    public IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, KeyBoundary boundary) {
+    public IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, Boundary boundary) {
         RocksDBKVSpace fromKeyRange = (RocksDBKVSpace) engine.createIfMissing(fromRangeId);
         try {
             // move data

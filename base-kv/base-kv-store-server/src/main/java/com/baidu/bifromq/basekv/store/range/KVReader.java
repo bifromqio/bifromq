@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.inRange;
 import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_ITR_GET;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -39,12 +39,12 @@ public class KVReader implements IKVReader {
     }
 
     @Override
-    public KeyBoundary boundary() {
+    public Boundary boundary() {
         return kvRangeReader.boundary();
     }
 
     @Override
-    public long size(KeyBoundary range) {
+    public long size(Boundary range) {
         assert inRange(range, boundary());
         return kvRangeReader.size(range);
     }

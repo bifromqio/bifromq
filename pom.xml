@@ -190,6 +190,11 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-kv-type-proto</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>base-kv-raft-type</artifactId>
                 <version>${project.version}</version>
             </dependency>

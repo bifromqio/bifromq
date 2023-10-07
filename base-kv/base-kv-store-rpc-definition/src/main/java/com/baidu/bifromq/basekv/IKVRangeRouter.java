@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.basekv;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.google.protobuf.ByteString;
 import java.util.List;
 import java.util.Optional;
@@ -24,5 +24,5 @@ public interface IKVRangeRouter {
 
     Optional<KVRangeSetting> findByKey(ByteString key);
 
-    List<KVRangeSetting> findByRange(Range range);
+    List<KVRangeSetting> findByBoundary(Boundary boundary);
 }

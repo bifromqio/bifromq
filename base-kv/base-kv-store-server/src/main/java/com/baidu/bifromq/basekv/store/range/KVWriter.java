@@ -18,7 +18,7 @@ import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_INSE
 import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_PUT;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.google.protobuf.ByteString;
 
@@ -39,7 +39,7 @@ public class KVWriter implements IKVWriter {
     }
 
     @Override
-    public void clear(KeyBoundary boundary) {
+    public void clear(Boundary boundary) {
         writer.clear(boundary);
         if (boundary.hasStartKey()) {
             loadTracker.track(boundary.getStartKey(), KEY_DEL);

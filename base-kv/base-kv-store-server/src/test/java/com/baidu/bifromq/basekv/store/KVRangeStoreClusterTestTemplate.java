@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.fail;
 
@@ -23,6 +22,7 @@ import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import java.lang.reflect.Method;
@@ -87,7 +87,7 @@ public abstract class KVRangeStoreClusterTestTemplate {
                 return setting.clusterConfig.getVotersList().containsAll(voters);
             });
             cluster.awaitAllKVRangeReady(rangeId, voters.size() == 1 ? 0 : 2, 5000);
-            log.info("KVRange[{}] ready in {}ms start testing", toShortString(rangeId),
+            log.info("KVRange[{}] ready in {}ms start testing", KVRangeIdUtil.toString(rangeId),
                 System.currentTimeMillis() - start);
         } catch (Throwable e) {
             log.error("Failed to setup test cluster", e);

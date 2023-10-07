@@ -34,9 +34,9 @@ import com.baidu.bifromq.basekv.KVRangeRouter;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.exception.BaseKVException;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
 import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigReply;
@@ -193,8 +193,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public List<KVRangeSetting> findByRange(Range range) {
-        return router.findByRange(range);
+    public List<KVRangeSetting> findByBoundary(Boundary boundary) {
+        return router.findByBoundary(boundary);
     }
 
     @Override

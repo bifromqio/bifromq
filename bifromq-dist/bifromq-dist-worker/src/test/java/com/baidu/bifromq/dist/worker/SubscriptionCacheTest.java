@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static java.util.Collections.singleton;
 import static org.mockito.ArgumentMatchers.any;
@@ -82,7 +82,7 @@ public class SubscriptionCacheTest {
         ScopedTopic scopedTopic = ScopedTopic.builder()
             .tenantId("testTenant")
             .topic("/test/user")
-            .range(FULL_RANGE)
+            .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
@@ -107,7 +107,7 @@ public class SubscriptionCacheTest {
         ScopedTopic scopedTopic = ScopedTopic.builder()
             .tenantId("testTenant")
             .topic("/test/user")
-            .range(FULL_RANGE)
+            .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
 
@@ -133,7 +133,7 @@ public class SubscriptionCacheTest {
         ScopedTopic scopedTopic = ScopedTopic.builder()
             .tenantId(tenantId)
             .topic("/test/user")
-            .range(FULL_RANGE)
+            .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
@@ -158,7 +158,7 @@ public class SubscriptionCacheTest {
         ScopedTopic scopedTopic = ScopedTopic.builder()
             .tenantId(tenantId)
             .topic("/test/user")
-            .range(FULL_RANGE)
+            .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
@@ -186,7 +186,7 @@ public class SubscriptionCacheTest {
         ScopedTopic scopedTopic = ScopedTopic.builder()
             .tenantId(tenantId)
             .topic("/test/user")
-            .range(FULL_RANGE)
+            .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
@@ -214,7 +214,7 @@ public class SubscriptionCacheTest {
         ScopedTopic scopedTopic = ScopedTopic.builder()
             .tenantId("testTenant")
             .topic("/test/user")
-            .range(FULL_RANGE)
+            .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
@@ -251,7 +251,7 @@ public class SubscriptionCacheTest {
         ScopedTopic scopedTopic = ScopedTopic.builder()
             .tenantId(tenantId)
             .topic("/test/user")
-            .range(FULL_RANGE)
+            .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
         SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);

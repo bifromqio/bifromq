@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeMetadata;
 
@@ -24,7 +24,7 @@ public interface IKVRangeMetadataUpdatable<T extends IKVRangeMetadataUpdatable<T
 
     T lastAppliedIndex(long lastAppliedIndex);
 
-    T boundary(KeyBoundary boundary);
+    T boundary(Boundary boundary);
 
     T state(State state);
 }

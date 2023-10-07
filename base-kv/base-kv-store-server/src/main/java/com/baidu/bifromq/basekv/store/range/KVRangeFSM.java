@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.Constants.EMPTY_RANGE;
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.inRange;
 import static com.baidu.bifromq.basekv.proto.State.StateType.ConfigChanging;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.MergedQuiting;
@@ -28,9 +26,10 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Destroye
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Destroying;
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Init;
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Open;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.canCombine;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.combine;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
 import static com.google.common.collect.Sets.difference;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.collect.Sets.union;
@@ -39,7 +38,7 @@ import static java.util.Collections.singleton;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.CancelMerging;
 import com.baidu.bifromq.basekv.proto.CancelMergingReply;
 import com.baidu.bifromq.basekv.proto.CancelMergingRequest;
@@ -96,7 +95,6 @@ import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscriber;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscription;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWAL;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.basekv.utils.KeyRangeUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
@@ -292,7 +290,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             return KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver())
                                 .setId(id)
-                                .setRange(toRange(meta.boundary()))
+                                .setBoundary(meta.boundary())
                                 .setRole(role)
                                 .setState(meta.state().getType())
                                 .setConfig(clusterConfig)
@@ -373,7 +371,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     public CompletableFuture<Void> destroy() {
         return close().thenCompose(v -> mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Closed, Destroying)) {
-                log.debug("Destroy range[{}] from store[{}]", toShortString(id), hostStoreId);
+                log.debug("Destroy range[{}] from store[{}]", KVRangeIdUtil.toString(id), hostStoreId);
                 kvRange.destroy();
                 wal.destroy();
                 lifecycle.set(Destroyed);
@@ -391,7 +389,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         return close().thenCompose(v -> mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Closed, Destroying)) {
                 log.debug("Range[{}] quit from store[{}]: reason={}",
-                    toShortString(id), hostStoreId, quitReason.join());
+                    KVRangeIdUtil.toString(id), hostStoreId, quitReason.join());
                 kvRange.destroy();
                 wal.destroy();
                 lifecycle.set(Destroyed);
@@ -649,7 +647,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                             dispose();
                                             onDone.complete(null);
                                             log.debug("Snapshot installed: rangeId={}, storeId={}, sessionId={}",
-                                                toShortString(id), hostStoreId, sessionId);
+                                                KVRangeIdUtil.toString(id), hostStoreId, sessionId);
                                         }
                                         messenger.send(KVRangeMessage.newBuilder()
                                             .setRangeId(id)
@@ -715,7 +713,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         CompletableFuture<Runnable> onDone = new CompletableFuture<>();
         long ver = rangeWriter.version();
         State state = rangeWriter.state();
-        KeyBoundary boundary = rangeWriter.boundary();
+        Boundary boundary = rangeWriter.boundary();
         switch (logEntry.getTypeCase()) {
             case DATA -> {
                 try {
@@ -724,7 +722,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     String taskId = command.getTaskId();
                     log.trace(
                         "Execute KVRange Command[term={}, index={}]: rangeId={}, storeId={}, ver={}, state={}, \n{}",
-                        logEntry.getTerm(), logEntry.getIndex(), toShortString(id), hostStoreId, ver,
+                        logEntry.getTerm(), logEntry.getIndex(), KVRangeIdUtil.toString(id), hostStoreId, ver,
                         state, command);
                     switch (command.getCommandTypeCase()) {
                         // admin commands
@@ -801,7 +799,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 });
                             newHostingStoreIds.forEach(storeId -> {
                                 log.debug("Send range ensure request to store[{}]: rangeId={}",
-                                    storeId, toShortString(id));
+                                    storeId, KVRangeIdUtil.toString(id));
                                 messenger.send(KVRangeMessage.newBuilder()
                                     .setRangeId(id)
                                     .setHostStoreId(storeId)
@@ -815,7 +813,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                 .setId(id)
                                                 // no checkpoint specified
                                                 .setLastAppliedIndex(0)
-                                                .setRange(EMPTY_RANGE)
+                                                .setBoundary(EMPTY_BOUNDARY)
                                                 .setState(State.newBuilder().setType(Normal).build())
                                                 .build().toByteString())
                                             .build())
@@ -876,17 +874,17 @@ public class KVRangeFSM implements IKVRangeFSM {
                             // under at-least-once semantic, we need to check if the splitKey is still valid to skip
                             // duplicated apply
                             if (inRange(request.getSplitKey(), boundary)) {
-                                KeyBoundary leftBoundary =
+                                Boundary leftBoundary =
                                     boundary.toBuilder().setEndKey(request.getSplitKey()).build();
-                                KeyBoundary rightBoundary = boundary.hasEndKey() ?
+                                Boundary rightBoundary = boundary.hasEndKey() ?
                                     boundary.toBuilder().setStartKey(request.getSplitKey()).build() :
-                                    KeyBoundary.newBuilder().setStartKey(request.getSplitKey()).build();
+                                    Boundary.newBuilder().setStartKey(request.getSplitKey()).build();
                                 KVRangeSnapshot rhsSS = KVRangeSnapshot.newBuilder()
                                     .setVer(ver + 1)
                                     .setId(request.getNewId())
                                     // no checkpoint specified
                                     .setLastAppliedIndex(5)
-                                    .setRange(toRange(rightBoundary))
+                                    .setBoundary(rightBoundary)
                                     .setState(State.newBuilder()
                                         .setType(Normal)
                                         .setTaskId(taskId)
@@ -911,7 +909,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                                             onDone.complete(() -> {
                                                 log.debug(
                                                     "Sending ensure request to load right KVRange[{}]: rangeId={}, storeId={}",
-                                                    toShortString(request.getNewId()), toShortString(id), hostStoreId);
+                                                    KVRangeIdUtil.toString(request.getNewId()),
+                                                    KVRangeIdUtil.toString(id),
+                                                    hostStoreId);
                                                 messenger.once(m -> {
                                                     if (m.hasEnsureRangeReply()) {
                                                         EnsureRangeReply reply = m.getEnsureRangeReply();
@@ -994,7 +994,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     .setTaskId(taskId)
                                     .setId(id)
                                     .setVer(VerUtil.bump(ver, false))
-                                    .setRange(toRange(boundary))
+                                    .setBoundary(boundary)
                                     .setConfig(wal.clusterConfig())
                                     .build())
                                 .build());
@@ -1023,14 +1023,15 @@ public class KVRangeFSM implements IKVRangeFSM {
                             // here is the formal mergeable condition check
                             if (state.getType() != Normal ||
                                 !isCompatible(request.getConfig(), wal.clusterConfig()) ||
-                                !KeyRangeUtil.canCombine(request.getRange(), toRange(boundary))) {
+                                !canCombine(request.getBoundary(), boundary)) {
                                 if (!taskId.equals(state.getTaskId())) {
-                                    log.debug("Cancel the loser merger[{}]", toShortString(request.getMergerId()));
+                                    log.debug("Cancel the loser merger[{}]",
+                                        KVRangeIdUtil.toString(request.getMergerId()));
                                     // help the loser merger cancel its operation by broadcast CancelMerging
                                     // via store message and wait for at lease one response to make sure
                                     // the loser merger has got canceled
                                     log.debug("Loser merger[{}] not found in local store",
-                                        toShortString(request.getMergerId()));
+                                        KVRangeIdUtil.toString(request.getMergerId()));
                                     CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m ->
                                         m.hasCancelMergingReply() &&
                                             m.getCancelMergingReply().getTaskId().equals(taskId) &&
@@ -1097,7 +1098,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     .setVer(request.getMergerVer())
                                     .setMergeeId(id)
                                     .setMergeeVer(VerUtil.bump(ver, false))
-                                    .setRange(toRange(boundary))
+                                    .setBoundary(boundary)
                                     .setStoreId(hostStoreId)
                                     .build())
                                 .build());
@@ -1160,12 +1161,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 long newVer = Math.max(ver, request.getMergeeVer()) + 2;
                                 // make sure the version is odd
                                 rangeWriter.resetVer(VerUtil.bump(newVer, true))
-                                    .boundary(toBoundary(KeyRangeUtil.combine(toRange(boundary), request.getRange())))
+                                    .boundary(combine(boundary, request.getBoundary()))
                                     .state(State.newBuilder()
                                         .setType(Normal)
                                         .setTaskId(taskId)
                                         .build())
-                                    .migrateFrom(request.getMergeeId(), toBoundary(request.getRange()));
+                                    .migrateFrom(request.getMergeeId(), request.getBoundary());
                                 CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m ->
                                     m.hasMergeDoneReply() &&
                                         m.getMergeDoneReply().getTaskId().equals(taskId));
@@ -1179,7 +1180,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     .whenCompleteAsync((v, e) -> {
                                         if (e != null || !v.getMergeDoneReply().getAccept()) {
                                             log.debug("Failed to send MergeDone request: rangeId={}, storeId={}",
-                                                toShortString(id), hostStoreId, e);
+                                                KVRangeIdUtil.toString(id), hostStoreId, e);
                                             onceFuture.cancel(true);
                                             onDone.completeExceptionally(e != null ?
                                                 e : new KVRangeException.InternalException(
@@ -1193,7 +1194,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     }, fsmExecutor);
                                 // send merge done request to local mergee
                                 log.debug("Send MergeDone request to Mergee[{}]: rangeId={}, storeId={}",
-                                    toShortString(id), hostStoreId, toShortString(request.getMergeeId()));
+                                    KVRangeIdUtil.toString(id), hostStoreId,
+                                    KVRangeIdUtil.toString(request.getMergeeId()));
                                 messenger.send(KVRangeMessage.newBuilder()
                                     .setRangeId(request.getMergeeId())
                                     .setHostStoreId(hostStoreId)
@@ -1216,7 +1218,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 assert state.getType() == WaitingForMerge
                                     && state.hasTaskId()
                                     && taskId.equals(state.getTaskId());
-                                rangeWriter.boundary(toBoundary(EMPTY_RANGE))
+                                rangeWriter.boundary(EMPTY_BOUNDARY)
                                     .bumpVer(true)
                                     .state(State.newBuilder()
                                         .setType(Merged)
@@ -1292,7 +1294,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 ClusterConfig config = logEntry.getConfig();
                 log.debug(
                     "Apply new config[term={}, index={}]: rangeId={}, storeId={}, state={}, leader={}\n{}",
-                    logEntry.getTerm(), logEntry.getIndex(), toShortString(id), hostStoreId, state,
+                    logEntry.getTerm(), logEntry.getIndex(), KVRangeIdUtil.toString(id), hostStoreId, state,
                     wal.isLeader(), config);
                 if (config.getNextVotersCount() != 0 || config.getNextLearnersCount() != 0) {
                     // skip joint-config
@@ -1400,7 +1402,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         return metricManager.recordCompact(() -> {
             KVRangeSnapshot snapshot = kvRange.checkpoint();
             log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
-                toShortString(id), hostStoreId, snapshot);
+                KVRangeIdUtil.toString(id), hostStoreId, snapshot);
             return wal.compact(snapshot).exceptionally(e -> {
                 log.error("Wal compaction error", e);
                 return null;
@@ -1447,7 +1449,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     private void handleSnapshotSyncRequest(String follower, SnapshotSyncRequest request) {
         log.debug("Init snap-dump session for follower[{}]: rangeId={}, storeId={}, sessionId={}",
-            follower, toShortString(id), hostStoreId, request.getSessionId());
+            follower, KVRangeIdUtil.toString(id), hostStoreId, request.getSessionId());
         KVRangeDumpSession session = new KVRangeDumpSession(follower, request, kvRange, messenger, fsmExecutor,
             Duration.ofSeconds(opts.getSnapshotSyncIdleTimeoutSec()),
             opts.getSnapshotSyncBytesPerSec(), metricManager::reportDump);
@@ -1456,7 +1458,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handlePrepareMergeToRequest(String peer, PrepareMergeToRequest request) {
-        log.debug("Handle PrepareMergeTo request: rangeId={}, storeId={}\n{}", toShortString(id), hostStoreId, request);
+        log.debug("Handle PrepareMergeTo request: rangeId={}, storeId={}\n{}",
+            KVRangeIdUtil.toString(id), hostStoreId, request);
         // I'm the mergee
         descriptorSubject.firstElement()
             .timeout(5, TimeUnit.SECONDS)
@@ -1467,17 +1470,17 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setPrepareMergeTo(PrepareMergeTo.newBuilder()
                                 .setMergerId(request.getId())
                                 .setMergerVer(request.getVer())
-                                .setRange(request.getRange())
+                                .setBoundary(request.getBoundary())
                                 .setConfig(request.getConfig())
                                 .build())
                             .build())
                         .whenCompleteAsync((v, e) -> {
                             if (e != null) {
                                 log.debug("Failed to propose command[PrepareMergeTo]: rangeId={}, storeId={}\n{}",
-                                    toShortString(id), hostStoreId, request, e);
+                                    KVRangeIdUtil.toString(id), hostStoreId, request, e);
                             } else {
                                 log.debug("Command[PrepareMergeTo] proposed: rangeId={}, storeId={}, index={}\n{}",
-                                    toShortString(id), hostStoreId, v, request);
+                                    KVRangeIdUtil.toString(id), hostStoreId, v, request);
                             }
                             messenger.send(KVRangeMessage.newBuilder()
                                 .setRangeId(request.getId())
@@ -1499,24 +1502,25 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handleMergeRequest(String peer, MergeRequest request) {
-        log.debug("Handle Merge request: rangeId={}, storeId={}\n{}", toShortString(id), hostStoreId, request);
+        log.debug("Handle Merge request: rangeId={}, storeId={}\n{}",
+            KVRangeIdUtil.toString(id), hostStoreId, request);
         wal.propose(KVRangeCommand.newBuilder()
                 .setTaskId(request.getTaskId())
                 .setVer(request.getVer())
                 .setMerge(Merge.newBuilder()
                     .setMergeeId(request.getMergeeId())
                     .setMergeeVer(request.getMergeeVer())
-                    .setRange(request.getRange())
+                    .setBoundary(request.getBoundary())
                     .setStoreId(request.getStoreId())
                     .build())
                 .build())
             .whenCompleteAsync((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to propose command[Merge]: rangeId={}, storeId={}\n{}",
-                        toShortString(id), hostStoreId, request, e);
+                        KVRangeIdUtil.toString(id), hostStoreId, request, e);
                 } else {
                     log.debug("Command[Merge] proposed: rangeId={}, storeId={}, index={}\n{}",
-                        toShortString(id), hostStoreId, v, request);
+                        KVRangeIdUtil.toString(id), hostStoreId, v, request);
                 }
                 messenger.send(KVRangeMessage.newBuilder()
                     .setRangeId(request.getMergeeId())
@@ -1530,7 +1534,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handleCancelMergingRequest(String peer, CancelMergingRequest request) {
-        log.debug("Handle CancelMerging request: rangeId={}, storeId={}\n{}", toShortString(id), hostStoreId, request);
+        log.debug("Handle CancelMerging request: rangeId={}, storeId={}\n{}",
+            KVRangeIdUtil.toString(id), hostStoreId, request);
         wal.propose(KVRangeCommand.newBuilder()
                 .setTaskId(request.getTaskId())
                 .setVer(request.getVer())
@@ -1540,10 +1545,10 @@ public class KVRangeFSM implements IKVRangeFSM {
             .whenCompleteAsync((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to propose command[CancelMerging]: rangeId={}, storeId={}\n{}",
-                        toShortString(id), hostStoreId, request, e);
+                        KVRangeIdUtil.toString(id), hostStoreId, request, e);
                 } else {
                     log.debug("Command[CancelMerging] proposed: rangeId={}, storeId={}, index={}\n{}",
-                        toShortString(id), hostStoreId, v, request);
+                        KVRangeIdUtil.toString(id), hostStoreId, v, request);
                 }
                 messenger.send(KVRangeMessage.newBuilder()
                     .setRangeId(request.getRequester())
@@ -1558,7 +1563,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     private void handleMergeDoneRequest(String peer, MergeDoneRequest request) {
         log.debug("Handle MergeDone request: rangeId={}, storeId={}\n{}",
-            toShortString(id), hostStoreId, request);
+            KVRangeIdUtil.toString(id), hostStoreId, request);
         wal.propose(KVRangeCommand.newBuilder()
                 .setTaskId(request.getTaskId())
                 .setVer(request.getMergeeVer())
@@ -1569,10 +1574,10 @@ public class KVRangeFSM implements IKVRangeFSM {
             .whenCompleteAsync((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to propose command[MergeDone]: rangeId={}, storeId={}\n{}",
-                        toShortString(id), hostStoreId, request, e);
+                        KVRangeIdUtil.toString(id), hostStoreId, request, e);
                 } else {
                     log.debug("Command[MergeDone] proposed: rangeId={}, storeId={}, index={}\n{}",
-                        toShortString(id), hostStoreId, v, request);
+                        KVRangeIdUtil.toString(id), hostStoreId, v, request);
                 }
                 messenger.send(KVRangeMessage.newBuilder()
                     .setRangeId(request.getId())

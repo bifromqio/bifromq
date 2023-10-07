@@ -132,10 +132,10 @@ public abstract class InboxServiceTest {
     @AfterClass(alwaysRun = true)
     public void teardown() {
         log.info("Finish testing, and tearing down");
-        inboxClient.close();
         inboxServer.shutdown();
-        inboxStoreClient.stop();
         inboxStore.stop();
+        inboxClient.close();
+        inboxStoreClient.stop();
         new Thread(() -> {
             clientCrdtService.stop();
             serverCrdtService.stop();

@@ -20,7 +20,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.AssertJUnit.fail;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
@@ -173,7 +173,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
         try {
             BatchInsertReply reply = requestRW(input).getBatchInsert();
 
-            ArgumentCaptor<KeyBoundary> rangeCaptor = ArgumentCaptor.forClass(KeyBoundary.class);
+            ArgumentCaptor<Boundary> rangeCaptor = ArgumentCaptor.forClass(Boundary.class);
             ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
             verify(writer).clear(rangeCaptor.capture());
             verify(writer).insert(argumentCaptor.capture(), argumentCaptor.capture());
@@ -233,7 +233,7 @@ public class MockedInboxInsertTest extends MockedInboxStoreTest {
         try {
             BatchInsertReply reply = requestRW(input).getBatchInsert();
 
-            ArgumentCaptor<KeyBoundary> rangeArgsCap = ArgumentCaptor.forClass(KeyBoundary.class);
+            ArgumentCaptor<Boundary> rangeArgsCap = ArgumentCaptor.forClass(Boundary.class);
             verify(writer).clear(rangeArgsCap.capture());
             assertEquals(rangeArgsCap.getValue().getStartKey(), qos0InboxMsgKey(scopedInboxId, 0));
             assertEquals(rangeArgsCap.getValue().getEndKey(), qos0InboxMsgKey(scopedInboxId, 4));

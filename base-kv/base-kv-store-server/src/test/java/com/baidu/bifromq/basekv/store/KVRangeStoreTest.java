@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.basekv.Constants.EMPTY_RANGE;
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
-import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.combine;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.combine;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
@@ -189,7 +189,7 @@ public class KVRangeStoreTest {
             .setVer(0)
             .setRole(RaftNodeStatus.Leader)
             .setState(Normal)
-            .setRange(FULL_RANGE)
+            .setBoundary(FULL_BOUNDARY)
             .setConfig(ClusterConfig.newBuilder().addVoters(rangeStore.id()).build())
             .putSyncState(rangeStore.id(), RaftNodeSyncState.Replicating)
             .setLoadHint(LoadHint.newBuilder().setLoad(0.0).build())
@@ -442,7 +442,7 @@ public class KVRangeStoreTest {
             rangeStore.split(0, id, copyFromUtf8("a")).toCompletableFuture().join();
             List<KVRangeDescriptor> ls = await().forever().until(() -> rangeStore.describe().blockingFirst(),
                 storeDescriptor -> storeDescriptor.getRangesList().size() == 2).getRangesList();
-            assertEquals(combine(ls.get(0).getRange(), ls.get(1).getRange()), FULL_RANGE);
+            assertEquals(combine(ls.get(0).getBoundary(), ls.get(1).getBoundary()), FULL_BOUNDARY);
         }
         {
             log.info("Split with version mismatch test");
@@ -529,7 +529,7 @@ public class KVRangeStoreTest {
                             .setVer(0)
                             .setLastAppliedIndex(0)
                             .setState(State.newBuilder().setType(Normal).build())
-                            .setRange(EMPTY_RANGE)
+                            .setBoundary(EMPTY_BOUNDARY)
                             .build().toByteString())
                         .build())
                     .build())

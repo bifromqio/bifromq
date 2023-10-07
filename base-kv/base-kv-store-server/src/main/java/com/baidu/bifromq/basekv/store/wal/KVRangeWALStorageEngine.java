@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.KEY_LATEST_SNAPSHOT_BYTES;
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
@@ -125,10 +124,10 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         checkState();
         instances.computeIfPresent(rangeId, (k, v) -> {
             try {
-                log.debug("Destroy range wal storage: storeId={}, rangeId={}", id(), toShortString(rangeId));
+                log.debug("Destroy range wal storage: storeId={}, rangeId={}", id(), KVRangeIdUtil.toString(rangeId));
                 v.destroy();
             } catch (Throwable e) {
-                log.error("Failed to destroy KVRangeWALStorage[{}]", toShortString(rangeId), e);
+                log.error("Failed to destroy KVRangeWALStorage[{}]", KVRangeIdUtil.toString(rangeId), e);
             }
             return null;
         });
@@ -142,7 +141,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         kvEngine.ranges().forEach((String id, IKVSpace kvSpace) -> {
             KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
             instances.put(kvRangeId, new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace));
-            log.debug("WAL loaded: kvRangeId={}", toShortString(kvRangeId));
+            log.debug("WAL loaded: kvRangeId={}", KVRangeIdUtil.toString(kvRangeId));
 
         });
     }

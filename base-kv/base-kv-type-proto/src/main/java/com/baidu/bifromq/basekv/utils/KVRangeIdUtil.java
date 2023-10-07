@@ -45,9 +45,4 @@ public final class KVRangeIdUtil {
             .setId(Long.parseUnsignedLong(parts[1]))
             .build();
     }
-
-    public static String toShortString(KVRangeId kvRangeId) {
-        String s = toString(kvRangeId);
-        return s.substring(s.length() - 4);
-    }
 }

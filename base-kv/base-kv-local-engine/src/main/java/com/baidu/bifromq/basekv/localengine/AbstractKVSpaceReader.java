@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.localengine;
 import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getTimer;
 
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -46,15 +46,15 @@ public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
 
     @Override
     public final long size() {
-        return size(KeyBoundary.getDefaultInstance());
+        return size(Boundary.getDefaultInstance());
     }
 
     @Override
-    public final long size(KeyBoundary boundary) {
+    public final long size(Boundary boundary) {
         return metricMgr.sizeCallTimer.record(() -> doSize(boundary));
     }
 
-    protected abstract long doSize(KeyBoundary boundary);
+    protected abstract long doSize(Boundary boundary);
 
     @Override
     public final boolean exist(ByteString key) {
@@ -78,11 +78,11 @@ public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
     protected abstract IKVSpaceIterator doNewIterator();
 
     @Override
-    public final IKVSpaceIterator newIterator(KeyBoundary subBoundary) {
+    public final IKVSpaceIterator newIterator(Boundary subBoundary) {
         return metricMgr.iterNewCallTimer.record(() -> new MonitoredKeyRangeIterator(doNewIterator(subBoundary)));
     }
 
-    protected abstract IKVSpaceIterator doNewIterator(KeyBoundary subBoundary);
+    protected abstract IKVSpaceIterator doNewIterator(Boundary subBoundary);
 
     private class MonitoredKeyRangeIterator implements IKVSpaceIterator {
         final IKVSpaceIterator delegate;

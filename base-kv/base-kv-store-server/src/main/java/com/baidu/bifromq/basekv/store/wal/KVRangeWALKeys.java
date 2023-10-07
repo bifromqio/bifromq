@@ -43,6 +43,6 @@ class KVRangeWALKeys {
     }
 
     public static long parseLogIndex(ByteString logEntryKey) {
-        return logEntryKey.asReadOnlyByteBuffer().getLong(1 + Integer.BYTES);
+        return logEntryKey.asReadOnlyByteBuffer().getLong(2 + Integer.BYTES);
     }
 }

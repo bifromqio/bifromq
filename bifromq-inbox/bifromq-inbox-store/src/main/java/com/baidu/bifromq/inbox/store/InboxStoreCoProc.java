@@ -13,11 +13,8 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.inRange;
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.upperBound;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
-import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.buildMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxMetadataKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isQoS0MessageKey;
@@ -40,9 +37,8 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedTopicFilter;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -546,11 +542,10 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 String tenantId = parseTenantId(itr.key());
                 ByteString startKey = tenantPrefix(tenantId);
                 ByteString endKey = upperBound(tenantPrefix(tenantId));
-                builder.putUsedSpaces(tenantId,
-                    reader.size(toBoundary(intersect(toRange(reader.boundary()), Range.newBuilder()
-                        .setStartKey(startKey)
-                        .setEndKey(endKey)
-                        .build()))));
+                builder.putUsedSpaces(tenantId, reader.size(intersect(reader.boundary(), Boundary.newBuilder()
+                    .setStartKey(startKey)
+                    .setEndKey(endKey)
+                    .build())));
                 itr.seek(endKey);
             }
         } catch (Exception e) {
@@ -727,7 +722,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             if (dropCount > 0) {
                 if (dropCount >= currCount) {
                     // drop all
-                    writer.clear(KeyBoundary.newBuilder()
+                    writer.clear(Boundary.newBuilder()
                         .setStartKey(keyGenerator.apply(scopedInboxId, startSeq))
                         .setEndKey(keyGenerator.apply(scopedInboxId, nextSeq))
                         .build());
@@ -746,7 +741,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     msgListBuilder
                         .addAllMessage(msgList.subList((int) (startSeq + dropCount - beginSeq), msgList.size()))
                         .addAllMessage(messages);
-                    writer.clear(KeyBoundary.newBuilder()
+                    writer.clear(Boundary.newBuilder()
                         .setStartKey(keyGenerator.apply(scopedInboxId, startSeq))
                         .setEndKey(keyGenerator.apply(scopedInboxId, startSeq + dropCount))
                         .build());
@@ -1000,7 +995,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 writer.insert(keyGenerator.apply(scopedInboxId, commitSeq + 1),
                     InboxMessageList.newBuilder().addAllMessage(msgList).build().toByteString());
             }
-            writer.clear(KeyBoundary.newBuilder()
+            writer.clear(Boundary.newBuilder()
                 .setStartKey(keyGenerator.apply(scopedInboxId, startSeq))
                 .setEndKey(keyGenerator.apply(scopedInboxId, commitSeq + 1))
                 .build());

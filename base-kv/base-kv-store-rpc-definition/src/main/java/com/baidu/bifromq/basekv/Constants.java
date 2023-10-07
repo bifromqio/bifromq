@@ -14,12 +14,6 @@
 package com.baidu.bifromq.basekv;
 
 
-import com.baidu.bifromq.basekv.proto.Range;
-import com.google.protobuf.ByteString;
-
 public class Constants {
     public static final String RPC_METADATA_STORE_ID = "store_id";
-    public static final ByteString MIN_KEY = ByteString.EMPTY;
-    public static final Range EMPTY_RANGE = Range.newBuilder().setEndKey(MIN_KEY).build();
-    public static final Range FULL_RANGE = Range.getDefaultInstance();
 }

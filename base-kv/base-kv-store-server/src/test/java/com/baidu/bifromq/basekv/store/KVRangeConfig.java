@@ -13,14 +13,10 @@
 
 package com.baidu.bifromq.basekv.store;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
@@ -30,7 +26,7 @@ public class KVRangeConfig {
     private final String clusterId;
     public final KVRangeId id;
     public final long ver;
-    public final Range range;
+    public final Boundary boundary;
     public final String leader;
     public final ClusterConfig clusterConfig;
 
@@ -38,7 +34,7 @@ public class KVRangeConfig {
         this.clusterId = clusterId;
         id = desc.getId();
         ver = desc.getVer();
-        range = desc.getRange();
+        boundary = desc.getBoundary();
         leader = leaderStoreId;
         clusterConfig = desc.getConfig();
     }

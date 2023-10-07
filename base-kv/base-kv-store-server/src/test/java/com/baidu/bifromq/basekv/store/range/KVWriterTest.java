@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.store.range;
 import static org.mockito.Mockito.verify;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.google.protobuf.ByteString;
 import org.mockito.Mock;
@@ -64,7 +64,7 @@ public class KVWriterTest {
         verify(keyRangeWriter).put(putKey, putValue);
 
         // delete range
-        KeyBoundary delRange = KeyBoundary.newBuilder()
+        Boundary delRange = Boundary.newBuilder()
             .setStartKey(ByteString.copyFromUtf8("a"))
             .setStartKey(ByteString.copyFromUtf8("z"))
             .build();

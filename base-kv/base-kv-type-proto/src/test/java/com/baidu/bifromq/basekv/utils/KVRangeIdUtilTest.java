@@ -11,12 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.utils;
 
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import lombok.SneakyThrows;
 import org.testng.annotations.Test;
 

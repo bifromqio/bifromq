@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 
@@ -39,7 +39,7 @@ public class KVRangeSettingTest {
             .setId(KVRangeIdUtil.generate())
             .setRole(RaftNodeStatus.Leader)
             .setVer(1)
-            .setRange(FULL_RANGE)
+            .setBoundary(FULL_BOUNDARY)
             .putSyncState(localVoter, RaftNodeSyncState.Replicating)
             .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
             .putSyncState(remoteVoter2, RaftNodeSyncState.Replicating)
@@ -64,7 +64,7 @@ public class KVRangeSettingTest {
             .setId(KVRangeIdUtil.generate())
             .setRole(RaftNodeStatus.Leader)
             .setVer(1)
-            .setRange(FULL_RANGE)
+            .setBoundary(FULL_BOUNDARY)
             .putSyncState(localVoter, RaftNodeSyncState.Replicating)
             .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
             .putSyncState(remoteVoter2, RaftNodeSyncState.Probing)

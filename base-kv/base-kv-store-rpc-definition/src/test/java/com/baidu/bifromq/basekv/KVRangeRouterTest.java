@@ -13,15 +13,15 @@
 
 package com.baidu.bifromq.basekv;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
@@ -38,7 +38,7 @@ public class KVRangeRouterTest {
             .setId(KVRangeIdUtil.generate())
             .setRole(RaftNodeStatus.Leader)
             .setVer(1)
-            .setRange(FULL_RANGE)
+            .setBoundary(FULL_BOUNDARY)
             .build())
         .build();
     private KVRangeStoreDescriptor bucket__a = KVRangeStoreDescriptor.newBuilder()
@@ -47,7 +47,7 @@ public class KVRangeRouterTest {
             .setId(KVRangeIdUtil.generate())
             .setVer(1)
             .setRole(RaftNodeStatus.Leader)
-            .setRange(Range.newBuilder()
+            .setBoundary(Boundary.newBuilder()
                 .setEndKey(copyFromUtf8("a"))
                 .build())
             .build())
@@ -59,7 +59,7 @@ public class KVRangeRouterTest {
             .setId(KVRangeIdUtil.generate())
             .setVer(1)
             .setRole(RaftNodeStatus.Leader)
-            .setRange(Range.newBuilder()
+            .setBoundary(Boundary.newBuilder()
                 .setStartKey(copyFromUtf8("a"))
                 .setEndKey(copyFromUtf8("c"))
                 .build())
@@ -71,7 +71,7 @@ public class KVRangeRouterTest {
             .setId(KVRangeIdUtil.generate())
             .setVer(1)
             .setRole(RaftNodeStatus.Leader)
-            .setRange(Range.newBuilder()
+            .setBoundary(Boundary.newBuilder()
                 .setStartKey(copyFromUtf8("c"))
                 .setEndKey(copyFromUtf8("e"))
                 .build())
@@ -83,7 +83,7 @@ public class KVRangeRouterTest {
             .setId(KVRangeIdUtil.generate())
             .setVer(1)
             .setRole(RaftNodeStatus.Leader)
-            .setRange(Range.newBuilder()
+            .setBoundary(Boundary.newBuilder()
                 .setStartKey(copyFromUtf8("e"))
                 .build())
             .build())
@@ -103,7 +103,7 @@ public class KVRangeRouterTest {
                 .setId(KVRangeIdUtil.generate())
                 .setVer(0) // older version
                 .setRole(RaftNodeStatus.Leader)
-                .setRange(Range.newBuilder()
+                .setBoundary(Boundary.newBuilder()
                     .setStartKey(copyFromUtf8("a"))
                     .setEndKey(copyFromUtf8("e"))
                     .build())
@@ -129,8 +129,8 @@ public class KVRangeRouterTest {
         KVRangeRouter router = new KVRangeRouter(clusterId);
         router.upsert(bucket_e_);
         router.upsert(bucket_full_range);
-        assertEquals(router.findByRange(FULL_RANGE).size(), 1);
-        assertEquals(router.findByRange(FULL_RANGE).get(0), convert(bucket_full_range));
+        assertEquals(router.findByBoundary(FULL_BOUNDARY).size(), 1);
+        assertEquals(router.findByBoundary(FULL_BOUNDARY).get(0), convert(bucket_full_range));
     }
 
     @Test
@@ -155,38 +155,38 @@ public class KVRangeRouterTest {
         router.upsert(bucket_c_e);
         router.upsert(bucket_e_);
 
-        List<KVRangeSetting> overlapped = router.findByRange(bucket__a.getRanges(0).getRange());
+        List<KVRangeSetting> overlapped = router.findByBoundary(bucket__a.getRanges(0).getBoundary());
         assertTrue(overlapped.size() == 1 && overlapped.contains(convert(bucket__a)));
 
-        overlapped = router.findByRange(Range.getDefaultInstance()); // default instance is full range
+        overlapped = router.findByBoundary(Boundary.getDefaultInstance()); // default instance is full range
         assertEquals(overlapped.size(), 4);
 
-        overlapped = router.findByRange(FULL_RANGE);
+        overlapped = router.findByBoundary(FULL_BOUNDARY);
         assertEquals(overlapped.size(), 4);
         assertTrue(overlapped.size() == 4 &&
             overlapped.containsAll(
                 Arrays.asList(convert(bucket__a), convert(bucket_a_c), convert(bucket_c_e), convert(bucket_e_))));
 
-        overlapped = router.findByRange(Range.newBuilder()
+        overlapped = router.findByBoundary(Boundary.newBuilder()
             .setStartKey(copyFromUtf8("c"))
             .setEndKey(copyFromUtf8("a"))
             .build());
         assertTrue(overlapped.isEmpty());
 
-        overlapped = router.findByRange(Range.newBuilder()
+        overlapped = router.findByBoundary(Boundary.newBuilder()
             .setStartKey(copyFromUtf8("a1"))
             .setEndKey(copyFromUtf8("d"))
             .build());
         assertEquals(overlapped.size(), 2);
         assertEquals(new ArrayList<>(overlapped), Arrays.asList(convert(bucket_a_c), convert(bucket_c_e)));
 
-        overlapped = router.findByRange(Range.newBuilder()
+        overlapped = router.findByBoundary(Boundary.newBuilder()
             .setStartKey(copyFromUtf8("c"))
             .setEndKey(copyFromUtf8("c"))
             .build());
         assertEquals(overlapped.size(), 0);
 
-        overlapped = router.findByRange(Range.newBuilder()
+        overlapped = router.findByBoundary(Boundary.newBuilder()
             .setStartKey(copyFromUtf8("c"))
             .setEndKey(copyFromUtf8("c1"))
             .build());
@@ -194,7 +194,7 @@ public class KVRangeRouterTest {
         assertEquals(overlapped.get(0), convert(bucket_c_e));
 
 
-        overlapped = router.findByRange(Range.newBuilder()
+        overlapped = router.findByBoundary(Boundary.newBuilder()
             .setEndKey(copyFromUtf8("c"))
             .build());
         assertEquals(overlapped.size(), 2);

@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
-import com.baidu.bifromq.basekv.localengine.RangeUtil;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
@@ -84,7 +85,7 @@ public class KVUtil {
     }
 
     public static KVRangeId cap(KVRangeId kvRangeId) {
-        ByteBuffer upper = ByteBuffer.wrap(RangeUtil.upperBound(
+        ByteBuffer upper = ByteBuffer.wrap(upperBound(
             ByteBuffer.allocate(2 * Long.BYTES)
                 .putLong(kvRangeId.getEpoch())
                 .putLong(kvRangeId.getId())

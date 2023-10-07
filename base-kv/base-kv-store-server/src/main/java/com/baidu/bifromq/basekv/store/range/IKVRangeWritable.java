@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 
 public interface IKVRangeWritable<T extends IKVRangeWritable<T>> extends IKVRangeMetadataUpdatable<T> {
-    IKVRangeMetadataUpdatable<?> migrateTo(KVRangeId targetRangeId, KeyBoundary boundary);
+    IKVRangeMetadataUpdatable<?> migrateTo(KVRangeId targetRangeId, Boundary boundary);
 
-    IKVRangeMetadataUpdatable<?> migrateFrom(KVRangeId fromRangeId, KeyBoundary boundary);
+    IKVRangeMetadataUpdatable<?> migrateFrom(KVRangeId fromRangeId, Boundary boundary);
 
     IKVWriter kvWriter();
 }

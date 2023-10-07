@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -48,7 +48,7 @@ public class KVRangeSetting {
     private final String clusterId;
     public final KVRangeId id;
     public final long ver;
-    public final Range range;
+    public final Boundary boundary;
     public final String leader;
     public final List<String> voters;
     private final List<String> inProcVoters;
@@ -61,7 +61,7 @@ public class KVRangeSetting {
         this.clusterId = clusterId;
         id = desc.getId();
         ver = desc.getVer();
-        range = desc.getRange();
+        boundary = desc.getBoundary();
         leader = leaderStoreId;
         Set<String> voters = new HashSet<>();
         Set<String> inProcVoters = new HashSet<>();

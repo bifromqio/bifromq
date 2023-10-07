@@ -18,7 +18,7 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import java.util.Map;
@@ -87,18 +87,18 @@ public class InMemKVSpaceWriter extends InMemKVSpaceReader implements IKVSpaceWr
 
     @Override
     public IKVSpaceWriter clear() {
-        helper.clear(id, KeyBoundary.getDefaultInstance());
+        helper.clear(id, Boundary.getDefaultInstance());
         return this;
     }
 
     @Override
-    public IKVSpaceWriter clear(KeyBoundary boundary) {
+    public IKVSpaceWriter clear(Boundary boundary) {
         helper.clear(id, boundary);
         return this;
     }
 
     @Override
-    public IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, KeyBoundary boundary) {
+    public IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, Boundary boundary) {
         InMemKVSpace toKeyRange = (InMemKVSpace) engine.createIfMissing(targetRangeId);
         try {
             // move data
@@ -116,7 +116,7 @@ public class InMemKVSpaceWriter extends InMemKVSpaceReader implements IKVSpaceWr
     }
 
     @Override
-    public IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, KeyBoundary boundary) {
+    public IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, Boundary boundary) {
         InMemKVSpace fromKeyRange = (InMemKVSpace) engine.createIfMissing(fromRangeId);
         helper.addMutators(fromKeyRange.id,
             fromKeyRange.metadataMap(),

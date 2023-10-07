@@ -16,11 +16,9 @@ package com.baidu.bifromq.basekv.store.range;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BOUND_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toRange;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
@@ -49,7 +47,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
         return kvSpace.metadata().map(metadataMap -> {
             long version = version(metadataMap.get(METADATA_VER_BYTES));
             State state = state(metadataMap.get(METADATA_STATE_BYTES));
-            KeyBoundary boundary = boundary(metadataMap.get(METADATA_RANGE_BOUND_BYTES));
+            Boundary boundary = boundary(metadataMap.get(METADATA_RANGE_BOUND_BYTES));
             return new KVRangeMeta(version, state, boundary);
         }).distinctUntilChanged();
     }
@@ -64,7 +62,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
             .setCheckpointId(checkpointId)
             .setLastAppliedIndex(kvRangeCheckpoint.lastAppliedIndex())
             .setState(kvRangeCheckpoint.state())
-            .setRange(toRange(kvRangeCheckpoint.boundary()));
+            .setBoundary(kvRangeCheckpoint.boundary());
         return builder.build();
     }
 
@@ -112,7 +110,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
             .resetVer(snapshot.getVer())
             .lastAppliedIndex(snapshot.getLastAppliedIndex())
             .state(snapshot.getState())
-            .boundary(toBoundary(snapshot.getRange()))
+            .boundary(snapshot.getBoundary())
             .kvWriter();
         kvWriter.clear(boundary());
         return new IKVReseter() {

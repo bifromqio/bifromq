@@ -15,8 +15,6 @@ package com.baidu.bifromq.basekv.store.range;
 
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.google.protobuf.ByteString;
 
 public class KVRangeKeys {
@@ -24,28 +22,4 @@ public class KVRangeKeys {
     public static final ByteString METADATA_RANGE_BOUND_BYTES = unsafeWrap(new byte[] {0x01});
     public static final ByteString METADATA_LAST_APPLIED_INDEX_BYTES = unsafeWrap(new byte[] {0x02});
     public static final ByteString METADATA_STATE_BYTES = unsafeWrap(new byte[] {0x03});
-
-    public static KeyBoundary toBoundary(Range range) {
-        // TODO: unify range and KeyRangeBoundary
-        KeyBoundary.Builder boundaryBuilder = KeyBoundary.newBuilder();
-        if (range.hasStartKey()) {
-            boundaryBuilder.setStartKey(range.getStartKey());
-        }
-        if (range.hasEndKey()) {
-            boundaryBuilder.setEndKey(range.getEndKey());
-        }
-        return boundaryBuilder.build();
-    }
-
-    public static Range toRange(KeyBoundary boundary) {
-        // TODO: unify range and KeyRangeBoundary
-        Range.Builder rangeBuilder = Range.newBuilder();
-        if (boundary.hasStartKey()) {
-            rangeBuilder.setStartKey(boundary.getStartKey());
-        }
-        if (boundary.hasEndKey()) {
-            rangeBuilder.setEndKey(boundary.getEndKey());
-        }
-        return rangeBuilder.build();
-    }
 }

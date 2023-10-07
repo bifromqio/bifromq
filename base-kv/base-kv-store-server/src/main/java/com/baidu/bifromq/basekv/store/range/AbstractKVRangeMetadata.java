@@ -19,7 +19,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BY
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadata;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeMetadata;
@@ -76,16 +76,16 @@ abstract class AbstractKVRangeMetadata implements IKVRangeMetadata {
     }
 
     @Override
-    public final KeyBoundary boundary() {
+    public final Boundary boundary() {
         return boundary(keyRangeMetadata.metadata(METADATA_RANGE_BOUND_BYTES).orElse(null));
     }
 
     @SneakyThrows
-    protected KeyBoundary boundary(ByteString boundaryBytes) {
+    protected Boundary boundary(ByteString boundaryBytes) {
         if (boundaryBytes != null) {
-            return KeyBoundary.parseFrom(boundaryBytes);
+            return Boundary.parseFrom(boundaryBytes);
         }
-        return KeyBoundary.getDefaultInstance();
+        return Boundary.getDefaultInstance();
     }
 
     @Override
@@ -94,7 +94,7 @@ abstract class AbstractKVRangeMetadata implements IKVRangeMetadata {
     }
 
     @Override
-    public final long size(KeyBoundary boundary) {
+    public final long size(Boundary boundary) {
         return keyRangeMetadata.size(boundary);
     }
 }

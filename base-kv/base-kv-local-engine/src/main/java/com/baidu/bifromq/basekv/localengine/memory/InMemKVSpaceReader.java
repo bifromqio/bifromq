@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVSpaceReader;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import java.util.Map;
@@ -38,7 +38,7 @@ public abstract class InMemKVSpaceReader extends AbstractKVSpaceReader {
     }
 
     @Override
-    protected long doSize(KeyBoundary boundary) {
+    protected long doSize(Boundary boundary) {
         SortedMap<ByteString, ByteString> sizedData;
         ConcurrentSkipListMap<ByteString, ByteString> rangeData = rangeData();
         if (!boundary.hasStartKey() && !boundary.hasEndKey()) {
@@ -73,7 +73,7 @@ public abstract class InMemKVSpaceReader extends AbstractKVSpaceReader {
     }
 
     @Override
-    protected IKVSpaceIterator doNewIterator(KeyBoundary subBoundary) {
+    protected IKVSpaceIterator doNewIterator(Boundary subBoundary) {
         return new InMemKVSpaceIterator(rangeData(), subBoundary);
     }
 }

@@ -17,7 +17,7 @@ message LoadHint{
 message KVRangeDescriptor {
   basekv.KVRangeId id = 1;
   uint64 ver = 2;
-  Range range = 3;
+  Boundary boundary = 3;
   basekv.State.StateType state = 4;
   raft.RaftNodeStatus role = 5;
   raft.ClusterConfig config = 6;

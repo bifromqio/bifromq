@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 
 public interface IKVSpaceWritable<T extends IKVSpaceWritable<T>> extends IKVSpaceMetadataUpdatable<T> {
@@ -50,7 +50,7 @@ public interface IKVSpaceWritable<T extends IKVSpaceWritable<T>> extends IKVSpac
      *
      * @param boundary the boundary
      */
-    T clear(KeyBoundary boundary);
+    T clear(Boundary boundary);
 
     /**
      * Migrate date in given boundary to target range, and returns the metadata updater for target boundary Note. the
@@ -60,7 +60,7 @@ public interface IKVSpaceWritable<T extends IKVSpaceWritable<T>> extends IKVSpac
      * @param boundary      the boundary of data to be migrated
      * @return the metadata updater of target boundary
      */
-    IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, KeyBoundary boundary);
+    IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, Boundary boundary);
 
-    IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, KeyBoundary boundary);
+    IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, Boundary boundary);
 }

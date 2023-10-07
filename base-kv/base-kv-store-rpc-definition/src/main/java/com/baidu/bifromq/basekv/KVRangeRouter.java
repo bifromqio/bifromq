@@ -13,15 +13,18 @@
 
 package com.baidu.bifromq.basekv;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isOverlap;
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
 import static java.util.Collections.emptySet;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.baidu.bifromq.basekv.utils.KeyRangeUtil;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -84,13 +87,13 @@ public final class KVRangeRouter implements IKVRangeRouter {
                 return false;
             }
             ByteString firstKey = rangeTable.firstKey();
-            if (!firstKey.equals(Constants.MIN_KEY) || rangeTable.firstEntry().getValue().range.hasStartKey()) {
+            if (!firstKey.equals(MIN_KEY) || rangeTable.firstEntry().getValue().boundary.hasStartKey()) {
                 // the lower bound of the first range is explicitly set to empty byte string.
                 return false;
             }
-            ByteString endKey = Constants.MIN_KEY;
+            ByteString endKey = MIN_KEY;
             for (Map.Entry<ByteString, KVRangeSetting> entry : rangeTable.entrySet()) {
-                Range range = entry.getValue().range;
+                Boundary range = entry.getValue().boundary;
                 if (!endKey.equals(range.getStartKey())) {
                     return false;
                 } else {
@@ -98,7 +101,7 @@ public final class KVRangeRouter implements IKVRangeRouter {
                 }
             }
             // the upper bound of the last range is open
-            return !rangeTable.lastEntry().getValue().range.hasEndKey();
+            return !rangeTable.lastEntry().getValue().boundary.hasEndKey();
         } finally {
             stampedLock.unlockRead(stamp);
         }
@@ -113,13 +116,14 @@ public final class KVRangeRouter implements IKVRangeRouter {
         }
     }
 
+    @Override
     public Optional<KVRangeSetting> findByKey(ByteString key) {
         final long stamp = stampedLock.readLock();
         try {
             Map.Entry<ByteString, KVRangeSetting> entry = rangeTable.floorEntry(key);
             if (entry != null) {
                 KVRangeSetting setting = entry.getValue();
-                if (KeyRangeUtil.inRange(key, setting.range)) {
+                if (inRange(key, setting.boundary)) {
                     return Optional.of(setting);
                 } else {
                     return Optional.empty();
@@ -132,30 +136,32 @@ public final class KVRangeRouter implements IKVRangeRouter {
         }
     }
 
-    public List<KVRangeSetting> findByRange(Range range) {
+    @Override
+    public List<KVRangeSetting> findByBoundary(Boundary boundary) {
         final long stamp = stampedLock.readLock();
         try {
-            return findByRangeWithoutLock(range);
+            return findByRangeWithoutLock(boundary);
         } finally {
             stampedLock.unlockRead(stamp);
         }
     }
 
+    @Override
     public Optional<KVRangeSetting> findById(KVRangeId id) {
         return Optional.ofNullable(rangeMap.get(id));
     }
 
-    private List<KVRangeSetting> findByRangeWithoutLock(Range range) {
+    private List<KVRangeSetting> findByRangeWithoutLock(Boundary range) {
         List<KVRangeSetting> ranges = new ArrayList<>();
         // range before range.start
         Map.Entry<ByteString, KVRangeSetting> before = rangeTable.lowerEntry(range.getStartKey());
-        if (before != null && KeyRangeUtil.inRange(range.getStartKey(), before.getValue().range)) {
+        if (before != null && inRange(range.getStartKey(), before.getValue().boundary)) {
             ranges.add(before.getValue());
         }
         // ranges after range.start
         NavigableMap<ByteString, KVRangeSetting> after = rangeTable.tailMap(range.getStartKey(), true);
         for (Map.Entry<ByteString, KVRangeSetting> entry : after.entrySet()) {
-            if (KeyRangeUtil.isOverlap(entry.getValue().range, range)) {
+            if (isOverlap(entry.getValue().boundary, range)) {
                 ranges.add(entry.getValue());
             } else {
                 break;
@@ -168,7 +174,7 @@ public final class KVRangeRouter implements IKVRangeRouter {
         if (descriptor.getRole() != RaftNodeStatus.Leader) {
             return false;
         }
-        if (descriptor.getRange().equals(Constants.EMPTY_RANGE)) {
+        if (descriptor.getBoundary().equals(EMPTY_BOUNDARY)) {
             return false;
         }
         switch (descriptor.getState()) {
@@ -178,20 +184,20 @@ public final class KVRangeRouter implements IKVRangeRouter {
         }
         KVRangeSetting setting = new KVRangeSetting(clusterId, storeId, descriptor);
 
-        List<KVRangeSetting> overlapped = findByRangeWithoutLock(setting.range);
+        List<KVRangeSetting> overlapped = findByRangeWithoutLock(setting.boundary);
         if (overlapped.isEmpty()) {
-            rangeTable.put(setting.range.getStartKey(), setting);
+            rangeTable.put(setting.boundary.getStartKey(), setting);
             rangesToStoreMap.computeIfAbsent(storeId, k -> new HashSet<>()).add(setting);
             rangeMap.put(setting.id, setting);
             return true;
         } else {
             if (overlapped.stream().allMatch(o -> o.ver <= setting.ver)) {
                 overlapped.forEach(o -> {
-                    rangeTable.remove(o.range.getStartKey());
+                    rangeTable.remove(o.boundary.getStartKey());
                     rangesToStoreMap.getOrDefault(o.leader, emptySet()).remove(o);
                     rangeMap.remove(o.id);
                 });
-                rangeTable.put(setting.range.getStartKey(), setting);
+                rangeTable.put(setting.boundary.getStartKey(), setting);
                 rangesToStoreMap.computeIfAbsent(setting.leader, k -> new HashSet<>()).add(setting);
                 rangeMap.put(setting.id, setting);
                 return true;

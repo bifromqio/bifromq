@@ -13,8 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.fail;
@@ -46,13 +45,13 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setVer(0)
             .setLastAppliedIndex(0)
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
-            .setRange(FULL_RANGE)
+            .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(keyRange, loadTracker).toReseter(snapshot).done();
 
         assertEquals(accessor.version(), snapshot.getVer());
-        assertEquals(accessor.boundary(), toBoundary(snapshot.getRange()));
+        assertEquals(accessor.boundary(), snapshot.getBoundary());
         assertEquals(accessor.lastAppliedIndex(), snapshot.getLastAppliedIndex());
         assertEquals(accessor.state(), snapshot.getState());
     }
@@ -83,7 +82,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setVer(ver)
             .setLastAppliedIndex(lastAppliedIndex)
             .setState(state)
-            .setRange(FULL_RANGE)
+            .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(keyRange, loadTracker).toReseter(snapshot).done();

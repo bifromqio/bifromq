@@ -21,7 +21,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LAT
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.proto.Range;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
@@ -124,7 +124,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                 Map<String, DistPack> distPackMap = buildDistPack();
                 Map<KVRangeSetting, List<DistPack>> distPacksByRange = new HashMap<>();
                 distPackMap.forEach((tenantId, distPack) -> {
-                    List<KVRangeSetting> ranges = distWorkerClient.findByRange(Range.newBuilder()
+                    List<KVRangeSetting> ranges = distWorkerClient.findByBoundary(Boundary.newBuilder()
                         .setStartKey(matchRecordKeyPrefix(tenantId))
                         .setEndKey(tenantUpperBound(tenantId))
                         .build());

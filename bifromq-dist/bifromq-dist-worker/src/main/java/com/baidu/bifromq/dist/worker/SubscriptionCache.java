@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordTopicFilterPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
@@ -22,8 +22,8 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static com.google.common.hash.Hashing.murmur3_128;
 import static java.util.Collections.singleton;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
@@ -129,7 +129,7 @@ public class SubscriptionCache {
                     @Override
                     public Map<ScopedTopic, MatchResult> loadAll(Set<? extends ScopedTopic> keys) {
                         Map<String, Set<String>> topicsByTenantId = new HashMap<>();
-                        Map<String, Range> matchRecordRangeByTenantId = new HashMap<>();
+                        Map<String, Boundary> matchRecordRangeByTenantId = new HashMap<>();
                         for (ScopedTopic st : keys) {
                             topicsByTenantId.computeIfAbsent(st.tenantId, k -> new HashSet<>()).add(st.topic);
                             matchRecordRangeByTenantId.computeIfAbsent(st.tenantId, k -> st.matchRecordRange);
@@ -233,21 +233,21 @@ public class SubscriptionCache {
         Metrics.globalRegistry.remove(internalMatchTimer);
     }
 
-    private Map<ScopedTopic, MatchResult> match(String tenantId, Set<String> topics, Range matchRecordRange) {
+    private Map<ScopedTopic, MatchResult> match(String tenantId, Set<String> topics, Boundary matchRecordRange) {
         long tenantVer = tenantVerCache.get(tenantId).get();
         return match(tenantId, topics, matchRecordRange, tenantVer);
     }
 
     private Map<ScopedTopic, MatchResult> match(String tenantId,
                                                 Set<String> topics,
-                                                Range matchRecordRange,
+                                                Boundary matchRecordBoundary,
                                                 long tenantVer) {
         Timer.Sample sample = Timer.start();
         Map<ScopedTopic, MatchResult> routes = Maps.newHashMap();
         topics.forEach(topic -> routes.put(ScopedTopic.builder()
             .tenantId(tenantId)
             .topic(topic)
-            .range(matchRecordRange)
+            .boundary(matchRecordBoundary)
             .build(), new MatchResult(tenantVer)));
         IKVReader rangeReader = threadLocalReader.get();
         rangeReader.refresh();
@@ -260,8 +260,8 @@ public class SubscriptionCache {
         int probe = 0;
         IKVIterator itr = rangeReader.iterator();
         // track seek
-        itr.seek(matchRecordRange.getStartKey());
-        while (itr.isValid() && compare(itr.key(), matchRecordRange.getEndKey()) < 0) {
+        itr.seek(matchRecordBoundary.getStartKey());
+        while (itr.isValid() && compare(itr.key(), matchRecordBoundary.getEndKey()) < 0) {
             // track itr.key()
             Matching matching = parseMatchRecord(itr.key(), itr.value());
             // key: topic
@@ -297,7 +297,7 @@ public class SubscriptionCache {
             matchedTopics.forEach(t -> routes.get(ScopedTopic.builder()
                     .tenantId(tenantId)
                     .topic(t)
-                    .range(matchRecordRange)
+                    .boundary(matchRecordBoundary)
                     .build())
                 .routes.add(matching));
         }

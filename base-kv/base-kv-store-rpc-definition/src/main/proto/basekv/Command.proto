@@ -34,13 +34,13 @@ message PrepareMergeTo{
   basekv.KVRangeId mergerId = 1;
   uint64 mergerVer = 2;
   raft.ClusterConfig config = 3; // merger's config at the moment
-  basekv.Range range = 4; // merger's range at the moment
+  basekv.Boundary boundary = 4; // merger's range at the moment
 }
 
 message Merge{
   basekv.KVRangeId mergeeId = 1;
   uint64 mergeeVer = 2;
-  basekv.Range range = 3;
+  basekv.Boundary Boundary = 3;
   string storeId = 4;
 }
 

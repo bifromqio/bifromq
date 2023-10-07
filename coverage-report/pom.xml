@@ -39,6 +39,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-kv-raft-type</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-kv-local-engine</artifactId>
         </dependency>
         <dependency>

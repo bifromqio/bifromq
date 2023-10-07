@@ -13,10 +13,9 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
-import static com.baidu.bifromq.basekv.utils.KeyRangeUtil.compare;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
 
@@ -49,8 +48,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;
         AtomicReference<KVRangeConfig> mergee;
-        if (range0.range.hasEndKey() &&
-            compare(range0.range.getEndKey(), range1.range.getStartKey()) <= 0) {
+        if (range0.boundary.hasEndKey() &&
+            compare(range0.boundary.getEndKey(), range1.boundary.getStartKey()) <= 0) {
             merger = new AtomicReference<>(range0);
             mergee = new AtomicReference<>(range1);
         } else {
@@ -59,8 +58,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         }
         while (!merger.get().leader.equals(mergee.get().leader)) {
             cluster.awaitKVRangeReady(mergee.get().leader, mergee.get().id);
-            log.info("Transfer mergee {} leader from {} to {}",
-                toShortString(mergee.get().id),
+            log.info("Transfer mergee {} leader from {} to {}", KVRangeIdUtil.toString(mergee.get().id),
                 mergee.get().leader,
                 merger.get().leader);
             cluster.transferLeader(mergee.get().leader,
@@ -121,8 +119,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;
         AtomicReference<KVRangeConfig> mergee;
-        if (range0.range.hasEndKey() &&
-            compare(range0.range.getEndKey(), range1.range.getStartKey()) <= 0) {
+        if (range0.boundary.hasEndKey() &&
+            compare(range0.boundary.getEndKey(), range1.boundary.getStartKey()) <= 0) {
             merger = new AtomicReference<>(range0);
             mergee = new AtomicReference<>(range1);
         } else {
@@ -131,8 +129,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         }
         while (!merger.get().leader.equals(mergee.get().leader)) {
             cluster.awaitKVRangeReady(mergee.get().leader, mergee.get().id);
-            log.info("Transfer mergee {} leader from {} to {}",
-                toShortString(mergee.get().id),
+            log.info("Transfer mergee {} leader from {} to {}", KVRangeIdUtil.toString(mergee.get().id),
                 mergee.get().leader,
                 merger.get().leader);
             cluster.transferLeader(mergee.get().leader,
@@ -159,8 +156,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         cluster.shutdownStore(followerStoreId);
 
         log.info("Merge KVRange {} to {} from leader store {}",
-            toShortString(mergee.get().id),
-            toShortString(merger.get().id),
+            KVRangeIdUtil.toString(mergee.get().id),
+            KVRangeIdUtil.toString(merger.get().id),
             merger.get().leader);
 
         cluster.merge(merger.get().leader, merger.get().ver, merger.get().id, mergee.get().id)
@@ -169,7 +166,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         KVRangeConfig mergedSettings = cluster.awaitAllKVRangeReady(merger.get().id, 3, 5000);
         log.info("Merged settings {}", mergedSettings);
         await().atMost(Duration.ofSeconds(40))
-            .until(() -> cluster.kvRangeSetting(merger.get().id).range.equals(FULL_RANGE));
+            .until(() -> cluster.kvRangeSetting(merger.get().id).boundary.equals(FULL_BOUNDARY));
         log.info("Merge done");
     }
 
@@ -189,8 +186,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;
         AtomicReference<KVRangeConfig> mergee;
-        if (range0.range.hasEndKey() &&
-            compare(range0.range.getEndKey(), range1.range.getStartKey()) <= 0) {
+        if (range0.boundary.hasEndKey() &&
+            compare(range0.boundary.getEndKey(), range1.boundary.getStartKey()) <= 0) {
             merger = new AtomicReference<>(range0);
             mergee = new AtomicReference<>(range1);
         } else {
@@ -200,7 +197,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         while (!merger.get().leader.equals(mergee.get().leader)) {
             cluster.awaitKVRangeReady(mergee.get().leader, mergee.get().id);
             log.info("Transfer mergee {} leader from {} to {}",
-                toShortString(mergee.get().id),
+                KVRangeIdUtil.toString(mergee.get().id),
                 mergee.get().leader,
                 merger.get().leader);
             cluster.transferLeader(mergee.get().leader,
@@ -227,8 +224,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         cluster.isolate(isolatedStoreId);
 
         log.info("Merge KVRange {} to {} from leader store {}",
-            toShortString(mergee.get().id),
-            toShortString(merger.get().id),
+            KVRangeIdUtil.toString(mergee.get().id),
+            KVRangeIdUtil.toString(merger.get().id),
             merger.get().leader);
 
         cluster.merge(merger.get().leader, merger.get().ver, merger.get().id, mergee.get().id)
@@ -236,7 +233,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
 
         KVRangeConfig mergedSettings = cluster.awaitAllKVRangeReady(merger.get().id, 3, 5000);
         await().atMost(Duration.ofSeconds(40))
-            .until(() -> cluster.kvRangeSetting(merger.get().id).range.equals(FULL_RANGE));
+            .until(() -> cluster.kvRangeSetting(merger.get().id).boundary.equals(FULL_BOUNDARY));
         log.info("Merge done {}", mergedSettings);
         log.info("Integrate {} into cluster, and wait for all mergees quited", isolatedStoreId);
         cluster.integrate(isolatedStoreId);

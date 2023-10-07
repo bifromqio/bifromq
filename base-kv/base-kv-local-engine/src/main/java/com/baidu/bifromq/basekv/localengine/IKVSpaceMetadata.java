@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 
@@ -24,5 +24,5 @@ public interface IKVSpaceMetadata {
 
     long size();
 
-    long size(KeyBoundary boundary);
+    long size(Boundary boundary);
 }

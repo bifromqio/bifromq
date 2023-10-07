@@ -19,7 +19,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.util.Optional;
@@ -230,7 +230,7 @@ public abstract class AbstractKVEngineTest {
         ByteString value = ByteString.copyFromUtf8("value");
         IKVSpace keyRange = engine.createIfMissing(rangeId);
 
-        try (IKVSpaceIterator keyRangeIterator = keyRange.newIterator(KeyBoundary.newBuilder()
+        try (IKVSpaceIterator keyRangeIterator = keyRange.newIterator(Boundary.newBuilder()
             .setStartKey(key)
             .build())) {
             keyRangeIterator.seekToFirst();
@@ -262,7 +262,7 @@ public abstract class AbstractKVEngineTest {
             keyRangeIterator.next();
             assertFalse(keyRangeIterator.isValid());
         }
-        try (IKVSpaceIterator keyRangeIterator = keyRange.newIterator(KeyBoundary.newBuilder()
+        try (IKVSpaceIterator keyRangeIterator = keyRange.newIterator(Boundary.newBuilder()
             .setStartKey(ByteString.copyFromUtf8("0"))
             .setEndKey(ByteString.copyFromUtf8("9"))
             .build())) {
@@ -308,7 +308,7 @@ public abstract class AbstractKVEngineTest {
         keyRange.toWriter().put(key, value).done();
 
         keyRange.toWriter()
-            .clear(KeyBoundary.newBuilder()
+            .clear(Boundary.newBuilder()
                 .setStartKey(ByteString.copyFromUtf8("0"))
                 .setEndKey(ByteString.copyFromUtf8("9"))
                 .build())
@@ -337,7 +337,7 @@ public abstract class AbstractKVEngineTest {
             .done();
         IKVSpaceWriter leftRangeWriter = leftRange.toWriter();
         leftRangeWriter
-            .migrateTo(rightRangeId, KeyBoundary.newBuilder().setStartKey(splitKey).build())
+            .migrateTo(rightRangeId, Boundary.newBuilder().setStartKey(splitKey).build())
             .metadata(metaKey, metaVal);
         leftRangeWriter.done();
 
@@ -377,7 +377,7 @@ public abstract class AbstractKVEngineTest {
 
         IKVSpaceWriter leftRangeWriter = leftRange.toWriter();
         leftRangeWriter
-            .migrateFrom(rightRangeId, KeyBoundary.newBuilder().setStartKey(splitKey).build())
+            .migrateFrom(rightRangeId, Boundary.newBuilder().setStartKey(splitKey).build())
             .metadata(metaKey, metaVal);
         leftRangeWriter
             .metadata(metaKey, metaVal)

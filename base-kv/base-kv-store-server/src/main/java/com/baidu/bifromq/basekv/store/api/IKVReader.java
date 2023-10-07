@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 
 public interface IKVReader {
-    KeyBoundary boundary();
+    Boundary boundary();
 
-    long size(KeyBoundary range);
+    long size(Boundary range);
 
     boolean exist(ByteString key);
 

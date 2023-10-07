@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildCollectMetricsRequest;
 import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
@@ -136,7 +136,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             if (status.get() != Status.STARTED) {
                 return;
             }
-            List<KVRangeSetting> settings = storeClient.findByRange(FULL_RANGE);
+            List<KVRangeSetting> settings = storeClient.findByBoundary(FULL_BOUNDARY);
             Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
             List<CompletableFuture<CollectMetricsReply>> statsFutures = new ArrayList<>();
             while (itr.hasNext()) {

@@ -23,10 +23,6 @@
     </parent>
 
     <artifactId>base-kv-store-client</artifactId>
-    <properties>
-        <!--remove when tests are added-->
-        <maven.test.skip>true</maven.test.skip>
-    </properties>
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

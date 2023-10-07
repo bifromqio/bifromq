@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 
@@ -26,9 +26,9 @@ public interface IKVRangeMetadata {
 
     long lastAppliedIndex();
 
-    KeyBoundary boundary();
+    Boundary boundary();
 
     long size();
 
-    long size(KeyBoundary boundary);
+    long size(Boundary boundary);
 }

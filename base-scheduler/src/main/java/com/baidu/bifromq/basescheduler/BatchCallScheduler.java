@@ -77,7 +77,7 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
         batchers = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
             .expireAfterAccess(batcherExpiry)
-            .removalListener((RemovalListener<BatcherKey, Batcher<Call, CallResult, BatcherKey>>)
+            .evictionListener((RemovalListener<BatcherKey, Batcher<Call, CallResult, BatcherKey>>)
                 (key, value, removalCause) -> {
                     if (value != null) {
                         value.close();

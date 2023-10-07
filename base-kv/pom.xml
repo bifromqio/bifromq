@@ -26,6 +26,7 @@
     <artifactId>base-kv</artifactId>
 
     <modules>
+        <module>base-kv-type-proto</module>
         <module>base-kv-raft-type</module>
         <module>base-kv-raft</module>
         <module>base-kv-local-engine</module>

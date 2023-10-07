@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.compare;
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.isValid;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.DATA_SECTION_END;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.DATA_SECTION_START;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.toDataKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isValid;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static java.util.Collections.singletonList;
 import static org.rocksdb.SizeApproximationFlag.INCLUDE_FILES;
@@ -27,7 +27,7 @@ import com.baidu.bifromq.basekv.localengine.AbstractKVSpaceReader;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import java.util.Optional;
@@ -48,7 +48,7 @@ public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
 
     protected abstract ISyncContext.IRefresher newRefresher();
 
-    protected final long doSize(KeyBoundary boundary) {
+    protected final long doSize(Boundary boundary) {
         byte[] start =
             !boundary.hasStartKey() ? DATA_SECTION_START : toDataKey(boundary.getStartKey().toByteArray());
         byte[] end =
@@ -79,11 +79,11 @@ public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
 
     @Override
     protected final IKVSpaceIterator doNewIterator() {
-        return new RocksDBKVSpaceIterator(db(), cfHandle(), KeyBoundary.getDefaultInstance(), newRefresher());
+        return new RocksDBKVSpaceIterator(db(), cfHandle(), Boundary.getDefaultInstance(), newRefresher());
     }
 
     @Override
-    protected final IKVSpaceIterator doNewIterator(KeyBoundary subBoundary) {
+    protected final IKVSpaceIterator doNewIterator(Boundary subBoundary) {
         assert isValid(subBoundary);
         return new RocksDBKVSpaceIterator(db(), cfHandle(), subBoundary, newRefresher());
     }

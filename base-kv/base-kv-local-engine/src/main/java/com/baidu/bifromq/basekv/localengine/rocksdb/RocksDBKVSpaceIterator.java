@@ -13,17 +13,17 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.endKeyBytes;
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.startKeyBytes;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.DATA_SECTION_END;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.DATA_SECTION_START;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.fromDataKey;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.toDataKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKeyBytes;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.startKeyBytes;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.lang.ref.Cleaner;
 import org.rocksdb.ColumnFamilyHandle;
@@ -45,7 +45,7 @@ public class RocksDBKVSpaceIterator implements IKVSpaceIterator {
 
     public RocksDBKVSpaceIterator(RocksDB db,
                                   ColumnFamilyHandle cfHandle,
-                                  KeyBoundary boundary,
+                                  Boundary boundary,
                                   ISyncContext.IRefresher refresher) {
         byte[] startKey = startKeyBytes(boundary);
         byte[] endKey = endKeyBytes(boundary);

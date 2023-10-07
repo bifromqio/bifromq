@@ -13,16 +13,16 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.endKeyBytes;
-import static com.baidu.bifromq.basekv.localengine.RangeUtil.startKeyBytes;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.DATA_SECTION_END;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.DATA_SECTION_START;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.toDataKey;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.toMetaKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKeyBytes;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.startKeyBytes;
 
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,7 +83,7 @@ class RocksDBKVSpaceWriterHelper {
         batch.singleDelete(cfHandle, toDataKey(key));
     }
 
-    void clear(ColumnFamilyHandle cfHandle, KeyBoundary boundary) throws RocksDBException {
+    void clear(ColumnFamilyHandle cfHandle, Boundary boundary) throws RocksDBException {
         byte[] startKey = startKeyBytes(boundary);
         byte[] endKey = endKeyBytes(boundary);
         startKey = startKey == null ? DATA_SECTION_START : toDataKey(startKey);

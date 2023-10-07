@@ -19,7 +19,7 @@ import static com.baidu.bifromq.basekv.localengine.TestUtil.toByteString;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
@@ -66,7 +66,7 @@ public class ContinuousKeyDeleteAndGet_Benchmark extends BenchmarkTemplate {
         }
         for (int i = keyCount - 1; i >= 0; i--) {
 //            kvEngine.delete(batchId, DEFAULT_NS, key.concat(toByteString(i)));
-            writer.clear(KeyBoundary.newBuilder()
+            writer.clear(Boundary.newBuilder()
                 .setStartKey(key.concat(toByteString(i)))
                 .setEndKey(key.concat(toByteString(i + 1)))
                 .build());

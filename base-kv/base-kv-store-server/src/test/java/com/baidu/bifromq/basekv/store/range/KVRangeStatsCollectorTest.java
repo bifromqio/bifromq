@@ -13,8 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.toBoundary;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
@@ -53,8 +52,8 @@ public class KVRangeStatsCollectorTest {
     @Test
     public void testScrap() {
         when(rangeReader.newDataReader()).thenReturn(kvReader);
-        when(kvReader.boundary()).thenReturn(toBoundary(FULL_RANGE));
-        when(kvReader.size(toBoundary(FULL_RANGE))).thenReturn(0L);
+        when(kvReader.boundary()).thenReturn(FULL_BOUNDARY);
+        when(kvReader.size(FULL_BOUNDARY)).thenReturn(0L);
         when(rangeWAL.logDataSize()).thenReturn(0L);
         KVRangeStatsCollector statsCollector = new KVRangeStatsCollector(rangeReader, rangeWAL,
             Duration.ofSeconds(1), MoreExecutors.directExecutor());

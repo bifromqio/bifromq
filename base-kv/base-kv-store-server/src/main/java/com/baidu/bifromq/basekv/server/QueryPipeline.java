@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import com.baidu.bifromq.basekv.proto.NullableValue;
+import com.baidu.bifromq.basekv.store.proto.NullableValue;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;

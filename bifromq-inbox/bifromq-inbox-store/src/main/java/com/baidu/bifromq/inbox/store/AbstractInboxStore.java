@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildCollectMetricsRequest;
@@ -156,7 +156,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             if (status.get() != Status.STARTED) {
                 return;
             }
-            List<KVRangeSetting> settings = storeClient.findByRange(FULL_RANGE);
+            List<KVRangeSetting> settings = storeClient.findByBoundary(FULL_BOUNDARY);
             Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
             List<CompletableFuture<?>> gcFutures = new ArrayList<>();
             while (itr.hasNext()) {
@@ -241,7 +241,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             if (status.get() != Status.STARTED) {
                 return;
             }
-            List<KVRangeSetting> settings = storeClient.findByRange(FULL_RANGE);
+            List<KVRangeSetting> settings = storeClient.findByBoundary(FULL_BOUNDARY);
             Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
             List<CompletableFuture<CollectMetricsReply>> statsFutures = new ArrayList<>();
             while (itr.hasNext()) {

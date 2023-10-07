@@ -17,8 +17,8 @@ import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.Range;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
@@ -49,11 +49,11 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
             assertEquals(kvRangeSettings.ver, genesisKVRangeSettings.ver + 1);
             if (kvRangeId.equals(genesisKVRangeId)) {
                 assertEquals(kvRangeSettings.leader, genesisKVRangeSettings.leader);
-                assertEquals(kvRangeSettings.range, Range.newBuilder()
+                assertEquals(kvRangeSettings.boundary, Boundary.newBuilder()
                     .setEndKey(ByteString.copyFromUtf8("e"))
                     .build());
             } else {
-                assertEquals(kvRangeSettings.range, Range.newBuilder()
+                assertEquals(kvRangeSettings.boundary, Boundary.newBuilder()
                     .setStartKey(ByteString.copyFromUtf8("e"))
                     .build());
             }
@@ -78,11 +78,11 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
             assertEquals(kvRangeSettings.ver, genesisKVRangeSettings.ver + 1);
             if (kvRangeId.equals(genesisKVRangeId)) {
                 assertEquals(kvRangeSettings.leader, genesisKVRangeSettings.leader);
-                assertEquals(kvRangeSettings.range, Range.newBuilder()
+                assertEquals(kvRangeSettings.boundary, Boundary.newBuilder()
                     .setEndKey(ByteString.copyFromUtf8("e"))
                     .build());
             } else {
-                assertEquals(kvRangeSettings.range, Range.newBuilder()
+                assertEquals(kvRangeSettings.boundary, Boundary.newBuilder()
                     .setStartKey(ByteString.copyFromUtf8("e"))
                     .build());
             }

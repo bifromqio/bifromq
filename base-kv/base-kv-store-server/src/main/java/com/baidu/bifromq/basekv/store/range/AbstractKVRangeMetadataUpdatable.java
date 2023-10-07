@@ -21,7 +21,7 @@ import static com.baidu.bifromq.basekv.store.util.VerUtil.bump;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadata;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
-import com.baidu.bifromq.basekv.localengine.proto.KeyBoundary;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
@@ -55,7 +55,7 @@ abstract class AbstractKVRangeMetadataUpdatable<T extends AbstractKVRangeMetadat
     }
 
     @Override
-    public final T boundary(KeyBoundary boundary) {
+    public final T boundary(Boundary boundary) {
         keyRangeWriter().metadata(METADATA_RANGE_BOUND_BYTES, boundary.toByteString());
         return thisT();
     }

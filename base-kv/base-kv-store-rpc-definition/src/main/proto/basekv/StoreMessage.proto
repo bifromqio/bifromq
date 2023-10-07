@@ -20,6 +20,11 @@ message SnapshotSyncRequest{
   KVRangeSnapshot snapshot = 2;
 }
 
+message KVPair{
+  bytes key = 1;
+  bytes value = 2;
+}
+
 message SaveSnapshotDataRequest{
   string sessionId = 1;
   uint32 reqId = 2;
@@ -61,7 +66,7 @@ message PrepareMergeToRequest{
   basekv.KVRangeId id = 2; // merger's id
   uint64 ver = 3; // merger's ver
   raft.ClusterConfig config = 4; // merger's config at the moment
-  basekv.Range range = 5; // merger's range at the moment
+  basekv.Boundary boundary = 5; // merger's boundary at the moment
 }
 
 message PrepareMergeToReply{
@@ -74,7 +79,7 @@ message MergeRequest{
   uint64 ver = 2;
   basekv.KVRangeId mergeeId = 3;
   uint64 mergeeVer = 4;
-  basekv.Range range = 5;
+  basekv.Boundary boundary = 5;
   string storeId = 6;
 }
 

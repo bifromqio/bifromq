@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.basekv.Constants.EMPTY_RANGE;
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
 import static com.baidu.bifromq.basekv.KVRangeSetting.regInProcStore;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.rangeNotFound;
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isOverlap;
 import static java.util.Collections.emptyList;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
@@ -50,7 +50,6 @@ import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWALStorageEngine;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.basekv.utils.KeyRangeUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -242,7 +241,7 @@ public class KVRangeStore implements IKVRangeStore {
         if (kvRangeMap.isEmpty()) {
             // build the genesis "full" KVRange in the cluster
             KVRangeId genesisId = KVRangeIdUtil.generate();
-            log.debug("Creating the genesis KVRange[{}]", toShortString(genesisId));
+            log.debug("Creating the genesis KVRange[{}]", KVRangeIdUtil.toString(genesisId));
             ensureKVRange(genesisId, Snapshot.newBuilder()
                 .setClusterConfig(ClusterConfig.newBuilder()
                     .addVoters(id())
@@ -254,7 +253,7 @@ public class KVRangeStore implements IKVRangeStore {
                     .setVer(0)
                     .setLastAppliedIndex(5)
                     .setState(State.newBuilder().setType(Normal).build())
-                    .setRange(FULL_RANGE)
+                    .setBoundary(FULL_BOUNDARY)
                     .build().toByteString())
                 .build()).toCompletableFuture().join();
             return true;
@@ -468,7 +467,7 @@ public class KVRangeStore implements IKVRangeStore {
             IKVSpace keyRange = kvRangeEngine.ranges().get(KVRangeIdUtil.toString(kvRangeId));
             KVRangeFSM kvRange;
             if (keyRange == null) {
-                log.debug("Init range[{}] in store[{}]", toShortString(kvRangeId), id);
+                log.debug("Init range[{}] in store[{}]", KVRangeIdUtil.toString(kvRangeId), id);
                 kvRange = new KVRangeFSM(clusterId,
                     id,
                     kvRangeId,
@@ -482,7 +481,7 @@ public class KVRangeStore implements IKVRangeStore {
                     opts.getKvRangeOptions(),
                     snapshot);
             } else {
-                log.debug("Load range[{}] in store[{}]", toShortString(kvRangeId), id);
+                log.debug("Load range[{}] in store[{}]", KVRangeIdUtil.toString(kvRangeId), id);
                 if (!walStorageEngine.has(kvRangeId)) {
                     walStorageEngine.newRaftStateStorage(kvRangeId, snapshot);
                 }
@@ -499,7 +498,7 @@ public class KVRangeStore implements IKVRangeStore {
                     opts.getKvRangeOptions(),
                     null);
             }
-            log.debug("Open range: storeId={}, rangeId={}", id, toShortString(kvRange.id()));
+            log.debug("Open range: storeId={}, rangeId={}", id, KVRangeIdUtil.toString(kvRange.id()));
             kvRange.open(new KVRangeMessenger(id, kvRange.id(), messenger));
             return kvRange;
         });
@@ -521,7 +520,7 @@ public class KVRangeStore implements IKVRangeStore {
 
     private KVRangeFSM loadKVRange(KVRangeId kvRangeId, IKVSpace keyRange) {
         checkStarted();
-        log.debug("Load existing kv range: storeId={}, rangeId={}", id, toShortString(kvRangeId));
+        log.debug("Load existing kv range: storeId={}, rangeId={}", id, KVRangeIdUtil.toString(kvRangeId));
         KVRangeFSM kvRange = new KVRangeFSM(clusterId,
             id,
             kvRangeId,
@@ -534,7 +533,7 @@ public class KVRangeStore implements IKVRangeStore {
             bgTaskExecutor,
             opts.getKvRangeOptions(),
             null);
-        log.debug("Open range: storeId={}, rangeId={}", id, toShortString(kvRange.id()));
+        log.debug("Open range: storeId={}, rangeId={}", id, KVRangeIdUtil.toString(kvRange.id()));
         kvRange.open(new KVRangeMessenger(id, kvRange.id(), messenger));
         return kvRange;
     }
@@ -551,8 +550,7 @@ public class KVRangeStore implements IKVRangeStore {
             List<KVRangeDescriptor> overlapped = kvRangeMap.values().stream()
                 .map(r -> r.describe().blockingFirst())
                 .filter(r -> !ignoreRanges.contains(r.getId()) &&
-                    KeyRangeUtil.isOverlap(r.getRange(), snapshot.getRange()) &&
-                    !r.getId().equals(snapshot.getId()))
+                    isOverlap(r.getBoundary(), snapshot.getBoundary()) && !r.getId().equals(snapshot.getId()))
                 .toList();
             if (overlapped.stream().anyMatch(r -> r.getVer() > snapshot.getVer())) {
                 onDone.completeExceptionally(new KVRangeStoreException("Staled snapshot"));
@@ -585,7 +583,7 @@ public class KVRangeStore implements IKVRangeStore {
                                 .setVer(0)
                                 .setId(r.id())
                                 .setLastAppliedIndex(0)
-                                .setRange(EMPTY_RANGE)
+                                .setBoundary(EMPTY_BOUNDARY)
                                 .setState(State.newBuilder().setType(Normal).build())
                                 .build()
                                 .toByteString())

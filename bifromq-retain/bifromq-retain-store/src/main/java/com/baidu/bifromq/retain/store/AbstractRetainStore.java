@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static com.baidu.bifromq.basekv.Constants.FULL_RANGE;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.metrics.TenantMeter.gauging;
 import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.RetainUsedSpaceGauge;
@@ -145,7 +145,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             if (status.get() != Status.STARTED) {
                 return;
             }
-            Iterator<KVRangeSetting> itr = storeClient.findByRange(FULL_RANGE)
+            Iterator<KVRangeSetting> itr = storeClient.findByBoundary(FULL_BOUNDARY)
                 .stream().filter(k -> k.leader.equals(id())).iterator();
             List<CompletableFuture<?>> gcFutures = new ArrayList<>();
             while (itr.hasNext()) {
@@ -183,7 +183,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             if (status.get() != Status.STARTED) {
                 return;
             }
-            List<KVRangeSetting> settings = storeClient.findByRange(FULL_RANGE);
+            List<KVRangeSetting> settings = storeClient.findByBoundary(FULL_BOUNDARY);
             Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
             List<CompletableFuture<CollectMetricsReply>> statsFutures = new ArrayList<>();
             while (itr.hasNext()) {

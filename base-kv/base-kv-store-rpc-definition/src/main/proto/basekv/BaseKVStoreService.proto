@@ -138,6 +138,10 @@ message KVRangeRORequest{
   }
 }
 
+message NullableValue{
+  optional bytes value = 1;
+}
+
 message KVRangeROReply{
   uint64 reqId = 1;
   ReplyCode code = 2;

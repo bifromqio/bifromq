@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store.wal;
 
-import static com.baidu.bifromq.basekv.utils.KVRangeIdUtil.toShortString;
 import static java.util.Collections.emptyMap;
 import static org.slf4j.LoggerFactory.getLogger;
 
@@ -82,7 +81,7 @@ public class KVRangeWAL implements IKVRangeWAL {
         this.maxFetchBytes = maxFetchBytes;
         raftNode = new RaftNode(raftConfig, stateStoreEngine.get(rangeId),
             getLogger("raft.logger"),
-            EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toShortString(rangeId)),
+            EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toString(rangeId)),
             "cluster", clusterId, "rangeId", KVRangeIdUtil.toString(rangeId), "storeId", localId);
     }
 
@@ -265,7 +264,7 @@ public class KVRangeWAL implements IKVRangeWAL {
 
     @Override
     public CompletableFuture<Void> close() {
-        log.debug("Closing WAL: rangeId={}, storeId={}", toShortString(rangeId), localId);
+        log.debug("Closing WAL: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), localId);
         raftMessagesPublisher.onComplete();
         commitIndexSubject.onComplete();
         snapInstallTaskPublisher.onComplete();
