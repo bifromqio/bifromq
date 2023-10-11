@@ -44,18 +44,19 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     private final Executor executor;
     private final Set<CompletableFuture<?>> runningQueries = Sets.newConcurrentHashSet();
     private final IKVRangeQueryLinearizer linearizer;
-    //    private final ThreadLocal<IKVRangeReader> threaLocalRangeReader;
-//    private final LoadingCache<Thread, IKVRangeReader> threaLocalRangeReader;
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final ILoadTracker loadTracker;
 
     KVRangeQueryRunner(IKVRange kvRange,
                        IKVRangeCoProc coProc,
                        Executor executor,
-                       IKVRangeQueryLinearizer linearizer) {
+                       IKVRangeQueryLinearizer linearizer,
+                       ILoadTracker loadTracker) {
         this.kvRange = kvRange;
         this.coProc = coProc;
         this.executor = executor;
         this.linearizer = linearizer;
+        this.loadTracker = loadTracker;
     }
 
     // Execute a ROCommand
@@ -72,10 +73,18 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
 
     @Override
     public CompletableFuture<ROCoProcOutput> queryCoProc(long ver, ROCoProcInput query, boolean linearized) {
-        return submit(ver, rangeReader -> coProc.query(query, rangeReader)
-            .exceptionally(e -> {
-                throw new InternalError("Query CoProc failed", e);
-            }), linearized);
+        return submit(ver, rangeReader -> {
+            ILoadTracker.ILoadRecorder recorder = loadTracker.start();
+            return coProc.query(query, new LoadRecordableKVReader(rangeReader, recorder))
+                .thenApply(v -> {
+                    recorder.stop();
+                    return v;
+                })
+                .exceptionally(e -> {
+                    recorder.stop();
+                    throw new InternalError("Query CoProc failed", e);
+                });
+        }, linearized);
     }
 
     // Close the executor, the returned future will be completed when running commands finished and pending tasks
@@ -123,7 +132,8 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
         return onDone;
     }
 
-    private <ReqT, ResultT> CompletableFuture<ResultT> doQuery(long ver, QueryFunction<ReqT, ResultT> queryFn) {
+    private <ReqT, ResultT> CompletableFuture<ResultT> doQuery(long ver,
+                                                               QueryFunction<ReqT, ResultT> queryFn) {
         CompletableFuture<ResultT> onDone = new CompletableFuture<>();
         IKVReader dataReader = kvRange.borrowDataReader();
         // return the borrowed reader when future completed

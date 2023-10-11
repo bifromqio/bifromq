@@ -47,7 +47,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
@@ -132,8 +131,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                      ISettingProvider settingProvider,
                      IEventCollector eventCollector,
                      Clock clock,
-                     Duration purgeDelay,
-                     ILoadTracker loadTracker) {
+                     Duration purgeDelay) {
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.clock = clock;

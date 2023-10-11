@@ -11,27 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range;
+package com.baidu.bifromq.basekv.store.util;
 
-import com.google.protobuf.ByteString;
+import static org.testng.Assert.assertTrue;
 
-public interface ILoadTracker {
-    interface ILoadRecorder {
-        /**
-         * The latency spent for accessing this key
-         *
-         * @param key          the accessed key
-         * @param latencyNanos the nanos spent
-         */
-        void record(ByteString key, long latencyNanos);
+import org.testng.annotations.Test;
 
-        void stop();
+public class ProcessUtilTest {
+    @Test
+    public void cpuLoad() {
+        double cpuLoad = ProcessUtil.cpuLoad();
+        assertTrue((cpuLoad >= 0.0 && cpuLoad < 1.0) || Double.isNaN(cpuLoad));
     }
-
-    /**
-     * Start a recorder
-     *
-     * @return the recorder
-     */
-    ILoadRecorder start();
 }

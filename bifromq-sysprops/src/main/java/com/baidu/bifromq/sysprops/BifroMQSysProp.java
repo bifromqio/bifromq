@@ -19,6 +19,7 @@ import com.baidu.bifromq.sysprops.parser.DoubleParser;
 import com.baidu.bifromq.sysprops.parser.IntegerParser;
 import com.baidu.bifromq.sysprops.parser.LongParser;
 import com.baidu.bifromq.sysprops.parser.PropParser;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -46,9 +47,11 @@ public enum BifroMQSysProp {
     INBOX_FETCH_QUEUES_PER_RANGE("inbox_fetch_queues_per_range",
         Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4), IntegerParser.POSITIVE),
     INBOX_CHECK_QUEUES_PER_RANGE("inbox_check_queues_per_range", 1, IntegerParser.POSITIVE),
-    INBOX_MAX_RANGE_LOAD("inbox_store_max_range_load", 2_000_000, IntegerParser.POSITIVE),
-    INBOX_SPLIT_KEY_EST_THRESHOLD("inbox_store_split_key_threshold", 0.7D, DoubleParser.from(0.0, 1.0, true)),
-    INBOX_LOAD_TRACKING_SECONDS("inbox_store_load_tracking_seconds", 5, IntegerParser.POSITIVE),
+    INBOX_STORE_TOLERABLE_QUERY_LATENCY_NANOS("inbox_store_tolerable_query_latency_nanos",
+        Duration.ofMillis(2).toNanos(), LongParser.POSITIVE),
+    INBOX_STORE_TOLERABLE_MUTATION_LATENCY_NANOS("inbox_store_tolerable_mutation_latency_nanos",
+        Duration.ofMillis(3).toNanos(), LongParser.POSITIVE),
+    INBOX_STORE_LOAD_EST_WINDOW_SECONDS("inbox_store_load_estimation_window_seconds", 5, IntegerParser.POSITIVE),
     INBOX_STORE_VOTER_COUNT("inbox_store_replica_voter_count", 1, IntegerParser.POSITIVE),
     INBOX_STORE_RECOVERY_TIMEOUT_MILLIS("inbox_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
     MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server",

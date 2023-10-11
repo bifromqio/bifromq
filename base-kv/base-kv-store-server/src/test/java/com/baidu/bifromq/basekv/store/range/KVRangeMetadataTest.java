@@ -31,7 +31,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
     public void initWithNoData() {
         KVRangeId id = KVRangeIdUtil.generate();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
-        IKVRange accessor = new KVRange(keyRange, loadTracker);
+        IKVRange accessor = new KVRange(keyRange);
         assertEquals(accessor.id(), id);
         assertEquals(accessor.version(), -1);
         assertEquals(accessor.lastAppliedIndex(), -1);
@@ -48,7 +48,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange, loadTracker).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
 
         assertEquals(accessor.version(), snapshot.getVer());
         assertEquals(accessor.boundary(), snapshot.getBoundary());
@@ -61,7 +61,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
         try {
             KVRangeId rangeId = KVRangeIdUtil.generate();
             IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(rangeId));
-            IKVRange kvRange = new KVRange(keyRange, loadTracker);
+            IKVRange kvRange = new KVRange(keyRange);
             Maybe<IKVRange.KVRangeMeta> metaMayBe = kvRange.metadata().firstElement();
             kvRange = null;
             keyRange.destroy();
@@ -85,7 +85,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange, loadTracker).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
 
         lastAppliedIndex = 11;
         accessor.toWriter().lastAppliedIndex(lastAppliedIndex).done();

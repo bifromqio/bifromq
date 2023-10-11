@@ -90,14 +90,14 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     private final ColumnFamilyHandle cfHandle;
     private final WriteOptions writeOptions;
     private final AtomicReference<CompletableFuture<Long>> flushFutureRef = new AtomicReference<>();
-    private final RocksDBKVSpaceCompactionTrigger writeStats;
+    private final IWriteStatsRecorder writeStats;
     private final ExecutorService compactionExecutor;
     private final ExecutorService flushExecutor;
     private final Checkpoint checkpoint;
     private final LoadingCache<String, RocksDBKVSpaceCheckpoint> checkpoints;
     private final RocksDBKVEngine engine;
     private final Runnable onDestroy;
-    private final AtomicBoolean compacting = new AtomicBoolean();
+    private final AtomicBoolean compacting = new AtomicBoolean(false);
     private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = BehaviorSubject.create();
     private final ISyncContext syncContext = new SyncContext();
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
@@ -135,11 +135,11 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         this.cfDesc = cfDesc;
         this.cfHandle = cfHandle;
         this.configurator = configurator;
-        this.writeStats = new RocksDBKVSpaceCompactionTrigger(
+        this.writeStats = configurator.isManualCompaction() ? new RocksDBKVSpaceCompactionTrigger(
             configurator.getCompactMinTombstoneKeys(),
             configurator.getCompactMinTombstoneRanges(),
             configurator.getCompactTombstoneKeysRatio(),
-            this::scheduleCompact);
+            this::scheduleCompact) : NoopWriteStatsRecorder.INSTANCE;
         this.engine = engine;
         this.checkpoint = Checkpoint.create(db);
         compactionExecutor = new ThreadPoolExecutor(1, 1,

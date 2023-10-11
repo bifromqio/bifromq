@@ -17,16 +17,15 @@ import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
+import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import lombok.SneakyThrows;
-import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -37,8 +36,6 @@ public class AbstractKVRangeTest {
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private KVEngineConfigurator<?> configurator = null;
     protected IKVEngine kvEngine;
-    @Mock
-    protected ILoadTracker loadTracker;
     private AutoCloseable closeable;
 
     @BeforeMethod

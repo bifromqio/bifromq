@@ -39,7 +39,8 @@ class KVRangeMetricManager {
     private final Gauge lastAppliedIndexGauge;
     private final Gauge dataSizeGauge;
     private final Gauge walSizeGauge;
-    private final Gauge loadGauge;
+    private final Gauge queryLoadGauge;
+    private final Gauge mutationLoadGauge;
     private final Timer configChangeTimer;
     private final Timer transferLeaderTimer;
     private final Timer splitTimer;
@@ -101,10 +102,19 @@ class KVRangeMetricManager {
             })
             .tags(tags)
             .register(Metrics.globalRegistry);
-        loadGauge = Gauge.builder("basekv.meta.load", () -> {
+        queryLoadGauge = Gauge.builder("basekv.meta.load.query", () -> {
                 KVRangeDescriptor desc = currentDesc.get();
                 if (desc != null) {
-                    return desc.getLoadHint().getLoad();
+                    return desc.getLoadHint().getQuery().getLoad();
+                }
+                return 0;
+            })
+            .tags(tags)
+            .register(Metrics.globalRegistry);
+        mutationLoadGauge = Gauge.builder("basekv.meta.load.mutation", () -> {
+                KVRangeDescriptor desc = currentDesc.get();
+                if (desc != null) {
+                    return desc.getLoadHint().getMutation().getLoad();
                 }
                 return 0;
             })
@@ -232,7 +242,8 @@ class KVRangeMetricManager {
         Metrics.globalRegistry.removeByPreFilterId(verGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(dataSizeGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(walSizeGauge.getId());
-        Metrics.globalRegistry.removeByPreFilterId(loadGauge.getId());
+        Metrics.globalRegistry.removeByPreFilterId(queryLoadGauge.getId());
+        Metrics.globalRegistry.removeByPreFilterId(mutationLoadGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(configChangeTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(transferLeaderTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(splitTimer.getId());

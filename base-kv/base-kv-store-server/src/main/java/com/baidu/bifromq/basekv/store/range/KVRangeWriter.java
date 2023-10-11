@@ -23,12 +23,10 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWriter>
     implements IKVRangeWriter<KVRangeWriter> {
     private final IKVSpaceWriter keyRangeWriter;
-    private final ILoadTracker loadTracker;
 
-    public KVRangeWriter(IKVSpaceWriter rangeWriter, ILoadTracker loadTracker) {
+    public KVRangeWriter(IKVSpaceWriter rangeWriter) {
         super(rangeWriter);
         this.keyRangeWriter = rangeWriter;
-        this.loadTracker = loadTracker;
     }
 
     @Override
@@ -48,12 +46,12 @@ public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWrite
 
     @Override
     public IKVWriter kvWriter() {
-        return new KVWriter(keyRangeWriter, loadTracker);
+        return new KVWriter(keyRangeWriter);
     }
 
     @Override
     public IKVReader newDataReader() {
-        return new KVReader(keyRangeWriter, this, loadTracker);
+        return new KVReader(keyRangeWriter, this);
     }
 
     @Override

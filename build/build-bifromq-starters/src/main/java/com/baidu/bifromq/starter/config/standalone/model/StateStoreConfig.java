@@ -53,7 +53,10 @@ public class StateStoreConfig {
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
-        private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig().compactMinTombstoneKeys(10000);
+        private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
+            .manualCompaction(true)
+            .compactMinTombstoneKeys(10000)
+            .compactMinTombstoneRanges(10);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 
@@ -66,13 +69,16 @@ public class StateStoreConfig {
     @Setter
     public static class InboxStoreConfig {
         private int queryPipelinePerStore = 100;
-        private int compactWALThreshold = 20000;
+        private int compactWALThreshold = 5000;
         private int gcIntervalSeconds = 600;
         private int purgeDelaySeconds = 180;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
-        private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig().compactMinTombstoneKeys(10000);
+        private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
+            .manualCompaction(true)
+            .compactMinTombstoneKeys(5000)
+            .compactMinTombstoneRanges(10);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 
@@ -92,7 +98,10 @@ public class StateStoreConfig {
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
-        private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig().compactMinTombstoneKeys(10000);
+        private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
+            .manualCompaction(true)
+            .compactMinTombstoneKeys(5000)
+            .compactMinTombstoneRanges(10);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 

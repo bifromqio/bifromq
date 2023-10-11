@@ -62,7 +62,8 @@ public class KVRangeQueryRunnerTest {
 
     @Test
     public void badVersionQuery() {
-        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
+        KVRangeQueryRunner runner =
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(1L);
 
@@ -93,7 +94,8 @@ public class KVRangeQueryRunnerTest {
     }
 
     private void internalErrorByWrongState(State.StateType stateType) {
-        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
+        KVRangeQueryRunner runner =
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.state()).thenReturn(State.newBuilder().setType(stateType).build());
 
@@ -110,7 +112,8 @@ public class KVRangeQueryRunnerTest {
 
     @Test
     public void get() {
-        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
+        KVRangeQueryRunner runner =
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);
         when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
@@ -127,7 +130,8 @@ public class KVRangeQueryRunnerTest {
 
     @Test
     public void exist() {
-        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
+        KVRangeQueryRunner runner =
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);
         when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
@@ -143,7 +147,8 @@ public class KVRangeQueryRunnerTest {
 
     @Test
     public void roCoProc() {
-        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
+        KVRangeQueryRunner runner =
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
@@ -157,7 +162,6 @@ public class KVRangeQueryRunnerTest {
         ArgumentCaptor<IKVReader> kvReaderCap = ArgumentCaptor.forClass(IKVReader.class);
         verify(coProc).query(inputCap.capture(), kvReaderCap.capture());
         assertEquals(inputCap.getValue(), key);
-        assertEquals(kvReaderCap.getValue(), kvReader);
         try {
             assertEquals(queryFuture.join(), value);
         } catch (Throwable e) {
@@ -167,7 +171,8 @@ public class KVRangeQueryRunnerTest {
 
     @Test
     public void linearizedRoCoProc() {
-        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
+        KVRangeQueryRunner runner =
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
@@ -182,7 +187,6 @@ public class KVRangeQueryRunnerTest {
         ArgumentCaptor<IKVReader> kvReaderCap = ArgumentCaptor.forClass(IKVReader.class);
         verify(coProc).query(inputCap.capture(), kvReaderCap.capture());
         assertEquals(inputCap.getValue(), key);
-        assertEquals(kvReaderCap.getValue(), kvReader);
         try {
             assertEquals(queryFuture.join(), value);
         } catch (Throwable e) {
@@ -192,7 +196,8 @@ public class KVRangeQueryRunnerTest {
 
     @Test
     public void close() {
-        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer);
+        KVRangeQueryRunner runner =
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);

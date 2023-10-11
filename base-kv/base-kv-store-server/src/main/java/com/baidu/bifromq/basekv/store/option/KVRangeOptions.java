@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.store.option;
 
 import com.baidu.bifromq.basekv.raft.RaftConfig;
+import java.time.Duration;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,9 +30,10 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder(toBuilder = true)
 public class KVRangeOptions {
-    private int maxRangeLoad = 300_000;
-    private double splitKeyThreshold = 0.6;
-    private int loadTrackingWindowSec = 5;
+    private boolean enableSplitKeyEstimation = true;
+    private long tolerableROCoProcLatencyNanos = Duration.ofMillis(2).toNanos();
+    private long tolerableRWCoProcLatencyNanos = Duration.ofMillis(3).toNanos();
+    private int loadTrackingWindowSec = 10;
     private int snapshotSyncBytesPerSec = 128 * 1024 * 1024; // 128MB
     private int compactWALThreshold = 10000; // the max number of logs before compaction
     private long tickUnitInMS = 100;

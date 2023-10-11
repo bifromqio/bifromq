@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.api;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.google.protobuf.ByteString;
 import java.util.function.Supplier;
 
@@ -23,5 +22,5 @@ public interface IKVRangeCoProcFactory {
         return key;
     }
 
-    IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> readerProvider, ILoadTracker loadTracker);
+    IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> readerProvider);
 }

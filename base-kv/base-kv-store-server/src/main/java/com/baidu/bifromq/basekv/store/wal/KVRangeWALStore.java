@@ -271,14 +271,13 @@ class KVRangeWALStore implements IRaftStateStore {
         for (LogEntry entry : entries) {
             if (entry.hasConfig()) {
                 configEntryMap.put(entry.getIndex(), entry.getConfig());
-                writer.put(configEntriesKey(logEntriesKeyInfix, entry.getIndex()),
-                    toByteString(entry.getIndex()));
+                writer.insert(configEntriesKey(logEntriesKeyInfix, entry.getIndex()), toByteString(entry.getIndex()));
                 // force flush if log entry contains config
                 flush = true;
             }
             trace("Append log entry[index={}, term={}, type={}], flush? {}",
                 entry.getIndex(), entry.getTerm(), entry.getTypeCase().name(), flush);
-            writer.put(logEntryKey(logEntriesKeyInfix, entry.getIndex()), entry.toByteString());
+            writer.insert(logEntryKey(logEntriesKeyInfix, entry.getIndex()), entry.toByteString());
         }
         writer.done();
         lastIndex = entries.get(entries.size() - 1).getIndex();

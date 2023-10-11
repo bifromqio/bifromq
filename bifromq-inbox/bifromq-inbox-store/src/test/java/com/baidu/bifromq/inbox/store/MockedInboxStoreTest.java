@@ -25,7 +25,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
@@ -74,8 +73,6 @@ public abstract class MockedInboxStoreTest {
     @Mock
     protected IKVIterator kvIterator;
     @Mock
-    private ILoadTracker loadTracker;
-    @Mock
     protected final IEventCollector eventCollector = event -> {
     };
     private final Supplier<IKVReader> rangeReaderProvider = () -> null;
@@ -104,7 +101,7 @@ public abstract class MockedInboxStoreTest {
         when(reader.boundary()).thenReturn(Boundary.newBuilder().build());
         id = KVRangeIdUtil.generate();
         coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
-            clock, Duration.ofMinutes(30), loadTracker);
+            clock, Duration.ofMinutes(30));
     }
 
     @AfterMethod

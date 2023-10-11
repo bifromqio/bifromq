@@ -32,11 +32,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ReplicaCntBalancer extends StoreBalancer {
-
     private final int voterCount;
     private final int learnerCount; // -1 represent no limit
-
-    private Set<KVRangeStoreDescriptor> latestStoreDescriptors = new HashSet<>();
+    private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = new HashSet<>();
 
     public ReplicaCntBalancer(String localStoreId, int voterCount, int learnerCount) {
         super(localStoreId);
@@ -137,10 +135,6 @@ public class ReplicaCntBalancer extends StoreBalancer {
     }
 
     private double calStoreLoad(KVRangeStoreDescriptor descriptor) {
-        return descriptor.getRangesList()
-            .stream()
-            .map(kvRangeDescriptor -> kvRangeDescriptor.getLoadHint().getLoad())
-            .reduce(Double::sum)
-            .orElse(0.0D);
+        return descriptor.getStatisticsMap().get("cpu.usage");
     }
 }

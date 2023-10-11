@@ -41,12 +41,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class KVRangeBalanceControllerTest {
 
@@ -60,6 +59,7 @@ public class KVRangeBalanceControllerTest {
 
     private KVRangeBalanceController KVRangeBalanceController;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() throws IOException {
         closeable = MockitoAnnotations.openMocks(this);
@@ -105,6 +105,7 @@ public class KVRangeBalanceControllerTest {
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.1)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
@@ -116,6 +117,7 @@ public class KVRangeBalanceControllerTest {
         storeDescriptors.add(
             KVRangeStoreDescriptor.newBuilder()
                 .setId("store2")
+                .putStatistics("cpu.usage", 0.1)
                 .build()
         );
         when(storeClient.changeReplicaConfig(anyString(), any())).thenReturn(CompletableFuture.completedFuture(
@@ -140,6 +142,7 @@ public class KVRangeBalanceControllerTest {
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.1)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
@@ -159,10 +162,10 @@ public class KVRangeBalanceControllerTest {
         );
         // New store
         storeDescriptors = Sets.newHashSet(storeDescriptors);
-        storeDescriptors.add(
-            KVRangeStoreDescriptor.newBuilder()
-                .setId("store2")
-                .build()
+        storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
+            .setId("store2")
+            .putStatistics("cpu.usage", 0.1)
+            .build()
         );
         storeDescSubject.onNext(storeDescriptors);
         // run and failed once, will try after 1000ms interval

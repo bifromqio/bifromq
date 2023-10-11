@@ -19,7 +19,6 @@ import com.baidu.bifromq.basekv.balance.utils.DescriptorUtils;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -69,10 +68,12 @@ public class ReplicaCntBalancerTest {
             DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(LOCAL_STORE_ID), Sets.newHashSet());
         KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
             .setId(LOCAL_STORE_ID)
+            .putStatistics("cpu.usage", 0.0)
             .addRanges(rangeDescriptors.get(0))
             .build();
         KVRangeStoreDescriptor storeDescriptor2 = KVRangeStoreDescriptor.newBuilder()
             .setId("store2")
+            .putStatistics("cpu.usage", 0.0)
             .build();
         // two store with one voter
         balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
@@ -97,11 +98,13 @@ public class ReplicaCntBalancerTest {
             DescriptorUtils.generateRangeDesc(id_2, Sets.newHashSet(LOCAL_STORE_ID), Sets.newHashSet());
         KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
             .setId(LOCAL_STORE_ID)
+            .putStatistics("cpu.usage", 0.0)
             .addRanges(rangeDescriptors_1.get(0))
             .addRanges(rangeDescriptors_2.get(0))
             .build();
         KVRangeStoreDescriptor storeDescriptor2 = KVRangeStoreDescriptor.newBuilder()
             .setId("store2")
+            .putStatistics("cpu.usage", 0.0)
             .addRanges(rangeDescriptors_1.get(0))
             .build();
         // two store with one voter
@@ -129,11 +132,13 @@ public class ReplicaCntBalancerTest {
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.0)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store2")
+            .putStatistics("cpu.usage", 0.0)
             .build());
         // three store with one voter
         balancer.update(storeDescriptors);
@@ -160,11 +165,13 @@ public class ReplicaCntBalancerTest {
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.0)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store3")
+            .putStatistics("cpu.usage", 0.0)
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
@@ -192,16 +199,19 @@ public class ReplicaCntBalancerTest {
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.0)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store2")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(1.0)))
+            .putStatistics("cpu.usage", 0.1)
+            .addRanges(KVRangeDescriptor.newBuilder().build())
             .build());
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store3")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(2.0)))
+            .putStatistics("cpu.usage", 0.2)
+            .addRanges(KVRangeDescriptor.newBuilder().build())
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
@@ -230,20 +240,24 @@ public class ReplicaCntBalancerTest {
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.0)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store2")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(1.0)))
+            .putStatistics("cpu.usage", 0.1)
+            .addRanges(KVRangeDescriptor.getDefaultInstance())
             .build());
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store3")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(2.0)))
+            .putStatistics("cpu.usage", 0.2)
+            .addRanges(KVRangeDescriptor.getDefaultInstance())
             .build());
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store4")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(3.0)))
+            .putStatistics("cpu.usage", 0.3)
+            .addRanges(KVRangeDescriptor.getDefaultInstance())
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
@@ -272,20 +286,24 @@ public class ReplicaCntBalancerTest {
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.0)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store2")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(1.0)))
+            .putStatistics("cpu.usage", 0.1)
+            .addRanges(KVRangeDescriptor.getDefaultInstance())
             .build());
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store3")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(2.0)))
+            .putStatistics("cpu.usage", 0.2)
+            .addRanges(KVRangeDescriptor.getDefaultInstance())
             .build());
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store4")
-            .addRanges(KVRangeDescriptor.newBuilder().setLoadHint(LoadHint.newBuilder().setLoad(3.0)))
+            .putStatistics("cpu.usage", 0.3)
+            .addRanges(KVRangeDescriptor.getDefaultInstance())
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
@@ -314,6 +332,7 @@ public class ReplicaCntBalancerTest {
         for (int i = 0; i < voters.size() + learners.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(i < voters.size() ? voters.get(i) : learners.get(i - voters.size()))
+                .putStatistics("cpu.usage", 0.0)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
@@ -337,10 +356,12 @@ public class ReplicaCntBalancerTest {
         List<KVRangeStoreDescriptor> storeDescriptors = new ArrayList<>();
         storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
             .setId("store_spare")
+            .putStatistics("cpu.usage", 0.0)
             .build());
         for (int i = 0; i < voters.size(); i++) {
             storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
                 .setId(voters.get(i))
+                .putStatistics("cpu.usage", 0.0)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
@@ -369,18 +390,17 @@ public class ReplicaCntBalancerTest {
         Map<String, KVRangeStoreDescriptor> storeDescriptors = new HashMap<>();
         storeDescriptors.put("store_spare_1", KVRangeStoreDescriptor.newBuilder()
             .setId("store_spare_1")
+            .putStatistics("cpu.usage", 0.0)
             .build());
         storeDescriptors.put("store_spare_2", KVRangeStoreDescriptor.newBuilder()
             .setId("store_spare_2")
-            .addRanges(KVRangeDescriptor.newBuilder()
-                .setId(KVRangeIdUtil.generate())
-                .setLoadHint(LoadHint.newBuilder().setLoad(1D).build())
-            )
+            .putStatistics("cpu.usage", 0.1)
             .build());
         for (int i = 0; i < voters.size() + learners.size(); i++) {
             String storeId = i < voters.size() ? voters.get(i) : learners.get(i - voters.size());
             storeDescriptors.put(storeId, KVRangeStoreDescriptor.newBuilder()
                 .setId(storeId)
+                .putStatistics("cpu.usage", 1.0 - 0.1 * i)
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }

@@ -9,9 +9,13 @@ option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.basekv.proto";
 option optimize_for = SPEED;
 
-message LoadHint{
+message SplitHint{
   double load = 1;
   optional bytes splitKey = 2;
+}
+message LoadHint{
+  SplitHint query = 1; // the split hint generated based on query load observation and split key estimation
+  SplitHint mutation = 2; // the split hint generated based on mutation load observation and split key estimation
 }
 
 message KVRangeDescriptor {

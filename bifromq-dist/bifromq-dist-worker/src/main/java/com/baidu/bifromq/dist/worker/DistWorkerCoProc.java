@@ -43,7 +43,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
@@ -107,14 +106,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             IDistClient distClient,
                             ISubBrokerManager subBrokerManager,
                             IDeliveryScheduler scheduler,
-                            Executor matchExecutor,
-                            ILoadTracker loadTracker) {
+                            Executor matchExecutor) {
         this.id = id;
         this.distClient = distClient;
         this.settingProvider = settingProvider;
         this.subBrokerManager = subBrokerManager;
         this.scheduler = scheduler;
-        this.routeCache = new SubscriptionCache(id, readClientProvider, matchExecutor, loadTracker);
+        this.routeCache = new SubscriptionCache(id, readClientProvider, matchExecutor);
         fanoutExecutorGroup =
             new FanoutExecutorGroup(scheduler, eventCollector, distClient, DIST_FAN_OUT_PARALLELISM.get());
     }

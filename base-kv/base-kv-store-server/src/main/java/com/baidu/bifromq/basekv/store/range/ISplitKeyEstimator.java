@@ -13,10 +13,8 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.proto.LoadHint;
-import com.google.protobuf.ByteString;
+import com.baidu.bifromq.basekv.proto.SplitHint;
 
-public interface ILoadEstimator extends ILoadTracker {
-
-    LoadHint estimate();
+public interface ISplitKeyEstimator extends ILoadTracker {
+    SplitHint estimate();
 }

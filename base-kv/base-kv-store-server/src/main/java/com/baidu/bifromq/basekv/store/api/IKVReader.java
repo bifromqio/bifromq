@@ -20,7 +20,7 @@ import java.util.Optional;
 public interface IKVReader {
     Boundary boundary();
 
-    long size(Boundary range);
+    long size(Boundary boundary);
 
     boolean exist(ByteString key);
 

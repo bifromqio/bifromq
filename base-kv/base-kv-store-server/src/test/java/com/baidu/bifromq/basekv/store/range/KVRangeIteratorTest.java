@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.store.range.TrackableKVOperation.KEY_ITR_GET;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -50,10 +49,9 @@ public class KVRangeIteratorTest {
         ByteString userKey = ByteString.copyFromUtf8("key");
         when(rangeIterator.isValid()).thenReturn(true);
         when(rangeIterator.key()).thenReturn(userKey);
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.seekToFirst();
         assertEquals(itr.key(), userKey);
-        verify(loadTracker).track(userKey, KEY_ITR_GET);
     }
 
     @Test
@@ -61,7 +59,7 @@ public class KVRangeIteratorTest {
         ByteString userKey = ByteString.copyFromUtf8("key");
         when(rangeIterator.isValid()).thenReturn(true);
         when(rangeIterator.key()).thenReturn(userKey);
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.seekToFirst();
         itr.value();
         verify(rangeIterator).value();
@@ -69,62 +67,56 @@ public class KVRangeIteratorTest {
 
     @Test
     public void isValid() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.isValid();
         verify(rangeIterator).isValid();
     }
 
     @Test
     public void next() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.next();
         verify(rangeIterator).next();
-        verify(rangeIterator).isValid();
     }
 
     @Test
     public void prev() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.prev();
         verify(rangeIterator).prev();
-        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seekToFirst() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.seekToFirst();
         verify(rangeIterator).seekToFirst();
-        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seekToLast() {
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.seekToLast();
         verify(rangeIterator).seekToLast();
-        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seek() {
         ByteString userKey = ByteString.copyFromUtf8("key");
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.seek(userKey);
         ArgumentCaptor<ByteString> captor = ArgumentCaptor.forClass(ByteString.class);
         verify(rangeIterator).seek(captor.capture());
         assertEquals(captor.getValue(), userKey);
-        verify(rangeIterator).isValid();
     }
 
     @Test
     public void seekForPrev() {
         ByteString userKey = ByteString.copyFromUtf8("key");
-        IKVIterator itr = new KVRangeIterator(loadTracker, rangeIterator);
+        IKVIterator itr = new KVIterator(rangeIterator);
         itr.seekForPrev(userKey);
         ArgumentCaptor<ByteString> captor = ArgumentCaptor.forClass(ByteString.class);
         verify(rangeIterator).seekForPrev(captor.capture());
         assertEquals(captor.getValue(), userKey);
-        verify(rangeIterator).isValid();
     }
 }

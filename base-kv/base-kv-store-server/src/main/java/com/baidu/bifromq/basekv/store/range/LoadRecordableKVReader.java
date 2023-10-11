@@ -13,58 +13,54 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
-
-import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
-import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 
-public class KVReader implements IKVReader {
-    private final IKVSpaceReader kvSpace;
-    private final IKVSpaceIterator kvSpaceIterator;
-    private final IKVRangeReader kvRangeReader;
+class LoadRecordableKVReader implements IKVReader {
+    private final IKVReader delegate;
+    private final ILoadTracker.ILoadRecorder recorder;
 
-    KVReader(IKVSpaceReader kvSpace, IKVRangeReader reader) {
-        this.kvSpace = kvSpace;
-        this.kvSpaceIterator = kvSpace.newIterator();
-        this.kvRangeReader = reader;
+    LoadRecordableKVReader(IKVReader delegate, ILoadTracker.ILoadRecorder recorder) {
+        this.delegate = delegate;
+        this.recorder = recorder;
     }
 
     @Override
     public Boundary boundary() {
-        return kvRangeReader.boundary();
+        return delegate.boundary();
     }
 
     @Override
     public long size(Boundary boundary) {
-        assert inRange(boundary, boundary());
-        return kvRangeReader.size(boundary);
+        return delegate.size(boundary);
     }
 
     @Override
     public boolean exist(ByteString key) {
-        assert inRange(key, boundary());
-        return kvSpace.exist(key);
+        long start = System.nanoTime();
+        boolean result = delegate.exist(key);
+        recorder.record(key, System.nanoTime() - start);
+        return result;
     }
 
     @Override
     public Optional<ByteString> get(ByteString key) {
-        assert inRange(key, boundary());
-        return kvSpace.get(key);
+        long start = System.nanoTime();
+        Optional<ByteString> result = delegate.get(key);
+        recorder.record(key, System.nanoTime() - start);
+        return result;
     }
 
     @Override
     public IKVIterator iterator() {
-        return new KVIterator(kvSpaceIterator);
+        return new LoadRecordableKVIterator(delegate.iterator(), recorder);
     }
 
     @Override
     public void refresh() {
-        kvSpaceIterator.refresh();
+        delegate.refresh();
     }
 }

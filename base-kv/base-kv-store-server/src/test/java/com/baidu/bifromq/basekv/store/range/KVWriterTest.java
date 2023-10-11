@@ -28,8 +28,6 @@ import org.testng.annotations.Test;
 public class KVWriterTest {
     @Mock
     private IKVSpaceWriter keyRangeWriter;
-    @Mock
-    private ILoadTracker loadTracker;
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -44,7 +42,7 @@ public class KVWriterTest {
 
     @Test
     public void write() {
-        IKVWriter writer = new KVWriter(keyRangeWriter, loadTracker);
+        IKVWriter writer = new KVWriter(keyRangeWriter);
 
         // delete
         ByteString delKey = ByteString.copyFromUtf8("delKey");

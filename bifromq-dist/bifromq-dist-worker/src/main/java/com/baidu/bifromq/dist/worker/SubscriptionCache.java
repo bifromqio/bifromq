@@ -75,17 +75,12 @@ public class SubscriptionCache {
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
     private final ThreadLocal<IKVReader> threadLocalReader;
-    private final ILoadTracker loadTracker;
     private final Timer externalMatchTimer;
     private final Timer internalMatchTimer;
 
-    SubscriptionCache(KVRangeId id,
-                      Supplier<IKVReader> rangeReaderProvider,
-                      Executor matchExecutor,
-                      ILoadTracker loadTracker) {
+    SubscriptionCache(KVRangeId id, Supplier<IKVReader> rangeReaderProvider, Executor matchExecutor) {
         int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
         threadLocalReader = ThreadLocal.withInitial(rangeReaderProvider);
-        this.loadTracker = loadTracker;
         orderedSharedMatching = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
@@ -176,13 +171,9 @@ public class SubscriptionCache {
                     NormalMatching matchedInbox;
                     if (matching instanceof NormalMatching) {
                         matchedInbox = (NormalMatching) matching;
-                        // track load
-                        loadTracker.track(matchedInbox.key, 1);
                         routesMap.put(matchedInbox, senders);
                     } else {
                         GroupMatching groupMatching = (GroupMatching) matching;
-                        // track load
-                        loadTracker.track(groupMatching.key, 1);
                         if (groupMatching.ordered) {
                             for (ClientInfo sender : senders) {
                                 matchedInbox = orderedSharedMatching

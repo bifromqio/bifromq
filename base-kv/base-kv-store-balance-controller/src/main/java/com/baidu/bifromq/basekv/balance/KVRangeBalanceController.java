@@ -117,14 +117,15 @@ public class KVRangeBalanceController {
             Map<String, IStoreBalancerFactory> balancerFactoryMap = BaseHookLoader.load(IStoreBalancerFactory.class);
             for (String factoryName : options.getBalancers()) {
                 if (!balancerFactoryMap.containsKey(factoryName)) {
-                    logWarn("There is no balancer factory named: {}", factoryName);
+                    logWarn("Balancer factory[{}] not found", factoryName);
                     continue;
                 }
                 StoreBalancer balancer = balancerFactoryMap.get(factoryName).newBalancer(localStoreId);
+                logInfo("Balancer factory[{}] enabled for store[{}]", factoryName, localStoreId);
                 balancers.add(balancer);
             }
             this.metricsManager = new MetricManager(localStoreId, storeClient.clusterId());
-            logDebug("Start to balance in store:{}", localStoreId);
+            logInfo("Balancer start in store[{}]", localStoreId);
             descriptorSub = this.storeClient.describe()
                 .distinctUntilChanged()
                 .subscribe(sds -> executor.execute(() -> updateStoreDescriptors(sds)));

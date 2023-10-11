@@ -42,9 +42,6 @@ public class KVReaderTest {
     private IKVSpaceIterator keyRangeIterator;
     @Mock
     private IKVReader dataReader;
-    @Mock
-    private ILoadTracker loadTracker;
-
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -61,7 +58,7 @@ public class KVReaderTest {
 
     @Test
     public void read() {
-        IKVReader reader = new KVReader(keyRangeReader, kvRangeReader, loadTracker);
+        IKVReader reader = new KVReader(keyRangeReader, kvRangeReader);
         // range
         when(kvRangeReader.boundary()).thenReturn(FULL_BOUNDARY);
         reader.boundary();

@@ -27,7 +27,6 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.basekv.store.range.ILoadEstimator;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.entity.NormalMatching;
@@ -56,8 +55,6 @@ public class SubscriptionCacheTest {
     private IKVIterator kvIterator;
     @Mock
     private Supplier<IKVReader> rangeReaderProvider;
-    @Mock
-    private ILoadEstimator loadTracker;
     private ExecutorService matchExecutor;
     private AutoCloseable closeable;
 
@@ -85,7 +82,7 @@ public class SubscriptionCacheTest {
             .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
-        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(false);
 
@@ -111,7 +108,7 @@ public class SubscriptionCacheTest {
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
 
-        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(false);
@@ -136,7 +133,7 @@ public class SubscriptionCacheTest {
             .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
-        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
 
         when(kvIterator.isValid()).thenReturn(false);
 
@@ -161,7 +158,7 @@ public class SubscriptionCacheTest {
             .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
-        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
 
         when(kvIterator.isValid()).thenReturn(false);
         Map<NormalMatching, Set<ClientInfo>> routes = cache.get(scopedTopic, singleton(sender)).join();
@@ -189,7 +186,7 @@ public class SubscriptionCacheTest {
             .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
-        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
 
         when(kvIterator.isValid()).thenReturn(false);
 
@@ -217,7 +214,7 @@ public class SubscriptionCacheTest {
             .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
-        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(true, false);
@@ -254,7 +251,7 @@ public class SubscriptionCacheTest {
             .boundary(FULL_BOUNDARY)
             .build();
         ClientInfo sender = ClientInfo.newBuilder().setTenantId("testTraffic").build();
-        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor, loadTracker);
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
 
         doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
         when(kvIterator.isValid()).thenReturn(true, false, true, false, true, false);

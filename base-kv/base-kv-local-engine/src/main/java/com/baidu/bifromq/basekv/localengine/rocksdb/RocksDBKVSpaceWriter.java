@@ -39,7 +39,7 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
     private final ISyncContext syncContext;
     private final RocksDBKVEngine engine;
     private final RocksDBKVSpaceWriterHelper helper;
-    private final RocksDBKVSpaceCompactionTrigger.WriteStatsRecorder writeStatsRecorder;
+    private final IWriteStatsRecorder.IRecorder writeStatsRecorder;
 
 
     RocksDBKVSpaceWriter(String id,
@@ -48,7 +48,7 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
                          RocksDBKVEngine engine,
                          WriteOptions writeOptions,
                          ISyncContext syncContext,
-                         RocksDBKVSpaceCompactionTrigger.WriteStatsRecorder writeStatsRecorder,
+                         IWriteStatsRecorder.IRecorder writeStatsRecorder,
                          Consumer<Boolean> afterWrite,
                          String... tags) {
         this(id, db, cfHandle, engine, syncContext,
@@ -61,7 +61,7 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
                          RocksDBKVEngine engine,
                          ISyncContext syncContext,
                          RocksDBKVSpaceWriterHelper writerHelper,
-                         RocksDBKVSpaceCompactionTrigger.WriteStatsRecorder writeStatsRecorder,
+                         IWriteStatsRecorder.IRecorder writeStatsRecorder,
                          Consumer<Boolean> afterWrite,
                          String... tags) {
         super(id, Tags.of(tags));

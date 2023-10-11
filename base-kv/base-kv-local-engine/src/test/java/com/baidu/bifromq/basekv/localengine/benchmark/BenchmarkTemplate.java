@@ -75,7 +75,7 @@ public abstract class BenchmarkTemplate {
                     .setManualWalFlush(true)
                     .setRecycleLogFileNum(10)
                     .setAvoidUnnecessaryBlockingIO(true)
-                    .setStatistics(gcable(new Statistics(), targetOption));
+                    .setStatistics(autoRelease(new Statistics(), targetOption));
             }
 
             @Override
@@ -95,7 +95,7 @@ public abstract class BenchmarkTemplate {
                             // https://github.com/facebook/rocksdb/wiki/Partitioned-Index-Filters#how-to-use-it
                             .setIndexType(IndexType.kTwoLevelIndexSearch) //
                             .setFilterPolicy(
-                                gcable(new BloomFilter(16, false), targetOption))
+                                autoRelease(new BloomFilter(16, false), targetOption))
                             .setPartitionFilters(true) //
                             .setMetadataBlockSize(8 * SizeUnit.KB) //
                             .setCacheIndexAndFilterBlocks(true) //
@@ -105,7 +105,7 @@ public abstract class BenchmarkTemplate {
                             // End of partitioned index filters settings.
                             .setBlockSize(4 * SizeUnit.KB)//
                             .setBlockCache(
-                                gcable(new LRUCache(512 * SizeUnit.MB, 8), targetOption)))
+                                autoRelease(new LRUCache(512 * SizeUnit.MB, 8), targetOption)))
                     .optimizeLevelStyleCompaction()
                     .setCompactionStyle(CompactionStyle.LEVEL) //
                     // Flushing options:

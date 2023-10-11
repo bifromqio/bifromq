@@ -13,9 +13,11 @@
 
 package com.baidu.bifromq.basekv.benchmark;
 
-import com.baidu.bifromq.basekv.store.range.ILoadEstimator;
-import com.baidu.bifromq.basekv.store.range.LoadEstimator;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
+import com.baidu.bifromq.basekv.store.range.ISplitKeyEstimator;
+import com.baidu.bifromq.basekv.store.range.SplitKeyEstimator;
 import com.google.protobuf.ByteString;
+import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -34,9 +36,9 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 @Slf4j
 @State(Scope.Benchmark)
-public class LoadEstimatorBenchmark {
+public class SplitKeyEstimatorBenchmark {
     private static final int totalKeyCount = 1000000;
-    private final ILoadEstimator loadEstimator = new LoadEstimator(1000000, 0.8, 5);
+    private final ISplitKeyEstimator loadEstimator = new SplitKeyEstimator(Duration.ofMillis(100), 5, true);
     private ByteString[] keys;
 
     @Setup(Level.Trial)
@@ -51,8 +53,10 @@ public class LoadEstimatorBenchmark {
     @Group("load")
     @BenchmarkMode(Mode.Throughput)
     public void track() {
+        ILoadTracker.ILoadRecorder recorder = loadEstimator.start();
         ByteString userKey = keys[ThreadLocalRandom.current().nextInt(0, totalKeyCount)];
-        loadEstimator.track(userKey, 1);
+        recorder.record(userKey, 1);
+        recorder.stop();
     }
 
     @Benchmark
@@ -65,7 +69,7 @@ public class LoadEstimatorBenchmark {
     @SneakyThrows
     public static void main(String[] args) {
         Options opt = new OptionsBuilder()
-            .include(LoadEstimatorBenchmark.class.getSimpleName())
+            .include(SplitKeyEstimatorBenchmark.class.getSimpleName())
             .threads(4)
             .warmupIterations(2)
             .measurementIterations(3)

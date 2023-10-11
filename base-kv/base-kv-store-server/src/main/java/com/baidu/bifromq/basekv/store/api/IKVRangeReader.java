@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import java.util.concurrent.ConcurrentLinkedQueue;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**

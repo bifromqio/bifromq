@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.stats.StatsCollector;
+import com.baidu.bifromq.basekv.store.util.ProcessUtil;
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
@@ -33,7 +34,7 @@ class KVRangeStoreStatsCollector extends StatsCollector {
     @Override
     protected void scrap(Map<String, Double> stats) {
         if (opt.getDataEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
-            RocksDBKVEngineConfigurator conf = (RocksDBKVEngineConfigurator) opt.getWalEngineConfigurator();
+            RocksDBKVEngineConfigurator conf = (RocksDBKVEngineConfigurator) opt.getDataEngineConfigurator();
             File dbRootDir = new File(conf.getDbRootDir());
             stats.put("db.usable", (double) dbRootDir.getUsableSpace());
             stats.put("db.total", (double) dbRootDir.getTotalSpace());
@@ -44,5 +45,6 @@ class KVRangeStoreStatsCollector extends StatsCollector {
             stats.put("wal.usable", (double) dbRootDir.getUsableSpace());
             stats.put("wal.total", (double) dbRootDir.getTotalSpace());
         }
+        stats.put("cpu.usage", ProcessUtil.cpuLoad());
     }
 }

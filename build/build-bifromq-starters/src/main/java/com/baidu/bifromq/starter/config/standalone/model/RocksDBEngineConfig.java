@@ -22,6 +22,7 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 public class RocksDBEngineConfig extends StorageEngineConfig {
     private String dataPathRoot = "";
+    private boolean manualCompaction = false;
     private int compactMinTombstoneKeys = 200000;
     private int compactMinTombstoneRanges = 100000;
     private double compactTombstoneRatio = 0.3; // 30%

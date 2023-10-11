@@ -23,7 +23,7 @@ import java.util.function.Supplier;
 
 public class TestCoProcFactory implements IKVRangeCoProcFactory {
     @Override
-    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> readerProvider, ILoadTracker loadTracker) {
+    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> readerProvider) {
         return new TestCoProc(id, readerProvider);
     }
 }

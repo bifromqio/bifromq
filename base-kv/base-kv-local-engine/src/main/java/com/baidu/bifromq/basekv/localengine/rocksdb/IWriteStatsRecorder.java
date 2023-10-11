@@ -11,27 +11,22 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range;
+package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import com.google.protobuf.ByteString;
+public interface IWriteStatsRecorder {
+    interface IRecorder {
+        void recordPut();
 
-public interface ILoadTracker {
-    interface ILoadRecorder {
-        /**
-         * The latency spent for accessing this key
-         *
-         * @param key          the accessed key
-         * @param latencyNanos the nanos spent
-         */
-        void record(ByteString key, long latencyNanos);
+        void recordInsert();
+
+        void recordDelete();
+
+        void recordDeleteRange();
 
         void stop();
     }
 
-    /**
-     * Start a recorder
-     *
-     * @return the recorder
-     */
-    ILoadRecorder start();
+    IRecorder newRecorder();
+
+    void reset();
 }

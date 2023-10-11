@@ -18,8 +18,12 @@ import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.proto.LoadHint;
+import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.google.common.base.Preconditions;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -28,10 +32,24 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class RangeSplitBalancer extends StoreBalancer {
+    private static final double DEFAULT_CPU_USAGE_LIMIT = 0.8;
+    private final double cpuUsageLimit;
+    private final boolean preferQueryLoadHint;
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
     public RangeSplitBalancer(String localStoreId) {
+        this(localStoreId, DEFAULT_CPU_USAGE_LIMIT, true);
+    }
+
+    public RangeSplitBalancer(String localStoreId, boolean preferQueryLoadHint) {
+        this(localStoreId, DEFAULT_CPU_USAGE_LIMIT, preferQueryLoadHint);
+    }
+
+    public RangeSplitBalancer(String localStoreId, double cpuUsageLimit, boolean preferQueryLoadHint) {
         super(localStoreId);
+        Preconditions.checkArgument(0 < cpuUsageLimit && cpuUsageLimit < 1.0, "Invalid cpu usage limit");
+        this.cpuUsageLimit = cpuUsageLimit;
+        this.preferQueryLoadHint = preferQueryLoadHint;
     }
 
     @Override
@@ -49,7 +67,13 @@ class RangeSplitBalancer extends StoreBalancer {
             }
         }
         if (localStoreDesc == null) {
-            log.warn("There is no storeDescriptor for local store: {}", localStoreId);
+            log.warn("There is no storeDescriptor for local store[{}]", localStoreId);
+            return Optional.empty();
+        }
+        double cpuUsage = localStoreDesc.getStatisticsMap().get("cpu.usage");
+        if (cpuUsage > cpuUsageLimit) {
+            log.warn("High CPU usage[{}], temporarily disable RangeSplitBalancer for local store[{}]",
+                cpuUsage, localStoreId);
             return Optional.empty();
         }
         List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
@@ -62,13 +86,24 @@ class RangeSplitBalancer extends StoreBalancer {
             return Optional.empty();
         }
         for (KVRangeDescriptor leaderRangeDescriptor : localLeaderRangeDescriptors) {
-            if (leaderRangeDescriptor.getLoadHint().hasSplitKey()) {
-                return Optional.of(SplitCommand.builder()
-                    .toStore(localStoreId)
-                    .expectedVer(leaderRangeDescriptor.getVer())
-                    .kvRangeId(leaderRangeDescriptor.getId())
-                    .splitKey(leaderRangeDescriptor.getLoadHint().getSplitKey())
-                    .build());
+            LoadHint hint = leaderRangeDescriptor.getLoadHint();
+            SplitHint[] splitHints = preferQueryLoadHint ?
+                new SplitHint[] {hint.getQuery(), hint.getMutation()} :
+                new SplitHint[] {hint.getMutation(), hint.getQuery()};
+            for (SplitHint splitHint : splitHints) {
+                if (splitHint.hasSplitKey()) {
+                    log.debug("Split range[{}] in store[{}]: key={}, load={}",
+                        KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
+                        localStoreId,
+                        splitHint.getSplitKey(),
+                        splitHint.getLoad());
+                    return Optional.of(SplitCommand.builder()
+                        .toStore(localStoreId)
+                        .expectedVer(leaderRangeDescriptor.getVer())
+                        .kvRangeId(leaderRangeDescriptor.getId())
+                        .splitKey(splitHint.getSplitKey())
+                        .build());
+                }
             }
         }
         return Optional.empty();

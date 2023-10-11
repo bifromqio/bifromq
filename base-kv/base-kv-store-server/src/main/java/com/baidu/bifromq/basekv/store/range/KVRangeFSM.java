@@ -67,6 +67,7 @@ import com.baidu.bifromq.basekv.proto.Put;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
+import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.SplitRange;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.TransferLeadership;
@@ -95,7 +96,6 @@ import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscriber;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscription;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWAL;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -163,6 +163,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final Subject<ClusterConfig> clusterConfigSubject = BehaviorSubject.<ClusterConfig>create().toSerialized();
     private final Subject<KVRangeDescriptor> descriptorSubject =
         BehaviorSubject.<KVRangeDescriptor>create().toSerialized();
+    private final Subject<SplitHint> queryLoadHint = BehaviorSubject.<SplitHint>create().toSerialized();
+    private final Subject<SplitHint> mutationLoadHint = BehaviorSubject.<SplitHint>create().toSerialized();
     private final KVRangeOptions opts;
     private final AtomicReference<Lifecycle> lifecycle = new AtomicReference<>(Lifecycle.Init);
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -170,7 +172,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final CompletableFuture<State.StateType> quitReason = new CompletableFuture<>();
     private final CompletableFuture<Void> destroyedSignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
-    private final ILoadEstimator loadEstimator;
+    private final ISplitKeyEstimator roCoProcLoadEstimator;
+    private final ISplitKeyEstimator rwCoProcLoadEstimator;
     private final AtomicBoolean compacting = new AtomicBoolean();
     private IKVRangeMessenger messenger;
     private volatile CompletableFuture<Void> compactionFuture;
@@ -191,18 +194,24 @@ public class KVRangeFSM implements IKVRangeFSM {
             this.opts = opts.toBuilder().build();
             this.id = id;
             this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
-            loadEstimator = new LoadEstimator(opts.getMaxRangeLoad(),
-                opts.getSplitKeyThreshold(),
-                opts.getLoadTrackingWindowSec(),
-                coProcFactory::toSplitKey);
+            roCoProcLoadEstimator = opts.isEnableSplitKeyEstimation() ?
+                new SplitKeyEstimator(Duration.ofNanos(opts.getTolerableROCoProcLatencyNanos()),
+                    opts.getLoadTrackingWindowSec(),
+                    true,
+                    coProcFactory::toSplitKey) : NoopEstimator.INSTANCE;
+            rwCoProcLoadEstimator = opts.isEnableSplitKeyEstimation() ?
+                new SplitKeyEstimator(Duration.ofNanos(opts.getTolerableRWCoProcLatencyNanos()),
+                    opts.getLoadTrackingWindowSec(),
+                    false,
+                    coProcFactory::toSplitKey) : NoopEstimator.INSTANCE;
             if (initSnapshot != null) {
                 walStateStorageEngine.destroy(id);
                 walStateStorageEngine.newRaftStateStorage(id, initSnapshot);
-                this.kvRange = new KVRange(kvSpace, loadEstimator)
+                this.kvRange = new KVRange(kvSpace)
                     .toReseter(KVRangeSnapshot.parseFrom(initSnapshot.getData()))
                     .done();
             } else {
-                this.kvRange = new KVRange(kvSpace, loadEstimator);
+                this.kvRange = new KVRange(kvSpace);
             }
             this.CompatibilityEnsurer = CompatibilityEnsurer;
             this.wal = new KVRangeWAL(clusterId, id,
@@ -217,11 +226,12 @@ public class KVRangeFSM implements IKVRangeFSM {
             this.mgmtExecutor = mgmtExecutor;
             this.mgmtTaskRunner =
                 new AsyncRunner("basekv.runner.rangemgmt", mgmtExecutor, "rangeId", KVRangeIdUtil.toString(id));
-            this.coProc = coProcFactory.create(id, kvRange::newDataReader, loadEstimator);
+            this.coProc = coProcFactory.create(id, kvRange::newDataReader);
 
             long lastAppliedIndex = kvRange.lastAppliedIndex();
             this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex);
-            this.queryRunner = new KVRangeQueryRunner(kvRange, coProc, queryExecutor, linearizer);
+            this.queryRunner =
+                new KVRangeQueryRunner(kvRange, coProc, queryExecutor, linearizer, roCoProcLoadEstimator);
             this.statsCollector = new KVRangeStatsCollector(kvRange,
                 wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
             this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
@@ -282,12 +292,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                         wal.state().distinctUntilChanged(),
                         wal.replicationStatus().distinctUntilChanged(),
                         clusterConfigSubject.distinctUntilChanged(),
-                        statsCollector.collect()
-                            .map(stats -> Lists.newArrayList(stats, loadEstimator.estimate()))
-                            .distinctUntilChanged(),
-                        (meta, role, syncStats, clusterConfig, statsAndLoadHint) -> {
-                            LoadHint loadHint = (LoadHint) statsAndLoadHint.get(1);
-                            return KVRangeDescriptor.newBuilder()
+                        statsCollector.collect().distinctUntilChanged(),
+                        queryLoadHint.distinctUntilChanged(),
+                        mutationLoadHint.distinctUntilChanged(),
+                        (meta, role, syncStats, clusterConfig, rangeStats, queryLoadHint, mutationLoadHint) ->
+                            KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver())
                                 .setId(id)
                                 .setBoundary(meta.boundary())
@@ -295,11 +304,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .setState(meta.state().getType())
                                 .setConfig(clusterConfig)
                                 .putAllSyncState(syncStats)
-                                .putAllStatistics((Map<String, Double>) statsAndLoadHint.get(0))
-                                .setLoadHint(loadHint)
-                                .setHlc(HLC.INST.get())
-                                .build();
-                        })
+                                .putAllStatistics(rangeStats)
+                                .setLoadHint(LoadHint.newBuilder()
+                                    .setQuery(queryLoadHint)
+                                    .setMutation(mutationLoadHint)
+                                    .build())
+                                .setHlc(HLC.INST.get()).build())
                     .subscribe(descriptorSubject::onNext));
                 disposables.add(messenger.receive().subscribe(this::handleMessage));
                 clusterConfigSubject.onNext(wal.clusterConfig());
@@ -324,6 +334,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         statsCollector.tick();
         dumpSessions.values().forEach(KVRangeDumpSession::tick);
         checkWalSize();
+        estimateSplitHint();
     }
 
     @Override
@@ -1268,9 +1279,16 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         onDone.complete(() -> finishCommand(taskId, value.orElse(ByteString.EMPTY)));
                                     }
                                     case RWCOPROC -> {
+                                        ILoadTracker.ILoadRecorder roRecorder = rwCoProcLoadEstimator.start();
+                                        ILoadTracker.ILoadRecorder rwRecorder = rwCoProcLoadEstimator.start();
                                         Supplier<RWCoProcOutput> outputSupplier = coProc.mutate(command.getRwCoProc(),
-                                            dataReader, rangeWriter.kvWriter());
-                                        onDone.complete(() -> finishCommand(taskId, outputSupplier.get()));
+                                            new LoadRecordableKVReader(dataReader, roRecorder),
+                                            new LoadRecordableKVWriter(rangeWriter.kvWriter(), rwRecorder));
+                                        onDone.complete(() -> {
+                                            roRecorder.stop();
+                                            rwRecorder.stop();
+                                            finishCommand(taskId, outputSupplier.get());
+                                        });
                                     }
                                 }
                             } catch (Throwable e) {
@@ -1385,6 +1403,17 @@ public class KVRangeFSM implements IKVRangeFSM {
                 scheduleCompaction();
             }
         }
+    }
+
+    private void estimateSplitHint() {
+        SplitHint roCoProcLoadHint = roCoProcLoadEstimator.estimate();
+        SplitHint rwCoProcLoadHint = rwCoProcLoadEstimator.estimate();
+        log.debug("Query load hint: rangeId={}, storeId={}, \n{}",
+            KVRangeIdUtil.toString(id), hostStoreId, roCoProcLoadHint);
+        log.debug("Mutation load hint: rangeId={}, storeId={}, \n{}",
+            KVRangeIdUtil.toString(id), hostStoreId, rwCoProcLoadHint);
+        queryLoadHint.onNext(roCoProcLoadHint);
+        mutationLoadHint.onNext(rwCoProcLoadHint);
     }
 
     private void scheduleCompaction() {

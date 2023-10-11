@@ -48,9 +48,8 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> rangeReaderProvider, ILoadTracker loadTracker) {
-        return new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector, clock, purgeDelay,
-            loadTracker);
+    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> rangeReaderProvider) {
+        return new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector, clock, purgeDelay);
     }
 
     public void close() {

@@ -33,13 +33,11 @@ import lombok.SneakyThrows;
 public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     @Getter
     private final IKVSpace kvSpace;
-    private final ILoadTracker loadTracker;
     private final ConcurrentLinkedQueue<IKVReader> sharedDataReaders = new ConcurrentLinkedQueue<>();
 
-    KVRange(IKVSpace kvSpace, ILoadTracker loadTracker) {
+    KVRange(IKVSpace kvSpace) {
         super(kvSpace);
         this.kvSpace = kvSpace;
-        this.loadTracker = loadTracker;
     }
 
     @Override
@@ -95,12 +93,12 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
 
     @Override
     public IKVReader newDataReader() {
-        return new KVReader(kvSpace, this, loadTracker);
+        return new KVReader(kvSpace, this);
     }
 
     @Override
     public IKVRangeWriter<?> toWriter() {
-        return new KVRangeWriter(kvSpace.toWriter(), loadTracker);
+        return new KVRangeWriter(kvSpace.toWriter());
     }
 
     @Override

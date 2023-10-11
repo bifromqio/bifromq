@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class RocksDBKVSpaceCompactionTrigger {
+public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
     private final AtomicInteger totalKeyCount = new AtomicInteger();
     private final AtomicInteger totalTombstoneKeyCount = new AtomicInteger();
     private final AtomicInteger totalTombstoneRangeCount = new AtomicInteger();
@@ -35,39 +35,39 @@ public class RocksDBKVSpaceCompactionTrigger {
         this.compact = compact;
     }
 
-    WriteStatsRecorder newRecorder() {
+    public IRecorder newRecorder() {
         return new WriteStatsRecorder();
     }
 
-    void reset() {
+    public void reset() {
         totalTombstoneKeyCount.set(0);
         totalKeyCount.set(0);
     }
 
-    class WriteStatsRecorder {
+    class WriteStatsRecorder implements IRecorder {
         private final AtomicInteger keyCount = new AtomicInteger();
         private final AtomicInteger tombstoneKeyCount = new AtomicInteger();
         private final AtomicInteger tombstoneRangeCount = new AtomicInteger();
 
 
-        void recordPut() {
+        public void recordPut() {
             keyCount.incrementAndGet();
             tombstoneKeyCount.incrementAndGet();
         }
 
-        void recordInsert() {
+        public void recordInsert() {
             keyCount.incrementAndGet();
         }
 
-        void recordDelete() {
+        public void recordDelete() {
             tombstoneKeyCount.incrementAndGet();
         }
 
-        void recordDeleteRange() {
+        public void recordDeleteRange() {
             tombstoneRangeCount.incrementAndGet();
         }
 
-        void stop() {
+        public void stop() {
             int totalKeys = totalKeyCount.addAndGet(keyCount.get());
             int totalTombstones = totalTombstoneKeyCount.addAndGet(tombstoneKeyCount.get());
             int totalRangeTombstones = totalTombstoneRangeCount.addAndGet(tombstoneRangeCount.get());

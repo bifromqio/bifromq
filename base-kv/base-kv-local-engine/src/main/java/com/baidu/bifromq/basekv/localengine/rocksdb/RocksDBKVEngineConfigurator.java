@@ -56,7 +56,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     }
 
     public interface Configurator {
-        default <T extends AutoCloseable, O> T gcable(T object, O owner) {
+        default <T extends AutoCloseable, O> T autoRelease(T object, O owner) {
             CLEANER.register(owner, new CloseableState(object));
             return object;
         }
@@ -83,14 +83,14 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 .setAvoidUnnecessaryBlockingIO(true)
                 .setMaxManifestFileSize(64 * SizeUnit.MB)
                 // log file settings
-                .setRecycleLogFileNum(5)
-                .setMaxLogFileSize(SizeUnit.GB)
-                .setKeepLogFileNum(5)
+                .setRecycleLogFileNum(4)
+                .setMaxLogFileSize(128 * SizeUnit.MB)
+                .setKeepLogFileNum(4)
                 // wal file settings
                 .setWalSizeLimitMB(0)
                 .setWalTtlSeconds(0)
-                .setStatistics(gcable(new Statistics(), targetOption))
-                .setRateLimiter(gcable(new RateLimiter(512 * SizeUnit.MB,
+                .setStatistics(autoRelease(new Statistics(), targetOption))
+                .setRateLimiter(autoRelease(new RateLimiter(512 * SizeUnit.MB,
                     RateLimiter.DEFAULT_REFILL_PERIOD_MICROS,
                     RateLimiter.DEFAULT_FAIRNESS,
                     RateLimiter.DEFAULT_MODE, true), targetOption));
@@ -115,7 +115,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                         // Begin to use partitioned index filters
                         // https://github.com/facebook/rocksdb/wiki/Partitioned-Index-Filters#how-to-use-it
                         .setIndexType(IndexType.kTwoLevelIndexSearch) //
-                        .setFilterPolicy(gcable(new BloomFilter(16, false), targetOption))
+                        .setFilterPolicy(autoRelease(new BloomFilter(16, false), targetOption))
                         .setPartitionFilters(true) //
                         .setMetadataBlockSize(8 * SizeUnit.KB) //
                         .setCacheIndexAndFilterBlocks(true) //
@@ -128,7 +128,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                         .setDataBlockHashTableUtilRatio(0.75)
                         // End of partitioned index filters settings.
                         .setBlockSize(4 * SizeUnit.KB)//
-                        .setBlockCache(gcable(new LRUCache(32 * SizeUnit.MB, 8), targetOption)))
+                        .setBlockCache(autoRelease(new LRUCache(32 * SizeUnit.MB, 8), targetOption)))
                 // https://github.com/facebook/rocksdb/pull/5744
                 .setForceConsistencyChecks(true)
                 .setCompactionStyle(CompactionStyle.LEVEL);
@@ -209,6 +209,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     private boolean asyncWALFlush = false;
     private boolean fsyncWAL = false;
 
+    private boolean manualCompaction = false;
     private int compactMinTombstoneKeys = 50000;
     private int compactMinTombstoneRanges = 10000;
     private double compactTombstoneKeysRatio = 0.3;
@@ -263,6 +264,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         private boolean disableWAL;
         private boolean asyncWALFlush;
         private boolean fsyncWAL;
+        private boolean manualCompaction;
         private int compactMinTombstoneKeys;
         private int compactMinTombstoneRanges;
         private double compactTombstoneKeysRatio;
@@ -313,6 +315,11 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
             return this;
         }
 
+        public RocksDBKVEngineConfiguratorBuilder manualCompaction(boolean manualCompaction) {
+            this.manualCompaction = manualCompaction;
+            return this;
+        }
+
         public RocksDBKVEngineConfiguratorBuilder compactMinTombstoneKeys(int compactMinTombstoneKeys) {
             this.compactMinTombstoneKeys = compactMinTombstoneKeys;
             return this;
@@ -343,6 +350,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 atomicFlush,
                 asyncWALFlush,
                 fsyncWAL,
+                manualCompaction,
                 compactMinTombstoneKeys,
                 compactMinTombstoneRanges,
                 compactTombstoneKeysRatio,

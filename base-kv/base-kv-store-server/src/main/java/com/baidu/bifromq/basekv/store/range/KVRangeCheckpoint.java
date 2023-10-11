@@ -27,7 +27,6 @@ public class KVRangeCheckpoint extends AbstractKVRangeMetadata implements IKVRan
 
     @Override
     public IKVReader newDataReader() {
-        return new KVReader(keyRangeCheckpoint, this, (key, loadUnits) -> {
-        });
+        return new KVReader(keyRangeCheckpoint, this);
     }
 }

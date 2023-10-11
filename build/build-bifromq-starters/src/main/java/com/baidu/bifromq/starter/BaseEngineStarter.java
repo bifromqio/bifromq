@@ -64,6 +64,7 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
                 .dbRootDir(dataRootDir.toString())
                 .dbCheckpointRootDir(dataCheckpointRootDir.toString())
                 .gcInterval(config.getGcIntervalInSec())
+                .manualCompaction(rocksDBConfig.manualCompaction())
                 .compactMinTombstoneKeys(rocksDBConfig.compactMinTombstoneKeys())
                 .compactMinTombstoneRanges(rocksDBConfig.compactMinTombstoneRanges())
                 .compactTombstoneRatio(rocksDBConfig.compactTombstoneRatio())

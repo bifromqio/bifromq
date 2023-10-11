@@ -13,37 +13,42 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
-
-import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.google.protobuf.ByteString;
 
-public class KVWriter implements IKVWriter {
-    private final IKVSpaceWriter writer;
+class LoadRecordableKVWriter implements IKVWriter {
+    private final IKVWriter delegate;
+    private final ILoadTracker.ILoadRecorder recorder;
 
-    public KVWriter(IKVSpaceWriter writer) {
-        this.writer = writer;
+    public LoadRecordableKVWriter(IKVWriter delegate, ILoadTracker.ILoadRecorder recorder) {
+        this.delegate = delegate;
+        this.recorder = recorder;
     }
 
     @Override
     public void delete(ByteString key) {
-        writer.delete(key);
+        long start = System.nanoTime();
+        delegate.delete(key);
+        recorder.record(key, System.nanoTime() - start);
     }
 
     @Override
     public void clear(Boundary boundary) {
-        writer.clear(boundary);
+        delegate.clear(boundary);
     }
 
     @Override
     public void insert(ByteString key, ByteString value) {
-        writer.insert(key, value);
+        long start = System.nanoTime();
+        delegate.insert(key, value);
+        recorder.record(key, System.nanoTime() - start);
     }
 
     @Override
     public void put(ByteString key, ByteString value) {
-        writer.put(key, value);
+        long start = System.nanoTime();
+        delegate.put(key, value);
+        recorder.record(key, System.nanoTime() - start);
     }
 }
