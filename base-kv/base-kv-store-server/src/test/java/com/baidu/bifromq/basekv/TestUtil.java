@@ -46,9 +46,4 @@ public class TestUtil {
             log.error("Failed to delete db root dir", e);
         }
     }
-
-    public static boolean isDevEnv() {
-        String osName = System.getProperty("os.name");
-        return osName != null && osName.startsWith("Mac");
-    }
 }

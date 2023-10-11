@@ -13,13 +13,11 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.annotation.Cluster;
-import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -40,10 +38,6 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
     private void createClusterByAnnotation(Method testMethod) {
         Cluster cluster = testMethod.getAnnotation(Cluster.class);
         options = new KVRangeStoreOptions();
-        if (isDevEnv()) {
-            options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
-            options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
-        }
         if (cluster != null) {
             Preconditions.checkArgument(cluster.initNodes() > 0,
                 "Init nodes number must be greater than zero");

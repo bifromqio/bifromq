@@ -13,12 +13,14 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.google.common.util.concurrent.MoreExecutors;
+import io.micrometer.core.instrument.Metrics;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,11 +40,22 @@ public class AsyncRunnerTest extends MockableTest {
     private ExecutorService executor;
 
     protected void doSetup(Method method) {
-        executor = Executors.newWorkStealingPool();
+        executor = Executors.newSingleThreadExecutor();
     }
 
     protected void doTeardown(Method method) {
         MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    public void removeMetricWhenGc() {
+        AsyncRunner asyncRunner = new AsyncRunner("TestRunner", executor);
+        assertEquals(Metrics.globalRegistry.find("TestRunner").timers().size(), 2);
+        asyncRunner = null;
+        await().forever().until(() -> {
+            System.gc();
+            return Metrics.globalRegistry.find("TestRunner").timers().isEmpty();
+        });
     }
 
     @Test

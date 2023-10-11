@@ -13,14 +13,11 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
-
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
-import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -37,17 +34,13 @@ public abstract class AbstractKVRangeTest extends MockableTest {
 
     @SneakyThrows
     protected void doSetup(Method method) {
-        if (isDevEnv()) {
-            configurator = new InMemKVEngineConfigurator();
-        } else {
-            dbRootDir = Files.createTempDirectory("");
-            configurator = new RocksDBKVEngineConfigurator()
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
-                    .toString())
-                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-                .setDisableWAL(true)
-                .setAtomicFlush(false);
-        }
+        dbRootDir = Files.createTempDirectory("");
+        configurator = new RocksDBKVEngineConfigurator()
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
+                .toString())
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .setDisableWAL(true)
+            .setAtomicFlush(false);
 
         kvEngine = KVEngineFactory.create(null, configurator);
         kvEngine.start();

@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
@@ -30,7 +29,6 @@ import static org.testng.Assert.fail;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.TestCoProcFactory;
-import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.EnsureRange;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -103,19 +101,14 @@ public class KVRangeStoreTest extends MockableTest {
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
-        if (isDevEnv()) {
-            options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
-            options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
-        } else {
-            dbRootDir = Files.createTempDirectory("");
-            (((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator()))
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
-                    .toString())
-                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
-            ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR).toString())
-                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME).toString());
-        }
+        dbRootDir = Files.createTempDirectory("");
+        (((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator()))
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
+                .toString())
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
+        ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
+            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR).toString())
+            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME).toString());
 
         rangeStore =
             new KVRangeStore("testCluster",

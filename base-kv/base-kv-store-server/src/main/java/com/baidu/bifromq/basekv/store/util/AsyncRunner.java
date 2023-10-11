@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
+import java.lang.ref.Cleaner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -27,14 +29,21 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class AsyncRunner {
-    private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
+    private static final Cleaner CLEANER = Cleaner.create();
+
+    private record ClosableState(Meter meter) implements Runnable {
+        @Override
+        public void run() {
+            Metrics.globalRegistry.remove(meter);
+        }
+    }
 
     private final ConcurrentLinkedDeque<Task<?>> taskQueue;
     private final Executor executor;
     private final AtomicReference<State> state = new AtomicReference<>(State.EMPTY_STOP);
     private final Timer queueingTimer;
     private final Timer execTimer;
-    private volatile CompletableFuture<Void> whenDone = DONE;
+    private volatile CompletableFuture<Void> whenDone = CompletableFuture.completedFuture(null);
 
     public AsyncRunner(Executor executor) {
         this("async.runner", executor);
@@ -51,6 +60,8 @@ public final class AsyncRunner {
             .tags("type", "exec")
             .tags(tags)
             .register(Metrics.globalRegistry);
+        CLEANER.register(this, new ClosableState(queueingTimer));
+        CLEANER.register(this, new ClosableState(execTimer));
     }
 
     public CompletableFuture<Void> add(Runnable runnable) {
@@ -165,7 +176,7 @@ public final class AsyncRunner {
             }
             if (state.compareAndSet(State.EMPTY_RUNNING, State.EMPTY_STOP)) {
                 whenDone.complete(null);
-                whenDone = DONE;
+                whenDone = CompletableFuture.completedFuture(null);
                 break;
             }
         }
@@ -173,11 +184,7 @@ public final class AsyncRunner {
 
     public CompletionStage<Void> awaitDone() {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
-        whenDone.whenComplete((v, e) -> {
-            onDone.complete(null);
-            Metrics.globalRegistry.remove(queueingTimer);
-            Metrics.globalRegistry.remove(execTimer);
-        });
+        whenDone.whenComplete((v, e) -> onDone.complete(null));
         return onDone;
     }
 
