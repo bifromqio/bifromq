@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
@@ -26,6 +27,7 @@ import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.client.IQueryPipeline;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
+import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
@@ -38,6 +40,7 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxMessagePack;
@@ -88,11 +91,11 @@ public abstract class MockedInboxService {
     protected IMutationPipeline mutPipeline;
     private ISettingProvider settingProvider = Setting::current;
     protected InboxService inboxService;
-    private String tenantId = "testTenantId";
+    protected String tenantId = "testTenantId";
     protected String inboxId = "testInboxId";
     protected ByteString scopedInboxId = scopedInboxId(tenantId, inboxId);
     protected String scopedInboxIdUtf8 = scopedInboxId.toStringUtf8();
-    private String clusterId = "testClusterId";
+    protected String clusterId = "testClusterId";
     private String leaderId = "testLeaderId";
     private String serviceName = "inboxService";
     private String methodName = "testMethod";
@@ -164,6 +167,12 @@ public abstract class MockedInboxService {
         .setInboxId(inboxId)
         .setQos(QoS.AT_LEAST_ONCE)
         .setUpToSeq(1l)
+        .build();
+
+    protected ExpireInboxRequest expireInboxRequest = ExpireInboxRequest.newBuilder()
+        .setReqId(System.nanoTime())
+        .setTenantId(tenantId)
+        .setExpirySeconds(10)
         .build();
     private AutoCloseable closeable;
 
@@ -260,6 +269,12 @@ public abstract class MockedInboxService {
     protected void mockDistMatch(MatchResult result) {
         when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(result));
+    }
+
+    protected void mockScanRange(KVRangeSetting setting, KVRangeROReply reply) {
+        when(inboxStoreClient.findById(eq(setting.id))).thenReturn(Optional.of(setting));
+        when(inboxStoreClient.query(eq(setting.leader), any(KVRangeRORequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(reply));
     }
 
     class TestingStreamObserver<T> extends ServerCallStreamObserver<T> {

@@ -510,19 +510,19 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         } else {
             itr.seekToFirst();
         }
-        while (itr.isValid() && System.nanoTime() - start < yieldThreshold) {
-            ByteString scopedInboxId = parseScopedInboxId(itr.key());
-            if (request.hasScopedInboxId() &&
-                request.getScopedInboxId().equals(scopedInboxId)) {
-                // skip the cursor
-                continue;
+        while (itr.isValid()) {
+            if (System.nanoTime() - start > yieldThreshold) {
+                replyBuilder.setNextScopedInboxId(itr.key());
+                break;
             }
+            ByteString scopedInboxId = parseScopedInboxId(itr.key());
             if (isInboxMetadataKey(itr.key())) {
                 InboxMetadata metadata = InboxMetadata.parseFrom(itr.value());
-                if (isGCable(metadata)) {
+                if (isGCable(metadata, request)) {
                     if (replyBuilder.getScopedInboxIdCount() < request.getLimit()) {
                         replyBuilder.addScopedInboxId(scopedInboxId);
                     } else {
+                        replyBuilder.setNextScopedInboxId(itr.key());
                         break;
                     }
                 }
@@ -1009,11 +1009,20 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return now.compareTo(expireAt) > 0;
     }
 
-    private boolean isGCable(InboxMetadata metadata) {
+    private boolean isGCable(InboxMetadata metadata, GCRequest request) {
+        if (request.hasTenantId() && !request.getTenantId().equals(metadata.getClient().getTenantId())) {
+            return false;
+        }
         Duration now = Duration.ofMillis(clock.millis());
-        Duration expireAt = Duration.ofMillis(metadata.getLastFetchTime())
-            .plus(Duration.ofSeconds(metadata.getExpireSeconds()))
-            .plus(purgeDelay);
+        Duration expireAt;
+        if (request.hasExpirySeconds() && request.getExpirySeconds() >= 0) {
+            expireAt = Duration.ofMillis(metadata.getLastFetchTime())
+                .plus(Duration.ofSeconds(request.getExpirySeconds()));
+        } else {
+            expireAt = Duration.ofMillis(metadata.getLastFetchTime())
+                .plus(Duration.ofSeconds(metadata.getExpireSeconds()))
+                .plus(purgeDelay);
+        }
         return now.compareTo(expireAt) > 0;
     }
 

@@ -204,6 +204,13 @@ public abstract class MockedInboxStoreTest {
             .build();
     }
 
+    protected InboxServiceROCoProcInput getGCScanInput(int limit, String tenantId) {
+        return InboxServiceROCoProcInput.newBuilder()
+            .setGc(GCRequest.newBuilder()
+                .setLimit(limit).setTenantId(tenantId).build())
+            .build();
+    }
+
     protected InboxServiceROCoProcInput getHasInput(ByteString... inboxIds) {
         return InboxServiceROCoProcInput.newBuilder()
             .setBatchCheck(BatchCheckRequest.newBuilder()
@@ -219,4 +226,5 @@ public abstract class MockedInboxStoreTest {
                 .build())
             .build();
     }
+
 }

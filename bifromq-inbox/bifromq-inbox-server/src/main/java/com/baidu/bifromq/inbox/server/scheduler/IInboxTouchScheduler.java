@@ -41,5 +41,10 @@ public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchSch
             scopedInboxIdUtf8 = scopedInboxId.toStringUtf8();
             keep = true;
         }
+
+        public Touch(ByteString scopedInboxId, boolean keep) {
+            scopedInboxIdUtf8 = scopedInboxId.toStringUtf8();
+            this.keep = keep;
+        }
     }
 }

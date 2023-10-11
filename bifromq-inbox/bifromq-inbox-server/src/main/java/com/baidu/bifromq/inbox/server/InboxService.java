@@ -13,13 +13,18 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
+import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
@@ -29,6 +34,9 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply.Result;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
@@ -60,9 +68,11 @@ import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxUnSubScheduler;
 import com.baidu.bifromq.inbox.storage.proto.MessagePack;
+import com.baidu.bifromq.inbox.store.gc.InboxGCProc;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -97,6 +107,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final ScheduledExecutorService bgTaskExecutor;
     private final boolean bgTaskExecutorOwner;
     private final IDistClient distClient;
+    private final IBaseKVStoreClient inboxStoreClient;
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
     private final IInboxFetchScheduler fetchScheduler;
     private final IInboxCheckScheduler checkScheduler;
@@ -107,6 +118,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxCreateScheduler createScheduler;
     private final IInboxSubScheduler subScheduler;
     private final IInboxUnsubScheduler unsubScheduler;
+    private final InboxGCProc inboxGCProc;
     private final Duration touchIdle = Duration.ofMinutes(5);
     private ScheduledFuture<?> touchTask;
 
@@ -115,6 +127,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IBaseKVStoreClient inboxStoreClient,
                  ScheduledExecutorService bgTaskExecutor) {
         this.distClient = distClient;
+        this.inboxStoreClient = inboxStoreClient;
         this.checkScheduler = new InboxCheckScheduler(inboxStoreClient);
         this.fetchScheduler = new InboxFetchScheduler(inboxStoreClient);
         this.insertScheduler = new InboxInsertScheduler(inboxStoreClient);
@@ -131,6 +144,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         } else {
             this.bgTaskExecutor = bgTaskExecutor;
         }
+        this.inboxGCProc = new InboxServiceGCProc(inboxStoreClient, touchScheduler, distClient, this.bgTaskExecutor);
     }
 
     @Override
@@ -195,9 +209,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .thenCompose(topicFilters -> {
                 if (topicFilters.isEmpty()) {
                     return CompletableFuture.completedFuture(UnmatchReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(UnmatchReply.Result.OK)
-                            .build());
+                        .setReqId(request.getReqId())
+                        .setResult(UnmatchReply.Result.OK)
+                        .build());
                 } else {
                     long reqId = System.nanoTime();
                     List<CompletableFuture<UnmatchResult>> unsubFutures = topicFilters.stream().map(
@@ -215,9 +229,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             if (e != null) {
                                 log.error("Touch inbox error", e);
                                 builder.setResult(UnmatchReply.Result.ERROR);
-                            }else if (unsubResults.stream().allMatch(r -> r == UnmatchResult.OK)) {
+                            } else if (unsubResults.stream().allMatch(r -> r == UnmatchResult.OK)) {
                                 builder.setResult(UnmatchReply.Result.OK);
-                            }else {
+                            } else {
                                 builder.setResult(UnmatchReply.Result.ERROR);
                             }
                             return builder.build();
@@ -227,12 +241,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .thenApply(v -> DeleteInboxReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setResult(v.getResult() == UnmatchReply.Result.OK ?
-                        DeleteInboxReply.Result.OK : DeleteInboxReply.Result.ERROR)
+                    DeleteInboxReply.Result.OK : DeleteInboxReply.Result.ERROR)
                 .build())
             .exceptionally(e -> DeleteInboxReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setResult(DeleteInboxReply.Result.ERROR)
-                    .build()), responseObserver);
+                .setReqId(request.getReqId())
+                .setResult(DeleteInboxReply.Result.ERROR)
+                .build()), responseObserver);
     }
 
     @Override
@@ -331,6 +345,41 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     .setResult(UnsubReply.Result.ERROR)
                     .build();
             }), responseObserver);
+    }
+
+    @Override
+    public void expireInbox(ExpireInboxRequest request, StreamObserver<ExpireInboxReply> responseObserver) {
+        response(tenantId -> {
+            List<KVRangeSetting> settings;
+            if (request.hasTenantId()) {
+                ByteString tenantPrefix = tenantPrefix(request.getTenantId());
+                settings = inboxStoreClient.findByBoundary(Boundary.newBuilder()
+                    .setStartKey(tenantPrefix).setEndKey(upperBound(tenantPrefix)).build());
+            } else {
+                settings = inboxStoreClient.findByBoundary(FULL_BOUNDARY);
+            }
+            if (settings.isEmpty()) {
+                return CompletableFuture.completedFuture(ExpireInboxReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(Result.OK)
+                    .build());
+            }
+            List<CompletableFuture<Void>> gcResults = settings.stream().map(
+                setting -> inboxGCProc.gcRange(setting.id, request.hasTenantId() ? request.getTenantId() : null,
+                    request.getExpirySeconds(), 100)).toList();
+            return CompletableFuture.allOf(gcResults.toArray(new CompletableFuture[0]))
+                .thenApply(v -> ExpireInboxReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(Result.OK)
+                    .build())
+                .exceptionally(e -> {
+                    log.error("Failed to expireInbox, request={}", request, e);
+                    return ExpireInboxReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(Result.ERROR)
+                        .build();
+                });
+        }, responseObserver);
     }
 
     @Override

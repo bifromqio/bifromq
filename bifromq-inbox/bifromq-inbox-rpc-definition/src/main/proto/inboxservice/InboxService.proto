@@ -18,6 +18,7 @@ service InboxService {
   rpc touchInbox (TouchInboxRequest) returns (TouchInboxReply);
   rpc sub(SubRequest) returns (SubReply);
   rpc unsub(UnsubRequest) returns (UnsubReply);
+  rpc expireInbox (ExpireInboxRequest) returns (ExpireInboxReply);
   rpc receive (stream SendRequest) returns (stream SendReply);
   rpc fetchInbox(stream InboxFetchHint) returns (stream InboxFetched);
   rpc commit(CommitRequest) returns(CommitReply);
@@ -172,3 +173,17 @@ message CommitReply {
   Result result = 2;
 }
 
+message ExpireInboxRequest {
+  uint64 reqId = 1;
+  optional string tenantId = 2;
+  uint32 expirySeconds = 3;
+}
+
+message ExpireInboxReply {
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
