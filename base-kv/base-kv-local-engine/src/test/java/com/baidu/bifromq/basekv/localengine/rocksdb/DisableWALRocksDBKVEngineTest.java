@@ -20,7 +20,9 @@ public class DisableWALRocksDBKVEngineTest extends AbstractRocksDBKVEngine2Test 
     private RocksDBKVEngineConfigurator configurator;
 
     @SneakyThrows
-    protected void doSetup() {
+    @Override
+    protected void beforeStart() {
+        super.beforeStart();
         String DB_NAME = "testDB";
         String DB_CHECKPOINT_DIR = "testDB_cp";
         configurator = new RocksDBKVEngineConfigurator()

@@ -22,6 +22,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -34,12 +35,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class KVRangeQueryRunnerTest {
+public class KVRangeQueryRunnerTest extends MockableTest {
     @Mock
     private IKVRange accessor;
     @Mock
@@ -48,17 +46,6 @@ public class KVRangeQueryRunnerTest {
     private IKVRangeQueryLinearizer linearizer;
     @Mock
     private IKVRangeCoProc coProc;
-    private AutoCloseable closeable;
-
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
-    }
 
     @Test
     public void badVersionQuery() {

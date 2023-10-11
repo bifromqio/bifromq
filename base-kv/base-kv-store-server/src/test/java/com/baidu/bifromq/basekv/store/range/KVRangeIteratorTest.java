@@ -17,32 +17,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.google.protobuf.ByteString;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class KVRangeIteratorTest {
-    @Mock
-    private ILoadTracker loadTracker;
+public class KVRangeIteratorTest extends MockableTest {
     @Mock
     private IKVSpaceIterator rangeIterator;
-    private AutoCloseable closeable;
-
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
-    }
 
     @Test
     public void key() {

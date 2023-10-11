@@ -16,32 +16,16 @@ package com.baidu.bifromq.basekv.localengine;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.baidu.bifromq.basekv.localengine.ISyncContext;
-import com.baidu.bifromq.basekv.localengine.SyncContext;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class SyncContextTest {
+public class SyncContextTest extends MockableTest {
 
     @Mock
     private Runnable refresh;
 
     @Mock
     private Runnable mutate;
-    private AutoCloseable closeable;
-
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
-    }
 
     @Test
     public void refreshAsNeeded() {

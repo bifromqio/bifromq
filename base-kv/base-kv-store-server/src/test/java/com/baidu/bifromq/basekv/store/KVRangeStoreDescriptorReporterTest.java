@@ -29,23 +29,23 @@ import com.baidu.bifromq.basecrdt.core.api.ORMapOperation.ORMapRemove;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation.ORMapUpdate;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
+import org.testng.annotations.Test;
 
-public class KVRangeStoreDescriptorReporterTest {
+@Slf4j
+public class KVRangeStoreDescriptorReporterTest extends MockableTest {
 
     @Mock
     private ICRDTService crdtService;
@@ -62,10 +62,9 @@ public class KVRangeStoreDescriptorReporterTest {
     private String remoteStoreId = "remoteStoreId";
     private KVRangeStoreDescriptor storeDescriptor;
     private KVRangeStoreDescriptor remoteStoreDescriptor;
-    private AutoCloseable closeable;
-    @BeforeMethod
-    public void init() {
-        closeable = MockitoAnnotations.openMocks(this);
+
+    @Override
+    protected void doSetup(Method method) {
         String uri = storeDescriptorMapCRDTURI("testCluster");
         when(crdtService.get(uri)).thenReturn(Optional.of(storeDescriptorMap));
         storeDescriptorReporter = new KVRangeStoreDescriptorReporter("testCluster", crdtService, 200L);
@@ -81,12 +80,11 @@ public class KVRangeStoreDescriptorReporterTest {
         storeDescriptorReporter.start();
     }
 
-    @AfterMethod
-    public void close() throws Exception {
+    @Override
+    protected void doTeardown(Method method) {
         when(storeDescriptorMap.execute(any(ORMapOperation.class))).thenReturn(CompletableFuture.completedFuture(null));
         when(crdtService.stopHosting(anyString())).thenReturn(CompletableFuture.completedFuture(null));
         storeDescriptorReporter.stop();
-        closeable.close();
     }
 
     @Test

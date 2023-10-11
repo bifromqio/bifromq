@@ -19,6 +19,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
@@ -34,6 +35,7 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.observers.TestObserver;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -45,13 +47,10 @@ import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class KVRangeWALTest {
+public class KVRangeWALTest extends MockableTest {
 
     private KVRangeId id = KVRangeIdUtil.generate();
 
@@ -67,11 +66,9 @@ public class KVRangeWALTest {
     private ScheduledExecutorService ticker;
     @Mock
     private IKVRangeWALStoreEngine walStorageEngine;
-    private AutoCloseable closeable;
 
-    @BeforeMethod
-    public void setup() {
-        closeable = MockitoAnnotations.openMocks(this);
+    @Override
+    protected void doSetup(Method method) {
         raftStateStorage = new InMemoryStateStore(replicaId, Snapshot.newBuilder()
             .setClusterConfig(ClusterConfig.newBuilder()
                 .addVoters(replicaId)
@@ -80,11 +77,10 @@ public class KVRangeWALTest {
         ticker = new ScheduledThreadPoolExecutor(1);
     }
 
-    @AfterMethod
-    public void teardown() throws Exception {
+    @Override
+    public void doTeardown(Method method) {
         MoreExecutors.shutdownAndAwaitTermination(ticker, 5, TimeUnit.SECONDS);
         raftStateStorage.stop();
-        closeable.close();
     }
 
 

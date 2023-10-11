@@ -21,24 +21,33 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
-import java.io.IOException;
+import io.reactivex.rxjava3.disposables.Disposable;
+import java.lang.reflect.Method;
 import java.util.Optional;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public abstract class AbstractKVEngineTest {
+public abstract class AbstractKVEngineTest extends MockableTest {
     protected IKVEngine engine;
 
-    @BeforeMethod
-    public void setup() throws IOException {
+    @Override
+    protected void doSetup(Method method) {
+        beforeStart();
         engine = newEngine();
         engine.start();
     }
 
-    @AfterMethod
-    public void teardown() {
+    protected void beforeStart() {
+
+    }
+
+    @Override
+    protected void doTeardown(Method method) {
         engine.stop();
+        afterStop();
+    }
+
+    protected void afterStop() {
+
     }
 
     protected abstract IKVEngine newEngine();
@@ -97,7 +106,9 @@ public abstract class AbstractKVEngineTest {
         String rangeId = "test_range1";
         IKVSpace range = engine.createIfMissing(rangeId);
         assertTrue(engine.ranges().containsKey(rangeId));
+        Disposable disposable = range.metadata().subscribe();
         range.destroy();
+        assertTrue(disposable.isDisposed());
         assertTrue(engine.ranges().isEmpty());
         assertFalse(engine.ranges().containsKey(rangeId));
     }

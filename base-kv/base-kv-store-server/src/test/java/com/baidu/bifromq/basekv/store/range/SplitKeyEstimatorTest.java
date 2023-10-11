@@ -20,35 +20,19 @@ import static org.testng.Assert.assertNotSame;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
-import lombok.SneakyThrows;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class SplitKeyEstimatorTest {
+public class SplitKeyEstimatorTest extends MockableTest {
     @Mock
     private Supplier<Long> nanoSource;
-
-    private AutoCloseable closeable;
-
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
-    }
-
-    @SneakyThrows
-    @AfterMethod
-    public void releaseMocks() {
-        closeable.close();
-    }
 
     @Test
     public void noLoad() {

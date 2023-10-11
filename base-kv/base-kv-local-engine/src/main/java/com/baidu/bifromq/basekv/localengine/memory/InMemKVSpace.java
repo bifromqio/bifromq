@@ -102,6 +102,7 @@ public class InMemKVSpace extends InMemKVSpaceReader implements IKVSpace {
 
     @Override
     public void destroy() {
+        metadataSubject.onComplete();
         onDestroy.run();
     }
 

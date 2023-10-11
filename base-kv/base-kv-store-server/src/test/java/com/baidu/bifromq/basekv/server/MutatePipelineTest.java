@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.Put;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
@@ -31,28 +32,13 @@ import com.google.protobuf.ByteString;
 import io.grpc.stub.ServerCallStreamObserver;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class MutatePipelineTest {
+public class MutatePipelineTest extends MockableTest {
     @Mock
     private IKVRangeStore rangeStore;
-
     @Mock
     private ServerCallStreamObserver streamObserver;
-    private AutoCloseable closeable;
-
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
-    }
 
     @Test
     public void put() {

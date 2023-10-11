@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWAL;
@@ -25,29 +26,15 @@ import io.reactivex.rxjava3.observers.TestObserver;
 import java.time.Duration;
 import java.util.Map;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class KVRangeStatsCollectorTest {
+public class KVRangeStatsCollectorTest extends MockableTest {
     @Mock
     private IKVRangeWAL rangeWAL;
     @Mock
     private IKVRangeReader rangeReader;
     @Mock
     private IKVReader kvReader;
-    private AutoCloseable closeable;
-
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
-    }
 
     @Test
     public void testScrap() {

@@ -28,6 +28,7 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.TestCoProcFactory;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
@@ -37,6 +38,8 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.proto.LoadHint;
+import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.StoreMessage;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -54,6 +57,7 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -69,13 +73,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class KVRangeStoreTest {
+public class KVRangeStoreTest extends MockableTest {
     private String DB_NAME = "testDB";
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private String DB_WAL_NAME = "testWAL";
@@ -87,13 +88,10 @@ public class KVRangeStoreTest {
     private ExecutorService queryExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
-
     public Path dbRootDir;
-    private AutoCloseable closeable;
 
-    @BeforeMethod(alwaysRun = true)
-    public void setup() throws IOException {
-        closeable = MockitoAnnotations.openMocks(this);
+    @SneakyThrows
+    protected void doSetup(Method method) {
         options.getKvRangeOptions().getWalRaftConfig().setAsyncAppend(false);
         options.getKvRangeOptions().getWalRaftConfig().setInstallSnapshotTimeoutTick(10);
 
@@ -105,7 +103,7 @@ public class KVRangeStoreTest {
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
-        if (!isDevEnv()) {
+        if (isDevEnv()) {
             options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
             options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         } else {
@@ -158,8 +156,7 @@ public class KVRangeStoreTest {
         assertTrue(rangeStore.bootstrap());
     }
 
-    @AfterMethod(alwaysRun = true)
-    public void teardown() throws Exception {
+    protected void doTeardown(Method method) {
         rangeStore.stop();
         queryExecutor.shutdownNow();
         tickTaskExecutor.shutdownNow();
@@ -175,7 +172,6 @@ public class KVRangeStoreTest {
             }
             dbRootDir = null;
         }
-        closeable.close();
         log.info("Shutdown read task executor");
     }
 
@@ -191,6 +187,10 @@ public class KVRangeStoreTest {
             .setBoundary(FULL_BOUNDARY)
             .setConfig(ClusterConfig.newBuilder().addVoters(rangeStore.id()).build())
             .putSyncState(rangeStore.id(), RaftNodeSyncState.Replicating)
+            .setLoadHint(LoadHint.newBuilder()
+                .setQuery(SplitHint.getDefaultInstance())
+                .setMutation(SplitHint.getDefaultInstance())
+                .build())
             .build());
     }
 

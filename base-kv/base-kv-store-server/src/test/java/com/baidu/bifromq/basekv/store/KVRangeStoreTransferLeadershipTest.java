@@ -25,7 +25,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestTemplate {
 
     @Test(groups = "integration")

@@ -22,6 +22,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
@@ -39,12 +40,9 @@ import java.time.Duration;
 import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class KVRangeDumpSessionTest {
+public class KVRangeDumpSessionTest extends MockableTest {
     @Mock
     private IKVRange rangeAccessor;
     @Mock
@@ -58,17 +56,6 @@ public class KVRangeDumpSessionTest {
 
     @Mock
     private KVRangeDumpSession.DumpBytesRecorder dumpBytesRecorder;
-    private AutoCloseable closeable;
-
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
-    }
 
     @Test
     public void dumpEmptySnapshot() {

@@ -15,34 +15,29 @@ package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
-import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import lombok.SneakyThrows;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 
-public class AbstractKVRangeTest {
+public abstract class AbstractKVRangeTest extends MockableTest {
     public Path dbRootDir;
     private String DB_NAME = "testDB";
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private KVEngineConfigurator<?> configurator = null;
     protected IKVEngine kvEngine;
-    private AutoCloseable closeable;
 
-    @BeforeMethod
-    public void setup() throws IOException {
-        closeable = MockitoAnnotations.openMocks(this);
-
-        if (!isDevEnv()) {
+    @SneakyThrows
+    protected void doSetup(Method method) {
+        if (isDevEnv()) {
             configurator = new InMemKVEngineConfigurator();
         } else {
             dbRootDir = Files.createTempDirectory("");
@@ -58,14 +53,11 @@ public class AbstractKVRangeTest {
         kvEngine.start();
     }
 
-    @SneakyThrows
-    @AfterMethod
-    public void teardown() {
+    protected void doTeardown(Method method) {
         kvEngine.stop();
         if (configurator instanceof RocksDBKVEngineConfigurator) {
             TestUtil.deleteDir(dbRootDir.toString());
             dbRootDir.toFile().delete();
         }
-        closeable.close();
     }
 }

@@ -21,25 +21,19 @@ import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.TestUtil;
 import com.google.protobuf.ByteString;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import lombok.SneakyThrows;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest {
     protected Path dbRootDir;
 
-    @BeforeMethod
-    public void setup() throws IOException {
+    @SneakyThrows
+    @Override
+    protected void beforeStart() {
         dbRootDir = Files.createTempDirectory("");
-        doSetup();
-        super.setup();
     }
-
-    protected abstract void doSetup();
 
     @SneakyThrows
     @Override
@@ -47,9 +41,8 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
         return new RocksDBKVEngine(null, configurator());
     }
 
-    @AfterMethod
-    public void teardown() {
-        super.teardown();
+    @Override
+    protected void afterStop() {
         TestUtil.deleteDir(dbRootDir.toString());
     }
 

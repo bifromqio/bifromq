@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
@@ -30,6 +31,7 @@ import com.google.common.collect.Iterators;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.PublishSubject;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
@@ -41,14 +43,11 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class KVRangeWALSubscriptionTest {
+public class KVRangeWALSubscriptionTest extends MockableTest {
     private long maxSize = 1024;
     @Mock
     private IKVRangeWAL wal;
@@ -56,22 +55,16 @@ public class KVRangeWALSubscriptionTest {
     private BehaviorSubject<Long> commitIndexSource = BehaviorSubject.create();
     @Mock
     private IKVRangeWALSubscriber subscriber;
-
     private ExecutorService executor;
-    private AutoCloseable closeable;
 
-    @BeforeMethod
-    public void setup() {
-        closeable = MockitoAnnotations.openMocks(this);
+    protected void doSetup(Method method) {
         executor = Executors.newSingleThreadScheduledExecutor();
         when(wal.snapshotInstallTask()).thenReturn(snapshotSource);
         when(wal.rangeId()).thenReturn(KVRangeIdUtil.generate());
     }
 
-    @AfterMethod
-    public void teardown() throws Exception {
+    protected void doTeardown(Method method) {
         MoreExecutors.shutdownAndAwaitTermination(executor, Duration.ofSeconds(5));
-        closeable.close();
     }
 
     @SneakyThrows

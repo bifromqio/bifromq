@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.localengine.metrics;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertFalse;
 
+import com.baidu.bifromq.basekv.localengine.MockableTest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -27,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class KVSpaceMetersTest {
+public class KVSpaceMetersTest extends MockableTest {
     @Test
     public void removeGaugeWhenNoRef() {
         AtomicInteger gaugeCounter = new AtomicInteger();

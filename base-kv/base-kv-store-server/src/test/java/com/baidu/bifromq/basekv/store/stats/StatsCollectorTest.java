@@ -13,20 +13,21 @@
 
 package com.baidu.bifromq.basekv.store.stats;
 
-import static org.testng.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doAnswer;
+import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.google.common.util.concurrent.AtomicDouble;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.time.Duration;
 import java.util.Map;
 import lombok.SneakyThrows;
-import org.testng.annotations.Test;
 import org.mockito.Mockito;
+import org.testng.annotations.Test;
 
-public class StatsCollectorTest {
+public class StatsCollectorTest extends MockableTest {
     @Test
     public void initAndTick() {
         StatsCollector collector = Mockito.mock(StatsCollector.class, Mockito.withSettings()

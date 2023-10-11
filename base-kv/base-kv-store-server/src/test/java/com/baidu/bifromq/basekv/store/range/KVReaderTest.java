@@ -20,20 +20,19 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.google.protobuf.ByteString;
+import java.lang.reflect.Method;
 import java.util.Optional;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class KVReaderTest {
+public class KVReaderTest extends MockableTest {
     @Mock
     private IKVRangeReader kvRangeReader;
     @Mock
@@ -42,18 +41,11 @@ public class KVReaderTest {
     private IKVSpaceIterator keyRangeIterator;
     @Mock
     private IKVReader dataReader;
-    private AutoCloseable closeable;
 
-    @BeforeMethod
-    public void openMocks() {
-        closeable = MockitoAnnotations.openMocks(this);
+    @Override
+    protected void doSetup(Method method) {
         when(kvRangeReader.newDataReader()).thenReturn(dataReader);
         when(keyRangeReader.newIterator()).thenReturn(keyRangeIterator);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
     }
 
     @Test

@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.TestUtil.isDevEnv;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -29,18 +30,17 @@ import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.AfterMethod;
 
 @Slf4j
-public abstract class KVRangeStoreClusterTestTemplate {
+public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
     protected KVRangeStoreTestCluster cluster;
     private int initNodes = 3;
     private KVRangeStoreOptions options;
 
-    public void createClusterByAnnotation(Method testMethod) {
+    private void createClusterByAnnotation(Method testMethod) {
         Cluster cluster = testMethod.getAnnotation(Cluster.class);
         options = new KVRangeStoreOptions();
-        if (!isDevEnv()) {
+        if (isDevEnv()) {
             options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
             options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         }
@@ -56,12 +56,12 @@ public abstract class KVRangeStoreClusterTestTemplate {
         } else {
             initNodes = 3;
         }
-        log.info("Starting test: " + testMethod.getName());
-        setup();
     }
 
-    public void setup() {
+    @Override
+    protected void doSetup(Method method) {
         try {
+            createClusterByAnnotation(method);
             log.info("Starting test cluster");
             cluster = new KVRangeStoreTestCluster(options);
             String store0 = cluster.bootstrapStore();
@@ -95,8 +95,8 @@ public abstract class KVRangeStoreClusterTestTemplate {
         }
     }
 
-    @AfterMethod
-    public void teardown() {
+    @Override
+    protected void doTeardown(Method method) {
         if (cluster != null) {
             log.info("Shutting down test cluster");
             new Thread(() -> cluster.shutdown()).start();

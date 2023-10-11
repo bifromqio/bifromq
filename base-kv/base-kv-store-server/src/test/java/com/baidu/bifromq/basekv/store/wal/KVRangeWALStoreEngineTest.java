@@ -18,6 +18,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
@@ -30,26 +31,26 @@ import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.io.File;
-import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class KVRangeWALStoreEngineTest {
+public class KVRangeWALStoreEngineTest extends MockableTest {
     private static final String DB_NAME = "testDB";
     private static final String DB_CHECKPOINT_DIR = "testDB_cp";
     private String dbPath;
     private KVEngineConfigurator<?> engineConfigurator;
     public Path dbRootDir;
 
-    @BeforeMethod
-    public void setup() throws IOException {
+    @SneakyThrows
+    @Override
+    protected void doSetup(Method method) {
         dbRootDir = Files.createTempDirectory("");
         dbPath = Paths.get(dbRootDir.toString(), DB_NAME).toString();
         engineConfigurator = new RocksDBKVEngineConfigurator()
@@ -57,8 +58,7 @@ public class KVRangeWALStoreEngineTest {
             .setDbRootDir(dbPath);
     }
 
-    @AfterMethod
-    public void teardown() {
+    protected void doTeardown(Method method) {
         if (dbRootDir != null) {
             TestUtil.deleteDir(dbRootDir.toString());
             dbRootDir.toFile().delete();

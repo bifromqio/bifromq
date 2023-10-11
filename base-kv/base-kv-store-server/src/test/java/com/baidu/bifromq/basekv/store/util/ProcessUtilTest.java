@@ -15,9 +15,10 @@ package com.baidu.bifromq.basekv.store.util;
 
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import org.testng.annotations.Test;
 
-public class ProcessUtilTest {
+public class ProcessUtilTest extends MockableTest {
     @Test
     public void cpuLoad() {
         double cpuLoad = ProcessUtil.cpuLoad();

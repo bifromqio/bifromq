@@ -21,6 +21,7 @@ import static com.baidu.bifromq.basekv.store.util.KVUtil.toLong;
 import static com.baidu.bifromq.basekv.store.util.KVUtil.toLongNativeOrder;
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
@@ -28,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class KVUtilTest {
+public class KVUtilTest extends MockableTest {
     @Test
     public void testToBytes() {
         assertEquals(toLong(KVUtil.toByteString(100L)), 100L);

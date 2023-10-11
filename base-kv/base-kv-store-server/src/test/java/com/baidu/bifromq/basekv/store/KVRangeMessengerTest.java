@@ -14,40 +14,37 @@
 package com.baidu.bifromq.basekv.store;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.StoreMessage;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import io.reactivex.rxjava3.observers.TestObserver;
 import io.reactivex.rxjava3.subjects.PublishSubject;
+import java.lang.reflect.Method;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.testng.annotations.Test;
 
-public class KVRangeMessengerTest {
+@Slf4j
+public class KVRangeMessengerTest extends MockableTest {
     @Mock
     private IStoreMessenger storeMessenger;
     private PublishSubject<StoreMessage> incomingStoreMsg;
-    private AutoCloseable closeable;
-    @BeforeMethod
-    public void setup() {
-        closeable = MockitoAnnotations.openMocks(this);
+
+    protected void doSetup(Method method) {
         incomingStoreMsg = PublishSubject.create();
     }
 
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
+    protected void doTeardown(Method method) {
     }
 
     @Test

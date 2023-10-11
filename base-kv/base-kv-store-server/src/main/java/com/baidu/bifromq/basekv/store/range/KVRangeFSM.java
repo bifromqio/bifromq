@@ -295,8 +295,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                         statsCollector.collect().distinctUntilChanged(),
                         queryLoadHint.distinctUntilChanged(),
                         mutationLoadHint.distinctUntilChanged(),
-                        (meta, role, syncStats, clusterConfig, rangeStats, queryLoadHint, mutationLoadHint) ->
-                            KVRangeDescriptor.newBuilder()
+                        (meta, role, syncStats, clusterConfig, rangeStats, queryLoadHint, mutationLoadHint) -> {
+                            log.trace("Query load hint: rangeId={}, storeId={}, \n{}",
+                                KVRangeIdUtil.toString(id), hostStoreId, queryLoadHint);
+                            log.trace("Mutation load hint: rangeId={}, storeId={}, \n{}",
+                                KVRangeIdUtil.toString(id), hostStoreId, mutationLoadHint);
+                            return KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver())
                                 .setId(id)
                                 .setBoundary(meta.boundary())
@@ -309,7 +313,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     .setQuery(queryLoadHint)
                                     .setMutation(mutationLoadHint)
                                     .build())
-                                .setHlc(HLC.INST.get()).build())
+                                .setHlc(HLC.INST.get()).build();
+                        })
                     .subscribe(descriptorSubject::onNext));
                 disposables.add(messenger.receive().subscribe(this::handleMessage));
                 clusterConfigSubject.onNext(wal.clusterConfig());
@@ -1408,10 +1413,6 @@ public class KVRangeFSM implements IKVRangeFSM {
     private void estimateSplitHint() {
         SplitHint roCoProcLoadHint = roCoProcLoadEstimator.estimate();
         SplitHint rwCoProcLoadHint = rwCoProcLoadEstimator.estimate();
-        log.debug("Query load hint: rangeId={}, storeId={}, \n{}",
-            KVRangeIdUtil.toString(id), hostStoreId, roCoProcLoadHint);
-        log.debug("Mutation load hint: rangeId={}, storeId={}, \n{}",
-            KVRangeIdUtil.toString(id), hostStoreId, rwCoProcLoadHint);
         queryLoadHint.onNext(roCoProcLoadHint);
         mutationLoadHint.onNext(rwCoProcLoadHint);
     }

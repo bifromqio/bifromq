@@ -14,16 +14,17 @@
 package com.baidu.bifromq.basekv.server;
 
 import static com.baidu.bifromq.basekv.server.AgentHostStoreMessenger.agentId;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMessage;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgentMember;
+import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.StoreMessage;
@@ -31,14 +32,12 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.observers.TestObserver;
 import io.reactivex.rxjava3.subjects.PublishSubject;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import java.lang.reflect.Method;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.testng.annotations.Test;
 
-public class AgentHostStoreMessengerTest {
+public class AgentHostStoreMessengerTest extends MockableTest {
     @Mock
     private IAgentHost agentHost;
     @Mock
@@ -55,10 +54,9 @@ public class AgentHostStoreMessengerTest {
     @Mock
     private IAgentMember tgtStoreAgentMember;
     private KVRangeId targetRange;
-    private AutoCloseable closeable;
-    @BeforeMethod
-    public void setup() {
-        closeable = MockitoAnnotations.openMocks(this);
+
+    @Override
+    protected void doSetup(Method method) {
         tgtStoreMessageSubject = PublishSubject.create();
         srcRange = KVRangeIdUtil.generate();
         targetRange = KVRangeIdUtil.generate();
@@ -66,11 +64,6 @@ public class AgentHostStoreMessengerTest {
         when(agent.register(srcStore)).thenReturn(srcStoreAgentMember);
         when(agent.register(targetStore)).thenReturn(tgtStoreAgentMember);
         when(tgtStoreAgentMember.receive()).thenReturn(tgtStoreMessageSubject);
-    }
-
-    @AfterMethod
-    public void releaseMocks() throws Exception {
-        closeable.close();
     }
 
     @Test

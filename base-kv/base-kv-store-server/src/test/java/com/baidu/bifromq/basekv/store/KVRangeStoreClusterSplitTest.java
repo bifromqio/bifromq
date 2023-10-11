@@ -26,7 +26,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(KVRangeStoreTestListener.class)
 public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplate {
 
     @Test(groups = "integration")

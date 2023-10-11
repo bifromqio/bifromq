@@ -17,7 +17,9 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import com.google.common.util.concurrent.MoreExecutors;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -29,21 +31,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class AsyncRunnerTest {
+public class AsyncRunnerTest extends MockableTest {
     private ExecutorService executor;
 
-    @BeforeMethod
-    public void setup() {
+    protected void doSetup(Method method) {
         executor = Executors.newWorkStealingPool();
     }
 
-    @AfterMethod
-    public void teardown() {
+    protected void doTeardown(Method method) {
         MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
     }
 

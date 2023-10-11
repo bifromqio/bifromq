@@ -15,9 +15,10 @@ package com.baidu.bifromq.basekv.store.util;
 
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.MockableTest;
 import org.testng.annotations.Test;
 
-public class VerUtilTest {
+public class VerUtilTest extends MockableTest {
     @Test
     public void bumpTest() {
         assertEquals(VerUtil.bump(0, false), 2);
