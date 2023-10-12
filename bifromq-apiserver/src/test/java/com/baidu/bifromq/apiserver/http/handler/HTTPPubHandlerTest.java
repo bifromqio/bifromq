@@ -157,7 +157,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
                 .thenReturn(CompletableFuture.completedFuture(RetainReply.getDefaultInstance()));
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
-        assertEquals(response.status(), HttpResponseStatus.FORBIDDEN);
+        assertEquals(response.status(), HttpResponseStatus.OK);
         assertEquals(response.content().readableBytes(), 0);
     }
 
