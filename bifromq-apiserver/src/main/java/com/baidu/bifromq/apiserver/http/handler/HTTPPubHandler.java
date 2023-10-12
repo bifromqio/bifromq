@@ -14,6 +14,7 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_PUB_QOS;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClientMeta;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRetain;
@@ -71,6 +72,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
         @Parameter(name = "topic", in = ParameterIn.HEADER, required = true, description = "the message topic"),
         @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the client type"),
+        @Parameter(name = "pub_qos", in = ParameterIn.HEADER, required = true, description = "QoS of the message to be distributed"),
         @Parameter(name = "retain", in = ParameterIn.HEADER, description = "the message should be retained"),
         @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about the kicker client, must be started with client_meta_"),
     })
@@ -85,6 +87,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
         try {
             String topic = getHeader(Headers.HEADER_TOPIC, req, true);
             String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
+            int qos = Integer.parseInt(getHeader(HEADER_PUB_QOS, req, true));
             boolean isRetain = getRetain(req);
             Map<String, String> clientMeta = getClientMeta(req);
             log.trace("Handling http pub request: reqId={}, tenantId={}, topic={}, clientType={}, clientMeta={}",
@@ -93,12 +96,16 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                 return CompletableFuture.completedFuture(
                     new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER));
             }
+            if (qos < 0 || qos > 2) {
+                return CompletableFuture.completedFuture(
+                        new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER));
+            }
             ClientInfo clientInfo = ClientInfo.newBuilder()
                 .setTenantId(tenantId)
                 .setType(clientType)
                 .putAllMetadata(clientMeta)
                 .build();
-            CompletableFuture<Void> distFuture = distClient.pub(reqId, topic, QoS.AT_MOST_ONCE,
+            CompletableFuture<Void> distFuture = distClient.pub(reqId, topic, QoS.forNumber(qos),
                 toRetainedByteBuffer(req.content()),
                 Integer.MAX_VALUE, clientInfo);
             CompletableFuture<Boolean> retainFuture = isRetain ?

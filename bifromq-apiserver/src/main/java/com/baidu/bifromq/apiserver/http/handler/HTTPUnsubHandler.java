@@ -65,7 +65,7 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
     }
 
     @DELETE
-    @Operation(summary = "remove a topic subscription from an inbox")
+    @Operation(summary = "Remove a topic subscription from an inbox")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),

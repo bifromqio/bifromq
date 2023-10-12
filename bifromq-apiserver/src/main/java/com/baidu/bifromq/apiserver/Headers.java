@@ -26,6 +26,7 @@ public enum Headers {
     HEADER_USER_ID("user_id"),
     HEADER_CLIENT_ID("client_id"),
     HEADER_RETAIN("retain"),
+    HEADER_PUB_QOS("pub_qos"),
     HEADER_DELIVERER_KEY("deliverer_key"),
     HEADER_EXPIRY_SECONDS("expiry_seconds");
 

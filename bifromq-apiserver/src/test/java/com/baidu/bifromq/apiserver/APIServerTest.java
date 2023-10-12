@@ -83,6 +83,7 @@ public class APIServerTest extends MockableTest {
             .header(Headers.HEADER_TOPIC.header, "/greeting")
             .header(Headers.HEADER_CLIENT_TYPE.header, "BifroMQ Fan")
             .header(Headers.HEADER_RETAIN.header,"true" )
+            .header(Headers.HEADER_PUB_QOS.header, "1")
             .POST(HttpRequest.BodyPublishers.ofString("Hello BifroMQ"))
             .build();
         when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
