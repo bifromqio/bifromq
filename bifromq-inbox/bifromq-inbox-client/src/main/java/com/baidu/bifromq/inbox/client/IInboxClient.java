@@ -17,6 +17,7 @@ import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.type.ClientInfo;
@@ -46,6 +47,8 @@ public interface IInboxClient extends ISubBroker, IConnectable {
     CompletableFuture<InboxSubResult> sub(long reqId, String tenantId, String inboxId, String topicFilter, QoS qos);
 
     CompletableFuture<InboxUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter);
+
+    CompletableFuture<ExpireInboxReply> expireInbox(long reqId, String tenantId, int expirySeconds);
 
     IInboxReader openInboxReader(String tenantId, String inboxId);
 

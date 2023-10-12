@@ -348,6 +348,11 @@
                 <artifactId>bifromq-inbox-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-inbox-gc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <!-- dist -->
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>

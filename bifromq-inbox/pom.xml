@@ -31,5 +31,6 @@
         <module>bifromq-inbox-rpc-definition</module>
         <module>bifromq-inbox-store</module>
         <module>bifromq-inbox-server</module>
+        <module>bifromq-inbox-gc</module>
     </modules>
 </project>

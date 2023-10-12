@@ -17,7 +17,6 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
@@ -25,7 +24,7 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
@@ -57,7 +56,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -65,7 +63,6 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
 public abstract class MockedInboxStoreTest {
-    private KVRangeId id;
     @Mock
     protected IKVReader reader;
     @Mock
@@ -73,9 +70,10 @@ public abstract class MockedInboxStoreTest {
     @Mock
     protected IKVIterator kvIterator;
     @Mock
+    protected IDistClient distClient;
+    @Mock
     protected final IEventCollector eventCollector = event -> {
     };
-    private final Supplier<IKVReader> rangeReaderProvider = () -> null;
     private final ISettingProvider settingProvider = Setting::current;
     protected final String tenantId = "tenantA";
     protected final String inboxId = "inboxId";
@@ -99,8 +97,7 @@ public abstract class MockedInboxStoreTest {
         closeable = MockitoAnnotations.openMocks(this);
         when(reader.iterator()).thenReturn(kvIterator);
         when(reader.boundary()).thenReturn(Boundary.newBuilder().build());
-        id = KVRangeIdUtil.generate();
-        coProc = new InboxStoreCoProc(id, rangeReaderProvider, settingProvider, eventCollector,
+        coProc = new InboxStoreCoProc(distClient, settingProvider, eventCollector,
             clock, Duration.ofMinutes(30));
     }
 
@@ -204,6 +201,13 @@ public abstract class MockedInboxStoreTest {
             .build();
     }
 
+    protected InboxServiceROCoProcInput getGCScanInput(int limit, String tenantId) {
+        return InboxServiceROCoProcInput.newBuilder()
+            .setGc(GCRequest.newBuilder()
+                .setLimit(limit).setTenantId(tenantId).build())
+            .build();
+    }
+
     protected InboxServiceROCoProcInput getHasInput(ByteString... inboxIds) {
         return InboxServiceROCoProcInput.newBuilder()
             .setBatchCheck(BatchCheckRequest.newBuilder()
@@ -219,4 +223,5 @@ public abstract class MockedInboxStoreTest {
                 .build())
             .build();
     }
+
 }

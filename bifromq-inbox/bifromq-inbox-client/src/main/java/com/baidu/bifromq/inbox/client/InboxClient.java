@@ -21,6 +21,9 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply.Result;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
@@ -163,6 +166,19 @@ final class InboxClient implements IInboxClient {
                 .setResult(UnsubReply.Result.ERROR)
                 .build())
             .thenApply(v -> InboxUnsubResult.values()[v.getResult().ordinal()]);
+    }
+
+    @Override
+    public CompletableFuture<ExpireInboxReply> expireInbox(long reqId, String tenantId, int expirySeconds) {
+        return rpcClient.invoke(tenantId, null, ExpireInboxRequest.newBuilder()
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setExpirySeconds(expirySeconds)
+                .build(), InboxServiceGrpc.getExpireInboxMethod())
+            .exceptionally(e -> ExpireInboxReply.newBuilder()
+                .setReqId(reqId)
+                .setResult(Result.ERROR)
+                .build());
     }
 
     @Override

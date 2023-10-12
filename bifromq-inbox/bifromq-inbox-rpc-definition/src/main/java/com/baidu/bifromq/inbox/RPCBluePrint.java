@@ -32,6 +32,7 @@ public class RPCBluePrint {
         .methodSemantic(InboxServiceGrpc.getTouchInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getSubMethod(), BluePrint.WRUnaryMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getUnsubMethod(), BluePrint.WRUnaryMethod.getInstance())
+        .methodSemantic(InboxServiceGrpc.getExpireInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getFetchInboxMethod(), BluePrint.WCHStreamingMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getCommitMethod(), BluePrint.WCHUnaryMethod
             .<CommitRequest>builder().keyHashFunc(CommitRequest::getInboxId).build())

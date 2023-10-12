@@ -24,11 +24,10 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
-import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchScheduler.Touch, List<String>>
+public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchScheduler.Touch, Boolean>
     implements IInboxTouchScheduler {
     public InboxTouchScheduler(IBaseKVStoreClient inboxStoreClient) {
         super("inbox_server_touch", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
@@ -36,7 +35,7 @@ public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchSchedu
     }
 
     @Override
-    protected Batcher<Touch, List<String>, MutationCallBatcherKey> newBatcher(String name,
+    protected Batcher<Touch, Boolean, MutationCallBatcherKey> newBatcher(String name,
                                                                               long tolerableLatencyNanos,
                                                                               long burstLatencyNanos,
                                                                               MutationCallBatcherKey batchKey) {
@@ -48,7 +47,7 @@ public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchSchedu
         return ByteString.copyFromUtf8(request.scopedInboxIdUtf8);
     }
 
-    private static class InboxTouchBatcher extends MutationCallBatcher<Touch, List<String>> {
+    private static class InboxTouchBatcher extends MutationCallBatcher<Touch, Boolean> {
         InboxTouchBatcher(String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
@@ -58,7 +57,7 @@ public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchSchedu
         }
 
         @Override
-        protected IBatchCall<Touch, List<String>, MutationCallBatcherKey> newBatch() {
+        protected IBatchCall<Touch, Boolean, MutationCallBatcherKey> newBatch() {
             return new BatchTouchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }

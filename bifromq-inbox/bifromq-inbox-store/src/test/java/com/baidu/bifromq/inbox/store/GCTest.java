@@ -16,6 +16,7 @@ package com.baidu.bifromq.inbox.store;
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +26,7 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -43,8 +45,8 @@ public class GCTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
         requestCreate(tenantId, inboxId, 3, 1, true);
         requestSub(tenantId, inboxId, "greeting", QoS.AT_MOST_ONCE);
-        when(inboxClient.touch(anyLong(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(null));
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), eq(1)))
+            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
@@ -55,11 +57,14 @@ public class GCTest extends InboxStoreTest {
         assertTrue(exist(tenantId, inboxId));
 
         ArgumentCaptor<String> tenantIdCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> topicFilterCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> inboxIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(inboxClient, timeout(3000))
-            .touch(anyLong(), tenantIdCaptor.capture(), inboxIdCaptor.capture());
+        verify(distClient, timeout(10000))
+            .unmatch(anyLong(), tenantIdCaptor.capture(), topicFilterCaptor.capture(), inboxIdCaptor.capture(),
+                anyString(), eq(1));
         assertEquals(tenantIdCaptor.getValue(), tenantId);
         assertEquals(inboxIdCaptor.getValue(), inboxId);
+        assertEquals(topicFilterCaptor.getValue(), "greeting");
     }
 
     private boolean exist(String tenantId, String inboxId) {

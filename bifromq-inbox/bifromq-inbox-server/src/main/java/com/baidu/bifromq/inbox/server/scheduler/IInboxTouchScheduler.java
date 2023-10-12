@@ -19,9 +19,8 @@ import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
 import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
 import com.google.protobuf.ByteString;
-import java.util.List;
 
-public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchScheduler.Touch, List<String>> {
+public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchScheduler.Touch, Boolean> {
     class Touch {
         final String scopedInboxIdUtf8;
         final boolean keep;
@@ -40,6 +39,11 @@ public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchSch
         public Touch(ByteString scopedInboxId) {
             scopedInboxIdUtf8 = scopedInboxId.toStringUtf8();
             keep = true;
+        }
+
+        public Touch(ByteString scopedInboxId, boolean keep) {
+            scopedInboxIdUtf8 = scopedInboxId.toStringUtf8();
+            this.keep = keep;
         }
     }
 }

@@ -28,12 +28,19 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.google.protobuf.ByteString;
 
 public class MessageUtil {
-    public static InboxServiceROCoProcInput buildGCRequest(long reqId, ByteString scopedInboxId, int limit) {
+    public static InboxServiceROCoProcInput buildGCRequest(long reqId, ByteString scopedInboxId, String tenantId,
+                                                           Integer expirySeconds, int limit) {
         GCRequest.Builder reqBuilder = GCRequest.newBuilder()
             .setReqId(reqId)
             .setLimit(limit);
         if (scopedInboxId != null) {
             reqBuilder.setScopedInboxId(scopedInboxId);
+        }
+        if (tenantId != null) {
+            reqBuilder.setTenantId(tenantId);
+        }
+        if (expirySeconds != null) {
+            reqBuilder.setExpirySeconds(expirySeconds);
         }
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)

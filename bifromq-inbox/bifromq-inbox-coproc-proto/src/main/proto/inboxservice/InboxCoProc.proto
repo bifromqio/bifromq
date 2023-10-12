@@ -62,7 +62,7 @@ message BatchTouchRequest{
 }
 
 message BatchTouchReply{
-  map<string, TopicFilterList> subs = 1; // key: scopedInboxIdUtf8
+  repeated string scopedInboxId = 1; // removed scopedInboxIdUtf8
 }
 
 message BatchSubRequest{
@@ -162,11 +162,14 @@ message GCRequest {
   uint64 reqId = 1;
   optional bytes scopedInboxId = 2;
   uint32 limit = 3;
+  optional string tenantId = 4;
+  optional uint32 expirySeconds = 5;
 }
 
 message GCReply {
   uint64 reqId = 1;
   repeated bytes scopedInboxId = 2;
+  optional bytes nextScopedInboxId = 3;
 }
 
 message CollectMetricsRequest{

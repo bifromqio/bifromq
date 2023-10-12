@@ -104,7 +104,7 @@ public abstract class InboxServiceTest {
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .inboxClient(inboxClient)
+            .distClient(distClient)
             .storeClient(inboxStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)

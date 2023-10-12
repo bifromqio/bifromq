@@ -35,7 +35,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-client</artifactId>
+            <artifactId>bifromq-dist-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -52,6 +52,10 @@
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-inbox-rpc-definition</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-inbox-gc</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

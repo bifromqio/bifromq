@@ -167,7 +167,7 @@ class MQTTTest {
             .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .inboxClient(inboxClient)
+            .distClient(distClient)
             .storeClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)

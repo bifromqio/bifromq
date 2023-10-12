@@ -22,13 +22,13 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 
-public class BatchTouchCall extends BatchMutationCall<IInboxTouchScheduler.Touch, List<String>> {
+public class BatchTouchCall extends BatchMutationCall<IInboxTouchScheduler.Touch, Boolean> {
     protected BatchTouchCall(KVRangeId rangeId,
                              IBaseKVStoreClient distWorkerClient,
                              Duration pipelineExpiryTime) {
@@ -51,19 +51,18 @@ public class BatchTouchCall extends BatchMutationCall<IInboxTouchScheduler.Touch
 
     @Override
     protected void handleOutput(
-        Queue<CallTask<IInboxTouchScheduler.Touch, List<String>, MutationCallBatcherKey>> batchedTasks,
+        Queue<CallTask<IInboxTouchScheduler.Touch, Boolean, MutationCallBatcherKey>> batchedTasks,
         RWCoProcOutput output) {
-        CallTask<IInboxTouchScheduler.Touch, List<String>, MutationCallBatcherKey> callTask;
+        Set<String> removedInboxes = new HashSet<>(output.getInboxService().getBatchTouch().getScopedInboxIdList());
+        CallTask<IInboxTouchScheduler.Touch, Boolean, MutationCallBatcherKey> callTask;
         while ((callTask = batchedTasks.poll()) != null) {
-            callTask.callResult.complete(
-                output.getInboxService().getBatchTouch().getSubsOrDefault(callTask.call.scopedInboxIdUtf8,
-                    TopicFilterList.getDefaultInstance()).getTopicFiltersList());
+            callTask.callResult.complete(removedInboxes.contains(callTask.call.scopedInboxIdUtf8));
         }
 
     }
 
     @Override
-    protected void handleException(CallTask<IInboxTouchScheduler.Touch, List<String>, MutationCallBatcherKey> callTask,
+    protected void handleException(CallTask<IInboxTouchScheduler.Touch, Boolean, MutationCallBatcherKey> callTask,
                                    Throwable e) {
         callTask.callResult.completeExceptionally(e);
     }
