@@ -15,23 +15,32 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -118,34 +127,48 @@ public class MockedInboxAdminTest extends MockedInboxStoreTest {
 
     @Test
     public void testDeleteInbox() {
+        String inboxId2 = scopedInboxId(tenantId, inboxId + "_2").toStringUtf8();
+        String inboxId3 = scopedInboxId(tenantId, inboxId + "_expire").toStringUtf8();
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         when(reader.get(ByteString.copyFromUtf8(scopedInboxIdUtf8)))
             .thenReturn(Optional.empty());
-        when(reader.get(ByteString.copyFromUtf8("dev-" + scopedInboxIdUtf8)))
+        when(reader.get(ByteString.copyFromUtf8(inboxId2)))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis())
                 .setExpireSeconds(Integer.MAX_VALUE)
+                .putTopicFilters("topicFilter2", QoS.AT_LEAST_ONCE)
                 .build().toByteString()));
-        when(reader.get(ByteString.copyFromUtf8("expire-" + scopedInboxIdUtf8)))
+        when(reader.get(ByteString.copyFromUtf8(inboxId3)))
             .thenReturn(Optional.of(InboxMetadata.newBuilder()
                 .setLastFetchTime(clock.millis() - 30 * 1000)
                 .setExpireSeconds(1)
+                .putTopicFilters("topicFilter3", QoS.AT_LEAST_ONCE)
                 .build().toByteString()));
         doNothing().when(writer).delete(any());
 
         try {
             requestRW(getDeleteInput(new HashMap<>() {{
                 put(scopedInboxIdUtf8, false);
-                put("dev-" + scopedInboxIdUtf8, false);
-                put("expire-" + scopedInboxIdUtf8, true);
+                put(inboxId2, false);
+                put(inboxId3, true);
             }}));
 
-            ArgumentCaptor<ByteString> argumentCaptor = ArgumentCaptor.forClass(ByteString.class);
-            verify(writer, times(2)).delete(argumentCaptor.capture());
-            List<ByteString> args = argumentCaptor.getAllValues();
-            assertEquals(args.size(), 2);
-            assertEquals(ByteString.copyFromUtf8("dev-" + scopedInboxIdUtf8), args.get(0));
-            assertEquals(ByteString.copyFromUtf8("expire-" + scopedInboxIdUtf8), args.get(1));
+            ArgumentCaptor<ByteString> inboxIdCaptor = ArgumentCaptor.forClass(ByteString.class);
+            ArgumentCaptor<String> tfCaptor = ArgumentCaptor.forClass(String.class);
+
+            verify(writer, times(2)).delete(inboxIdCaptor.capture());
+            verify(distClient, times(2)).unmatch(anyLong(), anyString(), tfCaptor.capture(), anyString(), anyString(), anyInt());
+            Set<ByteString> inboxIds = new HashSet<>(inboxIdCaptor.getAllValues());
+            assertEquals(inboxIds.size(), 2);
+            assertTrue(inboxIds.contains(ByteString.copyFromUtf8(inboxId2)));
+            assertTrue(inboxIds.contains(ByteString.copyFromUtf8(inboxId3)));
+            Set<String> tfs = new HashSet<>(tfCaptor.getAllValues());
+            assertEquals(tfs.size(), 2);
+            assertTrue(tfs.contains("topicFilter2"));
+            assertTrue(tfs.contains("topicFilter3"));
         } catch (Exception exception) {
+            exception.printStackTrace();
             fail();
         }
     }

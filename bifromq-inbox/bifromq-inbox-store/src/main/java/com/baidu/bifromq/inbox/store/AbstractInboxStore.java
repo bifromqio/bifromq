@@ -72,7 +72,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         this.storeClient = builder.storeClient;
         this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
-        coProcFactory = new InboxStoreCoProcFactory(builder.settingProvider,
+        coProcFactory = new InboxStoreCoProcFactory(builder.distClient, builder.settingProvider,
             builder.eventCollector, builder.clock, builder.purgeDelay);
         balanceController =
             new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
@@ -84,7 +84,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         } else {
             jobScheduler = builder.bgTaskExecutor;
         }
-        this.inboxStoreGCProc = new InboxStoreGCProc(storeClient, builder.inboxClient, jobScheduler);
+        this.inboxStoreGCProc = new InboxStoreGCProc(storeClient, jobScheduler);
         jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "inboxstore");
     }
 

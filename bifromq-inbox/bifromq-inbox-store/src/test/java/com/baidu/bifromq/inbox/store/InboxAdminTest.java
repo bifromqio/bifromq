@@ -14,11 +14,15 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
@@ -27,6 +31,7 @@ import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.QoS;
 import java.time.Clock;
+import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -73,7 +78,9 @@ public class InboxAdminTest extends InboxStoreTest {
     }
 
     @Test(groups = "integration")
-    public void deleteAndReturnSubs() {
+    public void deleteAndReturn() {
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), eq(1)))
+            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         String tenantId = "tenantId";
         String inboxId = "deleteAndReturnSubs_inboxId";
         requestCreate(tenantId, inboxId, 10, 2, false);
@@ -82,9 +89,7 @@ public class InboxAdminTest extends InboxStoreTest {
         when(clock.millis()).thenReturn(2100L);
 
         BatchTouchReply reply = requestDelete(tenantId, inboxId);
-        assertEquals(reply.getSubsCount(), 1);
-        assertEquals(reply.getSubsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()).getTopicFilters(0),
-            "/a/b/c");
+        assertEquals(reply.getScopedInboxIdCount(), 1);
     }
 
     @Test(groups = "integration")

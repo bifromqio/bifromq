@@ -34,7 +34,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class InboxGCProc {
 
-    private final IBaseKVStoreClient storeClient;
+    protected final IBaseKVStoreClient storeClient;
+
     private final Executor gcExecutor;
 
 
@@ -56,10 +57,9 @@ public abstract class InboxGCProc {
     public CompletableFuture<Void> gcRange(KVRangeId rangeId, String tenantId, Integer expirySeconds, int limit) {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         AtomicInteger count = new AtomicInteger();
-        gcExecutor.execute(() -> {
-            doGC(rangeId, tenantId, expirySeconds, null, limit, onDone, count);
-        });
-        onDone.whenComplete((v, e) -> log.debug("gced {} inboxes", count.get()));
+        gcExecutor.execute(() -> doGC(rangeId, tenantId, expirySeconds, null, limit, onDone, count));
+        onDone.whenComplete((v, e) -> log.debug("[InboxGC] tenant[{}] gc {} inboxes from range[{}]",
+            tenantId, count.get(), KVRangeIdUtil.toString(rangeId)));
         return onDone;
     }
 
@@ -73,10 +73,6 @@ public abstract class InboxGCProc {
                       CompletableFuture<Void> onDone,
                       AtomicInteger count) {
         scan(rangeId, tenantId, expirySeconds, fromInboxId, limit)
-            .exceptionally(e -> {
-                log.error("[InboxGC] scan failed: rangeId={}", KVRangeIdUtil.toString(rangeId), e);
-                return GCReply.getDefaultInstance();
-            })
             .thenComposeAsync(gcReply -> {
                 List<ByteString> scopedInboxIdList = gcReply.getScopedInboxIdList();
                 count.addAndGet(scopedInboxIdList.size());
@@ -136,6 +132,11 @@ public abstract class InboxGCProc {
                     return v.getRoCoProcResult().getInboxService().getGc();
                 }
                 throw new RuntimeException("BaseKV Query failed:" + v.getCode().name());
+            })
+            .exceptionally(e -> {
+                log.error("[InboxGC] scan failed: tenantId={}, rangeId={}", tenantId, KVRangeIdUtil.toString(rangeId),
+                    e);
+                return GCReply.newBuilder().setReqId(reqId).build();
             });
     }
 }

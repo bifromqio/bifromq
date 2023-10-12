@@ -19,11 +19,7 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.scopedTopicFilter;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static java.util.Collections.emptyList;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
@@ -50,7 +46,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterList.Builder;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import java.util.ArrayList;
@@ -205,7 +200,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
     @Test
     public void testDeleteInboxWithErrorCode() {
         mockExecutePipeline(ReplyCode.BadVersion,
-            generateRWCoProcResult(BatchTouchReply.newBuilder().putAllSubs(new HashMap<>()).build()));
+            generateRWCoProcResult(BatchTouchReply.newBuilder().build()));
         DeleteInboxReply.Builder builder = DeleteInboxReply.newBuilder();
         StreamObserver<DeleteInboxReply> responseObserver = new TestingStreamObserver<>() {
             @Override
@@ -218,49 +213,9 @@ public class MockedInboxAdminTest extends MockedInboxService {
     }
 
     @Test
-    public void testDeleteInboxWithEmptyTopicFilter() {
+    public void testDeleteInbox() {
         mockExecutePipeline(ReplyCode.Ok,
-            generateRWCoProcResult(BatchTouchReply.newBuilder().putAllSubs(new HashMap<>()).build()));
-        DeleteInboxReply.Builder builder = DeleteInboxReply.newBuilder();
-        StreamObserver<DeleteInboxReply> responseObserver = new TestingStreamObserver<>() {
-            @Override
-            public void onNext(DeleteInboxReply deleteInboxReply) {
-                builder.setResult(deleteInboxReply.getResult());
-            }
-        };
-        inboxService.deleteInbox(deleteRequest, responseObserver);
-        Assert.assertEquals(builder.getResult(), DeleteInboxReply.Result.OK);
-    }
-
-    @Test
-    public void testDeleteInboxWithUnMatchError() {
-        Map<String, TopicFilterList> allSubs = new HashMap<>();
-        allSubs.put(scopedInboxIdUtf8, TopicFilterList.newBuilder()
-            .addAllTopicFilters(topicFilters)
-            .build());
-        mockExecutePipeline(ReplyCode.Ok,
-            generateRWCoProcResult(BatchTouchReply.newBuilder().putAllSubs(allSubs).build()));
-        mockDistUnMatch(UnmatchResult.ERROR);
-        DeleteInboxReply.Builder builder = DeleteInboxReply.newBuilder();
-        StreamObserver<DeleteInboxReply> responseObserver = new TestingStreamObserver<>() {
-            @Override
-            public void onNext(DeleteInboxReply deleteInboxReply) {
-                builder.setResult(deleteInboxReply.getResult());
-            }
-        };
-        inboxService.deleteInbox(deleteRequest, responseObserver);
-        Assert.assertEquals(builder.getResult(), DeleteInboxReply.Result.ERROR);
-    }
-
-    @Test
-    public void testDeleteInboxWithUnMatchOK() {
-        Map<String, TopicFilterList> allSubs = new HashMap<>();
-        allSubs.put(scopedInboxIdUtf8, TopicFilterList.newBuilder()
-            .addAllTopicFilters(topicFilters)
-            .build());
-        mockExecutePipeline(ReplyCode.Ok,
-            generateRWCoProcResult(BatchTouchReply.newBuilder().putAllSubs(allSubs).build()));
-        mockDistUnMatch(UnmatchResult.OK);
+            generateRWCoProcResult(BatchTouchReply.newBuilder().build()));
         DeleteInboxReply.Builder builder = DeleteInboxReply.newBuilder();
         StreamObserver<DeleteInboxReply> responseObserver = new TestingStreamObserver<>() {
             @Override
@@ -376,26 +331,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
 
     @Test
     public void testExpireInbox() throws InterruptedException {
-        mockInboxServiceGCProc(3, 2);
-        AtomicReference<ExpireInboxReply> result = new AtomicReference<>();
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-        StreamObserver<ExpireInboxReply> responseObserver = new TestingStreamObserver<>() {
-            @Override
-            public void onNext(ExpireInboxReply reply) {
-                result.set(reply);
-                countDownLatch.countDown();
-            }
-        };
-
-        inboxService.expireInbox(expireInboxRequest, responseObserver);
-        countDownLatch.await();
-        Assert.assertEquals(result.get().getResult(), Result.OK);
-        verify(distClient, times(3 * 2)).unmatch(anyLong(), eq(tenantId), anyString(), anyString(), anyString(), eq(1));
-    }
-
-    @Test
-    public void testExpireInboxWithNoSub() throws InterruptedException {
-        mockInboxServiceGCProc(3, 0);
+        mockInboxServiceGCProc(3);
         AtomicReference<ExpireInboxReply> result = new AtomicReference<>();
         CountDownLatch countDownLatch = new CountDownLatch(1);
         StreamObserver<ExpireInboxReply> responseObserver = new TestingStreamObserver<>() {
@@ -408,7 +344,6 @@ public class MockedInboxAdminTest extends MockedInboxService {
         inboxService.expireInbox(expireInboxRequest, responseObserver);
         countDownLatch.await();
         Assert.assertEquals(result.get().getResult(), Result.OK);
-        verify(distClient, times(0)).unmatch(anyLong(), eq(tenantId), anyString(), anyString(), anyString(), eq(1));
     }
 
     @Test
@@ -428,7 +363,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
         Assert.assertEquals(result.get().getResult(), Result.OK);
     }
 
-    private void mockInboxServiceGCProc(int rangeCount, int inboxTopicFilterCount) {
+    private void mockInboxServiceGCProc(int rangeCount) {
         List<KVRangeSetting> rangeSettings = mockFindBoundary(tenantId, rangeCount);
         List<CompletableFuture<KVRangeRWReply>> touchResults = new ArrayList<>();
         for (int i = 0; i < rangeSettings.size(); i++) {
@@ -445,12 +380,8 @@ public class MockedInboxAdminTest extends MockedInboxService {
                     .build())
                 .build();
             mockScanRange(setting, scanReply);
-            Builder builder = TopicFilterList.newBuilder();
-            for (int j = 0; j < inboxTopicFilterCount; j++) {
-                builder.addTopicFilters("topicFilter_" + i + "_" + j);
-            }
             BatchTouchReply batchTouchReply = BatchTouchReply.newBuilder()
-                .putSubs(scopedInboxId.toStringUtf8(), builder.build())
+                .addScopedInboxId(scopedInboxId.toStringUtf8())
                 .build();
             touchResults.add(CompletableFuture.completedFuture(KVRangeRWReply.newBuilder()
                 .setCode(ReplyCode.Ok)

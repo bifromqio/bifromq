@@ -15,11 +15,13 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.buildMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxMetadataKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isQoS0MessageKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isQoS1MessageKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isQoS2MessageIndexKey;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseQoS2Index;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseScopedInboxId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseScopedInboxIdFromScopedTopicFilter;
@@ -38,7 +40,6 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -47,6 +48,8 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
@@ -120,18 +123,19 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class InboxStoreCoProc implements IKVRangeCoProc {
+    private final IDistClient distClient;
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final Clock clock;
     private final Duration purgeDelay;
     private final Cache<ByteString, Optional<InboxMetadata>> inboxMetadataCache;
 
-    InboxStoreCoProc(KVRangeId id,
-                     Supplier<IKVReader> rangeReaderProvider,
+    InboxStoreCoProc(IDistClient distClient,
                      ISettingProvider settingProvider,
                      IEventCollector eventCollector,
                      Clock clock,
                      Duration purgeDelay) {
+        this.distClient = distClient;
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.clock = clock;
@@ -150,8 +154,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             switch (coProcInput.getInputCase()) {
                 case BATCHCHECK -> outputBuilder.setBatchCheck(batchCheck(coProcInput.getBatchCheck(), reader));
                 case BATCHFETCH -> outputBuilder.setBatchFetch(batchFetch(coProcInput.getBatchFetch(), reader));
-                case COLLECTMETRICS ->
-                    outputBuilder.setCollectedMetrics(collect(coProcInput.getCollectMetrics(), reader));
+                case COLLECTMETRICS -> outputBuilder.setCollectedMetrics(
+                    collect(coProcInput.getCollectMetrics(), reader));
                 case GC -> outputBuilder.setGc(gcScan(coProcInput.getGc(), reader));
             }
             return CompletableFuture.completedFuture(ROCoProcOutput.newBuilder()
@@ -888,9 +892,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 InboxMetadata metadata = existing.get();
                 if (hasExpired(metadata) || !request.getScopedInboxIdMap().get(scopedInboxIdUtf8)) {
                     clearInbox(scopedInboxId, metadata, reader.iterator(), writer);
-                    replyBuilder.putSubs(scopedInboxIdUtf8, TopicFilterList.newBuilder()
-                        .addAllTopicFilters(metadata.getTopicFiltersMap().keySet())
-                        .build());
+                    replyBuilder.addScopedInboxId(scopedInboxIdUtf8);
                     toRemove.put(scopedInboxId, metadata);
                 } else {
                     metadata = metadata.toBuilder().setLastFetchTime(clock.millis()).build();
@@ -900,8 +902,25 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             }
         }
         return () -> {
-            toRemove.forEach((scopedInboxId, inboxMetadata) ->
-                inboxMetadataCache.asMap().remove(scopedInboxId, Optional.of(inboxMetadata)));
+            toRemove.forEach((scopedInboxId, inboxMetadata) -> {
+                String inboxId = parseInboxId(scopedInboxId);
+                inboxMetadataCache.asMap().remove(scopedInboxId, Optional.of(inboxMetadata));
+                for (String topicFilter : inboxMetadata.getTopicFiltersMap().keySet()) {
+                    distClient.unmatch(System.nanoTime(), inboxMetadata.getClient().getTenantId(),
+                            topicFilter, inboxId, getDelivererKey(inboxId), 1)
+                        .whenComplete((unmatchResult, e) -> {
+                            if (e != null) {
+                                log.error("Unmatch inbox exception, tenantId={}, inboxId={}",
+                                    inboxMetadata.getClient().getTenantId(), inboxId, e);
+                                return;
+                            }
+                            if (UnmatchResult.ERROR.equals(unmatchResult)) {
+                                log.error("Unmatch inbox error, tenantId={}, inboxId={}",
+                                    inboxMetadata.getClient().getTenantId(), inboxId);
+                            }
+                        });
+                }
+            });
             toUpdate.forEach((scopedInboxId, inboxMetadata) ->
                 inboxMetadataCache.put(scopedInboxId, Optional.of(inboxMetadata)));
         };

@@ -39,7 +39,7 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.IConnectable;
-import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
@@ -111,7 +111,7 @@ abstract class InboxStoreTest {
     protected SimpleMeterRegistry meterRegistry;
 
     @Mock
-    protected IInboxClient inboxClient;
+    protected IDistClient distClient;
     @Mock
     protected ISettingProvider settingProvider;
     @Mock
@@ -186,7 +186,7 @@ abstract class InboxStoreTest {
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .inboxClient(inboxClient)
+            .distClient(distClient)
             .storeClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -249,6 +249,7 @@ abstract class InboxStoreTest {
                 .setExpireSeconds(expireSeconds)
                 .setLimit(limit)
                 .setDropOldest(dropOldest)
+                .setClient(ClientInfo.newBuilder().setTenantId(tenantId).build())
                 .build())
             .build();
         InboxServiceRWCoProcInput input = MessageUtil.buildCreateRequest(reqId, request);
