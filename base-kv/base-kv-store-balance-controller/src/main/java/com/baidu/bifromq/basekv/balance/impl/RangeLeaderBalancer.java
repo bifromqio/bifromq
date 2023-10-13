@@ -24,6 +24,7 @@ import com.baidu.bifromq.basekv.proto.State.StateType;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.google.common.collect.Sets;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -153,7 +154,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
             .filter(d -> d.getState() == StateType.Normal)
-            .sorted((o1, o2) -> (int) (o1.getId().getId() - o2.getId().getId()))
+            .sorted(Comparator.comparingLong(o -> o.getId().getId()))
             .toList();
     }
 
