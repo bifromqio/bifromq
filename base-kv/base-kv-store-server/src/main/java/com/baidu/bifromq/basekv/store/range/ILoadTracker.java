@@ -14,9 +14,28 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.google.protobuf.ByteString;
+import java.util.Map;
 
 public interface ILoadTracker {
     interface ILoadRecorder {
+        long startNanos();
+
+        /**
+         * Get the kv io times
+         *
+         * @return the access times to kv engine
+         */
+        int getKVIOs();
+
+        /**
+         * Get the total time spent on io of kv engine
+         *
+         * @return the total time in nanos
+         */
+        long getKVIONanos();
+
+        Map<ByteString, Long> keyDistribution();
+
         /**
          * The latency spent for accessing this key
          *
@@ -24,6 +43,13 @@ public interface ILoadTracker {
          * @param latencyNanos the nanos spent
          */
         void record(ByteString key, long latencyNanos);
+
+        /**
+         * The latency spent for other kv activity
+         *
+         * @param latencyNanos the nanos spent
+         */
+        void record(long latencyNanos);
 
         void stop();
     }

@@ -87,6 +87,10 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.basekv.store.range.estimator.ISplitKeyEstimator;
+import com.baidu.bifromq.basekv.store.range.estimator.LatencyBasedSplitKeyEstimator;
+import com.baidu.bifromq.basekv.store.range.estimator.NoopEstimator;
+import com.baidu.bifromq.basekv.store.range.estimator.UsageBasedSplitKeyEstimator;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.VerUtil;
@@ -194,16 +198,23 @@ public class KVRangeFSM implements IKVRangeFSM {
             this.opts = opts.toBuilder().build();
             this.id = id;
             this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
-            roCoProcLoadEstimator = opts.isEnableSplitKeyEstimation() ?
-                new SplitKeyEstimator(Duration.ofNanos(opts.getTolerableROCoProcLatencyNanos()),
+            roCoProcLoadEstimator = opts.isEnableLoadEstimation() ?
+                new LatencyBasedSplitKeyEstimator(Duration.ofNanos(opts.getTolerableROCoProcLatencyNanos()),
                     opts.getLoadTrackingWindowSec(),
-                    true,
-                    coProcFactory::toSplitKey) : NoopEstimator.INSTANCE;
-            rwCoProcLoadEstimator = opts.isEnableSplitKeyEstimation() ?
-                new SplitKeyEstimator(Duration.ofNanos(opts.getTolerableRWCoProcLatencyNanos()),
-                    opts.getLoadTrackingWindowSec(),
-                    false,
-                    coProcFactory::toSplitKey) : NoopEstimator.INSTANCE;
+                    coProcFactory::toSplitKey,
+                    "clusterId", clusterId,
+                    "storeId", hostStoreId,
+                    "rangeId", KVRangeIdUtil.toString(id),
+                    "type", "query") : NoopEstimator.INSTANCE;
+            rwCoProcLoadEstimator = opts.isEnableLoadEstimation() ?
+                new UsageBasedSplitKeyEstimator(opts.getLoadTrackingWindowSec(),
+                    opts.getIoNanosLimit(),
+                    opts.getMaxIODensity(),
+                    coProcFactory::toSplitKey,
+                    "clusterId", clusterId,
+                    "storeId", hostStoreId,
+                    "rangeId", KVRangeIdUtil.toString(id),
+                    "type", "mutation") : NoopEstimator.INSTANCE;
             if (initSnapshot != null) {
                 walStateStorageEngine.destroy(id);
                 walStateStorageEngine.newRaftStateStorage(id, initSnapshot);
@@ -1284,13 +1295,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         onDone.complete(() -> finishCommand(taskId, value.orElse(ByteString.EMPTY)));
                                     }
                                     case RWCOPROC -> {
-                                        ILoadTracker.ILoadRecorder roRecorder = rwCoProcLoadEstimator.start();
                                         ILoadTracker.ILoadRecorder rwRecorder = rwCoProcLoadEstimator.start();
                                         Supplier<RWCoProcOutput> outputSupplier = coProc.mutate(command.getRwCoProc(),
-                                            new LoadRecordableKVReader(dataReader, roRecorder),
+                                            new LoadRecordableKVReader(dataReader, rwRecorder),
                                             new LoadRecordableKVWriter(rangeWriter.kvWriter(), rwRecorder));
                                         onDone.complete(() -> {
-                                            roRecorder.stop();
                                             rwRecorder.stop();
                                             finishCommand(taskId, outputSupplier.get());
                                         });

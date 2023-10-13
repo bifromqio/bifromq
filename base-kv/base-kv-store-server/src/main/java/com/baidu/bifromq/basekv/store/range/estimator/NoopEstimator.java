@@ -11,10 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range;
+package com.baidu.bifromq.basekv.store.range.estimator;
 
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.google.protobuf.ByteString;
+import java.util.Collections;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -23,7 +25,32 @@ public class NoopEstimator implements ISplitKeyEstimator {
     public static final ISplitKeyEstimator INSTANCE = new NoopEstimator();
     private static final ILoadRecorder DUMMY_RECORDER = new ILoadRecorder() {
         @Override
+        public long startNanos() {
+            return 0;
+        }
+
+        @Override
+        public int getKVIOs() {
+            return 0;
+        }
+
+        @Override
+        public long getKVIONanos() {
+            return 0;
+        }
+
+        @Override
+        public Map<ByteString, Long> keyDistribution() {
+            return Collections.emptyMap();
+        }
+
+        @Override
         public void record(ByteString key, long latencyNanos) {
+
+        }
+
+        @Override
+        public void record(long latencyNanos) {
 
         }
 

@@ -11,9 +11,10 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range;
+package com.baidu.bifromq.basekv.store.range.estimator;
 
 import com.baidu.bifromq.basekv.proto.SplitHint;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 
 public interface ISplitKeyEstimator extends ILoadTracker {
     SplitHint estimate();

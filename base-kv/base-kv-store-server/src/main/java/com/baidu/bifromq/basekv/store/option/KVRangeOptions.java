@@ -30,10 +30,13 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder(toBuilder = true)
 public class KVRangeOptions {
-    private boolean enableSplitKeyEstimation = true;
+    private boolean enableLoadEstimation = false;
     private long tolerableROCoProcLatencyNanos = Duration.ofMillis(2).toNanos();
-    private long tolerableRWCoProcLatencyNanos = Duration.ofMillis(3).toNanos();
-    private int loadTrackingWindowSec = 10;
+    // stop split key estimation if average io operation latency is above the limit
+    private long ioNanosLimit = 30_000; // 30 microseconds
+    // do split key estimation if io density is above the max
+    private int maxIODensity = 40;
+    private int loadTrackingWindowSec = 5;
     private int snapshotSyncBytesPerSec = 128 * 1024 * 1024; // 128MB
     private int compactWALThreshold = 10000; // the max number of logs before compaction
     private long tickUnitInMS = 100;

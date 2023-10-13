@@ -35,7 +35,10 @@ public class LoadRecordableKVIterator implements IKVIterator {
 
     @Override
     public ByteString value() {
-        return delegate.value();
+        long start = System.nanoTime();
+        ByteString result = delegate.value();
+        recorder.record(System.nanoTime() - start);
+        return result;
     }
 
     @Override
@@ -45,22 +48,30 @@ public class LoadRecordableKVIterator implements IKVIterator {
 
     @Override
     public void next() {
+        long start = System.nanoTime();
         delegate.next();
+        recorder.record(System.nanoTime() - start);
     }
 
     @Override
     public void prev() {
+        long start = System.nanoTime();
         delegate.prev();
+        recorder.record(System.nanoTime() - start);
     }
 
     @Override
     public void seekToFirst() {
+        long start = System.nanoTime();
         delegate.seekToFirst();
+        recorder.record(System.nanoTime() - start);
     }
 
     @Override
     public void seekToLast() {
+        long start = System.nanoTime();
         delegate.seekToLast();
+        recorder.record(System.nanoTime() - start);
     }
 
     @Override

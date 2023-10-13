@@ -11,39 +11,33 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range;
+package com.baidu.bifromq.basekv.store.range.estimator;
 
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotSame;
-import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.SplitHint;
+import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
-import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class SplitKeyEstimatorTest extends MockableTest {
-    @Mock
-    private Supplier<Long> nanoSource;
+public class LatencyBasedSplitKeyEstimatorTest extends AbstractSplitKeyEstimatorTest {
 
-    @Test
-    public void noLoad() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(Duration.ofMillis(100), 5, true);
-        SplitHint hint = estimator.estimate();
-        assertFalse(hint.hasSplitKey());
+    @Override
+    protected ISplitKeyEstimator create(Supplier<Long> nanoSource, int windowSizeSec) {
+        return new LatencyBasedSplitKeyEstimator(nanoSource, Duration.ofMillis(100), windowSizeSec);
     }
 
     @Test
-    public void notEnoughRecordsInConcurrentMode() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1, true);
+    public void notEnoughRecords() {
+        LatencyBasedSplitKeyEstimator
+            estimator = new LatencyBasedSplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1);
         long now = 0L;
         for (int i = 0; i < 5; i++) {
             when(nanoSource.get()).thenReturn(now);
@@ -62,48 +56,9 @@ public class SplitKeyEstimatorTest extends MockableTest {
     }
 
     @Test
-    public void nonConcurrentMode() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1, false);
-        long now = 0L;
-        when(nanoSource.get()).thenReturn(now);
-        ILoadTracker.ILoadRecorder recorder = estimator.start();
-        for (int i = 0; i < 80; i++) {
-            recorder.record(ByteString.copyFrom(new byte[] {(byte) i}), 1);
-        }
-        when(nanoSource.get()).thenReturn(now + Duration.ofMillis(200).toNanos());
-        recorder.stop();
-
-        when(nanoSource.get()).thenReturn(now + Duration.ofMillis(1100).toNanos());
-        SplitHint hint = estimator.estimate();
-        assertTrue(hint.getLoad() > 0.0);
-        assertTrue(hint.hasSplitKey());
-    }
-
-    @Test
-    public void hintMemoization() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1, true);
-        long now = 0L;
-        // track enough records
-        for (int i = 0; i < 11; i++) {
-            when(nanoSource.get()).thenReturn(now);
-            ILoadTracker.ILoadRecorder recorder = estimator.start();
-            recorder.record(ByteString.copyFromUtf8("Key"), Duration.ofMillis(20).toNanos());
-            when(nanoSource.get()).thenReturn(now + Duration.ofMillis(200).toNanos());
-            recorder.stop();
-        }
-        when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(1).toNanos());
-        SplitHint hint1 = estimator.estimate();
-        SplitHint hint2 = estimator.estimate();
-        assertTrue(hint1.hasSplitKey());
-        assertSame(hint1, hint2);
-        when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(2).toNanos());
-        hint2 = estimator.estimate();
-        assertNotSame(hint1, hint2);
-    }
-
-    @Test
     public void trackClearExpiredSlots() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1, true);
+        LatencyBasedSplitKeyEstimator
+            estimator = new LatencyBasedSplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1);
         long now = 0L;
         for (int i = 0; i < 11; i++) {
             when(nanoSource.get()).thenReturn(now);
@@ -124,7 +79,8 @@ public class SplitKeyEstimatorTest extends MockableTest {
 
     @Test
     public void skipCurrentWindow() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1, true);
+        LatencyBasedSplitKeyEstimator
+            estimator = new LatencyBasedSplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1);
         long now = 0L;
         for (int i = 0; i < 11; i++) {
             when(nanoSource.get()).thenReturn(now);
@@ -145,7 +101,8 @@ public class SplitKeyEstimatorTest extends MockableTest {
 
     @Test
     public void estimateSplitKey() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1, true);
+        LatencyBasedSplitKeyEstimator
+            estimator = new LatencyBasedSplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1);
         long now = 0L;
         for (int i = 0; i < 11; i++) {
             when(nanoSource.get()).thenReturn(now);
@@ -165,7 +122,8 @@ public class SplitKeyEstimatorTest extends MockableTest {
 
     @Test
     public void latencyLargerThanWindowSize() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1, true);
+        LatencyBasedSplitKeyEstimator
+            estimator = new LatencyBasedSplitKeyEstimator(nanoSource, Duration.ofMillis(100), 1);
 
         long now = 0L;
         List<ILoadTracker.ILoadRecorder> recorderList = new ArrayList<>();

@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.starter;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST_IO_NANOS_LIMIT;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST_MAX_IO_DENSITY;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST_WINDOW_SECONDS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_TOLERABLE_MUTATION_LATENCY_NANOS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_TOLERABLE_QUERY_LATENCY_NANOS;
 
 import com.baidu.bifromq.apiserver.APIServer;
@@ -273,8 +275,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                     .setCompactWALThreshold(config.getStateStoreConfig()
                         .getInboxStoreConfig()
                         .getCompactWALThreshold())
+                    .setEnableLoadEstimation(INBOX_STORE_LOAD_EST.get())
                     .setTolerableROCoProcLatencyNanos(INBOX_STORE_TOLERABLE_QUERY_LATENCY_NANOS.get())
-                    .setTolerableRWCoProcLatencyNanos(INBOX_STORE_TOLERABLE_MUTATION_LATENCY_NANOS.get())
+                    .setIoNanosLimit(INBOX_STORE_LOAD_EST_IO_NANOS_LIMIT.get())
+                    .setMaxIODensity(INBOX_STORE_LOAD_EST_MAX_IO_DENSITY.get())
                     .setLoadTrackingWindowSec(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
                 .setDataEngineConfigurator(
                     buildDataEngineConf(config

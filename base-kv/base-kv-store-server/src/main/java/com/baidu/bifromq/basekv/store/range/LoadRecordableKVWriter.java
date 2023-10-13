@@ -35,7 +35,9 @@ class LoadRecordableKVWriter implements IKVWriter {
 
     @Override
     public void clear(Boundary boundary) {
+        long start = System.nanoTime();
         delegate.clear(boundary);
+        recorder.record(System.nanoTime() - start);
     }
 
     @Override
