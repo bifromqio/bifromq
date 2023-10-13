@@ -13,9 +13,7 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_META_PREFIX;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC;
+import static com.baidu.bifromq.apiserver.Headers.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -25,10 +23,12 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 
+import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
@@ -71,6 +71,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         DefaultFullHttpRequest req = buildRequest(HttpMethod.POST, content);
         req.headers().set(HEADER_TOPIC.header, "admin_user");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_PUB_QOS.header, "1");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
@@ -89,7 +90,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         assertEquals(topicCap.getValue(), req.headers().get(HEADER_TOPIC.header));
         ClientInfo killer = killerCap.getValue();
         assertEquals(killer.getTenantId(), tenantId);
-        assertEquals(qosCap.getValue(), QoS.AT_MOST_ONCE);
+        assertEquals(qosCap.getValue(), QoS.AT_LEAST_ONCE);
         assertEquals(payloadCap.getValue(), ByteString.copyFrom(content.nioBuffer()));
         assertEquals(expiryCap.getValue(), Integer.MAX_VALUE);
         assertEquals(killer.getType(), req.headers().get(HEADER_CLIENT_TYPE.header));
@@ -102,6 +103,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC.header, "/greeting");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_PUB_QOS.header, "1");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
@@ -110,6 +112,49 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
 
         when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
+        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), HttpResponseStatus.OK);
+        assertEquals(response.content().readableBytes(), 0);
+    }
+
+    @Test
+    public void pubWithWrongQoS() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC.header, "/greeting");
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_PUB_QOS.header, "3");
+        req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
+
+        when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
+        assertEquals(response.content().readableBytes(), 0);
+    }
+
+    @Test
+    public void pubWithRetain() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC.header, "/greeting");
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_PUB_QOS.header, "2");
+        req.headers().set(HEADER_RETAIN.header, "true");
+        req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
+
+        when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
+                .thenReturn(CompletableFuture.completedFuture(RetainReply.getDefaultInstance()));
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.OK);
