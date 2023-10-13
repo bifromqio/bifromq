@@ -19,8 +19,7 @@ import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClient
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRetain;
 import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
-import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
-import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.apiserver.Headers;
@@ -98,7 +97,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
             }
             if (qos < 0 || qos > 2) {
                 return CompletableFuture.completedFuture(
-                        new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER));
+                        new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
             }
             ClientInfo clientInfo = ClientInfo.newBuilder()
                 .setTenantId(tenantId)
