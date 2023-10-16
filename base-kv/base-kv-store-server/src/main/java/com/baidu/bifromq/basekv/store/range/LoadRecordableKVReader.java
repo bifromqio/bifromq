@@ -61,6 +61,8 @@ class LoadRecordableKVReader implements IKVReader {
 
     @Override
     public void refresh() {
+        long start = System.nanoTime();
         delegate.refresh();
+        recorder.record(System.nanoTime() - start);
     }
 }

@@ -253,6 +253,13 @@ public abstract class MockedInboxService {
         return builder.build();
     }
 
+    protected void mockInboxStoreQuery(ReplyCode code, ROCoProcOutput roCoProcResult) {
+        when(inboxStoreClient.createQueryPipeline(anyString())).thenReturn(queryPipeline);
+        when(queryPipeline.query(any())).thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
+            .setCode(code)
+            .setRoCoProcResult(roCoProcResult)
+            .build()));
+    }
     protected void mockInboxStoreLinearizedQuery(ReplyCode code, ROCoProcOutput roCoProcResult) {
         when(inboxStoreClient.createLinearizedQueryPipeline(anyString())).thenReturn(queryPipeline);
         when(queryPipeline.query(any())).thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()

@@ -82,7 +82,6 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
         if (reader == null) {
             return newDataReader();
         }
-        reader.refresh();
         return reader;
     }
 
@@ -99,6 +98,11 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     @Override
     public IKVRangeWriter<?> toWriter() {
         return new KVRangeWriter(kvSpace.toWriter());
+    }
+
+    @Override
+    public IKVRangeWriter<?> toWriter(ILoadTracker.ILoadRecorder recorder) {
+        return new LoadRecordableKVRangeWriter(kvSpace.toWriter(), recorder);
     }
 
     @Override

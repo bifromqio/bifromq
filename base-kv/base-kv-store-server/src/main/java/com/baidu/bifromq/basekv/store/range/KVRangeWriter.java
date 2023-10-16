@@ -22,36 +22,36 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 
 public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWriter>
     implements IKVRangeWriter<KVRangeWriter> {
-    private final IKVSpaceWriter keyRangeWriter;
+    private final IKVSpaceWriter spaceWriter;
 
-    public KVRangeWriter(IKVSpaceWriter rangeWriter) {
-        super(rangeWriter);
-        this.keyRangeWriter = rangeWriter;
+    public KVRangeWriter(IKVSpaceWriter spaceWriter) {
+        super(spaceWriter);
+        this.spaceWriter = spaceWriter;
     }
 
     @Override
     protected IKVSpaceWriter keyRangeWriter() {
-        return keyRangeWriter;
+        return spaceWriter;
     }
 
     @Override
     public IKVRangeMetadataUpdatable<?> migrateTo(KVRangeId targetRangeId, Boundary boundary) {
-        return new KVRangeMetadataUpdatable(keyRangeWriter.migrateTo(KVRangeIdUtil.toString(targetRangeId), boundary));
+        return new KVRangeMetadataUpdatable(spaceWriter.migrateTo(KVRangeIdUtil.toString(targetRangeId), boundary));
     }
 
     @Override
     public IKVRangeMetadataUpdatable<?> migrateFrom(KVRangeId fromRangeId, Boundary boundary) {
-        return new KVRangeMetadataUpdatable(keyRangeWriter.migrateFrom(KVRangeIdUtil.toString(fromRangeId), boundary));
+        return new KVRangeMetadataUpdatable(spaceWriter.migrateFrom(KVRangeIdUtil.toString(fromRangeId), boundary));
     }
 
     @Override
     public IKVWriter kvWriter() {
-        return new KVWriter(keyRangeWriter);
+        return new KVWriter(spaceWriter);
     }
 
     @Override
     public IKVReader newDataReader() {
-        return new KVReader(keyRangeWriter, this);
+        return new KVReader(spaceWriter, this);
     }
 
     @Override

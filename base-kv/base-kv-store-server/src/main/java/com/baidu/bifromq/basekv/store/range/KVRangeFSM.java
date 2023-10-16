@@ -307,9 +307,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                         queryLoadHint.distinctUntilChanged(),
                         mutationLoadHint.distinctUntilChanged(),
                         (meta, role, syncStats, clusterConfig, rangeStats, queryLoadHint, mutationLoadHint) -> {
-                            log.trace("Query load hint: rangeId={}, storeId={}, \n{}",
+                            log.debug("Query load hint: rangeId={}, storeId={}, \n{}",
                                 KVRangeIdUtil.toString(id), hostStoreId, queryLoadHint);
-                            log.trace("Mutation load hint: rangeId={}, storeId={}, \n{}",
+                            log.debug("Mutation load hint: rangeId={}, storeId={}, \n{}",
                                 KVRangeIdUtil.toString(id), hostStoreId, mutationLoadHint);
                             return KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver())
@@ -600,9 +600,13 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     private CompletableFuture<Void> apply(LogEntry entry) {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
-        IKVRangeWriter<?> rangeWriter = kvRange.toWriter();
+        ILoadTracker.ILoadRecorder rwRecorder = rwCoProcLoadEstimator.start();
+        IKVRangeWriter<?> rangeWriter = kvRange.toWriter(rwRecorder);
         IKVReader borrowedReader = kvRange.borrowDataReader();
-        applyLog(entry, borrowedReader, rangeWriter)
+        IKVReader recordableReader = new LoadRecordableKVReader(borrowedReader, rwRecorder);
+        // count the cost of refresh()
+        recordableReader.refresh();
+        applyLog(entry, recordableReader, rangeWriter)
             .whenComplete((callback, e) -> {
                 if (onDone.isCancelled()) {
                     rangeWriter.abort();
@@ -614,6 +618,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         } else {
                             rangeWriter.lastAppliedIndex(entry.getIndex());
                             rangeWriter.done();
+                            rwRecorder.stop();
 
                             callback.run();
                             linearizer.afterLogApplied(entry.getIndex());
@@ -622,6 +627,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         }
                     } catch (Throwable t) {
                         log.error("Failed to apply log", t);
+                        rwRecorder.stop();
                         onDone.completeExceptionally(t);
                     }
                 }
@@ -1295,14 +1301,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         onDone.complete(() -> finishCommand(taskId, value.orElse(ByteString.EMPTY)));
                                     }
                                     case RWCOPROC -> {
-                                        ILoadTracker.ILoadRecorder rwRecorder = rwCoProcLoadEstimator.start();
                                         Supplier<RWCoProcOutput> outputSupplier = coProc.mutate(command.getRwCoProc(),
-                                            new LoadRecordableKVReader(dataReader, rwRecorder),
-                                            new LoadRecordableKVWriter(rangeWriter.kvWriter(), rwRecorder));
-                                        onDone.complete(() -> {
-                                            rwRecorder.stop();
-                                            finishCommand(taskId, outputSupplier.get());
-                                        });
+                                            dataReader, rangeWriter.kvWriter());
+                                        onDone.complete(() -> finishCommand(taskId, outputSupplier.get()));
                                     }
                                 }
                             } catch (Throwable e) {

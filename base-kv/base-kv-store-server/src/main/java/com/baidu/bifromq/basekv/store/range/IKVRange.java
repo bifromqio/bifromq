@@ -66,6 +66,14 @@ public interface IKVRange extends IKVRangeReader {
      */
     IKVRangeWriter<?> toWriter();
 
+    /**
+     * Get a writer for updating the range and using the provided recorder recording write load
+     *
+     * @param recorder the load recorder
+     * @return the range writer
+     */
+    IKVRangeWriter<?> toWriter(ILoadTracker.ILoadRecorder recorder);
+
     IKVReseter toReseter(KVRangeSnapshot snapshot);
 
     void destroy();

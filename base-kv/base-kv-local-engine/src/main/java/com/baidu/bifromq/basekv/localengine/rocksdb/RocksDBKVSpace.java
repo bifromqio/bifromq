@@ -99,6 +99,7 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     private final Runnable onDestroy;
     private final AtomicBoolean compacting = new AtomicBoolean(false);
     private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = BehaviorSubject.create();
+    private final RocksDBKVEngineIterator metaItr;
     private final ISyncContext syncContext = new SyncContext();
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
     private final MetricManager metricMgr;
@@ -153,6 +154,8 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         if (!configurator.isDisableWAL() && !configurator.isAsyncWALFlush()) {
             writeOptions.setSync(configurator.isFsyncWAL());
         }
+
+        metaItr = new RocksDBKVEngineIterator(db, cfHandle, META_SECTION_START, META_SECTION_END);
         cpRootDir = new File(configurator.getDbCheckpointRootDir(), id);
         Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
 
@@ -217,11 +220,9 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     private void loadMetadata() {
         metadataRefresher.runIfNeeded(() -> {
             Map<ByteString, ByteString> metaMap = new HashMap<>();
-            try (RocksDBKVEngineIterator itr =
-                     new RocksDBKVEngineIterator(db(), cfHandle(), META_SECTION_START, META_SECTION_END)) {
-                for (itr.seekToFirst(); itr.isValid(); itr.next()) {
-                    metaMap.put(fromMetaKey(itr.key()), unsafeWrap(itr.value()));
-                }
+            metaItr.refresh();
+            for (metaItr.seekToFirst(); metaItr.isValid(); metaItr.next()) {
+                metaMap.put(fromMetaKey(metaItr.key()), unsafeWrap(metaItr.value()));
             }
             if (!metaMap.isEmpty()) {
                 metadataSubject.onNext(Collections.unmodifiableMap(metaMap));
@@ -367,6 +368,7 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         if (state.compareAndSet(State.Opening, State.Closing)) {
             super.close();
             log.debug("Close key range[{}]", id);
+            metaItr.close();
             cfDesc.getOptions().close();
             synchronized (compacting) {
                 db.destroyColumnFamilyHandle(cfHandle);

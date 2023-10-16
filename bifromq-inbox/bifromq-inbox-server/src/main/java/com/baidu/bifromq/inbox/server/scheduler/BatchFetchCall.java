@@ -34,7 +34,7 @@ public class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFet
     protected BatchFetchCall(KVRangeId rangeId,
                              IBaseKVStoreClient storeClient,
                              Duration pipelineExpiryTime) {
-        super(rangeId, storeClient, true, pipelineExpiryTime);
+        super(rangeId, storeClient, false, pipelineExpiryTime);
     }
 
     @Override

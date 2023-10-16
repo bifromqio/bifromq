@@ -25,8 +25,7 @@ import lombok.Setter;
 @Setter
 public class StateStoreConfig {
     private String overrideIdentity;
-    private int queryThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 3);
-    private int mutationThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 4);
+    private int queryThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     private int tickerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
     private int bgWorkerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4);
 
@@ -69,7 +68,7 @@ public class StateStoreConfig {
     @Setter
     public static class InboxStoreConfig {
         private int queryPipelinePerStore = 100;
-        private int compactWALThreshold = 20000;
+        private int compactWALThreshold = 5000;
         private int gcIntervalSeconds = 600;
         private int purgeDelaySeconds = 180;
         @JsonSetter(nulls = Nulls.SKIP)
@@ -77,7 +76,7 @@ public class StateStoreConfig {
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
             .manualCompaction(true)
-            .compactMinTombstoneKeys(10000)
+            .compactMinTombstoneKeys(5000)
             .compactMinTombstoneRanges(10);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();

@@ -82,7 +82,7 @@ public class MockedInboxMessageTest extends MockedInboxService {
                         .addAllQos0Seq(List.of(0l))
                         .addAllQos0Msg(List.of(inboxMessage))
                 .build());
-        mockInboxStoreLinearizedQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(fetchedMap));
+        mockInboxStoreQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(fetchedMap));
         InboxFetched.Builder builder = InboxFetched.newBuilder();
         ServerCallStreamObserver<InboxFetched> responseObserver = new TestingStreamObserver<>() {
             @Override
@@ -100,7 +100,7 @@ public class MockedInboxMessageTest extends MockedInboxService {
 
     @Test
     public void testFetchInboxWithErrorCode() {
-        mockInboxStoreLinearizedQuery(ReplyCode.BadRequest, generateBatchFetchROCoProcResult(new HashMap<>()));
+        mockInboxStoreQuery(ReplyCode.BadRequest, generateBatchFetchROCoProcResult(new HashMap<>()));
         InboxFetched.Builder builder = InboxFetched.newBuilder();
         ServerCallStreamObserver<InboxFetched> responseObserver = new TestingStreamObserver<>() {
             @Override
@@ -125,7 +125,7 @@ public class MockedInboxMessageTest extends MockedInboxService {
                 .addAllQos0Seq(List.of(0l))
                 .addAllQos0Msg(List.of(inboxMessage))
                 .build());
-        mockInboxStoreLinearizedQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(fetchedMap));
+        mockInboxStoreQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(fetchedMap));
         mockInboxStoreLinearizedQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(fetchedMap));
         List<Fetched> fetchedList = new ArrayList<>();
         ServerCallStreamObserver<InboxFetched> fetchObserver = new TestingStreamObserver<>() {
@@ -164,7 +164,7 @@ public class MockedInboxMessageTest extends MockedInboxService {
                 .addAllQos2Seq(List.of(0l))
                 .addAllQos2Msg(inboxMessages)
                 .build());
-        mockInboxStoreLinearizedQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(firstMap));
+        mockInboxStoreQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(firstMap));
         List<Fetched> fetchedList = new ArrayList<>();
         ServerCallStreamObserver<InboxFetched> responseObserver = new TestingStreamObserver<>() {
             @Override
@@ -174,7 +174,7 @@ public class MockedInboxMessageTest extends MockedInboxService {
         };
         StreamObserver<InboxFetchHint> fetchRequester = inboxService.fetchInbox(responseObserver);
         fetchRequester.onNext(fetchHint);
-        mockInboxStoreLinearizedQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(secondMap));
+        mockInboxStoreQuery(ReplyCode.Ok, generateBatchFetchROCoProcResult(secondMap));
         InboxFetchHint rstHint = InboxFetchHint.newBuilder()
                 .setIncarnation(System.nanoTime())
                 .setCapacity(3)

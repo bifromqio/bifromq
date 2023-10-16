@@ -46,6 +46,7 @@ public abstract class AbstractSplitKeyEstimator implements ISplitKeyEstimator {
     private final Function<ByteString, ByteString> toSplitKey;
     private final AtomicDouble ioDensity = new AtomicDouble();
     private final AtomicLong ioNanos = new AtomicLong();
+    private final AtomicLong avgLatencyNanos = new AtomicLong();
     private final Gauge ioDensityGuage;
     private final Gauge ioNanosGauge;
     private final Gauge avgLatencyNanosGauge;
@@ -64,7 +65,7 @@ public abstract class AbstractSplitKeyEstimator implements ISplitKeyEstimator {
         this.ioNanosGauge = Gauge.builder("basekv.load.est.iolatency", ioNanos::get)
             .tags(tags)
             .register(Metrics.globalRegistry);
-        this.avgLatencyNanosGauge = Gauge.builder("basekv.load.est.avglatency", ioNanos::get)
+        this.avgLatencyNanosGauge = Gauge.builder("basekv.load.est.avglatency", avgLatencyNanos::get)
             .tags(tags)
             .register(Metrics.globalRegistry);
         CLEANER.register(this, new CleanableState(ioDensityGuage));
@@ -113,10 +114,12 @@ public abstract class AbstractSplitKeyEstimator implements ISplitKeyEstimator {
         if (windowSlot == null) {
             ioDensity.set(0);
             ioNanos.set(0);
+            avgLatencyNanos.set(0);
             return SplitHint.getDefaultInstance();
         }
         ioDensity.set(windowSlot.ioDensity());
         ioNanos.set(windowSlot.ioLatencyNanos());
+        avgLatencyNanos.set(windowSlot.avgLatencyNanos());
         return doEstimate(windowSlot);
     }
 
