@@ -26,7 +26,6 @@ import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Ticker;
-import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
@@ -41,7 +40,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(RaftGroupTestListener.class)
 public class LeaderElectionTest extends SharedRaftConfigTestTemplate {
 
     @Test(groups = "integration")

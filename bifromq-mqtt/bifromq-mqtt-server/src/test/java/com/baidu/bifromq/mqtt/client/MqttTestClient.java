@@ -34,6 +34,7 @@ public class MqttTestClient {
     @SneakyThrows
     public MqttTestClient(String brokerURI, String clientId) {
         client = new MqttClient(brokerURI, clientId, new MemoryPersistence());
+        client.setTimeToWait(10000);
     }
 
     public MqttTestClient(String brokerURI) {
@@ -50,7 +51,6 @@ public class MqttTestClient {
 
     @SneakyThrows
     public void connect(MqttConnectOptions options) {
-        client.connect(options);
         client.setCallback(new MqttCallback() {
             @Override
             public void connectionLost(Throwable cause) {
@@ -75,6 +75,7 @@ public class MqttTestClient {
                 }
             }
         });
+        client.connect(options);
     }
 
     @SneakyThrows

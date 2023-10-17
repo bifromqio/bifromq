@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.server;
 
 import static java.util.Collections.singletonList;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.testng.annotations.Test;
 
@@ -74,15 +76,15 @@ public class InboxInsertTest extends InboxServiceTest {
         assertEquals(result.get(subInfo), DeliveryResult.OK);
 
         IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
-        reader.hint(100);
-
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
         reader.fetch(fetched -> {
             fetchedRef.set(fetched);
             latch.countDown();
         });
-        latch.await();
+        reader.hint(100);
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
         assertEquals(fetchedRef.get().getResult(), Fetched.Result.OK);
         assertEquals(fetchedRef.get().getQos1MsgCount(), 1);
         assertEquals(fetchedRef.get().getQos1Msg(0).getMsg().getMessage(), msg);
@@ -144,14 +146,15 @@ public class InboxInsertTest extends InboxServiceTest {
         assertEquals(result3.get(subInfo), DeliveryResult.OK);
 
         IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
-        reader.hint(100);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
         reader.fetch(fetched -> {
             fetchedRef.set(fetched);
             latch.countDown();
         });
-        latch.await();
+        reader.hint(100);
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
         assertEquals(fetchedRef.get().getResult(), Fetched.Result.OK);
         assertEquals(fetchedRef.get().getQos1MsgCount(), 3);
         assertEquals(fetchedRef.get().getQos1Msg(0).getMsg().getMessage(), msg);

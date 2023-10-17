@@ -18,7 +18,6 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
-import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.google.protobuf.ByteString;
@@ -30,7 +29,6 @@ import java.util.Set;
 import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
-@Listeners(RaftGroupTestListener.class)
 public class SnapshotRestoreTest extends SharedRaftConfigTestTemplate {
     @Cluster(v = "V1")
     @Test(groups = "integration")

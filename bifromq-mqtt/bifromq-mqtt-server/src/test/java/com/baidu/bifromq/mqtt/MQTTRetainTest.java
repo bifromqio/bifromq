@@ -19,7 +19,6 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -184,6 +183,23 @@ public class MQTTRetainTest {
 
     @Test(groups = "integration")
     public void clearRetained() {
+        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
+                .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                        .setOk(Ok.newBuilder()
+                                .setTenantId(tenantId)
+                                .setUserId(deviceKey)
+                                .build())
+                        .build()));
+        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+                .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
+                        CompletableFuture.completedFuture(true));
+
+        lenient().doAnswer(invocationOnMock -> {
+            Event event = invocationOnMock.getArgument(0);
+            log.info("event: {}", event);
+            return null;
+        }).when(mqttTest.eventCollector).report(any(Event.class));
+
         clearRetained(0, 0);
         clearRetained(0, 1);
         clearRetained(0, 2);
@@ -202,22 +218,6 @@ public class MQTTRetainTest {
         String clientId = "testClient1";
         String topic = "retainTopic" + pubRetainQoS + pubClearQoS;
         ByteString payload = ByteString.copyFromUtf8("hello");
-        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
-                .setOk(Ok.newBuilder()
-                    .setTenantId(tenantId)
-                    .setUserId(deviceKey)
-                    .build())
-                .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
-                CompletableFuture.completedFuture(true));
-
-        lenient().doAnswer(invocationOnMock -> {
-            Event event = invocationOnMock.getArgument(0);
-            log.info("event: {}", event);
-            return null;
-        }).when(mqttTest.eventCollector).report(any(Event.class));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);

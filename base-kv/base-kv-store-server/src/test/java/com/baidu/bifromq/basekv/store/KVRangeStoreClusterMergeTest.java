@@ -27,7 +27,6 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -42,7 +41,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
                 genesisKVRangeId,
                 copyFromUtf8("e"))
             .toCompletableFuture().join();
-        await().atMost(Duration.ofSeconds(10000)).until(() -> cluster.allKVRangeIds().size() == 2);
+        await().atMost(Duration.ofSeconds(100)).until(() -> cluster.allKVRangeIds().size() == 2);
         KVRangeConfig range0 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(0));
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;
@@ -113,7 +112,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
                 genesisKVRangeId,
                 copyFromUtf8("e"))
             .toCompletableFuture().join();
-        await().atMost(Duration.ofSeconds(10000)).until(() -> cluster.allKVRangeIds().size() == 2);
+        await().atMost(Duration.ofSeconds(100)).until(() -> cluster.allKVRangeIds().size() == 2);
         KVRangeConfig range0 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(0));
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;
@@ -180,7 +179,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
                 genesisKVRangeId,
                 copyFromUtf8("e"))
             .toCompletableFuture().join();
-        await().atMost(Duration.ofSeconds(10000)).until(() -> cluster.allKVRangeIds().size() == 2);
+        await().atMost(Duration.ofSeconds(100)).until(() -> cluster.allKVRangeIds().size() == 2);
         KVRangeConfig range0 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(0));
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;

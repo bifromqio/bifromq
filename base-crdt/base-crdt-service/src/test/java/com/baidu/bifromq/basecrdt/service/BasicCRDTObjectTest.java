@@ -26,7 +26,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(CRDTServiceTestListener.class)
 public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
 
     @ServiceCfgs(services =

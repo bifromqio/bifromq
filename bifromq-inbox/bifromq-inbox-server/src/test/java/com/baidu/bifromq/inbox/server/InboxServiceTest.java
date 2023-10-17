@@ -35,6 +35,8 @@ import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -45,7 +47,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterClass;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class InboxServiceTest {
@@ -145,5 +149,16 @@ public abstract class InboxServiceTest {
             bgTaskExecutor.shutdown();
         }).start();
         closeable.close();
+    }
+
+    @BeforeMethod(alwaysRun = true)
+    public void printCaseStart(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+    }
+
+    @AfterMethod(alwaysRun = true)
+    public void printCaseFinish(Method method) {
+        log.info("Test case[{}.{}] finished, doing teardown",
+                method.getDeclaringClass().getName(), method.getName());
     }
 }

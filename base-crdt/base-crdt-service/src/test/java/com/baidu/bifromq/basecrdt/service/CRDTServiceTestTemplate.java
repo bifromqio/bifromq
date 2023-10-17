@@ -62,15 +62,20 @@ public class CRDTServiceTestTemplate {
     }
 
     @BeforeMethod(groups = "integration")
-    public void setup() {
+    public void setup(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
         testCluster = new CRDTServiceTestCluster();
+        createClusterByAnnotation(method);
     }
 
     @AfterMethod(groups = "integration")
-    public void teardown() {
+    public void teardown(Method method) {
+        log.info("Test case[{}.{}] finished, doing teardown",
+                method.getDeclaringClass().getName(), method.getName());
         if (testCluster != null) {
             log.info("Shutting down test cluster");
-            new Thread(() -> testCluster.shutdown()).start();
+            CRDTServiceTestCluster lastStoreMgr = this.testCluster;
+            new Thread(lastStoreMgr::shutdown).start();
         }
     }
 

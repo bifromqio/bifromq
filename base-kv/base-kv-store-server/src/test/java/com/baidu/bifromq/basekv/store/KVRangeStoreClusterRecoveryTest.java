@@ -19,6 +19,8 @@ import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+
+import java.time.Duration;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Listeners;
@@ -37,7 +39,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         assertEquals(storeIds.size(), 2);
         storeIds.remove(leader);
         cluster.shutdownStore(storeIds.get(0));
-        await().ignoreExceptions().forever().until(() -> {
+        await().ignoreExceptions().atMost(Duration.ofSeconds(30)).until(() -> {
             KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });
@@ -61,7 +63,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         cluster.shutdownStore(storeIds.get(0));
         cluster.shutdownStore(storeIds.get(1));
         log.info("Wait for becoming candidate");
-        await().forever().until(() -> {
+        await().ignoreExceptions().atMost(Duration.ofSeconds(30)).until(() -> {
             KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });

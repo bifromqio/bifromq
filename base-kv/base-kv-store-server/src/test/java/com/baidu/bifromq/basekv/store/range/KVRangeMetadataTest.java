@@ -26,6 +26,8 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import io.reactivex.rxjava3.core.Maybe;
 import org.testng.annotations.Test;
 
+import java.util.concurrent.TimeUnit;
+
 public class KVRangeMetadataTest extends AbstractKVRangeTest {
     @Test
     public void initWithNoData() {
@@ -63,9 +65,8 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(rangeId));
             IKVRange kvRange = new KVRange(keyRange);
             Maybe<IKVRange.KVRangeMeta> metaMayBe = kvRange.metadata().firstElement();
-            kvRange = null;
             keyRange.destroy();
-            assertNull(metaMayBe.blockingGet());
+            assertNull(metaMayBe.timeout(5, TimeUnit.SECONDS).blockingGet());
         } catch (Throwable e) {
             fail();
         }

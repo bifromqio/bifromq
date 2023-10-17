@@ -41,6 +41,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import io.reactivex.rxjava3.disposables.Disposable;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -48,9 +49,11 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
+@Listeners(MQTTTestListener.class)
 public class MQTTPubSubTest {
     private final MQTTTest mqttTest = MQTTTest.getInstance();
     private final String tenantId = "testPubSubTraffic";
@@ -190,7 +193,7 @@ public class MQTTPubSubTest {
         checkFuture.complete(true);
 
 
-        MqttMsg msg = topicSub.blockingFirst();
+        MqttMsg msg = topicSub.timeout(10, TimeUnit.SECONDS).blockingFirst();
         assertEquals(msg.topic, topic);
         assertEquals(msg.qos, 0);
         assertFalse(msg.isDup);
@@ -275,16 +278,27 @@ public class MQTTPubSubTest {
         pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
 
         log.info("Reconnect sub client");
+        CountDownLatch latch = new CountDownLatch(1);
+        Disposable disposable = subClient.messageArrived().subscribe(msg -> {
+            log.debug("offline message arrived: pubQos = {}, subQos = {}", pubQoS, subQoS);
+            latch.countDown();
+            assertEquals(msg.topic, topic);
+            assertEquals(msg.qos, Math.min(pubQoS, subQoS));
+            assertFalse(msg.isDup);
+            assertFalse(msg.isRetain);
+            assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
+        });
         subClient.connect(subClientOpts);
-        MqttMsg msg = subClient.messageArrived().blockingFirst();
-        assertEquals(msg.topic, topic);
-        assertEquals(msg.qos, Math.min(pubQoS, subQoS));
-        assertFalse(msg.isDup);
-        assertFalse(msg.isRetain);
-        assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
+        try {
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
+        } catch (InterruptedException e) {
+            fail();
+        }
+        disposable.dispose();
 
         pubClient.disconnect();
         pubClient.close();
+        subClient.unsubscribe(topic);
         subClient.disconnect();
         subClient.close();
     }
@@ -303,7 +317,7 @@ public class MQTTPubSubTest {
         client.connect(connOpts);
         Observable<MqttMsg> topicSub = client.subscribe(topicFilter, subQoS);
         client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
-        MqttMsg msg = topicSub.blockingFirst();
+        MqttMsg msg = topicSub.timeout(10, TimeUnit.SECONDS).blockingFirst();
         assertEquals(msg.topic, topic);
         assertEquals(msg.qos, Math.min(pubQoS, subQoS));
         assertFalse(msg.isDup);

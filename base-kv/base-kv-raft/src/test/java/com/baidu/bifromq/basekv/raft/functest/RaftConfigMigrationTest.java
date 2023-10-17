@@ -19,7 +19,6 @@ import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.RaftConfig;
-import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestTemplate;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
@@ -30,7 +29,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(RaftGroupTestListener.class)
 public class RaftConfigMigrationTest extends RaftGroupTestTemplate {
     @Test(groups = "integration")
     public void testLeaderElectionWithPreVoteMigration() {

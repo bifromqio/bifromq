@@ -23,7 +23,6 @@ import org.testng.Assert;
 import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
-@Listeners(CRDTServiceTestListener.class)
 public class CCounterTest extends CRDTServiceTestTemplate {
     @ServiceCfgs(services =
         {
