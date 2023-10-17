@@ -65,27 +65,24 @@ public class RangeSplitBalancerTest {
                 .setState(State.StateType.Normal)
                 .setLoadHint(LoadHint.newBuilder()
                     .setQuery(SplitHint.newBuilder()
+                        .setIoDensity(10)
+                        .setIoLatencyNanos(15)
+                        .setAvgLatency(100)
                         .setSplitKey(ByteString.copyFromUtf8("splitQueryLoadKey"))
                         .build())
                     .setMutation(SplitHint.newBuilder()
+                        .setIoDensity(10)
+                        .setIoLatencyNanos(15)
+                        .setAvgLatency(100)
                         .setSplitKey(ByteString.copyFromUtf8("splitMutationLoadKey"))
                         .build())
                     .build())
                 .build())
             .build()
         );
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local");
+        RangeSplitBalancer balancer = new RangeSplitBalancer("local", 0.8, 5, 20);
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertEquals(command.get().getKvRangeId(), rangeId);
-        assertEquals(command.get().getToStore(), "local");
-        assertEquals(command.get().getExpectedVer(), 0);
-        assertEquals(((SplitCommand) command.get()).getSplitKey(), ByteString.copyFromUtf8("splitQueryLoadKey"));
-
-        balancer = new RangeSplitBalancer("local", false);
-        balancer.update(descriptors);
-        command = balancer.balance();
         assertTrue(command.isPresent());
         assertEquals(command.get().getKvRangeId(), rangeId);
         assertEquals(command.get().getToStore(), "local");

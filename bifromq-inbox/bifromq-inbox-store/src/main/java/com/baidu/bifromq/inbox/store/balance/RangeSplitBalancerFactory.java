@@ -13,12 +13,19 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_RANGE_SPLIT_IO_NANOS_LIMIT;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_RANGE_SPLIT_MAX_CPU_USAGE;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_RANGE_SPLIT_MAX_IO_DENSITY;
+
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 
 public class RangeSplitBalancerFactory implements IStoreBalancerFactory {
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new RangeSplitBalancer(localStoreId);
+        return new RangeSplitBalancer(localStoreId,
+            INBOX_STORE_RANGE_SPLIT_MAX_CPU_USAGE.get(),
+            INBOX_STORE_RANGE_SPLIT_MAX_IO_DENSITY.get(),
+            INBOX_STORE_RANGE_SPLIT_IO_NANOS_LIMIT.get());
     }
 }

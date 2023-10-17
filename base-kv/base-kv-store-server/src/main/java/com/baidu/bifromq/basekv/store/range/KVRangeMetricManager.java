@@ -39,8 +39,13 @@ class KVRangeMetricManager {
     private final Gauge lastAppliedIndexGauge;
     private final Gauge dataSizeGauge;
     private final Gauge walSizeGauge;
-    private final Gauge queryLoadGauge;
-    private final Gauge mutationLoadGauge;
+    private final Gauge queryIODensityGuage;
+    private final Gauge queryIONanosGauge;
+    private final Gauge queryAvgLatencyNanosGauge;
+    private final Gauge mutationIODensityGuage;
+    private final Gauge mutationIONanosGauge;
+    private final Gauge mutationAvgLatencyNanosGauge;
+
     private final Timer configChangeTimer;
     private final Timer transferLeaderTimer;
     private final Timer splitTimer;
@@ -102,23 +107,65 @@ class KVRangeMetricManager {
             })
             .tags(tags)
             .register(Metrics.globalRegistry);
-        queryLoadGauge = Gauge.builder("basekv.meta.load.query", () -> {
+        queryIODensityGuage = Gauge.builder("basekv.load.est.iodensity", () -> {
                 KVRangeDescriptor desc = currentDesc.get();
                 if (desc != null) {
-                    return desc.getLoadHint().getQuery().getLoad();
+                    return desc.getLoadHint().getQuery().getIoDensity();
                 }
                 return 0;
             })
             .tags(tags)
+            .tags("type", "query")
             .register(Metrics.globalRegistry);
-        mutationLoadGauge = Gauge.builder("basekv.meta.load.mutation", () -> {
+        queryIONanosGauge = Gauge.builder("basekv.load.est.iolatency", () -> {
                 KVRangeDescriptor desc = currentDesc.get();
                 if (desc != null) {
-                    return desc.getLoadHint().getMutation().getLoad();
+                    return desc.getLoadHint().getQuery().getIoLatencyNanos();
                 }
                 return 0;
             })
             .tags(tags)
+            .tags("type", "query")
+            .register(Metrics.globalRegistry);
+        queryAvgLatencyNanosGauge = Gauge.builder("basekv.load.est.avglatency", () -> {
+                KVRangeDescriptor desc = currentDesc.get();
+                if (desc != null) {
+                    return desc.getLoadHint().getQuery().getAvgLatency();
+                }
+                return 0;
+            })
+            .tags(tags)
+            .tags("type", "query")
+            .register(Metrics.globalRegistry);
+        mutationIODensityGuage = Gauge.builder("basekv.load.est.iodensity", () -> {
+                KVRangeDescriptor desc = currentDesc.get();
+                if (desc != null) {
+                    return desc.getLoadHint().getMutation().getIoDensity();
+                }
+                return 0;
+            })
+            .tags(tags)
+            .tags("type", "mutation")
+            .register(Metrics.globalRegistry);
+        mutationIONanosGauge = Gauge.builder("basekv.load.est.iolatency", () -> {
+                KVRangeDescriptor desc = currentDesc.get();
+                if (desc != null) {
+                    return desc.getLoadHint().getMutation().getIoLatencyNanos();
+                }
+                return 0;
+            })
+            .tags(tags)
+            .tags("type", "mutation")
+            .register(Metrics.globalRegistry);
+        mutationAvgLatencyNanosGauge = Gauge.builder("basekv.load.est.avglatency", () -> {
+                KVRangeDescriptor desc = currentDesc.get();
+                if (desc != null) {
+                    return desc.getLoadHint().getMutation().getAvgLatency();
+                }
+                return 0;
+            })
+            .tags(tags)
+            .tags("type", "mutation")
             .register(Metrics.globalRegistry);
         configChangeTimer = Timer.builder("basekv.cmd.configchange")
             .tags(tags)
@@ -242,8 +289,12 @@ class KVRangeMetricManager {
         Metrics.globalRegistry.removeByPreFilterId(verGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(dataSizeGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(walSizeGauge.getId());
-        Metrics.globalRegistry.removeByPreFilterId(queryLoadGauge.getId());
-        Metrics.globalRegistry.removeByPreFilterId(mutationLoadGauge.getId());
+        Metrics.globalRegistry.removeByPreFilterId(queryIODensityGuage.getId());
+        Metrics.globalRegistry.removeByPreFilterId(queryIONanosGauge.getId());
+        Metrics.globalRegistry.removeByPreFilterId(queryAvgLatencyNanosGauge.getId());
+        Metrics.globalRegistry.removeByPreFilterId(mutationIODensityGuage.getId());
+        Metrics.globalRegistry.removeByPreFilterId(mutationIONanosGauge.getId());
+        Metrics.globalRegistry.removeByPreFilterId(mutationAvgLatencyNanosGauge.getId());
         Metrics.globalRegistry.removeByPreFilterId(configChangeTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(transferLeaderTimer.getId());
         Metrics.globalRegistry.removeByPreFilterId(splitTimer.getId());

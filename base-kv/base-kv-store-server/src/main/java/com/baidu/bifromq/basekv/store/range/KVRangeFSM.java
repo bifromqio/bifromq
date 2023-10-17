@@ -88,9 +88,7 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.range.estimator.ISplitKeyEstimator;
-import com.baidu.bifromq.basekv.store.range.estimator.LatencyBasedSplitKeyEstimator;
-import com.baidu.bifromq.basekv.store.range.estimator.NoopEstimator;
-import com.baidu.bifromq.basekv.store.range.estimator.UsageBasedSplitKeyEstimator;
+import com.baidu.bifromq.basekv.store.range.estimator.SplitKeyEstimator;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.VerUtil;
@@ -198,23 +196,8 @@ public class KVRangeFSM implements IKVRangeFSM {
             this.opts = opts.toBuilder().build();
             this.id = id;
             this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
-            roCoProcLoadEstimator = opts.isEnableLoadEstimation() ?
-                new LatencyBasedSplitKeyEstimator(Duration.ofNanos(opts.getTolerableROCoProcLatencyNanos()),
-                    opts.getLoadTrackingWindowSec(),
-                    coProcFactory::toSplitKey,
-                    "clusterId", clusterId,
-                    "storeId", hostStoreId,
-                    "rangeId", KVRangeIdUtil.toString(id),
-                    "type", "query") : NoopEstimator.INSTANCE;
-            rwCoProcLoadEstimator = opts.isEnableLoadEstimation() ?
-                new UsageBasedSplitKeyEstimator(opts.getLoadTrackingWindowSec(),
-                    opts.getIoNanosLimit(),
-                    opts.getMaxIODensity(),
-                    coProcFactory::toSplitKey,
-                    "clusterId", clusterId,
-                    "storeId", hostStoreId,
-                    "rangeId", KVRangeIdUtil.toString(id),
-                    "type", "mutation") : NoopEstimator.INSTANCE;
+            roCoProcLoadEstimator = new SplitKeyEstimator(opts.getLoadEstimationWindowSec(), coProcFactory::toSplitKey);
+            rwCoProcLoadEstimator = new SplitKeyEstimator(opts.getLoadEstimationWindowSec(), coProcFactory::toSplitKey);
             if (initSnapshot != null) {
                 walStateStorageEngine.destroy(id);
                 walStateStorageEngine.newRaftStateStorage(id, initSnapshot);

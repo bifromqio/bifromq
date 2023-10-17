@@ -17,5 +17,6 @@ import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 
 public interface ISplitKeyEstimator extends ILoadTracker {
+
     SplitHint estimate();
 }

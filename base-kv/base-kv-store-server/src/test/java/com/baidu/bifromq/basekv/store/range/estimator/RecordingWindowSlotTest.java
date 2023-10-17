@@ -30,7 +30,7 @@ public class RecordingWindowSlotTest extends MockableTest {
 
     @Test
     public void initState() {
-        RecordingWindowSlot slot = new RecordingWindowSlot();
+        LoadRecordWindow slot = new LoadRecordWindow();
         assertEquals(slot.records(), 0);
         assertEquals(slot.avgLatencyNanos(), 0);
         assertEquals(slot.ioDensity(), 0);
@@ -40,7 +40,7 @@ public class RecordingWindowSlotTest extends MockableTest {
 
     @Test
     public void record() {
-        RecordingWindowSlot slot = new RecordingWindowSlot();
+        LoadRecordWindow slot = new LoadRecordWindow();
         slot.record(Collections.singletonMap(ByteString.copyFromUtf8("key1"), 10L), 1, 10, 15);
         slot.record(Collections.singletonMap(ByteString.copyFromUtf8("key1"), 20L), 1, 20, 25);
         assertEquals(slot.records(), 2);
@@ -53,7 +53,7 @@ public class RecordingWindowSlotTest extends MockableTest {
     @Test
     public void estimateSplitKey() {
         when(nanoSource.get()).thenReturn(0L);
-        RecordingWindowSlot windowSlot = new RecordingWindowSlot();
+        LoadRecordWindow windowSlot = new LoadRecordWindow();
         LoadRecorder recorder = new LoadRecorder(nanoSource,
             rec -> windowSlot.record(rec.keyDistribution(), rec.getKVIOs(), rec.getKVIONanos(),
                 nanoSource.get() - rec.startNanos()));

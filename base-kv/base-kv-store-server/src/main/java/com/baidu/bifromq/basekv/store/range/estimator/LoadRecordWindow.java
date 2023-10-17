@@ -24,8 +24,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import javax.annotation.concurrent.NotThreadSafe;
 
-public final class RecordingWindowSlot {
+
+@NotThreadSafe
+final class LoadRecordWindow {
     private final Function<ByteString, ByteString> toSplitKey;
     private final AtomicInteger records = new AtomicInteger();
     private final AtomicInteger totalKVIOs = new AtomicInteger();
@@ -33,12 +36,20 @@ public final class RecordingWindowSlot {
     private final AtomicLong totalLatency = new AtomicLong();
     private final Map<ByteString, AtomicLong> loadDistribution = new ConcurrentHashMap<>();
 
-    public RecordingWindowSlot() {
+    public LoadRecordWindow() {
         this(k -> k);
     }
 
-    public RecordingWindowSlot(Function<ByteString, ByteString> toSplitKey) {
+    LoadRecordWindow(Function<ByteString, ByteString> toSplitKey) {
         this.toSplitKey = toSplitKey;
+    }
+
+    LoadRecordWindow(LoadRecordWindow other) {
+        this.toSplitKey = other.toSplitKey;
+        this.records.set(other.records.get());
+        this.totalKVIOs.set(other.totalKVIOs.get());
+        this.totalKVIONanos.set(other.totalKVIONanos.get());
+        this.totalLatency.set(other.totalLatency.get());
     }
 
     void record(Map<ByteString, Long> keyLoads, int kvIOs, long kvIOTimeNanos, long latencyNanos) {
@@ -54,8 +65,8 @@ public final class RecordingWindowSlot {
         return records.get();
     }
 
-    public double ioDensity() {
-        return totalKVIOs.get() / Math.max(records.get(), 1.0);
+    public int ioDensity() {
+        return (int) Math.ceil(totalKVIOs.get() / Math.max(records.get(), 1.0));
     }
 
     public long ioLatencyNanos() {
@@ -83,5 +94,4 @@ public final class RecordingWindowSlot {
         }
         return Optional.empty();
     }
-
 }

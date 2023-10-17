@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_VOTER_COUNT;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_RANGE_VOTER_COUNT;
 
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
@@ -23,6 +23,6 @@ public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, INBOX_STORE_VOTER_COUNT.get(), 0);
+        return new ReplicaCntBalancer(localStoreId, INBOX_STORE_RANGE_VOTER_COUNT.get(), 0);
     }
 }

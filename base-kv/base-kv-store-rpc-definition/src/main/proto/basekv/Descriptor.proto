@@ -10,8 +10,10 @@ option java_package = "com.baidu.bifromq.basekv.proto";
 option optimize_for = SPEED;
 
 message SplitHint{
-  double load = 1;
-  optional bytes splitKey = 2;
+  uint32 ioDensity = 1;
+  uint64 ioLatencyNanos = 2;
+  uint64 avgLatency = 3;
+  optional bytes splitKey = 4;
 }
 message LoadHint{
   SplitHint query = 1; // the split hint generated based on query load observation and split key estimation

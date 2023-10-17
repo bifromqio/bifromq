@@ -13,59 +13,36 @@
 
 package com.baidu.bifromq.basekv.store.range.estimator;
 
-import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotSame;
 import static org.testng.Assert.assertSame;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Metrics;
 import java.time.Duration;
 import java.util.function.Supplier;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public abstract class AbstractSplitKeyEstimatorTest extends MockableTest {
+public class SplitKeyEstimatorTest extends MockableTest {
     @Mock
     protected Supplier<Long> nanoSource;
 
-
-    protected abstract ISplitKeyEstimator create(Supplier<Long> nanoSource, int windowSizeSec);
-
     @Test
-    public void estimateSplitKey() {
-        AbstractSplitKeyEstimator testEstimator = new AbstractSplitKeyEstimator(System::nanoTime, 1, k -> k) {
-            @Override
-            protected SplitHint doEstimate(RecordingWindowSlot windowSlot) {
-                return SplitHint.getDefaultInstance();
-            }
-        };
-        assertFalse(Metrics.globalRegistry.find("basekv.load.est.iodensity").gauges().isEmpty());
-        assertFalse(Metrics.globalRegistry.find("basekv.load.est.iolatency").gauges().isEmpty());
-        assertFalse(Metrics.globalRegistry.find("basekv.load.est.avglatency").gauges().isEmpty());
-        testEstimator = null;
-        await().until(() -> {
-            System.gc();
-            return Metrics.globalRegistry.find("basekv.load.est.iodensity").gauges().isEmpty() &&
-                Metrics.globalRegistry.find("basekv.load.est.iolatency").gauges().isEmpty() &&
-                Metrics.globalRegistry.find("basekv.load.est.avglatency").gauges().isEmpty();
-        });
-    }
-
-    @Test
-    public void noLoad() {
-        ISplitKeyEstimator estimator = create(System::nanoTime, 5);
-        SplitHint hint = estimator.estimate();
+    public void noLoadRecorded() {
+        SplitKeyEstimator testEstimator = new SplitKeyEstimator(System::nanoTime, 5, k -> k);
+        SplitHint hint = testEstimator.estimate();
         assertFalse(hint.hasSplitKey());
     }
 
     @Test
     public void hintMemoization() {
-        ISplitKeyEstimator estimator = create(nanoSource, 5);
+        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 5, k -> k);
         long now = 0L;
         // track enough records
         for (int i = 0; i < 11; i++) {
@@ -78,10 +55,31 @@ public abstract class AbstractSplitKeyEstimatorTest extends MockableTest {
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(6).toNanos());
         SplitHint hint1 = estimator.estimate();
         SplitHint hint2 = estimator.estimate();
-        assertFalse(hint1.hasSplitKey());
+        assertTrue(hint1.hasSplitKey());
         assertSame(hint1, hint2);
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(11).toNanos());
         hint2 = estimator.estimate();
         assertNotSame(hint1, hint2);
+    }
+
+    @Test
+    public void trackClearExpiredSlots() {
+        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 1, k -> k);
+        long now = 0L;
+        for (int i = 0; i < 11; i++) {
+            when(nanoSource.get()).thenReturn(now);
+            ILoadTracker.ILoadRecorder recorder = estimator.start();
+            recorder.record(ByteString.copyFromUtf8("Key"), Duration.ofMillis(10).toNanos());
+            when(nanoSource.get()).thenReturn(now + Duration.ofMillis(200).toNanos());
+            recorder.stop();
+        }
+        when(nanoSource.get()).thenReturn(now + Duration.ofMillis(1000).toNanos());
+        SplitHint hint = estimator.estimate();
+        assertTrue(hint.getIoDensity() > 0);
+        assertTrue(hint.hasSplitKey());
+        when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(2).toNanos());
+        hint = estimator.estimate();
+        assertEquals(hint.getIoDensity(), 0);
+        assertFalse(hint.hasSplitKey());
     }
 }

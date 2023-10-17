@@ -15,9 +15,8 @@ package com.baidu.bifromq.basekv.benchmark;
 
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.store.range.estimator.ISplitKeyEstimator;
-import com.baidu.bifromq.basekv.store.range.estimator.LatencyBasedSplitKeyEstimator;
+import com.baidu.bifromq.basekv.store.range.estimator.SplitKeyEstimator;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +37,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @State(Scope.Benchmark)
 public class SplitKeyEstimatorBenchmark {
     private static final int totalKeyCount = 1000000;
-    private final ISplitKeyEstimator loadEstimator = new LatencyBasedSplitKeyEstimator(Duration.ofMillis(100), 5);
+    private final ISplitKeyEstimator loadEstimator = new SplitKeyEstimator(5);
     private ByteString[] keys;
 
     @Setup(Level.Trial)

@@ -33,23 +33,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class RangeSplitBalancer extends StoreBalancer {
     private static final double DEFAULT_CPU_USAGE_LIMIT = 0.8;
+    private static final int DEFAULT_MAX_IO_DENSITY_PER_RANGE = 30;
+    private static final long DEFAULT_IO_NANOS_LIMIT_PER_RANGE = 30_000;
     private final double cpuUsageLimit;
-    private final boolean preferQueryLoadHint;
+    private final int maxIODensityPerRange;
+    private final long ioNanosLimitPerRange;
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
     public RangeSplitBalancer(String localStoreId) {
-        this(localStoreId, DEFAULT_CPU_USAGE_LIMIT, true);
+        this(localStoreId, DEFAULT_CPU_USAGE_LIMIT, DEFAULT_MAX_IO_DENSITY_PER_RANGE, DEFAULT_IO_NANOS_LIMIT_PER_RANGE);
     }
 
-    public RangeSplitBalancer(String localStoreId, boolean preferQueryLoadHint) {
-        this(localStoreId, DEFAULT_CPU_USAGE_LIMIT, preferQueryLoadHint);
-    }
-
-    public RangeSplitBalancer(String localStoreId, double cpuUsageLimit, boolean preferQueryLoadHint) {
+    public RangeSplitBalancer(String localStoreId,
+                              double cpuUsageLimit,
+                              int maxIoDensityPerRange,
+                              long ioNanoLimitPerRange) {
         super(localStoreId);
         Preconditions.checkArgument(0 < cpuUsageLimit && cpuUsageLimit < 1.0, "Invalid cpu usage limit");
         this.cpuUsageLimit = cpuUsageLimit;
-        this.preferQueryLoadHint = preferQueryLoadHint;
+        this.maxIODensityPerRange = maxIoDensityPerRange;
+        this.ioNanosLimitPerRange = ioNanoLimitPerRange;
     }
 
     @Override
@@ -80,6 +83,9 @@ class RangeSplitBalancer extends StoreBalancer {
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
             .filter(d -> d.getState() == State.StateType.Normal)
+            // split range with highest io density
+            .sorted((o1, o2) -> Long.compare(o2.getLoadHint().getMutation().getIoDensity(),
+                o1.getLoadHint().getMutation().getIoDensity()))
             .toList();
         // No leader range in localStore
         if (localLeaderRangeDescriptors.isEmpty()) {
@@ -87,23 +93,18 @@ class RangeSplitBalancer extends StoreBalancer {
         }
         for (KVRangeDescriptor leaderRangeDescriptor : localLeaderRangeDescriptors) {
             LoadHint hint = leaderRangeDescriptor.getLoadHint();
-            SplitHint[] splitHints = preferQueryLoadHint ?
-                new SplitHint[] {hint.getQuery(), hint.getMutation()} :
-                new SplitHint[] {hint.getMutation(), hint.getQuery()};
-            for (SplitHint splitHint : splitHints) {
-                if (splitHint.hasSplitKey()) {
-                    log.debug("Split range[{}] in store[{}]: key={}, load={}",
-                        KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
-                        localStoreId,
-                        splitHint.getSplitKey(),
-                        splitHint.getLoad());
-                    return Optional.of(SplitCommand.builder()
-                        .toStore(localStoreId)
-                        .expectedVer(leaderRangeDescriptor.getVer())
-                        .kvRangeId(leaderRangeDescriptor.getId())
-                        .splitKey(splitHint.getSplitKey())
-                        .build());
-                }
+            SplitHint splitHint = hint.getMutation();
+            if (splitHint.getIoLatencyNanos() < ioNanosLimitPerRange &&
+                splitHint.getIoDensity() > maxIODensityPerRange && splitHint.hasSplitKey()) {
+                log.debug("Split range[{}] in store[{}]: key={}",
+                    KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
+                    localStoreId, splitHint.getSplitKey());
+                return Optional.of(SplitCommand.builder()
+                    .toStore(localStoreId)
+                    .expectedVer(leaderRangeDescriptor.getVer())
+                    .kvRangeId(leaderRangeDescriptor.getId())
+                    .splitKey(splitHint.getSplitKey())
+                    .build());
             }
         }
         return Optional.empty();
