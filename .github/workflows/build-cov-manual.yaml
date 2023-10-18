@@ -1,4 +1,4 @@
-name: Cov-Build
+name: Manual-Cov-Build
 
 on:
   workflow_dispatch:
