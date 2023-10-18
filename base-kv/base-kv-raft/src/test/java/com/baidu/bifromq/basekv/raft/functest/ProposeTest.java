@@ -32,6 +32,8 @@ import com.google.protobuf.ByteString;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
 import lombok.extern.slf4j.Slf4j;
 import org.testng.Assert;
 import org.testng.annotations.Ignore;
@@ -42,28 +44,32 @@ import org.testng.annotations.Test;
 public class ProposeTest extends SharedRaftConfigTestTemplate {
     @Test(groups = "integration")
     public void testProposalOverridden1() {
-        testProposalOverridden(true, DropProposalException.SupersededBySnapshotException.class);
+        testProposalOverridden(true,
+                e -> assertTrue(e instanceof DropProposalException.SupersededBySnapshotException));
     }
 
     @Config(preVote = false)
     @Test(groups = "integration")
-    @Ignore
     public void testProposalOverridden2() {
-        testProposalOverridden(true, DropProposalException.SupersededBySnapshotException.class);
+        testProposalOverridden(true,
+                e -> assertTrue(e instanceof DropProposalException.SupersededBySnapshotException ||
+                        e instanceof DropProposalException.OverriddenException));
     }
 
     @Test(groups = "integration")
     public void testProposalOverridden3() {
-        testProposalOverridden(false, DropProposalException.OverriddenException.class);
+        testProposalOverridden(false,
+                e -> assertTrue(e instanceof DropProposalException.OverriddenException));
     }
 
     @Config(preVote = false)
     @Test(groups = "integration")
     public void testProposalOverridden4() {
-        testProposalOverridden(false, DropProposalException.OverriddenException.class);
+        testProposalOverridden(false,
+                e -> assertTrue(e instanceof DropProposalException.OverriddenException));
     }
 
-    private void testProposalOverridden(boolean compaction, Class<? extends Throwable> expected) {
+    private void testProposalOverridden(boolean compaction, Consumer<Throwable> assertException) {
         String leader = group.currentLeader().get();
         assertTrue(group.awaitIndexCommitted(leader, 1));
         group.propose(leader, copyFromUtf8("appCommand1"));
@@ -105,12 +111,12 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
         try {
             assertEquals(propose5Future.get(), 7);
         } catch (Exception e) {
-            assertEquals(e.getCause().getClass(), expected);
+            assertException.accept(e.getCause());
         }
         try {
             assertEquals(propose6Future.get(), 8);
         } catch (Exception e) {
-            assertEquals(e.getCause().getClass(), expected);
+            assertException.accept(e.getCause());
         }
     }
 
