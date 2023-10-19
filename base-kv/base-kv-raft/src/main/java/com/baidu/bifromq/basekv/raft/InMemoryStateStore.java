@@ -106,7 +106,9 @@ public final class InMemoryStateStore implements IRaftStateStore {
         long snapLastIndex = snapshot.getIndex();
         long snapLastTerm = snapshot.getTerm();
         Optional<LogEntry> lastEntryInSS = entryAt(snapLastIndex);
-        if (lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) {
+        if ((lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) ||
+            (lastEntryInSS.isEmpty() && latestSnapshot != null && latestSnapshot.getIndex() == snapLastIndex &&
+                latestSnapshot.getTerm() == snapLastTerm)) {
             // the snapshot represents partial history, it happens when compacting
             latestSnapshot = snapshot;
             long truncateBefore = Math.min(lastIndex(), snapLastIndex) + 1;
