@@ -128,7 +128,9 @@ class KVRangeWALStore implements IKVRangeWALStore {
         log.debug("Compact logs using snapshot[term={}, index={}]: rangeId={}, storeId={}",
             snapLastTerm, snapLastIndex, KVRangeIdUtil.toString(rangeId), storeId);
         IKVSpaceWriter writer = kvSpace.toWriter();
-        if (lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) {
+        if ((lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) ||
+            (lastEntryInSS.isEmpty() && latestSnapshot != null && latestSnapshot.getIndex() == snapLastIndex &&
+                latestSnapshot.getTerm() == snapLastTerm)) {
             // the snapshot represents partial history, it happens when compacting
             // save snapshot
             writer.put(KEY_LATEST_SNAPSHOT_BYTES, snapshot.toByteString());

@@ -116,12 +116,15 @@ class KVRangeDumpSession {
     }
 
     void tick() {
+        if (lastReplyTS == 0) {
+            return;
+        }
         long elapseNanos = Duration.ofNanos(System.nanoTime() - lastReplyTS).toNanos();
         if (maxIdleDuration.toNanos() < elapseNanos) {
             log.debug("Cancel the idle dump session[{}] to store[{}]: rangeId={}",
                 request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
             cancel();
-        } else if (maxIdleDuration.toNanos() / 2 < elapseNanos) {
+        } else if (maxIdleDuration.toNanos() / 2 < elapseNanos && currentRequest != null) {
             runner.add(() -> {
                 if (maxIdleDuration.toNanos() / 2 < Duration.ofNanos(System.nanoTime() - lastReplyTS).toNanos()) {
                     messenger.send(currentRequest);
