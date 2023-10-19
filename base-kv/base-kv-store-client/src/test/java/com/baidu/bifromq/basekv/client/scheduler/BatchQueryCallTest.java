@@ -106,18 +106,27 @@ public class BatchQueryCallTest {
         TestQueryCallScheduler scheduler =
             new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
                 Duration.ofMillis(1000), Duration.ofMinutes(5), true);
-        List<Integer> reqList = new ArrayList<>();
-        List<Integer> respList = new CopyOnWriteArrayList<>();
+        List<Integer> reqList1 = new ArrayList<>();
+        List<Integer> reqList2 = new ArrayList<>();
+        List<Integer> respList1 = new CopyOnWriteArrayList<>();
+        List<Integer> respList2 = new CopyOnWriteArrayList<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
             int req = ThreadLocalRandom.current().nextInt(1, 1001);
-            reqList.add(req);
-            futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req)))
-                .thenAccept((v) -> respList.add(Integer.parseInt(v.toStringUtf8()))));
+            if (req < 500) {
+                reqList1.add(req);
+                futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req)))
+                    .thenAccept((v) -> respList1.add(Integer.parseInt(v.toStringUtf8()))));
+            } else {
+                reqList2.add(req);
+                futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req)))
+                    .thenAccept((v) -> respList2.add(Integer.parseInt(v.toStringUtf8()))));
+            }
         }
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         // the resp order preserved
-        assertEquals(reqList, respList);
+        assertEquals(reqList1, respList1);
+        assertEquals(reqList2, respList2);
     }
 
     @Test
