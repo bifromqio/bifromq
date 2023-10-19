@@ -24,6 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
+import java.util.concurrent.TimeUnit;
+
 @Slf4j
 public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestTemplate {
 
@@ -42,7 +44,10 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
             if (setting.leader.equals(newLeader)) {
                 return true;
             }
-            cluster.transferLeader(oldLeader, setting.ver, rangeId, newLeader).toCompletableFuture().join();
+            cluster.transferLeader(oldLeader, setting.ver, rangeId, newLeader)
+                    .toCompletableFuture()
+                    .orTimeout(30, TimeUnit.SECONDS)
+                    .join();
             setting = cluster.kvRangeSetting(rangeId);
             return setting.leader.equals(newLeader);
         });
@@ -55,7 +60,10 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
         String oldLeader = rangeSetting.leader;
 
         try {
-            cluster.transferLeader(oldLeader, rangeSetting.ver, rangeId, "FakeLeader").toCompletableFuture().join();
+            cluster.transferLeader(oldLeader, rangeSetting.ver, rangeId, "FakeLeader")
+                    .toCompletableFuture()
+                    .orTimeout(30, TimeUnit.SECONDS)
+                    .join();
             fail();
         } catch (Throwable e) {
             assertTrue(e.getCause() instanceof KVRangeException.BadRequest);

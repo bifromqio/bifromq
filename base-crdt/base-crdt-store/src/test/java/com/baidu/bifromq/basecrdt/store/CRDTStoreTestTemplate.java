@@ -31,16 +31,18 @@ public abstract class CRDTStoreTestTemplate {
     protected CRDTStoreTestCluster storeMgr;
 
     @BeforeMethod(alwaysRun = true)
-    public void setup() {
+    public void setup(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
         storeMgr = new CRDTStoreTestCluster();
+        createClusterByAnnotation(method);
     }
 
     @AfterMethod(alwaysRun = true)
-    public void teardown() {
-        if (storeMgr != null) {
-            log.info("Shutting down test cluster");
-            new Thread(() -> storeMgr.shutdown()).start();
-        }
+    public void teardown(Method method) {
+        log.info("Test case[{}.{}] finished, doing teardown",
+                method.getDeclaringClass().getName(), method.getName());
+        CRDTStoreTestCluster lastStoreMgr = storeMgr;
+        new Thread(lastStoreMgr::shutdown).start();
     }
 
     public void createClusterByAnnotation(Method testMethod) {

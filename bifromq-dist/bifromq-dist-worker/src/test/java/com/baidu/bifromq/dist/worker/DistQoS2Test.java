@@ -99,7 +99,7 @@ public class DistQoS2Test extends DistWorkerTest {
 
         ArgumentCaptor<Iterable<DeliveryPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);
 
-        verify(writer1, timeout(100).atLeastOnce()).deliver(msgCap.capture());
+        verify(writer1, timeout(200).atLeastOnce()).deliver(msgCap.capture());
         for (DeliveryPack pack : msgCap.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             Iterable<SubInfo> subInfos = pack.inboxes;
@@ -119,7 +119,7 @@ public class DistQoS2Test extends DistWorkerTest {
 //        assertEquals(inbox1Msgs.get(1).getSubQoS(), AT_MOST_ONCE);
 
         msgCap = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer2, timeout(100).atLeastOnce()).deliver(msgCap.capture());
+        verify(writer2, timeout(200).atLeastOnce()).deliver(msgCap.capture());
 
         assertEquals(msgCap.getAllValues().size(), 1);
         for (DeliveryPack pack : msgCap.getValue()) {

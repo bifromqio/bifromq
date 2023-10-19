@@ -88,8 +88,6 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
             disposables.dispose();
             fetchRunner.cancelAll();
             applyRunner.cancelAll();
-            fetchRunner.awaitDone().toCompletableFuture().join();
-            applyRunner.awaitDone().toCompletableFuture().join();
         }
     }
 

@@ -36,7 +36,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(AgentHostTestListener.class)
 public class AgentHostsTest extends AgentTestTemplate {
     @StoreCfgs(stores = {@StoreCfg(id = "s1")})
     @Test

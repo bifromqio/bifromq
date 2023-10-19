@@ -53,7 +53,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(CRDTStoreTestListener.class)
 public class CRDTStoreTest extends CRDTStoreTestTemplate {
 
     @StoreCfgs(stores = {@StoreCfg(id = "s1")})

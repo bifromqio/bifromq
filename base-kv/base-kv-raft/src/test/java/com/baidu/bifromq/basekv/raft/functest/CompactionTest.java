@@ -21,7 +21,6 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.raft.exception.CompactionException;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
-import com.baidu.bifromq.basekv.raft.functest.template.RaftGroupTestListener;
 import com.baidu.bifromq.basekv.raft.functest.template.SharedRaftConfigTestTemplate;
 import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +28,6 @@ import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(RaftGroupTestListener.class)
 public class CompactionTest extends SharedRaftConfigTestTemplate {
     @Cluster(v = "V1")
     @Test(groups = "integration")

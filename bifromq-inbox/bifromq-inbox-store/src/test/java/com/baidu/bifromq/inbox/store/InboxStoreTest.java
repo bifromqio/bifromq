@@ -79,6 +79,7 @@ import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -99,7 +100,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterClass;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 abstract class InboxStoreTest {
@@ -210,8 +213,8 @@ abstract class InboxStoreTest {
     @AfterClass(groups = "integration")
     public void teardown() throws Exception {
         log.info("Finish testing, and tearing down");
-        testStore.stop();
         new Thread(() -> {
+            testStore.stop();
             clientCrdtService.stop();
             serverCrdtService.stop();
             agentHost.shutdown();
@@ -228,6 +231,17 @@ abstract class InboxStoreTest {
             bgTaskExecutor.shutdown();
         }).start();
         closeable.close();
+    }
+
+    @BeforeMethod(alwaysRun = true)
+    public void printCaseStart(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+    }
+
+    @AfterMethod(alwaysRun = true)
+    public void printCaseFinish(Method method) {
+        log.info("Test case[{}.{}] finished, doing teardown",
+                method.getDeclaringClass().getName(), method.getName());
     }
 
     protected Clock getClock() {

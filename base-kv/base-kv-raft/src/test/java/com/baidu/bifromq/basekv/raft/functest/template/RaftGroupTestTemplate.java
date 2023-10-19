@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class RaftGroupTestTemplate {
@@ -29,17 +30,25 @@ public abstract class RaftGroupTestTemplate {
         ClusterConfig.newBuilder().addVoters("V1").addVoters("V2").addVoters("V3").build();
     private ClusterConfig clusterConfigInUse;
 
-    public void createClusterByAnnotation(Method testMethod) {
-        Cluster cluster = testMethod.getAnnotation(Cluster.class);
+    public void createClusterByAnnotation(Method method) {
+        Cluster cluster = method.getAnnotation(Cluster.class);
         clusterConfigInUse = cluster == null ? defaultClusterConfig : build(cluster);
-        startingTest(testMethod);
     }
 
-    protected void startingTest(Method testMethod) {
+    protected void doSetup(Method method) {
+    }
+
+    @BeforeMethod(alwaysRun = true)
+    public void setup(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+        createClusterByAnnotation(method);
+        doSetup(method);
     }
 
     @AfterMethod(alwaysRun = true)
-    public void teardown() {
+    public void teardown(Method method) {
+        log.info("Test case[{}.{}] finished, doing teardown",
+                method.getDeclaringClass().getName(), method.getName());
         clusterConfigInUse = null;
     }
 

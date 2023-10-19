@@ -1227,8 +1227,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     }, fsmExecutor);
                                 // send merge done request to local mergee
                                 log.debug("Send MergeDone request to Mergee[{}]: rangeId={}, storeId={}",
-                                    KVRangeIdUtil.toString(id), hostStoreId,
-                                    KVRangeIdUtil.toString(request.getMergeeId()));
+                                        KVRangeIdUtil.toString(request.getMergeeId()),
+                                        KVRangeIdUtil.toString(id), hostStoreId);
                                 messenger.send(KVRangeMessage.newBuilder()
                                     .setRangeId(request.getMergeeId())
                                     .setHostStoreId(hostStoreId)

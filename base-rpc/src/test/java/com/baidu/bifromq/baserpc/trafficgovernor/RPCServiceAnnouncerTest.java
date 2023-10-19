@@ -41,7 +41,8 @@ abstract class RPCServiceAnnouncerTest {
 
     @AfterClass(alwaysRun = true)
     public void teardown() {
-        new Thread(() -> agentHost.shutdown()).start();
+        IAgentHost lastAgentHost = agentHost;
+        new Thread(lastAgentHost::shutdown).start();
     }
 
     protected ICRDTService newCRDTService() {

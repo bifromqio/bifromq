@@ -27,6 +27,8 @@ import com.google.common.collect.Sets;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -61,25 +63,25 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
             String store0 = cluster.bootstrapStore();
             KVRangeId rangeId = cluster.genesisKVRangeId();
             cluster.awaitKVRangeReady(store0, rangeId);
+            Thread.sleep(100);
+
             Set<String> voters = Sets.newHashSet(store0);
             for (int i = 1; i < initNodes; i++) {
                 voters.add(cluster.addStore());
             }
             long start = System.currentTimeMillis();
             log.info("Preparing replica config for testing");
-            await().ignoreExceptions().forever().until(() -> {
-                KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
-                String leader = setting.leader;
-                if (setting.clusterConfig.getVotersList().containsAll(voters)) {
-                    return true;
-                }
+            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+            String leader = setting.leader;
+            if (!setting.clusterConfig.getVotersList().containsAll(voters)) {
                 cluster.changeReplicaConfig(leader, setting.ver, rangeId, voters, Sets.newHashSet())
-                    .toCompletableFuture().join();
-                setting = cluster.kvRangeSetting(rangeId);
-                log.info("Config change succeed: {}, {}, {}", setting, voters,
-                    setting.clusterConfig.getVotersList().containsAll(voters));
-                return setting.clusterConfig.getVotersList().containsAll(voters);
-            });
+                        .toCompletableFuture().join();
+
+                await().ignoreExceptions().atMost(40, TimeUnit.SECONDS).until(() -> {
+                    KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);
+                    return newSetting.clusterConfig.getVotersList().containsAll(voters);
+                });
+            }
             cluster.awaitAllKVRangeReady(rangeId, voters.size() == 1 ? 0 : 2, 5000);
             log.info("KVRange[{}] ready in {}ms start testing", KVRangeIdUtil.toString(rangeId),
                 System.currentTimeMillis() - start);
@@ -93,7 +95,8 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
     protected void doTeardown(Method method) {
         if (cluster != null) {
             log.info("Shutting down test cluster");
-            new Thread(() -> cluster.shutdown()).start();
+            KVRangeStoreTestCluster lastCluster = this.cluster;
+            new Thread(lastCluster::shutdown).start();
         }
     }
 

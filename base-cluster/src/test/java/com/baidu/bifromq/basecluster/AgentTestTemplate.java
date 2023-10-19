@@ -57,15 +57,23 @@ public abstract class AgentTestTemplate {
     }
 
     @BeforeMethod()
-    public void setup() {
+    public void setup(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+
         storeMgr = new AgentTestCluster();
+        createClusterByAnnotation(method);
     }
 
     @AfterMethod()
-    public void teardown() {
+    public void teardown(Method method) {
+        log.info("Test case[{}.{}] finished, doing teardown",
+                method.getDeclaringClass().getName(), method.getName());
+
         if (storeMgr != null) {
             log.info("Shutting down test cluster");
-            storeMgr.shutdown();
+            AgentTestCluster lastStoreMgr = this.storeMgr;
+            // run in a separate thread to avoid blocking the test thread
+            new Thread(lastStoreMgr::shutdown).start();
         }
     }
 

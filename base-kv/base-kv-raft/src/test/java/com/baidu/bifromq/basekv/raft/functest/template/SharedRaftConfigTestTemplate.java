@@ -37,9 +37,9 @@ public abstract class SharedRaftConfigTestTemplate extends RaftGroupTestTemplate
     private int tickInMS = 10;
 
     @Override
-    protected void startingTest(Method testMethod) {
-        Config config = testMethod.getAnnotation(Config.class);
-        Ticker ticker = testMethod.getAnnotation(Ticker.class);
+    protected void doSetup(Method method) {
+        Config config = method.getAnnotation(Config.class);
+        Ticker ticker = method.getAnnotation(Ticker.class);
         raftConfigInUse = config == null ? defaultRaftConfig : build(config);
         if (ticker != null) {
             tickInMS = ticker.unitInMS();
@@ -48,15 +48,12 @@ public abstract class SharedRaftConfigTestTemplate extends RaftGroupTestTemplate
             tickInMS = 10;
             disableTick = false;
         }
-        setup();
-    }
 
-    public final void setup() {
         log.info("Setup a test raft group: v={}, l={}, nv={}, nl={}",
-            clusterConfig().getVotersList(),
-            clusterConfig().getLearnersList(),
-            clusterConfig().getNextVotersList(),
-            clusterConfig().getNextLearnersList());
+                clusterConfig().getVotersList(),
+                clusterConfig().getLearnersList(),
+                clusterConfig().getNextVotersList(),
+                clusterConfig().getNextLearnersList());
         group = new RaftNodeGroup(clusterConfig(), raftConfigInUse);
         if (!disableTick) {
             group.run(tickInMS, TimeUnit.MILLISECONDS);
