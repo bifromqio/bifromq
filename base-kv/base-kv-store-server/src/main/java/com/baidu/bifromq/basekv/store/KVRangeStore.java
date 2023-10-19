@@ -20,12 +20,14 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isOverlap;
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.EnsureRange;
 import com.baidu.bifromq.basekv.proto.EnsureRangeReply;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -45,15 +47,17 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.range.IKVRangeFSM;
+import com.baidu.bifromq.basekv.store.range.KVRange;
 import com.baidu.bifromq.basekv.store.range.KVRangeFSM;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
+import com.baidu.bifromq.basekv.store.wal.IKVRangeWALStore;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWALStorageEngine;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -98,7 +102,6 @@ public class KVRangeStore implements IKVRangeStore {
     private final String id;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final Map<KVRangeId, IKVRangeFSM> kvRangeMap = Maps.newConcurrentMap();
-    private final Set<IKVRangeFSM> quitRanges = Sets.newConcurrentHashSet();
     private final Subject<List<Observable<KVRangeDescriptor>>> descriptorListSubject =
         BehaviorSubject.<List<Observable<KVRangeDescriptor>>>create().toSerialized();
     private final IKVRangeCoProcFactory coProcFactory;
@@ -110,8 +113,8 @@ public class KVRangeStore implements IKVRangeStore {
     private final ScheduledExecutorService tickExecutor;
     private volatile ScheduledFuture<?> tickFuture;
     private final ScheduledExecutorService bgTaskExecutor;
-    private final ScheduledExecutorService rangeMgmtTaskExecutor;
-    private final AsyncRunner rangeMgmtTaskRunner;
+    private final ScheduledExecutorService mgmtTaskExecutor;
+    private final AsyncRunner mgmtTaskRunner;
     private final KVRangeStoreOptions opts;
     private final MetricsManager metricsManager;
     private IStoreMessenger messenger;
@@ -138,10 +141,10 @@ public class KVRangeStore implements IKVRangeStore {
         this.queryExecutor = queryExecutor;
         this.tickExecutor = tickExecutor;
         this.bgTaskExecutor = bgTaskExecutor;
-        this.rangeMgmtTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+        this.mgmtTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("kvstore-mgmt-executor")),
             "kvstore[" + id + "]-mgmt-executor");
-        this.rangeMgmtTaskRunner = new AsyncRunner(rangeMgmtTaskExecutor);
+        this.mgmtTaskRunner = new AsyncRunner(mgmtTaskExecutor);
         this.metricsManager = new MetricsManager(clusterId, id);
         storeStatsCollector =
             new KVRangeStoreStatsCollector(opts, Duration.ofSeconds(opts.getStatsCollectIntervalSec()),
@@ -186,10 +189,10 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     private void loadExisting() {
-        rangeMgmtTaskRunner.add(() -> {
+        mgmtTaskRunner.add(() -> {
             kvRangeEngine.ranges().forEach((id, keyRange) -> {
                 KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
-                kvRangeMap.computeIfAbsent(kvRangeId, key -> loadKVRange(key, keyRange));
+                kvRangeMap.computeIfAbsent(kvRangeId, key -> loadKVRangeFSM(key, keyRange));
             });
             updateDescriptorList();
         }).toCompletableFuture().join();
@@ -216,7 +219,7 @@ public class KVRangeStore implements IKVRangeStore {
 //                    .join();
                 disposable.dispose();
                 storeStatsCollector.stop().toCompletableFuture().join();
-                rangeMgmtTaskRunner.awaitDone().toCompletableFuture().join();
+                mgmtTaskRunner.awaitDone().toCompletableFuture().join();
                 log.debug("Stopping WAL Engine");
                 walStorageEngine.stop();
                 log.debug("Stopping KVRange Engine");
@@ -229,7 +232,7 @@ public class KVRangeStore implements IKVRangeStore {
                 log.error("Error occurred during stopping range store", e);
             } finally {
                 messenger.close();
-                rangeMgmtTaskExecutor.shutdown();
+                mgmtTaskExecutor.shutdown();
                 status.set(Status.TERMINATED);
             }
         }
@@ -238,27 +241,33 @@ public class KVRangeStore implements IKVRangeStore {
     @Override
     public boolean bootstrap() {
         checkStarted();
-        if (kvRangeMap.isEmpty()) {
-            // build the genesis "full" KVRange in the cluster
-            KVRangeId genesisId = KVRangeIdUtil.generate();
-            log.debug("Creating the genesis KVRange[{}]", KVRangeIdUtil.toString(genesisId));
-            ensureKVRange(genesisId, Snapshot.newBuilder()
-                .setClusterConfig(ClusterConfig.newBuilder()
-                    .addVoters(id())
-                    .build())
-                .setTerm(0)
-                .setIndex(5)
-                .setData(KVRangeSnapshot.newBuilder()
+        return mgmtTaskRunner.add(() -> {
+            if (kvRangeMap.isEmpty()) {
+                // build the genesis "full" KVRange in the cluster
+                KVRangeId genesisId = KVRangeIdUtil.generate();
+                log.debug("Creating the genesis KVRange[{}]", KVRangeIdUtil.toString(genesisId));
+                assert !walStorageEngine.has(genesisId);
+                KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
                     .setId(genesisId)
                     .setVer(0)
                     .setLastAppliedIndex(5)
                     .setState(State.newBuilder().setType(Normal).build())
                     .setBoundary(FULL_BOUNDARY)
-                    .build().toByteString())
-                .build()).toCompletableFuture().join();
-            return true;
-        }
-        return false;
+                    .build();
+                Snapshot snapshot = Snapshot.newBuilder()
+                    .setClusterConfig(ClusterConfig.newBuilder()
+                        .addVoters(id())
+                        .build())
+                    .setTerm(0)
+                    .setIndex(5)
+                    .setData(rangeSnapshot.toByteString())
+                    .build();
+                kvRangeMap.put(genesisId, createKVRangeFSM(genesisId, snapshot, rangeSnapshot));
+                updateDescriptorList();
+                return CompletableFuture.completedFuture(true);
+            }
+            return CompletableFuture.completedFuture(false);
+        }).join();
     }
 
     @Override
@@ -270,7 +279,7 @@ public class KVRangeStore implements IKVRangeStore {
     public CompletionStage<Void> recover() {
         checkStarted();
         metricsManager.runningRecoverNum.increment();
-        return rangeMgmtTaskRunner.add(() -> CompletableFuture.allOf(kvRangeMap.values().stream()
+        return mgmtTaskRunner.add(() -> CompletableFuture.allOf(kvRangeMap.values().stream()
                 .map(kvRange -> kvRange.recover().handle((v, e) -> {
                     if (e != null) {
                         log.warn("KVRange[{}] recover failed for some reason",
@@ -308,18 +317,103 @@ public class KVRangeStore implements IKVRangeStore {
             KVRangeMessage payload = storeMessage.getPayload();
             if (payload.hasEnsureRange()) {
                 EnsureRange request = storeMessage.getPayload().getEnsureRange();
-                ensureKVRange(payload.getRangeId(), request.getInitSnapshot())
-                    .whenComplete((v, e) -> messenger.send(StoreMessage.newBuilder()
-                        .setFrom(id)
-                        .setSrcRange(payload.getRangeId())
-                        .setPayload(KVRangeMessage.newBuilder()
-                            .setRangeId(storeMessage.getSrcRange())
-                            .setHostStoreId(storeMessage.getFrom())
-                            .setEnsureRangeReply(EnsureRangeReply.newBuilder()
-                                .setResult(EnsureRangeReply.Result.OK)
+                mgmtTaskRunner.add(() -> {
+                    KVRangeId rangeId = payload.getRangeId();
+                    long ver = request.getVer();
+                    Boundary boundary = request.getBoundary();
+                    IKVRangeFSM range = kvRangeMap.get(rangeId);
+                    try {
+                        KVRangeSnapshot rangeSnapshot =
+                            KVRangeSnapshot.parseFrom(request.getInitSnapshot().getData());
+                        if (range != null) {
+                            if (range.ver() >= ver) {
+                                // just return OK
+                                messenger.send(StoreMessage.newBuilder()
+                                    .setFrom(id)
+                                    .setSrcRange(payload.getRangeId())
+                                    .setPayload(KVRangeMessage.newBuilder()
+                                        .setRangeId(storeMessage.getSrcRange())
+                                        .setHostStoreId(storeMessage.getFrom())
+                                        .setEnsureRangeReply(EnsureRangeReply.newBuilder()
+                                            .setResult(range.ver() == ver ?
+                                                // ok for range already exists
+                                                EnsureRangeReply.Result.OK :
+                                                // error for staled ensure request
+                                                EnsureRangeReply.Result.Error)
+                                            .build())
+                                        .build())
+                                    .build());
+                                return CompletableFuture.completedFuture(null);
+                            } else {
+                                // existing range is stale
+                                // make sure boundary is compatible with others
+                                return ensureCompatibilityInternal(rangeId, ver, boundary, emptySet())
+                                    .thenCompose(v -> range.destroy())
+                                    .thenAccept(v -> {
+                                        kvRangeMap.put(rangeId,
+                                            createKVRangeFSM(rangeId, request.getInitSnapshot(), rangeSnapshot));
+                                        messenger.send(StoreMessage.newBuilder()
+                                            .setFrom(id)
+                                            .setSrcRange(payload.getRangeId())
+                                            .setPayload(KVRangeMessage.newBuilder()
+                                                .setRangeId(storeMessage.getSrcRange())
+                                                .setHostStoreId(storeMessage.getFrom())
+                                                .setEnsureRangeReply(EnsureRangeReply.newBuilder()
+                                                    .setResult(EnsureRangeReply.Result.OK)
+                                                    .build())
+                                                .build())
+                                            .build());
+                                        updateDescriptorList();
+                                    });
+                            }
+                        } else {
+                            IKVSpace keyRange = kvRangeEngine.ranges().get(KVRangeIdUtil.toString(rangeId));
+                            if (keyRange == null) {
+                                if (walStorageEngine.has(rangeId)) {
+                                    log.warn("Staled WAL Store found, destroy it: rangeId={}, storeId={}",
+                                        KVRangeIdUtil.toString(rangeId), id);
+                                    walStorageEngine.get(rangeId).destroy();
+                                }
+                                kvRangeMap.put(rangeId,
+                                    createKVRangeFSM(rangeId, request.getInitSnapshot(), rangeSnapshot));
+                            } else {
+                                // for split workflow, the keyspace is already created, just create walstore and load it
+                                if (!walStorageEngine.has(rangeId)) {
+                                    walStorageEngine.create(rangeId, request.getInitSnapshot());
+                                }
+                                kvRangeMap.put(rangeId, loadKVRangeFSM(rangeId, keyRange));
+                            }
+                            updateDescriptorList();
+                            messenger.send(StoreMessage.newBuilder()
+                                .setFrom(id)
+                                .setSrcRange(payload.getRangeId())
+                                .setPayload(KVRangeMessage.newBuilder()
+                                    .setRangeId(storeMessage.getSrcRange())
+                                    .setHostStoreId(storeMessage.getFrom())
+                                    .setEnsureRangeReply(EnsureRangeReply.newBuilder()
+                                        .setResult(EnsureRangeReply.Result.OK)
+                                        .build())
+                                    .build())
+                                .build());
+                            return CompletableFuture.completedFuture(null);
+                        }
+                    } catch (InvalidProtocolBufferException e) {
+                        // should never happen
+                        log.error("Unexpected error", e);
+                        messenger.send(StoreMessage.newBuilder()
+                            .setFrom(id)
+                            .setSrcRange(payload.getRangeId())
+                            .setPayload(KVRangeMessage.newBuilder()
+                                .setRangeId(storeMessage.getSrcRange())
+                                .setHostStoreId(storeMessage.getFrom())
+                                .setEnsureRangeReply(EnsureRangeReply.newBuilder()
+                                    .setResult(EnsureRangeReply.Result.Error)
+                                    .build())
                                 .build())
-                            .build())
-                        .build()));
+                            .build());
+                        return CompletableFuture.completedFuture(null);
+                    }
+                });
             }
         }
     }
@@ -446,96 +540,53 @@ public class KVRangeStore implements IKVRangeStore {
         if (status.get() != Status.STARTED && status.get() != Status.CLOSING) {
             return;
         }
-        kvRangeMap.forEach((v, r) -> {
-            r.tick();
-            if (r.readyToQuit()) {
-                kvRangeMap.remove(v, r);
-                quitKVRange(r);
-            }
-        });
-        quitRanges.forEach(IKVRangeFSM::tick);
+        kvRangeMap.forEach((v, r) -> r.tick());
         storeStatsCollector.tick();
         scheduleTick(opts.getKvRangeOptions().getTickUnitInMS());
     }
 
-    private CompletionStage<Void> ensureKVRange(KVRangeId rangeId, Snapshot snapshot) {
-        return rangeMgmtTaskRunner.add(() -> addKVRange(rangeId, snapshot));
-    }
-
-    private void addKVRange(KVRangeId kvRangeId, Snapshot snapshot) {
-        kvRangeMap.computeIfAbsent(kvRangeId, k -> {
-            IKVSpace keyRange = kvRangeEngine.ranges().get(KVRangeIdUtil.toString(kvRangeId));
-            KVRangeFSM kvRange;
-            if (keyRange == null) {
-                log.debug("Init range[{}] in store[{}]", KVRangeIdUtil.toString(kvRangeId), id);
-                kvRange = new KVRangeFSM(clusterId,
-                    id,
-                    kvRangeId,
-                    coProcFactory,
-                    this::ensureCompatibility,
-                    kvRangeEngine.createIfMissing(KVRangeIdUtil.toString(kvRangeId)),
-                    walStorageEngine,
-                    queryExecutor,
-                    rangeMgmtTaskExecutor,
-                    bgTaskExecutor,
-                    opts.getKvRangeOptions(),
-                    snapshot);
-            } else {
-                log.debug("Load range[{}] in store[{}]", KVRangeIdUtil.toString(kvRangeId), id);
-                if (!walStorageEngine.has(kvRangeId)) {
-                    walStorageEngine.newRaftStateStorage(kvRangeId, snapshot);
-                }
-                kvRange = new KVRangeFSM(clusterId,
-                    id,
-                    kvRangeId,
-                    coProcFactory,
-                    this::ensureCompatibility,
-                    keyRange,
-                    walStorageEngine,
-                    queryExecutor,
-                    rangeMgmtTaskExecutor,
-                    bgTaskExecutor,
-                    opts.getKvRangeOptions(),
-                    null);
-            }
-            log.debug("Open range: storeId={}, rangeId={}", id, KVRangeIdUtil.toString(kvRange.id()));
-            kvRange.open(new KVRangeMessenger(id, kvRange.id(), messenger));
-            return kvRange;
-        });
-        updateDescriptorList();
-    }
-
     private void quitKVRange(IKVRangeFSM range) {
-        quitRanges.add(range);
-        rangeMgmtTaskRunner.add(() -> range.quit()
-            .whenCompleteAsync((v, e) -> {
-                if (e != null) {
-                    quitKVRange(range);
-                } else {
-                    quitRanges.remove(range);
-                    updateDescriptorList();
-                }
-            }, rangeMgmtTaskExecutor));
+        mgmtTaskRunner.add(() -> {
+            kvRangeMap.remove(range.id(), range);
+            return range.destroy().thenAccept(v -> updateDescriptorList());
+        });
     }
 
-    private KVRangeFSM loadKVRange(KVRangeId kvRangeId, IKVSpace keyRange) {
+    private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, IKVSpace keyRange) {
         checkStarted();
-        log.debug("Load existing kv range: storeId={}, rangeId={}", id, KVRangeIdUtil.toString(kvRangeId));
+        log.debug("Load existing kvrange: rangeId={},storeId={}", KVRangeIdUtil.toString(rangeId), id);
+        assert walStorageEngine.has(rangeId);
         KVRangeFSM kvRange = new KVRangeFSM(clusterId,
             id,
-            kvRangeId,
+            rangeId,
             coProcFactory,
             this::ensureCompatibility,
-            keyRange,
-            walStorageEngine,
+            new KVRange(keyRange),
+            walStorageEngine.get(rangeId),
             queryExecutor,
-            rangeMgmtTaskExecutor,
             bgTaskExecutor,
             opts.getKvRangeOptions(),
-            null);
-        log.debug("Open range: storeId={}, rangeId={}", id, KVRangeIdUtil.toString(kvRange.id()));
+            this::quitKVRange);
         kvRange.open(new KVRangeMessenger(id, kvRange.id(), messenger));
         return kvRange;
+    }
+
+    private IKVRangeFSM createKVRangeFSM(KVRangeId rangeId, Snapshot snapshot, KVRangeSnapshot rangeSnapshot) {
+        log.debug("Creating new kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
+        IKVRangeWALStore walStore = walStorageEngine.create(rangeId, snapshot);
+        KVRangeFSM rangeFSM = new KVRangeFSM(clusterId,
+            id,
+            rangeId,
+            coProcFactory,
+            this::ensureCompatibility,
+            new KVRange(kvRangeEngine.createIfMissing(KVRangeIdUtil.toString(rangeId)), rangeSnapshot),
+            walStore,
+            queryExecutor,
+            bgTaskExecutor,
+            opts.getKvRangeOptions(),
+            this::quitKVRange);
+        rangeFSM.open(new KVRangeMessenger(id, rangeId, messenger));
+        return rangeFSM;
     }
 
     private void updateDescriptorList() {
@@ -543,54 +594,53 @@ public class KVRangeStore implements IKVRangeStore {
             kvRangeMap.values().stream().map(IKVRangeFSM::describe).collect(Collectors.toList()));
     }
 
-    private CompletableFuture<List<IKVRangeFSM>> checkCompatibility(KVRangeSnapshot snapshot,
-                                                                    Set<KVRangeId> ignoreRanges) {
-        return rangeMgmtTaskRunner.add(() -> {
-            CompletableFuture<List<IKVRangeFSM>> onDone = new CompletableFuture<>();
-            List<KVRangeDescriptor> overlapped = kvRangeMap.values().stream()
-                .map(r -> r.describe().blockingFirst())
-                .filter(r -> !ignoreRanges.contains(r.getId()) &&
-                    isOverlap(r.getBoundary(), snapshot.getBoundary()) && !r.getId().equals(snapshot.getId()))
-                .toList();
-            if (overlapped.stream().anyMatch(r -> r.getVer() > snapshot.getVer())) {
-                onDone.completeExceptionally(new KVRangeStoreException("Staled snapshot"));
-            } else {
-                onDone.complete(overlapped.stream().map(r -> kvRangeMap.get(r.getId())).toList());
-            }
-            return onDone;
-        });
+    private CompletableFuture<Void> ensureCompatibility(KVRangeId rangeId,
+                                                        long ver,
+                                                        Boundary boundary,
+                                                        Set<KVRangeId> ignoreRanges) {
+        return mgmtTaskRunner.add(() -> ensureCompatibilityInternal(rangeId, ver, boundary, ignoreRanges));
     }
 
-    private CompletableFuture<Void> ensureCompatibility(KVRangeSnapshot snapshot, Set<KVRangeId> ignoreRanges) {
-        return checkCompatibility(snapshot, ignoreRanges)
-            .thenCompose(overlapped -> rangeMgmtTaskRunner.add(() ->
-                CompletableFuture.allOf(overlapped.stream()
-                        .map(r -> r.destroy().whenComplete((v, e) -> kvRangeMap.remove(r.id(), r)))
-                        .toArray(CompletableFuture[]::new))
-                    .thenApply(v -> overlapped)))
-            .thenCompose(overlapped -> {
-                if (overlapped.isEmpty()) {
-                    return CompletableFuture.completedFuture(null);
-                }
-                return rangeMgmtTaskRunner.add(() -> {
-                    // add overlapped ranges to initial state
-                    for (IKVRangeFSM r : overlapped) {
-                        addKVRange(r.id(), Snapshot.newBuilder()
-                            .setClusterConfig(ClusterConfig.getDefaultInstance())
-                            .setTerm(0)
-                            .setIndex(0)
-                            .setData(KVRangeSnapshot.newBuilder()
-                                .setVer(0)
-                                .setId(r.id())
-                                .setLastAppliedIndex(0)
-                                .setBoundary(EMPTY_BOUNDARY)
-                                .setState(State.newBuilder().setType(Normal).build())
-                                .build()
-                                .toByteString())
-                            .build());
-                    }
-                });
-            });
+    private CompletableFuture<Void> ensureCompatibilityInternal(KVRangeId rangeId,
+                                                                long ver,
+                                                                Boundary boundary,
+                                                                Set<KVRangeId> ignoreRanges) {
+        List<KVRangeDescriptor> overlapped = kvRangeMap.values().stream()
+            .map(r -> r.describe().blockingFirst())
+            .filter(r -> !ignoreRanges.contains(r.getId()) &&
+                isOverlap(r.getBoundary(), boundary) && !r.getId().equals(rangeId))
+            .toList();
+        if (overlapped.stream().anyMatch(r -> r.getVer() > ver)) {
+            return CompletableFuture.failedFuture(new KVRangeStoreException("Incompatible range version"));
+        } else {
+            return CompletableFuture.allOf(overlapped.stream()
+                    .map(d -> kvRangeMap.remove(d.getId()))
+                    .map(r -> {
+                        KVRangeId overlappedRangeId = r.id();
+                        return r.destroy()
+                            .thenAccept(v -> {
+                                KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
+                                    .setVer(0)
+                                    .setId(overlappedRangeId)
+                                    .setLastAppliedIndex(0)
+                                    .setBoundary(EMPTY_BOUNDARY)
+                                    .setState(State.newBuilder().setType(Normal).build())
+                                    .build();
+                                Snapshot initSnapshot = Snapshot.newBuilder()
+                                    .setClusterConfig(ClusterConfig.getDefaultInstance())
+                                    .setTerm(0)
+                                    .setIndex(0)
+                                    .setData(rangeSnapshot.toByteString())
+                                    .build();
+                                log.debug("Init range using Snapshot: rangeId={}, storeId={}\n{}",
+                                    KVRangeIdUtil.toString(overlappedRangeId), id, initSnapshot);
+                                kvRangeMap.put(overlappedRangeId,
+                                    createKVRangeFSM(overlappedRangeId, initSnapshot, rangeSnapshot));
+                            });
+                    })
+                    .toArray(CompletableFuture[]::new))
+                .thenAccept(v -> updateDescriptorList());
+        }
     }
 
     private void checkStarted() {

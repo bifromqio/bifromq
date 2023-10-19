@@ -29,12 +29,7 @@ public interface IKVRangeFSM {
 
     KVRangeId id();
 
-    /**
-     * If the range is ready to quit from the store. This happens after config changing or merging operation
-     *
-     * @return
-     */
-    boolean readyToQuit();
+    long ver();
 
     Observable<KVRangeDescriptor> describe();
 
@@ -48,13 +43,6 @@ public interface IKVRangeFSM {
      * @return
      */
     CompletableFuture<Void> close();
-
-    /**
-     * Quit the range from the store, if the range is ready to quit. The range will be closed implicitly.
-     *
-     * @return
-     */
-    CompletableFuture<Void> quit();
 
     /**
      * Destroy the range from store, all range related data will be purged from the store. The range will be closed

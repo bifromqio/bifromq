@@ -66,7 +66,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
     }
 
     @Test
-    public void testStartAndStop() {
+    public void startAndStop() {
         try {
             KVRangeWALStorageEngine stateStorageEngine =
                 new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
@@ -83,7 +83,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
     }
 
     @Test
-    public void testNewRaftStateStorage() {
+    public void newRaftStateStorage() {
         try {
             KVRangeId testId = KVRangeIdUtil.generate();
             KVRangeWALStorageEngine stateStorageEngine =
@@ -96,7 +96,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
                     .addVoters(stateStorageEngine.id())
                     .build())
                 .build();
-            IRaftStateStore stateStorage = stateStorageEngine.newRaftStateStorage(testId, snapshot);
+            IRaftStateStore stateStorage = stateStorageEngine.create(testId, snapshot);
             assertEquals(stateStorage.local(), stateStorageEngine.id());
             assertEquals(stateStorage.lastIndex(), 0);
             assertEquals(stateStorage.firstIndex(), 1);
@@ -116,7 +116,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
     }
 
     @Test
-    public void testLoadExistingRaftStateStorage() {
+    public void loadExistingRaftStateStorage() {
         if (engineConfigurator instanceof InMemKVEngineConfigurator) {
             return;
         }
@@ -133,8 +133,8 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
                 .addVoters(stateStorageEngine.id())
                 .build())
             .build();
-        IRaftStateStore walStore1 = stateStorageEngine.newRaftStateStorage(testId1, snapshot);
-        IRaftStateStore walStore2 = stateStorageEngine.newRaftStateStorage(testId2, snapshot);
+        IRaftStateStore walStore1 = stateStorageEngine.create(testId1, snapshot);
+        IRaftStateStore walStore2 = stateStorageEngine.create(testId2, snapshot);
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 2);
         walStore1.append(Collections.singletonList(LogEntry.newBuilder()
             .setData(ByteString.copyFromUtf8("Hello"))
@@ -156,11 +156,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
     }
 
     @Test
-    public void testDestroyRaftStateStorage() {
-        if (engineConfigurator instanceof InMemKVEngineConfigurator) {
-            return;
-        }
-
+    public void destroyRaftStateStorage() {
         KVRangeId testId1 = KVRangeIdUtil.generate();
         KVRangeId testId2 = KVRangeIdUtil.next(testId1);
         KVRangeWALStorageEngine stateStorageEngine =
@@ -173,9 +169,9 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
                 .addVoters(stateStorageEngine.id())
                 .build())
             .build();
-        stateStorageEngine.newRaftStateStorage(testId1, snapshot);
-        stateStorageEngine.newRaftStateStorage(testId2, snapshot);
-        stateStorageEngine.destroy(testId1);
+        IKVRangeWALStore walStore1 = stateStorageEngine.create(testId1, snapshot);
+        IKVRangeWALStore walStore2 = stateStorageEngine.create(testId2, snapshot);
+        walStore1.destroy();
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
         assertFalse(stateStorageEngine.has(testId1));
         assertTrue(stateStorageEngine.has(testId2));
@@ -185,5 +181,28 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
         stateStorageEngine.start();
         assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
         assertTrue(stateStorageEngine.has(testId2));
+    }
+
+    @Test
+    public void destroyAndCreate() {
+        KVRangeId testId1 = KVRangeIdUtil.generate();
+        KVRangeWALStorageEngine stateStorageEngine =
+            new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
+        stateStorageEngine.start();
+        Snapshot snapshot = Snapshot.newBuilder()
+            .setIndex(0)
+            .setTerm(0)
+            .setClusterConfig(ClusterConfig.newBuilder()
+                .addVoters(stateStorageEngine.id())
+                .build())
+            .build();
+        IKVRangeWALStore walStore1 = stateStorageEngine.create(testId1, snapshot);
+        walStore1.destroy();
+        assertEquals(stateStorageEngine.allKVRangeIds().size(), 0);
+        assertFalse(stateStorageEngine.has(testId1));
+
+        walStore1 = stateStorageEngine.create(testId1, snapshot);
+        assertEquals(stateStorageEngine.allKVRangeIds().size(), 1);
+        assertTrue(stateStorageEngine.has(testId1));
     }
 }

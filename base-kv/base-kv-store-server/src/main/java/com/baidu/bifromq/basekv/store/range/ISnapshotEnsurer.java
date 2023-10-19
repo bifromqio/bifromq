@@ -13,16 +13,16 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public interface ISnapshotEnsurer {
-    CompletableFuture<Void> ensure(KVRangeSnapshot snapshot, Set<KVRangeId> ignoreRanges);
+    CompletableFuture<Void> ensure(KVRangeId rangeId, long ver, Boundary boundary, Set<KVRangeId> ignoreRanges);
 
-    default CompletableFuture<Void> ensure(KVRangeSnapshot snapshot) {
-        return ensure(snapshot, Collections.emptySet());
+    default CompletableFuture<Void> ensure(KVRangeId rangeId, long ver, Boundary boundary) {
+        return ensure(rangeId, ver, boundary, Collections.emptySet());
     }
 }

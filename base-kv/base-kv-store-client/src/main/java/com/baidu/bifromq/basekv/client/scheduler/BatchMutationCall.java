@@ -122,7 +122,7 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
                     return reply.getRwCoProcResult();
                 }
                 log.debug("Failed to exec rw co-proc[code={}]", reply.getCode());
-                throw new RuntimeException();
+                throw new RuntimeException(String.format("Failed to exec rw co-proc[code=%s]", reply.getCode()));
             })
             .handle((v, e) -> {
                 if (e != null) {

@@ -14,10 +14,8 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import java.util.Set;
-import java.util.concurrent.ScheduledExecutorService;
 
 public interface IKVRangeWALStoreEngine {
     String id();
@@ -26,15 +24,13 @@ public interface IKVRangeWALStoreEngine {
 
     void stop();
 
-    IRaftStateStore newRaftStateStorage(KVRangeId kvRangeId, Snapshot initSnapshot);
+    IKVRangeWALStore create(KVRangeId kvRangeId, Snapshot initSnapshot);
 
     Set<KVRangeId> allKVRangeIds();
 
     boolean has(KVRangeId kvRangeId);
 
-    IRaftStateStore get(KVRangeId kvRangeId);
+    IKVRangeWALStore get(KVRangeId kvRangeId);
 
-    long storageSize(KVRangeId kvRangeId);
 
-    void destroy(KVRangeId kvRangeId);
 }

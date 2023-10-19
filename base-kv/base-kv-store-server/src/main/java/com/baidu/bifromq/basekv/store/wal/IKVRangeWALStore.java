@@ -11,12 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range;
+package com.baidu.bifromq.basekv.store.wal;
 
-import java.util.concurrent.CompletionStage;
+import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 
-public interface IKVRangeQueryLinearizer {
-    CompletionStage<Void> linearize();
+public interface IKVRangeWALStore extends IRaftStateStore {
+    long size();
 
-    void afterLogApplied(long logIndex);
+    void destroy();
 }

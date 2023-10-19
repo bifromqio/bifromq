@@ -37,7 +37,6 @@ import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.CancelMerging;
 import com.baidu.bifromq.basekv.proto.CancelMergingReply;
@@ -46,7 +45,6 @@ import com.baidu.bifromq.basekv.proto.ChangeConfig;
 import com.baidu.bifromq.basekv.proto.Delete;
 import com.baidu.bifromq.basekv.proto.EnsureRange;
 import com.baidu.bifromq.basekv.proto.EnsureRangeReply;
-import com.baidu.bifromq.basekv.proto.KVPair;
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -64,8 +62,6 @@ import com.baidu.bifromq.basekv.proto.PrepareMergeToReply;
 import com.baidu.bifromq.basekv.proto.PrepareMergeToRequest;
 import com.baidu.bifromq.basekv.proto.PrepareMergeWith;
 import com.baidu.bifromq.basekv.proto.Put;
-import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
-import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.SplitRange;
@@ -81,7 +77,6 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
-import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
@@ -93,7 +88,7 @@ import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.VerUtil;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWAL;
-import com.baidu.bifromq.basekv.store.wal.IKVRangeWALStoreEngine;
+import com.baidu.bifromq.basekv.store.wal.IKVRangeWALStore;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscriber;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscription;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWAL;
@@ -103,10 +98,8 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
-import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
-import io.reactivex.rxjava3.observers.DisposableObserver;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
@@ -116,7 +109,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -127,9 +119,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -148,13 +140,13 @@ public class KVRangeFSM implements IKVRangeFSM {
     };
     private final KVRangeId id;
     private final String hostStoreId;
-    private final ISnapshotEnsurer CompatibilityEnsurer;
+    private final ISnapshotEnsurer compatibilityEnsurer;
     private final IKVRange kvRange;
     private final IKVRangeWAL wal;
     private final IKVRangeWALSubscription commitLogSubscription;
     private final IStatsCollector statsCollector;
     private final ExecutorService fsmExecutor;
-    private final Executor mgmtExecutor;
+    private final ExecutorService mgmtExecutor;
     private final AsyncRunner mgmtTaskRunner;
     private final IKVRangeCoProc coProc;
     private final KVRangeQueryLinearizer linearizer;
@@ -178,72 +170,65 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final ISplitKeyEstimator rwCoProcLoadEstimator;
     private final AtomicBoolean compacting = new AtomicBoolean();
     private IKVRangeMessenger messenger;
+    private KVRangeRestorer restorer;
     private volatile CompletableFuture<Void> compactionFuture;
 
     public KVRangeFSM(String clusterId,
                       String hostStoreId,
                       KVRangeId id,
                       IKVRangeCoProcFactory coProcFactory,
-                      ISnapshotEnsurer CompatibilityEnsurer,
-                      IKVSpace kvSpace,
-                      IKVRangeWALStoreEngine walStateStorageEngine,
+                      ISnapshotEnsurer compatibilityEnsurer,
+                      IKVRange kvRange,
+                      IKVRangeWALStore walStore,
                       Executor queryExecutor,
-                      Executor mgmtExecutor,
                       Executor bgExecutor,
                       KVRangeOptions opts,
-                      @Nullable Snapshot initSnapshot) {
-        try {
-            this.opts = opts.toBuilder().build();
-            this.id = id;
-            this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
-            roCoProcLoadEstimator = new SplitKeyEstimator(opts.getLoadEstimationWindowSec(), coProcFactory::toSplitKey);
-            rwCoProcLoadEstimator = new SplitKeyEstimator(opts.getLoadEstimationWindowSec(), coProcFactory::toSplitKey);
-            if (initSnapshot != null) {
-                walStateStorageEngine.destroy(id);
-                walStateStorageEngine.newRaftStateStorage(id, initSnapshot);
-                this.kvRange = new KVRange(kvSpace)
-                    .toReseter(KVRangeSnapshot.parseFrom(initSnapshot.getData()))
-                    .done();
-            } else {
-                this.kvRange = new KVRange(kvSpace);
-            }
-            this.CompatibilityEnsurer = CompatibilityEnsurer;
-            this.wal = new KVRangeWAL(clusterId, id,
-                walStateStorageEngine,
-                opts.getWalRaftConfig(),
-                opts.getMaxWALFatchBatchSize());
-            this.fsmExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ThreadPoolExecutor(1, 1,
-                    0L, TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                    EnvProvider.INSTANCE.newThreadFactory("basekv-range-executor")),
-                "basekv-range-mutator");
-            this.mgmtExecutor = mgmtExecutor;
-            this.mgmtTaskRunner =
-                new AsyncRunner("basekv.runner.rangemgmt", mgmtExecutor, "rangeId", KVRangeIdUtil.toString(id));
-            this.coProc = coProcFactory.create(id, kvRange::newDataReader);
+                      Consumer<KVRangeFSM> onQuit) {
+        this.opts = opts.toBuilder().build();
+        this.id = id;
+        this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
+        roCoProcLoadEstimator = new SplitKeyEstimator(opts.getLoadEstimationWindowSec(), coProcFactory::toSplitKey);
+        rwCoProcLoadEstimator = new SplitKeyEstimator(opts.getLoadEstimationWindowSec(), coProcFactory::toSplitKey);
+        this.kvRange = kvRange;
+        this.compatibilityEnsurer = compatibilityEnsurer;
+        this.wal = new KVRangeWAL(clusterId, hostStoreId, id,
+            walStore,
+            opts.getWalRaftConfig(),
+            opts.getMaxWALFatchBatchSize());
+        this.fsmExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                EnvProvider.INSTANCE.newThreadFactory("basekv-range-executor")),
+            String.format("basekv-range-mutator[%s]", KVRangeIdUtil.toString(id)));
+        this.mgmtExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                EnvProvider.INSTANCE.newThreadFactory("basekv-compaction-executor")),
+            String.format("basekv-range-compactor[%s]", KVRangeIdUtil.toString(id)));
+        this.mgmtTaskRunner =
+            new AsyncRunner("basekv.runner.rangemgmt", mgmtExecutor, "rangeId", KVRangeIdUtil.toString(id));
+        this.coProc = coProcFactory.create(id, this.kvRange::newDataReader);
 
-            long lastAppliedIndex = kvRange.lastAppliedIndex();
-            this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex);
-            this.queryRunner =
-                new KVRangeQueryRunner(kvRange, coProc, queryExecutor, linearizer, roCoProcLoadEstimator);
-            this.statsCollector = new KVRangeStatsCollector(kvRange,
-                wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
-            this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
-            this.commitLogSubscription = wal.subscribe(lastAppliedIndex,
-                new IKVRangeWALSubscriber() {
-                    @Override
-                    public CompletableFuture<Void> apply(LogEntry log) {
-                        return metricManager.recordLogApply(() -> KVRangeFSM.this.apply(log));
-                    }
+        long lastAppliedIndex = this.kvRange.lastAppliedIndex();
+        this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex);
+        this.queryRunner =
+            new KVRangeQueryRunner(this.kvRange, coProc, queryExecutor, linearizer, roCoProcLoadEstimator);
+        this.statsCollector = new KVRangeStatsCollector(this.kvRange,
+            wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
+        this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
+        this.commitLogSubscription = wal.subscribe(lastAppliedIndex,
+            new IKVRangeWALSubscriber() {
+                @Override
+                public CompletableFuture<Void> apply(LogEntry log) {
+                    return metricManager.recordLogApply(() -> KVRangeFSM.this.apply(log));
+                }
 
-                    @Override
-                    public CompletableFuture<Void> apply(KVRangeSnapshot snapshot) {
-                        return metricManager.recordSnapshotInstall(() -> KVRangeFSM.this.apply(snapshot));
-                    }
-                }, fsmExecutor);
-        } catch (InvalidProtocolBufferException e) {
-            throw new KVRangeStoreException("Unable to restore from Snapshot", e);
-        }
+                @Override
+                public CompletableFuture<Void> apply(KVRangeSnapshot snapshot) {
+                    return metricManager.recordSnapshotInstall(() -> KVRangeFSM.this.apply(snapshot));
+                }
+            }, fsmExecutor);
+        quitReason.thenAccept(v -> onQuit.accept(this));
     }
 
     @Override
@@ -251,9 +236,8 @@ public class KVRangeFSM implements IKVRangeFSM {
         return id;
     }
 
-    @Override
-    public boolean readyToQuit() {
-        return quitReason.isDone();
+    public long ver() {
+        return kvRange.version();
     }
 
     @Override
@@ -261,9 +245,12 @@ public class KVRangeFSM implements IKVRangeFSM {
         if (lifecycle.get() != Init) {
             return;
         }
+        log.debug("Open kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(id), hostStoreId);
         mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Init, Lifecycle.Opening)) {
                 this.messenger = messenger;
+                this.restorer = new KVRangeRestorer(kvRange, compatibilityEnsurer, messenger,
+                    metricManager, fsmExecutor, opts.getSnapshotSyncIdleTimeoutSec());
                 // start the wal
                 wal.start();
                 disposables.add(wal.peerMessages().observeOn(Schedulers.io())
@@ -290,9 +277,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                         queryLoadHint.distinctUntilChanged(),
                         mutationLoadHint.distinctUntilChanged(),
                         (meta, role, syncStats, clusterConfig, rangeStats, queryLoadHint, mutationLoadHint) -> {
-                            log.debug("Query load hint: rangeId={}, storeId={}, \n{}",
+                            log.trace("Query load hint: rangeId={}, storeId={}, \n{}",
                                 KVRangeIdUtil.toString(id), hostStoreId, queryLoadHint);
-                            log.debug("Mutation load hint: rangeId={}, storeId={}, \n{}",
+                            log.trace("Mutation load hint: rangeId={}, storeId={}, \n{}",
                                 KVRangeIdUtil.toString(id), hostStoreId, mutationLoadHint);
                             return KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver())
@@ -338,6 +325,10 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Void> close() {
+        return mgmtTaskRunner.add(this::doClose).whenComplete((v, e) -> mgmtExecutor.shutdown());
+    }
+
+    private CompletableFuture<Void> doClose() {
         switch (lifecycle.get()) {
             case Init -> {
                 return CompletableFuture.completedFuture(null);
@@ -346,29 +337,33 @@ public class KVRangeFSM implements IKVRangeFSM {
                 return CompletableFuture.failedFuture(new IllegalStateException("Range is opening"));
             }
             case Open -> {
-                mgmtTaskRunner.add(() -> {
-                    if (lifecycle.compareAndSet(Open, Lifecycle.Closing)) {
-                        log.debug("Closing range[{}] from store[{}]", KVRangeIdUtil.toString(id), hostStoreId);
-                        clusterConfigSubject.onComplete();
-                        descriptorSubject.onComplete();
-                        disposables.dispose();
-                        commitLogSubscription.stop();
-                        queryRunner.close();
-                        coProc.close();
-                        cmdFutures.values()
-                            .forEach(f -> f.completeExceptionally(new KVRangeException.TryLater("Range closed")));
-                        dumpSessions.values().forEach(KVRangeDumpSession::cancel);
-                        statsCollector.stop()
-                            .thenComposeAsync(v -> mgmtTaskRunner.awaitDone(), mgmtExecutor)
-                            .thenComposeAsync(v -> wal.close(), mgmtExecutor)
-                            .whenCompleteAsync((v, e) -> {
-                                metricManager.close();
-                                fsmExecutor.shutdown();
-                                lifecycle.set(Closed);
-                                closeSignal.complete(null);
-                            }, mgmtExecutor);
-                    }
-                });
+                if (lifecycle.compareAndSet(Open, Lifecycle.Closing)) {
+                    log.debug("Closing range[{}] from store[{}]", KVRangeIdUtil.toString(id), hostStoreId);
+                    clusterConfigSubject.onComplete();
+                    descriptorSubject.onComplete();
+                    disposables.dispose();
+                    commitLogSubscription.stop();
+                    queryRunner.close();
+                    coProc.close();
+                    cmdFutures.values()
+                        .forEach(f -> f.completeExceptionally(new KVRangeException.TryLater("Range closed")));
+                    CompletableFuture.allOf(dumpSessions.values()
+                            .stream()
+                            .map(kvRangeDumpSession -> {
+                                kvRangeDumpSession.cancel();
+                                return kvRangeDumpSession.awaitDone();
+                            })
+                            .toArray(CompletableFuture<?>[]::new))
+                        .thenCompose(v -> restorer.await())
+                        .thenCompose(v -> statsCollector.stop())
+                        .thenCompose(v -> wal.close())
+                        .whenComplete((v, e) -> {
+                            metricManager.close();
+                            fsmExecutor.shutdown();
+                            lifecycle.set(Closed);
+                            closeSignal.complete(null);
+                        });
+                }
                 return closeSignal;
             }
             default -> {
@@ -379,34 +374,24 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Void> destroy() {
-        return close().thenCompose(v -> mgmtTaskRunner.add(() -> {
-            if (lifecycle.compareAndSet(Closed, Destroying)) {
-                log.debug("Destroy range[{}] from store[{}]", KVRangeIdUtil.toString(id), hostStoreId);
-                kvRange.destroy();
-                wal.destroy();
-                lifecycle.set(Destroyed);
-                destroyedSignal.complete(null);
-            }
-            return destroyedSignal;
-        }));
-    }
-
-    @Override
-    public CompletableFuture<Void> quit() {
-        if (!readyToQuit()) {
-            return CompletableFuture.failedFuture(new KVRangeException.InternalException("Not ready to quit"));
+        if (lifecycle.get() == Open) {
+            mgmtTaskRunner.add(() -> doClose()
+                    .thenAccept(v -> {
+                        if (lifecycle.compareAndSet(Closed, Destroying)) {
+                            log.debug("Destroy range[{}] from store[{}]", KVRangeIdUtil.toString(id), hostStoreId);
+                            kvRange.destroy();
+                            wal.destroy();
+                        }
+                    }))
+                .thenCompose(v -> wal.destroy())
+                .whenComplete((v, e) -> {
+                    if (lifecycle.compareAndSet(Destroying, Destroyed)) {
+                        destroyedSignal.complete(null);
+                    }
+                    mgmtExecutor.shutdown();
+                });
         }
-        return close().thenCompose(v -> mgmtTaskRunner.add(() -> {
-            if (lifecycle.compareAndSet(Closed, Destroying)) {
-                log.debug("Range[{}] quit from store[{}]: reason={}",
-                    KVRangeIdUtil.toString(id), hostStoreId, quitReason.join());
-                kvRange.destroy();
-                wal.destroy();
-                lifecycle.set(Destroyed);
-                destroyedSignal.complete(null);
-            }
-            return destroyedSignal;
-        }));
+        return destroyedSignal;
     }
 
     @Override
@@ -624,103 +609,111 @@ public class KVRangeFSM implements IKVRangeFSM {
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
-        CompletableFuture<Void> onDone = new CompletableFuture<>();
-        CompatibilityEnsurer.ensure(ss)
-            .whenCompleteAsync((v, e) -> {
-                if (onDone.isCancelled()) {
-                    return;
-                }
-                if (e != null) {
-                    onDone.completeExceptionally(e);
-                    return;
-                }
-                IKVReseter restorer = kvRange.toReseter(ss);
-                String sessionId = UUID.randomUUID().toString();
-                DisposableObserver<KVRangeMessage> observer = messenger.receive()
-                    .filter(m -> m.hasSaveSnapshotDataRequest() &&
-                        m.getSaveSnapshotDataRequest().getSessionId().equals(sessionId))
-                    .timeout(opts.getSnapshotSyncIdleTimeoutSec(), TimeUnit.SECONDS)
-                    .subscribeWith(new DisposableObserver<KVRangeMessage>() {
-                        @Override
-                        public void onNext(@NonNull KVRangeMessage m) {
-                            SaveSnapshotDataRequest request = m.getSaveSnapshotDataRequest();
-                            try {
-                                switch (request.getFlag()) {
-                                    case More, End -> {
-                                        int bytes = 0;
-                                        for (KVPair kv : request.getKvList()) {
-                                            bytes += kv.getKey().size();
-                                            bytes += kv.getValue().size();
-                                            restorer.put(kv.getKey(), kv.getValue());
-                                        }
-                                        metricManager.reportRestore(bytes);
-                                        if (request.getFlag() == SaveSnapshotDataRequest.Flag.End) {
-                                            restorer.done();
-                                            linearizer.afterLogApplied(ss.getLastAppliedIndex());
-                                            // finish all pending tasks
-                                            cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
-                                                new KVRangeException.TryLater("Snapshot installed, try again")));
-                                            dispose();
-                                            onDone.complete(null);
-                                            log.debug("Snapshot installed: rangeId={}, storeId={}, sessionId={}",
-                                                KVRangeIdUtil.toString(id), hostStoreId, sessionId);
-                                        }
-                                        messenger.send(KVRangeMessage.newBuilder()
-                                            .setRangeId(id)
-                                            .setHostStoreId(m.getHostStoreId())
-                                            .setSaveSnapshotDataReply(SaveSnapshotDataReply.newBuilder()
-                                                .setReqId(request.getReqId())
-                                                .setSessionId(request.getSessionId())
-                                                .setResult(SaveSnapshotDataReply.Result.OK)
-                                                .build())
-                                            .build());
-                                    }
-                                    case Error -> throw new KVRangeStoreException("Snapshot dump failed");
-                                }
-                            } catch (Throwable t) {
-                                log.error("Snapshot restored failed:sessionId={}", sessionId, t);
-                                onError(t);
-                                messenger.send(KVRangeMessage.newBuilder()
-                                    .setRangeId(id)
-                                    .setHostStoreId(m.getHostStoreId())
-                                    .setSaveSnapshotDataReply(SaveSnapshotDataReply.newBuilder()
-                                        .setReqId(request.getReqId())
-                                        .setSessionId(request.getSessionId())
-                                        .setResult(SaveSnapshotDataReply.Result.Error)
-                                        .build())
-                                    .build());
-                            }
-                        }
-
-                        @Override
-                        public void onError(@NonNull Throwable e) {
-                            restorer.abort();
-                            onDone.completeExceptionally(e);
-                            dispose();
-                        }
-
-                        @Override
-                        public void onComplete() {
-
-                        }
-                    });
-                onDone.whenComplete((_v, _e) -> {
-                    if (onDone.isCancelled()) {
-                        observer.dispose();
-                    }
-                });
-                if (!onDone.isDone()) {
-                    messenger.send(KVRangeMessage.newBuilder()
-                        .setRangeId(id)
-                        .setHostStoreId(wal.currentLeader().get())
-                        .setSnapshotSyncRequest(SnapshotSyncRequest.newBuilder()
-                            .setSessionId(sessionId)
-                            .setSnapshot(ss)
-                            .build())
-                        .build());
-                }
+        return restorer.restoreFrom(wal.currentLeader().get(), ss)
+            .thenAcceptAsync(v -> {
+                log.debug("Restored from snapshot: rangeId={} \n{}", KVRangeIdUtil.toString(id), ss);
+                linearizer.afterLogApplied(ss.getLastAppliedIndex());
+                // finish all pending tasks
+                cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
+                    new KVRangeException.TryLater("Snapshot installed, try again")));
             }, fsmExecutor);
-        return onDone;
+//        CompletableFuture<Void> onDone = new CompletableFuture<>();
+//        compatibilityEnsurer.ensure(ss.getId(), ss.getVer(), ss.getBoundary()).whenCompleteAsync((v, e) -> {
+//            if (onDone.isCancelled()) {
+//                return;
+//            }
+//            if (e != null) {
+//                onDone.completeExceptionally(e);
+//                return;
+//            }
+//            IKVReseter restorer = kvRange.toReseter(ss);
+//            String sessionId = UUID.randomUUID().toString();
+//            DisposableObserver<KVRangeMessage> observer = messenger.receive()
+//                .filter(m -> m.hasSaveSnapshotDataRequest() &&
+//                    m.getSaveSnapshotDataRequest().getSessionId().equals(sessionId))
+//                .timeout(opts.getSnapshotSyncIdleTimeoutSec(), TimeUnit.SECONDS)
+//                .subscribeWith(new DisposableObserver<KVRangeMessage>() {
+//                    @Override
+//                    public void onNext(@NonNull KVRangeMessage m) {
+//                        SaveSnapshotDataRequest request = m.getSaveSnapshotDataRequest();
+//                        try {
+//                            switch (request.getFlag()) {
+//                                case More, End -> {
+//                                    int bytes = 0;
+//                                    for (KVPair kv : request.getKvList()) {
+//                                        bytes += kv.getKey().size();
+//                                        bytes += kv.getValue().size();
+//                                        restorer.put(kv.getKey(), kv.getValue());
+//                                    }
+//                                    metricManager.reportRestore(bytes);
+//                                    if (request.getFlag() == SaveSnapshotDataRequest.Flag.End) {
+//                                        restorer.done();
+//                                        linearizer.afterLogApplied(ss.getLastAppliedIndex());
+//                                        // finish all pending tasks
+//                                        cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
+//                                            new KVRangeException.TryLater("Snapshot installed, try again")));
+//                                        dispose();
+//                                        onDone.complete(null);
+//                                        log.debug("Snapshot installed: rangeId={}, storeId={}, sessionId={}",
+//                                            KVRangeIdUtil.toString(id), hostStoreId, sessionId);
+//                                    }
+//                                    messenger.send(KVRangeMessage.newBuilder()
+//                                        .setRangeId(id)
+//                                        .setHostStoreId(m.getHostStoreId())
+//                                        .setSaveSnapshotDataReply(SaveSnapshotDataReply.newBuilder()
+//                                            .setReqId(request.getReqId())
+//                                            .setSessionId(request.getSessionId())
+//                                            .setResult(SaveSnapshotDataReply.Result.OK)
+//                                            .build())
+//                                        .build());
+//                                }
+//                                case Error -> throw new KVRangeStoreException("Snapshot dump failed");
+//                            }
+//                        } catch (Throwable t) {
+//                            log.error("Snapshot restored failed: rangeId={}, storeId={}, sessionId={}",
+//                                KVRangeIdUtil.toString(id), hostStoreId, sessionId, t);
+//                            onError(t);
+//                            messenger.send(KVRangeMessage.newBuilder()
+//                                .setRangeId(id)
+//                                .setHostStoreId(m.getHostStoreId())
+//                                .setSaveSnapshotDataReply(SaveSnapshotDataReply.newBuilder()
+//                                    .setReqId(request.getReqId())
+//                                    .setSessionId(request.getSessionId())
+//                                    .setResult(SaveSnapshotDataReply.Result.Error)
+//                                    .build())
+//                                .build());
+//                        }
+//                    }
+//
+//                    @Override
+//                    public void onError(@NonNull Throwable e) {
+//                        restorer.abort();
+//                        onDone.completeExceptionally(e);
+//                        dispose();
+//                    }
+//
+//                    @Override
+//                    public void onComplete() {
+//
+//                    }
+//                });
+//            onDone.whenComplete((_v, _e) -> {
+//                if (onDone.isCancelled()) {
+//                    observer.dispose();
+//                }
+//            });
+//            if (!onDone.isDone()) {
+//                messenger.send(KVRangeMessage.newBuilder()
+//                    .setRangeId(id)
+//                    .setHostStoreId(wal.currentLeader().get())
+//                    .setSnapshotSyncRequest(SnapshotSyncRequest.newBuilder()
+//                        .setSessionId(sessionId)
+//                        .setSnapshot(ss)
+//                        .build())
+//                    .build());
+//            }
+//        }, fsmExecutor);
+//        return onDone;
     }
 
     private CompletableFuture<Runnable> applyLog(LogEntry logEntry,
@@ -790,8 +783,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                     String.format("Config change aborted[taskId=%s] due to %s", taskId,
                                                         e.getMessage());
                                                 log.debug(errorMessage);
-                                                if (e instanceof ClusterConfigChangeException.NotLeaderException ||
-                                                    e.getCause() instanceof ClusterConfigChangeException.NotLeaderException) {
+                                                // we can finish the pending config-change request in follower here
+                                                if (!(e instanceof ClusterConfigChangeException.NotLeaderException) &&
+                                                    !(e.getCause() instanceof ClusterConfigChangeException.NotLeaderException)) {
                                                     finishCommandWithError(taskId,
                                                         new KVRangeException.TryLater(errorMessage));
                                                 }
@@ -820,17 +814,19 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     .setRangeId(id)
                                     .setHostStoreId(storeId)
                                     .setEnsureRange(EnsureRange.newBuilder()
+                                        .setVer(ver) // ensure the new kvrange is compatible in target store
+                                        .setBoundary(boundary)
                                         .setInitSnapshot(Snapshot.newBuilder()
                                             .setTerm(0)
                                             .setIndex(0)
                                             .setClusterConfig(ClusterConfig.getDefaultInstance()) // empty voter set
                                             .setData(KVRangeSnapshot.newBuilder()
-                                                .setVer(0)
+                                                .setVer(ver)
                                                 .setId(id)
                                                 // no checkpoint specified
                                                 .setLastAppliedIndex(0)
-                                                .setBoundary(EMPTY_BOUNDARY)
-                                                .setState(State.newBuilder().setType(Normal).build())
+                                                .setBoundary(boundary)
+                                                .setState(state)
                                                 .build().toByteString())
                                             .build())
                                         .build())
@@ -907,7 +903,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         .build())
                                     .build();
                                 // ensure the rhs range to be created is locally compatible with other ranges except the splitting one
-                                CompatibilityEnsurer.ensure(rhsSS, singleton(id))
+                                compatibilityEnsurer.ensure(rhsSS.getId(),
+                                        rhsSS.getVer(),
+                                        rhsSS.getBoundary(),
+                                        singleton(id))
                                     .whenCompleteAsync((v, e) -> {
                                         if (e != null) {
                                             log.warn(
@@ -916,6 +915,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                             onDone.completeExceptionally(e);
                                         } else {
                                             rangeWriter.boundary(leftBoundary).bumpVer(true);
+                                            // migrate data to right-hand keyspace which created implicitly
                                             IKVRangeMetadataUpdatable<?> rightRangeMetadataUpdateable =
                                                 rangeWriter.migrateTo(request.getNewId(), rightBoundary);
                                             rightRangeMetadataUpdateable.resetVer(rhsSS.getVer())
@@ -945,6 +945,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                     .setRangeId(rhsSS.getId())
                                                     .setHostStoreId(hostStoreId)
                                                     .setEnsureRange(EnsureRange.newBuilder()
+                                                        .setVer(rhsSS.getVer())
+                                                        .setBoundary(rhsSS.getBoundary())
                                                         .setInitSnapshot(Snapshot.newBuilder()
                                                             .setTerm(0)
                                                             .setIndex(rhsSS.getLastAppliedIndex())
@@ -955,7 +957,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                 scheduleCompaction();
                                             });
                                         }
-                                    }, mgmtExecutor);
+                                    }, fsmExecutor);
                             } else {
                                 onDone.complete(() -> finishCommandWithError(taskId,
                                     new KVRangeException.BadRequest("Invalid split key")));
@@ -1426,10 +1428,24 @@ public class KVRangeFSM implements IKVRangeFSM {
             KVRangeSnapshot snapshot = kvRange.checkpoint();
             log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
                 KVRangeIdUtil.toString(id), hostStoreId, snapshot);
-            return wal.compact(snapshot).exceptionally(e -> {
-                log.error("Wal compaction error", e);
-                return null;
-            });
+            return wal.compact(snapshot)
+//                .exceptionally(e -> {
+//                    log.error("Wal compaction error", e);
+//                    return null;
+//                });
+                .handle((v, e) -> {
+                    if (e != null) {
+                        log.error("Wal compaction error", e);
+                    } else {
+                        dumpSessions.forEach((sessionId, session) -> {
+                            if (!session.checkpointId().equals(snapshot.getCheckpointId())) {
+                                session.cancel();
+                                dumpSessions.remove(sessionId, session);
+                            }
+                        });
+                    }
+                    return null;
+                });
         });
     }
 

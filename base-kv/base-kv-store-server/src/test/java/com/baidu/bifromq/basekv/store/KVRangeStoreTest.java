@@ -75,14 +75,13 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class KVRangeStoreTest extends MockableTest {
-    private String DB_NAME = "testDB";
-    private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
-    private String DB_WAL_NAME = "testWAL";
-    private String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-    private KVRangeStoreOptions options = new KVRangeStoreOptions();
+    private final String DB_NAME = "testDB";
+    private final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
+    private final String DB_WAL_NAME = "testWAL";
+    private final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
+    private final KVRangeStoreOptions options = new KVRangeStoreOptions();
+    private final PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
     private IKVRangeStore rangeStore;
-    private IStoreMessenger messenger;
-    private PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
     private ExecutorService queryExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
@@ -117,7 +116,7 @@ public class KVRangeStoreTest extends MockableTest {
                 queryExecutor,
                 tickTaskExecutor,
                 bgTaskExecutor);
-        messenger = new IStoreMessenger() {
+        IStoreMessenger messenger = new IStoreMessenger() {
             @Override
             public void send(StoreMessage message) {
                 KVRangeMessage payload = message.getPayload();

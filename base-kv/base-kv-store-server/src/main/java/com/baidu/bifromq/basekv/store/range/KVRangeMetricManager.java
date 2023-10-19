@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-class KVRangeMetricManager {
+class KVRangeMetricManager implements IKVRangeMetricManager {
     private final DistributionSummary dumpBytesSummary;
     private final DistributionSummary restoreBytesSummary;
     private final Gauge stateGauge;
@@ -208,76 +208,95 @@ class KVRangeMetricManager {
             .register(Metrics.globalRegistry);
     }
 
-    void report(KVRangeDescriptor descriptor) {
+    @Override
+    public void report(KVRangeDescriptor descriptor) {
         currentDesc.set(descriptor);
     }
 
-    void reportDump(int bytes) {
+    @Override
+    public void reportDump(int bytes) {
         dumpBytesSummary.record(bytes);
     }
 
-    void reportRestore(int bytes) {
+    @Override
+    public void reportRestore(int bytes) {
         restoreBytesSummary.record(bytes);
     }
 
-    void reportLastAppliedIndex(long index) {
+    @Override
+    public void reportLastAppliedIndex(long index) {
         currentLastAppliedIndex.set(index);
     }
 
-    private <T> CompletableFuture<T> recordDuration(Supplier<CompletableFuture<T>> supplier, Timer timer) {
+    @Override
+    public <T> CompletableFuture<T> recordDuration(Supplier<CompletableFuture<T>> supplier, Timer timer) {
         Timer.Sample sample = Timer.start();
         return supplier.get().whenComplete((v, e) -> sample.stop(timer));
     }
 
-    CompletableFuture<Void> recordConfigChange(Supplier<CompletableFuture<Void>> supplier) {
+    @Override
+    public CompletableFuture<Void> recordConfigChange(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, configChangeTimer);
     }
 
-    CompletableFuture<Void> recordTransferLeader(Supplier<CompletableFuture<Void>> supplier) {
+    @Override
+    public CompletableFuture<Void> recordTransferLeader(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, transferLeaderTimer);
     }
 
-    CompletableFuture<Void> recordSplit(Supplier<CompletableFuture<Void>> supplier) {
+    @Override
+    public CompletableFuture<Void> recordSplit(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, splitTimer);
     }
 
-    CompletableFuture<Void> recordMerge(Supplier<CompletableFuture<Void>> supplier) {
+    @Override
+    public CompletableFuture<Void> recordMerge(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, mergeTimer);
     }
 
-    CompletableFuture<ByteString> recordPut(Supplier<CompletableFuture<ByteString>> supplier) {
+    @Override
+    public CompletableFuture<ByteString> recordPut(Supplier<CompletableFuture<ByteString>> supplier) {
         return recordDuration(supplier, putTimer);
     }
 
-    CompletableFuture<ByteString> recordDelete(Supplier<CompletableFuture<ByteString>> supplier) {
+    @Override
+    public CompletableFuture<ByteString> recordDelete(Supplier<CompletableFuture<ByteString>> supplier) {
         return recordDuration(supplier, deleteTimer);
     }
 
-    CompletableFuture<RWCoProcOutput> recordMutateCoProc(Supplier<CompletableFuture<RWCoProcOutput>> supplier) {
+    @Override
+    public CompletableFuture<RWCoProcOutput> recordMutateCoProc(Supplier<CompletableFuture<RWCoProcOutput>> supplier) {
         return recordDuration(supplier, mutateCoProcTimer);
     }
 
-    CompletableFuture<Boolean> recordExist(Supplier<CompletableFuture<Boolean>> supplier) {
+    @Override
+    public CompletableFuture<Boolean> recordExist(Supplier<CompletableFuture<Boolean>> supplier) {
         return recordDuration(supplier, existTimer);
     }
 
-    CompletableFuture<Optional<ByteString>> recordGet(Supplier<CompletableFuture<Optional<ByteString>>> supplier) {
+    @Override
+    public CompletableFuture<Optional<ByteString>> recordGet(
+        Supplier<CompletableFuture<Optional<ByteString>>> supplier) {
         return recordDuration(supplier, getTimer);
     }
 
-    CompletableFuture<ROCoProcOutput> recordQueryCoProc(Supplier<CompletableFuture<ROCoProcOutput>> supplier) {
+    @Override
+    public CompletableFuture<ROCoProcOutput> recordQueryCoProc(Supplier<CompletableFuture<ROCoProcOutput>> supplier) {
         return recordDuration(supplier, queryCoProcTimer);
     }
 
-    CompletableFuture<Void> recordCompact(Supplier<CompletableFuture<Void>> supplier) {
+    @Override
+    public CompletableFuture<Void> recordCompact(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, compactionTimer);
     }
 
-    CompletableFuture<Void> recordLogApply(Supplier<CompletableFuture<Void>> supplier) {
+    @Override
+    public CompletableFuture<Void> recordLogApply(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, applyLogTimer);
     }
 
-    CompletableFuture<Void> recordSnapshotInstall(Supplier<CompletableFuture<Void>> supplier) {
+    @Override
+    public CompletableFuture<Void> recordSnapshotInstall(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, installSnapshotTimer);
     }
 

@@ -29,6 +29,7 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
+import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
@@ -41,6 +42,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
     public void init() {
         KVRangeId id = KVRangeIdUtil.generate();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
+        // no snapshot specified
         IKVRange accessor = new KVRange(keyRange);
         assertEquals(accessor.id(), id);
         assertEquals(accessor.version(), -1);
@@ -49,7 +51,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
     }
 
     @Test
-    public void initExistingRange() {
+    public void initWithSnapshot() {
         KVRangeSnapshot snapshot = KVRangeSnapshot.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setVer(0)
@@ -58,8 +60,15 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
+        IKVRangeWriter<?> rangeWriter = accessor.toWriter();
+        IKVWriter writer = rangeWriter.kvWriter();
+        ByteString key = ByteString.copyFromUtf8("Hello");
+        ByteString value = ByteString.copyFromUtf8("World");
+        writer.put(key, value);
+        rangeWriter.done();
 
+        assertEquals(accessor.newDataReader().get(key).get(), value);
         assertEquals(accessor.version(), snapshot.getVer());
         assertEquals(accessor.boundary(), snapshot.getBoundary());
         assertEquals(accessor.lastAppliedIndex(), snapshot.getLastAppliedIndex());
@@ -76,7 +85,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
         IKVRange.KVRangeMeta metadata = accessor.metadata().blockingFirst();
         assertEquals(metadata.ver(), snapshot.getVer());
         assertEquals(metadata.boundary(), snapshot.getBoundary());
@@ -96,7 +105,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
         assertFalse(accessor.hasCheckpoint(snapshot));
 
         KVRangeSnapshot snap = accessor.checkpoint();
@@ -126,7 +135,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
         snapshot = accessor.checkpoint();
 
         ByteString key = ByteString.copyFromUtf8("Key");
@@ -163,7 +172,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(boundary)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
         IKVRangeWriter<?> rangeWriter = accessor.toWriter();
         IKVReader rangeReader = accessor.newDataReader();
         IKVIterator kvItr = rangeReader.iterator();
@@ -202,7 +211,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(boundary)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
         IKVRangeWriter<?> rangeWriter = accessor.toWriter();
         IKVReader rangeReader1 = accessor.borrowDataReader();
         IKVReader rangeReader2 = accessor.borrowDataReader();
@@ -238,7 +247,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(range)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
         IKVReader rangeReader1 = accessor.borrowDataReader();
         IKVReader rangeReader2 = accessor.borrowDataReader();
         accessor.returnDataReader(rangeReader1);
@@ -290,7 +299,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
 
         snapshot = accessor.checkpoint();
         IKVRangeWriter<?> rangeWriter = accessor.toWriter();
@@ -314,7 +323,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(keyRange, snapshot);
 
         IKVRangeWriter<?> rangeWriter = accessor.toWriter();
         ByteString key = ByteString.copyFromUtf8("aKey");
@@ -325,7 +334,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
         accessor.destroy();
 
         keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        accessor = new KVRange(keyRange, snapshot);
         IKVReader rangeReader = accessor.newDataReader();
         assertEquals(accessor.version(), 0);
         assertFalse(accessor.newDataReader().exist(key));

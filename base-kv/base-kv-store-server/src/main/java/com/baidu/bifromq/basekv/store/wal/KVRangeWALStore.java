@@ -33,7 +33,6 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
@@ -52,10 +51,11 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class KVRangeWALStore implements IRaftStateStore {
+class KVRangeWALStore implements IKVRangeWALStore {
     private static final StableListener DEFAULT_STABLE_LISTENER = stabledIndex -> {
     };
     private final String storeId;
@@ -63,6 +63,7 @@ class KVRangeWALStore implements IRaftStateStore {
     private final IKVSpace kvSpace;
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
     private final Deque<StabilizingIndex> stabilizingIndices = new ConcurrentLinkedDeque<>();
+    private final Consumer<KVRangeWALStore> onDestroy;
     private long currentTerm = 0;
     private Voting currentVoting;
     private Snapshot latestSnapshot;
@@ -70,10 +71,11 @@ class KVRangeWALStore implements IRaftStateStore {
     private int logEntriesKeyInfix;
     private volatile StableListener stableListener = DEFAULT_STABLE_LISTENER;
 
-    KVRangeWALStore(String storeId, KVRangeId rangeId, IKVSpace kvSpace) {
+    KVRangeWALStore(String storeId, KVRangeId rangeId, IKVSpace kvSpace, Consumer<KVRangeWALStore> onDestroy) {
         this.rangeId = rangeId;
         this.kvSpace = kvSpace;
         this.storeId = storeId;
+        this.onDestroy = onDestroy;
         load();
     }
 
@@ -300,11 +302,15 @@ class KVRangeWALStore implements IRaftStateStore {
         stableListener = DEFAULT_STABLE_LISTENER;
     }
 
+    @Override
     public void destroy() {
+        log.debug("Destroy walStore: rangeId={}, storeId={} ", KVRangeIdUtil.toString(rangeId), storeId);
         kvSpace.destroy();
+        onDestroy.accept(this);
     }
 
-    long size() {
+    @Override
+    public long size() {
         return kvSpace.size();
     }
 

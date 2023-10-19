@@ -68,6 +68,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
                 .setId(rangeId)
                 .build())
             .build();
+        when(rangeAccessor.id()).thenReturn(rangeId);
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofSeconds(5), 1024, dumpBytesRecorder);
         assertTrue(dumpSession.awaitDone().toCompletableFuture().isDone());
@@ -93,6 +94,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
             .setSessionId(sessionId)
             .setSnapshot(snapshot)
             .build();
+        when(rangeAccessor.id()).thenReturn(rangeId);
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(false);
         KVRangeDumpSession dumpSession = new KVRangeDumpSession(peerStoreId, request, rangeAccessor, messenger,
             MoreExecutors.directExecutor(), Duration.ofSeconds(5), 1024, dumpBytesRecorder);
@@ -137,6 +139,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
             .build();
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
+        when(rangeAccessor.id()).thenReturn(rangeId);
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
         when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
         when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
@@ -184,6 +187,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
             .build();
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
+        when(rangeAccessor.id()).thenReturn(rangeId);
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
         when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
         when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
@@ -218,6 +222,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
             .build();
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
+        when(rangeAccessor.id()).thenReturn(rangeId);
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
         when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
         when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
@@ -254,6 +259,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
             .build();
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
+        when(rangeAccessor.id()).thenReturn(rangeId);
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
         when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
         when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);
@@ -288,6 +294,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
             .build();
         PublishSubject<KVRangeMessage> incomingMsgs = PublishSubject.create();
 
+        when(rangeAccessor.id()).thenReturn(rangeId);
         when(rangeAccessor.hasCheckpoint(snapshot)).thenReturn(true);
         when(rangeAccessor.open(snapshot)).thenReturn(rangeCPReader);
         when(rangeCPReader.newDataReader()).thenReturn(rangeCPDataReader);

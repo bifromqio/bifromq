@@ -64,10 +64,12 @@ class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
         return onDone;
     }
 
+    @Override
     public void afterLogApplied(long logIndex) {
-        assert lastAppliedIndex <= logIndex;
-        lastAppliedIndex = logIndex;
-        schedule();
+        if (logIndex >= lastAppliedIndex) {
+            lastAppliedIndex = logIndex;
+            schedule();
+        }
     }
 
     private void schedule() {

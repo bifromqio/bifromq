@@ -35,9 +35,15 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     private final IKVSpace kvSpace;
     private final ConcurrentLinkedQueue<IKVReader> sharedDataReaders = new ConcurrentLinkedQueue<>();
 
-    KVRange(IKVSpace kvSpace) {
+    public KVRange(IKVSpace kvSpace) {
         super(kvSpace);
         this.kvSpace = kvSpace;
+    }
+
+    public KVRange(IKVSpace kvSpace, KVRangeSnapshot snapshot) {
+        super(kvSpace);
+        this.kvSpace = kvSpace;
+        toReseter(snapshot).done();
     }
 
     @Override

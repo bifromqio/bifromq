@@ -100,5 +100,5 @@ public interface IKVRangeWAL {
 
     CompletableFuture<Void> close();
 
-    void destroy();
+    CompletableFuture<Void> destroy();
 }

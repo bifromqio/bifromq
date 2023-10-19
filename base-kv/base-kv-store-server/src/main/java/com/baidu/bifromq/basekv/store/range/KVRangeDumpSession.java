@@ -14,18 +14,19 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.proto.KVPair;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.RateLimiter;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,6 +38,7 @@ class KVRangeDumpSession {
         void record(int bytes);
     }
 
+    private final KVRangeId rangeId;
     private final String peerStoreId;
     private final SnapshotSyncRequest request;
     private final IKVRangeMessenger messenger;
@@ -59,6 +61,7 @@ class KVRangeDumpSession {
                        Duration maxIdleDuration,
                        long bandwidth,
                        DumpBytesRecorder recorder) {
+        this.rangeId = accessor.id();
         this.peerStoreId = peerStoreId;
         this.request = request;
         this.messenger = messenger;
@@ -102,6 +105,8 @@ class KVRangeDumpSession {
                 })
                 .subscribe(this::handleReply);
             doneSignal.whenComplete((v, e) -> disposable.dispose());
+            log.debug("Start dump session[{}] to store[{}]: rangeId={}",
+                request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
             nextSaveRequest();
         }
     }
@@ -113,7 +118,8 @@ class KVRangeDumpSession {
     void tick() {
         long elapseNanos = Duration.ofNanos(System.nanoTime() - lastReplyTS).toNanos();
         if (maxIdleDuration.toNanos() < elapseNanos) {
-            log.warn("Cancel the idle dump session: {}", request.getSessionId());
+            log.debug("Cancel the idle dump session[{}] to store[{}]: rangeId={}",
+                request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
             cancel();
         } else if (maxIdleDuration.toNanos() / 2 < elapseNanos) {
             runner.add(() -> {
@@ -130,7 +136,7 @@ class KVRangeDumpSession {
         }
     }
 
-    CompletionStage<Void> awaitDone() {
+    CompletableFuture<Void> awaitDone() {
         return doneSignal;
     }
 
@@ -186,13 +192,15 @@ class KVRangeDumpSession {
                             break;
                         }
                     } catch (Throwable e) {
-                        log.error("Dump error for session: " + request.getSessionId(), e);
+                        log.error("DumpSession[{}] to store[{}] error: rangeId={}",
+                            request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId), e);
                         reqBuilder.clearKv();
                         reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.Error);
                         break;
                     }
                 } else {
-                    log.warn("DumpSession has been canceled: {}", request.getSessionId());
+                    log.debug("DumpSession[{}] to store[{}] has been canceled: rangeId={}",
+                        request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
                     reqBuilder.clearKv();
                     reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.Error);
                     break;

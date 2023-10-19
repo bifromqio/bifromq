@@ -60,6 +60,6 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
 
     @Override
     protected IRaftStateStore createStorage(String id, Snapshot snapshot) {
-        return stateStorageEngine.newRaftStateStorage(KVRangeIdUtil.generate(), snapshot);
+        return stateStorageEngine.create(KVRangeIdUtil.generate(), snapshot);
     }
 }

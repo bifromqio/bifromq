@@ -50,7 +50,9 @@ message SaveSnapshotDataReply{
 }
 
 message EnsureRange {
-  raft.Snapshot initSnapshot = 1;
+  uint64 ver = 1;
+  basekv.Boundary boundary = 2;
+  raft.Snapshot initSnapshot = 3;
 }
 
 message EnsureRangeReply {

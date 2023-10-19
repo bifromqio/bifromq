@@ -20,7 +20,6 @@ import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
@@ -89,14 +88,14 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     }
 
     @Override
-    public IRaftStateStore newRaftStateStorage(KVRangeId kvRangeId, Snapshot initSnapshot) {
+    public IKVRangeWALStore create(KVRangeId kvRangeId, Snapshot initSnapshot) {
         checkState();
         instances.computeIfAbsent(kvRangeId, id -> {
             IKVSpace kvSpace = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
             kvSpace.toWriter().put(KEY_LATEST_SNAPSHOT_BYTES, initSnapshot.toByteString())
                 .done();
             kvSpace.flush().join();
-            return new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace);
+            return new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace, store -> instances.remove(kvRangeId, store));
         });
         return instances.get(kvRangeId);
     }
@@ -108,29 +107,9 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     }
 
     @Override
-    public IRaftStateStore get(KVRangeId kvRangeId) {
+    public IKVRangeWALStore get(KVRangeId kvRangeId) {
         checkState();
         return instances.get(kvRangeId);
-    }
-
-    @Override
-    public long storageSize(KVRangeId kvRangeId) {
-        checkState();
-        return instances.get(kvRangeId).size();
-    }
-
-    @Override
-    public void destroy(KVRangeId rangeId) {
-        checkState();
-        instances.computeIfPresent(rangeId, (k, v) -> {
-            try {
-                log.debug("Destroy range wal storage: storeId={}, rangeId={}", id(), KVRangeIdUtil.toString(rangeId));
-                v.destroy();
-            } catch (Throwable e) {
-                log.error("Failed to destroy KVRangeWALStorage[{}]", KVRangeIdUtil.toString(rangeId), e);
-            }
-            return null;
-        });
     }
 
     private void checkState() {
@@ -140,7 +119,8 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     private void loadExisting() {
         kvEngine.ranges().forEach((String id, IKVSpace kvSpace) -> {
             KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
-            instances.put(kvRangeId, new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace));
+            instances.put(kvRangeId,
+                new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace, store -> instances.remove(kvRangeId, store)));
             log.debug("WAL loaded: kvRangeId={}", KVRangeIdUtil.toString(kvRangeId));
 
         });

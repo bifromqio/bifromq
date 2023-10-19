@@ -15,6 +15,8 @@ package com.baidu.demo.plugin;
 
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelClosedEvent;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ClientDisconnectEvent;
 import org.pf4j.Extension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +27,7 @@ public final class EventLogger implements IEventCollector {
 
     @Override
     public void report(Event<?> event) {
-        if (LOG.isWarnEnabled()) {
+        if (LOG.isDebugEnabled()) {
             switch (event.type()) {
                 case QOS0_DIST_ERROR,
                     QOS1_DIST_ERROR,
@@ -33,7 +35,12 @@ public final class EventLogger implements IEventCollector {
                     DIST_ERROR,
                     OVERFLOWED,
                     QOS1_DROPPED,
-                    DELIVER_ERROR -> LOG.info("Message dropped due to {}", event.type());
+                    DELIVER_ERROR -> LOG.debug("Message dropped due to {}", event.type());
+                default -> {
+                    if (event instanceof ChannelClosedEvent || event instanceof ClientDisconnectEvent) {
+                        LOG.debug("Channel closed due to {}", event.type());
+                    }
+                }
             }
         }
     }

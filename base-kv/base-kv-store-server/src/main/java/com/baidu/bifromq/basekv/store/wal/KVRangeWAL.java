@@ -66,21 +66,21 @@ public class KVRangeWAL implements IKVRangeWAL {
         BehaviorSubject.createDefault(emptyMap());
     private final KVRangeId rangeId;
     private final String localId;
-    private final IKVRangeWALStoreEngine stateStoreEngine;
+    private final IKVRangeWALStore walStore;
     private final IRaftNode raftNode;
     private final AtomicLong ticks = new AtomicLong(0);
 
     public KVRangeWAL(String clusterId,
+                      String localId,
                       KVRangeId rangeId,
-                      IKVRangeWALStoreEngine stateStoreEngine,
+                      IKVRangeWALStore walStore,
                       RaftConfig raftConfig,
                       int maxFetchBytes) {
         this.rangeId = rangeId;
-        this.stateStoreEngine = stateStoreEngine;
-        this.localId = stateStoreEngine.id();
+        this.localId = localId;
         this.maxFetchBytes = maxFetchBytes;
-        raftNode = new RaftNode(raftConfig, stateStoreEngine.get(rangeId),
-            getLogger("raft.logger"),
+        this.walStore = walStore;
+        raftNode = new RaftNode(raftConfig, walStore, getLogger("raft.logger"),
             EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toString(rangeId)),
             "cluster", clusterId, "rangeId", KVRangeIdUtil.toString(rangeId), "storeId", localId);
     }
@@ -235,14 +235,8 @@ public class KVRangeWAL implements IKVRangeWAL {
     }
 
     @Override
-    public void destroy() {
-        close();
-        stateStoreEngine.destroy(rangeId);
-    }
-
-    @Override
     public long logDataSize() {
-        return stateStoreEngine.storageSize(rangeId);
+        return walStore.size();
     }
 
     @Override
@@ -271,6 +265,11 @@ public class KVRangeWAL implements IKVRangeWAL {
         electionPublisher.onComplete();
         syncStatePublisher.onComplete();
         return raftNode.stop();
+    }
+
+    @Override
+    public CompletableFuture<Void> destroy() {
+        return close().thenAccept(v -> walStore.destroy());
     }
 
     void onRaftEvent(RaftEvent event) {
