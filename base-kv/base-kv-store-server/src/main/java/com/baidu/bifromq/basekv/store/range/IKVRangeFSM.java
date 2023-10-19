@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -30,6 +31,8 @@ public interface IKVRangeFSM {
     KVRangeId id();
 
     long ver();
+
+    Boundary boundary();
 
     Observable<KVRangeDescriptor> describe();
 

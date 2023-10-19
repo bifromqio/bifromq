@@ -605,16 +605,15 @@ public class KVRangeStore implements IKVRangeStore {
                                                                 long ver,
                                                                 Boundary boundary,
                                                                 Set<KVRangeId> ignoreRanges) {
-        List<KVRangeDescriptor> overlapped = kvRangeMap.values().stream()
-            .map(r -> r.describe().blockingFirst())
-            .filter(r -> !ignoreRanges.contains(r.getId()) &&
-                isOverlap(r.getBoundary(), boundary) && !r.getId().equals(rangeId))
+        List<IKVRangeFSM> overlapped = kvRangeMap.values().stream()
+            .filter(r -> !ignoreRanges.contains(r.id()) &&
+                isOverlap(r.boundary(), boundary) && !r.id().equals(rangeId))
             .toList();
-        if (overlapped.stream().anyMatch(r -> r.getVer() > ver)) {
+        if (overlapped.stream().anyMatch(r -> r.ver() > ver)) {
             return CompletableFuture.failedFuture(new KVRangeStoreException("Incompatible range version"));
         } else {
             return CompletableFuture.allOf(overlapped.stream()
-                    .map(d -> kvRangeMap.remove(d.getId()))
+                    .map(d -> kvRangeMap.remove(d.id()))
                     .map(r -> {
                         KVRangeId overlappedRangeId = r.id();
                         return r.destroy()

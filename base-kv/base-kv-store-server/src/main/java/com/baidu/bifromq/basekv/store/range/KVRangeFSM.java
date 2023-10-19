@@ -239,6 +239,10 @@ public class KVRangeFSM implements IKVRangeFSM {
     public long ver() {
         return kvRange.version();
     }
+    @Override
+    public Boundary boundary() {
+        return kvRange.boundary();
+    }
 
     @Override
     public void open(IKVRangeMessenger messenger) {
@@ -1212,8 +1216,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     }, fsmExecutor);
                                 // send merge done request to local mergee
                                 log.debug("Send MergeDone request to Mergee[{}]: rangeId={}, storeId={}",
-                                        KVRangeIdUtil.toString(request.getMergeeId()),
-                                        KVRangeIdUtil.toString(id), hostStoreId);
+                                    KVRangeIdUtil.toString(request.getMergeeId()),
+                                    KVRangeIdUtil.toString(id), hostStoreId);
                                 messenger.send(KVRangeMessage.newBuilder()
                                     .setRangeId(request.getMergeeId())
                                     .setHostStoreId(hostStoreId)
