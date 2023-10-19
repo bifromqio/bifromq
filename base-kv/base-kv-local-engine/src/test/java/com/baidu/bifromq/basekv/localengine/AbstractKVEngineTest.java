@@ -120,10 +120,13 @@ public abstract class AbstractKVEngineTest extends MockableTest {
         ByteString value = ByteString.copyFromUtf8("value");
         IKVSpace range = engine.createIfMissing(rangeId);
         range.toWriter().put(key, value).done();
+        assertTrue(range.exist(key));
         range.destroy();
 
         range = engine.createIfMissing(rangeId);
         assertFalse(range.exist(key));
+        range.toWriter().put(key, value).done();
+        assertTrue(range.exist(key));
     }
 
     @Test

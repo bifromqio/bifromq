@@ -78,7 +78,7 @@ import org.rocksdb.WriteOptions;
 @Slf4j
 public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     private enum State {
-        Opening, Closing, Closed
+        Opening, Destroying, Closing, Terminated
     }
 
     private static final String CP_SUFFIX = ".cp";
@@ -285,13 +285,18 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
 
     @Override
     public void destroy() {
-        try {
-            db.dropColumnFamily(cfHandle);
-            close();
-        } catch (RocksDBException e) {
-            throw new KVEngineException("Destroy KVRange error", e);
-        } finally {
-            onDestroy.run();
+        if (state.compareAndSet(State.Opening, State.Destroying)) {
+            try {
+                synchronized (compacting) {
+                    db.dropColumnFamily(cfHandle);
+                }
+                doClose();
+            } catch (RocksDBException e) {
+                throw new KVEngineException("Destroy KVRange error", e);
+            } finally {
+                onDestroy.run();
+                state.set(State.Terminated);
+            }
         }
     }
 
@@ -366,19 +371,26 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
 
     void close() {
         if (state.compareAndSet(State.Opening, State.Closing)) {
-            super.close();
-            log.debug("Close key range[{}]", id);
-            metaItr.close();
-            cfDesc.getOptions().close();
-            synchronized (compacting) {
-                db.destroyColumnFamilyHandle(cfHandle);
+            try {
+                doClose();
+            } finally {
+                state.set(State.Terminated);
             }
-            checkpoint.close();
-            writeOptions.close();
-            metadataSubject.onComplete();
-            metricMgr.close();
-            state.set(State.Closed);
         }
+    }
+
+    private void doClose() {
+        super.close();
+        log.debug("Close key range[{}]", id);
+        metaItr.close();
+        cfDesc.getOptions().close();
+        synchronized (compacting) {
+            db.destroyColumnFamilyHandle(cfHandle);
+        }
+        checkpoint.close();
+        writeOptions.close();
+        metadataSubject.onComplete();
+        metricMgr.close();
     }
 
     private String genCheckpointId() {
@@ -473,7 +485,7 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
                 .setBottommostLevelCompaction(CompactRangeOptions.BottommostLevelCompaction.kSkip)
                 .setExclusiveManualCompaction(false)) {
                 synchronized (compacting) {
-                    if (cfHandle.isOwningHandle()) {
+                    if (state.get() == State.Opening) {
                         db.compactRange(cfHandle, null, null, options);
                     }
                 }
