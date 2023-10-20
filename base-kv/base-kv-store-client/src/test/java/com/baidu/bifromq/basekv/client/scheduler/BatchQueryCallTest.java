@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
@@ -66,10 +68,12 @@ public class BatchQueryCallTest {
 
     @Test
     public void addToSameBatch() {
+        ExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
         when(storeClient.findByKey(any())).thenReturn(Optional.of(setting(id, "V1", 0)));
         when(storeClient.createLinearizedQueryPipeline("V1")).thenReturn(queryPipeline1);
         when(queryPipeline1.query(any()))
-            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build()));
+            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor));
 
         TestQueryCallScheduler scheduler =
             new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
@@ -86,6 +90,7 @@ public class BatchQueryCallTest {
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         // the resp order preserved
         assertEquals(reqList, respList);
+        executor.shutdown();
     }
 
     @Test
@@ -98,11 +103,12 @@ public class BatchQueryCallTest {
         });
         when(storeClient.createLinearizedQueryPipeline("V1")).thenReturn(queryPipeline1);
         when(storeClient.createLinearizedQueryPipeline("V2")).thenReturn(queryPipeline2);
+        ExecutorService executor1 = Executors.newSingleThreadScheduledExecutor();
+        ExecutorService executor2 = Executors.newSingleThreadScheduledExecutor();
         when(queryPipeline1.query(any()))
-            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build()));
+            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor1));
         when(queryPipeline2.query(any()))
-            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build()));
-
+            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor2));
         TestQueryCallScheduler scheduler =
             new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
                 Duration.ofMillis(1000), Duration.ofMinutes(5), true);
@@ -127,14 +133,18 @@ public class BatchQueryCallTest {
         // the resp order preserved
         assertEquals(reqList1, respList1);
         assertEquals(reqList2, respList2);
+        executor1.shutdown();
+        executor2.shutdown();
     }
 
     @Test
     public void pipelineExpiry() {
+        ExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
         when(storeClient.findByKey(any())).thenReturn(Optional.of(setting(id, "V1", 0)));
         when(storeClient.createQueryPipeline("V1")).thenReturn(queryPipeline1);
         when(queryPipeline1.query(any()))
-            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build()));
+            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor));
 
         TestQueryCallScheduler scheduler =
             new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
@@ -146,5 +156,6 @@ public class BatchQueryCallTest {
         }
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         verify(queryPipeline1, timeout(Long.MAX_VALUE).times(1)).close();
+        executor.shutdown();
     }
 }

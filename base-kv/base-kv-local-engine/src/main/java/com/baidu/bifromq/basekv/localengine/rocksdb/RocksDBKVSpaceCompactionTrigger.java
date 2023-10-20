@@ -13,9 +13,17 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Tags;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
+    public interface CompactionScheduler {
+        boolean schedule();
+    }
+
     private final AtomicInteger totalKeyCount = new AtomicInteger();
     private final AtomicInteger totalTombstoneKeyCount = new AtomicInteger();
     private final AtomicInteger totalTombstoneRangeCount = new AtomicInteger();
@@ -23,16 +31,29 @@ public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
     private final int minTombstoneKeysTrigger;
     private final int minTombstoneRangesTrigger;
     private final double minTombstoneKeysRatioTrigger;
-    private final Runnable compact;
+    private final Runnable compactionScheduler;
+    private final Gauge totalKeysGauge;
+    private final Gauge totalTombstoneKeysGauge;
+    private final Gauge totalTombstoneRangesGauge;
 
-    public RocksDBKVSpaceCompactionTrigger(int minTombstoneKeysTrigger,
+    public RocksDBKVSpaceCompactionTrigger(String id,
+                                           int minTombstoneKeysTrigger,
                                            int minTombstoneRangesTrigger,
                                            double minTombstoneKeysRatioTrigger,
-                                           Runnable compact) {
+                                           Runnable compactionScheduler,
+                                           String... tags) {
         this.minTombstoneKeysTrigger = minTombstoneKeysTrigger;
         this.minTombstoneRangesTrigger = minTombstoneRangesTrigger;
         this.minTombstoneKeysRatioTrigger = minTombstoneKeysRatioTrigger;
-        this.compact = compact;
+        this.compactionScheduler = compactionScheduler;
+        Tags metricTags = Tags.of(tags);
+        totalKeysGauge = KVSpaceMeters
+            .getGauge(id, KVSpaceMetric.TotalKeysGauge, totalKeyCount::get, metricTags);
+        totalTombstoneKeysGauge =
+            KVSpaceMeters.getGauge(id, KVSpaceMetric.TotalTombstoneKeysGauge, totalTombstoneKeyCount::get, metricTags);
+        totalTombstoneRangesGauge =
+            KVSpaceMeters.getGauge(id, KVSpaceMetric.TotalTombstoneRangesGauge, totalTombstoneRangeCount::get,
+                metricTags);
     }
 
     public IRecorder newRecorder() {
@@ -40,8 +61,9 @@ public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
     }
 
     public void reset() {
-        totalTombstoneKeyCount.set(0);
         totalKeyCount.set(0);
+        totalTombstoneKeyCount.set(0);
+        totalTombstoneRangeCount.set(0);
     }
 
     class WriteStatsRecorder implements IRecorder {
@@ -73,10 +95,7 @@ public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
             int totalRangeTombstones = totalTombstoneRangeCount.addAndGet(tombstoneRangeCount.get());
             if (totalRangeTombstones > minTombstoneRangesTrigger || (totalTombstones > minTombstoneKeysTrigger &&
                 (double) totalTombstones / (totalKeys + totalTombstones) >= minTombstoneKeysRatioTrigger)) {
-                totalKeyCount.addAndGet(-keyCount.get());
-                totalTombstoneKeyCount.addAndGet(-tombstoneKeyCount.get());
-                totalTombstoneRangeCount.addAndGet(-tombstoneRangeCount.get());
-                compact.run();
+                compactionScheduler.run();
             }
         }
     }

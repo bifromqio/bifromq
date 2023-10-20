@@ -395,6 +395,7 @@ class RaftNodeStateFollower extends RaftNodeState {
         InstallSnapshot iss = currentISSRequest;
         Snapshot snapshot = iss.getSnapshot();
         if (snapshot.getData() != fsmSnapshot) {
+            logDebug("Skip reply for old snapshot installation");
             return;
         }
         currentISSRequest = null;

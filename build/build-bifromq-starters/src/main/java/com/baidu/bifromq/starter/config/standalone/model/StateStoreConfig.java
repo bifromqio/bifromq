@@ -48,14 +48,14 @@ public class StateStoreConfig {
     @Setter
     public static class DistWorkerConfig {
         private int queryPipelinePerStore = 1000;
-        private int compactWALThreshold = 20000;
+        private int compactWALThreshold = 2500;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
             .manualCompaction(true)
-            .compactMinTombstoneKeys(10000)
-            .compactMinTombstoneRanges(10);
+            .compactMinTombstoneKeys(2500)
+            .compactMinTombstoneRanges(2);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 
@@ -68,7 +68,7 @@ public class StateStoreConfig {
     @Setter
     public static class InboxStoreConfig {
         private int queryPipelinePerStore = 100;
-        private int compactWALThreshold = 5000;
+        private int compactWALThreshold = 2500;
         private int gcIntervalSeconds = 600;
         private int purgeDelaySeconds = 180;
         @JsonSetter(nulls = Nulls.SKIP)
@@ -76,8 +76,8 @@ public class StateStoreConfig {
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
             .manualCompaction(true)
-            .compactMinTombstoneKeys(5000)
-            .compactMinTombstoneRanges(10);
+            .compactMinTombstoneKeys(2500)
+            .compactMinTombstoneRanges(2);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 
@@ -92,7 +92,7 @@ public class StateStoreConfig {
     @Setter
     public static class RetainStoreConfig {
         private int queryPipelinePerStore = 100;
-        private int compactWALThreshold = 20000;
+        private int compactWALThreshold = 2500;
         private int gcIntervalSeconds = 600;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
@@ -100,7 +100,7 @@ public class StateStoreConfig {
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
             .manualCompaction(true)
             .compactMinTombstoneKeys(5000)
-            .compactMinTombstoneRanges(10);
+            .compactMinTombstoneRanges(2);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 

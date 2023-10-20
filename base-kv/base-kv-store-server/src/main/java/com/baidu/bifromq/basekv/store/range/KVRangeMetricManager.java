@@ -231,7 +231,9 @@ class KVRangeMetricManager implements IKVRangeMetricManager {
     @Override
     public <T> CompletableFuture<T> recordDuration(Supplier<CompletableFuture<T>> supplier, Timer timer) {
         Timer.Sample sample = Timer.start();
-        return supplier.get().whenComplete((v, e) -> sample.stop(timer));
+        CompletableFuture<T> f = supplier.get();
+        f.whenComplete((v, e) -> sample.stop(timer));
+        return f;
     }
 
     @Override

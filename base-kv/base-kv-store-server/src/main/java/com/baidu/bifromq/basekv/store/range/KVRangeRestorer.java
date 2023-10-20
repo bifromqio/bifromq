@@ -38,36 +38,41 @@ class KVRangeRestorer {
     private final IKVRangeMetricManager metricManager;
     private final Executor executor;
     private final int idleTimeSec;
-    private final AtomicReference<CompletableFuture<Void>> currentSession =
-        new AtomicReference<>(CompletableFuture.completedFuture(null));
+    private final AtomicReference<RestoreSession> currentSession = new AtomicReference<>();
 
-    KVRangeRestorer(IKVRange range,
-                    ISnapshotEnsurer snapshotEnsurer,
-                    IKVRangeMessenger messenger,
-                    IKVRangeMetricManager metricManager,
-                    Executor executor,
-                    int idleTimeSec) {
+    KVRangeRestorer(
+        KVRangeSnapshot startSnapshot,
+        IKVRange range,
+        ISnapshotEnsurer snapshotEnsurer,
+        IKVRangeMessenger messenger,
+        IKVRangeMetricManager metricManager,
+        Executor executor,
+        int idleTimeSec) {
         this.range = range;
         this.snapshotEnsurer = snapshotEnsurer;
         this.messenger = messenger;
         this.metricManager = metricManager;
         this.executor = executor;
         this.idleTimeSec = idleTimeSec;
+        RestoreSession initialSession = new RestoreSession(startSnapshot);
+        initialSession.doneFuture.complete(null);
+        currentSession.set(initialSession);
     }
 
-    public CompletableFuture<Void> await() {
-        return currentSession.get();
+    public CompletableFuture<Void> awaitDone() {
+        return currentSession.get().doneFuture.exceptionally(ex -> null);
     }
 
     public CompletableFuture<Void> restoreFrom(String leader, KVRangeSnapshot rangeSnapshot) {
-        CompletableFuture<Void> onDone = new CompletableFuture<>();
-        CompletableFuture<Void> prevSession = currentSession.getAndSet(onDone);
-        if (prevSession != null && !prevSession.isDone()) {
+        RestoreSession session = new RestoreSession(rangeSnapshot);
+        RestoreSession prevSession = currentSession.getAndSet(session);
+        if (!prevSession.snapshot.equals(rangeSnapshot) && !prevSession.doneFuture.isDone()) {
             // cancel previous restore session
-            log.debug("Cancel previous resource session: rangeId={}", KVRangeIdUtil.toString(range.id()));
-            prevSession.cancel(true);
+            log.debug("Cancel previous restore session: rangeId={}\n{}",
+                KVRangeIdUtil.toString(range.id()), prevSession.snapshot.toByteString());
+            prevSession.doneFuture.cancel(true);
         }
-        log.debug("Ensuring snapshot's compatibility: rangeId={}", KVRangeIdUtil.toString(range.id()));
+        CompletableFuture<Void> onDone = session.doneFuture;
         snapshotEnsurer.ensure(rangeSnapshot.getId(), rangeSnapshot.getVer(), rangeSnapshot.getBoundary())
             .whenCompleteAsync((v, e) -> {
                 if (onDone.isCancelled()) {
@@ -102,12 +107,18 @@ class KVRangeRestorer {
                                             }
                                             metricManager.reportRestore(bytes);
                                             if (request.getFlag() == SaveSnapshotDataRequest.Flag.End) {
-                                                restorer.done();
-                                                dispose();
-                                                onDone.complete(null);
-                                                log.debug("Snapshot installed: rangeId={}, sessionId={}",
-                                                    KVRangeIdUtil.toString(range.id()), sessionId);
-
+                                                if (!onDone.isCancelled()) {
+                                                    restorer.done();
+                                                    dispose();
+                                                    onDone.complete(null);
+                                                    log.debug("Snapshot restored: rangeId={}, sessionId={}",
+                                                        KVRangeIdUtil.toString(range.id()), sessionId);
+                                                } else {
+                                                    restorer.abort();
+                                                    dispose();
+                                                    log.debug("Snapshot restore canceled: rangeId={}, sessionId={}",
+                                                        KVRangeIdUtil.toString(range.id()), sessionId);
+                                                }
                                             }
                                             log.debug("Saved snapshot data, send reply to {}: rangeId={}, sessionId={}",
                                                 m.getHostStoreId(), KVRangeIdUtil.toString(range.id()), sessionId);
@@ -173,5 +184,14 @@ class KVRangeRestorer {
                 }
             }, executor);
         return onDone;
+    }
+
+    private static class RestoreSession {
+        final KVRangeSnapshot snapshot;
+        final CompletableFuture<Void> doneFuture = new CompletableFuture<>();
+
+        private RestoreSession(KVRangeSnapshot snapshot) {
+            this.snapshot = snapshot;
+        }
     }
 }

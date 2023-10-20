@@ -136,7 +136,7 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         this.cfDesc = cfDesc;
         this.cfHandle = cfHandle;
         this.configurator = configurator;
-        this.writeStats = configurator.isManualCompaction() ? new RocksDBKVSpaceCompactionTrigger(
+        this.writeStats = configurator.isManualCompaction() ? new RocksDBKVSpaceCompactionTrigger(id,
             configurator.getCompactMinTombstoneKeys(),
             configurator.getCompactMinTombstoneRanges(),
             configurator.getCompactTombstoneKeysRatio(),
@@ -470,35 +470,31 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         }
         metricMgr.compactionSchedCounter.increment();
         if (compacting.compareAndSet(false, true)) {
-            compact();
+            compactionExecutor.execute(metricMgr.compactionTimer.wrap(() -> {
+                log.debug("KeyRange[{}] compaction start", id);
+                lastCompactAt = System.nanoTime();
+                writeStats.reset();
+                try (CompactRangeOptions options = new CompactRangeOptions()
+                    .setBottommostLevelCompaction(CompactRangeOptions.BottommostLevelCompaction.kSkip)
+                    .setExclusiveManualCompaction(false)) {
+                    synchronized (compacting) {
+                        if (state.get() == State.Opening) {
+                            db.compactRange(cfHandle, null, null, options);
+                        }
+                    }
+                    log.debug("KeyRange[{}] compacted", id);
+                } catch (Throwable e) {
+                    log.error("KeyRange[{}] compaction error", id, e);
+                } finally {
+                    compacting.set(false);
+                    if (nextCompactAt > lastCompactAt) {
+                        scheduleCompact();
+                    }
+                }
+            }));
         } else {
             nextCompactAt = System.nanoTime();
         }
-    }
-
-    private void compact() {
-        lastCompactAt = System.nanoTime();
-        writeStats.reset();
-        log.debug("KeyRange[{}] compaction start", id);
-        compactionExecutor.execute(metricMgr.compactionTimer.wrap(() -> {
-            try (CompactRangeOptions options = new CompactRangeOptions()
-                .setBottommostLevelCompaction(CompactRangeOptions.BottommostLevelCompaction.kSkip)
-                .setExclusiveManualCompaction(false)) {
-                synchronized (compacting) {
-                    if (state.get() == State.Opening) {
-                        db.compactRange(cfHandle, null, null, options);
-                    }
-                }
-                log.debug("KeyRange[{}] compacted", id);
-            } catch (Throwable e) {
-                log.error("KeyRange[{}] compaction error", id, e);
-            } finally {
-                compacting.set(false);
-                if (nextCompactAt > lastCompactAt) {
-                    scheduleCompact();
-                }
-            }
-        }));
     }
 
     private class MetricManager {

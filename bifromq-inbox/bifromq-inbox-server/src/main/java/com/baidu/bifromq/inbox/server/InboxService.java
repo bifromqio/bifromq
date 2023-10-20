@@ -360,7 +360,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             scopedInboxId -> touchScheduler.schedule(new IInboxTouchScheduler.Touch(scopedInboxId))
                 .handle((r, e) -> {
                     if (e != null) {
-                        log.error("Touch inbox error in InboxFetchPipeline, inbox={}", scopedInboxId.toStringUtf8(), e);
+                        log.debug("Touch inbox error in InboxFetchPipeline, inbox={}", scopedInboxId.toStringUtf8(), e);
                     }
                     return null;
                 }), registry);

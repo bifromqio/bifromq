@@ -66,7 +66,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
     }
 
     private static final String LOG_DETAILS_SUFFIX =
-        ": state={}, term={}, firstIndex={}, lastIndex={}, commitIndex={}, config={}";
+        ": id={}, state={}, term={}, firstIndex={}, lastIndex={}, commitIndex={}, config={}";
     protected final String id;
     protected final RaftConfig config;
     protected final IRaftStateStore stateStorage;
@@ -409,20 +409,21 @@ abstract class RaftNodeState implements IRaftNodeLogger {
     }
 
     private Object[] allLogArgs(Object... args) {
-        Object[] allArgs = new Object[args.length + 6];
+        Object[] allArgs = new Object[args.length + 7];
         int copyLength = args.length;
         if (args.length > 0 && args[args.length - 1] instanceof Throwable) {
             copyLength--;
         }
         System.arraycopy(args, 0, allArgs, 0, copyLength);
-        allArgs[copyLength] = getState();
-        allArgs[copyLength + 1] = currentTerm();
-        allArgs[copyLength + 2] = stateStorage.firstIndex();
-        allArgs[copyLength + 3] = stateStorage.lastIndex();
-        allArgs[copyLength + 4] = commitIndex;
-        allArgs[copyLength + 5] = printClusterConfig(stateStorage.latestClusterConfig());
+        allArgs[copyLength] = id;
+        allArgs[copyLength + 1] = getState();
+        allArgs[copyLength + 2] = currentTerm();
+        allArgs[copyLength + 3] = stateStorage.firstIndex();
+        allArgs[copyLength + 4] = stateStorage.lastIndex();
+        allArgs[copyLength + 5] = commitIndex;
+        allArgs[copyLength + 6] = printClusterConfig(stateStorage.latestClusterConfig());
         if (copyLength < args.length) {
-            allArgs[copyLength + 6] = args[args.length - 1]; // throwable
+            allArgs[copyLength + 7] = args[args.length - 1]; // throwable
         }
         return allArgs;
     }

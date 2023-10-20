@@ -20,6 +20,9 @@ public enum KVSpaceMetric {
     CheckpointTimer("basekv.le.rocksdb.checkpoint.time", Meter.Type.TIMER),
     CompactionCounter("basekv.le.rocksdb.compaction.count", Meter.Type.COUNTER),
     CompactionTimer("basekv.le.rocksdb.compaction.time", Meter.Type.TIMER),
+    TotalKeysGauge("basekv.le.rocksdb.compaction.keys", Meter.Type.GAUGE),
+    TotalTombstoneKeysGauge("basekv.le.rocksdb.compaction.delkeys", Meter.Type.GAUGE),
+    TotalTombstoneRangesGauge("basekv.le.rocksdb.compaction.delranges", Meter.Type.GAUGE),
     GCTimer("basekv.le.rocksdb.gc.time", Meter.Type.TIMER),
     FlushTimer("basekv.le.rocksdb.flush.time", Meter.Type.TIMER),
     CallTimer("basekv.le.call.time", Meter.Type.TIMER);

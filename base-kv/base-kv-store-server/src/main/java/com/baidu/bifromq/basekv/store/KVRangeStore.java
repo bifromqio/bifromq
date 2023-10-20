@@ -605,6 +605,7 @@ public class KVRangeStore implements IKVRangeStore {
                                                                 long ver,
                                                                 Boundary boundary,
                                                                 Set<KVRangeId> ignoreRanges) {
+        log.debug("Ensuring snapshot's compatibility: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
         List<IKVRangeFSM> overlapped = kvRangeMap.values().stream()
             .filter(r -> !ignoreRanges.contains(r.id()) &&
                 isOverlap(r.boundary(), boundary) && !r.id().equals(rangeId))
@@ -616,8 +617,12 @@ public class KVRangeStore implements IKVRangeStore {
                     .map(d -> kvRangeMap.remove(d.id()))
                     .map(r -> {
                         KVRangeId overlappedRangeId = r.id();
+                        log.debug("Destroying overlapped range[{}]: rangeId={}, storeId={}",
+                            KVRangeIdUtil.toString(overlappedRangeId), KVRangeIdUtil.toString(rangeId), id);
                         return r.destroy()
                             .thenAccept(v -> {
+                                log.debug("Overlapped range[{}] destroyed: rangeId={}, storeId={}",
+                                    KVRangeIdUtil.toString(overlappedRangeId), KVRangeIdUtil.toString(rangeId), id);
                                 KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
                                     .setVer(0)
                                     .setId(overlappedRangeId)
