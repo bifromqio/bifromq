@@ -372,7 +372,7 @@ public abstract class BasicStateStoreTest {
     }
 
     @Test
-    public void testOverrideSnapshot() {
+    public void testOverrideWithSameSnapshot() {
         IRaftStateStore stateStorage = setupStateStorage();
         ClusterConfig updatedClusterConfig = ClusterConfig.newBuilder()
             .addVoters(localId())
@@ -413,6 +413,57 @@ public abstract class BasicStateStoreTest {
             .setIndex(3)
             .build();
         stateStorage.applySnapshot(snapshot);
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
+        assertEquals(stateStorage.firstIndex(), 4);
+        assertEquals(stateStorage.lastIndex(), 10);
+        assertEquals(stateStorage.latestSnapshot(), snapshot);
+    }
+
+    @Test
+    public void testOverrideSnapshot() {
+        IRaftStateStore stateStorage = setupStateStorage();
+        ClusterConfig updatedClusterConfig = ClusterConfig.newBuilder()
+            .addVoters(localId())
+            .build();
+        int count = 10;
+        while (count-- > 0) {
+            LogEntry.Builder entryBuilder = LogEntry.newBuilder();
+            if (count == 5) {
+                entryBuilder
+                    .setTerm(1)
+                    .setIndex(stateStorage.lastIndex() + 1)
+                    .setConfig(updatedClusterConfig);
+            } else {
+                entryBuilder
+                    .setTerm(1)
+                    .setIndex(stateStorage.lastIndex() + 1)
+                    .setData(ByteString.copyFromUtf8("Data:" + (stateStorage.lastIndex() + 1)));
+            }
+            stateStorage.append(singletonList(entryBuilder.build()), true);
+        }
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
+        Snapshot snapshot = Snapshot.newBuilder()
+            .setClusterConfig(stateStorage.latestClusterConfig())
+            .setData(ByteString.EMPTY)
+            .setTerm(1)
+            .setIndex(3)
+            .build();
+        stateStorage.applySnapshot(snapshot);
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
+        assertEquals(stateStorage.firstIndex(), 4);
+        assertEquals(stateStorage.lastIndex(), 10);
+        assertEquals(stateStorage.latestSnapshot(), snapshot);
+
+        snapshot = Snapshot.newBuilder()
+            .setClusterConfig(stateStorage.latestClusterConfig())
+            .setData(ByteString.copyFromUtf8("hello"))
+            .setTerm(2)
+            .setIndex(3)
+            .build();
+        stateStorage.applySnapshot(snapshot);
+        assertEquals(stateStorage.latestClusterConfig(), updatedClusterConfig);
+        assertEquals(stateStorage.firstIndex(), 4);
+        assertEquals(stateStorage.lastIndex(), 3);
         assertEquals(stateStorage.latestSnapshot(), snapshot);
     }
 
