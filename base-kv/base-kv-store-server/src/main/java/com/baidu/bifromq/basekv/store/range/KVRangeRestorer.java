@@ -79,7 +79,7 @@ class KVRangeRestorer {
                     return;
                 }
                 if (e != null) {
-                    log.debug("Ensured snapshot's compatibility error: rangeId={}",
+                    log.error("Ensured snapshot's compatibility error: rangeId={}",
                         KVRangeIdUtil.toString(range.id()), e);
                     onDone.completeExceptionally(e);
                     return;

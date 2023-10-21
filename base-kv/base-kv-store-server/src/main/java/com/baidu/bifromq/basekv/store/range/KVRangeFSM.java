@@ -311,7 +311,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (!kvRange.hasCheckpoint(wal.latestSnapshot())) {
                     log.debug("Latest snapshot not available, do compaction: rangeId={}, storeId={}\n{}",
                         KVRangeIdUtil.toString(id), hostStoreId, wal.latestSnapshot());
-                    doCompaction().join();
+                    scheduleCompaction();
                 }
             }
         });
@@ -617,18 +617,20 @@ public class KVRangeFSM implements IKVRangeFSM {
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
-        log.debug("Restore from snapshot: rangeId={}, storeId={}\n{}",
-            KVRangeIdUtil.toString(id), hostStoreId, ss.toByteString());
-        // the restore future is cancelable
-        CompletableFuture<Void> restoreFuture = restorer.restoreFrom(wal.currentLeader().get(), ss);
-        restoreFuture.thenAcceptAsync(v -> {
-            log.debug("Restored from snapshot: rangeId={} \n{}", KVRangeIdUtil.toString(id), ss);
-            linearizer.afterLogApplied(ss.getLastAppliedIndex());
-            // finish all pending tasks
-            cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
-                new KVRangeException.TryLater("Snapshot installed, try again")));
-        }, fsmExecutor);
-        return restoreFuture;
+        return mgmtTaskRunner.add(() -> {
+            log.debug("Restore from snapshot: rangeId={}, storeId={}\n{}",
+                KVRangeIdUtil.toString(id), hostStoreId, ss.toByteString());
+            // the restore future is cancelable
+            CompletableFuture<Void> restoreFuture = restorer.restoreFrom(wal.currentLeader().get(), ss);
+            restoreFuture.thenAcceptAsync(v -> {
+                log.debug("Restored from snapshot: rangeId={} \n{}", KVRangeIdUtil.toString(id), ss);
+                linearizer.afterLogApplied(ss.getLastAppliedIndex());
+                // finish all pending tasks
+                cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
+                    new KVRangeException.TryLater("Snapshot installed, try again")));
+            }, fsmExecutor);
+            return restoreFuture;
+        });
     }
 
     private CompletableFuture<Runnable> applyLog(LogEntry logEntry,
@@ -1333,35 +1335,27 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (isNotOpening()) {
                     return CompletableFuture.completedFuture(null);
                 }
-                return doCompaction();
+                return metricManager.recordCompact(() -> {
+                    KVRangeSnapshot snapshot = kvRange.checkpoint();
+                    log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
+                        KVRangeIdUtil.toString(id), hostStoreId, snapshot);
+                    return wal.compact(snapshot).handle((v, e) -> {
+                        if (e != null) {
+                            log.error("Wal compaction error: rangeId={}, storeId={}",
+                                KVRangeIdUtil.toString(id), hostStoreId, e);
+                        } else {
+                            dumpSessions.forEach((sessionId, session) -> {
+                                if (!session.checkpointId().equals(snapshot.getCheckpointId())) {
+                                    session.cancel();
+                                    dumpSessions.remove(sessionId, session);
+                                }
+                            });
+                        }
+                        return null;
+                    });
+                });
             }).whenComplete((v, e) -> compacting.set(false));
         }
-    }
-
-    private CompletableFuture<Void> doCompaction() {
-        return metricManager.recordCompact(() -> {
-            KVRangeSnapshot snapshot = kvRange.checkpoint();
-            log.debug("Compact wal using snapshot: rangeId={}, storeId={}\n{}",
-                KVRangeIdUtil.toString(id), hostStoreId, snapshot);
-            return wal.compact(snapshot)
-//                .exceptionally(e -> {
-//                    log.error("Wal compaction error", e);
-//                    return null;
-//                });
-                .handle((v, e) -> {
-                    if (e != null) {
-                        log.error("Wal compaction error", e);
-                    } else {
-                        dumpSessions.forEach((sessionId, session) -> {
-                            if (!session.checkpointId().equals(snapshot.getCheckpointId())) {
-                                session.cancel();
-                                dumpSessions.remove(sessionId, session);
-                            }
-                        });
-                    }
-                    return null;
-                });
-        });
     }
 
     private boolean isNotOpening() {

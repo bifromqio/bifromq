@@ -439,7 +439,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     private Set<KVRangeStoreDescriptor> currentStoreDescriptors(long ts) {
-        log.trace("StoreDescriptor updated at {}", ts);
+        log.trace("StoreDescriptor CRDT updated at {}: clusterId={}\n{}", ts, clusterId, storeDescriptorCRDT);
         Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), IORMap.ORMapKey::key);
 
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
@@ -451,6 +451,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     private void refresh(ClusterInfo clusterInfo) {
+        log.debug("Cluster[{}] info update\n{}", clusterId, clusterInfo);
         boolean rangeRouteUpdated = refreshRangeRoute(clusterInfo);
         boolean storeRouteUpdated = refreshStoreRoute(clusterInfo);
         if (storeRouteUpdated) {

@@ -78,7 +78,7 @@ public class KVRangeStoreDescriptorReporter implements IKVRangeStoreDescriptorRe
     @Override
     public void report(KVRangeStoreDescriptor storeDescriptor) {
         localStoreDescriptor = storeDescriptor.toBuilder().build();
-        log.trace("Report store descriptor\n{}", localStoreDescriptor);
+        log.trace("Report store descriptor: clusterId={}\n{}", clusterId, localStoreDescriptor);
         ByteString ormapKey = ByteString.copyFromUtf8(localStoreDescriptor.getId());
         Optional<KVRangeStoreDescriptor> settingsOnCRDT = getDescriptorFromCRDT(storeDescriptorMap, ormapKey);
         if (settingsOnCRDT.isEmpty() || !settingsOnCRDT.get().equals(localStoreDescriptor)) {

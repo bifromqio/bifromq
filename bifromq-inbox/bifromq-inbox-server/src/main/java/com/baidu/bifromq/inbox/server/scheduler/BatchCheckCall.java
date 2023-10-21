@@ -32,7 +32,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class BatchCheckCall extends BatchQueryCall<HasInboxRequest, HasInboxReply> {
     protected BatchCheckCall(KVRangeId rangeId,
                              IBaseKVStoreClient storeClient,
@@ -46,9 +48,7 @@ public class BatchCheckCall extends BatchQueryCall<HasInboxRequest, HasInboxRepl
 
         BatchCheckRequest.Builder reqBuilder = BatchCheckRequest.newBuilder();
         hasInboxRequestIterator.forEachRemaining(
-            request -> {
-                checkInboxes.add(scopedInboxId(request.getTenantId(), request.getInboxId()));
-            });
+            request -> checkInboxes.add(scopedInboxId(request.getTenantId(), request.getInboxId())));
         long reqId = System.nanoTime();
         return ROCoProcInput.newBuilder()
             .setInboxService(InboxServiceROCoProcInput.newBuilder()
@@ -68,6 +68,7 @@ public class BatchCheckCall extends BatchQueryCall<HasInboxRequest, HasInboxRepl
                     task.call.getInboxId()).toStringUtf8());
             // if query result doesn't contain the scoped inboxId, reply error
             if (exists == null) {
+                log.error("");
                 task.callResult.completeExceptionally(new RuntimeException("Inbox not found"));
             } else {
                 task.callResult.complete(HasInboxReply.newBuilder()
