@@ -17,7 +17,7 @@ import com.baidu.bifromq.basecrdt.core.api.DWFlagOperation;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.google.protobuf.ByteString;
 
-public class DWFlagCoalesceOperation extends CoalesceOperation<IDotSet, DWFlagOperation> {
+class DWFlagCoalesceOperation extends CoalesceOperation<IDotSet, DWFlagOperation> {
     DWFlagOperation op;
 
     DWFlagCoalesceOperation(ByteString replicaId, DWFlagOperation op) {

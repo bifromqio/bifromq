@@ -41,7 +41,7 @@ public class DWFlagTest extends CRDTTest {
     @Test
     public void testOperation() {
         DWFlagInflater dwFlagInflater = new DWFlagInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 1000), executor, Duration.ofMillis(100));
+            newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
         IDWFlag dwFlag = dwFlagInflater.getCRDT();
         assertEquals(dwFlag.id(), leftReplica);
 
@@ -60,12 +60,12 @@ public class DWFlagTest extends CRDTTest {
     @Test
     public void testJoin() {
         DWFlagInflater leftInflater = new DWFlagInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 1000000),
+            newStateLattice(leftReplica, 1000000),
             executor, Duration.ofMillis(100));
         IDWFlag left = leftInflater.getCRDT();
 
         DWFlagInflater rightInflater = new DWFlagInflater(1, rightReplica,
-            newStateLattice(rightReplica.getId(), 1000000),
+            newStateLattice(rightReplica, 1000000),
             executor, Duration.ofMillis(100));
         IDWFlag right = rightInflater.getCRDT();
 

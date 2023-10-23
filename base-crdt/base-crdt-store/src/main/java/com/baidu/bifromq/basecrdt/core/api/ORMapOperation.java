@@ -19,19 +19,19 @@ import lombok.ToString;
 @ToString
 public abstract class ORMapOperation implements ICRDTOperation {
     public interface ORMapUpdater {
-        ORMapUpdate with(AWORSetOperation op);
+        ORMapUpdate<AWORSetOperation> with(AWORSetOperation op);
 
-        ORMapUpdate with(RWORSetOperation op);
+        ORMapUpdate<RWORSetOperation> with(RWORSetOperation op);
 
-        ORMapUpdate with(DWFlagOperation op);
+        ORMapUpdate<DWFlagOperation> with(DWFlagOperation op);
 
-        ORMapUpdate with(EWFlagOperation op);
+        ORMapUpdate<EWFlagOperation> with(EWFlagOperation op);
 
-        ORMapUpdate with(MVRegOperation op);
+        ORMapUpdate<MVRegOperation> with(MVRegOperation op);
 
-        ORMapUpdate with(CCounterOperation op);
+        ORMapUpdate<CCounterOperation> with(CCounterOperation op);
 
-        ORMapUpdate with(ORMapOperation op);
+        ORMapUpdate<ORMapOperation> with(ORMapOperation op);
     }
 
     public interface ORMapRemover {
@@ -59,47 +59,47 @@ public abstract class ORMapOperation implements ICRDTOperation {
     public static ORMapUpdater update(ByteString... keyPath) {
         return new ORMapUpdater() {
             @Override
-            public ORMapUpdate with(AWORSetOperation op) {
-                return new ORMapUpdate(Type.UpdateKey, keyPath, op);
+            public ORMapUpdate<AWORSetOperation> with(AWORSetOperation op) {
+                return new ORMapUpdate<>(Type.UpdateKey, keyPath, op);
             }
 
             @Override
-            public ORMapUpdate with(RWORSetOperation op) {
-                return new ORMapUpdate(Type.UpdateKey, keyPath, op);
+            public ORMapUpdate<RWORSetOperation> with(RWORSetOperation op) {
+                return new ORMapUpdate<>(Type.UpdateKey, keyPath, op);
             }
 
             @Override
-            public ORMapUpdate with(DWFlagOperation op) {
-                return new ORMapUpdate(Type.UpdateKey, keyPath, op);
+            public ORMapUpdate<DWFlagOperation> with(DWFlagOperation op) {
+                return new ORMapUpdate<>(Type.UpdateKey, keyPath, op);
             }
 
             @Override
-            public ORMapUpdate with(EWFlagOperation op) {
-                return new ORMapUpdate(Type.UpdateKey, keyPath, op);
+            public ORMapUpdate<EWFlagOperation> with(EWFlagOperation op) {
+                return new ORMapUpdate<>(Type.UpdateKey, keyPath, op);
             }
 
             @Override
-            public ORMapUpdate with(MVRegOperation op) {
-                return new ORMapUpdate(Type.UpdateKey, keyPath, op);
+            public ORMapUpdate<MVRegOperation> with(MVRegOperation op) {
+                return new ORMapUpdate<>(Type.UpdateKey, keyPath, op);
             }
 
             @Override
-            public ORMapUpdate with(CCounterOperation op) {
-                return new ORMapUpdate(Type.UpdateKey, keyPath, op);
+            public ORMapUpdate<CCounterOperation> with(CCounterOperation op) {
+                return new ORMapUpdate<>(Type.UpdateKey, keyPath, op);
             }
 
             @Override
-            public ORMapUpdate with(ORMapOperation op) {
-                return new ORMapUpdate(Type.UpdateKey, keyPath, op);
+            public ORMapUpdate<ORMapOperation> with(ORMapOperation op) {
+                return new ORMapUpdate<>(Type.UpdateKey, keyPath, op);
             }
 
         };
     }
 
-    public static class ORMapUpdate extends ORMapOperation {
-        public final ICRDTOperation valueOp;
+    public static class ORMapUpdate<T extends ICRDTOperation> extends ORMapOperation {
+        public final T valueOp;
 
-        private ORMapUpdate(Type type, ByteString[] keyPath, ICRDTOperation valueOp) {
+        private ORMapUpdate(Type type, ByteString[] keyPath, T valueOp) {
             super(type, keyPath);
             this.valueOp = valueOp;
         }

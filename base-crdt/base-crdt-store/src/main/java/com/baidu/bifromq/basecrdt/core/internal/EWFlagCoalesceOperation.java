@@ -17,7 +17,7 @@ import com.baidu.bifromq.basecrdt.core.api.EWFlagOperation;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.google.protobuf.ByteString;
 
-public class EWFlagCoalesceOperation extends CoalesceOperation<IDotSet, EWFlagOperation> {
+class EWFlagCoalesceOperation extends CoalesceOperation<IDotSet, EWFlagOperation> {
     EWFlagOperation op;
 
     EWFlagCoalesceOperation(ByteString replicaId, EWFlagOperation op) {

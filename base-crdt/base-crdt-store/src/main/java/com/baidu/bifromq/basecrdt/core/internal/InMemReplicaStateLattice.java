@@ -14,12 +14,13 @@
 package com.baidu.bifromq.basecrdt.core.internal;
 
 import static com.baidu.bifromq.basecrdt.core.util.LatticeIndexUtil.remember;
-import static com.baidu.bifromq.basecrdt.core.util.Log.error;
 import static java.util.Collections.emptyNavigableMap;
 import static java.util.Collections.singleton;
 
+import com.baidu.bifromq.basecrdt.ReplicaLogger;
 import com.baidu.bifromq.basecrdt.proto.Dot;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
+import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.proto.StateLattice;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Iterables;
@@ -43,11 +44,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import lombok.EqualsAndHashCode;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class InMemReplicaStateLattice implements IReplicaStateLattice {
-    private final ByteString ownerReplicaId;
+    private final Logger log;
+    private final Replica ownerReplica;
     private final AtomicLong event = new AtomicLong(0);
 
     // index into the events containing lattices which are populating current dot store
@@ -58,8 +59,9 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
     private final Duration historyExpire;
     private final long maxCompactionDuration;
 
-    InMemReplicaStateLattice(ByteString ownerReplicaId, Duration historyExpire, Duration maxCompactionTime) {
-        this.ownerReplicaId = ownerReplicaId;
+    InMemReplicaStateLattice(Replica ownerReplica, Duration historyExpire, Duration maxCompactionTime) {
+        this.ownerReplica = ownerReplica;
+        this.log = new ReplicaLogger(ownerReplica, InMemReplicaStateLattice.class);
         this.historyExpire = historyExpire;
         this.maxCompactionDuration = maxCompactionTime.toNanos();
     }
@@ -203,9 +205,9 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
                 Event event = itr.next();
                 EventInfo eventInfo = eventDAG.get(event);
                 if (eventInfo != null) {
-                    assert !eventInfo.lattice.isPresent();
+                    assert eventInfo.lattice.isEmpty();
                     for (Event replacedByEvent : replacedByEvents(event)) {
-                        if (!eventDAG.get(replacedByEvent).lattice.isPresent() && maxLattices > 0) {
+                        if (eventDAG.get(replacedByEvent).lattice.isEmpty() && maxLattices > 0) {
                             subDAG(replacedByEvent, replacements, coveredLatticeIndex, coveredHistoryIndex);
                             maxLattices--;
                         } else {
@@ -257,7 +259,7 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
             }
             return nextCompactNeeded;
         } catch (Throwable e) {
-            error(log, "Replica {} compaction error", ownerReplicaId, e);
+            log.error("Compaction error", e);
             return false;
         }
     }
@@ -345,10 +347,8 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
                 replacements.add(Replacement.newBuilder()
                     .addAllDots(events.stream().map(e -> {
                         EventInfo info = eventDAG.get(e);
-                        if (info.lattice.isPresent()) {
-                            return ProtoUtils.dot(e.replicaId, e.ver, info.lattice.get());
-                        }
-                        return ProtoUtils.dot(e.replicaId, e.ver);
+                        return info.lattice.map(stateLattice -> ProtoUtils.dot(e.replicaId, e.ver, stateLattice))
+                            .orElseGet(() -> ProtoUtils.dot(e.replicaId, e.ver));
                     }).collect(Collectors.toList()))
                     .build());
                 // rewind path until next visit event is replaced by the last event in the path

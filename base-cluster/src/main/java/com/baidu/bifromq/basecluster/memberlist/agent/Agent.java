@@ -34,6 +34,7 @@ import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -81,7 +82,9 @@ public final class Agent implements IAgent {
         this.store = store;
         this.hostProvider = hostProvider;
         Replica replica = store.host(CRDTUtil.toAgentURI(agentId), hostEndpoint.toByteString());
-        agentCRDT = (IORMap) store.get(replica.getUri()).get();
+        Optional<IORMap> orMapOpt = store.get(replica.getUri());
+        assert orMapOpt.isPresent();
+        agentCRDT = orMapOpt.get();
         disposables.add(agentCRDT.inflation()
             .observeOn(scheduler)
             .subscribe(this::sync));

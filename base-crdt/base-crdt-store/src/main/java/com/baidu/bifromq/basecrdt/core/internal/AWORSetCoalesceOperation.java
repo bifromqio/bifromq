@@ -39,14 +39,14 @@ class AWORSetCoalesceOperation extends CoalesceOperation<IDotMap, AWORSetOperati
             rems.clear();
         } else {
             switch (op.type) {
-                case Add:
+                case Add -> {
                     adds.add(op.element);
                     rems.remove(op.element);
-                    break;
-                case Remove:
+                }
+                case Remove -> {
                     adds.remove(op.element);
                     rems.add(op.element);
-                    break;
+                }
             }
         }
     }

@@ -22,7 +22,7 @@ public interface ICCounter extends ICausalCRDT<CCounterOperation> {
     /**
      * The final count includes all partial counts
      *
-     * @return
+     * @return the read of the counter
      */
     long read();
 }

@@ -17,6 +17,8 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgentMember;
+import com.baidu.bifromq.basecrdt.ReplicaLogger;
+import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
@@ -29,6 +31,7 @@ import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.subjects.Subject;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,15 +39,15 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
-class CRDTContext {
+class CRDTContext<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
+    private final Logger log;
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final AgentMemberAddr endpoint;
     private final ReadWriteLock shutdownLock = new ReentrantReadWriteLock();
     private final Replica replica;
-    private final ICausalCRDT crdt;
+    private final C crdt;
     private final ICRDTStore store;
     private final IAgent replicaAgent;
     private final IAgentMember replicaAgentMember;
@@ -58,13 +61,16 @@ class CRDTContext {
                 Scheduler scheduler,
                 Subject<CRDTStoreMessage> storeMsgSubject) {
         replica = store.host(uri);
+        log = new ReplicaLogger(replica, CRDTContext.class);
         replicaAgent = host.host(replica.getUri());
         endpoint = AgentMemberAddr.newBuilder()
             .setName(AgentUtil.toAgentMemberName(replica))
             .setEndpoint(replicaAgent.endpoint())
             .build();
         this.store = store;
-        this.crdt = store.get(uri).get();
+        Optional<C> crdtOpt = store.get(uri);
+        assert crdtOpt.isPresent();
+        this.crdt = crdtOpt.get();
         this.replicaAgentMember = replicaAgent.register(endpoint.getName());
         this.storeMsgSubject = storeMsgSubject;
         disposables.add(replicaAgent.membership()
@@ -117,7 +123,7 @@ class CRDTContext {
         return replica;
     }
 
-    ICausalCRDT crdt() {
+    C crdt() {
         return crdt;
     }
 

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecrdt.service;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import io.reactivex.rxjava3.core.Observable;
@@ -27,8 +28,8 @@ public interface ICRDTService {
     /**
      * Construct a new instance
      *
-     * @param options
-     * @return
+     * @param options the service options
+     * @return the CRDT service object
      */
     static ICRDTService newInstance(@NonNull CRDTServiceOptions options) {
         return new CRDTService(options);
@@ -38,7 +39,7 @@ public interface ICRDTService {
 
     Replica host(String uri);
 
-    Optional<ICausalCRDT> get(String uri);
+    <O extends ICRDTOperation, C extends ICausalCRDT<O>> Optional<C> get(String uri);
 
     CompletableFuture<Void> stopHosting(String uri);
 

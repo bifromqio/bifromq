@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static java.util.Collections.emptyMap;
-import static org.slf4j.LoggerFactory.getLogger;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
@@ -80,7 +79,7 @@ public class KVRangeWAL implements IKVRangeWAL {
         this.localId = localId;
         this.maxFetchBytes = maxFetchBytes;
         this.walStore = walStore;
-        raftNode = new RaftNode(raftConfig, walStore, getLogger("raft.logger"),
+        raftNode = new RaftNode(raftConfig, walStore,
             EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toString(rangeId)),
             "cluster", clusterId, "rangeId", KVRangeIdUtil.toString(rangeId), "storeId", localId);
     }

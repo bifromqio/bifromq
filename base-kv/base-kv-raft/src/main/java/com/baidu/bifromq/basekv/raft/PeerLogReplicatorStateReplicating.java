@@ -18,6 +18,7 @@ import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import java.util.LinkedList;
 import java.util.Optional;
+import org.slf4j.Logger;
 
 
 class PeerLogReplicatorStateReplicating extends PeerLogReplicatorState {
@@ -34,7 +35,7 @@ class PeerLogReplicatorStateReplicating extends PeerLogReplicatorState {
                                       IRaftStateStore stateStorage,
                                       long matchIndex,
                                       long nextIndex,
-                                      IRaftNodeLogger logger) {
+                                      Logger logger) {
         super(peerId, config, stateStorage, matchIndex, nextIndex, logger);
         lastMatchIndex = matchIndex;
         inflightAppends = new LinkedList<>();
@@ -100,14 +101,14 @@ class PeerLogReplicatorStateReplicating extends PeerLogReplicatorState {
         Optional<LogEntry> prevLogEntry = stateStorage.entryAt(peerLastIndex);
         if (prevLogEntry.isEmpty()) {
             // if prev log entry is unavailable
-            logger.logDebug("Entry[index:{}] not available for peer[{}] from "
+            logger.debug("Entry[index:{}] not available for peer[{}] from "
                     + "tracker[matchIndex:{},nextIndex:{},state:{}], start syncing with snapshot",
                 peerLastIndex, peerId, matchIndex, nextIndex, state());
             return new PeerLogReplicatorStateSnapshotSyncing(peerId, config, stateStorage, logger);
         } else {
             // probing from peer's last index
             long probeStartIndex = Math.min(peerLastIndex, matchIndex);
-            logger.logDebug("Peer[{}] with last index[{}] rejected appending entries from "
+            logger.debug("Peer[{}] with last index[{}] rejected appending entries from "
                     + "tracker[matchIndex:{},nextIndex:{},state:{}], start probing",
                 peerId, peerLastIndex, matchIndex, nextIndex, state());
             return new PeerLogReplicatorStateProbing(peerId, config,

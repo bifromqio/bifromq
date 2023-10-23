@@ -14,12 +14,13 @@
 package com.baidu.bifromq.basekv.raft;
 
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
+import org.slf4j.Logger;
 
 abstract class PeerLogReplicatorState {
     protected final String peerId;
     protected final RaftConfig config;
     protected final IRaftStateStore stateStorage;
-    protected final IRaftNodeLogger logger;
+    protected final Logger logger;
     protected long matchIndex;
     protected long nextIndex;
 
@@ -28,14 +29,14 @@ abstract class PeerLogReplicatorState {
                            IRaftStateStore stateStorage,
                            long matchIndex,
                            long nextIndex,
-                           IRaftNodeLogger logger) {
+                           Logger logger) {
         this.peerId = peerId;
         this.config = config;
         this.stateStorage = stateStorage;
         this.matchIndex = matchIndex;
         this.nextIndex = nextIndex;
         this.logger = logger;
-        logger.logDebug("Peer[{}] tracker[matchIndex:{},nextIndex:{},state:{}] initialized",
+        logger.debug("Peer[{}] tracker[matchIndex:{},nextIndex:{},state:{}] initialized",
             peerId, matchIndex, nextIndex, state());
     }
 

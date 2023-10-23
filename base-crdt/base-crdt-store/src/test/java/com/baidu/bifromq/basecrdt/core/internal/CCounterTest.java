@@ -42,7 +42,7 @@ public class CCounterTest extends CRDTTest {
     @Test
     public void testOperation() {
         CCounterInflater cctrInflater = new CCounterInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 1000), executor, Duration.ofMillis(100));
+            newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
         ICCounter cctr = cctrInflater.getCRDT();
         assertEquals(cctr.id(), leftReplica);
 
@@ -69,11 +69,11 @@ public class CCounterTest extends CRDTTest {
     @Test
     public void testJoin() {
         CCounterInflater leftInflater = new CCounterInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 100000), executor, Duration.ofMillis(100));
+            newStateLattice(leftReplica, 100000), executor, Duration.ofMillis(100));
         ICCounter left = leftInflater.getCRDT();
 
         CCounterInflater rightInflater = new CCounterInflater(1, rightReplica,
-            newStateLattice(rightReplica.getId(), 100000), executor, Duration.ofMillis(100));
+            newStateLattice(rightReplica, 100000), executor, Duration.ofMillis(100));
         ICCounter right = rightInflater.getCRDT();
 
         left.execute(CCounterOperation.add(10));
@@ -97,11 +97,11 @@ public class CCounterTest extends CRDTTest {
     @Test
     public void testZeroOut() {
         CCounterInflater leftInflater = new CCounterInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 100000), executor, Duration.ofMillis(100));
+            newStateLattice(leftReplica, 100000), executor, Duration.ofMillis(100));
         ICCounter left = leftInflater.getCRDT();
 
         CCounterInflater rightInflater = new CCounterInflater(1, rightReplica,
-            newStateLattice(rightReplica.getId(), 100000), executor, Duration.ofMillis(100));
+            newStateLattice(rightReplica, 100000), executor, Duration.ofMillis(100));
         ICCounter right = rightInflater.getCRDT();
 
         left.execute(CCounterOperation.add(10));
@@ -125,11 +125,11 @@ public class CCounterTest extends CRDTTest {
     @Test
     public void testZeroOutInBatch() {
         CCounterInflater leftInflater = new CCounterInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 100000), executor, Duration.ofMillis(100));
+            newStateLattice(leftReplica, 100000), executor, Duration.ofMillis(100));
         ICCounter left = leftInflater.getCRDT();
 
         CCounterInflater rightInflater = new CCounterInflater(1, rightReplica,
-            newStateLattice(rightReplica.getId(), 100000), executor, Duration.ofMillis(100));
+            newStateLattice(rightReplica, 100000), executor, Duration.ofMillis(100));
         ICCounter right = rightInflater.getCRDT();
 
         left.execute(CCounterOperation.add(10)).join();

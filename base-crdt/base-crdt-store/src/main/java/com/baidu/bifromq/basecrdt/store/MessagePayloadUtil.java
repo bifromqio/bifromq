@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.basecrdt.store;
 
-import static com.baidu.bifromq.basecrdt.core.util.Log.error;
-
 import com.baidu.bifromq.basecrdt.store.compressor.Compressor;
 import com.baidu.bifromq.basecrdt.store.proto.AckMessage;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
@@ -22,9 +20,7 @@ import com.baidu.bifromq.basecrdt.store.proto.DeltaMessage;
 import com.baidu.bifromq.basecrdt.store.proto.MessagePayload;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class MessagePayloadUtil {
 
     public static ByteString compressToPayload(Compressor compressor, AckMessage ackMessage) {
@@ -39,8 +35,7 @@ public class MessagePayloadUtil {
         try {
             return MessagePayload.parseFrom(compressor.decompress(crdtStoreMessage.getPayload()));
         } catch (InvalidProtocolBufferException e) {
-            error(log, "Can not decompress message payload from message {}", crdtStoreMessage, e);
-            throw new RuntimeException(e);
+            throw new RuntimeException("Can not decompress message payload from message {}", e);
         }
     }
 

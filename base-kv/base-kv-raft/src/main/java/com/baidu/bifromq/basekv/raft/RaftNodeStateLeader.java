@@ -91,18 +91,17 @@ class RaftNodeStateLeader extends RaftNodeState {
             commitIndex,
             config,
             stateStorage,
-            log,
             uncommittedProposals,
             sender,
             listener,
             installer,
             onSnapshotInstalled,
             tags);
-        peerLogTracker = new PeerLogTracker(id(), config, stateStorage, listener, this);
-        configChanger = new RaftConfigChanger(config, stateStorage, peerLogTracker, this);
+        peerLogTracker = new PeerLogTracker(id(), config, stateStorage, listener, log);
+        configChanger = new RaftConfigChanger(config, stateStorage, peerLogTracker, log);
         ClusterConfig clusterConfig = stateStorage.latestClusterConfig();
-        activityTracker = new QuorumTracker(clusterConfig, this);
-        readProgressTracker = new ReadProgressTracker(stateStorage, this);
+        activityTracker = new QuorumTracker(clusterConfig, log);
+        readProgressTracker = new ReadProgressTracker(stateStorage, log);
         // track peers in current config
         Set<String> peersToStartTracking = new HashSet<>(clusterConfig.getVotersList());
         peersToStartTracking.addAll(clusterConfig.getLearnersList());
@@ -115,13 +114,13 @@ class RaftNodeStateLeader extends RaftNodeState {
         // 2) resuming potential cluster config change process which has started but not finished in previous term
         // of course, this also introduces a small gap during which config change call will be rejected.
         if (isJoint(clusterConfig)) {
-            logDebug("Resume cluster config change process in current term");
+            log.debug("Resume cluster config change process in current term");
             changeClusterConfig(clusterConfig.getCorrelateId(),
                 new HashSet<>(clusterConfig.getNextVotersList()),
                 new HashSet<>(clusterConfig.getNextLearnersList()), new CompletableFuture<>());
 
         } else {
-            logDebug("Propose cluster config as first log entry in current term to conclude commit index");
+            log.debug("Propose cluster config as first log entry in current term to conclude commit index");
             changeClusterConfig(clusterConfig.getCorrelateId(),
                 new HashSet<>(clusterConfig.getVotersList()),
                 new HashSet<>(clusterConfig.getLearnersList()), new CompletableFuture<>());
@@ -129,26 +128,25 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     @Override
-    RaftNodeStatus getState() {
+    public RaftNodeStatus getState() {
         return RaftNodeStatus.Leader;
     }
 
     @Override
-    String currentLeader() {
+    public String currentLeader() {
         // leader is me
         return stateStorage.local();
     }
 
     @Override
     RaftNodeState stepDown() {
-        logDebug("leader is asked to step down to follower");
+        log.debug("leader is asked to step down to follower");
         RaftNodeState nextState = new RaftNodeStateFollower(
             currentTerm(),
             commitIndex,
             null,
             config,
             stateStorage,
-            log,
             uncommittedProposals,
             sender,
             listener,
@@ -173,7 +171,7 @@ class RaftNodeStateLeader extends RaftNodeState {
         if (configChanger.tick(currentTerm())) {
             // there is a state change after tick
             if (configChanger.state() == JointConfigCommitting || configChanger.state() == TargetConfigCommitting) {
-                logDebug("{} cluster config is activated in current term",
+                log.debug("{} cluster config is activated in current term",
                     configChanger.state() == JointConfigCommitting ? "Joint" : "Target");
                 ClusterConfig clusterConfig = stateStorage.latestClusterConfig();
                 activityTracker.refresh(clusterConfig);
@@ -181,7 +179,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                 if (leaderTransferTask != null) {
                     if (!clusterConfig.getVotersList().contains(leaderTransferTask.nextLeader)
                         && !clusterConfig.getNextVotersList().contains(leaderTransferTask.nextLeader)) {
-                        logDebug("Abort leadership transfer, new leader[{}] has been removed from new cluster config",
+                        log.debug("Abort leadership transfer, new leader[{}] has been removed from new cluster config",
                             leaderTransferTask.nextLeader);
                         leaderTransferTask.abort(LeaderTransferException.notFoundOrQualified());
                         leaderTransferTask = null;
@@ -192,7 +190,7 @@ class RaftNodeStateLeader extends RaftNodeState {
         if (electionElapsedTick >= config.getElectionTimeoutTick()) {
             electionElapsedTick = 0;
             if (leaderTransferTask != null) {
-                logDebug("Leadership cannot be transferred to {} in electionTimeoutTicks[{}]",
+                log.debug("Leadership cannot be transferred to {} in electionTimeoutTicks[{}]",
                     leaderTransferTask.nextLeader, config.getElectionTimeoutTick());
                 leaderTransferTask.abort(LeaderTransferException.transferTimeout());
                 leaderTransferTask = null;
@@ -202,12 +200,12 @@ class RaftNodeStateLeader extends RaftNodeState {
             QuorumTracker.JointVoteResult quorumCheckResult = activityTracker.tally();
             if (quorumCheckResult.result == QuorumTracker.VoteResult.Won) {
                 // prepare for next round check
-                logTrace("Quorum check succeed[{}], leadership remain", quorumCheckResult);
+                log.trace("Quorum check succeed[{}], leadership remain", quorumCheckResult);
                 activityTracker.reset();
             } else {
                 // at the end of an election timeout, leader is out of touch with the majority,
                 // step down as a follower and abort any pending futures
-                logWarn("Quorum check failed[{}], leader stepped down to follower", quorumCheckResult);
+                log.warn("Quorum check failed[{}], leader stepped down to follower", quorumCheckResult);
                 configChanger.abort();
                 readProgressTracker.abort();
                 return new RaftNodeStateFollower(
@@ -216,7 +214,6 @@ class RaftNodeStateLeader extends RaftNodeState {
                     null,
                     config,
                     stateStorage,
-                    log,
                     uncommittedProposals,
                     sender,
                     listener,
@@ -236,12 +233,12 @@ class RaftNodeStateLeader extends RaftNodeState {
     @Override
     void propose(ByteString fsmCmd, CompletableFuture<Long> onDone) {
         if (leaderTransferTask != null) {
-            logDebug("Dropped proposal due to transferring leadership");
+            log.debug("Dropped proposal due to transferring leadership");
             onDone.completeExceptionally(DropProposalException.transferringLeader());
             return;
         }
         if (isProposeThrottled()) {
-            logDebug("Dropped proposal due to log growing[uncommittedProposals:{}] "
+            log.debug("Dropped proposal due to log growing[uncommittedProposals:{}] "
                     + "exceeds threshold[maxUncommittedProposals:{}]",
                 uncommittedProposals.size(), maxUncommittedProposals);
             onDone.completeExceptionally(DropProposalException.throttledByThreshold());
@@ -269,7 +266,7 @@ class RaftNodeStateLeader extends RaftNodeState {
     @Override
     RaftNodeState stableTo(long stabledIndex) {
         // update self progress
-        logTrace("Log entries before index[{}] stabilized", stabledIndex);
+        log.trace("Log entries before index[{}] stabilized", stabledIndex);
         peerLogTracker.confirmMatch(stateStorage.local(), stabledIndex);
         return commit();
     }
@@ -278,7 +275,7 @@ class RaftNodeStateLeader extends RaftNodeState {
     void readIndex(CompletableFuture<Long> onDone) {
         // if no commit in current term
         if (commitIndexNotConfirmed()) {
-            logDebug("No log entry of current term committed");
+            log.debug("No log entry of current term committed");
             onDone.completeExceptionally(ReadIndexException.commitIndexNotConfirmed());
             return;
         }
@@ -299,7 +296,7 @@ class RaftNodeStateLeader extends RaftNodeState {
 
     @Override
     RaftNodeState receive(String fromPeer, RaftMessage message) {
-        logTrace("Receive[{}] from {}", message, fromPeer);
+        log.trace("Receive[{}] from {}", message, fromPeer);
         RaftNodeState nextState = this;
         if (message.getTerm() > currentTerm()) {
             switch (message.getMessageTypeCase()) {
@@ -317,7 +314,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                     if (!leaderTransfer && !voters().contains(fromPeer)) {
                         // request vote is not for transferring leadership
                         // if the vote coming a member
-                        logDebug("Vote[{}] from candidate[{}] not granted, lease is not expired",
+                        log.debug("Vote[{}] from candidate[{}] not granted, lease is not expired",
                             message.getTerm(), fromPeer);
 
                         sendRequestVoteReply(fromPeer, message.getTerm(), false);
@@ -337,7 +334,7 @@ class RaftNodeStateLeader extends RaftNodeState {
             }
             // transition to follower according to $3.3 in raft paper
             // abort on-going config change and readIndex request if any
-            logDebug("Got higher term[{}] message[{}] from peer[{}], start to step down",
+            log.debug("Got higher term[{}] message[{}] from peer[{}], start to step down",
                 message.getTerm(), message.getMessageTypeCase(), fromPeer);
             configChanger.abort();
             readProgressTracker.abort();
@@ -347,7 +344,6 @@ class RaftNodeStateLeader extends RaftNodeState {
                 null,
                 config,
                 stateStorage,
-                log,
                 uncommittedProposals,
                 sender,
                 listener,
@@ -423,7 +419,7 @@ class RaftNodeStateLeader extends RaftNodeState {
 
     private RaftNodeState handleAppendEntriesReply(String fromPeer, AppendEntriesReply reply) {
         if (!peerLogTracker.isTracking(fromPeer)) {
-            logDebug("No tracker available for peer[{}]", fromPeer);
+            log.debug("No tracker available for peer[{}]", fromPeer);
             return this;
         }
         activityTracker.poll(fromPeer, true);
@@ -435,7 +431,7 @@ class RaftNodeStateLeader extends RaftNodeState {
             // ignore heartbeat reply during snapshot syncing
             if (reply.getResultCase() == AppendEntriesReply.ResultCase.REJECT) {
                 AppendEntriesReply.Reject reject = reply.getReject();
-                logDebug("Follower[{}] with last entry[index:{},term:{}] rejected entries appending from index[{}]",
+                log.debug("Follower[{}] with last entry[index:{},term:{}] rejected entries appending from index[{}]",
                     fromPeer, reject.getLastIndex(), reject.getTerm(), reject.getRejectedIndex());
                 peerLogTracker.backoff(fromPeer, reject.getRejectedIndex(), reject.getLastIndex());
                 List<RaftMessage> messages = prepareAppendEntriesForPeer(fromPeer, true);
@@ -443,12 +439,12 @@ class RaftNodeStateLeader extends RaftNodeState {
                 return this;
             }
             AppendEntriesReply.Accept accept = reply.getAccept();
-            logTrace("Follower[{}] accepted entries, and advance match index[{}]",
+            log.trace("Follower[{}] accepted entries, and advance match index[{}]",
                 fromPeer, accept.getLastIndex());
             peerLogTracker.confirmMatch(fromPeer, accept.getLastIndex());
             if (leaderTransferTask != null && fromPeer.equals(leaderTransferTask.nextLeader)
                 && peerLogTracker.matchIndex(fromPeer) == stateStorage.lastIndex()) {
-                logInfo("Started leadership transfer by sending TimeoutNow to follower[{}]", fromPeer);
+                log.info("Started leadership transfer by sending TimeoutNow to follower[{}]", fromPeer);
                 sendTimeoutNow(leaderTransferTask.nextLeader);
             }
             return commit();
@@ -458,7 +454,7 @@ class RaftNodeStateLeader extends RaftNodeState {
 
     private RaftNodeState handleInstallSnapshotReply(String fromPeer, InstallSnapshotReply reply) {
         if (!peerLogTracker.isTracking(fromPeer)) {
-            logDebug("No tracker available for peer[{}] when handleInstallSnapshotReply", fromPeer);
+            log.debug("No tracker available for peer[{}] when handleInstallSnapshotReply", fromPeer);
             return this;
         }
         activityTracker.poll(fromPeer, true);
@@ -470,12 +466,12 @@ class RaftNodeStateLeader extends RaftNodeState {
             return this;
         }
         if (reply.getRejected()) {
-            logDebug("Follower[{}] rejected snapshot with last entry of index[{}]",
+            log.debug("Follower[{}] rejected snapshot with last entry of index[{}]",
                 fromPeer, reply.getLastIndex());
             peerLogTracker.backoff(fromPeer, reply.getLastIndex(), reply.getLastIndex());
             return this;
         } else {
-            logDebug("Follower[{}] installed snapshot, advance last index[{}]", fromPeer, reply.getLastIndex());
+            log.debug("Follower[{}] installed snapshot, advance last index[{}]", fromPeer, reply.getLastIndex());
             peerLogTracker.confirmMatch(fromPeer, reply.getLastIndex());
             return commit();
         }
@@ -498,7 +494,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                 if (!peerLogTracker.pauseReplicating(peer)) {
                     if (snapshot.getIndex() == peerLogTracker.matchIndex(peer)) {
                         // the tracker still tracking latest snapshot
-                        logDebug("Prepared snapshot[index:{},term:{}] for peer[{}] when {}",
+                        log.debug("Prepared snapshot[index:{},term:{}] for peer[{}] when {}",
                             snapshot.getIndex(), snapshot.getTerm(), peer, peerLogTracker.status(peer));
                         messages.add(RaftMessage.newBuilder()
                             .setTerm(currentTerm())
@@ -510,7 +506,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                             .build());
                         peerLogTracker.replicateBy(peer, snapshot.getIndex());
                     } else {
-                        logDebug("New snapshot[index:{},term:{}] generated, reset the tracker for peer[{}]",
+                        log.debug("New snapshot[index:{},term:{}] generated, reset the tracker for peer[{}]",
                             snapshot.getIndex(), snapshot.getTerm(), peer);
                         // there is a new snapshot generated, reset the tracker explicitly using previous snapshot
                         peerLogTracker.backoff(peer, peerLogTracker.matchIndex(peer), peerLogTracker.matchIndex(peer));
@@ -519,7 +515,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                 }
                 if (forceHeartbeat || peerLogTracker.needHeartbeat(peer)) {
                     // send heartbeats during installing snapshot
-                    logTrace("Prepare heartbeat after entry[index:{},term:{}] for peer[{}] with readIndex[{}] when {}",
+                    log.trace("Prepare heartbeat after entry[index:{},term:{}] for peer[{}] with readIndex[{}] when {}",
                         snapshot.getIndex(), snapshot.getTerm(), peer, readIndex, peerLogTracker.status(peer));
                     messages.add(RaftMessage.newBuilder()
                         .setTerm(currentTerm())
@@ -543,7 +539,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                     long preLogTerm = stateStorage.entryAt(preLogIndex)
                         .map(LogEntry::getTerm).orElseGet(() -> stateStorage.latestSnapshot().getTerm());
                     // no entries to append
-                    logDebug("Prepare probing after entry[index:{},term:{}] for peer[{}] with readIndex[{}] when {}",
+                    log.debug("Prepare probing after entry[index:{},term:{}] for peer[{}] with readIndex[{}] when {}",
                         preLogIndex, preLogTerm, peer, readIndex, peerLogTracker.status(peer));
                     messages.add(RaftMessage.newBuilder()
                         .setTerm(currentTerm())
@@ -584,7 +580,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                         .build());
 
                     assert appendEntries.getEntriesCount() != 0;
-                    logTrace("Prepare {} entries after "
+                    log.trace("Prepare {} entries after "
                             + "entry[index:{},term:{}] for peer[{}] with readIndex[{}] when {}",
                         appendEntries.getEntriesCount(),
                         preLogIndex,
@@ -598,7 +594,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                 }
                 if (forceHeartbeat || peerLogTracker.needHeartbeat(peer)) {
                     // no entries to append
-                    logTrace("Prepare heartbeat after "
+                    log.trace("Prepare heartbeat after "
                             + "entry[index:{},term:{}] for peer[{}] with readIndex[{}] when {}",
                         preLogIndex, preLogTerm, peer, readIndex, peerLogTracker.status(peer));
                     messages.add(RaftMessage.newBuilder()
@@ -666,13 +662,13 @@ class RaftNodeStateLeader extends RaftNodeState {
                                     peerId -> peerId,
                                     peerId -> prepareAppendEntriesForPeer(peerId, true)
                                 ));
-                            logDebug("Leader is about to step down, send final heartbeats to all remote peers[{}]",
+                            log.debug("Leader is about to step down, send final heartbeats to all remote peers[{}]",
                                 allRemotePeers);
                             submitRaftMessages(appendEntriesToSend);
                         }
                         // target config has been committed, step down if local server has been removed from voters
                         // abort pending read index requests if any
-                        logDebug("Leader stepped down due to being removed from cluster config");
+                        log.debug("Leader stepped down due to being removed from cluster config");
                         readProgressTracker.abort();
                         nextState = new RaftNodeStateFollower(
                             currentTerm(),
@@ -680,7 +676,6 @@ class RaftNodeStateLeader extends RaftNodeState {
                             null,
                             config,
                             stateStorage,
-                            log,
                             uncommittedProposals,
                             sender,
                             listener,
@@ -702,7 +697,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                                     peerId -> peerId,
                                     peerId -> prepareAppendEntriesForPeer(peerId, true)
                                 ));
-                            logDebug("Send final heartbeats to removed peers[{}]", removedPeers);
+                            log.debug("Send final heartbeats to removed peers[{}]", removedPeers);
                             submitRaftMessages(appendEntriesToSend);
                         }
                         // confirm the commit so that peers tracker of removed peers could be cleaned
@@ -716,7 +711,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                     if (leaderTransferTask != null
                         && !clusterConfig.getVotersList().contains(leaderTransferTask.nextLeader)) {
                         // abort the transfer
-                        logInfo("Aborted transfer leadership to follower[{}], it's removed from target cluster config",
+                        log.info("Aborted transfer leadership to follower[{}], it's removed from target cluster config",
                             leaderTransferTask.nextLeader);
                         leaderTransferTask.abort(LeaderTransferException.notFoundOrQualified());
                         leaderTransferTask = null;
@@ -731,12 +726,12 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     private void handleRequestReadIndex(String fromPeer, RequestReadIndex request) {
-        logTrace("Received forwarded ReadIndex request from peer[{}]", fromPeer);
+        log.trace("Received forwarded ReadIndex request from peer[{}]", fromPeer);
         CompletableFuture<Long> onDone = new CompletableFuture<>();
         onDone.whenComplete((readIndex, e) -> {
             // must be executed in raft thread
             if (e != null) {
-                logDebug("Failed to finish forwarded ReadIndex request from peer[{}]", fromPeer, e);
+                log.debug("Failed to finish forwarded ReadIndex request from peer[{}]", fromPeer, e);
             } else {
                 // don't pass exception, let follower abort itself
                 submitRaftMessages(fromPeer, RaftMessage.newBuilder()
@@ -752,12 +747,12 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     private void handlePropose(String fromPeer, Propose propose) {
-        logTrace("Received forwarded Propose request from peer[{}]", fromPeer);
+        log.trace("Received forwarded Propose request from peer[{}]", fromPeer);
         CompletableFuture<Long> onDone = new CompletableFuture<>();
         onDone.whenComplete((v, e) -> {
             // must be executed in raft thread
             if (e != null) {
-                logDebug("Failed to finish forwarded Propose request from peer[{}]", fromPeer, e);
+                log.debug("Failed to finish forwarded Propose request from peer[{}]", fromPeer, e);
                 submitRaftMessages(fromPeer, RaftMessage.newBuilder()
                     .setTerm(currentTerm())
                     .setProposeReply(ProposeReply.newBuilder()

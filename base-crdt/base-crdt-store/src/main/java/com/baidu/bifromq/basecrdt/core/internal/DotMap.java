@@ -99,33 +99,27 @@ class DotMap extends DotStore implements IDotMap {
         StateLattice val = addState.getSingleMap().getVal();
         AtomicBoolean inflated = new AtomicBoolean();
         switch (val.getStateTypeCase()) {
-            case SINGLEDOT:
-                dotSetMap.compute(key, (k, v) -> {
-                    if (v == null) {
-                        v = new DotSet();
-                    }
-                    inflated.set(v.add(val));
-                    return v;
-                });
-                break;
-            case SINGLEVALUE:
-                dotFuncMap.compute(key, (k, v) -> {
-                    if (v == null) {
-                        v = new DotFunc();
-                    }
-                    inflated.set(v.add(val));
-                    return v;
-                });
-                break;
-            case SINGLEMAP:
-                dotMapMap.compute(key, (k, v) -> {
-                    if (v == null) {
-                        v = new DotMap();
-                    }
-                    inflated.set(v.add(val));
-                    return v;
-                });
-                break;
+            case SINGLEDOT -> dotSetMap.compute(key, (k, v) -> {
+                if (v == null) {
+                    v = new DotSet();
+                }
+                inflated.set(v.add(val));
+                return v;
+            });
+            case SINGLEVALUE -> dotFuncMap.compute(key, (k, v) -> {
+                if (v == null) {
+                    v = new DotFunc();
+                }
+                inflated.set(v.add(val));
+                return v;
+            });
+            case SINGLEMAP -> dotMapMap.compute(key, (k, v) -> {
+                if (v == null) {
+                    v = new DotMap();
+                }
+                inflated.set(v.add(val));
+                return v;
+            });
         }
         return inflated.get();
     }
@@ -137,33 +131,27 @@ class DotMap extends DotStore implements IDotMap {
         StateLattice val = removeState.getSingleMap().getVal();
         AtomicBoolean inflated = new AtomicBoolean();
         switch (val.getStateTypeCase()) {
-            case SINGLEDOT:
-                dotSetMap.computeIfPresent(key, (k, v) -> {
-                    inflated.set(v.remove(val));
-                    if (v.isBottom()) {
-                        return null;
-                    }
-                    return v;
-                });
-                break;
-            case SINGLEVALUE:
-                dotFuncMap.computeIfPresent(key, (k, v) -> {
-                    inflated.set(v.remove(val));
-                    if (v.isBottom()) {
-                        return null;
-                    }
-                    return v;
-                });
-                break;
-            case SINGLEMAP:
-                dotMapMap.computeIfPresent(key, (k, v) -> {
-                    inflated.set(v.remove(val));
-                    if (v.isBottom()) {
-                        return null;
-                    }
-                    return v;
-                });
-                break;
+            case SINGLEDOT -> dotSetMap.computeIfPresent(key, (k, v) -> {
+                inflated.set(v.remove(val));
+                if (v.isBottom()) {
+                    return null;
+                }
+                return v;
+            });
+            case SINGLEVALUE -> dotFuncMap.computeIfPresent(key, (k, v) -> {
+                inflated.set(v.remove(val));
+                if (v.isBottom()) {
+                    return null;
+                }
+                return v;
+            });
+            case SINGLEMAP -> dotMapMap.computeIfPresent(key, (k, v) -> {
+                inflated.set(v.remove(val));
+                if (v.isBottom()) {
+                    return null;
+                }
+                return v;
+            });
         }
         return inflated.get();
     }

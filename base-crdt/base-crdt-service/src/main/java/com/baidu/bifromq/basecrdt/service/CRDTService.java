@@ -17,6 +17,8 @@ import static java.lang.Long.toUnsignedString;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.logger.FormatableLogger;
+import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
@@ -35,10 +37,10 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public class CRDTService implements ICRDTService {
+    private static final Logger log = FormatableLogger.getLogger(CRDTService.class);
 
     private enum State {
         INIT, STARTING, STARTED, STOPPING, SHUTDOWN
@@ -47,7 +49,7 @@ public class CRDTService implements ICRDTService {
     private final ICRDTStore store;
     private IAgentHost agentHost;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
-    private final Map<String, CRDTContext> hostedCRDT = Maps.newConcurrentMap(); // key is the uri of crdt
+    private final Map<String, CRDTContext<?, ?>> hostedCRDT = Maps.newConcurrentMap(); // key is the uri of crdt
     private final Subject<CRDTStoreMessage> incomingStoreMessages;
     private final ExecutorService executor =
         newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("crdt-service-scheduler"));
@@ -67,15 +69,16 @@ public class CRDTService implements ICRDTService {
     @Override
     public Replica host(String uri) {
         checkState();
-        CRDTContext crdtContext = hostedCRDT.computeIfAbsent(uri,
-            k -> new CRDTContext(k, store, agentHost, scheduler, incomingStoreMessages));
+        CRDTContext<?, ?> crdtContext = hostedCRDT.computeIfAbsent(uri,
+            k -> new CRDTContext<>(k, store, agentHost, scheduler, incomingStoreMessages));
         return crdtContext.id();
     }
 
     @Override
-    public Optional<ICausalCRDT> get(String uri) {
+    @SuppressWarnings("unchecked")
+    public <O extends ICRDTOperation, C extends ICausalCRDT<O>> Optional<C> get(String uri) {
         checkState();
-        return Optional.ofNullable(hostedCRDT.get(uri).crdt());
+        return Optional.ofNullable((C) hostedCRDT.get(uri).crdt());
     }
 
     @Override

@@ -32,7 +32,7 @@ public interface IORMap extends ICausalCRDT<ORMapOperation> {
     /**
      * Non-bottom keys
      *
-     * @return
+     * @return iterator of keys
      */
     Iterator<ORMapKey> keys();
 
