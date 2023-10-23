@@ -53,6 +53,7 @@ class CRDTStore implements ICRDTStore {
         LogFormatter.setStringifier(Replica.class, Formatter::toString);
         LogFormatter.setStringifier(DeltaMessage.class, Formatter::toString);
         LogFormatter.setStringifier(AckMessage.class, Formatter::toString);
+        LogFormatter.setStringifier(CRDTStoreMessage.class, Formatter::toString);
     }
 
     private class MetricManager {

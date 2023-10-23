@@ -13,10 +13,11 @@
 
 package com.baidu.bifromq.basecrdt.util;
 
-import com.baidu.bifromq.logger.FormatableLogger;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.proto.AckMessage;
+import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
 import com.baidu.bifromq.basecrdt.store.proto.DeltaMessage;
+import com.baidu.bifromq.logger.FormatableLogger;
 import com.google.common.io.BaseEncoding;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.util.JsonFormat;
@@ -40,6 +41,15 @@ public class Formatter {
     }
 
     public static String toString(AckMessage ack) {
+        try {
+            return JsonFormat.printer().print(ack);
+        } catch (Exception e) {
+            // ignore
+            return ack.toString();
+        }
+    }
+
+    public static String toString(CRDTStoreMessage ack) {
         try {
             return JsonFormat.printer().print(ack);
         } catch (Exception e) {

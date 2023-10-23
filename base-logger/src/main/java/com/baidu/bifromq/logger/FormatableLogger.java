@@ -112,7 +112,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(String msg) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled()) {
             return;
         }
         doLog(delegate::trace, msg);
@@ -120,7 +120,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(String format, Object arg) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled()) {
             return;
         }
         doLog(delegate::trace, format, arg);
@@ -128,7 +128,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(String format, Object arg1, Object arg2) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled()) {
             return;
         }
         doLog(delegate::trace, format, arg1, arg2);
@@ -136,15 +136,15 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(String format, Object... arguments) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled()) {
             return;
         }
-        doLogVarArgs(this::trace, format, arguments);
+        doLogVarArgs(delegate::trace, format, arguments);
     }
 
     @Override
     public final void trace(String msg, Throwable t) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled()) {
             return;
         }
         doLogThrowable(delegate::trace, msg, t);
@@ -157,7 +157,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(Marker marker, String msg) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled(marker)) {
             return;
         }
         doLog(delegate::trace, marker, msg);
@@ -165,7 +165,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(Marker marker, String format, Object arg) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled(marker)) {
             return;
         }
         doLog(delegate::trace, marker, format, arg);
@@ -173,7 +173,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(Marker marker, String format, Object arg1, Object arg2) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled(marker)) {
             return;
         }
         doLog(delegate::trace, marker, format, arg1, arg2);
@@ -181,15 +181,15 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void trace(Marker marker, String format, Object... argArray) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled(marker)) {
             return;
         }
-        doLogVarArgs(this::trace, marker, format, argArray);
+        doLogVarArgs(delegate::trace, marker, format, argArray);
     }
 
     @Override
     public final void trace(Marker marker, String msg, Throwable t) {
-        if (!isTraceEnabled()) {
+        if (!delegate.isTraceEnabled(marker)) {
             return;
         }
         doLogThrowable(delegate::trace, marker, msg, t);
@@ -202,7 +202,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(String msg) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled()) {
             return;
         }
         doLog(delegate::debug, msg);
@@ -210,7 +210,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(String format, Object arg) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled()) {
             return;
         }
         doLog(delegate::debug, format, arg);
@@ -218,7 +218,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(String format, Object arg1, Object arg2) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled()) {
             return;
         }
         doLog(delegate::debug, format, arg1, arg2);
@@ -226,7 +226,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(String format, Object... arguments) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled()) {
             return;
         }
         doLogVarArgs(delegate::debug, format, arguments);
@@ -234,7 +234,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(String msg, Throwable t) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled()) {
             return;
         }
         doLogThrowable(delegate::debug, msg, t);
@@ -247,7 +247,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(Marker marker, String msg) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled(marker)) {
             return;
         }
         doLog(delegate::debug, marker, msg);
@@ -255,7 +255,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(Marker marker, String format, Object arg) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled(marker)) {
             return;
         }
         doLog(delegate::debug, marker, format, arg);
@@ -263,7 +263,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(Marker marker, String format, Object arg1, Object arg2) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled(marker)) {
             return;
         }
         doLog(delegate::debug, marker, format, arg1, arg2);
@@ -271,7 +271,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(Marker marker, String format, Object... arguments) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled(marker)) {
             return;
         }
         doLogVarArgs(delegate::debug, marker, format, arguments);
@@ -279,7 +279,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void debug(Marker marker, String msg, Throwable t) {
-        if (!isDebugEnabled()) {
+        if (!delegate.isDebugEnabled(marker)) {
             return;
         }
         doLogThrowable(delegate::debug, marker, msg, t);
@@ -292,7 +292,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(String msg) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled()) {
             return;
         }
         doLog(delegate::info, msg);
@@ -300,7 +300,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(String format, Object arg) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled()) {
             return;
         }
         doLog(delegate::info, format, arg);
@@ -308,7 +308,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(String format, Object arg1, Object arg2) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled()) {
             return;
         }
         doLog(delegate::info, format, arg1, arg2);
@@ -316,7 +316,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(String format, Object... arguments) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled()) {
             return;
         }
         doLogVarArgs(delegate::info, format, arguments);
@@ -324,7 +324,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(String msg, Throwable t) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled()) {
             return;
         }
         doLogThrowable(delegate::info, msg, t);
@@ -337,7 +337,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(Marker marker, String msg) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled(marker)) {
             return;
         }
         doLog(delegate::info, marker, msg);
@@ -345,7 +345,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(Marker marker, String format, Object arg) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled(marker)) {
             return;
         }
         doLog(delegate::info, marker, format, arg);
@@ -353,7 +353,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(Marker marker, String format, Object arg1, Object arg2) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled(marker)) {
             return;
         }
         doLog(delegate::info, marker, format, arg1, arg2);
@@ -361,7 +361,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(Marker marker, String format, Object... arguments) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled(marker)) {
             return;
         }
         doLogVarArgs(delegate::info, marker, format, arguments);
@@ -369,7 +369,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void info(Marker marker, String msg, Throwable t) {
-        if (!isInfoEnabled()) {
+        if (!delegate.isInfoEnabled(marker)) {
             return;
         }
         doLogThrowable(delegate::info, msg, t);
@@ -382,7 +382,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(String msg) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled()) {
             return;
         }
         doLog(delegate::warn, msg);
@@ -390,7 +390,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(String format, Object arg) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled()) {
             return;
         }
         doLog(delegate::warn, format, arg);
@@ -398,7 +398,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(String format, Object... arguments) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled()) {
             return;
         }
         doLog(delegate::warn, format, arguments);
@@ -406,7 +406,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(String format, Object arg1, Object arg2) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled()) {
             return;
         }
         doLog(delegate::warn, format, arg1, arg2);
@@ -414,7 +414,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(String msg, Throwable t) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled()) {
             return;
         }
         doLog(delegate::warn, msg, t);
@@ -427,7 +427,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(Marker marker, String msg) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled(marker)) {
             return;
         }
         doLog(delegate::warn, marker, msg);
@@ -435,7 +435,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(Marker marker, String format, Object arg) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled(marker)) {
             return;
         }
         doLog(delegate::warn, marker, format, arg);
@@ -443,7 +443,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(Marker marker, String format, Object arg1, Object arg2) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled(marker)) {
             return;
         }
         doLog(delegate::warn, marker, format, arg1, arg2);
@@ -451,7 +451,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(Marker marker, String format, Object... arguments) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled(marker)) {
             return;
         }
         doLogVarArgs(delegate::warn, marker, format, arguments);
@@ -459,7 +459,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void warn(Marker marker, String msg, Throwable t) {
-        if (!isWarnEnabled()) {
+        if (!delegate.isWarnEnabled(marker)) {
             return;
         }
         doLogThrowable(delegate::warn, marker, msg, t);
@@ -472,7 +472,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(String msg) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled()) {
             return;
         }
         doLog(delegate::error, msg);
@@ -480,7 +480,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(String format, Object arg) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled()) {
             return;
         }
         doLog(delegate::error, format, arg);
@@ -488,7 +488,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(String format, Object arg1, Object arg2) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled()) {
             return;
         }
         doLog(delegate::error, format, arg1, arg2);
@@ -496,7 +496,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(String format, Object... arguments) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled()) {
             return;
         }
         doLogVarArgs(delegate::error, format, arguments);
@@ -504,7 +504,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(String msg, Throwable t) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled()) {
             return;
         }
         doLogThrowable(delegate::error, msg, t);
@@ -517,7 +517,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(Marker marker, String msg) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled(marker)) {
             return;
         }
         doLog(delegate::error, marker, msg);
@@ -525,7 +525,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(Marker marker, String format, Object arg) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled(marker)) {
             return;
         }
         doLog(delegate::error, marker, format, arg);
@@ -533,7 +533,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(Marker marker, String format, Object arg1, Object arg2) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled(marker)) {
             return;
         }
         doLog(delegate::error, marker, format, arg1, arg2);
@@ -541,7 +541,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(Marker marker, String format, Object... arguments) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled(marker)) {
             return;
         }
         doLogVarArgs(delegate::error, format, arguments);
@@ -549,7 +549,7 @@ public class FormatableLogger implements Logger {
 
     @Override
     public final void error(Marker marker, String msg, Throwable t) {
-        if (!isErrorEnabled()) {
+        if (!delegate.isErrorEnabled(marker)) {
             return;
         }
         doLogThrowable(delegate::error, marker, msg, t);
@@ -609,9 +609,8 @@ public class FormatableLogger implements Logger {
         if (obj instanceof Stringifiable) {
             return ((Stringifiable) obj).stringify();
         } else {
-            Stringifier<T> stringifier =
-                (Stringifier<T>) STRINGIFIER_MAP.getOrDefault(obj.getClass(), Object::toString);
-            return stringifier.stringify(obj);
+            Stringifier<T> stringifier = (Stringifier<T>) STRINGIFIER_MAP.get(obj.getClass());
+            return stringifier != null ? stringifier.stringify(obj) : obj.toString();
         }
     }
 }
