@@ -49,29 +49,29 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
             Path dataRootDir;
             Path dataCheckpointRootDir;
             RocksDBEngineConfig rocksDBConfig = (RocksDBEngineConfig) config;
-            if (Paths.get(rocksDBConfig.dataPathRoot()).isAbsolute()) {
-                dataRootDir = Paths.get(rocksDBConfig.dataPathRoot(), name);
+            if (Paths.get(rocksDBConfig.getDataPathRoot()).isAbsolute()) {
+                dataRootDir = Paths.get(rocksDBConfig.getDataPathRoot(), name);
                 dataCheckpointRootDir =
-                    Paths.get(rocksDBConfig.dataPathRoot(), name + "_cp");
+                    Paths.get(rocksDBConfig.getDataPathRoot(), name + "_cp");
             } else {
                 String userDir = System.getProperty(USER_DIR_PROP);
                 String dataDir = System.getProperty(DATA_DIR_PROP, userDir);
-                dataRootDir = Paths.get(dataDir, rocksDBConfig.dataPathRoot(), name);
+                dataRootDir = Paths.get(dataDir, rocksDBConfig.getDataPathRoot(), name);
                 dataCheckpointRootDir =
-                    Paths.get(dataDir, rocksDBConfig.dataPathRoot(), name + "_cp");
+                    Paths.get(dataDir, rocksDBConfig.getDataPathRoot(), name + "_cp");
             }
             return RocksDBKVEngineConfigurator.builder()
                 .dbRootDir(dataRootDir.toString())
                 .dbCheckpointRootDir(dataCheckpointRootDir.toString())
                 .gcInterval(config.getGcIntervalInSec())
-                .manualCompaction(rocksDBConfig.manualCompaction())
-                .compactMinTombstoneKeys(rocksDBConfig.compactMinTombstoneKeys())
-                .compactMinTombstoneRanges(rocksDBConfig.compactMinTombstoneRanges())
-                .compactTombstoneRatio(rocksDBConfig.compactTombstoneRatio())
+                .manualCompaction(rocksDBConfig.isManualCompaction())
+                .compactMinTombstoneKeys(rocksDBConfig.getCompactMinTombstoneKeys())
+                .compactMinTombstoneRanges(rocksDBConfig.getCompactMinTombstoneRanges())
+                .compactTombstoneRatio(rocksDBConfig.getCompactTombstoneRatio())
                 .disableWAL(disableWAL)
                 .atomicFlush(atomicFlush)
-                .asyncWALFlush(rocksDBConfig.asyncWALFlush())
-                .fsyncWAL(rocksDBConfig.fsyncWAL())
+                .asyncWALFlush(rocksDBConfig.isAsyncWALFlush())
+                .fsyncWAL(rocksDBConfig.isFsyncWAL())
                 .build();
         }
     }

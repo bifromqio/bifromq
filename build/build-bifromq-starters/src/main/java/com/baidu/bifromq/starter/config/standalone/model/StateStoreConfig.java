@@ -53,9 +53,9 @@ public class StateStoreConfig {
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
-            .manualCompaction(true)
-            .compactMinTombstoneKeys(2500)
-            .compactMinTombstoneRanges(2);
+            .setManualCompaction(true)
+            .setCompactMinTombstoneKeys(2500)
+            .setCompactMinTombstoneRanges(2);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 
@@ -75,9 +75,9 @@ public class StateStoreConfig {
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
-            .manualCompaction(true)
-            .compactMinTombstoneKeys(2500)
-            .compactMinTombstoneRanges(2);
+            .setManualCompaction(true)
+            .setCompactMinTombstoneKeys(2500)
+            .setCompactMinTombstoneRanges(2);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 
@@ -98,9 +98,9 @@ public class StateStoreConfig {
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
-            .manualCompaction(true)
-            .compactMinTombstoneKeys(5000)
-            .compactMinTombstoneRanges(2);
+            .setManualCompaction(true)
+            .setCompactMinTombstoneKeys(5000)
+            .setCompactMinTombstoneRanges(2);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();
 
