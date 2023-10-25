@@ -19,7 +19,7 @@ import lombok.experimental.Accessors;
 
 @Getter
 @Setter
-@Accessors(fluent = true)
+@Accessors(chain = true)
 public class RocksDBEngineConfig extends StorageEngineConfig {
     private String dataPathRoot = "";
     private boolean manualCompaction = false;
