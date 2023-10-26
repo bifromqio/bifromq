@@ -74,7 +74,8 @@ mvn test
 
 #### 部署
 
-BifroMQ 有三种部署模式：`单机模式(Standalone)`，`标准集群(Standard Cluster)`，`独立工作负载集群(Independent Workload Cluster)`
+BifroMQ
+有三种部署模式：`单机模式(Standalone)`，`标准集群(Standard Cluster)`，`独立工作负载集群(Independent-Workload Cluster)`
 
 ##### 单机模式
 
@@ -107,11 +108,11 @@ BifroMQ 有三种部署模式：`单机模式(Standalone)`，`标准集群(Stand
 
 大部分设置可以通过名称理解其含义。默认情况下，单机服务器将在`data`目录中保存持久数据。
 
-##### 标准集群（即将公开）
+##### 标准集群
 
 标准集群部署模式适用于需要可靠性和可扩展性的小型到中型生产环境。
 
-它由几个完全功能的节点组成，共同作为一个逻辑 MQTT Broker 实例，确保高可用性。 
+它由几个完全功能的Standalone节点组成，共同作为一个逻辑 MQTT Broker 实例，确保高可用性。
 
 你也可以通过添加更多的节点来扩大并发 MQTT 连接的工作负载，而在这种模式下，某些类型的消息相关的工作负载并不是水平可扩展的。
 
