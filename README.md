@@ -76,7 +76,7 @@ mvn test
 
 #### Deployment
 
-BifroMQ has three deployment modes: `Standalone`, `Standard Cluster`, `Independent Workload Cluster`
+BifroMQ has three deployment modes: `Standalone`, `Standard Cluster`, `Independent-Workload Cluster`
 
 ##### Standalone
 
@@ -110,10 +110,11 @@ stop server:
 The configuration file, 'standalone.yml', is located in the conf directory. Many of the settings are self-described via
 name. By default, the standalone server will save persistent data in `data` directory.
 
-##### Standard Cluster(Will be available publicly soon)
+##### Standard Cluster
 
 The standard cluster deployment mode is suitable for small to medium-sized production environments that require
-reliability and scalability. It comprises several fully functional nodes working together as a logical MQTT broker
+reliability and scalability. It comprises several fully functional standalone nodes working together as a logical MQTT
+broker
 instance, ensuring high availability. You can also scale up the concurrent mqtt connection workload by adding more
 nodes, while some types of messaging related workload are not horizontal scalable in this mode.
 
