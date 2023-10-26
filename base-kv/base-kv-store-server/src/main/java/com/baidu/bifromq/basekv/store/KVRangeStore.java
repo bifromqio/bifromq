@@ -540,9 +540,14 @@ public class KVRangeStore implements IKVRangeStore {
         if (status.get() != Status.STARTED && status.get() != Status.CLOSING) {
             return;
         }
-        kvRangeMap.forEach((v, r) -> r.tick());
-        storeStatsCollector.tick();
-        scheduleTick(opts.getKvRangeOptions().getTickUnitInMS());
+        try {
+            kvRangeMap.forEach((v, r) -> r.tick());
+            storeStatsCollector.tick();
+        } catch (Throwable e) {
+            log.error("Unexpected error during tick", e);
+        } finally {
+            scheduleTick(opts.getKvRangeOptions().getTickUnitInMS());
+        }
     }
 
     private void quitKVRange(IKVRangeFSM range) {

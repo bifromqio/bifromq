@@ -14,6 +14,7 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.inbox.util.KeyUtil.hasScopedInboxId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseScopedInboxId;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -26,6 +27,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.protobuf.ByteString;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
@@ -48,8 +50,11 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public ByteString toSplitKey(ByteString key) {
-        return upperBound(parseScopedInboxId(key));
+    public Optional<ByteString> toSplitKey(ByteString key) {
+        if (hasScopedInboxId(key)) {
+            return Optional.of(upperBound(parseScopedInboxId(key)));
+        }
+        return Optional.empty();
     }
 
     @Override

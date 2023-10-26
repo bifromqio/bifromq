@@ -15,11 +15,12 @@ package com.baidu.bifromq.basekv.store.api;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.protobuf.ByteString;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 public interface IKVRangeCoProcFactory {
-    default ByteString toSplitKey(ByteString key) {
-        return key;
+    default Optional<ByteString> toSplitKey(ByteString key) {
+        return Optional.of(key);
     }
 
     IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> readerProvider);

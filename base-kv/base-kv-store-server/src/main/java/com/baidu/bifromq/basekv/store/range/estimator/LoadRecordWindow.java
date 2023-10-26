@@ -29,7 +29,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 @NotThreadSafe
 final class LoadRecordWindow {
-    private final Function<ByteString, ByteString> toSplitKey;
+    private final Function<ByteString, Optional<ByteString>> toSplitKey;
     private final AtomicInteger records = new AtomicInteger();
     private final AtomicInteger totalKVIOs = new AtomicInteger();
     private final AtomicLong totalKVIONanos = new AtomicLong();
@@ -37,10 +37,10 @@ final class LoadRecordWindow {
     private final Map<ByteString, AtomicLong> loadDistribution = new ConcurrentHashMap<>();
 
     public LoadRecordWindow() {
-        this(k -> k);
+        this(Optional::of);
     }
 
-    LoadRecordWindow(Function<ByteString, ByteString> toSplitKey) {
+    LoadRecordWindow(Function<ByteString, Optional<ByteString>> toSplitKey) {
         this.toSplitKey = toSplitKey;
     }
 
@@ -82,13 +82,26 @@ final class LoadRecordWindow {
         long halfTotal = totalKVIONanos.get() / 2;
         NavigableMap<ByteString, AtomicLong> slotDistro = new TreeMap<>(unsignedLexicographicalComparator());
         slotDistro.putAll(loadDistribution);
+        int attempt = 0;
         for (Map.Entry<ByteString, AtomicLong> e : slotDistro.entrySet()) {
             if (e.getValue().get() >= halfTotal) {
-                return Optional.of(toSplitKey.apply(e.getKey()));
+                Optional<ByteString> splitKey = toSplitKey.apply(e.getKey());
+                if (splitKey.isPresent()) {
+                    return splitKey;
+                }
+                if (attempt < 5) {
+                    attempt++;
+                } else {
+                    return Optional.empty();
+                }
             } else {
                 loadSum += e.getValue().get();
                 if (loadSum >= halfTotal) {
-                    return Optional.of(toSplitKey.apply(e.getKey()));
+                    Optional<ByteString> splitKey = toSplitKey.apply(e.getKey());
+                    if (splitKey.isPresent()) {
+                        return splitKey;
+                    }
+                    attempt++;
                 }
             }
         }

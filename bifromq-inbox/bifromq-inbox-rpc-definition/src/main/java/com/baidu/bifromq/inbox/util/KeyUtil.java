@@ -133,6 +133,19 @@ public class KeyUtil {
             2 * Integer.BYTES + tenantIdLen + inboxIdLen).toStringUtf8();
     }
 
+    public static boolean hasScopedInboxId(ByteString key) {
+        int size = key.size();
+        if (size < Integer.BYTES) {
+            return false;
+        }
+        int tenantIdLen = tenantIdLength(key);
+        if (size <= tenantIdLen + Integer.BYTES) {
+            return false;
+        }
+        int inboxIdLen = inboxIdLength(key, tenantIdLen);
+        return size >= tenantIdLen + inboxIdLen + 2 * Integer.BYTES;
+    }
+
     public static ByteString parseScopedInboxId(ByteString key) {
         int tenantIdLen = tenantIdLength(key);
         int inboxIdLen = inboxIdLength(key, tenantIdLen);
