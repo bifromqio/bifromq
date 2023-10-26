@@ -19,6 +19,7 @@ import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -28,19 +29,19 @@ public class SplitKeyEstimator implements ISplitKeyEstimator {
     private final long windowSizeNanos;
     private final NavigableMap<Long, LoadRecordWindow> trackedKeySlots = new ConcurrentSkipListMap<>();
     private final NavigableMap<Long, SplitHint> recentLoadHints = new ConcurrentSkipListMap<>();
-    private final Function<ByteString, ByteString> toSplitKey;
+    private final Function<ByteString, Optional<ByteString>> toSplitKey;
 
     public SplitKeyEstimator(int windowSizeNanos) {
-        this(windowSizeNanos, k -> k);
+        this(windowSizeNanos, Optional::of);
     }
 
-    public SplitKeyEstimator(int windowSizeSeconds, Function<ByteString, ByteString> toSplitKey) {
+    public SplitKeyEstimator(int windowSizeSeconds, Function<ByteString, Optional<ByteString>> toSplitKey) {
         this(System::nanoTime, windowSizeSeconds, toSplitKey);
     }
 
     public SplitKeyEstimator(Supplier<Long> nanoSource,
                              int windowSizeSeconds,
-                             Function<ByteString, ByteString> toSplitKey) {
+                             Function<ByteString, Optional<ByteString>> toSplitKey) {
         Preconditions.checkArgument(0 <= windowSizeSeconds, "Window size must be positive");
         this.nanoSource = nanoSource;
         this.windowSizeNanos = Duration.ofSeconds(windowSizeSeconds).toNanos();

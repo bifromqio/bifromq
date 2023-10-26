@@ -25,6 +25,7 @@ import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.function.Supplier;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
@@ -35,14 +36,14 @@ public class SplitKeyEstimatorTest extends MockableTest {
 
     @Test
     public void noLoadRecorded() {
-        SplitKeyEstimator testEstimator = new SplitKeyEstimator(System::nanoTime, 5, k -> k);
+        SplitKeyEstimator testEstimator = new SplitKeyEstimator(System::nanoTime, 5, Optional::of);
         SplitHint hint = testEstimator.estimate();
         assertFalse(hint.hasSplitKey());
     }
 
     @Test
     public void hintMemoization() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 5, k -> k);
+        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 5, Optional::of);
         long now = 0L;
         // track enough records
         for (int i = 0; i < 11; i++) {
@@ -64,7 +65,7 @@ public class SplitKeyEstimatorTest extends MockableTest {
 
     @Test
     public void trackClearExpiredSlots() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 1, k -> k);
+        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 1, Optional::of);
         long now = 0L;
         for (int i = 0; i < 11; i++) {
             when(nanoSource.get()).thenReturn(now);
