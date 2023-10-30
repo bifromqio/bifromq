@@ -313,6 +313,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                         KVRangeIdUtil.toString(id), hostStoreId, wal.latestSnapshot());
                     scheduleCompaction();
                 }
+                switch (kvRange.state().getType()) {
+                    case Purged, Merged, Removed -> quitReason.complete(kvRange.state().getType());
+                }
             }
         });
     }
