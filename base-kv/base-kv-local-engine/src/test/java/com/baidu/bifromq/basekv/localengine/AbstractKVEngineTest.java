@@ -151,7 +151,7 @@ public abstract class AbstractKVEngineTest extends MockableTest {
         assertTrue(checkpoint.get().exist(key));
     }
 
-    @Test
+    @Test(groups = "integration")
     public void gc() {
         String rangeId = "test_range1";
         IKVSpace keyRange = engine.createIfMissing(rangeId);
