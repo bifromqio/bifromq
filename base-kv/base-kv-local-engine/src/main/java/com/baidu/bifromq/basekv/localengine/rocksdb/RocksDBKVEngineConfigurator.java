@@ -55,11 +55,12 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         return new RocksDBKVEngineConfigurator().toBuilder();
     }
 
+    public static <T extends AutoCloseable, O> T autoRelease(T object, O owner) {
+        CLEANER.register(owner, new CloseableState(object));
+        return object;
+    }
+
     public interface Configurator {
-        default <T extends AutoCloseable, O> T autoRelease(T object, O owner) {
-            CLEANER.register(owner, new CloseableState(object));
-            return object;
-        }
     }
 
     public interface DBOptionsConfigurator extends Configurator {

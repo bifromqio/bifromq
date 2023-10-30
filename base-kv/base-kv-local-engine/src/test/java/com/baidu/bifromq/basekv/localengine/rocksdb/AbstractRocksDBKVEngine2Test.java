@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import static com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator.autoRelease;
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -24,6 +26,7 @@ import com.google.protobuf.ByteString;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import lombok.SneakyThrows;
+import org.rocksdb.Statistics;
 import org.testng.annotations.Test;
 
 public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest {
@@ -95,5 +98,18 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
         engine.start();
         keyRange = engine.createIfMissing(rangeId);
         assertTrue(keyRange.exist(key));
+    }
+
+    @Test
+    public void autoReleaseTest() {
+        Object owner = new Object();
+        Statistics statistics = autoRelease(new Statistics(), owner);
+        assertTrue(statistics.isOwningHandle());
+
+        owner = null;
+        await().until(() -> {
+            System.gc();
+            return !statistics.isOwningHandle();
+        });
     }
 }
