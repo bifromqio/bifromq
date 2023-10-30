@@ -40,7 +40,6 @@ public class KVSpaceMeters {
 
     private static final Cache<MeterKey, Meter> METERS = Caffeine.newBuilder()
         .evictionListener((RemovalListener<MeterKey, Meter>) (key, value, cause) -> {
-            log.debug("Remove {}", value);
             if (value != null) {
                 Metrics.globalRegistry.remove(value);
             }
