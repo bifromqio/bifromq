@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.localengine.benchmark;
 
+import static com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator.autoRelease;
 import static java.lang.Math.max;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
