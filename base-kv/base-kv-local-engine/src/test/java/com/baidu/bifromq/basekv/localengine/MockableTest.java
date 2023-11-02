@@ -26,7 +26,7 @@ public abstract class MockableTest {
 
     @BeforeMethod(alwaysRun = true)
     public final void setup(Method method) {
-        log.info("Test case[{}] start", method.getName());
+        log.info("Test case[{}] start @ {}", method.getName(), this.getClass().getSimpleName());
         closeable = MockitoAnnotations.openMocks(this);
         doSetup(method);
     }

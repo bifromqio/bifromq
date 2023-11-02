@@ -28,8 +28,7 @@ public class EnableWALRocksDBKVEngineTest extends AbstractRocksDBKVEngine2Test {
         configurator = new RocksDBKVEngineConfigurator()
             .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
             .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDisableWAL(false)
-            .setGcIntervalInSec(1);
+            .setDisableWAL(false);
     }
 
     @Override

@@ -16,6 +16,10 @@ package com.baidu.bifromq.basekv.localengine.metrics;
 import io.micrometer.core.instrument.Meter;
 
 public enum KVSpaceMetric {
+    BlockCache("basekv.le.rocksdb.mem.blockcache", Meter.Type.GAUGE),
+    TableReader("basekv.le.rocksdb.mem.tablereader", Meter.Type.GAUGE),
+    MemTable("basekv.le.rocksdb.mem.memtable", Meter.Type.GAUGE),
+    PinnedMem("basekv.le.rocksdb.mem.pinned", Meter.Type.GAUGE),
     CheckpointNumGauge("basekv.le.active.checkpoints", Meter.Type.GAUGE),
     CheckpointTimer("basekv.le.rocksdb.checkpoint.time", Meter.Type.TIMER),
     CompactionCounter("basekv.le.rocksdb.compaction.count", Meter.Type.COUNTER),
@@ -23,7 +27,6 @@ public enum KVSpaceMetric {
     TotalKeysGauge("basekv.le.rocksdb.compaction.keys", Meter.Type.GAUGE),
     TotalTombstoneKeysGauge("basekv.le.rocksdb.compaction.delkeys", Meter.Type.GAUGE),
     TotalTombstoneRangesGauge("basekv.le.rocksdb.compaction.delranges", Meter.Type.GAUGE),
-    GCTimer("basekv.le.rocksdb.gc.time", Meter.Type.TIMER),
     FlushTimer("basekv.le.rocksdb.flush.time", Meter.Type.TIMER),
     CallTimer("basekv.le.call.time", Meter.Type.TIMER);
 

@@ -45,13 +45,6 @@ public interface IKVSpace extends IKVSpaceReader {
     String checkpoint();
 
     /**
-     * Get the id of latest checkpoint
-     *
-     * @return an optional of the latest checkpoint id
-     */
-    Optional<String> latestCheckpoint();
-
-    /**
      * Open a readonly range object to access the checkpoint state. When the returned range object is garbage-collected
      * the associated checkpoint will be cleaned as well, except for the latest checkpoint. So the caller should keep a
      * strong reference to the checkpoint if it's still useful.
@@ -59,7 +52,7 @@ public interface IKVSpace extends IKVSpaceReader {
      * @param checkpointId the checkpoint id
      * @return the range object for accessing the checkpoint
      */
-    Optional<IKVSpaceReader> open(String checkpointId);
+    Optional<IKVSpaceCheckpoint> open(String checkpointId);
 
     /**
      * Get a writer to update range state

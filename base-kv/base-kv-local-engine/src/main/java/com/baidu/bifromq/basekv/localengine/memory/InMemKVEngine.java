@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
@@ -27,7 +26,7 @@ public class InMemKVEngine extends AbstractKVEngine {
     private final InMemKVEngineConfigurator configurator;
 
     public InMemKVEngine(String overrideIdentity, InMemKVEngineConfigurator c) {
-        super(overrideIdentity, Duration.ofSeconds(c.getGcIntervalInSec()));
+        super(overrideIdentity);
         this.configurator = c;
         if (overrideIdentity != null && !overrideIdentity.trim().isEmpty()) {
             identity = overrideIdentity;
@@ -43,11 +42,6 @@ public class InMemKVEngine extends AbstractKVEngine {
 
     @Override
     protected void doStop() {
-
-    }
-
-    @Override
-    protected void doGC() {
 
     }
 

@@ -28,7 +28,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -53,14 +52,16 @@ public class RocksDBKVEngine extends AbstractKVEngine {
     private final DBOptions dbOptions;
     private final RocksDBKVEngineConfigurator configurator;
     private final Map<ColumnFamilyDescriptor, ColumnFamilyHandle> existingColumnFamilies = new HashMap<>();
-    private final ConcurrentMap<String, IKVSpace> kvSpaceMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, RocksDBKVSpace> kvSpaceMap = new ConcurrentHashMap<>();
     private final String identity;
     private final RocksDB db;
+    private final ColumnFamilyDescriptor defaultCFDesc;
+    private final ColumnFamilyHandle defaultCFHandle;
     private String[] metricTags;
     private MetricManager metricManager;
 
     public RocksDBKVEngine(String overrideIdentity, RocksDBKVEngineConfigurator configurator) {
-        super(overrideIdentity, Duration.ofSeconds(configurator.getGcIntervalInSec()));
+        super(overrideIdentity);
         this.configurator = configurator;
         dbOptions = configurator.config();
         dbRootDir = new File(configurator.getDbRootDir());
@@ -70,9 +71,12 @@ public class RocksDBKVEngine extends AbstractKVEngine {
             Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
             boolean isCreation = isEmpty(dbRootDir.toPath());
             if (isCreation) {
-                List<ColumnFamilyDescriptor> cfDescs = singletonList(new ColumnFamilyDescriptor(DEFAULT_NS.getBytes()));
+                defaultCFDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());
+                List<ColumnFamilyDescriptor> cfDescs = singletonList(defaultCFDesc);
                 List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
                 db = RocksDB.open(dbOptions, dbRootDir.getAbsolutePath(), cfDescs, cfHandles);
+                assert cfHandles.size() == 1;
+                defaultCFHandle = cfHandles.get(0);
             } else {
                 List<ColumnFamilyDescriptor> cfDescs = RocksDB.listColumnFamilies(options, dbRootDir.getAbsolutePath())
                     .stream()
@@ -83,7 +87,8 @@ public class RocksDBKVEngine extends AbstractKVEngine {
                 db = RocksDB.open(dbOptions, dbRootDir.getAbsolutePath(), cfDescs, cfHandles);
                 assert Arrays.equals(cfDescs.get(0).getName(), DEFAULT_NS.getBytes(UTF_8));
                 assert cfDescs.size() == cfHandles.size();
-
+                defaultCFDesc = cfDescs.get(0);
+                defaultCFHandle = cfHandles.get(0);
                 for (int i = 1; i < cfDescs.size(); i++) {
                     ColumnFamilyDescriptor cfDesc = cfDescs.get(i);
                     ColumnFamilyHandle cfHandle = cfHandles.get(i);
@@ -108,8 +113,8 @@ public class RocksDBKVEngine extends AbstractKVEngine {
                     ColumnFamilyDescriptor cfDesc =
                         new ColumnFamilyDescriptor(rangeId.getBytes(UTF_8), configurator.config(rangeId));
                     ColumnFamilyHandle cfHandle = db.createColumnFamily(cfDesc);
-                    return new RocksDBKVSpace(rangeId, cfDesc, cfHandle, db, configurator, this,
-                        () -> kvSpaceMap.remove(rangeId), metricTags);
+                    return new RocksDBCheckpointableKVSpace(rangeId, cfDesc, cfHandle, db, configurator, this,
+                        () -> kvSpaceMap.remove(rangeId), metricTags).open();
                 } catch (RocksDBException e) {
                     throw new KVEngineException("Create key range error", e);
                 }
@@ -137,15 +142,12 @@ public class RocksDBKVEngine extends AbstractKVEngine {
     @Override
     protected void doStop() {
         log.info("Stopping RocksDBKVEngine[{}]", identity);
+        metricManager.close();
         kvSpaceMap.values().forEach(keyRange -> ((RocksDBKVSpace) keyRange).close());
+        db.destroyColumnFamilyHandle(defaultCFHandle);
+        defaultCFDesc.getOptions().close();
         db.close();
         dbOptions.close();
-        metricManager.close();
-    }
-
-    @Override
-    protected void doGC() {
-        kvSpaceMap.values().forEach(keyRange -> ((RocksDBKVSpace) keyRange).gc());
     }
 
     @Override
@@ -156,8 +158,9 @@ public class RocksDBKVEngine extends AbstractKVEngine {
     private void loadExisting(String... metricTags) {
         existingColumnFamilies.forEach((cfDesc, cfHandle) -> {
             String rangeId = new String(cfDesc.getName());
-            kvSpaceMap.put(rangeId, new RocksDBKVSpace(rangeId, cfDesc, cfHandle, db, configurator, this,
-                () -> kvSpaceMap.remove(rangeId), metricTags));
+            kvSpaceMap.put(rangeId,
+                new RocksDBCheckpointableKVSpace(rangeId, cfDesc, cfHandle, db, configurator, this,
+                    () -> kvSpaceMap.remove(rangeId), metricTags).open());
         });
         existingColumnFamilies.clear();
     }
@@ -195,10 +198,6 @@ public class RocksDBKVEngine extends AbstractKVEngine {
         private final Gauge checkpointTotalSpaceGauge;
         private final Gauge dataUsableSpaceGauge;
         private final Gauge checkpointsUsableSpaceGauge;
-        private final Gauge blockCacheMemSizeGauge;
-        private final Gauge indexAndFilterSizeGauge;
-        private final Gauge memtableSizeGauges;
-        private final Gauge pinedMemorySizeGauges;
 
         MetricManager(String... metricTags) {
             Tags tags = Tags.of(metricTags);
@@ -216,55 +215,6 @@ public class RocksDBKVEngine extends AbstractKVEngine {
                     cpRootDir::getUsableSpace)
                 .tags(tags)
                 .register(Metrics.globalRegistry);
-            blockCacheMemSizeGauge = Gauge.builder("basekv.le.rocksdb.memusage",
-                    () -> {
-                        try {
-                            return db.getLongProperty("rocksdb.block-cache-usage");
-                        } catch (RocksDBException e) {
-                            log.warn("Unable to get long property {}", "rocksdb.block-cache-usage");
-                            return 0;
-                        }
-                    })
-                .tags(tags.and("kind", "blockcache"))
-                .baseUnit("bytes")
-                .register(Metrics.globalRegistry);
-
-            indexAndFilterSizeGauge = Gauge.builder("basekv.le.rocksdb.memusage", () -> {
-                    try {
-                        return db.getLongProperty("rocksdb.estimate-table-readers-mem");
-                    } catch (RocksDBException e) {
-                        log.warn("Unable to get long property {}", "rocksdb.estimate-table-readers-mem");
-                        return 0;
-                    }
-                })
-                .tags(tags.and("kind", "tablereader"))
-                .baseUnit("bytes")
-                .register(Metrics.globalRegistry);
-
-            memtableSizeGauges = Gauge.builder("basekv.le.rocksdb.memusage", () -> {
-                    try {
-                        return db.getLongProperty("rocksdb.cur-size-all-mem-tables");
-                    } catch (RocksDBException e) {
-                        log.warn("Unable to get long property {}", "rocksdb.cur-size-all-mem-tables");
-                        return 0;
-                    }
-                })
-                .tags(tags.and("kind", "memtable"))
-                .baseUnit("bytes")
-                .register(Metrics.globalRegistry);
-
-            pinedMemorySizeGauges = Gauge.builder("basekv.le.rocksdb.memusage", () -> {
-                    try {
-                        return db.getLongProperty("rocksdb.size-all-mem-tables") -
-                            db.getLongProperty("rocksdb.cur-size-all-mem-tables");
-                    } catch (RocksDBException e) {
-                        log.warn("Unable to get long property {}", "rocksdb.size-all-mem-tables");
-                        return 0;
-                    }
-                })
-                .tags(tags.and("kind", "pinned"))
-                .baseUnit("bytes")
-                .register(Metrics.globalRegistry);
         }
 
         void close() {
@@ -272,10 +222,6 @@ public class RocksDBKVEngine extends AbstractKVEngine {
             Metrics.globalRegistry.remove(checkpointTotalSpaceGauge);
             Metrics.globalRegistry.remove(dataUsableSpaceGauge);
             Metrics.globalRegistry.remove(checkpointsUsableSpaceGauge);
-            Metrics.globalRegistry.remove(blockCacheMemSizeGauge);
-            Metrics.globalRegistry.remove(indexAndFilterSizeGauge);
-            Metrics.globalRegistry.remove(memtableSizeGauges);
-            Metrics.globalRegistry.remove(pinedMemorySizeGauges);
         }
     }
 }

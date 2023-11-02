@@ -88,6 +88,5 @@ public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
         return new RocksDBKVSpaceIterator(db(), cfHandle(), subBoundary, newRefresher());
     }
 
-    void close() {
-    }
+    abstract void close();
 }

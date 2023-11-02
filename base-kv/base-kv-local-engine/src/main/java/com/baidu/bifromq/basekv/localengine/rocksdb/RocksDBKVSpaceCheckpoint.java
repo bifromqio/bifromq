@@ -22,11 +22,22 @@ import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import java.io.File;
+import java.io.IOException;
+import java.lang.ref.Cleaner;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
+import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.DBOptions;
@@ -34,37 +45,110 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 
 @Slf4j
-class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader {
+class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBKVSpaceCheckpoint {
+    private static final Cleaner CLEANER = Cleaner.create();
+
+    private record ClosableResources(
+        String id,
+        String cpId,
+        File cpDir,
+        ColumnFamilyDescriptor defaultCFDesc,
+        ColumnFamilyHandle defaultCFHandle,
+        ColumnFamilyDescriptor cfDesc,
+        ColumnFamilyHandle cfHandle,
+        RocksDB roDB,
+        DBOptions dbOptions,
+        Predicate<String> isLatest
+    ) implements Runnable {
+        @Override
+        public void run() {
+            roDB.destroyColumnFamilyHandle(defaultCFHandle);
+            defaultCFDesc.getOptions().close();
+
+            roDB.destroyColumnFamilyHandle(cfHandle);
+            cfDesc.getOptions().close();
+
+            roDB.close();
+            dbOptions.close();
+
+            if (!isLatest.test(cpId)) {
+                log.debug("delete checkpoint[{}] of kvspace[{}] in path: {}", cpId, id, cpDir.getAbsolutePath());
+                try {
+                    Files.walkFileTree(cpDir.toPath(), EnumSet.noneOf(FileVisitOption.class),
+                        Integer.MAX_VALUE,
+                        new SimpleFileVisitor<>() {
+                            @Override
+                            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                                throws IOException {
+                                Files.delete(file);
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            @Override
+                            public FileVisitResult postVisitDirectory(Path dir, IOException exc)
+                                throws IOException {
+                                Files.delete(dir);
+                                return FileVisitResult.CONTINUE;
+                            }
+                        });
+                } catch (IOException e) {
+                    log.error("Failed to clean checkpoint at path:{}", cpDir);
+                }
+            }
+        }
+    }
+
     private final String cpId;
     private final DBOptions dbOptions;
     private final RocksDB roDB;
     private final ColumnFamilyDescriptor cfDesc;
     private final ColumnFamilyHandle cfHandle;
+    private final ColumnFamilyDescriptor defaultCFDesc;
+    private final ColumnFamilyHandle defaultCFHandle;
+    private final Cleaner.Cleanable cleanable;
 
-    RocksDBKVSpaceCheckpoint(String id,
-                             String cpId,
-                             File cpDir,
-                             RocksDBKVEngineConfigurator configurator,
-                             String... tags) {
+    RocksDBKVSpaceCheckpoint(String id, String cpId, File cpDir, Predicate<String> isLatest, String... tags) {
         super(id, Tags.of(tags));
         this.cpId = cpId;
         try {
-            dbOptions = configurator.config();
-            cfDesc = new ColumnFamilyDescriptor(id.getBytes(), configurator.config(id));
+            defaultCFDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());
+            defaultCFDesc.getOptions().setTableFormatConfig(new BlockBasedTableConfig()
+                .setNoBlockCache(true)
+                .setBlockCacheCompressed(null)
+                .setBlockCache(null));
+            dbOptions = new DBOptions();
+            cfDesc = new ColumnFamilyDescriptor(id.getBytes());
+            cfDesc.getOptions().setTableFormatConfig(new BlockBasedTableConfig()
+                .setNoBlockCache(true)
+                .setBlockCacheCompressed(null)
+                .setBlockCache(null));
 
             List<ColumnFamilyDescriptor> cfDescs = new ArrayList<>();
-            cfDescs.add(new ColumnFamilyDescriptor(DEFAULT_NS.getBytes()));
+            cfDescs.add(defaultCFDesc);
             cfDescs.add(cfDesc);
+
             List<ColumnFamilyHandle> handles = new ArrayList<>();
             roDB = RocksDB.openReadOnly(dbOptions, cpDir.getAbsolutePath(), cfDescs, handles);
 
+            defaultCFHandle = handles.get(0);
             cfHandle = handles.get(1);
+            cleanable = CLEANER.register(this, new ClosableResources(id,
+                cpId,
+                cpDir,
+                defaultCFDesc,
+                defaultCFHandle,
+                cfDesc,
+                cfHandle,
+                roDB,
+                dbOptions,
+                isLatest));
         } catch (RocksDBException e) {
             throw new KVEngineException("Failed to open checkpoint", e);
         }
     }
 
-    String cpId() {
+    @Override
+    public String cpId() {
         return cpId;
     }
 
@@ -81,12 +165,9 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader {
         }
     }
 
-    void close() {
-        super.close();
-        roDB.destroyColumnFamilyHandle(cfHandle);
-        cfDesc.getOptions().close();
-        roDB.close();
-        dbOptions.close();
+    @Override
+    public void close() {
+        cleanable.clean();
     }
 
     @Override

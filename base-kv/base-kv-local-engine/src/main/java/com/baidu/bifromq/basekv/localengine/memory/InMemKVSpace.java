@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.localengine.memory;
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
@@ -119,14 +119,7 @@ public class InMemKVSpace extends InMemKVSpaceReader implements IKVSpace {
     }
 
     @Override
-    public Optional<String> latestCheckpoint() {
-        synchronized (this) {
-            return Optional.ofNullable(latestCheckpoint == null ? null : latestCheckpoint.cpId());
-        }
-    }
-
-    @Override
-    public Optional<IKVSpaceReader> open(String checkpointId) {
+    public Optional<IKVSpaceCheckpoint> open(String checkpointId) {
         return Optional.ofNullable(checkpoints.getIfPresent(checkpointId));
     }
 
