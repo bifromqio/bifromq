@@ -79,29 +79,26 @@ final class LoadRecordWindow {
 
     public Optional<ByteString> estimateSplitKey() {
         long loadSum = 0;
-        long halfTotal = totalKVIONanos.get() / 2;
+        long totalKeyIONanos = 0;
         NavigableMap<ByteString, AtomicLong> slotDistro = new TreeMap<>(unsignedLexicographicalComparator());
-        slotDistro.putAll(loadDistribution);
+        for (Map.Entry<ByteString, AtomicLong> entry : loadDistribution.entrySet()) {
+            slotDistro.put(entry.getKey(), entry.getValue());
+            totalKeyIONanos += entry.getValue().get();
+        }
+        long halfTotal = totalKeyIONanos / 2;
         int attempt = 0;
         for (Map.Entry<ByteString, AtomicLong> e : slotDistro.entrySet()) {
-            if (e.getValue().get() >= halfTotal) {
+            loadSum += e.getValue().get();
+            if (loadSum >= halfTotal) {
                 Optional<ByteString> splitKey = toSplitKey.apply(e.getKey());
                 if (splitKey.isPresent()) {
                     return splitKey;
                 }
+                attempt++;
                 if (attempt < 5) {
                     attempt++;
                 } else {
                     return Optional.empty();
-                }
-            } else {
-                loadSum += e.getValue().get();
-                if (loadSum >= halfTotal) {
-                    Optional<ByteString> splitKey = toSplitKey.apply(e.getKey());
-                    if (splitKey.isPresent()) {
-                        return splitKey;
-                    }
-                    attempt++;
                 }
             }
         }

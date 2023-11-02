@@ -68,4 +68,24 @@ public class RecordingWindowSlotTest extends MockableTest {
         assertTrue(windowSlot.estimateSplitKey().isPresent());
         assertEquals(windowSlot.estimateSplitKey().get(), ByteString.copyFromUtf8("Key4"));
     }
+
+    @Test
+    public void estimateSplitKeyWithNonKeyIO() {
+        when(nanoSource.get()).thenReturn(0L);
+        LoadRecordWindow windowSlot = new LoadRecordWindow();
+        LoadRecorder recorder = new LoadRecorder(nanoSource,
+            rec -> windowSlot.record(rec.keyDistribution(), rec.getKVIOs(), rec.getKVIONanos(),
+                nanoSource.get() - rec.startNanos()));
+
+        recorder.record(ByteString.copyFromUtf8("Key1"), 20);
+        recorder.record(ByteString.copyFromUtf8("Key2"), 20);
+        recorder.record(ByteString.copyFromUtf8("Key3"), 20);
+        recorder.record(ByteString.copyFromUtf8("Key4"), 30);
+        recorder.record(ByteString.copyFromUtf8("Key5"), 30);
+        recorder.record(ByteString.copyFromUtf8("Key6"), 30);
+        recorder.record(1000);
+        recorder.stop();
+        assertTrue(windowSlot.estimateSplitKey().isPresent());
+        assertEquals(windowSlot.estimateSplitKey().get(), ByteString.copyFromUtf8("Key4"));
+    }
 }
