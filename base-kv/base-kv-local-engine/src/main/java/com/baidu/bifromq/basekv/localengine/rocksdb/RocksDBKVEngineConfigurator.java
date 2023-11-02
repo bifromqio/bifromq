@@ -40,7 +40,6 @@ import org.rocksdb.LRUCache;
 import org.rocksdb.MutableColumnFamilyOptionsInterface;
 import org.rocksdb.MutableDBOptionsInterface;
 import org.rocksdb.RateLimiter;
-import org.rocksdb.Statistics;
 import org.rocksdb.util.SizeUnit;
 
 @Slf4j
@@ -90,7 +89,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // wal file settings
                 .setWalSizeLimitMB(0)
                 .setWalTtlSeconds(0)
-                .setStatistics(autoRelease(new Statistics(), targetOption))
                 .setRateLimiter(autoRelease(new RateLimiter(512 * SizeUnit.MB,
                     RateLimiter.DEFAULT_REFILL_PERIOD_MICROS,
                     RateLimiter.DEFAULT_FAIRNESS,
