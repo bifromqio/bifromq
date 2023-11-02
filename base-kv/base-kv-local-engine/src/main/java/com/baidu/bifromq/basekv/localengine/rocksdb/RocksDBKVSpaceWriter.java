@@ -220,4 +220,9 @@ class RocksDBKVSpaceWriter extends RocksDBKVSpaceReader implements IKVSpaceWrite
     protected ISyncContext.IRefresher newRefresher() {
         return syncContext.refresher();
     }
+
+    @Override
+    void close() {
+        // nothing to close
+    }
 }

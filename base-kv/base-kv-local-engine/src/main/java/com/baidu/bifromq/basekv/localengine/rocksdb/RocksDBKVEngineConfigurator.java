@@ -201,7 +201,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     private final CFOptionsConfigurator cfOptionsConfigurator;
 
     private String dbRootDir;
-
     private String dbCheckpointRootDir;
     private boolean disableWAL = false;
     private boolean atomicFlush = false;
@@ -212,7 +211,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     private int compactMinTombstoneKeys = 50000;
     private int compactMinTombstoneRanges = 10000;
     private double compactTombstoneKeysRatio = 0.3;
-    private long gcIntervalInSec = 30;
 
     public RocksDBKVEngineConfigurator() {
         this.dbOptionsConfigurator = new BaseDBOptionConfigurator();
@@ -248,8 +246,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
             .dbRootDir(this.dbRootDir)
             .dbCheckpointRootDir(this.dbCheckpointRootDir)
             .disableWAL(this.disableWAL)
-            .atomicFlush(this.atomicFlush)
-            .gcInterval(this.gcIntervalInSec);
+            .atomicFlush(this.atomicFlush);
     }
 
     @ToString
@@ -267,7 +264,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         private int compactMinTombstoneKeys;
         private int compactMinTombstoneRanges;
         private double compactTombstoneKeysRatio;
-        private long gcInterval;
 
 
         RocksDBKVEngineConfiguratorBuilder() {
@@ -334,11 +330,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
             return this;
         }
 
-        public RocksDBKVEngineConfiguratorBuilder gcInterval(long gcInterval) {
-            this.gcInterval = gcInterval;
-            return this;
-        }
-
         public RocksDBKVEngineConfigurator build() {
             return new RocksDBKVEngineConfigurator(
                 dbOptionsConfigurator,
@@ -352,8 +343,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 manualCompaction,
                 compactMinTombstoneKeys,
                 compactMinTombstoneRanges,
-                compactTombstoneKeysRatio,
-                gcInterval);
+                compactTombstoneKeysRatio);
         }
     }
 

@@ -11,19 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.standalone.model;
+package com.baidu.bifromq.basekv.localengine;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import lombok.Getter;
-import lombok.Setter;
-
-@Getter
-@Setter
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
-@JsonSubTypes({
-    @JsonSubTypes.Type(value = InMemEngineConfig.class, name = "memory"),
-    @JsonSubTypes.Type(value = RocksDBEngineConfig.class, name = "rocksdb")
-})
-public abstract class StorageEngineConfig {
+public interface IKVSpaceCheckpoint extends IKVSpaceReader {
+    String cpId();
 }

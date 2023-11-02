@@ -171,7 +171,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final AtomicBoolean compacting = new AtomicBoolean();
     private IKVRangeMessenger messenger;
     private KVRangeRestorer restorer;
-    private volatile CompletableFuture<Void> compactionFuture;
+    private volatile CompletableFuture<Void> compactionFuture = CompletableFuture.completedFuture(null);
 
     public KVRangeFSM(String clusterId,
                       String hostStoreId,
@@ -363,6 +363,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 return dumpSession.awaitDone();
                             })
                             .toArray(CompletableFuture<?>[]::new))
+                        .thenCompose(v -> {
+                            compactionFuture.cancel(true);
+                            return compactionFuture;
+                        })
                         .thenCompose(v -> restorer.awaitDone())
                         .thenCompose(v -> statsCollector.stop())
                         .thenCompose(v -> wal.close())
@@ -1316,7 +1320,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void checkWalSize() {
-        if ((compactionFuture == null || compactionFuture.isDone())) {
+        if (compactionFuture.isDone()) {
             long lastAppliedIndex = kvRange.lastAppliedIndex();
             KVRangeSnapshot snapshot = wal.latestSnapshot();
             if (lastAppliedIndex - snapshot.getLastAppliedIndex() > opts.getCompactWALThreshold()) {

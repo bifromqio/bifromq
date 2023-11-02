@@ -13,17 +13,14 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.lang.reflect.Method;
-import java.util.Optional;
 import org.testng.annotations.Test;
 
 public abstract class AbstractKVEngineTest extends MockableTest {
@@ -129,43 +126,6 @@ public abstract class AbstractKVEngineTest extends MockableTest {
         assertTrue(range.exist(key));
     }
 
-    @Test
-    public void checkpoint() {
-        String rangeId = "test_range1";
-        ByteString key = ByteString.copyFromUtf8("key");
-        ByteString value = ByteString.copyFromUtf8("value");
-        IKVSpace keyRange = engine.createIfMissing(rangeId);
-        assertFalse(keyRange.latestCheckpoint().isPresent());
-
-        String checkpointId = keyRange.checkpoint();
-        assertEquals(checkpointId, keyRange.latestCheckpoint().get());
-        Optional<IKVSpaceReader> checkpoint = keyRange.open(checkpointId);
-        assertTrue(checkpoint.isPresent());
-        assertEquals(checkpoint.get(), keyRange.open(checkpointId).get());
-
-        keyRange.toWriter().put(key, value).done();
-        assertFalse(checkpoint.get().exist(key));
-
-        checkpoint = keyRange.open(keyRange.checkpoint());
-        assertTrue(checkpoint.isPresent());
-        assertTrue(checkpoint.get().exist(key));
-    }
-
-    @Test(groups = "integration")
-    public void gc() {
-        String rangeId = "test_range1";
-        IKVSpace keyRange = engine.createIfMissing(rangeId);
-        String checkpointId = keyRange.checkpoint();
-        Optional<IKVSpaceReader> checkpoint = keyRange.open(checkpointId);
-        String checkpointId1 = keyRange.checkpoint();
-        assertNotEquals(checkpointId1, checkpointId);
-
-        checkpoint = null;
-        await().forever().until(() -> {
-            System.gc();
-            return keyRange.open(checkpointId).isEmpty();
-        });
-    }
 
     @Test
     public void exist() {

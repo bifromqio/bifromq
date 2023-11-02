@@ -13,12 +13,13 @@
 
 package com.baidu.bifromq.basekv.localengine.memory;
 
+import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class InMemKVSpaceCheckpoint extends InMemKVSpaceReader {
+class InMemKVSpaceCheckpoint extends InMemKVSpaceReader implements IKVSpaceCheckpoint {
     private final String cpId;
     private final Map<ByteString, ByteString> metadataMap;
     private final ConcurrentSkipListMap<ByteString, ByteString> rangeData;
@@ -34,6 +35,7 @@ public class InMemKVSpaceCheckpoint extends InMemKVSpaceReader {
         this.rangeData = rangeData;
     }
 
+    @Override
     public String cpId() {
         return cpId;
     }
