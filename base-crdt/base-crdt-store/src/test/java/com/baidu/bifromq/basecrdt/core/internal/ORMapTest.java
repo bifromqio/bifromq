@@ -69,7 +69,7 @@ public class ORMapTest extends CRDTTest {
 
     @Test
     public void testOperation() {
-        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica.getId(), 1000),
+        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IORMap ormap = orMapInflater.getCRDT();
         assertEquals(ormap.id(), leftReplica);
@@ -185,11 +185,11 @@ public class ORMapTest extends CRDTTest {
     @Test
     public void testJoin() {
         ORMapInflater leftInflater = new ORMapInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 1000), executor, Duration.ofMillis(100));
+            newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
         IORMap leftMap = leftInflater.getCRDT();
 
         ORMapInflater rightInflater = new ORMapInflater(1, rightReplica,
-            newStateLattice(rightReplica.getId(), 1000), executor, Duration.ofMillis(100));
+            newStateLattice(rightReplica, 1000), executor, Duration.ofMillis(100));
         IORMap rightMap = rightInflater.getCRDT();
 
         {
@@ -279,7 +279,7 @@ public class ORMapTest extends CRDTTest {
 
     @Test
     public void testSubCRDTGC() {
-        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica.getId(), 1000),
+        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IORMap orMap = orMapInflater.getCRDT();
 
@@ -305,7 +305,7 @@ public class ORMapTest extends CRDTTest {
 
     @Test
     public void testInflationSubscriptionWhenGC() throws InterruptedException {
-        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica.getId(), 1000),
+        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IORMap orMap = orMapInflater.getCRDT();
         AtomicInteger inflationCount = new AtomicInteger();

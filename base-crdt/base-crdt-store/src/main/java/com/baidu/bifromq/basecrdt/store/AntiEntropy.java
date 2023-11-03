@@ -14,11 +14,10 @@
 package com.baidu.bifromq.basecrdt.store;
 
 import static com.baidu.bifromq.basecrdt.core.util.LatticeIndexUtil.remember;
-import static com.baidu.bifromq.basecrdt.core.util.Log.debug;
-import static com.baidu.bifromq.basecrdt.core.util.Log.error;
-import static com.baidu.bifromq.basecrdt.core.util.Log.trace;
 import static com.baidu.bifromq.basecrdt.store.MessagePayloadUtil.compressToPayload;
+import static com.baidu.bifromq.basecrdt.util.Formatter.toStringifiable;
 
+import com.baidu.bifromq.basecrdt.ReplicaLogger;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Dot;
@@ -44,11 +43,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 final class AntiEntropy {
-    private final ICausalCRDT replica;
+    private final Logger log;
+    private final ICausalCRDT<?> replica;
     private final ByteString localAddr;
     private final ByteString neighborAddr;
     private final ICRDTEngine engine;
@@ -67,10 +66,10 @@ final class AntiEntropy {
     private final Compressor compressor;
     private final Counter deltaMsgCounter;
     private final Counter deltaMsgBytesCounter;
-    private volatile ScheduledFuture resendTask = null;
+    private volatile ScheduledFuture<?> resendTask = null;
     private volatile CRDTStoreMessage recentSent = null;
 
-    AntiEntropy(ICausalCRDT replica,
+    AntiEntropy(ICausalCRDT<?> replica,
                 ByteString localAddr,
                 ByteString neighborAddr,
                 ICRDTEngine engine,
@@ -81,6 +80,7 @@ final class AntiEntropy {
                 Counter deltaMsgCounter,
                 Counter deltaMsgBytesCounter,
                 Compressor compressor) {
+        this.log = new ReplicaLogger(replica.id(), AntiEntropy.class);
         this.replica = replica;
         this.localAddr = localAddr;
         this.neighborAddr = neighborAddr;
@@ -103,7 +103,7 @@ final class AntiEntropy {
             return;
         }
         if (running.compareAndSet(false, true)) {
-            debug(log, "Replica[{}] start anti-entropy to addr[{}]", replica.id(), neighborAddr);
+            log.debug("Start anti-entropy to addr[{}]", toStringifiable(neighborAddr));
             resendCount.set(0);
             ackSeqNo.set(seqNo.get());
             resendTask = null;
@@ -137,20 +137,19 @@ final class AntiEntropy {
         }
         synchronized (this) {
             if (ackSeqNo.get() < ack.getSeqNo() && ack.getSeqNo() <= seqNo.get()) {
-                trace(log, "Replica[{}] accept ack[{}] from addr[{}]:\n{}",
-                    replica.id(), ack.getSeqNo(), neighborAddr, ack);
+                log.trace("Accept ack[{}] from addr[{}]:\n{}", ack.getSeqNo(), toStringifiable(neighborAddr), ack);
                 // replace by events in ack
                 neighborLatticeEvents.clear();
                 neighborHistoryEvents.clear();
                 for (EventIndex idx : ack.getLatticeEventsList()) {
                     Map<Long, Long> ranges = neighborLatticeEvents
                         .computeIfAbsent(idx.getReplicaId(), k -> Maps.newTreeMap());
-                    idx.getRangesMap().forEach(ranges::put);
+                    ranges.putAll(idx.getRangesMap());
                 }
                 for (EventIndex idx : ack.getHistoryEventsList()) {
                     Map<Long, Long> ranges = neighborHistoryEvents
                         .computeIfAbsent(idx.getReplicaId(), k -> Maps.newTreeMap());
-                    idx.getRangesMap().forEach(ranges::put);
+                    ranges.putAll(idx.getRangesMap());
                 }
                 ackSeqNo.set(ack.getSeqNo());
                 if (resendTask != null && !resendTask.isDone()) {
@@ -159,15 +158,14 @@ final class AntiEntropy {
                 }
                 executor.schedule(this::tick, 0, TimeUnit.MILLISECONDS);
             } else {
-                trace(log, "Replica[{}] ignore ack[{}] from addr[{}]:\n{}",
-                    replica.id(), ack.getSeqNo(), neighborAddr, ack);
+                log.trace("Ignore ack[{}] from addr[{}]:\n{}", ack.getSeqNo(), toStringifiable(neighborAddr), ack);
             }
         }
     }
 
     void cancel() {
         if (canceled.compareAndSet(false, true)) {
-            debug(log, "Replica[{}] canceled anti-entropy to addr[{}] ", replica.id(), neighborAddr);
+            log.debug("Canceled anti-entropy to addr[{}] ", toStringifiable(neighborAddr));
             disposable.dispose();
             canceled.set(true);
         }
@@ -189,8 +187,8 @@ final class AntiEntropy {
                     return;
                 }
                 resendCount.incrementAndGet();
-                trace(log, "Replica[{}] resend last delta to addr[{}] from addr[{}]:\n{}",
-                    replica.id(), neighborAddr, localAddr, recentSent);
+                log.trace("Resend last delta to addr[{}] from addr[{}]:\n{}",
+                    toStringifiable(neighborAddr), toStringifiable(localAddr), recentSent);
                 deltaMsgCounter.increment(1D);
                 deltaMsgBytesCounter.increment(recentSent.getSerializedSize());
                 deltaSubject.onNext(recentSent);
@@ -206,8 +204,8 @@ final class AntiEntropy {
                             DeltaMessage.newBuilder().setSeqNo(seqNo.incrementAndGet()).build()))
                         .build();
                     resendCount.set(0);
-                    trace(log, "Replica[{}] send empty delta to addr[{}] from addr[{}]:\n{}",
-                        replica.id(), neighborAddr, localAddr, recentSent);
+                    log.trace("Send empty delta to addr[{}] from addr[{}]:\n{}",
+                        toStringifiable(neighborAddr), toStringifiable(localAddr), recentSent);
                     deltaMsgCounter.increment(1D);
                     deltaMsgBytesCounter.increment(recentSent.getSerializedSize());
                     deltaSubject.onNext(recentSent);
@@ -216,7 +214,8 @@ final class AntiEntropy {
                     engine.delta(replica.id().getUri(), neighborLatticeEvents, neighborHistoryEvents, maxEventsInDelta)
                         .whenComplete((delta, e) -> {
                             if (e != null) {
-                                error(log, "Failed to calculate delta for neighbor[{}]", neighborAddr, e);
+                                log.error("Failed to calculate delta for neighbor[{}]", toStringifiable(neighborAddr),
+                                    e);
                                 return;
                             }
                             if (delta.isPresent()) {
@@ -231,8 +230,8 @@ final class AntiEntropy {
                                             .build()))
                                     .build();
                                 resendCount.set(0);
-                                trace(log, "Replica[{}] send delta to addr[{}] from addr[{}]:\n{}",
-                                    replica.id(), neighborAddr, localAddr, recentSent);
+                                log.trace("Send delta to addr[{}] from addr[{}]:\n{}",
+                                    toStringifiable(neighborAddr), toStringifiable(localAddr), recentSent);
                                 deltaMsgCounter.increment(1D);
                                 deltaMsgBytesCounter.increment(recentSent.getSerializedSize());
                                 deltaSubject.onNext(recentSent);

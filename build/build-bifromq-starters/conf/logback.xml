@@ -18,8 +18,10 @@
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } [%t] --- %-40.40logger{39}[%F:%L] %m%n"/>
     <property name="eventPattern"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} --- %m%n"/>
-    <property name="raftLogPattern"
+    <property name="crdtLogPattern"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] --- [%F:%L] %m%n"/>
+    <property name="raftLogPattern"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] --- [%F:%L] %m - [id=%X{id},term=%X{term},state=%X{state},leader=%X{leader},f=%X{first},l=%X{last}],c=%X{commit},cfg=%X{config}]%n"/>
     <property name="balancerLogPattern"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] --- [%F:%L] %m%n"/>
 
@@ -43,16 +45,36 @@
         </encoder>
     </appender>
 
-    <appender name="raftLogFile" class="ch.qos.logback.classic.sift.SiftingAppender">
+    <appender name="crdtLogFile" class="ch.qos.logback.classic.sift.SiftingAppender">
         <discriminator>
-            <key>logKey</key>
+            <key>sift_key</key>
             <defaultValue>default</defaultValue>
         </discriminator>
         <sift>
-            <appender name="${logKey}" class="ch.qos.logback.core.FileAppender">
-                <file>${logDir}/raft/${logKey}.log</file>
+            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+                <file>${logDir}/crdt/${sift_key}.log</file>
                 <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-                    <fileNamePattern>${logDir}/raft/${logKey}.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+                    <fileNamePattern>${logDir}/crdt/${sift_key}.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+                    <maxHistory>7</maxHistory>
+                </rollingPolicy>
+                <encoder>
+                    <pattern>${crdtLogPattern}</pattern>
+                </encoder>
+            </appender>
+        </sift>
+    </appender>
+
+
+    <appender name="raftLogFile" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <discriminator>
+            <key>sift_key</key>
+            <defaultValue>default</defaultValue>
+        </discriminator>
+        <sift>
+            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+                <file>${logDir}/raft/${sift_key}.log</file>
+                <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                    <fileNamePattern>${logDir}/raft/${sift_key}.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
                     <maxHistory>7</maxHistory>
                 </rollingPolicy>
                 <encoder>
@@ -64,14 +86,14 @@
 
     <appender name="balancerLogFile" class="ch.qos.logback.classic.sift.SiftingAppender">
         <discriminator>
-            <key>logKey</key>
+            <key>sift_key</key>
             <defaultValue>default</defaultValue>
         </discriminator>
         <sift>
-            <appender name="${logKey}" class="ch.qos.logback.core.FileAppender">
-                <file>${logDir}/balancer/${logKey}.log</file>
+            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+                <file>${logDir}/balancer/${sift_key}.log</file>
                 <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-                    <fileNamePattern>${logDir}/balancer/${logKey}.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+                    <fileNamePattern>${logDir}/balancer/${sift_key}.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
                     <maxHistory>7</maxHistory>
                 </rollingPolicy>
                 <encoder>
@@ -169,7 +191,11 @@
         <appender-ref ref="errorLogFile"/>
     </logger>
 
-    <logger name="raft.logger" level="INFO" additivity="false">
+    <logger name="com.baidu.bifromq.basecrdt" level="INFO" additivity="false">
+        <appender-ref ref="crdtLogFile"/>
+    </logger>
+
+    <logger name="com.baidu.bifromq.basekv.raft" level="INFO" additivity="false">
         <appender-ref ref="raftLogFile"/>
     </logger>
 

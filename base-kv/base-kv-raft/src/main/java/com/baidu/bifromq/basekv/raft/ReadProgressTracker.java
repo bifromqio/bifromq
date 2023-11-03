@@ -20,13 +20,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
 
 class ReadProgressTracker {
     private static class ReadProgress {
         private final List<CompletableFuture<Long>> pendingFutures;
         private final QuorumTracker confirmTracker;
 
-        ReadProgress(ClusterConfig clusterConfig, IRaftNodeLogger logger) {
+        ReadProgress(ClusterConfig clusterConfig, Logger logger) {
             pendingFutures = new ArrayList<>();
             confirmTracker = new QuorumTracker(clusterConfig, logger);
         }
@@ -50,10 +51,10 @@ class ReadProgressTracker {
 
     private final TreeMap<Long, ReadProgress> readProgressMap;
     private final IRaftStateStore stateStorage;
-    private final IRaftNodeLogger logger;
+    private final Logger logger;
     private int total;
 
-    ReadProgressTracker(IRaftStateStore stateStorage, IRaftNodeLogger logger) {
+    ReadProgressTracker(IRaftStateStore stateStorage, Logger logger) {
         this.readProgressMap = new TreeMap<>();
         this.stateStorage = stateStorage;
         this.logger = logger;
@@ -92,7 +93,7 @@ class ReadProgressTracker {
     }
 
     public void abort() {
-        logger.logDebug("Abort on-going read progresses");
+        logger.debug("Abort on-going read progresses");
         readProgressMap.values().forEach(ReadProgress::abort);
         readProgressMap.clear();
         total = 0;

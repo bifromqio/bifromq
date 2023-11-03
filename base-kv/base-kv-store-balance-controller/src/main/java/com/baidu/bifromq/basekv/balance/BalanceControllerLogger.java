@@ -11,17 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.raft;
+package com.baidu.bifromq.basekv.balance;
 
-public interface IRaftNodeLogger {
+import com.baidu.bifromq.logger.SiftLogger;
 
-    void logTrace(String message, Object... args);
-
-    void logDebug(String message, Object... args);
-
-    void logInfo(String message, Object... args);
-
-    void logWarn(String message, Object... args);
-
-    void logError(String message, Object... args);
+class BalanceControllerLogger extends SiftLogger {
+    protected BalanceControllerLogger(String clusterId, String storeId, String name) {
+        super(clusterId + "-" + storeId, name);
+    }
 }

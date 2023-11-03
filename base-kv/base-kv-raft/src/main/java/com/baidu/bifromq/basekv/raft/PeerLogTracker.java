@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
 
 class PeerLogTracker {
     private final String id;
@@ -27,14 +28,14 @@ class PeerLogTracker {
     private final RaftConfig config;
     private final IRaftStateStore stateStorage;
     private final IRaftNode.IRaftEventListener listener;
-    private final IRaftNodeLogger logger;
+    private final Logger logger;
 
     PeerLogTracker(
         String id,
         RaftConfig config,
         IRaftStateStore stateStorage,
         IRaftNode.IRaftEventListener listener,
-        IRaftNodeLogger logger) {
+        Logger logger) {
         this.id = id;
         this.config = config;
         this.stateStorage = stateStorage;

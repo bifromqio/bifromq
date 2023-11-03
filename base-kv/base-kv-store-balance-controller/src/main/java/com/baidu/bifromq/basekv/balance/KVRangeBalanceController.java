@@ -59,16 +59,11 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.Builder;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
+import org.slf4j.Logger;
 
-@Slf4j(topic = "balancer.logger")
 public class KVRangeBalanceController {
-
     private enum State {
         Init,
         Started,
@@ -83,7 +78,7 @@ public class KVRangeBalanceController {
     private final AtomicBoolean scheduling = new AtomicBoolean();
     private final AtomicReference<State> state = new AtomicReference<>(State.Init);
     private final boolean executorOwner;
-    private String logKey = "";
+    private Logger log;
     private MetricManager metricsManager;
     private Disposable descriptorSub;
     private ScheduledFuture<?> scheduledFuture;
@@ -113,19 +108,20 @@ public class KVRangeBalanceController {
 
     public void start(String localStoreId) {
         if (state.compareAndSet(State.Init, State.Started)) {
-            logKey = storeClient.clusterId() + "-" + localStoreId;
+            log = new BalanceControllerLogger(storeClient.clusterId(), localStoreId, "balancer.logger");
+
             Map<String, IStoreBalancerFactory> balancerFactoryMap = BaseHookLoader.load(IStoreBalancerFactory.class);
             for (String factoryName : options.getBalancers()) {
                 if (!balancerFactoryMap.containsKey(factoryName)) {
-                    logWarn("Balancer factory[{}] not found", factoryName);
+                    log.warn("Balancer factory[{}] not found", factoryName);
                     continue;
                 }
                 StoreBalancer balancer = balancerFactoryMap.get(factoryName).newBalancer(localStoreId);
-                logInfo("Balancer factory[{}] enabled for store[{}]", factoryName, localStoreId);
+                log.info("Balancer factory[{}] enabled for store[{}]", factoryName, localStoreId);
                 balancers.add(balancer);
             }
             this.metricsManager = new MetricManager(localStoreId, storeClient.clusterId());
-            logInfo("Balancer start in store[{}]", localStoreId);
+            log.info("Balancer start");
             descriptorSub = this.storeClient.describe()
                 .distinctUntilChanged()
                 .subscribe(sds -> executor.execute(() -> updateStoreDescriptors(sds)));
@@ -170,7 +166,7 @@ public class KVRangeBalanceController {
                 Optional<BalanceCommand> commandOpt = fromBalancer.balance();
                 if (commandOpt.isPresent()) {
                     BalanceCommand commandToRun = commandOpt.get();
-                    logInfo("Balancer[{}] run command: {}", fromBalancer.getClass().getSimpleName(), commandToRun);
+                    log.info("Balancer[{}] run command: {}", fromBalancer.getClass().getSimpleName(), commandToRun);
                     String balancerName = fromBalancer.getClass().getSimpleName();
                     String cmdName = commandToRun.getClass().getSimpleName();
                     Sample start = Timer.start();
@@ -179,10 +175,10 @@ public class KVRangeBalanceController {
                             scheduling.set(false);
                             CommandMetrics metrics = metricsManager.getCommandMetrics(balancerName, cmdName);
                             if (e != null) {
-                                logError("Should not be here, error when run command", e);
+                                log.error("Should not be here, error when run command", e);
                                 metrics.cmdFailedCounter.increment();
                             } else {
-                                logInfo("Balancer command[{},{}] result: {}", fromBalancer.getClass().getSimpleName(),
+                                log.info("Balancer command[{},{}] result: {}", fromBalancer.getClass().getSimpleName(),
                                     commandToRun, r);
                                 if (r) {
                                     metrics.cmdSucceedCounter.increment();
@@ -196,7 +192,7 @@ public class KVRangeBalanceController {
                     return;
                 }
             } catch (Throwable e) {
-                logWarn("Run balancer[{}] failed", fromBalancer.getClass().getSimpleName(), e);
+                log.warn("Run balancer[{}] failed", fromBalancer.getClass().getSimpleName(), e);
             }
         }
         // no command to run
@@ -207,7 +203,7 @@ public class KVRangeBalanceController {
         if (command.getExpectedVer() != null) {
             Long prevCMDVer = historyCommandCache.getIfPresent(command.getKvRangeId());
             if (prevCMDVer != null && prevCMDVer >= command.getExpectedVer()) {
-                logWarn("Command version is duplicated with prev one: {}", command);
+                log.warn("Command version is duplicated with prev one: {}", command);
                 return CompletableFuture.completedFuture(false);
             }
         }
@@ -265,7 +261,7 @@ public class KVRangeBalanceController {
                 yield storeClient.recover(command.getToStore(), recoverRequest)
                     .handle((r, e) -> {
                         if (e != null) {
-                            logError("Unexpected error when recover, req: {}", recoverRequest, e);
+                            log.error("Unexpected error when recover, req: {}", recoverRequest, e);
                         }
                         return true;
                     });
@@ -278,7 +274,7 @@ public class KVRangeBalanceController {
         CompletableFuture<Boolean> onDone = new CompletableFuture<>();
         storeReply.whenComplete((code, e) -> {
             if (e != null) {
-                logError("Unexpected error when run command: {}", command, e);
+                log.error("Unexpected error when run command: {}", command, e);
                 onDone.complete(false);
                 return;
             }
@@ -291,37 +287,13 @@ public class KVRangeBalanceController {
                     onDone.complete(true);
                 }
                 case BadRequest, BadVersion, TryLater, InternalError -> {
-                    logWarn("Failed with reply: {}, command: {}", code, command);
+                    log.warn("Failed with reply: {}, command: {}", code, command);
                     onDone.complete(false);
                 }
                 default -> onDone.complete(false);
             }
         });
         return onDone;
-    }
-
-    private void logDebug(String format, Object... args) {
-        log(format, args, log::isDebugEnabled, log::debug);
-    }
-
-    private void logInfo(String format, Object... args) {
-        log(format, args, log::isInfoEnabled, log::info);
-    }
-
-    private void logWarn(String format, Object... args) {
-        log(format, args, log::isWarnEnabled, log::warn);
-    }
-
-    private void logError(String format, Object... args) {
-        log(format, args, log::isErrorEnabled, log::error);
-    }
-
-    private void log(String format, Object[] args, Supplier<Boolean> isEnable, BiConsumer<String, Object[]> logFunc) {
-        if (isEnable.get()) {
-            MDC.put("logKey", logKey);
-            logFunc.accept(format, args);
-            MDC.clear();
-        }
     }
 
     static class MetricManager {

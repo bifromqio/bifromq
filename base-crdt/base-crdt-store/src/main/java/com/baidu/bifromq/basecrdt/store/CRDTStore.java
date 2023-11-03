@@ -13,17 +13,21 @@
 
 package com.baidu.bifromq.basecrdt.store;
 
-import static com.baidu.bifromq.basecrdt.core.util.Log.debug;
-import static com.baidu.bifromq.basecrdt.core.util.Log.trace;
+import static com.baidu.bifromq.basecrdt.util.Formatter.toStringifiable;
 import static java.lang.Long.toUnsignedString;
 
 import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
+import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
-import com.baidu.bifromq.basecrdt.core.util.Log;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.compressor.Compressor;
+import com.baidu.bifromq.basecrdt.store.proto.AckMessage;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
+import com.baidu.bifromq.basecrdt.store.proto.DeltaMessage;
 import com.baidu.bifromq.basecrdt.store.proto.MessagePayload;
+import com.baidu.bifromq.basecrdt.util.Formatter;
+import com.baidu.bifromq.logger.FormatableLogger;
+import com.baidu.bifromq.logger.LogFormatter;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
@@ -42,10 +46,16 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class CRDTStore implements ICRDTStore {
+    static {
+        LogFormatter.setStringifier(Replica.class, Formatter::toString);
+        LogFormatter.setStringifier(DeltaMessage.class, Formatter::toString);
+        LogFormatter.setStringifier(AckMessage.class, Formatter::toString);
+        LogFormatter.setStringifier(CRDTStoreMessage.class, Formatter::toString);
+    }
+
     private class MetricManager {
         final Gauge objectNumGauge;
 
@@ -67,8 +77,8 @@ class CRDTStore implements ICRDTStore {
         INIT, STARTING, STARTED, STOPPING, STOPPED
     }
 
+    private static final Logger log = FormatableLogger.getLogger(CRDTStore.class);
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
-
     private final CRDTStoreOptions options;
     private final ICRDTEngine engine;
     private final Subject<CRDTStoreMessage> storeMsgPublisher = PublishSubject.<CRDTStoreMessage>create()
@@ -77,7 +87,7 @@ class CRDTStore implements ICRDTStore {
     private final CompositeDisposable disposable = new CompositeDisposable();
     private final ScheduledExecutorService storeExecutor;
     private final Compressor compressor;
-    private MetricManager metricManager;
+    private final MetricManager metricManager;
 
     public CRDTStore(CRDTStoreOptions options) {
         this.options = options;
@@ -122,7 +132,7 @@ class CRDTStore implements ICRDTStore {
     }
 
     @Override
-    public <T extends ICausalCRDT> Optional<T> get(String uri) {
+    public <O extends ICRDTOperation, T extends ICausalCRDT<O>> Optional<T> get(String uri) {
         checkState();
         return engine.get(uri);
     }
@@ -133,18 +143,18 @@ class CRDTStore implements ICRDTStore {
         // make sure local address is a cluster member
         cluster.add(localAddr);
         // ensure localAddr is a member
-        Optional<ICausalCRDT> crdt = engine.get(uri);
-        if (!crdt.isPresent()) {
+        Optional<ICausalCRDT<ICRDTOperation>> crdt = engine.get(uri);
+        if (crdt.isEmpty()) {
             throw new IllegalArgumentException("CRDT not found");
         }
         antiEntropyByURI.compute(uri, (k, v) -> {
             if (v == null) {
-                debug(log, "Replica[{}] bind to address[{}]", crdt.get().id(), localAddr);
+                log.debug("Replica[{}] bind to address[{}]", crdt.get().id(), toStringifiable(localAddr));
                 v = new AntiEntropyManager(crdt.get(), localAddr, engine, storeExecutor,
                     storeMsgPublisher, options.maxEventsInDelta, compressor);
             } else if (!v.getLocalAddr().equals(localAddr)) {
-                debug(log, "Replica[id={},uri={}] relocate to new address[{}] from address[{}]",
-                    crdt.get().id(), localAddr, v.getLocalAddr());
+                log.debug("Replica[{}] relocate to new address[{}] from address[{}]",
+                    crdt.get().id(), toStringifiable(localAddr), toStringifiable(v.getLocalAddr()));
                 v.stop();
                 v = new AntiEntropyManager(crdt.get(), localAddr, engine, storeExecutor,
                     storeMsgPublisher, options.maxEventsInDelta, compressor);
@@ -197,7 +207,7 @@ class CRDTStore implements ICRDTStore {
                 }));
             engine.start();
             state.set(State.STARTED);
-            Log.debug(log, "Started CRDTStore[{}]", toUnsignedString(engine.id()));
+            log.debug("Started CRDTStore[{}]", toUnsignedString(engine.id()));
         } else {
             log.warn("Start more than one time");
         }
@@ -206,7 +216,7 @@ class CRDTStore implements ICRDTStore {
     @Override
     public void stop() {
         if (state.compareAndSet(State.STARTED, State.STOPPED)) {
-            Log.debug(log, "Stop CRDTStore[{}]", toUnsignedString(engine.id()));
+            log.debug("Stop CRDTStore[{}]", toUnsignedString(engine.id()));
             antiEntropyByURI.forEach((uri, aaMgr) -> aaMgr.stop());
             antiEntropyByURI.clear();
             metricManager.close();
@@ -219,20 +229,16 @@ class CRDTStore implements ICRDTStore {
     private void handleStoreMessage(CRDTStoreMessage msg) {
         AntiEntropyManager antiEntropyMgr = antiEntropyByURI.get(msg.getUri());
         if (antiEntropyMgr != null) {
-            trace(log, "Anti-entropy manager of crdt[{}] bind to addr[{}], receive message from addr[{}]:\n{}",
-                msg.getUri(), msg.getReceiver(), msg.getSender(), msg);
+            log.trace("Anti-entropy manager of crdt[{}] bind to addr[{}], receive message from addr[{}]:\n{}",
+                msg.getUri(), toStringifiable(msg.getReceiver()), toStringifiable(msg.getSender()), msg);
             MessagePayload payload = MessagePayloadUtil.decompress(compressor, msg);
             switch (payload.getMsgTypeCase()) {
-                case DELTA:
-                    antiEntropyMgr.join(payload.getDelta(), msg.getSender());
-                    break;
-                case ACK:
-                    antiEntropyMgr.receive(payload.getAck(), msg.getSender());
-                    break;
+                case DELTA -> antiEntropyMgr.join(payload.getDelta(), msg.getSender());
+                case ACK -> antiEntropyMgr.receive(payload.getAck(), msg.getSender());
             }
         } else {
-            debug(log, "No anti-entropy manager of crdt[{}] bind to addr[{}], ignore the message from addr[{}]",
-                msg.getUri(), msg.getReceiver(), msg.getSender());
+            log.debug("No anti-entropy manager of crdt[{}] bind to addr[{}], ignore the message from addr[{}]",
+                msg.getUri(), toStringifiable(msg.getReceiver()), toStringifiable(msg.getSender()));
         }
     }
 

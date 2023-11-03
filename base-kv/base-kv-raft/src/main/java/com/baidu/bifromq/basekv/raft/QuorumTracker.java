@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
 
 
 class QuorumTracker {
@@ -97,16 +98,16 @@ class QuorumTracker {
     private final Set<String> voterGroupOne = new HashSet<>();
     private final Set<String> voterGroupTwo = new HashSet<>(); // non empty in joint config
     private final Map<String, Boolean> votes = new HashMap<>();
-    private final IRaftNodeLogger logger;
+    private final Logger logger;
 
-    QuorumTracker(ClusterConfig clusterConfig, IRaftNodeLogger logger) {
+    QuorumTracker(ClusterConfig clusterConfig, Logger logger) {
         voterGroupOne.addAll(clusterConfig.getVotersList());
         voterGroupTwo.addAll(clusterConfig.getNextVotersList());
         this.logger = logger;
     }
 
     void refresh(ClusterConfig clusterConfig) {
-        logger.logDebug("Quorum tracker reset to config[v:{},nv:{}]",
+        logger.debug("Quorum tracker reset to config[v:{},nv:{}]",
             clusterConfig.getVotersList(), clusterConfig.getNextVotersList());
         voterGroupOne.clear();
         voterGroupOne.addAll(clusterConfig.getVotersList());

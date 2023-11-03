@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.raft;
 
 
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
+import org.slf4j.Logger;
 
 class PeerLogReplicatorStateSnapshotSyncing extends PeerLogReplicatorState {
     private int heartbeatElapsedTick;
@@ -25,7 +26,7 @@ class PeerLogReplicatorStateSnapshotSyncing extends PeerLogReplicatorState {
     PeerLogReplicatorStateSnapshotSyncing(String peerId,
                                           RaftConfig config,
                                           IRaftStateStore stateStorage,
-                                          IRaftNodeLogger logger) {
+                                          Logger logger) {
         super(peerId,
             config,
             stateStorage,
@@ -43,7 +44,7 @@ class PeerLogReplicatorStateSnapshotSyncing extends PeerLogReplicatorState {
         installSnapshotElapsedTick++;
         if (installSnapshotElapsedTick >= config.getInstallSnapshotTimeoutTick()) {
             // no ack from peer within timeout, restart from probe
-            logger.logDebug("Peer[{}] install snapshot timeout from "
+            logger.debug("Peer[{}] install snapshot timeout from "
                     + "tracker[matchIndex:{},nextIndex:{},state:{}], probing again",
                 peerId, matchIndex, nextIndex, state());
             return new PeerLogReplicatorStateProbing(peerId, config, stateStorage, logger);
@@ -77,7 +78,7 @@ class PeerLogReplicatorStateSnapshotSyncing extends PeerLogReplicatorState {
         if (matchIndex == peerLastIndex) {
             // peer is still under tracking
             // if peer reports installation failure, snapshot syncing again
-            logger.logDebug("Peer[{}] rejected snapshot from "
+            logger.debug("Peer[{}] rejected snapshot from "
                     + "tracker[matchIndex:{},nextIndex:{},state:{}], try again",
                 peerId, matchIndex, nextIndex, state());
             return new PeerLogReplicatorStateSnapshotSyncing(peerId, config, stateStorage, logger);
@@ -92,14 +93,14 @@ class PeerLogReplicatorStateSnapshotSyncing extends PeerLogReplicatorState {
             // peer is still under tracking
             if (stateStorage.latestSnapshot().getIndex() == matchIndex) {
                 // snapshot is still there
-                logger.logDebug("Peer[{}] installed snapshot from tracker[matchIndex:{},nextIndex:{},state:{}], "
+                logger.debug("Peer[{}] installed snapshot from tracker[matchIndex:{},nextIndex:{},state:{}], "
                     + "start replicating", peerId, matchIndex, nextIndex, state());
                 return new PeerLogReplicatorStateReplicating(peerId, config,
                     stateStorage, matchIndex, nextIndex, logger);
             } else {
-                logger.logDebug("Peer[{}] installed old snapshot "
+                logger.debug("Peer[{}] installed old snapshot "
                         + "from tracker[matchIndex:{},nextIndex:{},state:{}], try again",
-                    peerLastIndex, peerId, matchIndex, nextIndex, state());
+                    peerId, matchIndex, nextIndex, state());
                 return new PeerLogReplicatorStateSnapshotSyncing(peerId, config, stateStorage, logger);
             }
         }

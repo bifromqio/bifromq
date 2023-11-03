@@ -52,7 +52,9 @@ public class KVRangeStoreDescriptorReporter implements IKVRangeStoreDescriptorRe
         this.deadStoreCleanupInMillis = deadStoreCleanupInMillis;
         String uri = storeDescriptorMapCRDTURI(clusterId);
         crdtService.host(uri);
-        storeDescriptorMap = (IORMap) crdtService.get(uri).get();
+        Optional<IORMap> crdtOpt = crdtService.get(uri);
+        assert crdtOpt.isPresent();
+        storeDescriptorMap = crdtOpt.get();
     }
 
     @Override

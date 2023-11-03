@@ -34,7 +34,7 @@ abstract class CausalCRDT<T extends IDotStore, O extends ICRDTOperation> impleme
         CompletableFuture<Void> submit(O op);
     }
 
-    private final Set<ObservableEmitter> emitters = Sets.newConcurrentHashSet();
+    private final Set<ObservableEmitter<Long>> emitters = Sets.newConcurrentHashSet();
 
     protected final Replica replica;
     protected final CRDTOperationExecutor<O> executor;
@@ -67,8 +67,8 @@ abstract class CausalCRDT<T extends IDotStore, O extends ICRDTOperation> impleme
     /**
      * A notification from inflater about the batch changes made to the dot store
      *
-     * @param addEvents
-     * @param removeEvents
+     * @param addEvents    add events happened
+     * @param removeEvents remove events happened
      */
     final void afterInflation(Iterable<StateLattice> addEvents, Iterable<StateLattice> removeEvents) {
         handleInflation(addEvents, removeEvents);

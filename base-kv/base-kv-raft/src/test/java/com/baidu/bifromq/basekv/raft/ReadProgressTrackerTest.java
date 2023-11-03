@@ -13,28 +13,29 @@
 
 package com.baidu.bifromq.basekv.raft;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import java.util.concurrent.CompletableFuture;
-
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class ReadProgressTrackerTest {
     ReadProgressTracker readProgressTracker;
     @Mock
     IRaftStateStore stateStorage;
     @Mock
-    IRaftNodeLogger logger;
+    Logger logger;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);

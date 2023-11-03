@@ -15,6 +15,8 @@ package com.baidu.bifromq.basekv.raft;
 
 
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
+import lombok.extern.java.Log;
+import org.slf4j.Logger;
 
 class PeerLogReplicatorStateProbing extends PeerLogReplicatorState {
     private int heartbeatElapsedTick = 0;
@@ -23,7 +25,7 @@ class PeerLogReplicatorStateProbing extends PeerLogReplicatorState {
     PeerLogReplicatorStateProbing(String peerId,
                                   RaftConfig config,
                                   IRaftStateStore stateStorage,
-                                  IRaftNodeLogger logger) {
+                                  Logger logger) {
         this(peerId,
             config,
             stateStorage,
@@ -37,7 +39,7 @@ class PeerLogReplicatorStateProbing extends PeerLogReplicatorState {
                                   IRaftStateStore stateStorage,
                                   long matchIndex,
                                   long nextIndex,
-                                  IRaftNodeLogger logger) {
+                                  Logger logger) {
         super(peerId, config, stateStorage, matchIndex, nextIndex, logger);
     }
 
@@ -81,7 +83,7 @@ class PeerLogReplicatorStateProbing extends PeerLogReplicatorState {
             matchIndex = Math.min(matchIndex, nextIndex - 1);
             if (nextIndex > 0 && stateStorage.entryAt(nextIndex).isEmpty()) {
                 // if prev log entry is unavailable, send follower the latest snapshot
-                logger.logDebug("Entry[index:{}] not available for peer[{}] from "
+                logger.debug("Entry[index:{}] not available for peer[{}] from "
                         + "tracker[matchIndex:{},nextIndex:{},state:{}], start syncing with snapshot",
                     nextIndex, peerId, matchIndex, nextIndex, state());
                 return new PeerLogReplicatorStateSnapshotSyncing(peerId, config, stateStorage, logger);
@@ -97,7 +99,7 @@ class PeerLogReplicatorStateProbing extends PeerLogReplicatorState {
         // in this case matchIndex is same as peerLastIndex(reported by follower)
         if (matchIndex <= peerLastIndex) {
             // switch to replicating mode
-            logger.logDebug("Peer[{}] accepted entry[{}] from tracker[matchIndex:{},nextIndex:{},state:{}], "
+            logger.debug("Peer[{}] accepted entry[{}] from tracker[matchIndex:{},nextIndex:{},state:{}], "
                     + "start replicating",
                 peerId, peerLastIndex, matchIndex, nextIndex, state());
             return new PeerLogReplicatorStateReplicating(peerId, config,

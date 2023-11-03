@@ -42,7 +42,7 @@ public class EWFlagTest extends CRDTTest {
     @Test
     public void testOperation() {
         EWFlagInflater ewFlagInflater = new EWFlagInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 1000),
+            newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IEWFlag ewFlag = ewFlagInflater.getCRDT();
         assertEquals(ewFlag.id(), leftReplica);
@@ -62,11 +62,11 @@ public class EWFlagTest extends CRDTTest {
     @Test
     public void testJoin() {
         EWFlagInflater leftInflater = new EWFlagInflater(0, leftReplica,
-            newStateLattice(leftReplica.getId(), 1000000), executor, Duration.ofMillis(100));
+            newStateLattice(leftReplica, 1000000), executor, Duration.ofMillis(100));
         IEWFlag left = leftInflater.getCRDT();
 
         EWFlagInflater rightInflater = new EWFlagInflater(1, rightReplica,
-            newStateLattice(rightReplica.getId(), 1000000), executor, Duration.ofMillis(100));
+            newStateLattice(rightReplica, 1000000), executor, Duration.ofMillis(100));
         IEWFlag right = rightInflater.getCRDT();
 
         left.execute(EWFlagOperation.enable()).join();

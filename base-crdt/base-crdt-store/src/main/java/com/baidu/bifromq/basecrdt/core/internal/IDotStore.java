@@ -20,7 +20,7 @@ interface IDotStore extends Iterable<Dot> {
     /**
      * If in bottom state
      *
-     * @return
+     * @return boolean if in bottom state
      */
     boolean isBottom();
 }

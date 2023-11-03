@@ -53,7 +53,7 @@ public class RaftNodeTest {
                 .addVoters("V1")
                 .build()).build();
         IRaftStateStore stateStorage = new InMemoryStateStore("V1", snapshot);
-        testNode = new RaftNode(new RaftConfig(), stateStorage, log, Executors.defaultThreadFactory());
+        testNode = new RaftNode(new RaftConfig(), stateStorage, Executors.defaultThreadFactory());
     }
 
     @AfterMethod

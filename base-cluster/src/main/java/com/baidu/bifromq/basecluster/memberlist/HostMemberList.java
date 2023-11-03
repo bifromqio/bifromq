@@ -94,8 +94,9 @@ public class HostMemberList implements IHostMemberList {
         this.tags = tags;
         // setup an ORMap for syncing host list
         store.host(AGENT_HOST_MAP_URI);
-        assert store.get(AGENT_HOST_MAP_URI).isPresent();
-        hostListCRDT = (IORMap) store.get(AGENT_HOST_MAP_URI).get();
+        Optional<IORMap> orMapOpt = store.get(AGENT_HOST_MAP_URI);
+        assert orMapOpt.isPresent();
+        hostListCRDT = orMapOpt.get();
         local = HostMember.newBuilder()
             .setEndpoint(HostEndpoint.newBuilder()
                 .setId(hostListCRDT.id().getId())

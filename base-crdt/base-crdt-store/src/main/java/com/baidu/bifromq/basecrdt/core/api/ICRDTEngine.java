@@ -52,7 +52,7 @@ public interface ICRDTEngine {
 
     CompletableFuture<Void> stopHosting(String crdtURI);
 
-    <C extends ICausalCRDT> Optional<C> get(String crdtURI);
+    <O extends ICRDTOperation, C extends ICausalCRDT<O>> Optional<C> get(String crdtURI);
 
     Optional<Map<ByteString, NavigableMap<Long, Long>>> latticeEvents(String crdtURI);
 

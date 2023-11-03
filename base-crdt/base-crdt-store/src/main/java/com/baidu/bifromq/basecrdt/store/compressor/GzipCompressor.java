@@ -15,6 +15,7 @@ package com.baidu.bifromq.basecrdt.store.compressor;
 
 import com.google.protobuf.ByteString;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -22,8 +23,8 @@ public class GzipCompressor implements Compressor {
     @Override
     public ByteString compress(ByteString src) {
         ByteString.Output out = ByteString.newOutput();
-        try (GZIPOutputStream defl = new GZIPOutputStream(out)) {
-            src.newInput().transferTo(defl);
+        try (GZIPOutputStream defl = new GZIPOutputStream(out); InputStream is = src.newInput()) {
+            is.transferTo(defl);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

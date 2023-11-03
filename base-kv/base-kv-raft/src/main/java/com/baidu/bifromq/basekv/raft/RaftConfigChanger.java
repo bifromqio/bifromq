@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
 
 /**
  * The cluster config change process goes through following phases:
@@ -77,12 +78,12 @@ class RaftConfigChanger {
     private final RaftConfig config;
     private final IRaftStateStore stateStorage;
     private final PeerLogTracker peerLogTracker;
-    private final IRaftNodeLogger logger;
+    private final Logger logger;
 
     RaftConfigChanger(RaftConfig config,
                       IRaftStateStore stateStorage,
                       PeerLogTracker peerLogTracker,
-                      IRaftNodeLogger logger) {
+                      Logger logger) {
         this.config = config;
         this.stateStorage = stateStorage;
         this.peerLogTracker = peerLogTracker;
@@ -148,7 +149,7 @@ class RaftConfigChanger {
             // accumulated
             if (catchingUpElapsedTick >=
                 config.getInstallSnapshotTimeoutTick() + 10L * config.getElectionTimeoutTick()) {
-                logger.logDebug("Catching up timeout, give up changing config");
+                logger.debug("Catching up timeout, give up changing config");
 
                 // report exception, unregister replicators and transit to Waiting state
                 Set<String> peersToStopTracking = new HashSet<>(jointConfig.getNextVotersList());
@@ -164,7 +165,7 @@ class RaftConfigChanger {
                 if (peersCatchUp()) {
                     if (noChangeJoint(jointConfig)) {
                         targetConfigIndex = stateStorage.lastIndex() + 1;
-                        logger.logDebug("Peers have caught up, append target config as log entry[index={}]",
+                        logger.debug("Peers have caught up, append target config as log entry[index={}]",
                             targetConfigIndex);
                         LogEntry targetConfigEntry = LogEntry.newBuilder()
                             .setTerm(currentTerm)
@@ -180,7 +181,7 @@ class RaftConfigChanger {
                     } else {
                         // append joint-consensus config as a log entry then replicated to peers in parallel
                         jointConfigIndex = stateStorage.lastIndex() + 1;
-                        logger.logDebug("Peers have caught up, append joint config as log entry[index={}]",
+                        logger.debug("Peers have caught up, append joint config as log entry[index={}]",
                             jointConfigIndex);
                         LogEntry jointConfigEntry = LogEntry.newBuilder()
                             .setTerm(currentTerm)
@@ -228,7 +229,7 @@ class RaftConfigChanger {
                     peerLogTracker.replicateBy(stateStorage.local(), stateStorage.lastIndex());
                     // mark the next voters in pending config have been caught-up with the leader
                     state = TargetConfigCommitting;
-                    logger.logDebug("Joint config committed, append target config as log entry[index={}]",
+                    logger.debug("Joint config committed, append target config as log entry[index={}]",
                         targetConfigIndex);
                     return true;
                 }
@@ -236,7 +237,7 @@ class RaftConfigChanger {
             case TargetConfigCommitting:
                 if (commitIndex >= targetConfigIndex) {
                     state = Waiting;
-                    logger.logDebug("Target config committed at index[{}]", targetConfigIndex);
+                    logger.debug("Target config committed at index[{}]", targetConfigIndex);
                     return true;
                 }
                 return false;
@@ -291,7 +292,7 @@ class RaftConfigChanger {
         switch (state) {
             case Waiting -> state = Abort;
             case CatchingUp, TargetConfigCommitting, JointConfigCommitting -> {
-                logger.logDebug("Abort on-going cluster config change");
+                logger.debug("Abort on-going cluster config change");
                 state = Abort;
                 onDone.completeExceptionally(ClusterConfigChangeException.leaderStepDown());
             }
