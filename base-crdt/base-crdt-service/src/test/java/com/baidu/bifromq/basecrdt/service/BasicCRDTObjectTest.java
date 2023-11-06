@@ -72,7 +72,7 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
         awaitUntilTrue(() -> service2.aliveReplicas(uri).blockingFirst().size() == 2);
 
         Optional<ICCounter> counter1Opt = service1.get(uri);
-        Optional<ICCounter> counter2Opt = service1.get(uri);
+        Optional<ICCounter> counter2Opt = service2.get(uri);
         ICCounter counter1 = counter1Opt.get();
         ICCounter counter2 = counter2Opt.get();
         counter1.execute(CCounterOperation.add(1)).join();

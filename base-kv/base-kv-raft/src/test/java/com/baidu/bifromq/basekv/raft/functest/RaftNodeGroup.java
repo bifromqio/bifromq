@@ -183,11 +183,11 @@ public final class RaftNodeGroup {
                         break;
                 }
             },
-            fsmSnapshot -> {
+            (fsmSnapshot, leader) -> {
                 if (snapshotLogs.containsKey(id) && nodes.containsKey(id)) {
                     snapshotLogs.get(id).add(fsmSnapshot);
                 }
-                return CompletableFuture.completedFuture(null);
+                return CompletableFuture.completedFuture(fsmSnapshot);
             });
     }
 

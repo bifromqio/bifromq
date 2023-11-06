@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
@@ -298,7 +299,8 @@ class KVRangeMetricManager implements IKVRangeMetricManager {
     }
 
     @Override
-    public CompletableFuture<Void> recordSnapshotInstall(Supplier<CompletableFuture<Void>> supplier) {
+    public CompletableFuture<KVRangeSnapshot> recordSnapshotInstall(
+        Supplier<CompletableFuture<KVRangeSnapshot>> supplier) {
         return recordDuration(supplier, installSnapshotTimer);
     }
 

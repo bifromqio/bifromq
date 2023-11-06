@@ -413,7 +413,7 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     @Override
-    void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex) {
+    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
         // ignore in leader state
     }
 

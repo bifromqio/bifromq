@@ -36,6 +36,7 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.protobuf.AbstractMessageLite;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
@@ -53,7 +54,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class KVRangeWAL implements IKVRangeWAL {
+public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     private final long maxFetchBytes;
     private final PublishSubject<SnapshotRestoredEvent> snapRestoreEventPublisher = PublishSubject.create();
     private final BehaviorSubject<Long> commitIndexSubject = BehaviorSubject.create();
@@ -159,7 +160,7 @@ public class KVRangeWAL implements IKVRangeWAL {
                     }
 
                     @Override
-                    public CompletableFuture<Void> apply(KVRangeSnapshot snapshot) {
+                    public CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot request, String leader) {
                         return CompletableFuture.failedFuture(new KVRangeException("Canceled once"));
                     }
                 }, executor);
@@ -251,7 +252,7 @@ public class KVRangeWAL implements IKVRangeWAL {
 
     @Override
     public void start() {
-        raftNode.start(this::sendRaftMessages, this::onRaftEvent, this::installSnapshot);
+        raftNode.start(this::sendRaftMessages, this::onRaftEvent, this);
         statusPublisher.onNext(raftNode.status());
     }
 
@@ -271,6 +272,13 @@ public class KVRangeWAL implements IKVRangeWAL {
         return close().thenAccept(v -> walStore.destroy());
     }
 
+    @Override
+    public CompletableFuture<ByteString> install(ByteString requested, String leader) {
+        SnapshotInstallTask task = new SnapshotInstallTask(requested, leader);
+        snapInstallTaskPublisher.onNext(task);
+        return task.onDone.thenApply(AbstractMessageLite::toByteString);
+    }
+
     void onRaftEvent(RaftEvent event) {
         switch (event.type) {
             case COMMIT -> commitIndexSubject.onNext(((CommitEvent) event).index);
@@ -284,12 +292,5 @@ public class KVRangeWAL implements IKVRangeWAL {
     @VisibleForTesting
     void sendRaftMessages(Map<String, List<RaftMessage>> peerMessages) {
         raftMessagesPublisher.onNext(peerMessages);
-    }
-
-    @VisibleForTesting
-    CompletableFuture<Void> installSnapshot(ByteString snapshot) {
-        SnapshotInstallTask task = new SnapshotInstallTask(snapshot);
-        snapInstallTaskPublisher.onNext(task);
-        return task.onDone;
     }
 }

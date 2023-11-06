@@ -44,7 +44,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
-import org.slf4j.Logger;
 
 class RaftNodeStateFollower extends RaftNodeState {
     private static class StabilizingTask {
@@ -381,17 +380,14 @@ class RaftNodeStateFollower extends RaftNodeState {
     }
 
     @Override
-    void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex) {
-        if (ex != null) {
-            log.warn("Failed to restore snapshot", ex);
-        }
+    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
         if (currentISSRequest == null) {
             return;
         }
         InstallSnapshot iss = currentISSRequest;
         Snapshot snapshot = iss.getSnapshot();
-        if (snapshot.getData() != fsmSnapshot) {
-            log.debug("Skip reply for old snapshot installation");
+        if (snapshot.getData() != requested) {
+            log.debug("Skip reply for obsolete snapshot installation");
             return;
         }
         currentISSRequest = null;
@@ -411,6 +407,8 @@ class RaftNodeStateFollower extends RaftNodeState {
         } else {
             log.debug("Snapshot[index:{},term:{}] accepted by FSM", snapshot.getIndex(), snapshot.getTerm());
             try {
+                // replace fsm snapshot data with the installed one
+                snapshot = snapshot.toBuilder().setData(installed).build();
                 stateStorage.applySnapshot(snapshot);
                 // reset commitIndex to last index in snapshot
                 commitIndex = snapshot.getIndex();
@@ -574,7 +572,7 @@ class RaftNodeStateFollower extends RaftNodeState {
         }
 
         currentISSRequest = installSnapshot;
-        submitSnapshot(snapshot.getData());
+        submitSnapshot(snapshot.getData(), currentLeader);
         log.debug("Snapshot[index:{},term:{}] from peer[{}] submitted to FSM",
             snapshot.getIndex(), snapshot.getTerm(), fromLeader);
     }

@@ -7,6 +7,8 @@ on:
       - 'release-**'
       - 'feat-**'
       - 'hotfix-**'
+      - 'bugfix-**'
+      - 'fix-**'
 jobs:
   build:
     runs-on: ubuntu-latest

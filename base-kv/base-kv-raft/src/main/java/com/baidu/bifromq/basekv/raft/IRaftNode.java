@@ -43,9 +43,11 @@ public interface IRaftNode {
         /**
          * Application specific async snapshot installation
          *
-         * @param fsmSnapshot the snapshot you received from snapshot listener
+         * @param request the snapshot requested to be installed
+         * @param leader  the leader who sent the installation request
+         * @return future of the installation, the value is the installed snapshot of the application
          */
-        CompletableFuture<Void> install(ByteString fsmSnapshot);
+        CompletableFuture<ByteString> install(ByteString request, String leader);
     }
 
     boolean isStarted();

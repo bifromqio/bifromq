@@ -224,8 +224,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
 
                 @Override
-                public CompletableFuture<Void> apply(KVRangeSnapshot snapshot) {
-                    return metricManager.recordSnapshotInstall(() -> KVRangeFSM.this.apply(snapshot));
+                public CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot request, String leader) {
+                    return metricManager.recordSnapshotInstall(() -> KVRangeFSM.this.install(request, leader));
                 }
             }, fsmExecutor);
         quitReason.thenAccept(v -> onQuit.accept(this));
@@ -334,7 +334,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Void> close() {
-        return mgmtTaskRunner.add(this::doClose).whenComplete((v, e) -> mgmtExecutor.shutdown());
+        return this.doClose().whenComplete((v, e) -> mgmtExecutor.shutdown());
     }
 
     private CompletableFuture<Void> doClose() {
@@ -363,10 +363,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 return dumpSession.awaitDone();
                             })
                             .toArray(CompletableFuture<?>[]::new))
-                        .thenCompose(v -> {
-                            compactionFuture.cancel(true);
-                            return compactionFuture;
-                        })
+                        .thenCompose(v -> compactionFuture)
                         .thenCompose(v -> restorer.awaitDone())
                         .thenCompose(v -> statsCollector.stop())
                         .thenCompose(v -> wal.close())
@@ -388,17 +385,15 @@ public class KVRangeFSM implements IKVRangeFSM {
     @Override
     public CompletableFuture<Void> destroy() {
         if (lifecycle.get() == Open) {
-            mgmtTaskRunner.add(() -> {
-                    log.debug("Destroy range: rangeId={}, storeId={}", KVRangeIdUtil.toString(id), hostStoreId);
-                    return doClose()
-                        .thenAccept(v -> {
-                            if (lifecycle.compareAndSet(Closed, Destroying)) {
-                                kvRange.destroy();
-                                wal.destroy();
-                            }
-                        });
+            log.debug("Destroy range: rangeId={}, storeId={}", KVRangeIdUtil.toString(id), hostStoreId);
+            doClose()
+                .thenCompose(v -> {
+                    if (lifecycle.compareAndSet(Closed, Destroying)) {
+                        kvRange.destroy();
+                        return wal.destroy();
+                    }
+                    return CompletableFuture.completedFuture(null);
                 })
-                .thenCompose(v -> wal.destroy())
                 .whenComplete((v, e) -> {
                     if (lifecycle.compareAndSet(Destroying, Destroyed)) {
                         destroyedSignal.complete(null);
@@ -619,24 +614,42 @@ public class KVRangeFSM implements IKVRangeFSM {
         return onDone;
     }
 
-    private CompletableFuture<Void> apply(KVRangeSnapshot ss) {
+    private CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot snapshot, String leader) {
         if (isNotOpening()) {
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
         return mgmtTaskRunner.add(() -> {
+            if (isNotOpening()) {
+                return CompletableFuture.completedFuture(null);
+            }
             log.debug("Restore from snapshot: rangeId={}, storeId={}\n{}",
-                KVRangeIdUtil.toString(id), hostStoreId, ss.toByteString());
+                KVRangeIdUtil.toString(id), hostStoreId, snapshot.toByteString());
+            CompletableFuture<KVRangeSnapshot> onInstalled = new CompletableFuture<>();
             // the restore future is cancelable
-            CompletableFuture<Void> restoreFuture = restorer.restoreFrom(wal.currentLeader().get(), ss);
-            restoreFuture.thenAcceptAsync(v -> {
-                log.debug("Restored from snapshot: rangeId={} \n{}", KVRangeIdUtil.toString(id), ss);
-                linearizer.afterLogApplied(ss.getLastAppliedIndex());
-                // finish all pending tasks
-                cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
-                    new KVRangeException.TryLater("Snapshot installed, try again")));
+            CompletableFuture<Void> restoreFuture = restorer.restoreFrom(leader, snapshot);
+            onInstalled.whenComplete((v, e) -> {
+                if (onInstalled.isCancelled()) {
+                    // cancel restore task if possible
+                    restoreFuture.cancel(true);
+                }
+            });
+            restoreFuture.whenCompleteAsync((v, e) -> {
+                if (e != null) {
+                    log.debug("Restored from snapshot error: rangeId={} \n{}", KVRangeIdUtil.toString(id), snapshot, e);
+                    onInstalled.completeExceptionally(e);
+                } else {
+                    log.debug("Restored from snapshot: rangeId={} \n{}", KVRangeIdUtil.toString(id), snapshot);
+                    linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
+                    // finish all pending tasks
+                    cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
+                        new KVRangeException.TryLater("Snapshot installed, try again")));
+
+                    // TODO: update snapshot with correct checkpoint and return
+                    onInstalled.complete(snapshot);
+                }
             }, fsmExecutor);
-            return restoreFuture;
+            return onInstalled;
         });
     }
 

@@ -24,6 +24,7 @@ import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Iterator;
 import java.util.List;
@@ -33,13 +34,24 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Predicate;
-import lombok.AllArgsConstructor;
 
 public interface IKVRangeWAL {
-    @AllArgsConstructor
     class SnapshotInstallTask {
-        public final ByteString snapshot;
-        public final CompletableFuture<Void> onDone = new CompletableFuture<>();
+        public final KVRangeSnapshot snapshot;
+        public final String leader;
+        public final CompletableFuture<KVRangeSnapshot> onDone;
+
+        public SnapshotInstallTask(ByteString snapshotData, String leader) {
+            this.leader = leader;
+            this.onDone = new CompletableFuture<>();
+            KVRangeSnapshot ss = null;
+            try {
+                ss = KVRangeSnapshot.parseFrom(snapshotData);
+            } catch (InvalidProtocolBufferException e) {
+                this.onDone.completeExceptionally(e);
+            }
+            snapshot = ss;
+        }
     }
 
     String storeId();

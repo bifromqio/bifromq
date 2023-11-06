@@ -15,12 +15,14 @@ package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.InMemoryStateStore;
 import com.baidu.bifromq.basekv.raft.RaftConfig;
@@ -224,13 +226,24 @@ public class KVRangeWALTest extends MockableTest {
 
         TestObserver<IKVRangeWAL.SnapshotInstallTask> testObserver = new TestObserver<>();
         wal.snapshotInstallTask().subscribe(testObserver);
-        CompletableFuture<Void> onDone = wal.installSnapshot(ByteString.EMPTY);
+        CompletableFuture<ByteString> onDone = wal.install(ByteString.EMPTY, "leader");
         testObserver.awaitCount(1);
         IKVRangeWAL.SnapshotInstallTask task = testObserver.values().get(0);
-        assertEquals(task.snapshot, ByteString.EMPTY);
-        assertEquals(task.onDone, onDone);
+        assertEquals(task.snapshot, KVRangeSnapshot.getDefaultInstance());
         wal.close().join();
         testObserver.assertComplete();
+    }
+
+    @SneakyThrows
+    @Test
+    public void snapshotTaskTest() {
+        IKVRangeWAL.SnapshotInstallTask task =
+            new IKVRangeWAL.SnapshotInstallTask(ByteString.copyFromUtf8("BadData"), "leader");
+        assertTrue(task.onDone.isCompletedExceptionally());
+
+        task = new IKVRangeWAL.SnapshotInstallTask(ByteString.empty(), "leader");
+        assertEquals(task.snapshot, KVRangeSnapshot.parseFrom(ByteString.empty()));
+        assertFalse(task.onDone.isDone());
     }
 
     @Test

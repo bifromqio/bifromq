@@ -24,5 +24,12 @@ public interface IKVRangeWALSubscriber {
 
     CompletableFuture<Void> apply(LogEntry log);
 
-    CompletableFuture<Void> apply(KVRangeSnapshot snapshot);
+    /**
+     * Install snapshot to kv range asynchronously and the returned snapshot will be used for WAL compaction
+     *
+     * @param requested the snapshot requested to be installed
+     * @param leader    the leader
+     * @return future for the installation
+     */
+    CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot requested, String leader);
 }

@@ -44,8 +44,8 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 
 abstract class RaftNodeState implements IRaftNodeState {
-    interface OnSnapshotInstalled {
-        void done(ByteString fsmSnapshot, Throwable ex);
+    public interface OnSnapshotInstalled {
+        void done(ByteString requested, ByteString installed, Throwable ex);
     }
 
     /**
@@ -131,7 +131,7 @@ abstract class RaftNodeState implements IRaftNodeState {
                                       Set<String> newLearners,
                                       CompletableFuture<Void> onDone);
 
-    abstract void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex);
+    abstract void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex);
 
     @Override
     public final long currentTerm() {
@@ -250,8 +250,9 @@ abstract class RaftNodeState implements IRaftNodeState {
         }});
     }
 
-    protected void submitSnapshot(ByteString fsmSnapshot) {
-        snapshotInstaller.install(fsmSnapshot).whenComplete((v, e) -> onSnapshotInstalled.done(fsmSnapshot, e));
+    protected void submitSnapshot(ByteString requested, String fromLeader) {
+        snapshotInstaller.install(requested, fromLeader).whenComplete(
+            (installed, ex) -> onSnapshotInstalled.done(requested, installed, ex));
     }
 
     protected void notifyCommit() {

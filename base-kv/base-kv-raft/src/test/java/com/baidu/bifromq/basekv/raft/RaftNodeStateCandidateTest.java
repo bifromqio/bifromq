@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.raft;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
@@ -456,7 +457,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig, stateStorage,
             log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
-        when(snapshotInstaller.install(any(ByteString.class))).thenReturn(new CompletableFuture<>());
+        when(snapshotInstaller.install(any(ByteString.class), anyString())).thenReturn(new CompletableFuture<>());
         RaftMessage installSnapshot = RaftMessage.newBuilder()
             .setTerm(1)
             .setInstallSnapshot(InstallSnapshot.newBuilder()
