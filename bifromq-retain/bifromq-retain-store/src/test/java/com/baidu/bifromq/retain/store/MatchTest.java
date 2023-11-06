@@ -40,6 +40,14 @@ public class MatchTest extends RetainStoreTest {
         assertEquals(matchReply.getOk().getMessagesCount(), 3);
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2, message3));
 
+        matchReply = requestMatch(tenantId, "/#", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 3);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2, message3));
+
+        matchReply = requestMatch(tenantId, "/c/#", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message3));
+
         matchReply = requestMatch(tenantId, "/a/+", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 0);
 
@@ -52,6 +60,14 @@ public class MatchTest extends RetainStoreTest {
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message2));
 
         matchReply = requestMatch(tenantId, "/+/b/#", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+
+        matchReply = requestMatch(tenantId, "/a/b/c/#", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1));
+
+        matchReply = requestMatch(tenantId, "/a/b/#", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 2);
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
 

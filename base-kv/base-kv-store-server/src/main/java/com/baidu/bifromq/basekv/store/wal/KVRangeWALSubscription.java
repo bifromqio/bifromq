@@ -96,7 +96,7 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
             return wal.retrieveCommitted(lastFetchedIdx.get() + 1, maxFetchBytes)
                 .handleAsync((logEntries, e) -> {
                     if (e != null) {
-                        log.error("Failed to retrieve log from wal from index[{}]", lastFetchedIdx.get() + 1, e);
+                        log.debug("Failed to retrieve log from wal from index[{}]", lastFetchedIdx.get() + 1, e);
                         fetching.set(false);
                         scheduleFetchWAL();
                     } else {
