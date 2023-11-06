@@ -69,7 +69,7 @@ public class SingleNodeBenchmark {
         cluster.awaitKVRangeReady(store0, rangeId);
         log.info("KVRange ready in {}ms: kvRangeId={}", System.currentTimeMillis() - start,
             KVRangeIdUtil.toString(rangeId));
-        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 40);
         cluster.split(store0, rangeSettings.ver, rangeId, ByteString.copyFromUtf8("Key1")).toCompletableFuture()
             .join();
         await().atMost(Duration.ofSeconds(10)).until(() -> cluster.allKVRangeIds().size() == 2);

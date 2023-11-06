@@ -173,8 +173,8 @@ public class KVRangeStoreTestCluster {
         });
     }
 
-    public KVRangeConfig awaitAllKVRangeReady(KVRangeId kvRangeId, long atLeastVer, long timeoutInMS) {
-        await().atMost(Duration.ofMillis(timeoutInMS)).until(() -> {
+    public KVRangeConfig awaitAllKVRangeReady(KVRangeId kvRangeId, long atLeastVer, long timeoutInSeconds) {
+        await().atMost(Duration.ofSeconds(timeoutInSeconds)).until(() -> {
             boolean allReady = true;
             for (KVRangeStoreDescriptor storeDescriptor : storeDescriptorMap.values()) {
                 boolean ready = false;

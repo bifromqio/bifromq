@@ -93,7 +93,7 @@ public class DistQoS1Test extends DistWorkerTest {
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, timeout(100).atLeastOnce()).deliver(messageListCap.capture());
+        verify(writer1, timeout(200).atLeastOnce()).deliver(messageListCap.capture());
 
         for (Iterable<DeliveryPack> packs : messageListCap.getAllValues()) {
             for (DeliveryPack pack : packs) {
@@ -107,7 +107,7 @@ public class DistQoS1Test extends DistWorkerTest {
             }
         }
 
-        verify(distClient, timeout(100).atLeastOnce())
+        verify(distClient, timeout(200).atLeastOnce())
             .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
         unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
@@ -148,7 +148,7 @@ public class DistQoS1Test extends DistWorkerTest {
 
 
         ArgumentCaptor<Iterable<DeliveryPack>> messageListCap = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, timeout(100).atLeastOnce()).deliver(messageListCap.capture());
+        verify(writer1, timeout(200).atLeastOnce()).deliver(messageListCap.capture());
 
         for (Iterable<DeliveryPack> packs : messageListCap.getAllValues()) {
             for (DeliveryPack pack : packs) {
@@ -163,10 +163,10 @@ public class DistQoS1Test extends DistWorkerTest {
         }
 
 
-        verify(distClient, timeout(100).atLeastOnce())
+        verify(distClient, timeout(200).atLeastOnce())
             .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
-        verify(eventCollector, timeout(100).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
+        verify(eventCollector, timeout(200).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
 
         unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
     }

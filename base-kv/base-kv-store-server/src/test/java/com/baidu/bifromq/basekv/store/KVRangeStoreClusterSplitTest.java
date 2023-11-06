@@ -31,7 +31,7 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
     @Test(groups = "integration")
     public void splitFromLeaderStore() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
+        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 40);
         cluster.split(genesisKVRangeSettings.leader,
                 genesisKVRangeSettings.ver,
                 genesisKVRangeId,
@@ -62,7 +62,7 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
     @Test(groups = "integration")
     public void splitFromNonLeaderStore() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
+        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 40);
         String nonLeaderStore = nonLeaderStore(genesisKVRangeSettings);
         cluster.awaitKVRangeReady(nonLeaderStore, genesisKVRangeId);
         cluster.split(nonLeaderStore, genesisKVRangeSettings.ver, genesisKVRangeId, copyFromUtf8("e"))

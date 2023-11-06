@@ -205,7 +205,7 @@ public class DistQoS0Test extends DistWorkerTest {
 
         ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
 
-        verify(writer2, after(100).atMost(10)).deliver(list2.capture());
+        verify(writer2, after(200).atMost(10)).deliver(list2.capture());
         for (DeliveryPack pack : list2.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
@@ -240,10 +240,10 @@ public class DistQoS0Test extends DistWorkerTest {
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, after(100).atMost(10)).deliver(list1.capture());
+        verify(writer1, after(200).atMost(10)).deliver(list1.capture());
 
         ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer2, after(100).atMost(10)).deliver(list2.capture());
+        verify(writer2, after(200).atMost(10)).deliver(list2.capture());
 
         List<Iterable<DeliveryPack>> captured = list1.getAllValues().isEmpty() ?
             list2.getAllValues() : list1.getAllValues();

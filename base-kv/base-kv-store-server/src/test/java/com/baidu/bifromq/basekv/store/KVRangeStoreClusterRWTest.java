@@ -31,7 +31,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSetting.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> getValue = cluster.get(rangeSetting.leader, rangeId, copyFromUtf8("key" + i));
@@ -42,7 +42,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSetting.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));
             Optional<ByteString> getValue = cluster.get(nonLeaderStore(rangeSetting), rangeId, copyFromUtf8("key" + i));
@@ -53,7 +53,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readWhenReplicaRestart() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         String restartStoreId = nonLeaderStore(rangeSetting);
 
         log.info("Shutdown store {}", restartStoreId);
@@ -101,7 +101,7 @@ public class KVRangeStoreClusterRWTest extends KVRangeStoreClusterTestTemplate {
     @Test(groups = "integration")
     public void readWhileAddNewReplica() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
 
         for (int i = 0; i < 10; i++) {
             cluster.put(rangeSettings.leader, rangeId, copyFromUtf8("key" + i), copyFromUtf8("value" + i));

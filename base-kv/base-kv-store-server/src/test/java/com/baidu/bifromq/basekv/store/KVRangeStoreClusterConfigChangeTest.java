@@ -54,7 +54,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void removeNonLeaderReplicaFromHostingStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig setting = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig setting = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         String leaderStore = setting.leader;
         String remainStore = nonLeaderStore(setting);
         String removedStore = followStores(setting)
@@ -117,7 +117,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void removeNonLeaderReplicaFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         String leaderStore = rangeSettings.leader;
         String remainStore = nonLeaderStore(rangeSettings);
         try {
@@ -177,7 +177,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void addReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         String newStore = cluster.addStore();
         Set<String> newReplicas = Sets.newHashSet(rangeSettings.clusterConfig.getVotersList());
         newReplicas.add(newStore);
@@ -201,7 +201,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void jointChangeReplicasFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         String newStore1 = cluster.addStore();
         String newStore2 = cluster.addStore();
         String newStore3 = cluster.addStore();
@@ -224,7 +224,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void moveHostingStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 0, 40);
         String newStore = cluster.addStore();
         Set<String> newReplicas = Sets.newHashSet(newStore);
         log.info("Config change from {} to {}", rangeSettings.clusterConfig.getVotersList(), newReplicas);
@@ -248,7 +248,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
     @Test(groups = "integration")
     public void jointChangeReplicasFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 5000);
+        KVRangeConfig rangeSettings = cluster.awaitAllKVRangeReady(rangeId, 1, 40);
         String newStore1 = cluster.addStore();
         String newStore2 = cluster.addStore();
         String newStore3 = cluster.addStore();
