@@ -117,7 +117,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
     @Test
     public void stopRetryWhenSnapshot() {
         AtomicInteger retryCount = new AtomicInteger();
-
+        KVRangeSnapshot snapshot = KVRangeSnapshot.getDefaultInstance();
         when(wal.retrieveCommitted(0, maxSize))
             .thenAnswer((Answer<CompletableFuture<Iterator<LogEntry>>>) invocationOnMock -> {
                 retryCount.incrementAndGet();
@@ -126,9 +126,9 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
             });
         CountDownLatch latch = new CountDownLatch(1);
         when(subscriber.install(any(KVRangeSnapshot.class), anyString())).thenAnswer(
-            (Answer<CompletableFuture<Void>>) invocationOnMock -> {
+            (Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
                 latch.countDown();
-                return CompletableFuture.completedFuture(null);
+                return CompletableFuture.completedFuture(snapshot);
             });
 
         KVRangeWALSubscription walSub =
@@ -136,7 +136,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         commitIndexSource.onNext(0L);
         await().until(() -> retryCount.get() > 2);
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader"));
+            new IKVRangeWAL.SnapshotInstallTask(snapshot.toByteString(), "leader"));
         latch.await();
         await().until(() -> {
             int c = retryCount.get();
@@ -211,6 +211,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
                 LogEntry.newBuilder().setTerm(0).setIndex(0).build(),
                 LogEntry.newBuilder().setTerm(0).setIndex(1).build()))
         );
+        KVRangeSnapshot snapshot = KVRangeSnapshot.getDefaultInstance();
         AtomicInteger retryCount = new AtomicInteger();
         when(subscriber.apply(any(LogEntry.class)))
             .thenAnswer((Answer<CompletableFuture<Void>>) invocationOnMock -> {
@@ -219,16 +220,16 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
             });
         CountDownLatch latch = new CountDownLatch(1);
         when(subscriber.install(any(KVRangeSnapshot.class), anyString()))
-            .thenAnswer((Answer<CompletableFuture<Void>>) invocationOnMock -> {
+            .thenAnswer((Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
                 latch.countDown();
-                return CompletableFuture.completedFuture(null);
+                return CompletableFuture.completedFuture(snapshot);
             });
         KVRangeWALSubscription walSub =
             new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
         await().until(() -> retryCount.get() > 2);
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader"));
+            new IKVRangeWAL.SnapshotInstallTask(snapshot.toByteString(), "leader"));
         latch.await();
         int c = retryCount.get();
         Thread.sleep(100);
@@ -239,9 +240,9 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
     @Test
     public void cancelApplySnapshot() {
         CountDownLatch latch = new CountDownLatch(1);
-        CompletableFuture<Void> applySnapshotFuture = new CompletableFuture<>();
+        CompletableFuture<KVRangeSnapshot> applySnapshotFuture = new CompletableFuture<>();
         when(subscriber.install(any(KVRangeSnapshot.class), eq("leader")))
-            .thenAnswer((Answer<CompletableFuture<Void>>) invocationOnMock -> {
+            .thenAnswer((Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
                 latch.countDown();
                 return applySnapshotFuture;
             });
@@ -259,9 +260,9 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
     @Test
     public void cancelApplySnapshotWhenStop() {
         CountDownLatch latch = new CountDownLatch(1);
-        CompletableFuture<Void> applySnapshotFuture = new CompletableFuture<>();
+        CompletableFuture<KVRangeSnapshot> applySnapshotFuture = new CompletableFuture<>();
         when(subscriber.install(any(KVRangeSnapshot.class), anyString()))
-            .thenAnswer((Answer<CompletableFuture<Void>>) invocationOnMock -> {
+            .thenAnswer((Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
                 latch.countDown();
                 return applySnapshotFuture;
             });
