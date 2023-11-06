@@ -1268,10 +1268,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                             }
                             onDone.complete(() -> {
                                 clusterConfigSubject.onNext(config);
+                                finishCommand(taskId);
                                 if (remove) {
                                     quitReason.complete(Purged);
                                 }
-                                finishCommand(taskId);
                                 scheduleCompaction();
                             });
                         } else {
@@ -1300,10 +1300,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                         rangeWriter.bumpVer(false);
                         onDone.complete(() -> {
                             clusterConfigSubject.onNext(config);
+                            finishCommand(taskId);
                             if (remove) {
                                 quitReason.complete(Removed);
                             }
-                            finishCommand(taskId);
                             scheduleCompaction();
                         });
                     }
