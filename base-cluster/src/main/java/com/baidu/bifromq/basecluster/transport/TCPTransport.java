@@ -244,6 +244,7 @@ public final class TCPTransport extends AbstractTransport {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         getChannel(recipient).whenComplete((ch, e) -> {
             if (e != null) {
+                log.warn("Failed to connect to address: " + recipient, e);
                 onDone.completeExceptionally(e);
             } else {
                 if (ch.isWritable()) {
@@ -319,7 +320,7 @@ public final class TCPTransport extends AbstractTransport {
                     try {
                         future.get();
                     } catch (Exception e) {
-                        f.completeExceptionally(new RuntimeException("Failed to connect to address: " + recipient, e));
+                        f.completeExceptionally(e);
                     }
                 }
             });

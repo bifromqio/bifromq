@@ -91,7 +91,6 @@ public interface IRaftNode {
      * Receive raft messages from other Peers and drive local Raft StateMachine to proceed.
      *
      * @param message
-     * @return
      */
     void receive(String fromPeer, RaftMessage message);
 

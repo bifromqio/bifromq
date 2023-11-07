@@ -130,7 +130,6 @@ public interface ICRDTStore {
      * NOTE: the messages with toStoreId set to '0' is used for broadcast, and will be accepted by every CRDTStore
      *
      * @param replicaMessages the observable to receive messages from others
-     * @return
      */
     void start(Observable<CRDTStoreMessage> replicaMessages);
 

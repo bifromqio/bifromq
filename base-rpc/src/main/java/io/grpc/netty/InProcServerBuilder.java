@@ -41,13 +41,13 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>The server is intended to be fully-featured, high performance, and useful in testing.
  *
- * <h3>Using JUnit TestRule</h3>
+ * <h2>Using JUnit TestRule</h2>
  * The class "GrpcServerRule" (from "grpc-java/testing") is a JUnit TestRule that creates a {@link InProcServer} and a
  * {@link io.grpc.ManagedChannel ManagedChannel}. This test rule contains the boilerplate code shown below. The classes
  * "HelloWorldServerTest" and "HelloWorldClientTest" (from "grpc-java/examples") demonstrate basic usage.
  *
- * <h3>Usage example</h3>
- * <h4>Server and client channel setup</h4>
+ * <h2>Usage example</h2>
+ * <h3>Server and client channel setup</h3>
  * <pre>
  *   String uniqueName = InProcessServerBuilder.generateName();
  *   Server server = InProcessServerBuilder.forName(uniqueName)
@@ -59,7 +59,7 @@ import java.util.concurrent.TimeUnit;
  *       .build();
  * </pre>
  *
- * <h4>Usage in tests</h4>
+ * <h3>Usage in tests</h3>
  * The channel can be used normally. A blocking stub example:
  * <pre>
  *   TestServiceGrpc.TestServiceBlockingStub blockingStub =
