@@ -421,14 +421,19 @@ public class KVRangeStoreTestCluster {
             options.setOverrideIdentity(storeId);
         }
         if (options.getDataEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
-            ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+            options.setDataEngineConfigurator(((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
+                .toBuilder()
+                .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString())
+                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
-            ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
-                    .toString())
-                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
+                .build());
+        }
+        if (options.getWalEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
+            options.setWalEngineConfigurator(((RocksDBKVEngineConfigurator) options
+                .getWalEngineConfigurator()).toBuilder()
+                .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString())
+                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid).toString())
+                .build());
         }
         initStore(options);
     }
