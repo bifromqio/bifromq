@@ -17,7 +17,7 @@ import java.util.Collection;
 
 public interface IRecipientSelector {
     /**
-     * Select at most <limit> recipient randomly
+     * Select at most 'limit' recipient randomly
      *
      * @param limit
      * @return
