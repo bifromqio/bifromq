@@ -802,6 +802,8 @@
                         <excludes>
                             <exclude>com/baidu/bifromq/type/*.class</exclude>
                             <exclude>**/proto/*.class</exclude>
+                            <exclude>io/grpc/**/*.class</exclude>
+                            <exclude>com/baidu/bifromq/baserpc/**/*.class</exclude>
                         </excludes>
                     </configuration>
                     <executions>
@@ -817,11 +819,6 @@
                             <goals>
                                 <goal>report</goal>
                             </goals>
-                            <configuration>
-                                <outputDirectory>
-                                    ${session.executionRootDirectory}/target/site/coverage/${project.artifactId}
-                                </outputDirectory>
-                            </configuration>
                         </execution>
                     </executions>
                 </plugin>
@@ -883,6 +880,10 @@
                                 <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
                     </plugin>
                 </plugins>
             </build>

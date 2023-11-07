@@ -1,5 +1,10 @@
 # BifroMQ
 
+[![GitHub Release](https://img.shields.io/github/release/baidu/bifromq?color=brightgreen&label=Release)](https://github.com/baidu/bifromq/releases)
+[![Coverage Status](https://img.shields.io/coveralls/github/baidu/bifromq/main?label=Coverage)](https://coveralls.io/github/baidu/bifromq?branch=main)
+[![Docker Pulls](https://img.shields.io/docker/pulls/bifromq/bifromq?label=Docker%20Pulls)](https://hub.docker.com/r/bifromq/bifromq)
+
+
 English | [中文简体](./README.zh_Hans.md)
 
 ---

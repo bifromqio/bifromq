@@ -82,7 +82,7 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
                     return newSetting.clusterConfig.getVotersList().containsAll(voters);
                 });
             }
-            cluster.awaitAllKVRangeReady(rangeId, voters.size() == 1 ? 0 : 2, 5000);
+            cluster.awaitAllKVRangeReady(rangeId, voters.size() == 1 ? 0 : 2, 40);
             log.info("KVRange[{}] ready in {}ms start testing", KVRangeIdUtil.toString(rangeId),
                 System.currentTimeMillis() - start);
         } catch (Throwable e) {
