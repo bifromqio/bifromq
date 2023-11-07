@@ -85,6 +85,18 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
         assertTrue(keyRangeLoaded.metadata().blockingFirst().containsKey(metaKey));
         assertTrue(keyRangeLoaded.exist(key));
         assertEquals(keyRangeLoaded.get(key).get(), value);
+        // stop again and start
+        engine.stop();
+
+        engine = newEngine();
+        engine.start();
+        assertEquals(engine.ranges().size(), 1);
+        keyRangeLoaded = engine.ranges().values().stream().findFirst().get();
+        assertEquals(keyRangeLoaded.id(), rangeId);
+        assertTrue(keyRangeLoaded.metadata(metaKey).isPresent());
+        assertTrue(keyRangeLoaded.metadata().blockingFirst().containsKey(metaKey));
+        assertTrue(keyRangeLoaded.exist(key));
+        assertEquals(keyRangeLoaded.get(key).get(), value);
     }
 
     @Test

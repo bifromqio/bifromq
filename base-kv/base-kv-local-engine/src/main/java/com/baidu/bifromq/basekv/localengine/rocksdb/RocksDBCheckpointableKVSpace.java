@@ -96,6 +96,7 @@ public class RocksDBCheckpointableKVSpace extends RocksDBKVSpace {
             }
             log.debug("Load latest checkpoint[{}] of kvspace[{}] in engine[{}] at path[{}]",
                 cpId, id, engine.id(), cpDir);
+            latestCheckpointId.set(cpId);
             return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest);
         }
         return doCheckpoint();
