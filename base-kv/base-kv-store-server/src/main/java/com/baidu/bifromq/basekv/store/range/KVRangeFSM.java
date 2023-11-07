@@ -645,8 +645,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
                         new KVRangeException.TryLater("Snapshot installed, try again")));
 
-                    // TODO: update snapshot with correct checkpoint and return
-                    onInstalled.complete(snapshot);
+                    onInstalled.complete(kvRange.checkpoint());
                 }
             }, fsmExecutor);
             return onInstalled;
