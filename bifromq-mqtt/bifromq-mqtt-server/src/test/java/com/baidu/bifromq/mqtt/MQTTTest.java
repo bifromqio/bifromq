@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
@@ -36,6 +37,7 @@ import com.baidu.bifromq.inbox.server.IInboxServer;
 import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -114,6 +116,12 @@ class MQTTTest {
 
     private void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        doAnswer(invocationOnMock -> {
+            Event event = invocationOnMock.getArgument(0);
+            event.clone(event.getClass().getConstructor().newInstance());
+            return null;
+        }).when(eventCollector).report(any(Event.class));
+
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         pluginMgr = new DefaultPluginManager();
         queryExecutor = Executors.newFixedThreadPool(2);

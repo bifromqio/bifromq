@@ -18,13 +18,17 @@
     <parent>
         <artifactId>base-kv</artifactId>
         <groupId>com.baidu.bifromq</groupId>
-        <version>2.0.0-SNAPSHOT</version>
+        <version>2.0.1-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>base-kv-store-balance-controller</artifactId>
 
     <dependencies>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-logger</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-env-provider</artifactId>

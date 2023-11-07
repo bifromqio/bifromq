@@ -44,7 +44,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
-import org.slf4j.Logger;
 
 class RaftNodeStateFollower extends RaftNodeState {
     private static class StabilizingTask {
@@ -70,7 +69,6 @@ class RaftNodeStateFollower extends RaftNodeState {
                           String leader,
                           RaftConfig config,
                           IRaftStateStore stateStorage,
-                          Logger log,
                           IRaftNode.IRaftMessageSender sender,
                           IRaftNode.IRaftEventListener listener,
                           IRaftNode.ISnapshotInstaller installer,
@@ -81,7 +79,6 @@ class RaftNodeStateFollower extends RaftNodeState {
             leader,
             config,
             stateStorage,
-            log,
             new LinkedHashMap<>(),
             sender,
             listener,
@@ -95,7 +92,6 @@ class RaftNodeStateFollower extends RaftNodeState {
                           String leader,
                           RaftConfig config,
                           IRaftStateStore stateStorage,
-                          Logger log,
                           LinkedHashMap<Long, ProposeTask> uncommittedProposals,
                           IRaftNode.IRaftMessageSender sender,
                           IRaftNode.IRaftEventListener listener,
@@ -106,7 +102,6 @@ class RaftNodeStateFollower extends RaftNodeState {
             commitIndex,
             config,
             stateStorage,
-            log,
             uncommittedProposals,
             sender,
             listener,
@@ -122,12 +117,12 @@ class RaftNodeStateFollower extends RaftNodeState {
     }
 
     @Override
-    RaftNodeStatus getState() {
+    public RaftNodeStatus getState() {
         return RaftNodeStatus.Follower;
     }
 
     @Override
-    String currentLeader() {
+    public String currentLeader() {
         return currentLeader;
     }
 
@@ -156,7 +151,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                     CompletableFuture<Long> pendingOnDone = idToReadRequestMap.remove(pendingReadId);
                     if (pendingOnDone != null && !pendingOnDone.isDone()) {
                         // if not finished by requestReadIndexReply then abort it
-                        logDebug("Aborted forwarded timed-out ReadIndex request[{}]", pendingReadId);
+                        log.debug("Aborted forwarded timed-out ReadIndex request[{}]", pendingReadId);
                         pendingOnDone.completeExceptionally(ReadIndexException.forwardTimeout());
                     }
                 });
@@ -174,7 +169,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                     CompletableFuture<Long> pendingOnDone = idToForwardedProposeMap.remove(pendingProposalId);
                     if (pendingOnDone != null && !pendingOnDone.isDone()) {
                         // if not finished by proposeReply then abort it
-                        logDebug("Aborted forwarded timed-out Propose request[{}]", pendingProposalId);
+                        log.debug("Aborted forwarded timed-out Propose request[{}]", pendingProposalId);
                         pendingOnDone.completeExceptionally(DropProposalException.forwardTimeout());
                     }
                 });
@@ -185,7 +180,7 @@ class RaftNodeStateFollower extends RaftNodeState {
         if (electionElapsedTick >= randomElectionTimeoutTick) {
             electionElapsedTick = 0;
             abortPendingRequests();
-            logDebug("Transit to candidate due to election timeout[{}]", randomElectionTimeoutTick);
+            log.debug("Transit to candidate due to election timeout[{}]", randomElectionTimeoutTick);
             return new RaftNodeStateCandidate(
                 currentTerm(),
                 commitIndex,
@@ -206,17 +201,17 @@ class RaftNodeStateFollower extends RaftNodeState {
     @Override
     void propose(ByteString fsmCmd, CompletableFuture<Long> onDone) {
         if (config.isDisableForwardProposal()) {
-            logDebug("Forward proposal to leader is disabled");
+            log.debug("Forward proposal to leader is disabled");
             onDone.completeExceptionally(DropProposalException.leaderForwardDisabled());
             return;
         }
         if (currentLeader == null) {
-            logDebug("Dropped proposal due to no leader elected in current term");
+            log.debug("Dropped proposal due to no leader elected in current term");
             onDone.completeExceptionally(DropProposalException.NoLeader());
             return;
         }
         if (isProposeThrottled()) {
-            logDebug("Dropped proposal due to log growing[uncommittedProposals:{}] "
+            log.debug("Dropped proposal due to log growing[uncommittedProposals:{}] "
                     + "exceeds threshold[maxUncommittedProposals:{}]",
                 uncommittedProposals.size(), maxUncommittedProposals);
             onDone.completeExceptionally(DropProposalException.throttledByThreshold());
@@ -249,7 +244,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                 StabilizingTask task = stabilizingIndexes.get(index);
                 while (task.pendingReplyCount-- > 0) {
                     if (currentLeader != null) {
-                        logTrace("Entries below index[{}] stabilized, reply to leader[{}]",
+                        log.trace("Entries below index[{}] stabilized, reply to leader[{}]",
                             index, currentLeader);
                         submitRaftMessages(currentLeader, RaftMessage.newBuilder()
                             .setTerm(currentTerm())
@@ -265,7 +260,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                 }
                 if (task.committed) {
                     commitIndex = index;
-                    logTrace("Advanced commitIndex[{}]", commitIndex);
+                    log.trace("Advanced commitIndex[{}]", commitIndex);
                     notifyCommit();
                 }
                 toRemove.add(index);
@@ -280,7 +275,7 @@ class RaftNodeStateFollower extends RaftNodeState {
     @Override
     void readIndex(CompletableFuture<Long> onDone) {
         if (currentLeader == null) {
-            logDebug("Dropped ReadIndex forwarding due to no leader elected in current term");
+            log.debug("Dropped ReadIndex forwarding due to no leader elected in current term");
             onDone.completeExceptionally(ReadIndexException.noLeader());
         } else {
             int forwardReadId = nextForwardReqId();
@@ -303,7 +298,7 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     @Override
     RaftNodeState receive(String fromPeer, RaftMessage message) {
-        logTrace("Receive[{}] from {}", message, fromPeer);
+        log.trace("Receive[{}] from {}", message, fromPeer);
         RaftNodeState nextState = this;
         if (message.getTerm() > currentTerm()) {
             switch (message.getMessageTypeCase()) {
@@ -321,14 +316,14 @@ class RaftNodeStateFollower extends RaftNodeState {
                     // prevent from being disrupted
                     boolean leaderTransfer = message.getRequestVote().getLeaderTransfer();
                     if (!leaderTransfer && inLease() && !voters().contains(fromPeer)) {
-                        logDebug("Vote[{}] from candidate[{}] not granted, lease is not expired",
+                        log.debug("Vote[{}] from candidate[{}] not granted, lease is not expired",
                             message.getTerm(), fromPeer);
                         sendRequestVoteReply(fromPeer, message.getTerm(), false);
                         return nextState;
                     }
                     // fallthrough
                 default:
-                    logDebug("Higher term[{}] message[{}] received from peer[{}]",
+                    log.debug("Higher term[{}] message[{}] received from peer[{}]",
                         message.getTerm(), message.getMessageTypeCase(), fromPeer);
                     stateStorage.saveTerm(message.getTerm());
                     // clear the known leader from prev term, otherwise canGrant may report wrong result
@@ -385,23 +380,20 @@ class RaftNodeStateFollower extends RaftNodeState {
     }
 
     @Override
-    void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex) {
-        if (ex != null) {
-            logWarn("Failed to restore snapshot", ex);
-        }
+    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
         if (currentISSRequest == null) {
             return;
         }
         InstallSnapshot iss = currentISSRequest;
         Snapshot snapshot = iss.getSnapshot();
-        if (snapshot.getData() != fsmSnapshot) {
-            logDebug("Skip reply for old snapshot installation");
+        if (snapshot.getData() != requested) {
+            log.debug("Skip reply for obsolete snapshot installation");
             return;
         }
         currentISSRequest = null;
         RaftMessage reply;
         if (ex != null) {
-            logWarn("Snapshot[index:{},term:{}] rejected by FSM", snapshot.getIndex(), snapshot.getTerm(), ex);
+            log.warn("Snapshot[index:{},term:{}] rejected by FSM", snapshot.getIndex(), snapshot.getTerm(), ex);
             reply = RaftMessage.newBuilder()
                 .setTerm(currentTerm())
                 .setInstallSnapshotReply(
@@ -413,8 +405,10 @@ class RaftNodeStateFollower extends RaftNodeState {
                         .build())
                 .build();
         } else {
-            logDebug("Snapshot[index:{},term:{}] accepted by FSM", snapshot.getIndex(), snapshot.getTerm());
+            log.debug("Snapshot[index:{},term:{}] accepted by FSM", snapshot.getIndex(), snapshot.getTerm());
             try {
+                // replace fsm snapshot data with the installed one
+                snapshot = snapshot.toBuilder().setData(installed).build();
                 stateStorage.applySnapshot(snapshot);
                 // reset commitIndex to last index in snapshot
                 commitIndex = snapshot.getIndex();
@@ -438,7 +432,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                     it.remove();
                 }
             } catch (Throwable e) {
-                logError("Failed to apply snapshot[index:{}, term:{}]", snapshot.getIndex(), snapshot.getTerm(), e);
+                log.error("Failed to apply snapshot[index:{}, term:{}]", snapshot.getIndex(), snapshot.getTerm(), e);
                 reply = RaftMessage.newBuilder()
                     .setTerm(currentTerm())
                     .setInstallSnapshotReply(
@@ -456,12 +450,12 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     private void handleAppendEntries(String fromLeader, AppendEntries appendEntries) {
         if (!appendEntries.getLeaderId().equals(currentLeader)) {
-            logDebug("Leader[{}] of current term[{}] elected", appendEntries.getLeaderId(), currentTerm());
+            log.debug("Leader[{}] of current term[{}] elected", appendEntries.getLeaderId(), currentTerm());
             currentLeader = appendEntries.getLeaderId();
         }
         if (!entryMatch(appendEntries.getPrevLogIndex(), appendEntries.getPrevLogTerm())) {
             // prevLogEntry mismatch, reject
-            logDebug("Rejected {} entries from leader[{}] due to mismatched last entry[index:{},term:{}]",
+            log.debug("Rejected {} entries from leader[{}] due to mismatched last entry[index:{},term:{}]",
                 appendEntries.getEntriesCount(),
                 fromLeader,
                 appendEntries.getPrevLogIndex(),
@@ -485,7 +479,7 @@ class RaftNodeStateFollower extends RaftNodeState {
             if (appendEntries.getEntriesCount() > 0) {
                 // prevLogEntry match, filter out duplicated append entries requests
                 long newLastIndex = appendEntries.getEntries(appendEntries.getEntriesCount() - 1).getIndex();
-                logDebug("Append {} entries after entry[index:{},term:{}]",
+                log.debug("Append {} entries after entry[index:{},term:{}]",
                     appendEntries.getEntriesCount(),
                     appendEntries.getPrevLogIndex(),
                     appendEntries.getPrevLogTerm());
@@ -519,7 +513,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                     // all entries have been stabilized
                     if (newCommitIndex <= stateStorage.lastIndex()) {
                         commitIndex = newCommitIndex;
-                        logTrace("Advanced commitIndex[{}]", commitIndex);
+                        log.trace("Advanced commitIndex[{}]", commitIndex);
                         // report to application
                         notifyCommit();
                     } else {
@@ -540,14 +534,14 @@ class RaftNodeStateFollower extends RaftNodeState {
                 if (newCommitIndex < stabilizingIndexes.firstKey()) {
                     // if the new commitIndex has been stabilized locally, then advance local commitIndex directly
                     commitIndex = newCommitIndex;
-                    logTrace("Advanced commitIndex[{}]", commitIndex);
+                    log.trace("Advanced commitIndex[{}]", commitIndex);
                     // report to application
                     notifyCommit();
                 } else {
                     if (newCommitIndex > stabilizingIndexes.lastKey()) {
                         // if the newCommitIndex is greater than the largest local stabilizing index
                         // add it to stabilizingIndexes and mark it has been committed
-                        logDebug("Entries[from:{},to:{}] missing locally",
+                        log.debug("Entries[from:{},to:{}] missing locally",
                             stabilizingIndexes.lastKey(), newCommitIndex);
                     }
                     stabilizingIndexes.compute(stateStorage.lastIndex(), (k, v) -> {
@@ -564,7 +558,7 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     private void handleSnapshot(String fromLeader, InstallSnapshot installSnapshot) {
         if (!installSnapshot.getLeaderId().equals(currentLeader)) {
-            logDebug("Leader[{}] of current term elected", installSnapshot.getLeaderId());
+            log.debug("Leader[{}] of current term elected", installSnapshot.getLeaderId());
             currentLeader = installSnapshot.getLeaderId();
         }
         Snapshot snapshot = installSnapshot.getSnapshot();
@@ -572,14 +566,14 @@ class RaftNodeStateFollower extends RaftNodeState {
         Snapshot latestSnapshot = stateStorage.latestSnapshot();
         if (latestSnapshot.getIndex() > snapshot.getIndex() && latestSnapshot.getTerm() > snapshot.getTerm()) {
             // ignore obsolete snapshot
-            logDebug("Ignore obsolete snapshot[index:{},term:{}] from peer[{}]",
+            log.debug("Ignore obsolete snapshot[index:{},term:{}] from peer[{}]",
                 snapshot.getIndex(), snapshot.getTerm(), fromLeader);
             return;
         }
 
         currentISSRequest = installSnapshot;
-        submitSnapshot(snapshot.getData());
-        logDebug("Snapshot[index:{},term:{}] from peer[{}] submitted to FSM",
+        submitSnapshot(snapshot.getData(), currentLeader);
+        log.debug("Snapshot[index:{},term:{}] from peer[{}] submitted to FSM",
             snapshot.getIndex(), snapshot.getTerm(), fromLeader);
     }
 
@@ -594,7 +588,7 @@ class RaftNodeStateFollower extends RaftNodeState {
             // reset election tick when grant a vote
             electionElapsedTick = 0;
         }
-        logDebug("Vote for peer[{}] with last log[index={}, term={}]? {}, grant? {}, log up-to-date? {}",
+        log.debug("Vote for peer[{}] with last log[index={}, term={}]? {}, grant? {}, log up-to-date? {}",
             fromPeer, request.getLastLogIndex(), request.getLastLogTerm(), vote, canGrantVote, isLogUpToDate);
         sendRequestVoteReply(fromPeer, currentTerm(), vote);
     }
@@ -621,7 +615,7 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     private RaftNodeState handleTimeoutNow(String fromLeader) {
         if (promotable()) {
-            logInfo("Transited to candidate now by request from current leader[{}]", fromLeader);
+            log.info("Transited to candidate now by request from current leader[{}]", fromLeader);
             abortPendingRequests();
             return new RaftNodeStateCandidate(
                 currentTerm(),

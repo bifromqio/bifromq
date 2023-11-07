@@ -15,12 +15,13 @@ package com.baidu.bifromq.basekv.raft;
 
 
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
+import org.slf4j.Logger;
 
 final class PeerLogReplicator implements IPeerLogReplicator {
     private PeerLogReplicatorState state;
 
 
-    PeerLogReplicator(String peerId, RaftConfig config, IRaftStateStore stateStorage, IRaftNodeLogger logger) {
+    PeerLogReplicator(String peerId, RaftConfig config, IRaftStateStore stateStorage, Logger logger) {
         this.state = new PeerLogReplicatorStateProbing(peerId, config, stateStorage, logger);
     }
 

@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basecrdt.store;
 
-import static com.baidu.bifromq.basecrdt.core.util.Log.debug;
-import static com.baidu.bifromq.basecrdt.core.util.Log.trace;
+import static com.baidu.bifromq.basecrdt.util.Formatter.toStringifiable;
 
+import com.baidu.bifromq.basecrdt.ReplicaLogger;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
@@ -28,17 +28,18 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.io.BaseEncoding;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,12 +50,11 @@ import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 /**
  * Manage a hosted replica's anti-entropy process with its neighbors
  */
-@Slf4j
 final class AntiEntropyManager {
 
     private class MetricManager {
@@ -96,7 +96,8 @@ final class AntiEntropyManager {
         }
     }
 
-    private final ICausalCRDT replica;
+    private final Logger log;
+    private final ICausalCRDT<?> replica;
     private final ByteString localAddr;
     private final ICRDTEngine engine;
     private final Subject<CRDTStoreMessage> messageSource;
@@ -107,16 +108,18 @@ final class AntiEntropyManager {
     private final NavigableSet<ByteString> cluster = Sets.newTreeSet(ByteString.unsignedLexicographicalComparator());
     private final Cache<ByteString, Long> ackCache;
     private final int maxEventsInDelta;
+    private final CompositeDisposable disposable = new CompositeDisposable();
     private final Compressor compressor;
     private final MetricManager metricManager;
 
-    public AntiEntropyManager(ICausalCRDT replica,
+    public AntiEntropyManager(ICausalCRDT<?> replica,
                               ByteString localAddr, // address from which local replica could be reached with in cluster
                               ICRDTEngine engine,
                               ScheduledExecutorService executor,
                               Subject<CRDTStoreMessage> msgSource,
                               int maxEventsInDelta,
                               Compressor compressor) {
+        this.log = new ReplicaLogger(replica.id(), AntiEntropyManager.class);
         this.replica = replica;
         this.localAddr = localAddr;
         this.engine = engine;
@@ -128,16 +131,16 @@ final class AntiEntropyManager {
         ackCache = Caffeine.newBuilder()
             .expireAfterAccess(Duration.ofSeconds(30))
             .build();
-        neighborLost.subscribe(lostNeighbourAddr -> {
+        disposable.add(neighborLost.subscribe(lostNeighbourAddr -> {
             this.lostNeighbors.add(lostNeighbourAddr);
-            debug(log, "Replica[{}] add lostNeighbor [{}]", replica.id(), lostNeighbourAddr);
+            log.debug("Add lostNeighbor[{}]", lostNeighbourAddr);
             if (antiEntropyMap.containsKey(lostNeighbourAddr)) {
                 resetNeighbors();
             }
-        });
+        }));
         this.metricManager = new MetricManager(Tags.of("store.id", Long.toUnsignedString(engine.id()))
             .and("replica.uri", replica.id().getUri())
-            .and("replica.id", Base64.getEncoder().encodeToString(replica.id().getId().toByteArray())));
+            .and("replica.id", BaseEncoding.base64().encode(replica.id().getId().toByteArray())));
     }
 
     ByteString getLocalAddr() {
@@ -169,14 +172,14 @@ final class AntiEntropyManager {
         Set<ByteString> removeAddrs = Sets.newHashSet(Sets.difference(antiEntropyMap.keySet(), neighborAddrs));
         for (ByteString neighborAddr : neighborAddrs) {
             antiEntropyMap.computeIfAbsent(neighborAddr, k -> {
-                trace(log, "Replica[{}] add new neighbor [{}]", replica.id(), neighborAddr);
+                log.trace("Add new neighbor[{}]", toStringifiable(neighborAddr));
                 return new AntiEntropy(replica, localAddr, neighborAddr, engine,
-                        executor, messageSource, maxEventsInDelta, neighborLost,
-                        metricManager.sendDeltaNum, metricManager.sendDeltaBytes, compressor);
+                    executor, messageSource, maxEventsInDelta, neighborLost,
+                    metricManager.sendDeltaNum, metricManager.sendDeltaBytes, compressor);
             });
         }
         for (ByteString removeAddr : removeAddrs) {
-            trace(log, "Replica[{}] remove neighbor [{}]", replica.id(), removeAddr);
+            log.trace("Remove neighbor[{}]", toStringifiable(removeAddr));
             antiEntropyMap.remove(removeAddr).cancel();
         }
 
@@ -187,15 +190,15 @@ final class AntiEntropyManager {
 
     synchronized void probe() {
         if (antiEntropyMap.isEmpty() && !lostNeighbors.isEmpty()) {
-            trace(log, "Replica[{}] has no neighbors, try probe lostNeighbors", replica.id());
-            lostNeighbors.forEach(addr ->  {
+            log.trace("No neighbors, try probing lostNeighbors");
+            lostNeighbors.forEach(addr -> {
                 CRDTStoreMessage probeMessage = CRDTStoreMessage.newBuilder()
-                        .setUri(replica.id().getUri())
-                        .setSender(localAddr)
-                        .setReceiver(addr)
-                        .setPayload(MessagePayloadUtil.compressToPayload(compressor,
-                                DeltaMessage.newBuilder().build()))
-                        .build();
+                    .setUri(replica.id().getUri())
+                    .setSender(localAddr)
+                    .setReceiver(addr)
+                    .setPayload(MessagePayloadUtil.compressToPayload(compressor,
+                        DeltaMessage.newBuilder().build()))
+                    .build();
                 metricManager.sendDeltaNum.increment();
                 metricManager.sendDeltaBytes.increment(probeMessage.getSerializedSize());
                 messageSource.onNext(probeMessage);
@@ -205,8 +208,7 @@ final class AntiEntropyManager {
     }
 
     void join(DeltaMessage delta, ByteString sender) {
-        trace(log, "Replica[{}] join delta[{}] from addr[{}]:\n{}",
-            replica.id(), delta.getSeqNo(), sender, delta.getReplacementList());
+        log.trace("Join delta[{}] from addr[{}]:\n{}", delta.getSeqNo(), toStringifiable(sender), delta);
         metricManager.receiveDeltaNum.increment(1D);
         metricManager.receiveDeltaBytes.increment(delta.getSerializedSize());
         String uri = replica.id().getUri();
@@ -236,7 +238,7 @@ final class AntiEntropyManager {
             Optional<Map<ByteString, NavigableMap<Long, Long>>> latticeEvents = engine.latticeEvents(uri);
             Optional<Map<ByteString, NavigableMap<Long, Long>>> historyEvents = engine.historyEvents(uri);
             if (latticeEvents.isPresent() && historyEvents.isPresent()) {
-                trace(log, "Replica[{}] reply probe ack[{}] to addr[{}]", replica.id(), delta.getSeqNo(), sender);
+                log.trace("Reply probe ack[{}] to addr[{}]", delta.getSeqNo(), toStringifiable(sender));
                 CRDTStoreMessage msg = CRDTStoreMessage.newBuilder()
                     .setUri(uri)
                     .setReceiver(sender)
@@ -255,12 +257,12 @@ final class AntiEntropyManager {
             }
             // receive delta message from a new sender, add it to neighbors
             if (delta.getSeqNo() == 1 && !antiEntropyMap.containsKey(sender)) {
-                debug(log, "Replica[{}] add sender[{}] to neighbors", replica.id(), sender);
+                log.debug("Add sender[{}] to neighbors", toStringifiable(sender));
                 antiEntropyMap.computeIfAbsent(sender, k ->
-                        new AntiEntropy(replica, localAddr, sender, engine,
-                                executor, messageSource, maxEventsInDelta, neighborLost,
-                                metricManager.sendDeltaNum, metricManager.sendDeltaBytes,
-                                compressor));
+                    new AntiEntropy(replica, localAddr, sender, engine,
+                        executor, messageSource, maxEventsInDelta, neighborLost,
+                        metricManager.sendDeltaNum, metricManager.sendDeltaBytes,
+                        compressor));
             }
         } else if (ackSeqNo == null || ackSeqNo < delta.getSeqNo()) {
             engine.join(uri, delta.getReplacementList())
@@ -271,8 +273,7 @@ final class AntiEntropyManager {
                         Optional<Map<ByteString, NavigableMap<Long, Long>>> historyEvents =
                             engine.historyEvents(uri);
                         if (latticeEvents.isPresent() && historyEvents.isPresent()) {
-                            trace(log, "Replica[{}] reply ack[{}] to addr[{}]",
-                                replica.id(), delta.getSeqNo(), sender);
+                            log.trace("Reply ack[{}] to addr[{}]", delta.getSeqNo(), toStringifiable(sender));
                             CRDTStoreMessage msg = CRDTStoreMessage.newBuilder()
                                 .setUri(uri)
                                 .setReceiver(sender)
@@ -304,30 +305,29 @@ final class AntiEntropyManager {
         metricManager.receiveAckBytes.increment(ack.getSerializedSize());
         AntiEntropy a = antiEntropyMap.get(sender);
         if (a != null) {
-            trace(log, "Replica[{}] receive ack[{}] from addr[{}]:\n{}",
-                replica.id(), ack.getSeqNo(), sender, ack);
+            log.trace("Receive ack[{}] from addr[{}]:\n{}", ack.getSeqNo(), toStringifiable(sender), ack);
             a.handleAck(ack);
         } else if (lostNeighbors.contains(sender)) {
             synchronized (this) {
-                trace(log, "Replica[{}] receive probe ack from lost neighbor[{}]", replica.id(), sender);
+                log.trace("Receive probe ack from lost neighbor[{}]", toStringifiable(sender));
                 lostNeighbors.remove(sender);
                 if (antiEntropyMap.isEmpty()) {
-                    trace(log, "Replica[{}] add [{}] to neighbors");
+                    log.trace("Add [{}] to neighbors", toStringifiable(sender));
                     antiEntropyMap.computeIfAbsent(sender, k ->
-                            new AntiEntropy(replica, localAddr, sender, engine,
-                                    executor, messageSource, maxEventsInDelta, neighborLost,
-                                    metricManager.sendDeltaNum, metricManager.sendDeltaBytes, compressor));
+                        new AntiEntropy(replica, localAddr, sender, engine,
+                            executor, messageSource, maxEventsInDelta, neighborLost,
+                            metricManager.sendDeltaNum, metricManager.sendDeltaBytes, compressor));
                 }
             }
         } else {
-            debug(log, "Replica[{}] ignore ack[{}] from addr[{}]:\n{}",
-                replica.id(), ack.getSeqNo(), sender, ack);
+            log.debug("Ignore ack[{}] from addr[{}]:\n{}", ack.getSeqNo(), toStringifiable(sender), ack);
         }
     }
 
     void stop() {
-        debug(log, "Stop anti-entropy manager of replica[{}]", replica.id());
+        log.debug("Stop anti-entropy manager");
         antiEntropyMap.values().forEach(AntiEntropy::cancel);
+        disposable.dispose();
         this.metricManager.close();
     }
 

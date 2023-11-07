@@ -46,7 +46,7 @@ public class KVSpaceMetersTest extends MockableTest {
 
     @Test
     public void removeTimerWhenNoRef() {
-        Timer timer = KVSpaceMeters.getTimer("testSpace", KVSpaceMetric.GCTimer, Tags.of(new String[0]));
+        Timer timer = KVSpaceMeters.getTimer("testSpace", KVSpaceMetric.FlushTimer, Tags.of(new String[0]));
         String timerName = timer.getId().getName();
         WeakReference<Timer> weakRef = new WeakReference<>(timer);
         assertFalse(Metrics.globalRegistry.find(timerName).timers().isEmpty());

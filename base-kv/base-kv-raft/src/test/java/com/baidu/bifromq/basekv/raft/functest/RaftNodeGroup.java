@@ -49,12 +49,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Slf4j
 public final class RaftNodeGroup {
-    public static final Logger RAFT_LOGGER = LoggerFactory.getLogger("raft.logger");
     public final static RaftConfig DefaultRaftConfig = new RaftConfig();
     public final static int RaftNodeTickMagnitude = 5;
     private final ConcurrentHashMap<String, RaftNode> nodes = new ConcurrentHashMap();
@@ -117,7 +114,7 @@ public final class RaftNodeGroup {
             Snapshot.newBuilder().setIndex(snapLastIndex).setTerm(snapLastTerm).setClusterConfig(clusterConfig).build();
         IRaftStateStore stateStorage = new InMemoryStateStore(id, snapshot);
         RaftNode raftNode =
-            new RaftNode(raftConfig, stateStorage, RAFT_LOGGER, Executors.defaultThreadFactory(), "id", id);
+            new RaftNode(raftConfig, stateStorage, Executors.defaultThreadFactory(), "id", id);
         nodes.put(id, raftNode);
     }
 
@@ -186,11 +183,11 @@ public final class RaftNodeGroup {
                         break;
                 }
             },
-            fsmSnapshot -> {
+            (fsmSnapshot, leader) -> {
                 if (snapshotLogs.containsKey(id) && nodes.containsKey(id)) {
                     snapshotLogs.get(id).add(fsmSnapshot);
                 }
-                return CompletableFuture.completedFuture(null);
+                return CompletableFuture.completedFuture(fsmSnapshot);
             });
     }
 

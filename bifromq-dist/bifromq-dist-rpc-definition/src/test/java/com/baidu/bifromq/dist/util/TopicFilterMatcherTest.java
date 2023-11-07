@@ -17,6 +17,7 @@ package com.baidu.bifromq.dist.util;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.dist.util.TopicUtil.parse;
 import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
+import static java.util.Collections.singleton;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -27,7 +28,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -86,7 +86,7 @@ public class TopicFilterMatcherTest {
         }
         TopicTrie trie = new TopicTrie();
         topics.forEach(
-            topic -> trie.add(topic, Collections.singleton(TopicMessage.newBuilder().setTopic(topic).build())));
+            topic -> trie.add(topic, singleton(TopicMessage.newBuilder().setTopic(topic).build())));
         List<String> topicFilters = TopicUtil.expand(trie);
         log.info("Expand {} topics into {} topic filters costs {}ms", topicCount, topicFilters.size(),
             Duration.ofNanos(System.nanoTime() - s).toMillis());
@@ -103,6 +103,38 @@ public class TopicFilterMatcherTest {
     }
 
     @Test
+    public void specialCases() {
+        TopicTrie trie = new TopicTrie();
+        trie.add("a", singleton(TopicMessage.newBuilder().setTopic("a").build()));
+        trie.add("a/b", singleton(TopicMessage.newBuilder().setTopic("a/b").build()));
+        TopicFilterMatcher matcher = new TopicFilterMatcher(trie);
+        assertTrue(matcher.match(escape("a/#")).get().containsKey("a"));
+        assertTrue(matcher.match(escape("a/#")).get().containsKey("a/b"));
+        assertTrue(matcher.match(escape("b/#")).isEmpty());
+        assertTrue(matcher.match(escape("a/b/#")).get().containsKey("a/b"));
+        assertTrue(matcher.match(escape("a/+")).get().containsKey("a/b"));
+        assertTrue(matcher.match(escape("a/+/#")).get().containsKey("a/b"));
+        assertTrue(matcher.match(escape("a/c/#")).isEmpty());
+
+        trie = new TopicTrie();
+        trie.add("/", singleton(TopicMessage.newBuilder().setTopic("a").build()));
+        trie.add("/a", singleton(TopicMessage.newBuilder().setTopic("a/b").build()));
+        matcher = new TopicFilterMatcher(trie);
+        assertTrue(matcher.match(escape("+")).isEmpty());
+        assertTrue(matcher.match(escape("+/+")).get().containsKey("/"));
+        assertTrue(matcher.match(escape("+/+")).get().containsKey("/a"));
+
+        assertTrue(matcher.match(escape("#")).get().containsKey("/"));
+        assertTrue(matcher.match(escape("#")).get().containsKey("/a"));
+
+        assertTrue(matcher.match(escape("+/#")).get().containsKey("/"));
+        assertTrue(matcher.match(escape("+/#")).get().containsKey("/a"));
+
+        assertTrue(matcher.match(escape("/b/#")).isEmpty());
+        assertTrue(matcher.match(escape("+/b")).isEmpty());
+    }
+
+    @Test
     public void testFindingHigherTopicFilter() {
         long s = System.nanoTime();
         List<String> topics = new ArrayList<>();
@@ -114,7 +146,7 @@ public class TopicFilterMatcherTest {
         }
         TopicTrie trie = new TopicTrie();
         topics.forEach(
-            topic -> trie.add(topic, Collections.singleton(TopicMessage.newBuilder().setTopic(topic).build())));
+            topic -> trie.add(topic, singleton(TopicMessage.newBuilder().setTopic(topic).build())));
         List<String> topicFilters = TopicUtil.expand(trie);
         log.info("Expand {} topics into {} topic filters costs {}ms", topicCount, topicFilters.size(),
             Duration.ofNanos(System.nanoTime() - s).toMillis());

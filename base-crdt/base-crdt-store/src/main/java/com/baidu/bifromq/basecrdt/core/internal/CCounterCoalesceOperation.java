@@ -23,12 +23,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 class CCounterCoalesceOperation extends CoalesceOperation<IDotMap, CCounterOperation> {
-
+    private final Set<ByteString> zeroOutReplicaIds = Sets.newHashSet();
     private long inc;
-
     private boolean preset;
-
-    private Set<ByteString> zeroOutReplicaIds = Sets.newHashSet();
 
     CCounterCoalesceOperation(ByteString replicaId, CCounterOperation op) {
         super(replicaId);
@@ -38,19 +35,16 @@ class CCounterCoalesceOperation extends CoalesceOperation<IDotMap, CCounterOpera
     @Override
     public void coalesce(CCounterOperation op) {
         switch (op.type) {
-            case Add:
-                inc += op.c;
-                break;
-            case Preset:
+            case Add -> inc += op.c;
+            case Preset -> {
                 if (op.replicaId == null) {
                     preset = true;
                     inc = op.c;
                 } else {
                     zeroOutReplicaIds.add(op.replicaId);
                 }
-                break;
-            default:
-                throw new IllegalStateException("Unknown ccounter operation type: " + op.type);
+            }
+            default -> throw new IllegalStateException("Unknown ccounter operation type: " + op.type);
         }
     }
 

@@ -33,7 +33,6 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -85,6 +84,22 @@ public class DistQoS0Test extends DistWorkerTest {
 
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, topic, payload, "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
+    }
+
+    @Test(groups = "integration")
+    public void testDistCase1() {
+        // pub: qos0
+        // topic: "/a/b/c"
+        // sub: inbox1 -> [(/a/b/c, qos0),(/#, qos0)], inbox2 -> [(/#,qos1)]
+        // expected behavior: inbox1 gets 2 messages, inbox2 get 1 message
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+
+        sub(tenantA, "TopicA/#", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "TopicB", copyFromUtf8("Hello"), "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault("TopicB", 0).intValue(), 0);
+
+        unsub(tenantA, "TopicA/#", InboxService, "inbox1", "batch1");
     }
 
     @Test(groups = "integration")
@@ -205,7 +220,7 @@ public class DistQoS0Test extends DistWorkerTest {
 
         ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
 
-        verify(writer2, after(100).atMost(10)).deliver(list2.capture());
+        verify(writer2, after(200).atMost(10)).deliver(list2.capture());
         for (DeliveryPack pack : list2.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
             assertEquals(msgs.getTopic(), "/a/b/c");
@@ -240,10 +255,10 @@ public class DistQoS0Test extends DistWorkerTest {
         }
 
         ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer1, after(100).atMost(10)).deliver(list1.capture());
+        verify(writer1, after(200).atMost(10)).deliver(list1.capture());
 
         ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
-        verify(writer2, after(100).atMost(10)).deliver(list2.capture());
+        verify(writer2, after(200).atMost(10)).deliver(list2.capture());
 
         List<Iterable<DeliveryPack>> captured = list1.getAllValues().isEmpty() ?
             list2.getAllValues() : list1.getAllValues();

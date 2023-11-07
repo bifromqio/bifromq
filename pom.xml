@@ -17,12 +17,13 @@
 
     <groupId>com.baidu.bifromq</groupId>
     <artifactId>bifromq-parent</artifactId>
-    <version>2.0.0-SNAPSHOT</version>
+    <version>2.0.1-SNAPSHOT</version>
     <modules>
         <module>base-env</module>
         <module>base-cluster</module>
         <module>base-crdt</module>
         <module>base-hlc</module>
+        <module>base-logger</module>
         <module>base-kv</module>
         <module>base-rpc</module>
         <module>base-scheduler</module>
@@ -156,6 +157,11 @@
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
                 <artifactId>base-hlc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-logger</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -796,6 +802,8 @@
                         <excludes>
                             <exclude>com/baidu/bifromq/type/*.class</exclude>
                             <exclude>**/proto/*.class</exclude>
+                            <exclude>io/grpc/**/*.class</exclude>
+                            <exclude>com/baidu/bifromq/baserpc/**/*.class</exclude>
                         </excludes>
                     </configuration>
                     <executions>
@@ -811,11 +819,6 @@
                             <goals>
                                 <goal>report</goal>
                             </goals>
-                            <configuration>
-                                <outputDirectory>
-                                    ${session.executionRootDirectory}/target/site/coverage/${project.artifactId}
-                                </outputDirectory>
-                            </configuration>
                         </execution>
                     </executions>
                 </plugin>
@@ -870,6 +873,23 @@
             <build>
                 <plugins>
                     <plugin>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>create-javadoc-jar</id>
+                                <goals>
+                                    <goal>javadoc</goal>
+                                    <goal>jar</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <source>${java.source.version}</source>
+                            <failOnError>true</failOnError>
+                        </configuration>
+                    </plugin>
+                    <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
@@ -877,6 +897,10 @@
                                 <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
                     </plugin>
                 </plugins>
             </build>
@@ -948,6 +972,7 @@
                         </executions>
                         <configuration>
                             <source>${java.source.version}</source>
+                            <failOnError>true</failOnError>
                         </configuration>
                     </plugin>
                     <plugin>

@@ -13,16 +13,14 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.LATEST_CP_KEY;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_END;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_START;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.fromMetaKey;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
@@ -30,9 +28,8 @@ import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
 import com.baidu.bifromq.basekv.localengine.SyncContext;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -40,22 +37,10 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.FileVisitOption;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -63,10 +48,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.rocksdb.Checkpoint;
+import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.CompactRangeOptions;
@@ -76,25 +60,22 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteOptions;
 
 @Slf4j
-public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
+abstract class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     private enum State {
-        Opening, Destroying, Closing, Terminated
+        Init, Opening, Destroying, Closing, Terminated
     }
 
-    private static final String CP_SUFFIX = ".cp";
-    private final AtomicReference<State> state = new AtomicReference<>(State.Opening);
-    private final RocksDB db;
+    private final AtomicReference<State> state = new AtomicReference<>(State.Init);
+    protected final RocksDB db;
     private final RocksDBKVEngineConfigurator configurator;
-    private final File cpRootDir;
     private final ColumnFamilyDescriptor cfDesc;
-    private final ColumnFamilyHandle cfHandle;
+    protected final ColumnFamilyHandle cfHandle;
     private final WriteOptions writeOptions;
     private final AtomicReference<CompletableFuture<Long>> flushFutureRef = new AtomicReference<>();
     private final IWriteStatsRecorder writeStats;
     private final ExecutorService compactionExecutor;
     private final ExecutorService flushExecutor;
-    private final Checkpoint checkpoint;
-    private final LoadingCache<String, RocksDBKVSpaceCheckpoint> checkpoints;
+    private final Cache<String, IRocksDBKVSpaceCheckpoint> checkpoints;
     private final RocksDBKVEngine engine;
     private final Runnable onDestroy;
     private final AtomicBoolean compacting = new AtomicBoolean(false);
@@ -104,10 +85,12 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
     private final MetricManager metricMgr;
     private final String[] tags;
-    private RocksDBKVSpaceCheckpoint latestCheckpoint;
+    // keep a strong ref to latest checkpoint
+    private IKVSpaceCheckpoint latestCheckpoint;
     private volatile long lastCompactAt;
     private volatile long nextCompactAt;
 
+    @SneakyThrows
     public RocksDBKVSpace(String id,
                           ColumnFamilyDescriptor cfDesc,
                           ColumnFamilyHandle cfHandle,
@@ -116,19 +99,6 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
                           RocksDBKVEngine engine,
                           Runnable onDestroy,
                           String... tags) {
-        this(id, cfDesc, cfHandle, db, configurator, engine, onDestroy, false, tags);
-    }
-
-    @SneakyThrows
-    private RocksDBKVSpace(String id,
-                           ColumnFamilyDescriptor cfDesc,
-                           ColumnFamilyHandle cfHandle,
-                           RocksDB db,
-                           RocksDBKVEngineConfigurator configurator,
-                           RocksDBKVEngine engine,
-                           Runnable onDestroy,
-                           boolean isCreate,
-                           String... tags) {
         super(id, Tags.of(tags));
         this.tags = tags;
         this.db = db;
@@ -142,7 +112,6 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
             configurator.getCompactTombstoneKeysRatio(),
             this::scheduleCompact) : NoopWriteStatsRecorder.INSTANCE;
         this.engine = engine;
-        this.checkpoint = Checkpoint.create(db);
         compactionExecutor = new ThreadPoolExecutor(1, 1,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("keyrange-compactor"));
@@ -155,35 +124,17 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
             writeOptions.setSync(configurator.isFsyncWAL());
         }
 
-        metaItr = new RocksDBKVEngineIterator(db, cfHandle, META_SECTION_START, META_SECTION_END);
-        cpRootDir = new File(configurator.getDbCheckpointRootDir(), id);
-        Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
+        metaItr = new RocksDBKVEngineIterator(db, cfHandle, null, META_SECTION_START, META_SECTION_END);
 
-        checkpoints = Caffeine.newBuilder()
-            .weakValues()
-            .evictionListener((RemovalListener<String, RocksDBKVSpaceCheckpoint>) (key, value, cause) -> {
-                if (value != null) {
-                    value.close();
-                }
-            })
-            .build(cpId -> {
-                synchronized (this) {
-                    File cpDir = checkpointDir(cpId);
-                    if (cpDir.exists()) {
-                        try {
-                            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, configurator, tags);
-                        } catch (Throwable e) {
-                            log.error("Failed to init checkpoint[{}] for key range[{}]", cpId, id, e);
-                            return null;
-                        }
-                    }
-                    return null;
-                }
-            });
+        checkpoints = Caffeine.newBuilder().weakValues().build();
         metricMgr = new MetricManager(tags);
-        if (!isCreate) {
+    }
+
+    public RocksDBKVSpace open() {
+        if (state.compareAndSet(State.Init, State.Opening)) {
             load();
         }
+        return this;
     }
 
     public Observable<Map<ByteString, ByteString>> metadata() {
@@ -259,7 +210,7 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         });
     }
 
-    private void doFlush() {
+    protected void doFlush() {
         metricMgr.flushTimer.record(() -> {
             if (configurator.isDisableWAL()) {
                 log.debug("KeyRange[{}] flush start", id);
@@ -304,34 +255,19 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     public String checkpoint() {
         return metricMgr.checkpointTimer.record(() -> {
             synchronized (this) {
-                String cpId = genCheckpointId();
-                File cpDir = Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
-                log.debug("Checkpointing key range[{}] in path[{}]", id, cpDir);
-                try {
-                    // flush before checkpointing
-                    db.put(cfHandle, LATEST_CP_KEY, cpId.getBytes());
-                    doFlush();
-                    checkpoint.createCheckpoint(cpDir.toString());
-                    loadLatestCheckpoint();
-                } catch (Throwable e) {
-                    log.error("Failed to checkpoint key range[{}] in path[{}]", id, cpDir, e);
-                    throw new KVEngineException("Checkpoint key range error", e);
-                }
-                return cpId;
+                IRocksDBKVSpaceCheckpoint cp = doCheckpoint();
+                checkpoints.put(cp.cpId(), cp);
+                latestCheckpoint = cp;
+                return cp.cpId();
             }
         });
     }
 
-    @Override
-    public Optional<String> latestCheckpoint() {
-        synchronized (this) {
-            return Optional.ofNullable(latestCheckpoint == null ? null : latestCheckpoint.cpId());
-        }
-    }
+    protected abstract IRocksDBKVSpaceCheckpoint doCheckpoint();
 
     @Override
-    public Optional<IKVSpaceReader> open(String checkpointId) {
-        return Optional.ofNullable(checkpoints.get(checkpointId));
+    public Optional<IKVSpaceCheckpoint> open(String checkpointId) {
+        return Optional.ofNullable(checkpoints.getIfPresent(checkpointId));
     }
 
     @Override
@@ -355,20 +291,6 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         );
     }
 
-    void gc() {
-        metricMgr.gcTimer.record(() -> {
-            synchronized (this) {
-                for (String cpId : checkpoints()) {
-                    try {
-                        cleanCheckpoint(cpId);
-                    } catch (Throwable e) {
-                        log.error("Clean checkpoint[{}] for key range[{}] error", cpId, id, e);
-                    }
-                }
-            }
-        });
-    }
-
     void close() {
         if (state.compareAndSet(State.Opening, State.Closing)) {
             try {
@@ -379,23 +301,17 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         }
     }
 
-    private void doClose() {
-        super.close();
+    protected void doClose() {
         log.debug("Close key range[{}]", id);
+        metricMgr.close();
+        checkpoints.asMap().forEach((cpId, cp) -> cp.close());
         metaItr.close();
         cfDesc.getOptions().close();
         synchronized (compacting) {
             db.destroyColumnFamilyHandle(cfHandle);
         }
-        checkpoint.close();
         writeOptions.close();
         metadataSubject.onComplete();
-        metricMgr.close();
-    }
-
-    private String genCheckpointId() {
-        // we need generate global unique checkpoint id, since it will be used in raft snapshot
-        return UUID.randomUUID() + CP_SUFFIX;
     }
 
     @Override
@@ -413,56 +329,15 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
         return syncContext.refresher();
     }
 
-    private File checkpointDir(String cpId) {
-        return Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
-    }
-
     @SneakyThrows
     private void loadLatestCheckpoint() {
-        byte[] cpIdBytes = db.get(cfHandle, LATEST_CP_KEY);
-        if (cpIdBytes != null) {
-            String cpId = new String(cpIdBytes, UTF_8);
-            latestCheckpoint = checkpoints.get(cpId);
-        } else {
-            latestCheckpoint = null;
-        }
+        IRocksDBKVSpaceCheckpoint checkpoint = doLoadLatestCheckpoint();
+        assert !checkpoints.asMap().containsKey(checkpoint.cpId());
+        checkpoints.put(checkpoint.cpId(), checkpoint);
+        latestCheckpoint = checkpoint;
     }
 
-    protected Iterable<String> checkpoints() {
-        File[] cpDirList = cpRootDir.listFiles();
-        if (cpDirList == null) {
-            return Collections.emptyList();
-        }
-        return Arrays.stream(cpDirList)
-            .filter(File::isDirectory)
-            .map(File::getName)
-            .filter(cpId -> !cpId.equals(latestCheckpoint.cpId()) && checkpoints.getIfPresent(cpId) == null)
-            .collect(Collectors.toList());
-    }
-
-    protected void cleanCheckpoint(String cpId) {
-        log.debug("Deleting checkpoint[{}] for key range[{}]", cpId, id);
-        try {
-            Files.walkFileTree(checkpointDir(cpId).toPath(), EnumSet.noneOf(FileVisitOption.class), Integer.MAX_VALUE,
-                new SimpleFileVisitor<>() {
-                    @Override
-                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                        throws IOException {
-                        Files.delete(file);
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    @Override
-                    public FileVisitResult postVisitDirectory(Path dir, IOException exc)
-                        throws IOException {
-                        Files.delete(dir);
-                        return FileVisitResult.CONTINUE;
-                    }
-                });
-        } catch (IOException e) {
-            log.error("Failed to clean checkpoint[{}] for key range[{}] at path:{}", cpId, id, checkpointDir(cpId));
-        }
-    }
+    protected abstract IRocksDBKVSpaceCheckpoint doLoadLatestCheckpoint();
 
     private void scheduleCompact() {
         if (state.get() != State.Opening) {
@@ -498,34 +373,78 @@ public class RocksDBKVSpace extends RocksDBKVSpaceReader implements IKVSpace {
     }
 
     private class MetricManager {
-        private Gauge checkpointGauge; // hold a strong reference
-        private Timer checkpointTimer;
-        private Counter compactionSchedCounter;
-        private Timer compactionTimer;
-        private Timer gcTimer;
-        private Timer flushTimer;
+        private final Gauge blockCacheSizeGauge;
+        private final Gauge tableReaderSizeGauge;
+        private final Gauge memtableSizeGauges;
+        private final Gauge pinedMemorySizeGauges;
+        private final Gauge checkpointGauge; // hold a strong reference
+        private final Timer checkpointTimer;
+        private final Counter compactionSchedCounter;
+        private final Timer compactionTimer;
+        private final Timer flushTimer;
 
         MetricManager(String... tags) {
             Tags metricTags = Tags.of(tags);
-            checkpointGauge = KVSpaceMeters.getGauge(id, KVSpaceMetric.CheckpointNumGauge, () -> {
-                File[] cpDirList = cpRootDir.listFiles();
-                return cpDirList != null ? cpDirList.length : 0;
-            }, metricTags);
+            checkpointGauge =
+                KVSpaceMeters.getGauge(id, KVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, metricTags);
             checkpointTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CheckpointTimer, metricTags);
             compactionSchedCounter = KVSpaceMeters.getCounter(id, KVSpaceMetric.CompactionCounter, metricTags);
             compactionTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CompactionTimer, metricTags);
-            gcTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.GCTimer, metricTags);
             flushTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.FlushTimer, metricTags);
+
+            blockCacheSizeGauge = KVSpaceMeters.getGauge(id, KVSpaceMetric.BlockCache, () -> {
+                try {
+                    if (!((BlockBasedTableConfig) cfDesc.getOptions().tableFormatConfig()).noBlockCache()) {
+                        return db.getLongProperty(cfHandle, "rocksdb.block-cache-usage");
+                    }
+                    return 0;
+                } catch (RocksDBException e) {
+                    log.warn("Unable to get long property {}", "rocksdb.block-cache-usage", e);
+                    return 0;
+                }
+            }, metricTags);
+
+            tableReaderSizeGauge = KVSpaceMeters.getGauge(id, KVSpaceMetric.TableReader, () -> {
+                try {
+                    return db.getLongProperty(cfHandle, "rocksdb.estimate-table-readers-mem");
+                } catch (RocksDBException e) {
+                    log.warn("Unable to get long property {}", "rocksdb.estimate-table-readers-mem", e);
+                    return 0;
+                }
+            }, metricTags);
+
+            memtableSizeGauges = KVSpaceMeters.getGauge(id, KVSpaceMetric.MemTable, () -> {
+                try {
+                    return db.getLongProperty(cfHandle, "rocksdb.cur-size-all-mem-tables");
+                } catch (RocksDBException e) {
+                    log.warn("Unable to get long property {}", "rocksdb.cur-size-all-mem-tables", e);
+                    return 0;
+                }
+            }, metricTags);
+
+            pinedMemorySizeGauges = KVSpaceMeters.getGauge(id, KVSpaceMetric.PinnedMem, () -> {
+                try {
+                    if (!((BlockBasedTableConfig) cfDesc.getOptions().tableFormatConfig()).noBlockCache()) {
+                        return db.getLongProperty(cfHandle, "rocksdb.block-cache-pinned-usage");
+                    }
+                    return 0;
+                } catch (RocksDBException e) {
+                    log.warn("Unable to get long property {}", "rocksdb.block-cache-pinned-usage", e);
+                    return 0;
+                }
+            }, metricTags);
         }
 
         void close() {
+            blockCacheSizeGauge.close();
+            memtableSizeGauges.close();
+            tableReaderSizeGauge.close();
+            pinedMemorySizeGauges.close();
             checkpointGauge.close();
-            checkpointGauge = null;
-            checkpointTimer = null;
-            compactionSchedCounter = null;
-            compactionTimer = null;
-            gcTimer = null;
-            flushTimer = null;
+            checkpointTimer.close();
+            compactionSchedCounter.close();
+            compactionTimer.close();
+            flushTimer.close();
         }
     }
 }

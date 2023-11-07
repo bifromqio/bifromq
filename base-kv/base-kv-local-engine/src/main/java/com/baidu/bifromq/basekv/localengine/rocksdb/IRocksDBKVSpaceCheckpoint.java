@@ -11,17 +11,10 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.raft;
+package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-public interface IRaftNodeLogger {
+import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 
-    void logTrace(String message, Object... args);
-
-    void logDebug(String message, Object... args);
-
-    void logInfo(String message, Object... args);
-
-    void logWarn(String message, Object... args);
-
-    void logError(String message, Object... args);
+public interface IRocksDBKVSpaceCheckpoint extends IKVSpaceCheckpoint {
+    void close();
 }

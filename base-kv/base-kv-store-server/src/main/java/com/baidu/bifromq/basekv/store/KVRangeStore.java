@@ -190,10 +190,8 @@ public class KVRangeStore implements IKVRangeStore {
 
     private void loadExisting() {
         mgmtTaskRunner.add(() -> {
-            kvRangeEngine.ranges().forEach((id, keyRange) -> {
-                KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
-                kvRangeMap.computeIfAbsent(kvRangeId, key -> loadKVRangeFSM(key, keyRange));
-            });
+            kvRangeEngine.ranges().forEach((id, keyRange) ->
+                putAndOpen(loadKVRangeFSM(KVRangeIdUtil.fromString(id), keyRange)));
             updateDescriptorList();
         }).toCompletableFuture().join();
     }
@@ -262,7 +260,7 @@ public class KVRangeStore implements IKVRangeStore {
                     .setIndex(5)
                     .setData(rangeSnapshot.toByteString())
                     .build();
-                kvRangeMap.put(genesisId, createKVRangeFSM(genesisId, snapshot, rangeSnapshot));
+                putAndOpen(createKVRangeFSM(genesisId, snapshot, rangeSnapshot));
                 updateDescriptorList();
                 return CompletableFuture.completedFuture(true);
             }
@@ -350,8 +348,7 @@ public class KVRangeStore implements IKVRangeStore {
                                 return ensureCompatibilityInternal(rangeId, ver, boundary, emptySet())
                                     .thenCompose(v -> range.destroy())
                                     .thenAccept(v -> {
-                                        kvRangeMap.put(rangeId,
-                                            createKVRangeFSM(rangeId, request.getInitSnapshot(), rangeSnapshot));
+                                        putAndOpen(createKVRangeFSM(rangeId, request.getInitSnapshot(), rangeSnapshot));
                                         messenger.send(StoreMessage.newBuilder()
                                             .setFrom(id)
                                             .setSrcRange(payload.getRangeId())
@@ -374,14 +371,13 @@ public class KVRangeStore implements IKVRangeStore {
                                         KVRangeIdUtil.toString(rangeId), id);
                                     walStorageEngine.get(rangeId).destroy();
                                 }
-                                kvRangeMap.put(rangeId,
-                                    createKVRangeFSM(rangeId, request.getInitSnapshot(), rangeSnapshot));
+                                putAndOpen(createKVRangeFSM(rangeId, request.getInitSnapshot(), rangeSnapshot));
                             } else {
                                 // for split workflow, the keyspace is already created, just create walstore and load it
                                 if (!walStorageEngine.has(rangeId)) {
                                     walStorageEngine.create(rangeId, request.getInitSnapshot());
                                 }
-                                kvRangeMap.put(rangeId, loadKVRangeFSM(rangeId, keyRange));
+                                putAndOpen(loadKVRangeFSM(rangeId, keyRange));
                             }
                             updateDescriptorList();
                             messenger.send(StoreMessage.newBuilder()
@@ -561,7 +557,7 @@ public class KVRangeStore implements IKVRangeStore {
         checkStarted();
         log.debug("Load existing kvrange: rangeId={},storeId={}", KVRangeIdUtil.toString(rangeId), id);
         assert walStorageEngine.has(rangeId);
-        KVRangeFSM kvRange = new KVRangeFSM(clusterId,
+        return new KVRangeFSM(clusterId,
             id,
             rangeId,
             coProcFactory,
@@ -572,14 +568,12 @@ public class KVRangeStore implements IKVRangeStore {
             bgTaskExecutor,
             opts.getKvRangeOptions(),
             this::quitKVRange);
-        kvRange.open(new KVRangeMessenger(id, kvRange.id(), messenger));
-        return kvRange;
     }
 
     private IKVRangeFSM createKVRangeFSM(KVRangeId rangeId, Snapshot snapshot, KVRangeSnapshot rangeSnapshot) {
         log.debug("Creating new kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
         IKVRangeWALStore walStore = walStorageEngine.create(rangeId, snapshot);
-        KVRangeFSM rangeFSM = new KVRangeFSM(clusterId,
+        return new KVRangeFSM(clusterId,
             id,
             rangeId,
             coProcFactory,
@@ -590,8 +584,6 @@ public class KVRangeStore implements IKVRangeStore {
             bgTaskExecutor,
             opts.getKvRangeOptions(),
             this::quitKVRange);
-        rangeFSM.open(new KVRangeMessenger(id, rangeId, messenger));
-        return rangeFSM;
     }
 
     private void updateDescriptorList() {
@@ -643,13 +635,17 @@ public class KVRangeStore implements IKVRangeStore {
                                     .build();
                                 log.debug("Init range using Snapshot: rangeId={}, storeId={}\n{}",
                                     KVRangeIdUtil.toString(overlappedRangeId), id, initSnapshot);
-                                kvRangeMap.put(overlappedRangeId,
-                                    createKVRangeFSM(overlappedRangeId, initSnapshot, rangeSnapshot));
+                                putAndOpen(createKVRangeFSM(overlappedRangeId, initSnapshot, rangeSnapshot));
                             });
                     })
                     .toArray(CompletableFuture[]::new))
                 .thenAccept(v -> updateDescriptorList());
         }
+    }
+
+    private void putAndOpen(IKVRangeFSM kvRangeFSM) {
+        kvRangeMap.put(kvRangeFSM.id(), kvRangeFSM);
+        kvRangeFSM.open(new KVRangeMessenger(id, kvRangeFSM.id(), messenger));
     }
 
     private void checkStarted() {

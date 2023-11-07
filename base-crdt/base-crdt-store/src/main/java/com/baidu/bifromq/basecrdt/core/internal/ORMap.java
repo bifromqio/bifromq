@@ -44,11 +44,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 class ORMap extends CausalCRDT<IDotMap, ORMapOperation> implements IORMap {
-    private final Cache<ByteString, CausalCRDT> subCRDTMap = Caffeine.newBuilder().weakValues().build();
+    private final Cache<ByteString, CausalCRDT<?, ?>> subCRDTMap = Caffeine.newBuilder().weakValues().build();
 
 
     ORMap(Replica replica, DotStoreAccessor<IDotMap> dotStoreAccessor,
@@ -193,7 +191,7 @@ class ORMap extends CausalCRDT<IDotMap, ORMapOperation> implements IORMap {
             eventsByKey.get(key).get(1).add(val);
         }
         eventsByKey.forEach((k, v) -> {
-            CausalCRDT subCRDT = subCRDTMap.getIfPresent(k);
+            CausalCRDT<?, ?> subCRDT = subCRDTMap.getIfPresent(k);
             if (subCRDT != null) {
                 subCRDT.afterInflation(v.get(0), v.get(1));
             }

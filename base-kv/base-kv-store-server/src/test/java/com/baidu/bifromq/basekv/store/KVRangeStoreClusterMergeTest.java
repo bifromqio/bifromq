@@ -34,7 +34,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
     @Test(groups = "integration")
     public void mergeFromLeaderStore() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
+        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 40);
         log.info("Splitting range");
         cluster.split(genesisKVRangeSettings.leader,
                 genesisKVRangeSettings.ver,
@@ -86,7 +86,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
                 mergee.get().id)
             .toCompletableFuture().join();
 
-        KVRangeConfig setting = cluster.awaitAllKVRangeReady(merger.get().id, 3, 5000);
+        KVRangeConfig setting = cluster.awaitAllKVRangeReady(merger.get().id, 3, 40);
         log.info("Merged settings {}", setting);
         await().atMost(Duration.ofSeconds(400)).until(() -> {
             for (String storeId : cluster.allStoreIds()) {
@@ -105,7 +105,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
     @Test(groups = "integration")
     public void mergeUnderOnlyQuorumAvailable() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
+        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 40);
         log.info("Splitting range");
         cluster.split(genesisKVRangeSettings.leader,
                 genesisKVRangeSettings.ver,
@@ -161,7 +161,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         cluster.merge(merger.get().leader, merger.get().ver, merger.get().id, mergee.get().id)
             .toCompletableFuture().join();
 
-        KVRangeConfig mergedSettings = cluster.awaitAllKVRangeReady(merger.get().id, 3, 5000);
+        KVRangeConfig mergedSettings = cluster.awaitAllKVRangeReady(merger.get().id, 3, 40);
         log.info("Merged settings {}", mergedSettings);
         await().atMost(Duration.ofSeconds(40))
             .until(() -> cluster.kvRangeSetting(merger.get().id).boundary.equals(FULL_BOUNDARY));
@@ -172,7 +172,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
     @Test(groups = "integration")
     public void mergeWithOneMemberIsolated() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 5000);
+        KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 40);
         log.info("Splitting range");
         cluster.split(genesisKVRangeSettings.leader,
                 genesisKVRangeSettings.ver,
@@ -229,7 +229,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         cluster.merge(merger.get().leader, merger.get().ver, merger.get().id, mergee.get().id)
             .toCompletableFuture().join();
 
-        KVRangeConfig mergedSettings = cluster.awaitAllKVRangeReady(merger.get().id, 3, 5000);
+        KVRangeConfig mergedSettings = cluster.awaitAllKVRangeReady(merger.get().id, 3, 40);
         await().atMost(Duration.ofSeconds(40))
             .until(() -> cluster.kvRangeSetting(merger.get().id).boundary.equals(FULL_BOUNDARY));
         log.info("Merge done {}", mergedSettings);

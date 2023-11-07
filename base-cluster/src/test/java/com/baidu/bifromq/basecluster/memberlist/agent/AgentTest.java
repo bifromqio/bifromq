@@ -52,6 +52,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -93,7 +94,8 @@ public class AgentTest {
         hostsSubjects = PublishSubject.create();
         messageSubject = PublishSubject.create();
         when(crdtStore.host(CRDTUtil.toAgentURI(agentId), endpoint1.toByteString())).thenReturn(replica);
-        when(crdtStore.get(CRDTUtil.toAgentURI(agentId))).thenReturn(Optional.of(orMap));
+        when(crdtStore.get(CRDTUtil.toAgentURI(agentId)))
+            .thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(orMap));
         when(orMap.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
         when(orMap.id()).thenReturn(replica);
         when(orMap.inflation()).thenReturn(inflationSubject);

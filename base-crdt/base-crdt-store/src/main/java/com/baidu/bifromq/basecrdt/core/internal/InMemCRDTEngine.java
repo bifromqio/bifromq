@@ -16,9 +16,11 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.toByteString;
 import static java.lang.Long.toUnsignedString;
 
+import com.baidu.bifromq.logger.FormatableLogger;
 import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.core.api.CRDTURI;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
+import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.core.exception.CRDTNotFoundException;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
@@ -37,19 +39,21 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public final class InMemCRDTEngine implements ICRDTEngine {
+
     private enum State {
         CREATED, RUNNING, STOPPING, SHUTDOWN
     }
+
+    private static final Logger log = FormatableLogger.getLogger(InMemCRDTEngine.class);
 
     private final long id;
     private final AtomicReference<State> status = new AtomicReference<>(State.CREATED);
 
     private final AtomicLong seqNo = new AtomicLong();
-    private final Map<String, CausalCRDTInflater> uriToCRDTInflater = Maps.newConcurrentMap();
+    private final Map<String, CausalCRDTInflater<?, ?, ?>> uriToCRDTInflater = Maps.newConcurrentMap();
     private final ScheduledExecutorService inflationExecutor;
     private final CRDTEngineOptions options;
 
@@ -80,32 +84,25 @@ public final class InMemCRDTEngine implements ICRDTEngine {
     public Replica host(String crdtURI, ByteString replicaId) {
         checkServingState();
         CRDTURI.checkURI(crdtURI);
-        CausalCRDTInflater crdt = uriToCRDTInflater.computeIfAbsent(crdtURI, key -> {
+        CausalCRDTInflater<?, ?, ?> crdt = uriToCRDTInflater.computeIfAbsent(crdtURI, key -> {
             Replica replica = Replica.newBuilder().setUri(crdtURI).setId(replicaId).build();
-            IReplicaStateLattice lattice = new InMemReplicaStateLattice(replicaId,
+            IReplicaStateLattice lattice = new InMemReplicaStateLattice(replica,
                 options.orHistoryExpireTime(), options.maxCompactionTime());
 
-            switch (CRDTURI.parseType(crdtURI)) {
-                case aworset:
-                    return new AWORSetInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
-                case rworset:
-                    return new RWORSetInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
-                case ormap:
-                    return new ORMapInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
-                case cctr:
-                    return new CCounterInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
-                case dwflag:
-                    return new DWFlagInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
-                case ewflag:
-                    return new EWFlagInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
-                case mvreg:
-                    return new MVRegInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
-                default:
-                    throw new UnsupportedOperationException();
-            }
+            return switch (CRDTURI.parseType(crdtURI)) {
+                case aworset ->
+                    new AWORSetInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
+                case rworset ->
+                    new RWORSetInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
+                case ormap -> new ORMapInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
+                case cctr -> new CCounterInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
+                case dwflag -> new DWFlagInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
+                case ewflag -> new EWFlagInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
+                case mvreg -> new MVRegInflater(id, replica, lattice, inflationExecutor, options.inflationInterval());
+            };
         });
         if (!crdt.id().getId().equals(replicaId)) {
-            log.warn("Replica with id[{}] already host for URI[{}]", crdt.id().getId(), crdtURI);
+            log.warn("Replica[{}] already host", crdt.id());
         }
         return crdt.id();
     }
@@ -114,7 +111,7 @@ public final class InMemCRDTEngine implements ICRDTEngine {
     public CompletableFuture<Void> stopHosting(String crdtURI) {
         checkServingState();
         CRDTURI.checkURI(crdtURI);
-        CausalCRDTInflater inflater = uriToCRDTInflater.remove(crdtURI);
+        CausalCRDTInflater<?, ?, ?> inflater = uriToCRDTInflater.remove(crdtURI);
         if (inflater != null) {
             return inflater.stop();
         }
@@ -122,9 +119,10 @@ public final class InMemCRDTEngine implements ICRDTEngine {
     }
 
     @Override
-    public <T extends ICausalCRDT> Optional<T> get(String crdtURI) {
+    @SuppressWarnings("unchecked")
+    public <O extends ICRDTOperation, T extends ICausalCRDT<O>> Optional<T> get(String crdtURI) {
         checkServingState();
-        CausalCRDTInflater inflater = uriToCRDTInflater.get(crdtURI);
+        CausalCRDTInflater<?, ?, ?> inflater = uriToCRDTInflater.get(crdtURI);
         if (inflater != null) {
             return Optional.of((T) inflater.getCRDT());
         }
@@ -134,7 +132,7 @@ public final class InMemCRDTEngine implements ICRDTEngine {
     @Override
     public Optional<Map<ByteString, NavigableMap<Long, Long>>> latticeEvents(String crdtURI) {
         checkServingState();
-        CausalCRDTInflater inflater = uriToCRDTInflater.get(crdtURI);
+        CausalCRDTInflater<?, ?, ?> inflater = uriToCRDTInflater.get(crdtURI);
         if (inflater != null) {
             return Optional.of(inflater.latticeEvents());
         }
@@ -144,7 +142,7 @@ public final class InMemCRDTEngine implements ICRDTEngine {
     @Override
     public Optional<Map<ByteString, NavigableMap<Long, Long>>> historyEvents(String crdtURI) {
         checkServingState();
-        CausalCRDTInflater inflater = uriToCRDTInflater.get(crdtURI);
+        CausalCRDTInflater<?, ?, ?> inflater = uriToCRDTInflater.get(crdtURI);
         if (inflater != null) {
             return Optional.of(inflater.historyEvents());
         }
@@ -155,7 +153,7 @@ public final class InMemCRDTEngine implements ICRDTEngine {
     @Override
     public CompletableFuture<Void> join(String crdtURI, Iterable<Replacement> delta) {
         checkServingState();
-        CausalCRDTInflater crdt = uriToCRDTInflater.get(crdtURI);
+        CausalCRDTInflater<?, ?, ?> crdt = uriToCRDTInflater.get(crdtURI);
         if (crdt != null) {
             return crdt.join(delta);
         }
@@ -167,7 +165,7 @@ public final class InMemCRDTEngine implements ICRDTEngine {
     delta(String crdtURI, Map<ByteString, NavigableMap<Long, Long>> coveredLatticeEvents,
           Map<ByteString, NavigableMap<Long, Long>> coveredHistoryEvents, int maxEvents) {
         checkServingState();
-        CausalCRDTInflater crdt = uriToCRDTInflater.get(crdtURI);
+        CausalCRDTInflater<?, ?, ?> crdt = uriToCRDTInflater.get(crdtURI);
         if (crdt != null) {
             return crdt.delta(coveredLatticeEvents, coveredHistoryEvents, maxEvents);
         }

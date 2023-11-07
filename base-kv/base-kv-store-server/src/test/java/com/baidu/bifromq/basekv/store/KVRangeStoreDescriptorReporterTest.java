@@ -42,6 +42,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
+import org.mockito.stubbing.Answer;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -66,7 +67,7 @@ public class KVRangeStoreDescriptorReporterTest extends MockableTest {
     @Override
     protected void doSetup(Method method) {
         String uri = storeDescriptorMapCRDTURI("testCluster");
-        when(crdtService.get(uri)).thenReturn(Optional.of(storeDescriptorMap));
+        when(crdtService.get(uri)).thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(storeDescriptorMap));
         storeDescriptorReporter = new KVRangeStoreDescriptorReporter("testCluster", crdtService, 200L);
         storeDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId(localStoreId)

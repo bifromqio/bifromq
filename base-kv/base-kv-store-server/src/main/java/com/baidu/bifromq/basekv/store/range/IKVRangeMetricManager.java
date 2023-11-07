@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.google.protobuf.ByteString;
@@ -57,5 +58,5 @@ public interface IKVRangeMetricManager {
 
     CompletableFuture<Void> recordLogApply(Supplier<CompletableFuture<Void>> supplier);
 
-    CompletableFuture<Void> recordSnapshotInstall(Supplier<CompletableFuture<Void>> supplier);
+    CompletableFuture<KVRangeSnapshot> recordSnapshotInstall(Supplier<CompletableFuture<KVRangeSnapshot>> supplier);
 }

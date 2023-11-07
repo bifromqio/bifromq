@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -44,7 +45,7 @@ public class RaftConfigChangerTest {
     @Mock
     PeerLogTracker peerLogTracker;
     @Mock
-    IRaftNodeLogger logger;
+    Logger logger;
 
     @Mock
     IPeerLogReplicator logReplicator;

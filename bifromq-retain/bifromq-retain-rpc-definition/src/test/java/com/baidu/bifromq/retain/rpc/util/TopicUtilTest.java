@@ -36,10 +36,13 @@ public class TopicUtilTest {
         assertTrue(matches("a/", "+/#"));
         assertTrue(matches("a/", "a/"));
         assertTrue(matches("/a", "/a"));
+        assertTrue(matches("/a", "/a/#"));
         assertTrue(matches("/a", "/+"));
         assertTrue(matches("/a/b/c", "/+/#"));
         assertTrue(matches("/a/b/c", "/#"));
         assertTrue(matches("/a/b/c", "#"));
+        assertTrue(matches("/a/b/c", "/a/b/c/#"));
+        assertTrue(matches("/a/b/c", "/a/b/#"));
 
         assertFalse(matches("a", "/a"));
         assertFalse(matches("a", "+/"));

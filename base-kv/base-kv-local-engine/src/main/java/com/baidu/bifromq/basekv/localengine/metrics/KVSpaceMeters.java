@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.localengine.metrics;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
@@ -38,15 +37,7 @@ public class KVSpaceMeters {
 
     }
 
-    private static final Cache<MeterKey, Meter> METERS = Caffeine.newBuilder()
-        .evictionListener((RemovalListener<MeterKey, Meter>) (key, value, cause) -> {
-            log.debug("Remove {}", value);
-            if (value != null) {
-                Metrics.globalRegistry.remove(value);
-            }
-        })
-        .weakValues()
-        .build();
+    private static final Cache<MeterKey, Meter> METERS = Caffeine.newBuilder().weakValues().build();
 
     public static Timer getTimer(String id, KVSpaceMetric metric, Tags tags) {
         assert metric.meterType == Meter.Type.TIMER;
@@ -84,10 +75,11 @@ public class KVSpaceMeters {
 
     private static final class TimerWrapper implements Timer {
         private final Timer delegate;
+        private final Cleaner.Cleanable cleanable;
 
         private TimerWrapper(Timer delegate) {
             this.delegate = delegate;
-            CLEANER.register(this, new State(delegate));
+            cleanable = CLEANER.register(this, new State(delegate));
         }
 
         @Override
@@ -139,19 +131,32 @@ public class KVSpaceMeters {
         public Id getId() {
             return delegate.getId();
         }
+
+        @Override
+        public void close() {
+            Timer.super.close();
+            cleanable.clean();
+        }
     }
 
     private static final class CounterWrapper implements Counter {
         private final Counter delegate;
+        private final Cleaner.Cleanable cleanable;
 
         private CounterWrapper(Counter delegate) {
             this.delegate = delegate;
-            CLEANER.register(this, new State(delegate));
+            cleanable = CLEANER.register(this, new State(delegate));
         }
 
         @Override
         public Id getId() {
             return delegate.getId();
+        }
+
+        @Override
+        public void close() {
+            Counter.super.close();
+            cleanable.clean();
         }
 
         @Override
@@ -167,15 +172,22 @@ public class KVSpaceMeters {
 
     private static final class GaugeWrapper implements Gauge {
         private final Gauge delegate;
+        private final Cleaner.Cleanable cleanable;
 
         private GaugeWrapper(Gauge delegate) {
             this.delegate = delegate;
-            CLEANER.register(this, new State(delegate));
+            cleanable = CLEANER.register(this, new State(delegate));
         }
 
         @Override
         public Id getId() {
             return delegate.getId();
+        }
+
+        @Override
+        public void close() {
+            Gauge.super.close();
+            cleanable.clean();
         }
 
         @Override

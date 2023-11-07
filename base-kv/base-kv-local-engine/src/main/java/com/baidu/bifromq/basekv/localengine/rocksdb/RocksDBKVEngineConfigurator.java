@@ -40,7 +40,6 @@ import org.rocksdb.LRUCache;
 import org.rocksdb.MutableColumnFamilyOptionsInterface;
 import org.rocksdb.MutableDBOptionsInterface;
 import org.rocksdb.RateLimiter;
-import org.rocksdb.Statistics;
 import org.rocksdb.util.SizeUnit;
 
 @Slf4j
@@ -55,11 +54,12 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         return new RocksDBKVEngineConfigurator().toBuilder();
     }
 
+    public static <T extends AutoCloseable, O> T autoRelease(T object, O owner) {
+        CLEANER.register(owner, new CloseableState(object));
+        return object;
+    }
+
     public interface Configurator {
-        default <T extends AutoCloseable, O> T autoRelease(T object, O owner) {
-            CLEANER.register(owner, new CloseableState(object));
-            return object;
-        }
     }
 
     public interface DBOptionsConfigurator extends Configurator {
@@ -89,7 +89,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 // wal file settings
                 .setWalSizeLimitMB(0)
                 .setWalTtlSeconds(0)
-                .setStatistics(autoRelease(new Statistics(), targetOption))
                 .setRateLimiter(autoRelease(new RateLimiter(512 * SizeUnit.MB,
                     RateLimiter.DEFAULT_REFILL_PERIOD_MICROS,
                     RateLimiter.DEFAULT_FAIRNESS,
@@ -202,7 +201,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     private final CFOptionsConfigurator cfOptionsConfigurator;
 
     private String dbRootDir;
-
     private String dbCheckpointRootDir;
     private boolean disableWAL = false;
     private boolean atomicFlush = false;
@@ -213,7 +211,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
     private int compactMinTombstoneKeys = 50000;
     private int compactMinTombstoneRanges = 10000;
     private double compactTombstoneKeysRatio = 0.3;
-    private long gcIntervalInSec = 30;
 
     public RocksDBKVEngineConfigurator() {
         this.dbOptionsConfigurator = new BaseDBOptionConfigurator();
@@ -249,8 +246,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
             .dbRootDir(this.dbRootDir)
             .dbCheckpointRootDir(this.dbCheckpointRootDir)
             .disableWAL(this.disableWAL)
-            .atomicFlush(this.atomicFlush)
-            .gcInterval(this.gcIntervalInSec);
+            .atomicFlush(this.atomicFlush);
     }
 
     @ToString
@@ -268,7 +264,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         private int compactMinTombstoneKeys;
         private int compactMinTombstoneRanges;
         private double compactTombstoneKeysRatio;
-        private long gcInterval;
 
 
         RocksDBKVEngineConfiguratorBuilder() {
@@ -335,11 +330,6 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
             return this;
         }
 
-        public RocksDBKVEngineConfiguratorBuilder gcInterval(long gcInterval) {
-            this.gcInterval = gcInterval;
-            return this;
-        }
-
         public RocksDBKVEngineConfigurator build() {
             return new RocksDBKVEngineConfigurator(
                 dbOptionsConfigurator,
@@ -353,8 +343,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
                 manualCompaction,
                 compactMinTombstoneKeys,
                 compactMinTombstoneRanges,
-                compactTombstoneKeysRatio,
-                gcInterval);
+                compactTombstoneKeysRatio);
         }
     }
 

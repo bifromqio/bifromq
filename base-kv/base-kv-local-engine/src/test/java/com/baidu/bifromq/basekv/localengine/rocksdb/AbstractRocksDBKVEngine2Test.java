@@ -13,7 +13,10 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import static com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator.autoRelease;
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngineTest;
@@ -23,6 +26,7 @@ import com.baidu.bifromq.basekv.localengine.TestUtil;
 import com.google.protobuf.ByteString;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.SneakyThrows;
 import org.testng.annotations.Test;
 
@@ -81,6 +85,18 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
         assertTrue(keyRangeLoaded.metadata().blockingFirst().containsKey(metaKey));
         assertTrue(keyRangeLoaded.exist(key));
         assertEquals(keyRangeLoaded.get(key).get(), value);
+        // stop again and start
+        engine.stop();
+
+        engine = newEngine();
+        engine.start();
+        assertEquals(engine.ranges().size(), 1);
+        keyRangeLoaded = engine.ranges().values().stream().findFirst().get();
+        assertEquals(keyRangeLoaded.id(), rangeId);
+        assertTrue(keyRangeLoaded.metadata(metaKey).isPresent());
+        assertTrue(keyRangeLoaded.metadata().blockingFirst().containsKey(metaKey));
+        assertTrue(keyRangeLoaded.exist(key));
+        assertEquals(keyRangeLoaded.get(key).get(), value);
     }
 
     @Test
@@ -95,5 +111,26 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
         engine.start();
         keyRange = engine.createIfMissing(rangeId);
         assertTrue(keyRange.exist(key));
+    }
+
+    @Test
+    public void autoReleaseTest() {
+        Object owner = new Object();
+        class Closeable implements AutoCloseable {
+            AtomicBoolean closed = new AtomicBoolean();
+
+            @Override
+            public void close() {
+                closed.set(true);
+            }
+        }
+        Closeable closeable = autoRelease(new Closeable(), owner);
+        assertFalse(closeable.closed.get());
+
+        owner = null;
+        await().until(() -> {
+            System.gc();
+            return closeable.closed.get();
+        });
     }
 }

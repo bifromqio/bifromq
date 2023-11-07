@@ -29,8 +29,7 @@ public class DisableWALRocksDBKVEngineTest extends AbstractRocksDBKVEngine2Test 
             .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
             .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
             .setDisableWAL(true)
-            .setAtomicFlush(false)
-            .setGcIntervalInSec(1);
+            .setAtomicFlush(false);
     }
 
     @Override

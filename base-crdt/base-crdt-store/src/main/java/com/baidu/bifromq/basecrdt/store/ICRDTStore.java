@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basecrdt.store;
 
+import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
@@ -83,7 +84,7 @@ public interface ICRDTStore {
      * @param uri the id of the hosted replica
      * @return the replica object of the CRDT
      */
-    <T extends ICausalCRDT> Optional<T> get(String uri);
+    <O extends ICRDTOperation, T extends ICausalCRDT<O>> Optional<T> get(String uri);
 
     /**
      * Join a cluster from specified local address. Some remote members will be selected to be the neighbors with which
@@ -129,7 +130,6 @@ public interface ICRDTStore {
      * NOTE: the messages with toStoreId set to '0' is used for broadcast, and will be accepted by every CRDTStore
      *
      * @param replicaMessages the observable to receive messages from others
-     * @return
      */
     void start(Observable<CRDTStoreMessage> replicaMessages);
 

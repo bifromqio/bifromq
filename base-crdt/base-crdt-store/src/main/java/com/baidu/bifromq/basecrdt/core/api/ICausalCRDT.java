@@ -21,29 +21,29 @@ public interface ICausalCRDT<O extends ICRDTOperation> {
     /**
      * The identity of the CRDT replica
      *
-     * @return
+     * @return the id
      */
     Replica id();
 
     /**
      * The type of the replica
      *
-     * @return
+     * @return the CRDT type
      */
     CausalCRDTType type();
 
     /**
      * Execute an CRDT operation asynchronously
      *
-     * @param op
-     * @return
+     * @param op the operation
+     * @return a future of the execution
      */
     CompletableFuture<Void> execute(O op);
 
     /**
      * The observable of inflation happens to the CRDT state overtime
      *
-     * @return
+     * @return an observable of inflation event
      */
     Observable<Long> inflation();
 }

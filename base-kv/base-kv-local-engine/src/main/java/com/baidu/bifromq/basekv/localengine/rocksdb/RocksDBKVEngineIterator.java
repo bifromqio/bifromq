@@ -21,6 +21,7 @@ import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.Slice;
+import org.rocksdb.Snapshot;
 
 @Slf4j
 class RocksDBKVEngineIterator implements AutoCloseable {
@@ -45,7 +46,11 @@ class RocksDBKVEngineIterator implements AutoCloseable {
     private final RocksIterator rocksIterator;
     private final Cleaner.Cleanable onClose;
 
-    RocksDBKVEngineIterator(RocksDB db, ColumnFamilyHandle cfHandle, byte[] startKey, byte[] endKey) {
+    RocksDBKVEngineIterator(RocksDB db,
+                            ColumnFamilyHandle cfHandle,
+                            Snapshot snapshot,
+                            byte[] startKey,
+                            byte[] endKey) {
         ReadOptions readOptions = new ReadOptions();
         Slice lowerSlice = null;
         if (startKey != null) {
@@ -56,6 +61,9 @@ class RocksDBKVEngineIterator implements AutoCloseable {
         if (endKey != null) {
             upperSlice = new Slice(endKey);
             readOptions.setIterateUpperBound(upperSlice);
+        }
+        if (snapshot != null) {
+            readOptions.setSnapshot(snapshot);
         }
         rocksIterator = db.newIterator(cfHandle, readOptions);
         onClose = CLEANER.register(this, new NativeState(rocksIterator, readOptions, lowerSlice, upperSlice));

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecrdt.core.internal;
 
 import com.baidu.bifromq.basecrdt.proto.Replacement;
+import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
@@ -38,8 +39,8 @@ public abstract class CRDTTest {
         MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
     }
 
-    protected IReplicaStateLattice newStateLattice(ByteString ownerReplicaId, long historyDurationInMS) {
-        return new InMemReplicaStateLattice(ownerReplicaId,
+    protected IReplicaStateLattice newStateLattice(Replica ownerReplica, long historyDurationInMS) {
+        return new InMemReplicaStateLattice(ownerReplica,
             Duration.ofMillis(historyDurationInMS),
             Duration.ofMillis(200));
     }

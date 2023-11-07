@@ -24,6 +24,7 @@ import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import java.util.Optional;
 
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -36,7 +37,7 @@ public class PeerLogReplicatorStateProbingTest {
     @Mock
     private IRaftStateStore stateStorage;
     @Mock
-    private IRaftNodeLogger logger;
+    private Logger logger;
     private AutoCloseable closeable;
     @BeforeMethod
     public void openMocks() {

@@ -15,6 +15,8 @@ package com.baidu.bifromq.basekv.raft;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -60,14 +62,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockitoAnnotations;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
-    private final Logger log = LoggerFactory.getLogger("RaftNodeStateFollowerTest");
     private static final String leader = "v1";
     private AutoCloseable closeable;
 
@@ -86,7 +85,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
             .setClusterConfig(clusterConfig).build());
 
-        RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig, stateStorage, log,
+        RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig, stateStorage,
             msgSender,
             eventListener,
             snapshotInstaller,
@@ -111,7 +110,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower raftNodeStateFollower = new RaftNodeStateFollower(1, 0, leader, raftConfig,
-            stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         Integer randomElectionTimeoutTick =
             ReflectionUtils.getField(raftNodeStateFollower, "randomElectionTimeoutTick");
@@ -124,7 +123,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
 
         // change cluster config to be not promotable
         raftNodeStateFollower = new RaftNodeStateFollower(1, 0, leader, raftConfig,
-            stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         stateStorage.append(Collections.singletonList(LogEntry.newBuilder()
             .setConfig(ClusterConfig.newBuilder().addAllVoters(Arrays.asList("v2", "v3")).build())
             .setTerm(2)
@@ -147,7 +146,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            stateStorage, log, messages -> {
+            stateStorage, messages -> {
             if (onMessageReadyIndex.get() == 0) {
                 onMessageReadyIndex.incrementAndGet();
                 assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
@@ -223,14 +222,14 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         when(raftStateStorage.latestClusterConfig()).thenReturn(clusterConfig);
 
         RaftNodeStateFollower disableForwardProposalFollower = new RaftNodeStateFollower(1, 0, null,
-            new RaftConfig().setDisableForwardProposal(true).setElectionTimeoutTick(3), raftStateStorage, log,
+            new RaftConfig().setDisableForwardProposal(true).setElectionTimeoutTick(3), raftStateStorage,
             msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         CompletableFuture<Long> disableForwardProposalOnDone = new CompletableFuture<>();
         disableForwardProposalFollower.propose(command, disableForwardProposalOnDone);
         assertTrue(disableForwardProposalOnDone.isCompletedExceptionally());
 
         RaftNodeStateFollower noLeaderFollower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
-            raftStateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            raftStateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         CompletableFuture<Long> nonLeaderOnDone = new CompletableFuture<>();
         noLeaderFollower.propose(command, nonLeaderOnDone);
         assertTrue(nonLeaderOnDone.isCompletedExceptionally());
@@ -242,7 +241,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            raftStateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            raftStateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         follower.transferLeadership("v1", onDone);
         assertTrue(onDone.isCompletedExceptionally());
@@ -254,7 +253,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            raftStateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            raftStateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         follower.changeClusterConfig("cId", Collections.singleton("v3"), Collections.singleton("l4"), onDone);
         assertTrue(onDone.isCompletedExceptionally());
@@ -268,7 +267,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            stateStorage, log, messages -> {
+            stateStorage, messages -> {
             if (onMessageReadyIndex.get() == 0) {
                 onMessageReadyIndex.incrementAndGet();
                 assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
@@ -318,7 +317,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
-            stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         CompletableFuture<Long> onDone = new CompletableFuture<>();
         follower.readIndex(onDone);
@@ -331,7 +330,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         // change cluster config to be not promotable
         stateStorage.append(Collections.singletonList(LogEntry.newBuilder()
@@ -365,7 +364,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
 
         // not in lease will handle preVote
         RaftNodeStateFollower nonInLeaseFollower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
-            stateStorage, log, messages -> {
+            stateStorage, messages -> {
             assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v2", Collections.singletonList(RaftMessage.newBuilder()
                     .setTerm(2)
@@ -391,17 +390,14 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
 
         // inLease && higher term will reject pre-vote
         RaftNodeStateFollower inLeaseFollower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            stateStorage, log,
-            messages -> {
-                assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
-                    put("v2", Collections.singletonList(RaftMessage.newBuilder()
-                        .setTerm(2)
-                        .setRequestPreVoteReply(RequestPreVoteReply.newBuilder()
-                            .setVoteCouldGranted(false)
-                            .build())
-                        .build()));
-                }});
-            }, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, messages -> assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
+            put("v2", Collections.singletonList(RaftMessage.newBuilder()
+                .setTerm(2)
+                .setRequestPreVoteReply(RequestPreVoteReply.newBuilder()
+                    .setVoteCouldGranted(false)
+                    .build())
+                .build()));
+        }}), eventListener, snapshotInstaller, onSnapshotInstalled);
         raftNodeState = inLeaseFollower.receive("v2", higherTermPreVote);
         assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
 
@@ -426,7 +422,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower inLeaseFollower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         RaftMessage nonLeaderTransferRequest = RaftMessage.newBuilder()
             .setTerm(2)
             .setRequestVote(RequestVote.newBuilder()
@@ -443,7 +439,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
 
         // higherTerm && !leaderTransfer && !inLease()
         RaftNodeStateFollower nonInLeaseFollower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
-            stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         nonInLeaseFollower.receive("v2", nonLeaderTransferRequest);
         assertEquals(nonInLeaseFollower.currentTerm(), 2);
 
@@ -468,7 +464,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower inLeaseFollower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            stateStorage, log, messages -> {
+            stateStorage, messages -> {
             if (onMessageReadyIndex.get() == 0 || onMessageReadyIndex.get() == 1 || onMessageReadyIndex.get() == 3) {
                 onMessageReadyIndex.incrementAndGet();
                 assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
@@ -523,7 +519,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
-            stateStorage, log, messages -> {
+            stateStorage, messages -> {
             if (onMessageReadyIndex.get() == 0 || onMessageReadyIndex.get() == 1 || onMessageReadyIndex.get() == 2) {
                 onMessageReadyIndex.incrementAndGet();
                 assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
@@ -557,7 +553,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
-            stateStorage, log, messages -> {
+            stateStorage, messages -> {
             if (onMessageReadyIndex.get() == 0) {
                 onMessageReadyIndex.incrementAndGet();
                 assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
@@ -641,7 +637,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", snapshot);
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null,
-            defaultRaftConfig, stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            defaultRaftConfig, stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         // obsolete or duplicated snapshot
         RaftMessage installSnapshot = RaftMessage.newBuilder()
@@ -671,9 +667,11 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", snapshot);
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null,
-            defaultRaftConfig, stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled,
+            defaultRaftConfig, stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled,
             "cluster", "testCluster", "rangeId", "testRange");
 
+        ByteString fsmSnapshot1 = ByteString.copyFrom("snapshot".getBytes());
+        ByteString fsmSnapshot2 = ByteString.copyFrom("snapshot".getBytes());
         RaftMessage installSnapshot = RaftMessage.newBuilder()
             .setTerm(1)
             .setInstallSnapshot(InstallSnapshot.newBuilder()
@@ -681,7 +679,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .setSnapshot(Snapshot.newBuilder()
                     .setTerm(1)
                     .setIndex(0)
-                    .setData(ByteString.copyFrom("snapshot".getBytes()))
+                    .setData(fsmSnapshot1)
                     .build())
                 .build())
             .build();
@@ -693,24 +691,26 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .setSnapshot(Snapshot.newBuilder()
                     .setTerm(1)
                     .setIndex(0)
-                    .setData(ByteString.copyFrom("snapshot".getBytes()))
+                    .setData(fsmSnapshot2)
                     .build())
                 .build())
             .build();
 
-        CompletableFuture<Void> firstInstallResult = new CompletableFuture<>();
-        CompletableFuture<Void> secondInstallResult = new CompletableFuture<>();
+        CompletableFuture<ByteString> firstInstallResult = new CompletableFuture<>();
+        CompletableFuture<ByteString> secondInstallResult = new CompletableFuture<>();
 
-        when(snapshotInstaller.install(any(ByteString.class))).thenReturn(firstInstallResult, secondInstallResult);
+        when(snapshotInstaller.install(any(ByteString.class), anyString()))
+            .thenReturn(firstInstallResult, secondInstallResult);
 
         noInLeaseFollower.receive("newLeader", installSnapshot);
         noInLeaseFollower.receive("newLeader", installSnapshot2);
-        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(),
+        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(), fsmSnapshot1,
             new CancellationException());
-        noInLeaseFollower.onSnapshotRestored(installSnapshot2.getInstallSnapshot().getSnapshot().getData(), null);
+        noInLeaseFollower.onSnapshotRestored(installSnapshot2.getInstallSnapshot().getSnapshot().getData(),
+            fsmSnapshot2, null);
 
         firstInstallResult.completeExceptionally(new CancellationException());
-        secondInstallResult.complete(null);
+        secondInstallResult.complete(fsmSnapshot2);
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
         verify(msgSender, times(1)).send(msgCaptor.capture());
         assertEquals(msgCaptor.getValue(), new HashMap<String, List<RaftMessage>>() {{
@@ -742,9 +742,10 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", snapshot);
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null,
-            defaultRaftConfig, stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled,
+            defaultRaftConfig, stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled,
             "cluster", "testCluster", "rangeId", "testRange");
 
+        ByteString fsmSnapshot = ByteString.copyFrom("snapshot".getBytes());
         RaftMessage installSnapshot = RaftMessage.newBuilder()
             .setTerm(1)
             .setInstallSnapshot(InstallSnapshot.newBuilder()
@@ -752,19 +753,19 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .setSnapshot(Snapshot.newBuilder()
                     .setTerm(1)
                     .setIndex(0)
-                    .setData(ByteString.copyFrom("snapshot".getBytes()))
+                    .setData(fsmSnapshot)
                     .build())
                 .build())
             .build();
 
-        when(snapshotInstaller.install(any(ByteString.class)))
+        when(snapshotInstaller.install(any(ByteString.class), anyString()))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Test Exception")));
 
         noInLeaseFollower.receive("newLeader", installSnapshot);
-        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(),
+        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(), fsmSnapshot,
             new RuntimeException("Test Exception"));
 
-        verify(onSnapshotInstalled).done(any(), any(Throwable.class));
+        verify(onSnapshotInstalled).done(any(), any(), any(Throwable.class));
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
         verify(msgSender, times(1)).send(msgCaptor.capture());
         assertEquals(msgCaptor.getValue(), new HashMap<String, List<RaftMessage>>() {{
@@ -789,8 +790,9 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", snapshot);
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null,
-            defaultRaftConfig, stateStorage, log, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            defaultRaftConfig, stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
+        ByteString fsmSnapshot = ByteString.copyFrom("snapshot".getBytes());
         RaftMessage installSnapshot = RaftMessage.newBuilder()
             .setTerm(1)
             .setInstallSnapshot(InstallSnapshot.newBuilder()
@@ -798,16 +800,18 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .setSnapshot(Snapshot.newBuilder()
                     .setTerm(0)
                     .setIndex(0)
-                    .setData(ByteString.copyFrom("snapshot".getBytes()))
+                    .setData(fsmSnapshot)
                     .build())
                 .build())
             .build();
 
-        when(snapshotInstaller.install(any(ByteString.class))).thenReturn(CompletableFuture.completedFuture(null));
+        when(snapshotInstaller.install(any(ByteString.class), anyString())).thenReturn(
+            CompletableFuture.completedFuture(fsmSnapshot));
         noInLeaseFollower.receive("newLeader", installSnapshot);
-        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(), null);
+        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(),
+            fsmSnapshot, null);
 
-        verify(onSnapshotInstalled).done(any(), isNull());
+        verify(onSnapshotInstalled).done(any(), any(), isNull());
 
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
         verify(msgSender, times(1)).send(msgCaptor.capture());
@@ -832,13 +836,68 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
     }
 
     @Test
+    public void testRestoredWithSemanticallySameSnapshot() {
+        Snapshot snapshot = Snapshot.newBuilder()
+            .setClusterConfig(clusterConfig)
+            .setIndex(0)
+            .setTerm(1)
+            .build();
+        IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", snapshot);
+
+        RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null,
+            defaultRaftConfig, stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+
+        ByteString fsmSnapshot1 = ByteString.copyFrom("snapshot1".getBytes());
+        RaftMessage installSnapshot1 = RaftMessage.newBuilder()
+            .setTerm(1)
+            .setInstallSnapshot(InstallSnapshot.newBuilder()
+                .setLeaderId("newLeader")
+                .setSnapshot(Snapshot.newBuilder()
+                    .setTerm(0)
+                    .setIndex(0)
+                    .setData(fsmSnapshot1)
+                    .build())
+                .build())
+            .build();
+        ByteString fsmSnapshot2 = ByteString.copyFrom("snapshot2".getBytes());
+
+        when(snapshotInstaller.install(fsmSnapshot1, "newLeader"))
+            .thenReturn(CompletableFuture.completedFuture(fsmSnapshot2));
+        noInLeaseFollower.receive("newLeader", installSnapshot1);
+        noInLeaseFollower.onSnapshotRestored(fsmSnapshot1, fsmSnapshot2, null);
+
+        verify(onSnapshotInstalled).done(eq(fsmSnapshot1), eq(fsmSnapshot2), isNull());
+
+        ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(msgSender, times(1)).send(msgCaptor.capture());
+        assertEquals(msgCaptor.getValue(), new HashMap<String, List<RaftMessage>>() {{
+            put("newLeader", Collections.singletonList(RaftMessage.newBuilder()
+                .setTerm(1)
+                .setInstallSnapshotReply(InstallSnapshotReply.newBuilder()
+                    .setRejected(false)
+                    .setLastIndex(0)
+                    .build())
+                .build()));
+        }});
+
+        ArgumentCaptor<RaftEvent> eventCaptor = ArgumentCaptor.forClass(RaftEvent.class);
+        verify(eventListener, times(1)).onEvent(eventCaptor.capture());
+
+        List<RaftEvent> events = eventCaptor.getAllValues();
+
+        assertEquals(events.get(0).type, RaftEventType.SNAPSHOT_RESTORED);
+        assertEquals(((SnapshotRestoredEvent) events.get(0)).snapshot,
+            installSnapshot1.getInstallSnapshot().getSnapshot().toBuilder().setData(fsmSnapshot2).build());
+    }
+
+    @Test
     public void testReceiveAppendEntries() {
         AtomicInteger onMessageReadyIndex = new AtomicInteger();
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower noInLeaseFollower = new RaftNodeStateFollower(1, 0, null, defaultRaftConfig,
-            stateStorage, log, messages -> {
+            stateStorage, messages -> {
             switch (onMessageReadyIndex.get()) {
                 case 0:
                 case 1:
@@ -883,9 +942,10 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                     break;
             }
         }, eventListener,
-            appSMSnapshot -> {
+            (appSMSnapshot, leader) -> {
                 assertEquals(appSMSnapshot, ByteString.copyFromUtf8("snapshot"));
-                return CompletableFuture.completedFuture(null);
+                assertEquals(leader, "newLeader");
+                return CompletableFuture.completedFuture(appSMSnapshot);
             }, onSnapshotInstalled);
         stateStorage.addStableListener(noInLeaseFollower::stableTo);
         // appended entries

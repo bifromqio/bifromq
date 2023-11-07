@@ -27,7 +27,7 @@ class EventHistoryUtil {
             long bStartKey = br.getKey();
             long bEndKey = br.getValue();
             Long aStartKey = null;
-            Long aEndKey = null;
+            Long aEndKey;
             if (historyA.floorKey(bStartKey) != null) {
                 aStartKey = historyA.floorKey(bStartKey);
             } else if (historyA.ceilingKey(bStartKey) != null) {
@@ -78,7 +78,7 @@ class EventHistoryUtil {
             long bStartKey = br.getKey();
             long bEndKey = br.getValue();
             Long aStartKey = null;
-            Long aEndKey = null;
+            Long aEndKey;
             if (historyA.floorKey(bStartKey) != null) {
                 aStartKey = historyA.floorKey(bStartKey);
             } else if (historyA.ceilingKey(bStartKey) != null) {

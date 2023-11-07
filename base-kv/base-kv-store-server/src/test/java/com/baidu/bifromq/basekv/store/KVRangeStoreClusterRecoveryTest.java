@@ -33,7 +33,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
     @Test(groups = "integration")
     public void recoveryFromTwoToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 40);
         String leader = rangeSetting.leader;
         List<String> storeIds = cluster.allStoreIds();
         assertEquals(storeIds.size(), 2);
@@ -55,7 +55,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
     @Test(groups = "integration")
     public void recoveryFromThreeToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
-        KVRangeConfig setting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 5000);
+        KVRangeConfig setting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 40);
         String leader = setting.leader;
         List<String> storeIds = cluster.allStoreIds();
         assertEquals(storeIds.size(), 3);

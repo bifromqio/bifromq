@@ -42,11 +42,13 @@ public class TopicFilterMatcher {
         if (matchingLevel + 1 < filterLevels.size() && filterLevels.get(matchingLevel + 1).equals("#")) {
             // # match parent level as well. [MQTT-4.7.1-2]
             if (node.isLastTopicLevel()) {
-                // current node matches real topic
-                filterLevels.set(matchingLevel, node.levelName());
-                matchedTopics.put(TopicUtil.fastJoin("/", filterLevels.subList(1, matchingLevel + 1)),
-                    node.messages());
-                filterLevels.set(matchingLevel, filterName);
+                if (node.levelName().equals(filterName) || filterName.equals("+")) {
+                    // current node matches real topic
+                    filterLevels.set(matchingLevel, node.levelName());
+                    matchedTopics.put(TopicUtil.fastJoin("/", filterLevels.subList(1, matchingLevel + 1)),
+                        node.messages());
+                    filterLevels.set(matchingLevel, filterName);
+                }
             }
         }
         switch (filterName) {

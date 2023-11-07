@@ -28,7 +28,7 @@ public final class CRDTURI {
             uriPattern.append("|");
         }
         uriPattern.deleteCharAt(uriPattern.length() - 1);
-        uriPattern.append("):" + namePattern);
+        uriPattern.append("):").append(namePattern);
         NAME = Pattern.compile(namePattern);
         URI = Pattern.compile(uriPattern.toString());
     }

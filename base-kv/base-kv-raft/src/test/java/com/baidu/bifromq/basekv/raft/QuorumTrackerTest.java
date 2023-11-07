@@ -16,17 +16,19 @@ package com.baidu.bifromq.basekv.raft;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 public class QuorumTrackerTest {
     @Mock
-    IRaftNodeLogger logger;
+    Logger logger;
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);

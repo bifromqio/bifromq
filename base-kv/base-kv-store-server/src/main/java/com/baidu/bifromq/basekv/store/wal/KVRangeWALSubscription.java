@@ -17,7 +17,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.util.concurrent.CompletableFuture;
@@ -59,21 +58,16 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
         this.subscriber.onSubscribe(this);
         disposables.add(wal.snapshotInstallTask()
             .subscribe(task -> fetchRunner.add(() -> {
-                try {
-                    KVRangeSnapshot snap = KVRangeSnapshot.parseFrom(task.snapshot);
-                    applyRunner.cancelAll();
-                    applyRunner.add(installSnapshot(snap, task.onDone))
-                        .thenAccept(v -> {
-                            log.debug(
-                                "Snapshot installed: range={}, ver={}, state={}, checkpoint={}, lastAppliedIndex={}",
-                                KVRangeIdUtil.toString(snap.getId()),
-                                snap.getVer(), snap.getState(), snap.getCheckpointId(), snap.getLastAppliedIndex());
-                            lastFetchedIdx.set(snap.getLastAppliedIndex());
-                            commitIdx.set(-1);
-                        });
-                } catch (InvalidProtocolBufferException e) {
-                    task.onDone.completeExceptionally(e);
-                }
+                applyRunner.cancelAll();
+                applyRunner.add(installSnapshot(task.snapshot, task.leader, task.onDone))
+                    .thenAccept(snap -> {
+                        log.debug(
+                            "Snapshot installed: range={}, ver={}, state={}, checkpoint={}, lastAppliedIndex={}",
+                            KVRangeIdUtil.toString(snap.getId()),
+                            snap.getVer(), snap.getState(), snap.getCheckpointId(), snap.getLastAppliedIndex());
+                        lastFetchedIdx.set(snap.getLastAppliedIndex());
+                        commitIdx.set(-1);
+                    });
             })));
         disposables.add(commitIndex
             .subscribe(c -> fetchRunner.add(() -> {
@@ -102,7 +96,7 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
             return wal.retrieveCommitted(lastFetchedIdx.get() + 1, maxFetchBytes)
                 .handleAsync((logEntries, e) -> {
                     if (e != null) {
-                        log.error("Failed to retrieve log from wal from index[{}]", lastFetchedIdx.get() + 1, e);
+                        log.debug("Failed to retrieve log from wal from index[{}]", lastFetchedIdx.get() + 1, e);
                         fetching.set(false);
                         scheduleFetchWAL();
                     } else {
@@ -156,23 +150,26 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
         };
     }
 
-    private Supplier<CompletableFuture<Void>> installSnapshot(KVRangeSnapshot snapshot,
-                                                              CompletableFuture<Void> onDone) {
+    private Supplier<CompletableFuture<KVRangeSnapshot>> installSnapshot(KVRangeSnapshot snapshot,
+                                                                         String leader,
+                                                                         CompletableFuture<KVRangeSnapshot> onDone) {
         return () -> {
             if (onDone.isCancelled()) {
                 return CompletableFuture.completedFuture(null);
             }
-            CompletableFuture<Void> applyFuture = subscriber.apply(snapshot);
+            // start async installation
+            CompletableFuture<KVRangeSnapshot> installFuture = subscriber.install(snapshot, leader);
             onDone.whenComplete((v, e) -> {
                 if (onDone.isCancelled()) {
-                    applyFuture.cancel(true);
+                    // cancel installation if possible
+                    installFuture.cancel(true);
                 }
             });
-            applyFuture.whenCompleteAsync((v, e) -> {
+            installFuture.whenCompleteAsync((installed, e) -> {
                 if (e != null) {
                     onDone.completeExceptionally(e);
                 } else {
-                    onDone.complete(null);
+                    onDone.complete(installed);
                 }
             }, executor);
             return onDone;

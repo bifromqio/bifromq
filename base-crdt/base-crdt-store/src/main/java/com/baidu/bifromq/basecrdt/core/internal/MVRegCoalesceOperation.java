@@ -21,7 +21,7 @@ import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.google.protobuf.ByteString;
 
-public class MVRegCoalesceOperation extends CoalesceOperation<IDotFunc, MVRegOperation> {
+class MVRegCoalesceOperation extends CoalesceOperation<IDotFunc, MVRegOperation> {
     MVRegOperation op;
 
     MVRegCoalesceOperation(ByteString replicaId, MVRegOperation op) {

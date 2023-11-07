@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
-import static java.util.Collections.emptyList;
-
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.baidu.bifromq.basecrdt.proto.StateLattice;
 import com.google.protobuf.ByteString;
@@ -26,18 +24,6 @@ import java.util.Optional;
 
 interface IReplicaStateLattice {
     interface JoinDiff {
-        JoinDiff NO_DIFF = new JoinDiff() {
-            @Override
-            public Iterable<StateLattice> adds() {
-                return emptyList();
-            }
-
-            @Override
-            public Iterable<StateLattice> removes() {
-                return emptyList();
-            }
-        };
-
         Iterable<StateLattice> adds();
 
         Iterable<StateLattice> removes();

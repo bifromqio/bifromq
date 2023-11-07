@@ -20,6 +20,7 @@ import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -283,8 +284,8 @@ public final class RaftNode implements IRaftNode {
         }
 
         @Override
-        public CompletableFuture<Void> install(ByteString fsmSnapshot) {
-            return metricMgr.snapshotInstallTimer.record(() -> delegate.install(fsmSnapshot));
+        public CompletableFuture<ByteString> install(ByteString request, String leader) {
+            return metricMgr.snapshotInstallTimer.record(() -> delegate.install(request, leader));
         }
     }
 
@@ -301,13 +302,12 @@ public final class RaftNode implements IRaftNode {
 
     public RaftNode(RaftConfig config,
                     IRaftStateStore stateStore,
-                    Logger logger,
                     ThreadFactory threadFactory,
                     String... tags) {
         verifyTags(tags);
         verifyConfig(config);
         verifyStateStore(stateStore);
-        log = logger;
+        log = SiftLogger.getLogger(RaftLogger.buildSiftKey(tags), RaftNode.class);
         this.tags = tags;
         this.stateStorage = new MetricMonitoredStateStore(stateStore, Tags.of(tags));
         this.id = stateStorage.local();
@@ -467,7 +467,6 @@ public final class RaftNode implements IRaftNode {
                 null,
                 config,
                 stateStorage,
-                log,
                 new SampledRaftMessageListener(sender),
                 new SampledRaftEventListener(listener),
                 new SampledSnapshotInstaller(installer),
@@ -510,13 +509,13 @@ public final class RaftNode implements IRaftNode {
         };
     }
 
-    void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex) {
+    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
         if (isStarted()) {
             raftExecutor.execute(() -> {
                 if (!isStarted()) {
                     return;
                 }
-                stateRef.get().onSnapshotRestored(fsmSnapshot, ex);
+                stateRef.get().onSnapshotRestored(requested, installed, ex);
             });
         }
     }

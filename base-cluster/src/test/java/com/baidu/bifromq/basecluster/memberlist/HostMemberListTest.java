@@ -20,15 +20,15 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_REPLICA_ID
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.ZOMBIE_ENDPOINT;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.memberlist.agent.Agent;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
@@ -57,13 +57,14 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
+import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class HostMemberListTest {
@@ -79,11 +80,13 @@ public class HostMemberListTest {
     private PublishSubject<Long> inflationSubject = PublishSubject.create();
     private PublishSubject<Timed<MessageEnvelope>> messageSubject = PublishSubject.create();
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         when(store.host(CRDTUtil.AGENT_HOST_MAP_URI)).thenReturn(LOCAL_REPLICA);
-        when(store.get(CRDTUtil.AGENT_HOST_MAP_URI)).thenReturn(Optional.of(hostListCRDT));
+        when(store.get(CRDTUtil.AGENT_HOST_MAP_URI))
+            .thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(hostListCRDT));
         when(hostListCRDT.id()).thenReturn(LOCAL_REPLICA);
         when(hostListCRDT.inflation()).thenReturn(inflationSubject);
         when(messenger.receive()).thenReturn(messageSubject);

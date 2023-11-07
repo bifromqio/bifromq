@@ -23,7 +23,6 @@ import com.baidu.bifromq.basekv.raft.proto.AppendEntriesReply;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
-import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.RequestPreVote;
 import com.baidu.bifromq.basekv.raft.proto.RequestPreVoteReply;
 import com.baidu.bifromq.basekv.raft.proto.RequestVoteReply;
@@ -41,15 +40,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.BiConsumer;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
-import org.slf4j.MDC;
 
-abstract class RaftNodeState implements IRaftNodeLogger {
-    interface OnSnapshotInstalled {
-        void done(ByteString fsmSnapshot, Throwable ex);
+abstract class RaftNodeState implements IRaftNodeState {
+    public interface OnSnapshotInstalled {
+        void done(ByteString requested, ByteString installed, Throwable ex);
     }
 
     /**
@@ -78,7 +74,6 @@ abstract class RaftNodeState implements IRaftNodeLogger {
     protected final LinkedHashMap<Long, ProposeTask> uncommittedProposals;
     protected final int maxUncommittedProposals;
     protected final String[] tags;
-    protected final String logKey;
     protected volatile long commitIndex;
 
     public RaftNodeState(
@@ -86,7 +81,6 @@ abstract class RaftNodeState implements IRaftNodeLogger {
         long commitIndex,
         RaftConfig config,
         IRaftStateStore stateStorage,
-        Logger log,
         LinkedHashMap<Long, ProposeTask> uncommittedProposals,
         IRaftNode.IRaftMessageSender sender,
         IRaftNode.IRaftEventListener listener,
@@ -96,13 +90,12 @@ abstract class RaftNodeState implements IRaftNodeLogger {
         this.stateStorage = stateStorage;
         this.id = stateStorage.local();
         this.tags = tags;
-        this.logKey = buildLogKey(tags);
         this.uncommittedProposals = uncommittedProposals;
         this.maxUncommittedProposals = config.getMaxUncommittedProposals() == 0 ? Integer.MAX_VALUE
             : config.getMaxUncommittedProposals();
         this.commitIndex = commitIndex;
         this.config = config;
-        this.log = log;
+        this.log = new RaftLogger(this, tags);
         this.sender = sender;
         this.listener = listener;
         this.snapshotInstaller = installer;
@@ -112,7 +105,8 @@ abstract class RaftNodeState implements IRaftNodeLogger {
         }
     }
 
-    final String id() {
+    @Override
+    public final String id() {
         return id;
     }
 
@@ -128,10 +122,6 @@ abstract class RaftNodeState implements IRaftNodeLogger {
 
     abstract RaftNodeState receive(String fromPeer, RaftMessage message);
 
-    abstract RaftNodeStatus getState();
-
-    abstract String currentLeader();
-
     abstract void readIndex(CompletableFuture<Long> onDone);
 
     abstract void transferLeadership(String newLeader, CompletableFuture<Void> onDone);
@@ -141,10 +131,26 @@ abstract class RaftNodeState implements IRaftNodeLogger {
                                       Set<String> newLearners,
                                       CompletableFuture<Void> onDone);
 
-    abstract void onSnapshotRestored(ByteString fsmSnapshot, Throwable ex);
+    abstract void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex);
 
-    final long currentTerm() {
+    @Override
+    public final long currentTerm() {
         return stateStorage.currentTerm();
+    }
+
+    @Override
+    public long firstIndex() {
+        return stateStorage.firstIndex();
+    }
+
+    @Override
+    public long lastIndex() {
+        return stateStorage.lastIndex();
+    }
+
+    @Override
+    public long commitIndex() {
+        return commitIndex;
     }
 
     final Optional<String> currentVote() {
@@ -152,7 +158,8 @@ abstract class RaftNodeState implements IRaftNodeLogger {
         return voting.map(Voting::getFor);
     }
 
-    final ClusterConfig latestClusterConfig() {
+    @Override
+    public final ClusterConfig latestClusterConfig() {
         return stateStorage.latestClusterConfig();
     }
 
@@ -186,7 +193,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
             try {
                 long firstIndex = stateStorage.firstIndex();
                 stateStorage.applySnapshot(newSnapshot);
-                logDebug("Compacted entries[{},{}]", firstIndex, compactIndex);
+                log.debug("Compacted entries[{},{}]", firstIndex, compactIndex);
                 onDone.complete(null);
             } catch (Throwable e) {
                 onDone.completeExceptionally(new CompactionException("Failed to apply snapshot", e));
@@ -243,12 +250,13 @@ abstract class RaftNodeState implements IRaftNodeLogger {
         }});
     }
 
-    protected void submitSnapshot(ByteString fsmSnapshot) {
-        snapshotInstaller.install(fsmSnapshot).whenComplete((v, e) -> onSnapshotInstalled.done(fsmSnapshot, e));
+    protected void submitSnapshot(ByteString requested, String fromLeader) {
+        snapshotInstaller.install(requested, fromLeader).whenComplete(
+            (installed, ex) -> onSnapshotInstalled.done(requested, installed, ex));
     }
 
     protected void notifyCommit() {
-        logTrace("Notify commit index[{}]", commitIndex);
+        log.trace("Notify commit index[{}]", commitIndex);
         for (Iterator<Map.Entry<Long, ProposeTask>> it = uncommittedProposals.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<Long, ProposeTask> entry = it.next();
             long proposalIndex = entry.getKey();
@@ -316,7 +324,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
     }
 
     protected void sendRequestPreVoteReply(String fromPeer, long term, boolean granted) {
-        logDebug("Answering pre-vote request from peer[{}] of term[{}], granted?: {}", fromPeer, term, granted);
+        log.debug("Answering pre-vote request from peer[{}] of term[{}], granted?: {}", fromPeer, term, granted);
         RaftMessage reply = RaftMessage
             .newBuilder()
             .setTerm(term)
@@ -348,7 +356,7 @@ abstract class RaftNodeState implements IRaftNodeLogger {
                 // probably an isolated server regains connectivity with higher term and receiving request from
                 // leader of majority, we need to let the leader acknowledge the higher term and step down, so
                 // that the partitioned member could rejoin and be stable
-                logDebug("Reply to the leader[{}] of lower term[{}] to let it step down",
+                log.debug("Reply to the leader[{}] of lower term[{}] to let it step down",
                     fromPeer, message.getTerm());
                 submitRaftMessages(fromPeer,
                     RaftMessage.newBuilder()
@@ -367,84 +375,16 @@ abstract class RaftNodeState implements IRaftNodeLogger {
                 // so that it had a chance to update its term, without this mechanism the cluster may deadlock when
                 // pre-vote gradually enable using rolling restart.
                 // for details checkout: https://github.com/etcd-io/etcd/issues/8501
-                logDebug("Reject pre-vote from candidate[{}] of lower term", fromPeer, message.getTerm());
+                log.debug("Reject pre-vote from candidate[{}] of lower term[{}]", fromPeer, message.getTerm());
                 submitRaftMessages(fromPeer, RaftMessage.newBuilder()
                     .setTerm(currentTerm())
                     .setRequestPreVoteReply(RequestPreVoteReply.newBuilder().setVoteCouldGranted(false).build())
                     .build());
             }
-            default -> logDebug("Ignore message[{}] with lower term[{}] from peer[{}]",
+            default -> log.debug("Ignore message[{}] with lower term[{}] from peer[{}]",
                 message.getMessageTypeCase(), message.getTerm(), fromPeer);
 
             // ignore other messages other than the leader issues
         }
-    }
-
-    public final void logTrace(String message, Object... args) {
-        log(message + LOG_DETAILS_SUFFIX, allLogArgs(args), log::isTraceEnabled, log::trace);
-    }
-
-    public final void logDebug(String message, Object... args) {
-        log(message + LOG_DETAILS_SUFFIX, allLogArgs(args), log::isDebugEnabled, log::debug);
-    }
-
-    public final void logInfo(String message, Object... args) {
-        log(message + LOG_DETAILS_SUFFIX, allLogArgs(args), log::isInfoEnabled, log::info);
-    }
-
-    public final void logWarn(String message, Object... args) {
-        log(message + LOG_DETAILS_SUFFIX, allLogArgs(args), log::isWarnEnabled, log::warn);
-    }
-
-    public final void logError(String message, Object... args) {
-        log(message + LOG_DETAILS_SUFFIX, allLogArgs(args), log::isErrorEnabled, log::error);
-    }
-
-    private void log(String format, Object[] args, Supplier<Boolean> isEnable, BiConsumer<String, Object[]> logFunc) {
-        if (isEnable.get()) {
-            MDC.put("logKey", logKey);
-            logFunc.accept(format, args);
-            MDC.clear();
-        }
-    }
-
-    private Object[] allLogArgs(Object... args) {
-        Object[] allArgs = new Object[args.length + 7];
-        int copyLength = args.length;
-        if (args.length > 0 && args[args.length - 1] instanceof Throwable) {
-            copyLength--;
-        }
-        System.arraycopy(args, 0, allArgs, 0, copyLength);
-        allArgs[copyLength] = id;
-        allArgs[copyLength + 1] = getState();
-        allArgs[copyLength + 2] = currentTerm();
-        allArgs[copyLength + 3] = stateStorage.firstIndex();
-        allArgs[copyLength + 4] = stateStorage.lastIndex();
-        allArgs[copyLength + 5] = commitIndex;
-        allArgs[copyLength + 6] = printClusterConfig(stateStorage.latestClusterConfig());
-        if (copyLength < args.length) {
-            allArgs[copyLength + 7] = args[args.length - 1]; // throwable
-        }
-        return allArgs;
-    }
-
-    private String printClusterConfig(ClusterConfig clusterConfig) {
-        return String.format("[c:%s,v:%s,l:%s,nv:%s,nl:%s]",
-            clusterConfig.getCorrelateId(),
-            clusterConfig.getVotersList(),
-            clusterConfig.getLearnersList(),
-            clusterConfig.getNextVotersList(),
-            clusterConfig.getNextLearnersList());
-    }
-
-    private String buildLogKey(String... tags) {
-        StringBuilder logKey = new StringBuilder();
-        for (int i = 0; i < tags.length; i += 2) {
-            logKey.append(tags[i + 1]);
-            if (i + 2 < tags.length) {
-                logKey.append("-");
-            }
-        }
-        return logKey.toString();
     }
 }

@@ -65,11 +65,6 @@ public class MQTTLastWillTest {
         when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
             .thenReturn(CompletableFuture.completedFuture(true));
 
-        doAnswer(invocationOnMock -> {
-            Event<?> event = invocationOnMock.getArgument(0);
-            log.info("event: {}", event);
-            return null;
-        }).when(mqttTest.eventCollector).report(any(Event.class));
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);

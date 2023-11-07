@@ -43,7 +43,6 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
                                                     boolean atomicFlush) {
         if (config instanceof InMemEngineConfig) {
             return InMemKVEngineConfigurator.builder()
-                .gcInterval(config.getGcIntervalInSec())
                 .build();
         } else {
             Path dataRootDir;
@@ -63,7 +62,6 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
             return RocksDBKVEngineConfigurator.builder()
                 .dbRootDir(dataRootDir.toString())
                 .dbCheckpointRootDir(dataCheckpointRootDir.toString())
-                .gcInterval(config.getGcIntervalInSec())
                 .manualCompaction(rocksDBConfig.isManualCompaction())
                 .compactMinTombstoneKeys(rocksDBConfig.getCompactMinTombstoneKeys())
                 .compactMinTombstoneRanges(rocksDBConfig.getCompactMinTombstoneRanges())

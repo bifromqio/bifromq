@@ -20,7 +20,6 @@ import com.baidu.bifromq.basekv.raft.proto.Voting;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Local Storage interface used by RAFT state machine to work with its local persistent state. The implementation MUST
@@ -127,7 +126,7 @@ public interface IRaftStateStore {
 
     /**
      * The index of the last entry in the log. It will be 0 when there is no log entry For non-empty logs, invariant
-     * firstIndex<=lastIndex must be hold
+     * firstIndex less than or equal lastIndex must be hold
      *
      * @return
      */

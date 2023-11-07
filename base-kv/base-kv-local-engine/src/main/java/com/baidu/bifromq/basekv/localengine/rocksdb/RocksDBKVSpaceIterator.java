@@ -28,6 +28,7 @@ import com.google.protobuf.ByteString;
 import java.lang.ref.Cleaner;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
+import org.rocksdb.Snapshot;
 
 public class RocksDBKVSpaceIterator implements IKVSpaceIterator {
     private static final Cleaner CLEANER = Cleaner.create();
@@ -47,11 +48,19 @@ public class RocksDBKVSpaceIterator implements IKVSpaceIterator {
                                   ColumnFamilyHandle cfHandle,
                                   Boundary boundary,
                                   ISyncContext.IRefresher refresher) {
+        this(db, cfHandle, null, boundary, refresher);
+    }
+
+    public RocksDBKVSpaceIterator(RocksDB db,
+                                  ColumnFamilyHandle cfHandle,
+                                  Snapshot snapshot,
+                                  Boundary boundary,
+                                  ISyncContext.IRefresher refresher) {
         byte[] startKey = startKeyBytes(boundary);
         byte[] endKey = endKeyBytes(boundary);
         startKey = startKey != null ? toDataKey(startKey) : DATA_SECTION_START;
         endKey = endKey != null ? toDataKey(endKey) : DATA_SECTION_END;
-        this.rocksItr = new RocksDBKVEngineIterator(db, cfHandle, startKey, endKey);
+        this.rocksItr = new RocksDBKVEngineIterator(db, cfHandle, snapshot, startKey, endKey);
         this.refresher = refresher;
         onClose = CLEANER.register(this, new State(rocksItr));
     }

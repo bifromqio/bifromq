@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.retain.utils;
 
+import static com.baidu.bifromq.retain.utils.TopicUtil.NUL;
 import static com.baidu.bifromq.retain.utils.TopicUtil.escape;
 import static com.baidu.bifromq.retain.utils.TopicUtil.parse;
 import static com.google.protobuf.ByteString.copyFromUtf8;
@@ -37,7 +38,8 @@ public class KeyUtil {
     public static ByteString retainKeyPrefix(ByteString tenantNS, List<String> topicFilterLevels) {
         ByteString prefix = ByteString.empty();
         byte leastLevels = 0;
-        for (String tfl : topicFilterLevels) {
+        for (int i = 0; i < topicFilterLevels.size(); i++) {
+            String tfl = topicFilterLevels.get(i);
             if ("+".equals(tfl)) {
                 leastLevels++;
                 break;
@@ -47,6 +49,13 @@ public class KeyUtil {
             }
             leastLevels++;
             prefix = prefix.concat(copyFromUtf8(tfl));
+            if (i + 1 < topicFilterLevels.size()) {
+                switch (topicFilterLevels.get(i + 1)) {
+                    case "+", "#" -> {
+                    }
+                    default -> prefix = prefix.concat(copyFromUtf8(NUL));
+                }
+            }
         }
         return tenantNS.concat(unsafeWrap(new byte[] {leastLevels})).concat(prefix);
     }
