@@ -56,6 +56,11 @@ public class GroupMatching extends Matching {
     }
 
     @Override
+    public Type type() {
+        return Type.Group;
+    }
+
+    @Override
     public String originalTopicFilter() {
         return origTopicFilter;
     }

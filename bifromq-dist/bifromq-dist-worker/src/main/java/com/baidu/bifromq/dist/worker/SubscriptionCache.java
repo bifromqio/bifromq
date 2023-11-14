@@ -16,27 +16,20 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordTopicFilterPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
-import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_CACHED_SUBS_PER_TENANT;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
-import static com.google.common.hash.Hashing.murmur3_128;
 import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
-import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.dist.util.TopicFilterMatcher;
 import com.baidu.bifromq.dist.util.TopicTrie;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.TopicMessage;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
-import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -50,7 +43,6 @@ import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -59,7 +51,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -69,9 +60,6 @@ import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class SubscriptionCache {
-    // OuterCacheKey: OrderedSharedMatchingKey(<tenantId>, <escapedTopicFilter>, <tenantVer>)
-    // InnerCacheKey: ClientInfo(<tenantId>, <type>, <metadata>)
-    private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
     private final ThreadLocal<IKVReader> threadLocalReader;
@@ -81,18 +69,6 @@ public class SubscriptionCache {
     SubscriptionCache(KVRangeId id, Supplier<IKVReader> rangeReaderProvider, Executor matchExecutor) {
         int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
         threadLocalReader = ThreadLocal.withInitial(rangeReaderProvider);
-        orderedSharedMatching = Caffeine.newBuilder()
-            .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
-            .scheduler(Scheduler.systemScheduler())
-            .removalListener((RemovalListener<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>>)
-                (key, value, cause) -> {
-                    if (value != null) {
-                        value.invalidateAll();
-                    }
-                })
-            .build(k -> Caffeine.newBuilder()
-                .expireAfterAccess(expirySec, TimeUnit.SECONDS)
-                .build());
         tenantCache = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 3L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
@@ -161,45 +137,9 @@ public class SubscriptionCache {
             .register(Metrics.globalRegistry);
     }
 
-    public CompletableFuture<Map<NormalMatching, Set<ClientInfo>>> get(ScopedTopic topic, Set<ClientInfo> senders) {
+    public CompletableFuture<MatchResult> get(ScopedTopic topic) {
         Timer.Sample sample = Timer.start();
-        return tenantCache.get(topic.tenantId).get(topic)
-            .thenApply(matchResult -> {
-                sample.stop(externalMatchTimer);
-                Map<NormalMatching, Set<ClientInfo>> routesMap = new HashMap<>();
-                for (Matching matching : matchResult.routes) {
-                    NormalMatching matchedInbox;
-                    if (matching instanceof NormalMatching) {
-                        matchedInbox = (NormalMatching) matching;
-                        routesMap.put(matchedInbox, senders);
-                    } else {
-                        GroupMatching groupMatching = (GroupMatching) matching;
-                        if (groupMatching.ordered) {
-                            for (ClientInfo sender : senders) {
-                                matchedInbox = orderedSharedMatching
-                                    .get(new OrderedSharedMatchingKey(groupMatching.tenantId,
-                                        groupMatching.escapedTopicFilter,
-                                        matchResult.tenantVer))
-                                    .get(sender, k -> {
-                                        RendezvousHash<ClientInfo, NormalMatching> hash =
-                                            new RendezvousHash<>(murmur3_128(),
-                                                (from, into) -> into.putInt(from.hashCode()),
-                                                (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
-                                                Comparator.comparing(a -> a.scopedInboxId));
-                                        groupMatching.inboxList.forEach(hash::add);
-                                        return hash.get(k);
-                                    });
-                                routesMap.computeIfAbsent(matchedInbox, k -> new HashSet<>()).add(sender);
-                            }
-                        } else {
-                            matchedInbox = groupMatching.inboxList.get(ThreadLocalRandom.current()
-                                .nextInt(groupMatching.inboxList.size()));
-                            routesMap.put(matchedInbox, senders);
-                        }
-                    }
-                }
-                return routesMap;
-            });
+        return tenantCache.get(topic.tenantId).get(topic).whenComplete((v, e) -> sample.stop(externalMatchTimer));
     }
 
     // TODO: explore the possibility to invalidate all keys which matching a given wildcard topic filter
@@ -208,17 +148,19 @@ public class SubscriptionCache {
     }
 
     public void invalidate(ScopedTopic topic) {
+        // TODO: there is a potential invalidation lost that will lead to cache staled routes. think about the sequence:
+        // 1. match against KVRange, but before add the match result to cache
+        // 2. sub/unsub
+        // 3. invalidation cache, nothing happens
+        // 4. add staled result to cache
         AsyncLoadingCache<ScopedTopic, MatchResult> routeCache = tenantCache.getIfPresent(topic.tenantId);
         if (routeCache != null) {
             routeCache.synchronous().invalidate(topic);
         }
-        orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(topic.tenantId, escape(topic.topic),
-            tenantVerCache.get(topic.tenantId).get()));
     }
 
     public void close() {
         tenantCache.invalidateAll();
-        orderedSharedMatching.invalidateAll();
         tenantVerCache.invalidateAll();
         Metrics.globalRegistry.remove(externalMatchTimer);
         Metrics.globalRegistry.remove(internalMatchTimer);
@@ -296,12 +238,10 @@ public class SubscriptionCache {
         return routes;
     }
 
+
     @AllArgsConstructor
-    private static class MatchResult {
+    public static class MatchResult {
         final List<Matching> routes = new ArrayList<>();
         final long tenantVer;
-    }
-
-    private record OrderedSharedMatchingKey(String tenantId, String escapedTopicFilter, long tenantVer) {
     }
 }

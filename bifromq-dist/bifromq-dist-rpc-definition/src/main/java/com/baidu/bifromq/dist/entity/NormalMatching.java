@@ -75,6 +75,11 @@ public class NormalMatching extends Matching {
     }
 
     @Override
+    public Type type() {
+        return Type.Normal;
+    }
+
+    @Override
     public String originalTopicFilter() {
         return originalTopicFilter;
     }

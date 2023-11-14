@@ -14,15 +14,16 @@
 package com.baidu.bifromq.dist.worker.scheduler;
 
 import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.TopicMessagePack;
 
 public class DeliveryRequest {
     public final SubInfo subInfo;
     public final MessagePackWrapper msgPackWrapper;
     public final DelivererKey writerKey;
 
-    public DeliveryRequest(SubInfo subInfo, int brokerId, String delivererKey, MessagePackWrapper msgPackWrapper) {
+    public DeliveryRequest(SubInfo subInfo, int brokerId, String delivererKey, TopicMessagePack msgPack) {
         this.subInfo = subInfo;
-        this.msgPackWrapper = msgPackWrapper;
+        this.msgPackWrapper = MessagePackWrapper.wrap(msgPack);
         writerKey = new DelivererKey(brokerId, delivererKey);
     }
 }

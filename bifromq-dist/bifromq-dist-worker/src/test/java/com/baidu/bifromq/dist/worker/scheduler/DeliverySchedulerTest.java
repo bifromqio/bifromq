@@ -62,8 +62,7 @@ public class DeliverySchedulerTest {
     @Test
     public void writeSucceed() {
         SubInfo subInfo = SubInfo.newBuilder().build();
-        MessagePackWrapper msgPack = MessagePackWrapper.wrap(TopicMessagePack.newBuilder().build());
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", msgPack);
+        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(
             CompletableFuture.completedFuture(Collections.singletonMap(subInfo, DeliveryResult.OK)));
         DeliveryResult result = testScheduler.schedule(request).join();
@@ -73,8 +72,7 @@ public class DeliverySchedulerTest {
     @Test
     public void writeIncompleteResult() {
         SubInfo subInfo = SubInfo.newBuilder().build();
-        MessagePackWrapper msgPack = MessagePackWrapper.wrap(TopicMessagePack.newBuilder().build());
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", msgPack);
+        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
         DeliveryResult result = testScheduler.schedule(request).join();
         assertEquals(result, DeliveryResult.OK);
@@ -83,8 +81,7 @@ public class DeliverySchedulerTest {
     @Test
     public void writeNoInbox() {
         SubInfo subInfo = SubInfo.newBuilder().build();
-        MessagePackWrapper msgPack = MessagePackWrapper.wrap(TopicMessagePack.newBuilder().build());
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", msgPack);
+        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(
             CompletableFuture.completedFuture(Collections.singletonMap(subInfo, DeliveryResult.NO_INBOX)));
         DeliveryResult result = testScheduler.schedule(request).join();
@@ -94,8 +91,7 @@ public class DeliverySchedulerTest {
     @Test(expectedExceptions = RuntimeException.class)
     public void writeFail() {
         SubInfo subInfo = SubInfo.newBuilder().build();
-        MessagePackWrapper msgPack = MessagePackWrapper.wrap(TopicMessagePack.newBuilder().build());
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", msgPack);
+        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("Mock Exception")));
         testScheduler.schedule(request).join();

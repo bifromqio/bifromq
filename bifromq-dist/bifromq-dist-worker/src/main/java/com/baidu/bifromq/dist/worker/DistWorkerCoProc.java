@@ -62,12 +62,10 @@ import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
-import com.baidu.bifromq.dist.worker.scheduler.MessagePackWrapper;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Maps;
@@ -79,7 +77,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -156,17 +153,20 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         DistServiceRWCoProcInput coProcInput = input.getDistService();
         log.trace("Receive rw co-proc request\n{}", coProcInput);
         Set<String> touchedTenants = Sets.newHashSet();
-        Set<ScopedTopic> touchedTopics = Sets.newHashSet();
+        Set<ScopedTopic> touchedTopicFilters = Sets.newHashSet();
         DistServiceRWCoProcOutput.Builder outputBuilder = DistServiceRWCoProcOutput.newBuilder();
         switch (coProcInput.getTypeCase()) {
             case BATCHMATCH -> outputBuilder.setBatchMatch(
-                batchMatch(coProcInput.getBatchMatch(), reader, writer, touchedTenants, touchedTopics));
+                batchMatch(coProcInput.getBatchMatch(), reader, writer, touchedTenants, touchedTopicFilters));
             case BATCHUNMATCH -> outputBuilder.setBatchUnmatch(
-                batchUnmatch(coProcInput.getBatchUnmatch(), reader, writer, touchedTenants, touchedTopics));
+                batchUnmatch(coProcInput.getBatchUnmatch(), reader, writer, touchedTenants, touchedTopicFilters));
         }
         RWCoProcOutput output = RWCoProcOutput.newBuilder().setDistService(outputBuilder.build()).build();
         return () -> {
-            touchedTopics.forEach(routeCache::invalidate);
+            touchedTopicFilters.forEach(topicFilter -> {
+                routeCache.invalidate(topicFilter);
+                fanoutExecutorGroup.invalidate(topicFilter);
+            });
             touchedTenants.forEach(routeCache::touch);
             return output;
         };
@@ -194,13 +194,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     writer.put(normalMatchRecordKey, MatchRecord.newBuilder().setNormal(subQoS).build().toByteString());
                     if (isWildcardTopicFilter(topicFilter)) {
                         touchedTenants.add(tenantId);
-                    } else {
-                        touchedTopics.add(ScopedTopic.builder()
-                            .tenantId(tenantId)
-                            .topic(topicFilter)
-                            .boundary(reader.boundary())
-                            .build());
                     }
+                    touchedTopics.add(ScopedTopic.builder()
+                        .tenantId(tenantId)
+                        .topic(topicFilter)
+                        .boundary(reader.boundary())
+                        .build());
                 }
                 replyBuilder.putResults(scopedTopicFilter, BatchMatchReply.Result.OK);
             } else {
@@ -249,13 +248,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());
                 if (isWildcardTopicFilter(groupTopicFilter)) {
                     touchedTenants.add(parseTenantId(groupMatchRecordKey));
-                } else {
-                    touchedTopics.add(ScopedTopic.builder()
-                        .tenantId(parseTenantId(groupMatchRecordKey))
-                        .topic(groupTopicFilter)
-                        .boundary(reader.boundary())
-                        .build());
                 }
+                touchedTopics.add(ScopedTopic.builder()
+                    .tenantId(parseTenantId(groupMatchRecordKey))
+                    .topic(groupTopicFilter)
+                    .boundary(reader.boundary())
+                    .build());
             }
         });
         return replyBuilder.build();
@@ -279,13 +277,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     writer.delete(normalMatchRecordKey);
                     if (isWildcardTopicFilter(topicFilter)) {
                         touchedTenants.add(tenantId);
-                    } else {
-                        touchedTopics.add(ScopedTopic.builder()
-                            .tenantId(tenantId)
-                            .topic(topicFilter)
-                            .boundary(reader.boundary())
-                            .build());
                     }
+                    touchedTopics.add(ScopedTopic.builder()
+                        .tenantId(tenantId)
+                        .topic(topicFilter)
+                        .boundary(reader.boundary())
+                        .build());
                     replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.OK);
                 } else {
                     replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.NOT_EXISTED);
@@ -328,13 +325,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());
                     if (isWildcardTopicFilter(groupTopicFilter)) {
                         touchedTenants.add(parseTenantId(groupMatchRecordKey));
-                    } else {
-                        touchedTopics.add(ScopedTopic.builder()
-                            .tenantId(parseTenantId(groupMatchRecordKey))
-                            .topic(groupTopicFilter)
-                            .boundary(reader.boundary())
-                            .build());
                     }
+                    touchedTopics.add(ScopedTopic.builder()
+                        .tenantId(parseTenantId(groupMatchRecordKey))
+                        .topic(groupTopicFilter)
+                        .boundary(reader.boundary())
+                        .build());
                 }
             } else {
                 delGroupMembers.forEach(delQInboxId ->
@@ -370,13 +366,10 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     .topic(topic)
                     .boundary(reader.boundary())
                     .build();
-                Map<ClientInfo, TopicMessagePack.PublisherPack> senderMsgPackMap = topicMsgPack.getMessageList()
-                    .stream().collect(Collectors.toMap(TopicMessagePack.PublisherPack::getPublisher, e -> e));
-                distFanOutFutures.add(routeCache.get(scopedTopic, senderMsgPackMap.keySet())
-                    .thenApply(routeMap -> {
-                        fanoutExecutorGroup.submit(Objects.hash(tenantId, topic, request.getOrderKey()), routeMap,
-                            MessagePackWrapper.wrap(topicMsgPack), senderMsgPackMap);
-                        return singletonMap(tenantId, singletonMap(topic, routeMap.size()));
+                distFanOutFutures.add(routeCache.get(scopedTopic)
+                    .thenApply(matchResult -> {
+                        fanoutExecutorGroup.submit(matchResult.routes, topicMsgPack);
+                        return singletonMap(tenantId, singletonMap(topic, matchResult.routes.size()));
                     }));
             }
         }

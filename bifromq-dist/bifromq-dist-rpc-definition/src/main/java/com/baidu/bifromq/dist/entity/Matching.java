@@ -20,6 +20,10 @@ import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode
 public abstract class Matching {
+    public enum Type {
+        Normal, Group
+    }
+
     @EqualsAndHashCode.Exclude
     public final ByteString key;
     @EqualsAndHashCode.Exclude
@@ -35,6 +39,8 @@ public abstract class Matching {
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
         escapedTopicFilter = matchRecordKeyStr.substring(firstSplit + 2, lastSplit);
     }
+
+    public abstract Type type();
 
     public abstract String originalTopicFilter();
 }
