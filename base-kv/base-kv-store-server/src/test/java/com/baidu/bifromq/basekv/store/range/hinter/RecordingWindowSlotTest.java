@@ -11,13 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range.estimator;
+package com.baidu.bifromq.basekv.store.range.hinter;
 
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.MockableTest;
+import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
+import com.baidu.bifromq.basekv.store.range.KVLoadRecorder;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
 import java.util.function.Supplier;
@@ -54,9 +56,7 @@ public class RecordingWindowSlotTest extends MockableTest {
     public void estimateSplitKey() {
         when(nanoSource.get()).thenReturn(0L);
         LoadRecordWindow windowSlot = new LoadRecordWindow();
-        LoadRecorder recorder = new LoadRecorder(nanoSource,
-            rec -> windowSlot.record(rec.keyDistribution(), rec.getKVIOs(), rec.getKVIONanos(),
-                nanoSource.get() - rec.startNanos()));
+        KVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
 
         recorder.record(ByteString.copyFromUtf8("Key1"), 20);
         recorder.record(ByteString.copyFromUtf8("Key2"), 20);
@@ -64,7 +64,9 @@ public class RecordingWindowSlotTest extends MockableTest {
         recorder.record(ByteString.copyFromUtf8("Key4"), 30);
         recorder.record(ByteString.copyFromUtf8("Key5"), 30);
         recorder.record(ByteString.copyFromUtf8("Key6"), 30);
-        recorder.stop();
+        IKVLoadRecord record = recorder.stop();
+        windowSlot.record(record.keyDistribution(), record.getKVIOs(), record.getKVIONanos(),
+            nanoSource.get() - record.startNanos());
         assertTrue(windowSlot.estimateSplitKey().isPresent());
         assertEquals(windowSlot.estimateSplitKey().get(), ByteString.copyFromUtf8("Key4"));
     }
@@ -73,10 +75,7 @@ public class RecordingWindowSlotTest extends MockableTest {
     public void estimateSplitKeyWithNonKeyIO() {
         when(nanoSource.get()).thenReturn(0L);
         LoadRecordWindow windowSlot = new LoadRecordWindow();
-        LoadRecorder recorder = new LoadRecorder(nanoSource,
-            rec -> windowSlot.record(rec.keyDistribution(), rec.getKVIOs(), rec.getKVIONanos(),
-                nanoSource.get() - rec.startNanos()));
-
+        KVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
         recorder.record(ByteString.copyFromUtf8("Key1"), 20);
         recorder.record(ByteString.copyFromUtf8("Key2"), 20);
         recorder.record(ByteString.copyFromUtf8("Key3"), 20);
@@ -84,7 +83,10 @@ public class RecordingWindowSlotTest extends MockableTest {
         recorder.record(ByteString.copyFromUtf8("Key5"), 30);
         recorder.record(ByteString.copyFromUtf8("Key6"), 30);
         recorder.record(1000);
-        recorder.stop();
+        IKVLoadRecord record = recorder.stop();
+        windowSlot.record(record.keyDistribution(), record.getKVIOs(), record.getKVIONanos(),
+            nanoSource.get() - record.startNanos());
+
         assertTrue(windowSlot.estimateSplitKey().isPresent());
         assertEquals(windowSlot.estimateSplitKey().get(), ByteString.copyFromUtf8("Key4"));
     }

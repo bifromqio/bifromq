@@ -72,7 +72,7 @@ public interface IKVRange extends IKVRangeReader {
      * @param recorder the load recorder
      * @return the range writer
      */
-    IKVRangeWriter<?> toWriter(ILoadTracker.ILoadRecorder recorder);
+    IKVRangeWriter<?> toWriter(IKVLoadRecorder recorder);
 
     IKVReseter toReseter(KVRangeSnapshot snapshot);
 

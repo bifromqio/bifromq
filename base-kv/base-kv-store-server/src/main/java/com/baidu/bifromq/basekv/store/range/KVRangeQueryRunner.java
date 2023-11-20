@@ -19,13 +19,16 @@ import static com.baidu.bifromq.basekv.proto.State.StateType.Removed;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
+import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -45,18 +48,18 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     private final Set<CompletableFuture<?>> runningQueries = Sets.newConcurrentHashSet();
     private final IKVRangeQueryLinearizer linearizer;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final ILoadTracker loadTracker;
+    private final List<IKVRangeSplitHinter> splitHinters;
 
     KVRangeQueryRunner(IKVRange kvRange,
                        IKVRangeCoProc coProc,
                        Executor executor,
                        IKVRangeQueryLinearizer linearizer,
-                       ILoadTracker loadTracker) {
+                       List<IKVRangeSplitHinter> splitHinters) {
         this.kvRange = kvRange;
         this.coProc = coProc;
         this.executor = executor;
         this.linearizer = linearizer;
-        this.loadTracker = loadTracker;
+        this.splitHinters = splitHinters;
     }
 
     // Execute a ROCommand
@@ -80,12 +83,15 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     @Override
     public CompletableFuture<ROCoProcOutput> queryCoProc(long ver, ROCoProcInput query, boolean linearized) {
         return submit(ver, rangeReader -> {
-            ILoadTracker.ILoadRecorder recorder = loadTracker.start();
-            IKVReader loadRecordableReader = new LoadRecordableKVReader(rangeReader, recorder);
+            IKVLoadRecorder loadRecorder = new KVLoadRecorder();
+            IKVReader loadRecordableReader = new LoadRecordableKVReader(rangeReader, loadRecorder);
             // the cost of refresh() needs to be recorded
             loadRecordableReader.refresh();
             return coProc.query(query, loadRecordableReader)
-                .whenComplete((v, e) -> recorder.stop());
+                .whenComplete((v, e) -> {
+                    IKVLoadRecord record = loadRecorder.stop();
+                    splitHinters.forEach(hinter -> hinter.recordQuery(query, record, rangeReader));
+                });
         }, linearized);
     }
 

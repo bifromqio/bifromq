@@ -29,8 +29,8 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
-import com.baidu.bifromq.basekv.store.range.estimator.NoopEstimator;
 import com.google.protobuf.ByteString;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -51,7 +51,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
     @Test
     public void badVersionQuery() {
         KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(1L);
 
@@ -83,7 +83,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     private void internalErrorByWrongState(State.StateType stateType) {
         KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.state()).thenReturn(State.newBuilder().setType(stateType).build());
 
@@ -101,7 +101,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
     @Test
     public void get() {
         KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);
         when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
@@ -119,7 +119,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
     @Test
     public void exist() {
         KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);
         when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
@@ -136,7 +136,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
     @Test
     public void roCoProc() {
         KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
@@ -160,7 +160,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
     @Test
     public void linearizedRoCoProc() {
         KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
@@ -185,7 +185,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
     @Test
     public void close() {
         KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, NoopEstimator.INSTANCE);
+            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);

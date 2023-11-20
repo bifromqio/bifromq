@@ -36,8 +36,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.LoadHint;
-import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.StoreMessage;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -179,10 +177,6 @@ public class KVRangeStoreTest extends MockableTest {
             .setBoundary(FULL_BOUNDARY)
             .setConfig(ClusterConfig.newBuilder().addVoters(rangeStore.id()).build())
             .putSyncState(rangeStore.id(), RaftNodeSyncState.Replicating)
-            .setLoadHint(LoadHint.newBuilder()
-                .setQuery(SplitHint.getDefaultInstance())
-                .setMutation(SplitHint.getDefaultInstance())
-                .build())
             .build());
     }
 

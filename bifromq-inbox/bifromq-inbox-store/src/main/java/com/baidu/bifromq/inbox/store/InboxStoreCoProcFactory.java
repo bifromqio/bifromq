@@ -20,13 +20,17 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.parseScopedInboxId;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
+import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
+import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.google.protobuf.ByteString;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -35,30 +39,36 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final Clock clock;
+    private final Duration loadEstWindow;
     private final Duration purgeDelay;
 
     public InboxStoreCoProcFactory(IDistClient distClient,
                                    ISettingProvider settingProvider,
                                    IEventCollector eventCollector,
                                    Clock clock,
+                                   Duration loadEstimateWindow,
                                    Duration purgeDelay) {
         this.distClient = distClient;
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.clock = clock;
+        this.loadEstWindow = loadEstimateWindow;
         this.purgeDelay = purgeDelay;
     }
 
     @Override
-    public Optional<ByteString> toSplitKey(ByteString key) {
-        if (hasScopedInboxId(key)) {
-            return Optional.of(upperBound(parseScopedInboxId(key)));
-        }
-        return Optional.empty();
+    public List<IKVRangeSplitHinter> create(String clusterId, String storeId, KVRangeId id) {
+        return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
+            if (hasScopedInboxId(key)) {
+                return Optional.of(upperBound(parseScopedInboxId(key)));
+            }
+            return Optional.empty();
+        }, "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)));
     }
 
     @Override
-    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> rangeReaderProvider) {
+    public IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id,
+                                 Supplier<IKVReader> rangeReaderProvider) {
         return new InboxStoreCoProc(distClient, settingProvider, eventCollector, clock, purgeDelay);
     }
 

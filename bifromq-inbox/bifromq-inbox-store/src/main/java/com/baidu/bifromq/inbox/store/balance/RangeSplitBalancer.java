@@ -13,15 +13,18 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
+import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_DENSITY;
+import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
+
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.base.Preconditions;
 import java.util.Collections;
@@ -83,19 +86,21 @@ class RangeSplitBalancer extends StoreBalancer {
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
             .filter(d -> d.getState() == State.StateType.Normal)
+            .filter(d -> d.getHintsList().stream()
+                .anyMatch(hint -> hint.getType().equals(MutationKVLoadBasedSplitHinter.TYPE)))
             // split range with highest io density
-            .sorted((o1, o2) -> Long.compare(o2.getLoadHint().getMutation().getIoDensity(),
-                o1.getLoadHint().getMutation().getIoDensity()))
+            .sorted((o1, o2) -> Double.compare(o2.getHints(0).getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0),
+                o1.getHints(0).getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0)))
             .toList();
         // No leader range in localStore
         if (localLeaderRangeDescriptors.isEmpty()) {
             return Optional.empty();
         }
         for (KVRangeDescriptor leaderRangeDescriptor : localLeaderRangeDescriptors) {
-            LoadHint hint = leaderRangeDescriptor.getLoadHint();
-            SplitHint splitHint = hint.getMutation();
-            if (splitHint.getIoLatencyNanos() < ioNanosLimitPerRange &&
-                splitHint.getIoDensity() > maxIODensityPerRange && splitHint.hasSplitKey()) {
+            SplitHint splitHint = leaderRangeDescriptor.getHints(0);
+            assert splitHint.getType().equals(MutationKVLoadBasedSplitHinter.TYPE);
+            if (splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0) < ioNanosLimitPerRange &&
+                splitHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0) > maxIODensityPerRange && splitHint.hasSplitKey()) {
                 log.debug("Split range[{}] in store[{}]: key={}",
                     KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
                     localStoreId, splitHint.getSplitKey());

@@ -16,14 +16,12 @@ package com.baidu.bifromq.basekv;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
 import java.util.function.Supplier;
 
 public class TestCoProcFactory implements IKVRangeCoProcFactory {
     @Override
-    public IKVRangeCoProc create(KVRangeId id, Supplier<IKVReader> readerProvider) {
+    public IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id, Supplier<IKVReader> readerProvider) {
         return new TestCoProc(id, readerProvider);
     }
 }

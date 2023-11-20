@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range.estimator;
+package com.baidu.bifromq.basekv.store.range.hinter;
 
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +19,9 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.MockableTest;
+import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
+import com.baidu.bifromq.basekv.store.range.IKVLoadRecorder;
+import com.baidu.bifromq.basekv.store.range.KVLoadRecorder;
 import com.google.protobuf.ByteString;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -30,36 +33,31 @@ public class LoadRecorderTest extends MockableTest {
     @Mock
     private Supplier<Long> nanoSource;
 
-    @Mock
-    private Consumer<LoadRecorder> onStop;
-
     @Test
     public void initState() {
         when(nanoSource.get()).thenReturn(10L);
-        LoadRecorder recorder = new LoadRecorder(nanoSource, onStop);
-        assertEquals(recorder.getKVIONanos(), 0);
-        assertEquals(recorder.getKVIOs(), 0);
-        assertEquals(recorder.startNanos(), 10L);
-        assertTrue(recorder.keyDistribution().isEmpty());
-        recorder.stop();
-        ArgumentCaptor<LoadRecorder> captor = ArgumentCaptor.forClass(LoadRecorder.class);
-        verify(onStop).accept(captor.capture());
-        assertEquals(captor.getValue(), recorder);
+        IKVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
+        IKVLoadRecord record = recorder.stop();
+        assertEquals(record.getKVIONanos(), 0);
+        assertEquals(record.getKVIOs(), 0);
+        assertEquals(record.startNanos(), 10L);
+        assertTrue(record.keyDistribution().isEmpty());
     }
 
     @Test
     public void record() {
         when(nanoSource.get()).thenReturn(10L);
-        LoadRecorder recorder = new LoadRecorder(nanoSource, onStop);
+        IKVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
         recorder.record(1);
         recorder.record(ByteString.copyFromUtf8("key1"), 1L);
         recorder.record(ByteString.copyFromUtf8("key1"), 2L);
         recorder.record(ByteString.copyFromUtf8("key2"), 1L);
 
-        assertEquals(recorder.getKVIONanos(), 5);
-        assertEquals(recorder.getKVIOs(), 4);
-        assertEquals(recorder.startNanos(), 10L);
-        assertEquals(recorder.keyDistribution().size(), 2);
+        IKVLoadRecord record = recorder.stop();
+        assertEquals(record.getKVIONanos(), 5);
+        assertEquals(record.getKVIOs(), 4);
+        assertEquals(record.startNanos(), 10L);
+        assertEquals(record.keyDistribution().size(), 2);
         recorder.stop();
     }
 }

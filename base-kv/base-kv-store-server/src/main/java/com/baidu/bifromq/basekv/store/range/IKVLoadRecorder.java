@@ -11,17 +11,26 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.api;
+package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Supplier;
+import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
+import com.google.protobuf.ByteString;
 
-public interface IKVRangeCoProcFactory {
-    default List<IKVRangeSplitHinter> create(String clusterId, String storeId, KVRangeId id) {
-        return Collections.emptyList();
-    }
+public interface IKVLoadRecorder {
+    /**
+     * The latency spent for accessing this key
+     *
+     * @param key          the accessed key
+     * @param latencyNanos the nanos spent
+     */
+    void record(ByteString key, long latencyNanos);
 
-    IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id, Supplier<IKVReader> readerProvider);
+    /**
+     * The latency spent for other kv activity
+     *
+     * @param latencyNanos the nanos spent
+     */
+    void record(long latencyNanos);
+
+    IKVLoadRecord stop();
 }

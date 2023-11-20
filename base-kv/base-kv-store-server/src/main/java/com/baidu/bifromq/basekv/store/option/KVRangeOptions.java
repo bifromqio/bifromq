@@ -30,7 +30,6 @@ import lombok.experimental.Accessors;
 @Builder(toBuilder = true)
 public class KVRangeOptions {
     private boolean enableLoadEstimation = false;
-    private int loadEstimationWindowSec = 5;
     private int snapshotSyncBytesPerSec = 128 * 1024 * 1024; // 128MB
     private int compactWALThreshold = 10000; // the max number of logs before compaction
     private long tickUnitInMS = 100;

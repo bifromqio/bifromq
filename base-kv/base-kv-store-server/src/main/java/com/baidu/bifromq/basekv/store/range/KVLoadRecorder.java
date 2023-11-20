@@ -11,45 +11,26 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range.estimator;
+package com.baidu.bifromq.basekv.store.range;
 
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
+import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-class LoadRecorder implements ILoadTracker.ILoadRecorder {
+public class KVLoadRecorder implements IKVLoadRecorder {
     private final long startNanos;
     private final Map<ByteString, Long> loadDistribution = new HashMap<>();
     private long kvIONanos = 0L;
     private int kvIOs = 0;
-    private final Consumer<LoadRecorder> onStop;
 
-    public LoadRecorder(Supplier<Long> nanoSource, Consumer<LoadRecorder> onStop) {
+    public KVLoadRecorder() {
+        this(System::nanoTime);
+    }
+
+    public KVLoadRecorder(Supplier<Long> nanoSource) {
         startNanos = nanoSource.get();
-        this.onStop = onStop;
-    }
-
-    @Override
-    public long startNanos() {
-        return startNanos;
-    }
-
-    @Override
-    public int getKVIOs() {
-        return kvIOs;
-    }
-
-    @Override
-    public long getKVIONanos() {
-        return kvIONanos;
-    }
-
-    @Override
-    public Map<ByteString, Long> keyDistribution() {
-        return loadDistribution;
     }
 
     @Override
@@ -66,7 +47,27 @@ class LoadRecorder implements ILoadTracker.ILoadRecorder {
     }
 
     @Override
-    public void stop() {
-        onStop.accept(this);
+    public IKVLoadRecord stop() {
+        return new IKVLoadRecord() {
+            @Override
+            public long startNanos() {
+                return startNanos;
+            }
+
+            @Override
+            public int getKVIOs() {
+                return kvIOs;
+            }
+
+            @Override
+            public long getKVIONanos() {
+                return kvIONanos;
+            }
+
+            @Override
+            public Map<ByteString, Long> keyDistribution() {
+                return loadDistribution;
+            }
+        };
     }
 }

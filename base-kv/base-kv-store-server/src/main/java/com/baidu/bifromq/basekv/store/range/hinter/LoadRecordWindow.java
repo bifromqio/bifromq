@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range.estimator;
+package com.baidu.bifromq.basekv.store.range.hinter;
 
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
 

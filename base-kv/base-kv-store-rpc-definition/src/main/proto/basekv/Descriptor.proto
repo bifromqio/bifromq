@@ -10,14 +10,9 @@ option java_package = "com.baidu.bifromq.basekv.proto";
 option optimize_for = SPEED;
 
 message SplitHint{
-  uint32 ioDensity = 1;
-  uint64 ioLatencyNanos = 2;
-  uint64 avgLatency = 3;
-  optional bytes splitKey = 4;
-}
-message LoadHint{
-  SplitHint query = 1; // the split hint generated based on query load observation and split key estimation
-  SplitHint mutation = 2; // the split hint generated based on mutation load observation and split key estimation
+  string type = 1;
+  map<string, double> load = 2;
+  optional bytes splitKey = 3;
 }
 
 message KVRangeDescriptor {
@@ -29,7 +24,7 @@ message KVRangeDescriptor {
   raft.ClusterConfig config = 6;
   map<string, raft.RaftNodeSyncState> syncState = 7;
   map<string, double> statistics = 8;
-  LoadHint loadHint = 9;
+  repeated SplitHint hints = 9;
   uint64 hlc = 10;
 }
 

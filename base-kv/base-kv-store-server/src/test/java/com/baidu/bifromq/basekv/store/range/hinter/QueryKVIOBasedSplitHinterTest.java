@@ -11,8 +11,9 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range.estimator;
+package com.baidu.bifromq.basekv.store.range.hinter;
 
+import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_DENSITY;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -22,7 +23,8 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.SplitHint;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
+import com.baidu.bifromq.basekv.store.range.IKVLoadRecorder;
+import com.baidu.bifromq.basekv.store.range.KVLoadRecorder;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Optional;
@@ -30,28 +32,30 @@ import java.util.function.Supplier;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class SplitKeyEstimatorTest extends MockableTest {
+public class QueryKVIOBasedSplitHinterTest extends MockableTest {
     @Mock
     protected Supplier<Long> nanoSource;
 
     @Test
     public void noLoadRecorded() {
-        SplitKeyEstimator testEstimator = new SplitKeyEstimator(System::nanoTime, 5, Optional::of);
+        QueryKVLoadBasedSplitHinter testEstimator =
+            new QueryKVLoadBasedSplitHinter(Duration.ofSeconds(5), Optional::of);
         SplitHint hint = testEstimator.estimate();
         assertFalse(hint.hasSplitKey());
     }
 
     @Test
     public void hintMemoization() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 5, Optional::of);
+        QueryKVLoadBasedSplitHinter estimator =
+            new QueryKVLoadBasedSplitHinter(nanoSource, Duration.ofSeconds(5), Optional::of);
         long now = 0L;
         // track enough records
         for (int i = 0; i < 11; i++) {
             when(nanoSource.get()).thenReturn(now);
-            ILoadTracker.ILoadRecorder recorder = estimator.start();
+            IKVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
             recorder.record(ByteString.copyFromUtf8("Key"), 10_000);
             when(nanoSource.get()).thenReturn(now + 10_000);
-            recorder.stop();
+            estimator.recordQuery(null, recorder.stop(), null);
         }
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(6).toNanos());
         SplitHint hint1 = estimator.estimate();
@@ -65,22 +69,23 @@ public class SplitKeyEstimatorTest extends MockableTest {
 
     @Test
     public void trackClearExpiredSlots() {
-        SplitKeyEstimator estimator = new SplitKeyEstimator(nanoSource, 1, Optional::of);
+        QueryKVLoadBasedSplitHinter estimator =
+            new QueryKVLoadBasedSplitHinter(nanoSource, Duration.ofSeconds(1), Optional::of);
         long now = 0L;
         for (int i = 0; i < 11; i++) {
             when(nanoSource.get()).thenReturn(now);
-            ILoadTracker.ILoadRecorder recorder = estimator.start();
+            IKVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
             recorder.record(ByteString.copyFromUtf8("Key"), Duration.ofMillis(10).toNanos());
             when(nanoSource.get()).thenReturn(now + Duration.ofMillis(200).toNanos());
-            recorder.stop();
+            estimator.recordQuery(null, recorder.stop(), null);
         }
         when(nanoSource.get()).thenReturn(now + Duration.ofMillis(1000).toNanos());
         SplitHint hint = estimator.estimate();
-        assertTrue(hint.getIoDensity() > 0);
+        assertTrue(hint.getLoadMap().get(LOAD_TYPE_IO_DENSITY) > 0);
         assertTrue(hint.hasSplitKey());
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(2).toNanos());
         hint = estimator.estimate();
-        assertEquals(hint.getIoDensity(), 0);
+        assertEquals(hint.getLoadMap().getOrDefault(LOAD_TYPE_IO_DENSITY, 0d), 0d);
         assertFalse(hint.hasSplitKey());
     }
 }

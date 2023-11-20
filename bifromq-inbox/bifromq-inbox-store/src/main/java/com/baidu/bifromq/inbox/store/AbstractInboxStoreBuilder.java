@@ -40,6 +40,7 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     Executor queryExecutor;
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
+    Duration loadEstimateWindow = Duration.ofSeconds(5);
     Duration statsInterval = Duration.ofSeconds(30);
     Duration gcInterval = Duration.ofMinutes(5);
     Duration purgeDelay = Duration.ofMinutes(30);
@@ -112,6 +113,11 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
 
     public T bgTaskExecutor(ScheduledExecutorService bgTaskExecutor) {
         this.bgTaskExecutor = bgTaskExecutor;
+        return thisT();
+    }
+
+    public T loadEstimateWindow(Duration window) {
+        this.loadEstimateWindow = window;
         return thisT();
     }
 

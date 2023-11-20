@@ -49,7 +49,7 @@ public enum BifroMQSysProp {
     INBOX_CHECK_QUEUES_PER_RANGE("inbox_check_queues_per_range", 1, IntegerParser.POSITIVE),
     INBOX_STORE_TOLERABLE_QUERY_LATENCY_NANOS("inbox_store_tolerable_query_latency_nanos",
         Duration.ofMillis(2).toNanos(), LongParser.POSITIVE),
-    INBOX_STORE_LOAD_EST_WINDOW_SECONDS("inbox_store_load_estimation_window_seconds", 5, IntegerParser.POSITIVE),
+    INBOX_STORE_LOAD_EST_WINDOW_SECONDS("inbox_store_load_estimation_window_seconds", 5L, LongParser.POSITIVE),
     INBOX_STORE_RANGE_SPLIT_MAX_CPU_USAGE("inbox_store_range_split_max_cpu_usage", 0.8,
         DoubleParser.from(0.0, 1.0, true)),
     INBOX_STORE_RANGE_SPLIT_IO_NANOS_LIMIT("inbox_store_range_split_io_nanos_limit", 30_000L, LongParser.POSITIVE),

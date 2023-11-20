@@ -107,7 +107,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     }
 
     @Override
-    public IKVRangeWriter<?> toWriter(ILoadTracker.ILoadRecorder recorder) {
+    public IKVRangeWriter<?> toWriter(IKVLoadRecorder recorder) {
         return new LoadRecordableKVRangeWriter(kvSpace.toWriter(), recorder);
     }
 

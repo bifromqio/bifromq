@@ -21,9 +21,9 @@ import java.util.Optional;
 
 class LoadRecordableKVReader implements IKVReader {
     private final IKVReader delegate;
-    private final ILoadTracker.ILoadRecorder recorder;
+    private final IKVLoadRecorder recorder;
 
-    LoadRecordableKVReader(IKVReader delegate, ILoadTracker.ILoadRecorder recorder) {
+    LoadRecordableKVReader(IKVReader delegate, IKVLoadRecorder recorder) {
         this.delegate = delegate;
         this.recorder = recorder;
     }

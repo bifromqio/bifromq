@@ -11,12 +11,27 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.range.estimator;
+package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.proto.SplitHint;
-import com.baidu.bifromq.basekv.store.range.ILoadTracker;
+import com.google.protobuf.ByteString;
+import java.util.Map;
 
-public interface ISplitKeyEstimator extends ILoadTracker {
+public interface IKVLoadRecord {
+    long startNanos();
 
-    SplitHint estimate();
+    /**
+     * Get the kv io times
+     *
+     * @return the access times to kv engine
+     */
+    int getKVIOs();
+
+    /**
+     * Get the total time spent on io of kv engine
+     *
+     * @return the total time in nanos
+     */
+    long getKVIONanos();
+
+    Map<ByteString, Long> keyDistribution();
 }

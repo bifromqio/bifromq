@@ -261,6 +261,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .queryExecutor(queryExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .loadEstimateWindow(Duration.ofSeconds(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
             .purgeDelay(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getPurgeDelaySeconds()))
             .balanceControllerOptions(
@@ -271,8 +272,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                     .setCompactWALThreshold(config.getStateStoreConfig()
                         .getInboxStoreConfig()
                         .getCompactWALThreshold())
-                    .setEnableLoadEstimation(true)
-                    .setLoadEstimationWindowSec(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
+                    .setEnableLoadEstimation(true))
                 .setDataEngineConfigurator(
                     buildDataEngineConf(config
                         .getStateStoreConfig()

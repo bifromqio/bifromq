@@ -15,8 +15,6 @@ package com.baidu.bifromq.basekv.balance.utils;
 
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.LoadHint;
-import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State.StateType;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
@@ -34,19 +32,6 @@ public class DescriptorUtils {
                 .setId(id)
                 .setState(StateType.Normal)
                 .setRole(raftNodeStatus)
-                .setLoadHint(LoadHint.newBuilder()
-                    .setQuery(SplitHint.newBuilder()
-                        .setAvgLatency(100 - i)
-                        .setIoDensity(100 - i)
-                        .setIoDensity(100 - i)
-                        .build())
-                    .setMutation(SplitHint.newBuilder()
-                        .setAvgLatency(100 - i)
-                        .setIoDensity(100 - i)
-                        .setIoDensity(100 - i)
-                        .build())
-                    .build()
-                )
                 .setVer(1)
                 .setConfig(ClusterConfig.newBuilder()
                     .addAllVoters(voters)

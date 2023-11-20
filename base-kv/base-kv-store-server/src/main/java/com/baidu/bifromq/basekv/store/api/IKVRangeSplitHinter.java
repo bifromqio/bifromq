@@ -13,15 +13,19 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Supplier;
+import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.proto.SplitHint;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 
-public interface IKVRangeCoProcFactory {
-    default List<IKVRangeSplitHinter> create(String clusterId, String storeId, KVRangeId id) {
-        return Collections.emptyList();
-    }
+public interface IKVRangeSplitHinter {
+    void recordQuery(ROCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader);
 
-    IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id, Supplier<IKVReader> readerProvider);
+    void recordMutate(RWCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader);
+
+    void reset(Boundary boundary);
+
+    SplitHint estimate();
+
+    void close();
 }

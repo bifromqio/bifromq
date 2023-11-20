@@ -19,9 +19,9 @@ import com.google.protobuf.ByteString;
 
 class LoadRecordableKVWriter implements IKVWriter {
     private final IKVWriter delegate;
-    private final ILoadTracker.ILoadRecorder recorder;
+    private final IKVLoadRecorder recorder;
 
-    public LoadRecordableKVWriter(IKVWriter delegate, ILoadTracker.ILoadRecorder recorder) {
+    public LoadRecordableKVWriter(IKVWriter delegate, IKVLoadRecorder recorder) {
         this.delegate = delegate;
         this.recorder = recorder;
     }

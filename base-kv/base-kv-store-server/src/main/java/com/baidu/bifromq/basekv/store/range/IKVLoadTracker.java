@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.store.range;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 
-public interface ILoadTracker {
+public interface IKVLoadTracker {
     interface ILoadRecorder {
         long startNanos();
 

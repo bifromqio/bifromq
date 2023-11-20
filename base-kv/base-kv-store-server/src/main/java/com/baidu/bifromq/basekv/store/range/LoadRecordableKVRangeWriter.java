@@ -18,9 +18,9 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 
 public class LoadRecordableKVRangeWriter extends KVRangeWriter {
-    private final ILoadTracker.ILoadRecorder recorder;
+    private final IKVLoadRecorder recorder;
 
-    public LoadRecordableKVRangeWriter(IKVSpaceWriter spaceWriter, ILoadTracker.ILoadRecorder recorder) {
+    public LoadRecordableKVRangeWriter(IKVSpaceWriter spaceWriter, IKVLoadRecorder recorder) {
         super(spaceWriter);
         this.recorder = recorder;
     }

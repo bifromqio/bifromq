@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
+import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_AVG_LATENCY_NANOS;
+import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_DENSITY;
+import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -22,10 +25,10 @@ import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.LoadHint;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
@@ -63,19 +66,12 @@ public class RangeSplitBalancerTest {
                 .setId(rangeId)
                 .setRole(RaftNodeStatus.Leader)
                 .setState(State.StateType.Normal)
-                .setLoadHint(LoadHint.newBuilder()
-                    .setQuery(SplitHint.newBuilder()
-                        .setIoDensity(10)
-                        .setIoLatencyNanos(15)
-                        .setAvgLatency(100)
-                        .setSplitKey(ByteString.copyFromUtf8("splitQueryLoadKey"))
-                        .build())
-                    .setMutation(SplitHint.newBuilder()
-                        .setIoDensity(10)
-                        .setIoLatencyNanos(15)
-                        .setAvgLatency(100)
-                        .setSplitKey(ByteString.copyFromUtf8("splitMutationLoadKey"))
-                        .build())
+                .addHints(SplitHint.newBuilder()
+                    .setType(MutationKVLoadBasedSplitHinter.TYPE)
+                    .putLoad(LOAD_TYPE_IO_DENSITY, 10)
+                    .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 15)
+                    .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 100)
+                    .setSplitKey(ByteString.copyFromUtf8("splitMutationLoadKey"))
                     .build())
                 .build())
             .build()
@@ -101,11 +97,11 @@ public class RangeSplitBalancerTest {
                 .setId(rangeId)
                 .setRole(RaftNodeStatus.Leader)
                 .setState(State.StateType.Normal)
-                .setLoadHint(LoadHint.newBuilder()
-                    .setQuery(SplitHint.newBuilder()
-                        .build())
-                    .setMutation(SplitHint.newBuilder()
-                        .build())
+                .addHints(SplitHint.newBuilder()
+                    .setType(MutationKVLoadBasedSplitHinter.TYPE)
+                    .putLoad(LOAD_TYPE_IO_DENSITY, 1)
+                    .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 1)
+                    .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 1)
                     .build())
                 .build())
             .build()

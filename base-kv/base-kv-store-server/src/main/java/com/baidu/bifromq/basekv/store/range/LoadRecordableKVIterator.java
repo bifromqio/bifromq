@@ -18,9 +18,9 @@ import com.google.protobuf.ByteString;
 
 public class LoadRecordableKVIterator implements IKVIterator {
     private final IKVIterator delegate;
-    private final ILoadTracker.ILoadRecorder recorder;
+    private final IKVLoadRecorder recorder;
 
-    public LoadRecordableKVIterator(IKVIterator delegate, ILoadTracker.ILoadRecorder recorder) {
+    public LoadRecordableKVIterator(IKVIterator delegate, IKVLoadRecorder recorder) {
         this.delegate = delegate;
         this.recorder = recorder;
     }
