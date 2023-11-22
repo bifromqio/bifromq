@@ -107,6 +107,7 @@ class RPCServer implements IRPCServer {
         NettyServerBuilder nettyServerBuilder = NettyServerBuilder
             .forAddress(new InetSocketAddress(builder.host, builder.port))
             .permitKeepAliveWithoutCalls(true)
+            .maxInboundMessageSize(Integer.MAX_VALUE)
             .executor(builder.executor);
         if (builder.executorSupplier != null) {
             nettyServerBuilder.callExecutor(new ServerCallExecutorSupplier() {

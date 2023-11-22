@@ -137,6 +137,7 @@ public final class RPCClientBuilder {
                     .keepAliveTime(keepAliveInSec <= 0 ? 600 : keepAliveInSec, TimeUnit.SECONDS)
                     .keepAliveWithoutCalls(true)
                     .idleTimeout(idleTimeoutInSec <= 0 ? (365 * 24 * 3600) : idleTimeoutInSec, TimeUnit.SECONDS)
+                    .maxInboundMessageSize(Integer.MAX_VALUE)
                     .defaultLoadBalancingPolicy(loadBalancerProvider.getPolicyName())
                     .executor(rpcExecutor);
                 if (sslContext != null) {

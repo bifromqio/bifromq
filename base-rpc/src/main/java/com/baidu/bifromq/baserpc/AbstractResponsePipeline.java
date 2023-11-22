@@ -60,7 +60,7 @@ abstract class AbstractResponsePipeline<RequestT, ResponseT>
     private void close(Throwable t) {
         if (closed.compareAndSet(false, true)) {
             if (t != null) {
-                log.trace("Close pipeline@{} by error", hashCode(), t);
+                log.debug("Close pipeline@{} by error", hashCode(), t);
                 responseObserver.onError(t);
             } else {
                 log.trace("Close pipeline@{} normally", hashCode());
