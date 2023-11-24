@@ -136,7 +136,7 @@ public final class RocksDBKVEngineConfigurator implements KVEngineConfigurator<R
         @Override
         public void config(String name, MutableColumnFamilyOptionsInterface<ColumnFamilyOptions> targetOption) {
             targetOption
-                .setCompressionType(CompressionType.LZ4_COMPRESSION)
+                .setCompressionType(CompressionType.NO_COMPRESSION)
                 // Flushing options:
                 // write_buffer_size sets the size of a single mem_table. Once mem_table exceeds
                 // this size, it is marked immutable and a new one is created.
