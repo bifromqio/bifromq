@@ -56,7 +56,7 @@ public class SplitKeyEstimatorBenchmark {
         IKVLoadRecorder recorder = new KVLoadRecorder();
         ByteString userKey = keys[ThreadLocalRandom.current().nextInt(0, totalKeyCount)];
         recorder.record(userKey, 1);
-        loadEstimator.recordQuery(null, recorder.stop(), null);
+        loadEstimator.recordQuery(null, recorder.stop());
     }
 
     @Benchmark

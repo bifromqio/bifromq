@@ -125,8 +125,8 @@ public class BoundaryUtil {
         return ByteString.unsignedLexicographicalComparator().compare(a, b);
     }
 
-    public static ByteString startKey(Boundary range) {
-        return range.hasStartKey() ? range.getStartKey() : null;
+    public static ByteString startKey(Boundary boundary) {
+        return boundary.hasStartKey() ? boundary.getStartKey() : null;
     }
 
     public static ByteString endKey(Boundary boundary) {
@@ -141,32 +141,32 @@ public class BoundaryUtil {
         return boundary.hasEndKey() ? boundary.getEndKey().toByteArray() : null;
     }
 
-    public static Optional<ByteString> greaterLowerBound(Boundary range1, Boundary range2) {
-        if (!range1.hasStartKey() && !range2.hasStartKey()) {
+    public static Optional<ByteString> greaterLowerBound(Boundary boundary1, Boundary boundary2) {
+        if (!boundary1.hasStartKey() && !boundary2.hasStartKey()) {
             return Optional.empty();
         }
-        if (!range1.hasStartKey()) {
-            return Optional.of(range2.getStartKey());
+        if (!boundary1.hasStartKey()) {
+            return Optional.of(boundary2.getStartKey());
         }
-        if (!range2.hasStartKey()) {
-            return Optional.of(range1.getStartKey());
+        if (!boundary2.hasStartKey()) {
+            return Optional.of(boundary1.getStartKey());
         }
-        return Optional.of(compare(range1.getStartKey(),
-            range2.getStartKey()) < 0 ? range2.getStartKey() : range1.getStartKey());
+        return Optional.of(compare(boundary1.getStartKey(),
+            boundary2.getStartKey()) < 0 ? boundary2.getStartKey() : boundary1.getStartKey());
     }
 
-    public static Optional<ByteString> leastUpperBound(Boundary range1, Boundary range2) {
-        if (!range1.hasEndKey() && !range2.hasEndKey()) {
+    public static Optional<ByteString> leastUpperBound(Boundary boundary1, Boundary boundary2) {
+        if (!boundary1.hasEndKey() && !boundary2.hasEndKey()) {
             return Optional.empty();
         }
-        if (!range1.hasEndKey()) {
-            return Optional.of(range2.getEndKey());
+        if (!boundary1.hasEndKey()) {
+            return Optional.of(boundary2.getEndKey());
         }
-        if (!range2.hasEndKey()) {
-            return Optional.of(range1.getEndKey());
+        if (!boundary2.hasEndKey()) {
+            return Optional.of(boundary1.getEndKey());
         }
-        return Optional.of(compare(range1.getEndKey(), range2.getEndKey()) < 0 ?
-            range1.getEndKey() : range2.getEndKey());
+        return Optional.of(compare(boundary1.getEndKey(), boundary2.getEndKey()) < 0 ?
+            boundary1.getEndKey() : boundary2.getEndKey());
     }
 
     public static boolean isOverlap(Boundary boundary1, Boundary boundary2) {
@@ -207,52 +207,72 @@ public class BoundaryUtil {
                 boundary1.getEndKey().equals(boundary2.getStartKey())));
     }
 
-    public static Boundary combine(Boundary... ranges) {
-        assert ranges.length >= 2;
-        Boundary range = ranges[0];
-        for (int i = 1; i < ranges.length; i++) {
-            range = combine2Range(range, ranges[i]);
+    public static Boundary combine(Boundary... boundaries) {
+        assert boundaries.length >= 2;
+        Boundary range = boundaries[0];
+        for (int i = 1; i < boundaries.length; i++) {
+            range = combine2Range(range, boundaries[i]);
         }
         return range;
     }
 
-    private static Boundary combine2Range(Boundary range1, Boundary range2) {
-        assert canCombine(range1, range2);
-        if (isEmptyRange(range1)) {
-            return range2;
+    public static boolean isSplittable(Boundary boundary, ByteString splitKey) {
+        if (compare(MIN_KEY, splitKey) >= 0 || !inRange(splitKey, boundary)) {
+            return false;
         }
-        if (isEmptyRange(range2)) {
-            return range1;
+        return !splitKey.equals(boundary.getStartKey()) ||
+            splitKey.equals(boundary.getStartKey()) && !upperBound(splitKey).equals(boundary.getEndKey());
+    }
+
+    public static Boundary[] split(Boundary boundary, ByteString splitKey) {
+        assert isSplittable(boundary, splitKey);
+        if (boundary.getStartKey().equals(splitKey)) {
+            Boundary left = boundary.toBuilder().setEndKey(upperBound(splitKey)).build();
+            Boundary right = boundary.toBuilder().setStartKey(upperBound(splitKey)).build();
+            return new Boundary[] {left, right};
         }
-        if (isStartOpen(range1)) {
-            if (range2.hasEndKey()) {
-                return Boundary.newBuilder().setEndKey(range2.getEndKey()).build();
+        Boundary left = boundary.toBuilder().setEndKey(splitKey).build();
+        Boundary right = boundary.toBuilder().setStartKey(splitKey).build();
+        return new Boundary[] {left, right};
+    }
+
+    private static Boundary combine2Range(Boundary boundary1, Boundary boundary2) {
+        assert canCombine(boundary1, boundary2);
+        if (isEmptyRange(boundary1)) {
+            return boundary2;
+        }
+        if (isEmptyRange(boundary2)) {
+            return boundary1;
+        }
+        if (isStartOpen(boundary1)) {
+            if (boundary2.hasEndKey()) {
+                return Boundary.newBuilder().setEndKey(boundary2.getEndKey()).build();
             } else {
                 return FULL_BOUNDARY;
             }
         }
-        if (isStartOpen(range2)) {
-            if (range1.hasEndKey()) {
-                return Boundary.newBuilder().setEndKey(range1.getEndKey()).build();
+        if (isStartOpen(boundary2)) {
+            if (boundary1.hasEndKey()) {
+                return Boundary.newBuilder().setEndKey(boundary1.getEndKey()).build();
             } else {
                 return FULL_BOUNDARY;
             }
         }
-        if (isEndOpen(range1)) {
-            return Boundary.newBuilder().setStartKey(range2.getStartKey()).build();
+        if (isEndOpen(boundary1)) {
+            return Boundary.newBuilder().setStartKey(boundary2.getStartKey()).build();
         }
-        if (isEndOpen(range2)) {
-            return Boundary.newBuilder().setStartKey(range1.getStartKey()).build();
+        if (isEndOpen(boundary2)) {
+            return Boundary.newBuilder().setStartKey(boundary1.getStartKey()).build();
         }
-        if (range1.getStartKey().equals(range2.getEndKey())) {
+        if (boundary1.getStartKey().equals(boundary2.getEndKey())) {
             return Boundary.newBuilder()
-                .setStartKey(range2.getStartKey())
-                .setEndKey(range1.getEndKey())
+                .setStartKey(boundary2.getStartKey())
+                .setEndKey(boundary1.getEndKey())
                 .build();
         } else {
             return Boundary.newBuilder()
-                .setStartKey(range1.getStartKey())
-                .setEndKey(range2.getEndKey())
+                .setStartKey(boundary1.getStartKey())
+                .setEndKey(boundary2.getEndKey())
                 .build();
         }
     }

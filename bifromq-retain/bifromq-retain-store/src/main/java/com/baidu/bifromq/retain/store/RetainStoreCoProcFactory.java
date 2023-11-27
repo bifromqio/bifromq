@@ -31,8 +31,8 @@ public class RetainStoreCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id,
-                                 Supplier<IKVReader> rangeReaderProvider) {
+    public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
+                                       Supplier<IKVReader> rangeReaderProvider) {
         return new RetainStoreCoProc(id, rangeReaderProvider, settingProvider, clock);
     }
 }

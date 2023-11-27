@@ -89,8 +89,12 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
             loadRecordableReader.refresh();
             return coProc.query(query, loadRecordableReader)
                 .whenComplete((v, e) -> {
-                    IKVLoadRecord record = loadRecorder.stop();
-                    splitHinters.forEach(hinter -> hinter.recordQuery(query, record, rangeReader));
+                    try {
+                        IKVLoadRecord record = loadRecorder.stop();
+                        splitHinters.forEach(hinter -> hinter.recordQuery(query, record));
+                    } catch (Throwable t) {
+                        log.error("Failed to reset hinter and coProc", t);
+                    }
                 });
         }, linearized);
     }

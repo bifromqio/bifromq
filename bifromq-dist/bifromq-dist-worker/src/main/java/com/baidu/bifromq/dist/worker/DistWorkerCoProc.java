@@ -94,7 +94,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final ISubBrokerManager subBrokerManager;
     private final IDeliveryScheduler scheduler;
     private final SubscriptionCache routeCache;
-    private final FanoutExecutorGroup fanoutExecutorGroup;
+    private final DeliverExecutorGroup fanoutExecutorGroup;
 
     public DistWorkerCoProc(KVRangeId id,
                             Supplier<IKVReader> readClientProvider,
@@ -111,7 +111,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         this.scheduler = scheduler;
         this.routeCache = new SubscriptionCache(id, readClientProvider, matchExecutor);
         fanoutExecutorGroup =
-            new FanoutExecutorGroup(scheduler, eventCollector, distClient, DIST_FAN_OUT_PARALLELISM.get());
+            new DeliverExecutorGroup(scheduler, eventCollector, distClient, DIST_FAN_OUT_PARALLELISM.get());
     }
 
     @Override
@@ -170,6 +170,11 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             touchedTenants.forEach(routeCache::touch);
             return output;
         };
+    }
+
+    @Override
+    public void reset(Boundary boundary) {
+        routeCache.touchAll();
     }
 
     public void close() {

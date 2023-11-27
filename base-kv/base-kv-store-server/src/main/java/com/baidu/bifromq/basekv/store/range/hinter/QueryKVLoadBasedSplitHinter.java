@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.range.hinter;
 
 import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.google.protobuf.ByteString;
@@ -43,12 +42,12 @@ public class QueryKVLoadBasedSplitHinter extends KVLoadBasedSplitHinter {
     }
 
     @Override
-    public void recordQuery(ROCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader) {
+    public void recordQuery(ROCoProcInput input, IKVLoadRecord ioRecord) {
         onRecord(ioRecord);
     }
 
     @Override
-    public void recordMutate(RWCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader) {
+    public void recordMutate(RWCoProcInput input, IKVLoadRecord ioRecord) {
         // do nothing
     }
 

@@ -26,10 +26,11 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Destroye
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Destroying;
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Init;
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Open;
+import static com.baidu.bifromq.basekv.store.util.ExecutorServiceUtil.awaitShutdown;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.canCombine;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.combine;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isSplittable;
 import static com.google.common.collect.Sets.difference;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.collect.Sets.union;
@@ -90,6 +91,7 @@ import com.baidu.bifromq.basekv.store.wal.IKVRangeWALStore;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscriber;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALSubscription;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWAL;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
@@ -183,7 +185,6 @@ public class KVRangeFSM implements IKVRangeFSM {
         this.opts = opts.toBuilder().build();
         this.id = id;
         this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
-        this.splitHinters = coProcFactory.create(clusterId, hostStoreId, id);
         this.kvRange = kvRange;
         this.compatibilityEnsurer = compatibilityEnsurer;
         this.wal = new KVRangeWAL(clusterId, hostStoreId, id,
@@ -202,7 +203,8 @@ public class KVRangeFSM implements IKVRangeFSM {
             String.format("basekv-range-manager[%s]", KVRangeIdUtil.toString(id)));
         this.mgmtTaskRunner =
             new AsyncRunner("basekv.runner.rangemanager", mgmtExecutor, "rangeId", KVRangeIdUtil.toString(id));
-        this.coProc = coProcFactory.create(clusterId, hostStoreId, id, this.kvRange::newDataReader);
+        this.splitHinters = coProcFactory.createHinters(clusterId, hostStoreId, id, this.kvRange::newDataReader);
+        this.coProc = coProcFactory.createCoProc(clusterId, hostStoreId, id, this.kvRange::newDataReader);
 
         long lastAppliedIndex = this.kvRange.lastAppliedIndex();
         this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex);
@@ -323,7 +325,7 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Void> close() {
-        return this.doClose().whenComplete((v, e) -> mgmtExecutor.shutdown());
+        return this.doClose().thenCompose(v -> awaitShutdown(mgmtExecutor));
     }
 
     private CompletableFuture<Void> doClose() {
@@ -357,9 +359,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .thenCompose(v -> restorer.awaitDone())
                         .thenCompose(v -> statsCollector.stop())
                         .thenCompose(v -> wal.close())
-                        .whenComplete((v, e) -> {
+                        .thenCompose(v -> {
                             metricManager.close();
-                            fsmExecutor.shutdown();
+                            return awaitShutdown(fsmExecutor);
+                        })
+                        .whenComplete((v, e) -> {
                             lifecycle.set(Closed);
                             closeSignal.complete(null);
                         });
@@ -388,8 +392,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                     if (lifecycle.compareAndSet(Destroying, Destroyed)) {
                         destroyedSignal.complete(null);
                     }
-                    mgmtExecutor.shutdown();
-                });
+                })
+                .thenCompose(v -> awaitShutdown(mgmtExecutor));
         }
         return destroyedSignal;
     }
@@ -617,8 +621,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         rangeWriter.lastAppliedIndex(entry.getIndex());
                                         rangeWriter.done();
                                         if (command.hasRwCoProc()) {
-                                            splitHinters.forEach(hint -> hint.recordMutate(command.getRwCoProc(),
-                                                loadRecorder.stop(), borrowedReader));
+                                            splitHinters.forEach(
+                                                hint -> hint.recordMutate(command.getRwCoProc(), loadRecorder.stop()));
                                         }
                                         callback.run();
                                         linearizer.afterLogApplied(entry.getIndex());
@@ -891,12 +895,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
                 // under at-least-once semantic, we need to check if the splitKey is still valid to skip
                 // duplicated apply
-                if (inRange(request.getSplitKey(), boundary)) {
-                    Boundary leftBoundary =
-                        boundary.toBuilder().setEndKey(request.getSplitKey()).build();
-                    Boundary rightBoundary = boundary.hasEndKey() ?
-                        boundary.toBuilder().setStartKey(request.getSplitKey()).build() :
-                        Boundary.newBuilder().setStartKey(request.getSplitKey()).build();
+                if (isSplittable(boundary, request.getSplitKey())) {
+                    Boundary[] boundaries = BoundaryUtil.split(boundary, request.getSplitKey());
+                    Boundary leftBoundary = boundaries[0];
+                    Boundary rightBoundary = boundaries[1];
                     KVRangeSnapshot rhsSS = KVRangeSnapshot.newBuilder()
                         .setVer(ver + 1)
                         .setId(request.getNewId())
@@ -944,9 +946,15 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         if (_e != null) {
                                             finishCommandWithError(taskId, _e);
                                         } else {
-                                            finishCommand(taskId);
-                                            // reset hinter when boundary changed
-                                            splitHinters.forEach(hinter -> hinter.reset(leftBoundary));
+                                            try {
+                                                // reset hinter when boundary changed
+                                                splitHinters.forEach(hinter -> hinter.reset(leftBoundary));
+                                                coProc.reset(leftBoundary);
+                                            } catch (Throwable t) {
+                                                log.error("Failed to reset hinter and coProc", t);
+                                            } finally {
+                                                finishCommand(taskId);
+                                            }
                                         }
                                     });
                                     messenger.send(KVRangeMessage.newBuilder()
@@ -1216,10 +1224,16 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     "Failed to send MergeDone request"));
                             } else {
                                 onDone.complete(() -> {
-                                    finishCommand(taskId);
-                                    scheduleCompaction();
-                                    // reset hinter when boundary changed
-                                    splitHinters.forEach(hinter -> hinter.reset(mergedBoundary));
+                                    try {
+                                        // reset hinter when boundary changed
+                                        splitHinters.forEach(hinter -> hinter.reset(mergedBoundary));
+                                        coProc.reset(mergedBoundary);
+                                    } catch (Throwable t) {
+                                        log.error("Failed to reset hinter and coProc", t);
+                                    } finally {
+                                        finishCommand(taskId);
+                                        scheduleCompaction();
+                                    }
                                 });
                             }
                         }, fsmExecutor);
@@ -1259,6 +1273,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         scheduleCompaction();
                         // reset hinter when boundary changed
                         splitHinters.forEach(hinter -> hinter.reset(EMPTY_BOUNDARY));
+                        coProc.reset(EMPTY_BOUNDARY);
                     });
                 } else {
                     Map<String, Boolean> waitingList = Maps.newHashMap(state.getWaitingListMap());
@@ -1343,6 +1358,13 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
             });
             restoreFuture.whenCompleteAsync((v, e) -> {
+                if (isNotOpening()) {
+                    if (!onInstalled.isCancelled()) {
+                        onInstalled.completeExceptionally(
+                            new KVRangeException.InternalException("KVRange has been closed"));
+                    }
+                    return;
+                }
                 if (e != null) {
                     log.debug("Restored from snapshot error: rangeId={} \n{}", KVRangeIdUtil.toString(id), snapshot, e);
                     onInstalled.completeExceptionally(e);
@@ -1352,7 +1374,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                     // finish all pending tasks
                     cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
                         new KVRangeException.TryLater("Snapshot installed, try again")));
-
                     onInstalled.complete(kvRange.checkpoint());
                 }
             }, fsmExecutor);

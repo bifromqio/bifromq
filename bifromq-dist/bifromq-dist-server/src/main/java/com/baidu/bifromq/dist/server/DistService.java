@@ -62,12 +62,13 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                 IGlobalDistCallRateSchedulerFactory distCallRateScheduler) {
         this.eventCollector = eventCollector;
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
-        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient);
         this.subCallScheduler = new MatchCallScheduler(distWorkerClient);
         this.unsubCallScheduler = new UnmatchCallScheduler(distWorkerClient);
         tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(k -> new RunningAverage(5));
+        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient,
+            tenantId -> tenantFanouts.get(tenantId).estimate());
     }
 
     @Override
@@ -75,7 +76,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         response(tenantId -> subCallScheduler.schedule(request)
             .handle((v, e) -> {
                 if (e != null) {
-                    log.error("Failed to exec SubRequest, tenantId={}, req={}", tenantId, request, e);
+                    log.debug("Failed to exec SubRequest, tenantId={}, req={}", tenantId, request, e);
                     eventCollector.report(getLocal(SubscribeError.class)
                         .reqId(request.getReqId())
                         .qos(request.getSubQoS())
@@ -106,7 +107,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         response(tenantId -> unsubCallScheduler.schedule(request)
             .handle((v, e) -> {
                 if (e != null) {
-                    log.error("Failed to exec UnsubRequest, tenantId={}, req={}", tenantId, request, e);
+                    log.debug("Failed to exec UnsubRequest, tenantId={}, req={}", tenantId, request, e);
                     eventCollector.report(getLocal(UnsubscribeError.class)
                         .reqId(request.getReqId())
                         .topicFilter(request.getTopicFilter())

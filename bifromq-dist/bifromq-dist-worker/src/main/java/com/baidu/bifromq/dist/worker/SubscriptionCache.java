@@ -14,7 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
-import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordTopicFilterPrefix;
+import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordPrefixWithEscapedTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_CACHED_SUBS_PER_TENANT;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
@@ -147,8 +147,12 @@ public class SubscriptionCache {
         tenantVerCache.get(tenantId).updateAndGet(v -> Math.max(v, System.nanoTime()));
     }
 
+    public void touchAll() {
+        tenantVerCache.invalidateAll();
+    }
+
     public void invalidate(ScopedTopic topic) {
-        // TODO: there is a potential invalidation lost that will lead to cache staled routes. think about the sequence:
+        // TODO: there is a potential invalidation lost that will lead to staled routes still being cached. think about the sequence:
         // 1. match against KVRange, but before add the match result to cache
         // 2. sub/unsub
         // 3. invalidation cache, nothing happens
@@ -216,7 +220,8 @@ public class SubscriptionCache {
                             itr.next();
                         } else {
                             // seek to match next topic filter
-                            ByteString nextMatch = matchRecordTopicFilterPrefix(tenantId, higherFilter.get());
+                            ByteString nextMatch =
+                                matchRecordPrefixWithEscapedTopicFilter(tenantId, higherFilter.get());
                             itr.seek(nextMatch);
                         }
                         continue;

@@ -11,18 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.api;
+package com.baidu.bifromq.dist.worker.balance;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Supplier;
+import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.basekv.balance.impl.RangeLeaderBalancer;
 
-public interface IKVRangeCoProcFactory {
-    default List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
-                                                    Supplier<IKVReader> readerProvider) {
-        return Collections.emptyList();
+public class RangeLeaderBalancerFactory implements IStoreBalancerFactory {
+    @Override
+    public StoreBalancer newBalancer(String localStoreId) {
+        return new RangeLeaderBalancer(localStoreId);
     }
-
-    IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id, Supplier<IKVReader> readerProvider);
 }

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
@@ -24,8 +25,8 @@ public interface IKVRangeCoProc {
     /**
      * Execute a query co-proc
      *
-     * @param input
-     * @return
+     * @param input the query input
+     * @return the future of query result
      */
     CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader client);
 
@@ -33,12 +34,20 @@ public interface IKVRangeCoProc {
      * Execute a mutation co-proc, returns a supplier of mutation output. The supplier will be called after mutation is
      * persisted successfully.
      *
-     * @param input
-     * @param reader
-     * @param writer
-     * @return
+     * @param input  the mutation input
+     * @param reader the range data reader
+     * @param writer the range data writer
+     * @return the future of mutation result
      */
     Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer);
+
+    /**
+     * This method will be called whenever the boundary of the owner KVRange has changed
+     *
+     * @param boundary the boundary of the owner KVRange
+     */
+    default void reset(Boundary boundary) {
+    }
 
     /**
      * Close the coproc instance, and release all related resources

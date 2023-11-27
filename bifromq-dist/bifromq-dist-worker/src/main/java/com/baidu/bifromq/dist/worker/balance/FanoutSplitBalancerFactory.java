@@ -11,18 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.api;
+package com.baidu.bifromq.dist.worker.balance;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Supplier;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_SPLIT_MAX_CPU_USAGE;
 
-public interface IKVRangeCoProcFactory {
-    default List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
-                                                    Supplier<IKVReader> readerProvider) {
-        return Collections.emptyList();
+import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.StoreBalancer;
+
+public class FanoutSplitBalancerFactory implements IStoreBalancerFactory {
+    @Override
+    public StoreBalancer newBalancer(String localStoreId) {
+        return new FanoutSplitBalancer(localStoreId, DIST_WORKER_SPLIT_MAX_CPU_USAGE.get());
     }
-
-    IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id, Supplier<IKVReader> readerProvider);
 }

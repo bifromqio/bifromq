@@ -14,12 +14,16 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MATCH_PARALLELISM;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_FANOUT_SPLIT_THRESHOLD;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
+import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
 import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
 import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -27,6 +31,8 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
@@ -42,6 +48,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final ISubBrokerManager subBrokerManager;
     private final IDeliveryScheduler scheduler;
     private final ExecutorService matchExecutor;
+    private final int fanoutSplitThreshold = DIST_WORKER_FANOUT_SPLIT_THRESHOLD.get();
 
     public DistWorkerCoProcFactory(IDistClient distClient,
                                    ISettingProvider settingProvider,
@@ -51,7 +58,6 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.subBrokerManager = subBrokerManager;
-//        scheduler = new DeliveryScheduler(subBrokerManager);
         scheduler = new DeliveryScheduler(subBrokerManager);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
@@ -69,8 +75,15 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id,
-                                 Supplier<IKVReader> rangeReaderProvider) {
+    public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
+                                                   Supplier<IKVReader> readerProvider) {
+        return Collections.singletonList(new FanoutSplitHinter(readerProvider, fanoutSplitThreshold,
+            "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)));
+    }
+
+    @Override
+    public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
+                                       Supplier<IKVReader> rangeReaderProvider) {
         return new DistWorkerCoProc(id, rangeReaderProvider, eventCollector, settingProvider, distClient,
             subBrokerManager, scheduler, matchExecutor);
     }

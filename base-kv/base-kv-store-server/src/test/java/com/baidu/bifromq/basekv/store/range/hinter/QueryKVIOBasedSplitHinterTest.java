@@ -55,7 +55,7 @@ public class QueryKVIOBasedSplitHinterTest extends MockableTest {
             IKVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
             recorder.record(ByteString.copyFromUtf8("Key"), 10_000);
             when(nanoSource.get()).thenReturn(now + 10_000);
-            estimator.recordQuery(null, recorder.stop(), null);
+            estimator.recordQuery(null, recorder.stop());
         }
         when(nanoSource.get()).thenReturn(now + Duration.ofSeconds(6).toNanos());
         SplitHint hint1 = estimator.estimate();
@@ -77,7 +77,7 @@ public class QueryKVIOBasedSplitHinterTest extends MockableTest {
             IKVLoadRecorder recorder = new KVLoadRecorder(nanoSource);
             recorder.record(ByteString.copyFromUtf8("Key"), Duration.ofMillis(10).toNanos());
             when(nanoSource.get()).thenReturn(now + Duration.ofMillis(200).toNanos());
-            estimator.recordQuery(null, recorder.stop(), null);
+            estimator.recordQuery(null, recorder.stop());
         }
         when(nanoSource.get()).thenReturn(now + Duration.ofMillis(1000).toNanos());
         SplitHint hint = estimator.estimate();

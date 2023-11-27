@@ -21,7 +21,8 @@ import java.util.function.Supplier;
 
 public class TestCoProcFactory implements IKVRangeCoProcFactory {
     @Override
-    public IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id, Supplier<IKVReader> readerProvider) {
+    public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
+                                       Supplier<IKVReader> readerProvider) {
         return new TestCoProc(id, readerProvider);
     }
 }

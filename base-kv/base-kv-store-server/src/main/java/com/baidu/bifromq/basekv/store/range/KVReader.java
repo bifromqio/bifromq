@@ -26,12 +26,11 @@ import java.util.Optional;
 
 public class KVReader implements IKVReader {
     private final IKVSpaceReader kvSpace;
-    private final IKVSpaceIterator kvSpaceIterator;
     private final IKVRangeReader kvRangeReader;
+    private volatile IKVSpaceIterator kvSpaceIterator;
 
     KVReader(IKVSpaceReader kvSpace, IKVRangeReader reader) {
         this.kvSpace = kvSpace;
-        this.kvSpaceIterator = kvSpace.newIterator();
         this.kvRangeReader = reader;
     }
 
@@ -60,11 +59,22 @@ public class KVReader implements IKVReader {
 
     @Override
     public IKVIterator iterator() {
-        return new KVIterator(kvSpaceIterator);
+        return new KVIterator(getKvSpaceIterator());
     }
 
     @Override
     public void refresh() {
-        kvSpaceIterator.refresh();
+        getKvSpaceIterator().refresh();
+    }
+
+    private IKVSpaceIterator getKvSpaceIterator() {
+        if (kvSpaceIterator == null) {
+            synchronized (this) {
+                if (kvSpaceIterator == null) {
+                    this.kvSpaceIterator = kvSpace.newIterator();
+                }
+            }
+        }
+        return kvSpaceIterator;
     }
 }

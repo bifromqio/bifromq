@@ -57,7 +57,8 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public List<IKVRangeSplitHinter> create(String clusterId, String storeId, KVRangeId id) {
+    public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
+                                                   Supplier<IKVReader> rangeReaderProvider) {
         return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
             if (hasScopedInboxId(key)) {
                 return Optional.of(upperBound(parseScopedInboxId(key)));
@@ -67,8 +68,8 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     @Override
-    public IKVRangeCoProc create(String clusterId, String storeId, KVRangeId id,
-                                 Supplier<IKVReader> rangeReaderProvider) {
+    public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
+                                       Supplier<IKVReader> rangeReaderProvider) {
         return new InboxStoreCoProc(distClient, settingProvider, eventCollector, clock, purgeDelay);
     }
 

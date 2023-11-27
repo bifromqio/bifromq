@@ -19,9 +19,9 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 
 public interface IKVRangeSplitHinter {
-    void recordQuery(ROCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader);
+    void recordQuery(ROCoProcInput input, IKVLoadRecord ioRecord);
 
-    void recordMutate(RWCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader);
+    void recordMutate(RWCoProcInput input, IKVLoadRecord ioRecord);
 
     void reset(Boundary boundary);
 

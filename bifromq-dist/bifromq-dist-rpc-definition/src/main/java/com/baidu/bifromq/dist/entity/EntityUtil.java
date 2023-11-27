@@ -115,10 +115,17 @@ public class EntityUtil {
         return tenantPrefix(tenantId).concat(INFIX_MATCH_RECORD_INFIX);
     }
 
+    public static ByteString matchRecordKeyPrefix(String tenantId, String topicFilter) {
+        return matchRecordKeyPrefix(tenantId).concat(copyFromUtf8(escape(topicFilter) + NUL));
+    }
+
+    public static ByteString matchRecordPrefixWithEscapedTopicFilter(String tenantId, String escapedTopicFilter) {
+        return matchRecordKeyPrefix(tenantId).concat(copyFromUtf8(escapedTopicFilter + NUL));
+    }
+
     public static ByteString toNormalMatchRecordKey(String tenantId, String topicFilter, String qInboxId) {
         assert isNormalTopicFilter(topicFilter);
-        return matchRecordKeyPrefix(tenantId)
-            .concat(copyFromUtf8(escape(topicFilter) + NUL))
+        return matchRecordKeyPrefix(tenantId, topicFilter)
             .concat(FLAG_NORMAL)
             .concat(copyFromUtf8(qInboxId));
     }
@@ -126,29 +133,35 @@ public class EntityUtil {
     public static ByteString toGroupMatchRecordKey(String tenantId, String topicFilter) {
         assert !isNormalTopicFilter(topicFilter);
         TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
-        return matchRecordKeyPrefix(tenantId)
-            .concat(copyFromUtf8(escape(stf.topicFilter) + NUL))
+        return matchRecordKeyPrefix(tenantId, stf.topicFilter)
             .concat(stf.ordered ? FLAG_ORDERD_SHARE : FLAG_UNORDERD_SHARE)
             .concat(copyFromUtf8(stf.shareGroup));
     }
 
     public static ByteString toMatchRecordKey(String tenantId, String topicFilter, String qInboxId) {
         if (isNormalTopicFilter(topicFilter)) {
-            return matchRecordKeyPrefix(tenantId)
-                .concat(copyFromUtf8(escape(topicFilter) + NUL))
+            return matchRecordKeyPrefix(tenantId, topicFilter)
                 .concat(FLAG_NORMAL)
                 .concat(copyFromUtf8(qInboxId));
         } else {
             TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
-            return matchRecordKeyPrefix(tenantId)
-                .concat(copyFromUtf8(escape(stf.topicFilter) + NUL))
+            return matchRecordKeyPrefix(tenantId, stf.topicFilter)
                 .concat(stf.ordered ? FLAG_ORDERD_SHARE : FLAG_UNORDERD_SHARE)
                 .concat(copyFromUtf8(stf.shareGroup));
         }
     }
 
-    public static ByteString matchRecordTopicFilterPrefix(String tenantId, String escapedTopicFilter) {
-        return matchRecordKeyPrefix(tenantId).concat(copyFromUtf8(escapedTopicFilter + NUL));
+    public static int matchRecordSize(String tenantId, String topicFilter, String qInboxId) {
+        return toMatchRecordKey(tenantId, topicFilter, qInboxId).size() + 1;
+    }
+
+    public static ByteString toMatchRecordKeyPrefix(String tenantId, String topicFilter) {
+        if (isNormalTopicFilter(topicFilter)) {
+            return matchRecordKeyPrefix(tenantId, topicFilter);
+        } else {
+            TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
+            return matchRecordKeyPrefix(tenantId, stf.topicFilter);
+        }
     }
 
     public static String parseTopicFilter(String matchRecordKeyStr) {

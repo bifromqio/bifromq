@@ -15,7 +15,10 @@ package com.baidu.bifromq.basekv.utils;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isSplittable;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.split;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFrom;
 import static com.google.protobuf.ByteString.copyFromUtf8;
@@ -221,7 +224,7 @@ public class BoundaryUtilTest {
     }
 
     @Test
-    public void canCombine() {
+    public void canCombineTest() {
         Boundary a_b = Boundary.newBuilder().setStartKey(copyFromUtf8("a")).setEndKey(copyFromUtf8("b")).build();
         Boundary b_c = Boundary.newBuilder().setStartKey(copyFromUtf8("b")).setEndKey(copyFromUtf8("c")).build();
         Boundary d_e = Boundary.newBuilder().setStartKey(copyFromUtf8("d")).setEndKey(copyFromUtf8("e")).build();
@@ -258,7 +261,7 @@ public class BoundaryUtilTest {
     }
 
     @Test
-    public void combine() {
+    public void combineTest() {
         Boundary a_b = boundary("a", "b");
         Boundary b_c = boundary("b", "c");
         Boundary a_c = boundary("a", "c");
@@ -293,6 +296,31 @@ public class BoundaryUtilTest {
         assertEquals(_c, BoundaryUtil.combine(_a, a_b, b_c));
         assertEquals(_c, BoundaryUtil.combine(a_b, _a, b_c));
         assertEquals(_c, BoundaryUtil.combine(b_c, a_b, _a));
+    }
+
+    @Test
+    public void isSplittableTest() {
+        assertFalse(isSplittable(boundary(null, null), MIN_KEY));
+        assertTrue(isSplittable(boundary(null, null), copyFromUtf8("a")));
+        assertTrue(isSplittable(boundary("a", null), copyFromUtf8("a")));
+        assertFalse(isSplittable(boundary("a", "b"), copyFromUtf8("a")));
+        assertTrue(isSplittable(boundary(null, "b"), copyFromUtf8("a")));
+        assertFalse(isSplittable(boundary(null, "a"), copyFromUtf8("a")));
+    }
+
+    @Test
+    public void splitTest() {
+        Boundary[] boundaries = split(boundary(null, null), copyFromUtf8("a"));
+        assertEquals(boundaries[0], boundary(null, "a"));
+        assertEquals(boundaries[1], boundary("a", null));
+
+        boundaries = split(boundary("a", null), copyFromUtf8("a"));
+        assertEquals(boundaries[0], boundary("a", "b"));
+        assertEquals(boundaries[1], boundary("b", null));
+
+        boundaries = split(boundary(null, "b"), copyFromUtf8("a"));
+        assertEquals(boundaries[0], boundary(null, "a"));
+        assertEquals(boundaries[1], boundary("a", "b"));
     }
 
     private Boundary boundary(String startKey, String endKey) {

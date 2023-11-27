@@ -63,10 +63,7 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
     @Override
     protected void handleException(CallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.callResult.complete(UnmatchReply.newBuilder()
-            .setReqId(callTask.call.getReqId())
-            .setResult(UnmatchReply.Result.ERROR)
-            .build());
+        callTask.callResult.completeExceptionally(e);
     }
 
     @Override

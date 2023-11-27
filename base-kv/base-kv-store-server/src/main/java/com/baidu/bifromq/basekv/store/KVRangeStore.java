@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store;
 import static com.baidu.bifromq.basekv.KVRangeSetting.regInProcStore;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.rangeNotFound;
+import static com.baidu.bifromq.basekv.store.util.ExecutorServiceUtil.awaitShutdown;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isOverlap;
@@ -230,7 +231,7 @@ public class KVRangeStore implements IKVRangeStore {
                 log.error("Error occurred during stopping range store", e);
             } finally {
                 messenger.close();
-                mgmtTaskExecutor.shutdown();
+                awaitShutdown(mgmtTaskExecutor).join();
                 status.set(Status.TERMINATED);
             }
         }

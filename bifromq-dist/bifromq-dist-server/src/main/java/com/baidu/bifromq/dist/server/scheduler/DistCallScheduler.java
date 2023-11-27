@@ -18,10 +18,12 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildBatchDistRequest;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_FANOUT_SPLIT_THRESHOLD;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
@@ -47,6 +49,7 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -54,12 +57,16 @@ import lombok.extern.slf4j.Slf4j;
 public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<String, Integer>, Integer>
     implements IDistCallScheduler {
     private final IBaseKVStoreClient distWorkerClient;
+    private final Function<String, Integer> tenantFanoutGetter;
+    private final int fanoutSplitThreshold = DIST_WORKER_FANOUT_SPLIT_THRESHOLD.get();
 
     public DistCallScheduler(ICallScheduler<DistWorkerCall> reqScheduler,
-                             IBaseKVStoreClient distWorkerClient) {
+                             IBaseKVStoreClient distWorkerClient,
+                             Function<String, Integer> tenantFanoutGetter) {
         super("dist_server_dist_batcher", reqScheduler, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
         this.distWorkerClient = distWorkerClient;
+        this.tenantFanoutGetter = tenantFanoutGetter;
     }
 
     @Override
@@ -67,7 +74,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                                                                 long tolerableLatencyNanos,
                                                                                 long burstLatencyNanos,
                                                                                 Integer batchKey) {
-        return new DistWorkerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, distWorkerClient);
+        return new DistWorkerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos,
+            fanoutSplitThreshold,
+            distWorkerClient,
+            tenantFanoutGetter);
     }
 
     @Override
@@ -78,13 +88,19 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
     private static class DistWorkerCallBatcher extends Batcher<DistWorkerCall, Map<String, Integer>, Integer> {
         private final IBaseKVStoreClient distWorkerClient;
         private final String orderKey = UUID.randomUUID().toString();
+        private final Function<String, Integer> tenantFanoutGetter;
+        private final int fanoutSplitThreshold;
 
         protected DistWorkerCallBatcher(Integer batcherKey, String name,
                                         long tolerableLatencyNanos,
                                         long burstLatencyNanos,
-                                        IBaseKVStoreClient distWorkerClient) {
+                                        int fanoutSplitThreshold,
+                                        IBaseKVStoreClient distWorkerClient,
+                                        Function<String, Integer> tenantFanoutGetter) {
             super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
             this.distWorkerClient = distWorkerClient;
+            this.tenantFanoutGetter = tenantFanoutGetter;
+            this.fanoutSplitThreshold = fanoutSplitThreshold;
         }
 
         @Override
@@ -122,29 +138,37 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
             @Override
             public CompletableFuture<Void> execute() {
                 Map<String, DistPack> distPackMap = buildDistPack();
-                Map<KVRangeSetting, List<DistPack>> distPacksByRange = new HashMap<>();
+                Map<KVRangeReplica, List<DistPack>> distPacksByRangeReplica = new HashMap<>();
                 distPackMap.forEach((tenantId, distPack) -> {
+                    int fanoutScale = tenantFanoutGetter.apply(tenantId);
                     List<KVRangeSetting> ranges = distWorkerClient.findByBoundary(Boundary.newBuilder()
                         .setStartKey(matchRecordKeyPrefix(tenantId))
                         .setEndKey(tenantUpperBound(tenantId))
                         .build());
-                    ranges.forEach(range ->
-                        distPacksByRange.computeIfAbsent(range, k -> new LinkedList<>()).add(distPack));
+                    if (fanoutScale > fanoutSplitThreshold) {
+                        ranges.forEach(range -> distPacksByRangeReplica.computeIfAbsent(
+                            new KVRangeReplica(range.id, range.ver, range.leader),
+                            k -> new LinkedList<>()).add(distPack));
+                    } else {
+                        ranges.forEach(range -> distPacksByRangeReplica.computeIfAbsent(
+                            new KVRangeReplica(range.id, range.ver, range.randomReplica()),
+                            k -> new LinkedList<>()).add(distPack));
+                    }
                 });
 
                 long reqId = System.nanoTime();
-                List<CompletableFuture<BatchDistReply>> distReplyFutures = distPacksByRange.entrySet().stream()
+                List<CompletableFuture<BatchDistReply>> distReplyFutures = distPacksByRangeReplica.entrySet().stream()
                     .map(entry -> {
-                        KVRangeSetting range = entry.getKey();
+                        KVRangeReplica rangeReplica = entry.getKey();
                         BatchDistRequest batchDist = BatchDistRequest.newBuilder()
                             .setReqId(reqId)
                             .addAllDistPack(entry.getValue())
                             .setOrderKey(orderKey)
                             .build();
-                        return distWorkerClient.query(selectStore(range), KVRangeRORequest.newBuilder()
+                        return distWorkerClient.query(rangeReplica.storeId, KVRangeRORequest.newBuilder()
                                 .setReqId(reqId)
-                                .setVer(range.ver)
-                                .setKvRangeId(range.id)
+                                .setVer(rangeReplica.ver)
+                                .setKvRangeId(rangeReplica.id)
                                 .setRoCoProc(ROCoProcInput.newBuilder()
                                     .setDistService(buildBatchDistRequest(batchDist))
                                     .build())
@@ -203,10 +227,6 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                     });
             }
 
-            private String selectStore(KVRangeSetting setting) {
-                return setting.randomReplica();
-            }
-
             private Map<String, DistPack> buildDistPack() {
                 Map<String, DistPack> distPackMap = new HashMap<>();
                 batch.forEach((tenantId, topicMap) -> {
@@ -225,6 +245,9 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                 });
                 return distPackMap;
             }
+        }
+
+        private record KVRangeReplica(KVRangeId id, long ver, String storeId) {
         }
     }
 }

@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -200,15 +199,5 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
                     leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
                 return CollectMetricsReply.newBuilder().setReqId(reqId).build();
             });
-    }
-
-    private <S> void awaitIfNotCancelled(ScheduledFuture<S> sf) {
-        try {
-            if (!sf.isCancelled()) {
-                sf.get();
-            }
-        } catch (Throwable e) {
-            log.error("Error during awaiting", e);
-        }
     }
 }

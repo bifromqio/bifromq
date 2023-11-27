@@ -60,6 +60,8 @@ public class StateStoreConfig {
         private BalancerOptions balanceConfig = new BalancerOptions();
 
         public DistWorkerConfig() {
+            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.FanoutSplitBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RangeLeaderBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory");
         }
     }

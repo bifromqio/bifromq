@@ -111,6 +111,7 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
                 ctx.pipeline().remove(this);
                 break;
             case 5:
+                log.warn("MQTT5 not unsupported now, stay tune!");
             default:
                 // TODO: MQTT5
         }

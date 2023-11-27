@@ -62,10 +62,7 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
 
     @Override
     protected void handleException(CallTask<MatchRequest, MatchReply, MutationCallBatcherKey> callTask, Throwable e) {
-        callTask.callResult.complete(MatchReply.newBuilder()
-            .setReqId(callTask.call.getReqId())
-            .setResult(MatchReply.Result.ERROR)
-            .build());
+        callTask.callResult.completeExceptionally(e);
     }
 
     @Override

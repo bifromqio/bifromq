@@ -33,12 +33,12 @@ public class MutationKVLoadBasedSplitHinter extends KVLoadBasedSplitHinter {
 
 
     @Override
-    public void recordQuery(ROCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader) {
+    public void recordQuery(ROCoProcInput input, IKVLoadRecord ioRecord) {
         // do nothing
     }
 
     @Override
-    public void recordMutate(RWCoProcInput input, IKVLoadRecord ioRecord, IKVReader reader) {
+    public void recordMutate(RWCoProcInput input, IKVLoadRecord ioRecord) {
         onRecord(ioRecord);
     }
 
