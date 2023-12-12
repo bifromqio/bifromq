@@ -13,29 +13,23 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import com.google.protobuf.ByteString;
-import io.reactivex.rxjava3.core.Observable;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
-public interface IKVSpace extends IKVSpaceReader {
-    Observable<Map<ByteString, ByteString>> metadata();
-
-    KVSpaceDescriptor describe();
-
-
+public interface ICPableKVSpace extends IKVSpace {
     /**
-     * Destroy the range, after destroy all data and associated resources will be cleared and released. The range object
-     * will transit to destroyed state
-     */
-    void destroy();
-
-
-    /**
-     * Get a writer to update range state
+     * Make a checkpoint of the current range state
      *
-     * @return the writer object
+     * @return global unique id of the checkpoint
      */
-    IKVSpaceWriter toWriter();
+    String checkpoint();
+
+    /**
+     * Open a readonly range object to access the checkpoint state. When the returned range object is garbage-collected
+     * the associated checkpoint will be cleaned as well, except for the latest checkpoint. So the caller should keep a
+     * strong reference to the checkpoint if it's still useful.
+     *
+     * @param checkpointId the checkpoint id
+     * @return the range object for accessing the checkpoint
+     */
+    Optional<IKVSpaceCheckpoint> open(String checkpointId);
 }

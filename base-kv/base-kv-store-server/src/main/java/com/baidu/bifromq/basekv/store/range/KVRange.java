@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BO
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
 
+import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
@@ -32,15 +33,15 @@ import lombok.SneakyThrows;
 
 public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     @Getter
-    private final IKVSpace kvSpace;
+    private final ICPableKVSpace kvSpace;
     private final ConcurrentLinkedQueue<IKVReader> sharedDataReaders = new ConcurrentLinkedQueue<>();
 
-    public KVRange(IKVSpace kvSpace) {
+    public KVRange(ICPableKVSpace kvSpace) {
         super(kvSpace);
         this.kvSpace = kvSpace;
     }
 
-    public KVRange(IKVSpace kvSpace, KVRangeSnapshot snapshot) {
+    public KVRange(ICPableKVSpace kvSpace, KVRangeSnapshot snapshot) {
         super(kvSpace);
         this.kvSpace = kvSpace;
         toReseter(snapshot).done();

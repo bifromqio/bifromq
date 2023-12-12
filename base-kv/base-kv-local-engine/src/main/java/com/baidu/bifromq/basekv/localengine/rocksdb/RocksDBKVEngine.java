@@ -17,7 +17,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngine;
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -46,13 +45,16 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 
 @Slf4j
-public class RocksDBKVEngine extends AbstractKVEngine {
+public abstract class RocksDBKVEngine<
+    E extends RocksDBKVEngine<E, T, C>,
+    T extends RocksDBKVSpace<E, T, C>,
+    C extends RocksDBKVEngineConfigurator<C>
+    > extends AbstractKVEngine<T> {
     private final File dbRootDir;
-    private final File cpRootDir;
     private final DBOptions dbOptions;
-    private final RocksDBKVEngineConfigurator configurator;
+    private final C configurator;
     private final Map<ColumnFamilyDescriptor, ColumnFamilyHandle> existingColumnFamilies = new HashMap<>();
-    private final ConcurrentMap<String, RocksDBKVSpace> kvSpaceMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, T> kvSpaceMap = new ConcurrentHashMap<>();
     private final String identity;
     private final RocksDB db;
     private final ColumnFamilyDescriptor defaultCFDesc;
@@ -60,15 +62,13 @@ public class RocksDBKVEngine extends AbstractKVEngine {
     private String[] metricTags;
     private MetricManager metricManager;
 
-    public RocksDBKVEngine(String overrideIdentity, RocksDBKVEngineConfigurator configurator) {
+    public RocksDBKVEngine(String overrideIdentity, C configurator) {
         super(overrideIdentity);
         this.configurator = configurator;
-        dbOptions = configurator.config();
-        dbRootDir = new File(configurator.getDbRootDir());
-        cpRootDir = new File(configurator.getDbCheckpointRootDir());
+        dbOptions = configurator.dbOptions();
+        dbRootDir = new File(configurator.dbRootDir());
         try (Options options = new Options()) {
             Files.createDirectories(dbRootDir.getAbsoluteFile().toPath());
-            Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
             boolean isCreation = isEmpty(dbRootDir.toPath());
             if (isCreation) {
                 defaultCFDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());
@@ -81,7 +81,7 @@ public class RocksDBKVEngine extends AbstractKVEngine {
                 List<ColumnFamilyDescriptor> cfDescs = RocksDB.listColumnFamilies(options, dbRootDir.getAbsolutePath())
                     .stream()
                     .map(nameBytes -> new ColumnFamilyDescriptor(nameBytes,
-                        configurator.config(new String(nameBytes, UTF_8))))
+                        configurator.cfOptions(new String(nameBytes, UTF_8))))
                     .toList();
                 List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
                 db = RocksDB.open(dbOptions, dbRootDir.getAbsolutePath(), cfDescs, cfHandles);
@@ -105,21 +105,28 @@ public class RocksDBKVEngine extends AbstractKVEngine {
     }
 
     @Override
-    public IKVSpace createIfMissing(String rangeId) {
+    public T createIfMissing(String spaceId) {
         assertStarted();
-        return kvSpaceMap.computeIfAbsent(rangeId,
+        return kvSpaceMap.computeIfAbsent(spaceId,
             k -> {
                 try {
                     ColumnFamilyDescriptor cfDesc =
-                        new ColumnFamilyDescriptor(rangeId.getBytes(UTF_8), configurator.config(rangeId));
+                        new ColumnFamilyDescriptor(spaceId.getBytes(UTF_8), configurator.cfOptions(spaceId));
                     ColumnFamilyHandle cfHandle = db.createColumnFamily(cfDesc);
-                    return new RocksDBCheckpointableKVSpace(rangeId, cfDesc, cfHandle, db, configurator, this,
-                        () -> kvSpaceMap.remove(rangeId), metricTags).open();
+                    return buildKVSpace(spaceId, cfDesc, cfHandle, db, () -> kvSpaceMap.remove(spaceId),
+                        metricTags).open();
                 } catch (RocksDBException e) {
                     throw new KVEngineException("Create key range error", e);
                 }
             });
     }
+
+    protected abstract T buildKVSpace(String spaceId,
+                                      ColumnFamilyDescriptor cfDesc,
+                                      ColumnFamilyHandle cfHandle,
+                                      RocksDB db,
+                                      Runnable onDestroy,
+                                      String... tags);
 
     @Override
     protected void doStart(String... metricTags) {
@@ -134,7 +141,7 @@ public class RocksDBKVEngine extends AbstractKVEngine {
     }
 
     @Override
-    public Map<String, IKVSpace> ranges() {
+    public Map<String, T> spaces() {
         assertStarted();
         return Collections.unmodifiableMap(kvSpaceMap);
     }
@@ -143,7 +150,7 @@ public class RocksDBKVEngine extends AbstractKVEngine {
     protected void doStop() {
         log.info("Stopping RocksDBKVEngine[{}]", identity);
         metricManager.close();
-        kvSpaceMap.values().forEach(keyRange -> ((RocksDBKVSpace) keyRange).close());
+        kvSpaceMap.values().forEach(RocksDBKVSpace::close);
         db.destroyColumnFamilyHandle(defaultCFHandle);
         defaultCFDesc.getOptions().close();
         db.close();
@@ -159,8 +166,7 @@ public class RocksDBKVEngine extends AbstractKVEngine {
         existingColumnFamilies.forEach((cfDesc, cfHandle) -> {
             String rangeId = new String(cfDesc.getName());
             kvSpaceMap.put(rangeId,
-                new RocksDBCheckpointableKVSpace(rangeId, cfDesc, cfHandle, db, configurator, this,
-                    () -> kvSpaceMap.remove(rangeId), metricTags).open());
+                buildKVSpace(rangeId, cfDesc, cfHandle, db, () -> kvSpaceMap.remove(rangeId), metricTags).open());
         });
         existingColumnFamilies.clear();
     }
@@ -195,33 +201,21 @@ public class RocksDBKVEngine extends AbstractKVEngine {
 
     private class MetricManager {
         private final Gauge dataTotalSpaceGauge;
-        private final Gauge checkpointTotalSpaceGauge;
         private final Gauge dataUsableSpaceGauge;
-        private final Gauge checkpointsUsableSpaceGauge;
 
         MetricManager(String... metricTags) {
             Tags tags = Tags.of(metricTags);
             dataTotalSpaceGauge = Gauge.builder("basekv.le.rocksdb.total.data", dbRootDir::getTotalSpace)
                 .tags(tags)
                 .register(Metrics.globalRegistry);
-            checkpointTotalSpaceGauge =
-                Gauge.builder("basekv.le.rocksdb.total.checkpoints", cpRootDir::getTotalSpace)
-                    .tags(tags)
-                    .register(Metrics.globalRegistry);
             dataUsableSpaceGauge = Gauge.builder("basekv.le.rocksdb.usable.data", dbRootDir::getUsableSpace)
-                .tags(tags)
-                .register(Metrics.globalRegistry);
-            checkpointsUsableSpaceGauge = Gauge.builder("basekv.le.rocksdb.usable.checkpoints",
-                    cpRootDir::getUsableSpace)
                 .tags(tags)
                 .register(Metrics.globalRegistry);
         }
 
         void close() {
             Metrics.globalRegistry.remove(dataTotalSpaceGauge);
-            Metrics.globalRegistry.remove(checkpointTotalSpaceGauge);
             Metrics.globalRegistry.remove(dataUsableSpaceGauge);
-            Metrics.globalRegistry.remove(checkpointsUsableSpaceGauge);
         }
     }
 }

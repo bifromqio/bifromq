@@ -28,9 +28,9 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static java.lang.String.format;
 
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
+import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -60,7 +60,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
     };
     private final String storeId;
     private final KVRangeId rangeId;
-    private final IKVSpace kvSpace;
+    private final IWALableKVSpace kvSpace;
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
     private final Deque<StabilizingIndex> stabilizingIndices = new ConcurrentLinkedDeque<>();
     private final Consumer<KVRangeWALStore> onDestroy;
@@ -71,7 +71,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
     private int logEntriesKeyInfix;
     private volatile StableListener stableListener = DEFAULT_STABLE_LISTENER;
 
-    KVRangeWALStore(String storeId, KVRangeId rangeId, IKVSpace kvSpace, Consumer<KVRangeWALStore> onDestroy) {
+    KVRangeWALStore(String storeId, KVRangeId rangeId, IWALableKVSpace kvSpace, Consumer<KVRangeWALStore> onDestroy) {
         this.rangeId = rangeId;
         this.kvSpace = kvSpace;
         this.storeId = storeId;

@@ -25,6 +25,7 @@ import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
@@ -107,7 +108,7 @@ public class KVRangeStore implements IKVRangeStore {
         BehaviorSubject.<List<Observable<KVRangeDescriptor>>>create().toSerialized();
     private final IKVRangeCoProcFactory coProcFactory;
     private final KVRangeWALStorageEngine walStorageEngine;
-    private final IKVEngine kvRangeEngine;
+    private final IKVEngine<? extends ICPableKVSpace> kvRangeEngine;
     private final IStatsCollector storeStatsCollector;
     private final CompositeDisposable disposable = new CompositeDisposable();
     private final Executor queryExecutor;
@@ -138,7 +139,7 @@ public class KVRangeStore implements IKVRangeStore {
             log.warn("KVRangeStore has been initialized with identity[{}], the override[{}] is ignored",
                 id, opts.getOverrideIdentity());
         }
-        kvRangeEngine = KVEngineFactory.create(null, opts.getDataEngineConfigurator());
+        kvRangeEngine = KVEngineFactory.createCPable(null, opts.getDataEngineConfigurator());
         this.queryExecutor = queryExecutor;
         this.tickExecutor = tickExecutor;
         this.bgTaskExecutor = bgTaskExecutor;
@@ -191,7 +192,7 @@ public class KVRangeStore implements IKVRangeStore {
 
     private void loadExisting() {
         mgmtTaskRunner.add(() -> {
-            kvRangeEngine.ranges().forEach((id, keyRange) ->
+            kvRangeEngine.spaces().forEach((id, keyRange) ->
                 putAndOpen(loadKVRangeFSM(KVRangeIdUtil.fromString(id), keyRange)));
             updateDescriptorList();
         }).toCompletableFuture().join();
@@ -365,7 +366,7 @@ public class KVRangeStore implements IKVRangeStore {
                                     });
                             }
                         } else {
-                            IKVSpace keyRange = kvRangeEngine.ranges().get(KVRangeIdUtil.toString(rangeId));
+                            ICPableKVSpace keyRange = kvRangeEngine.spaces().get(KVRangeIdUtil.toString(rangeId));
                             if (keyRange == null) {
                                 if (walStorageEngine.has(rangeId)) {
                                     log.warn("Staled WAL Store found, destroy it: rangeId={}, storeId={}",
@@ -554,7 +555,7 @@ public class KVRangeStore implements IKVRangeStore {
         });
     }
 
-    private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, IKVSpace keyRange) {
+    private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, ICPableKVSpace keyRange) {
         checkStarted();
         log.debug("Load existing kvrange: rangeId={},storeId={}", KVRangeIdUtil.toString(rangeId), id);
         assert walStorageEngine.has(rangeId);

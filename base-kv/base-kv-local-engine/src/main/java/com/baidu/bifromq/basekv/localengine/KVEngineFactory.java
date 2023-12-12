@@ -13,19 +13,33 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngine;
+import com.baidu.bifromq.basekv.localengine.memory.InMemCPableKVEngine;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngine;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.memory.InMemWALableKVEngine;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngine;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngine;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 
 public class KVEngineFactory {
-    public static IKVEngine create(String overrideIdentity,
-                                   KVEngineConfigurator<?> configurator) {
+    public static IKVEngine<? extends ICPableKVSpace> createCPable(String overrideIdentity,
+                                                                   ICPableKVEngineConfigurator configurator) {
         if (configurator instanceof InMemKVEngineConfigurator) {
-            return new InMemKVEngine(overrideIdentity, (InMemKVEngineConfigurator) configurator);
+            return new InMemCPableKVEngine(overrideIdentity, (InMemKVEngineConfigurator) configurator);
         }
-        if (configurator instanceof RocksDBKVEngineConfigurator) {
-            return new RocksDBKVEngine(overrideIdentity, (RocksDBKVEngineConfigurator) configurator);
+        if (configurator instanceof RocksDBCPableKVEngineConfigurator) {
+            return new RocksDBCPableKVEngine(overrideIdentity, (RocksDBCPableKVEngineConfigurator) configurator);
+        }
+        throw new UnsupportedOperationException();
+    }
+
+    public static IKVEngine<? extends IWALableKVSpace> createWALable(String overrideIdentity,
+                                                                     IWALableKVEngineConfigurator configurator) {
+        if (configurator instanceof InMemKVEngineConfigurator) {
+            return new InMemWALableKVEngine(overrideIdentity, (InMemKVEngineConfigurator) configurator);
+        }
+        if (configurator instanceof RocksDBWALableKVEngineConfigurator) {
+            return new RocksDBWALableKVEngine(overrideIdentity, (RocksDBWALableKVEngineConfigurator) configurator);
         }
         throw new UnsupportedOperationException();
     }

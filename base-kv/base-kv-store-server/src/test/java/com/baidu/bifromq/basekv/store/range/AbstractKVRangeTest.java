@@ -15,10 +15,10 @@ package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.TestUtil;
+import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,26 +29,25 @@ public abstract class AbstractKVRangeTest extends MockableTest {
     public Path dbRootDir;
     private String DB_NAME = "testDB";
     private String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
-    private KVEngineConfigurator<?> configurator = null;
-    protected IKVEngine kvEngine;
+    private RocksDBCPableKVEngineConfigurator configurator = null;
+    protected IKVEngine<? extends ICPableKVSpace> kvEngine;
 
     @SneakyThrows
     protected void doSetup(Method method) {
         dbRootDir = Files.createTempDirectory("");
-        configurator = new RocksDBKVEngineConfigurator()
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
+        configurator = RocksDBCPableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME)
                 .toString())
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDisableWAL(true)
-            .setAtomicFlush(false);
+            .build();
 
-        kvEngine = KVEngineFactory.create(null, configurator);
+        kvEngine = KVEngineFactory.createCPable(null, configurator);
         kvEngine.start();
     }
 
     protected void doTeardown(Method method) {
         kvEngine.stop();
-        if (configurator instanceof RocksDBKVEngineConfigurator) {
+        if (configurator != null) {
             TestUtil.deleteDir(dbRootDir.toString());
             dbRootDir.toFile().delete();
         }

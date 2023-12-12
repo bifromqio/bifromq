@@ -18,6 +18,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
@@ -32,7 +33,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
     @Test
     public void initWithNoData() {
         KVRangeId id = KVRangeIdUtil.generate();
-        IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
+        ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
         IKVRange accessor = new KVRange(keyRange);
         assertEquals(accessor.id(), id);
         assertEquals(accessor.version(), -1);
@@ -49,7 +50,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setBoundary(FULL_BOUNDARY)
             .build();
-        IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
+        ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
 
         assertEquals(accessor.version(), snapshot.getVer());
@@ -62,7 +63,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
     public void initWithNoDataAndDestroy() {
         try {
             KVRangeId rangeId = KVRangeIdUtil.generate();
-            IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(rangeId));
+            ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(rangeId));
             IKVRange kvRange = new KVRange(keyRange);
             Maybe<IKVRange.KVRangeMeta> metaMayBe = kvRange.metadata().firstElement();
             keyRange.destroy();
@@ -85,7 +86,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setState(state)
             .setBoundary(FULL_BOUNDARY)
             .build();
-        IKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
+        ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
 
         lastAppliedIndex = 11;

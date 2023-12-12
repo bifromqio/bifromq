@@ -11,15 +11,20 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.localengine.memory;
+package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import com.baidu.bifromq.basekv.localengine.AbstractKVEngineTest;
-import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
+import com.baidu.bifromq.basekv.localengine.ICPableKVEngineConfigurator;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+import lombok.experimental.SuperBuilder;
 
-public class InMemKVEngineTest extends AbstractKVEngineTest {
-    @Override
-    protected IKVEngine<? extends ICPableKVSpace> newEngine() {
-        return new InMemCPableKVEngine(null, new InMemKVEngineConfigurator());
-    }
+@Accessors(chain = true, fluent = true)
+@Getter
+@Setter
+@SuperBuilder(toBuilder = true)
+public final class RocksDBCPableKVEngineConfigurator
+    extends RocksDBKVEngineConfigurator<RocksDBCPableKVEngineConfigurator> implements ICPableKVEngineConfigurator {
+    private String dbCheckpointRootDir;
 }

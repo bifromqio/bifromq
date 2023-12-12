@@ -11,21 +11,29 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.starter.config.standalone.model;
+package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import com.baidu.bifromq.basekv.localengine.IWALableKVEngineConfigurator;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import lombok.experimental.SuperBuilder;
+import org.rocksdb.DBOptions;
 
+@Accessors(chain = true, fluent = true)
 @Getter
 @Setter
-@Accessors(chain = true)
-public class RocksDBEngineConfig extends StorageEngineConfig {
-    private String dataPathRoot = "";
-    private boolean manualCompaction = false;
-    private int compactMinTombstoneKeys = 200000;
-    private int compactMinTombstoneRanges = 100000;
-    private double compactTombstoneRatio = 0.3; // 30%
-    private boolean asyncWALFlush = true; // only work for wal engine
-    private boolean fsyncWAL = false; // only work for wal engine
+@SuperBuilder(toBuilder = true)
+public final class RocksDBWALableKVEngineConfigurator
+    extends RocksDBKVEngineConfigurator<RocksDBWALableKVEngineConfigurator>
+    implements IWALableKVEngineConfigurator {
+    private boolean asyncWALFlush = false;
+    private boolean fsyncWAL = false;
+
+    @Override
+    public DBOptions dbOptions() {
+        DBOptions options = super.dbOptions();
+        options.setManualWalFlush(asyncWALFlush);
+        return options;
+    }
 }

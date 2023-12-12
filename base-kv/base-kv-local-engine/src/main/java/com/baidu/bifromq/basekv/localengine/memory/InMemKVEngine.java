@@ -14,15 +14,15 @@
 package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngine;
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class InMemKVEngine extends AbstractKVEngine {
+public abstract class InMemKVEngine<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>>
+    extends AbstractKVEngine<T> {
     private final String identity;
-    private final Map<String, InMemKVSpace> kvSpaceMap = new ConcurrentHashMap<>();
+    private final Map<String, T> kvSpaceMap = new ConcurrentHashMap<>();
     private final InMemKVEngineConfigurator configurator;
 
     public InMemKVEngine(String overrideIdentity, InMemKVEngineConfigurator c) {
@@ -51,13 +51,15 @@ public class InMemKVEngine extends AbstractKVEngine {
     }
 
     @Override
-    public Map<String, IKVSpace> ranges() {
+    public Map<String, T> spaces() {
         return Collections.unmodifiableMap(kvSpaceMap);
     }
 
     @Override
-    public IKVSpace createIfMissing(String rangeId) {
-        return kvSpaceMap.computeIfAbsent(rangeId,
-            k -> new InMemKVSpace(k, configurator, this, () -> kvSpaceMap.remove(rangeId)));
+    public T createIfMissing(String spaceId) {
+        return kvSpaceMap.computeIfAbsent(spaceId,
+            k -> buildKVSpace(k, configurator, () -> kvSpaceMap.remove(spaceId)));
     }
+
+    protected abstract T buildKVSpace(String spaceId, InMemKVEngineConfigurator configurator, Runnable onDestroy);
 }

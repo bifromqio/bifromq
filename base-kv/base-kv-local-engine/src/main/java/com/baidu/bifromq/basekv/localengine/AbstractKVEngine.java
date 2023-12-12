@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class AbstractKVEngine implements IKVEngine {
+public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<T> {
     protected enum State {
         INIT, STARTING, STARTED, FATAL_FAILURE, STOPPING, STOPPED
     }
@@ -42,7 +42,7 @@ public abstract class AbstractKVEngine implements IKVEngine {
             try {
                 doStart(metricTags);
                 state.set(State.STARTED);
-                gauge = Gauge.builder("basekv.le.ranges", this.ranges()::size)
+                gauge = Gauge.builder("basekv.le.ranges", this.spaces()::size)
                     .tags(metricTags)
                     .register(Metrics.globalRegistry);
                 afterStart();

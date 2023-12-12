@@ -13,13 +13,14 @@
 
 package com.baidu.bifromq.basekv.localengine.memory;
 
-import com.baidu.bifromq.basekv.localengine.AbstractKVEngineTest;
-import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
+public class InMemCPableKVEngine extends InMemKVEngine<InMemCPableKVEngine, InMemCPableKVSpace> {
+    public InMemCPableKVEngine(String overrideIdentity, InMemKVEngineConfigurator c) {
+        super(overrideIdentity, c);
+    }
 
-public class InMemKVEngineTest extends AbstractKVEngineTest {
     @Override
-    protected IKVEngine<? extends ICPableKVSpace> newEngine() {
-        return new InMemCPableKVEngine(null, new InMemKVEngineConfigurator());
+    protected InMemCPableKVSpace buildKVSpace(String spaceId, InMemKVEngineConfigurator configurator,
+                                              Runnable onDestroy) {
+        return new InMemCPableKVSpace(spaceId, configurator, this, onDestroy);
     }
 }

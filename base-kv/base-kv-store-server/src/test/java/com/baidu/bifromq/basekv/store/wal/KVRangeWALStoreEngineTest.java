@@ -20,9 +20,7 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.TestUtil;
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -45,7 +43,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
     private static final String DB_NAME = "testDB";
     private static final String DB_CHECKPOINT_DIR = "testDB_cp";
     private String dbPath;
-    private KVEngineConfigurator<?> engineConfigurator;
+    private RocksDBWALableKVEngineConfigurator engineConfigurator;
     public Path dbRootDir;
 
     @SneakyThrows
@@ -53,9 +51,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
     protected void doSetup(Method method) {
         dbRootDir = Files.createTempDirectory("");
         dbPath = Paths.get(dbRootDir.toString(), DB_NAME).toString();
-        engineConfigurator = new RocksDBKVEngineConfigurator()
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
-            .setDbRootDir(dbPath);
+        engineConfigurator = RocksDBWALableKVEngineConfigurator.builder().dbRootDir(dbPath).build();
     }
 
     protected void doTeardown(Method method) {
@@ -71,7 +67,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
             KVRangeWALStorageEngine stateStorageEngine =
                 new KVRangeWALStorageEngine("testcluster", null, engineConfigurator);
             stateStorageEngine.start();
-            if (engineConfigurator instanceof RocksDBKVEngineConfigurator) {
+            if (engineConfigurator != null) {
                 assertTrue((new File(dbPath)).isDirectory());
             }
             assertTrue(stateStorageEngine.allKVRangeIds().isEmpty());
@@ -117,10 +113,6 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
 
     @Test
     public void loadExistingRaftStateStorage() {
-        if (engineConfigurator instanceof InMemKVEngineConfigurator) {
-            return;
-        }
-
         KVRangeId testId1 = KVRangeIdUtil.generate();
         KVRangeId testId2 = KVRangeIdUtil.next(testId1);
         KVRangeWALStorageEngine stateStorageEngine =

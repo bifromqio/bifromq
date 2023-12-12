@@ -13,14 +13,13 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import static com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator.autoRelease;
+import static com.baidu.bifromq.basekv.localengine.rocksdb.AutoCleaner.autoRelease;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngineTest;
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.TestUtil;
 import com.google.protobuf.ByteString;
@@ -39,18 +38,11 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
         dbRootDir = Files.createTempDirectory("");
     }
 
-    @SneakyThrows
-    @Override
-    protected IKVEngine newEngine() {
-        return new RocksDBKVEngine(null, configurator());
-    }
 
     @Override
     protected void afterStop() {
         TestUtil.deleteDir(dbRootDir.toString());
     }
-
-    protected abstract RocksDBKVEngineConfigurator configurator();
 
     @Test
     public void identityKeptSame() {
@@ -78,8 +70,8 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
 
         engine = newEngine();
         engine.start();
-        assertEquals(engine.ranges().size(), 1);
-        IKVSpace keyRangeLoaded = engine.ranges().values().stream().findFirst().get();
+        assertEquals(engine.spaces().size(), 1);
+        IKVSpace keyRangeLoaded = engine.spaces().values().stream().findFirst().get();
         assertEquals(keyRangeLoaded.id(), rangeId);
         assertTrue(keyRangeLoaded.metadata(metaKey).isPresent());
         assertTrue(keyRangeLoaded.metadata().blockingFirst().containsKey(metaKey));
@@ -90,8 +82,8 @@ public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest 
 
         engine = newEngine();
         engine.start();
-        assertEquals(engine.ranges().size(), 1);
-        keyRangeLoaded = engine.ranges().values().stream().findFirst().get();
+        assertEquals(engine.spaces().size(), 1);
+        keyRangeLoaded = engine.spaces().values().stream().findFirst().get();
         assertEquals(keyRangeLoaded.id(), rangeId);
         assertTrue(keyRangeLoaded.metadata(metaKey).isPresent());
         assertTrue(keyRangeLoaded.metadata().blockingFirst().containsKey(metaKey));

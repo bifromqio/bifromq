@@ -13,27 +13,27 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import com.baidu.bifromq.basekv.localengine.IKVEngine;
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import java.nio.file.Paths;
 import lombok.SneakyThrows;
 
-public class DisableWALRocksDBKVEngineTest extends AbstractRocksDBKVEngine2Test {
-    private RocksDBKVEngineConfigurator configurator;
+public class RocksDBWALableKVEngineTest extends AbstractRocksDBKVEngine2Test {
+    protected RocksDBWALableKVEngineConfigurator configurator;
 
     @SneakyThrows
     @Override
     protected void beforeStart() {
         super.beforeStart();
         String DB_NAME = "testDB";
-        String DB_CHECKPOINT_DIR = "testDB_cp";
-        configurator = new RocksDBKVEngineConfigurator()
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDisableWAL(true)
-            .setAtomicFlush(false);
+        configurator = RocksDBWALableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .build();
     }
 
+    @SneakyThrows
     @Override
-    protected RocksDBKVEngineConfigurator configurator() {
-        return configurator;
+    protected IKVEngine<? extends IKVSpace> newEngine() {
+        return new RocksDBWALableKVEngine(null, configurator);
     }
 }

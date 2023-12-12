@@ -16,13 +16,10 @@ package com.baidu.bifromq.basekv.localengine.memory;
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
 import com.baidu.bifromq.basekv.localengine.SyncContext;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import io.reactivex.rxjava3.core.Observable;
@@ -30,37 +27,32 @@ import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InMemKVSpace extends InMemKVSpaceReader implements IKVSpace {
-    protected final String id;
-    private final InMemKVEngine engine;
-    private final Map<ByteString, ByteString> metadataMap = new ConcurrentHashMap<>();
-    private final ConcurrentSkipListMap<ByteString, ByteString> rangeData =
-        new ConcurrentSkipListMap<>(unsignedLexicographicalComparator());
+public class InMemKVSpace<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
+    implements IKVSpace {
+    private final E engine;
     private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = BehaviorSubject.create();
-    private final Cache<String, InMemKVSpaceCheckpoint> checkpoints;
     private final ISyncContext syncContext = new SyncContext();
-    private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
     private final Runnable onDestroy;
-    private volatile InMemKVSpaceCheckpoint latestCheckpoint;
+    protected final String id;
+    protected final Map<ByteString, ByteString> metadataMap = new ConcurrentHashMap<>();
+    protected final ConcurrentSkipListMap<ByteString, ByteString> rangeData =
+        new ConcurrentSkipListMap<>(unsignedLexicographicalComparator());
+    protected final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
 
     protected InMemKVSpace(String id,
                            InMemKVEngineConfigurator configurator,
-                           InMemKVEngine engine,
+                           E engine,
                            Runnable onDestroy,
                            String... tags) {
         super(id, Tags.of(tags).and("from", "kvspace"));
         this.id = id;
         this.engine = engine;
         this.onDestroy = onDestroy;
-        checkpoints = Caffeine.newBuilder().weakValues().build();
     }
 
     ISyncContext syncContext() {
@@ -95,10 +87,6 @@ public class InMemKVSpace extends InMemKVSpaceReader implements IKVSpace {
         return stats;
     }
 
-    @Override
-    public CompletableFuture<Long> flush() {
-        return CompletableFuture.completedFuture(System.nanoTime());
-    }
 
     @Override
     public void destroy() {
@@ -106,26 +94,10 @@ public class InMemKVSpace extends InMemKVSpaceReader implements IKVSpace {
         onDestroy.run();
     }
 
-    @Override
-    public String checkpoint() {
-        synchronized (this) {
-            return metadataRefresher.call(() -> {
-                String cpId = UUID.randomUUID().toString();
-                latestCheckpoint = new InMemKVSpaceCheckpoint(id, cpId, new HashMap<>(metadataMap), rangeData.clone());
-                checkpoints.put(cpId, latestCheckpoint);
-                return cpId;
-            });
-        }
-    }
-
-    @Override
-    public Optional<IKVSpaceCheckpoint> open(String checkpointId) {
-        return Optional.ofNullable(checkpoints.getIfPresent(checkpointId));
-    }
 
     @Override
     public IKVSpaceWriter toWriter() {
-        return new InMemKVSpaceWriter(id, metadataMap, rangeData, engine, syncContext,
+        return new InMemKVSpaceWriter<>(id, metadataMap, rangeData, engine, syncContext,
             metadataUpdated -> {
                 if (metadataUpdated) {
                     this.loadMetadata();
@@ -134,7 +106,7 @@ public class InMemKVSpace extends InMemKVSpaceReader implements IKVSpace {
     }
 
     IKVSpaceWriter toWriter(InMemKVSpaceWriterHelper helper) {
-        return new InMemKVSpaceWriter(id, metadataMap, rangeData, engine, syncContext, helper,
+        return new InMemKVSpaceWriter<>(id, metadataMap, rangeData, engine, syncContext, helper,
             metadataUpdated -> {
                 if (metadataUpdated) {
                     this.loadMetadata();

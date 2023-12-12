@@ -20,7 +20,8 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.TestCoProcFactory;
 import com.baidu.bifromq.basekv.TestUtil;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -391,19 +392,18 @@ public class KVRangeStoreTestCluster {
     private String buildStore(boolean isBootstrap) {
         String uuid = UUID.randomUUID().toString();
         KVRangeStoreOptions options = optionsTpl.toBuilder().build();
-        if (options.getDataEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
-            options.setDataEngineConfigurator(((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
+        if (options.getDataEngineConfigurator() instanceof RocksDBCPableKVEngineConfigurator) {
+            options.setDataEngineConfigurator(((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator())
                 .toBuilder()
                 .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString())
                 .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
                 .build());
         }
-        if (options.getWalEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
-            options.setWalEngineConfigurator(((RocksDBKVEngineConfigurator) options
+        if (options.getWalEngineConfigurator() instanceof RocksDBWALableKVEngineConfigurator) {
+            options.setWalEngineConfigurator(((RocksDBWALableKVEngineConfigurator) options
                 .getWalEngineConfigurator()).toBuilder()
                 .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString())
-                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid).toString())
                 .build());
         }
         KVRangeStore store = initStore(options);
@@ -420,19 +420,18 @@ public class KVRangeStoreTestCluster {
         if (options.getWalEngineConfigurator() instanceof InMemKVEngineConfigurator) {
             options.setOverrideIdentity(storeId);
         }
-        if (options.getDataEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
-            options.setDataEngineConfigurator(((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
+        if (options.getDataEngineConfigurator() instanceof RocksDBCPableKVEngineConfigurator) {
+            options.setDataEngineConfigurator(((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator())
                 .toBuilder()
                 .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString())
-                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
-                    .toString())
+                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid).toString())
                 .build());
         }
-        if (options.getWalEngineConfigurator() instanceof RocksDBKVEngineConfigurator) {
-            options.setWalEngineConfigurator(((RocksDBKVEngineConfigurator) options
-                .getWalEngineConfigurator()).toBuilder()
+        if (options.getWalEngineConfigurator() instanceof RocksDBWALableKVEngineConfigurator) {
+            options.setWalEngineConfigurator(((RocksDBWALableKVEngineConfigurator) options
+                .getWalEngineConfigurator())
+                .toBuilder()
                 .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString())
-                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid).toString())
                 .build());
         }
         initStore(options);

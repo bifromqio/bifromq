@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.localengine;
 
 import java.util.Map;
 
-public interface IKVEngine {
+public interface IKVEngine<T extends IKVSpace> {
 
     String DEFAULT_NS = "default";
 
@@ -27,19 +27,19 @@ public interface IKVEngine {
     String id();
 
     /**
-     * Find all currently available ranges
+     * Find all currently available kv spaces
      *
-     * @return key range list
+     * @return the kv space list
      */
-    Map<String, IKVSpace> ranges();
+    Map<String, T> spaces();
 
     /**
-     * Create a new key range with specified rangeId and boundary or get existing key range
+     * Create a new key range with specified spaceId and boundary or get existing key range
      *
-     * @param rangeId the range id
+     * @param spaceId the space id
      * @return the key range created
      */
-    IKVSpace createIfMissing(String rangeId);
+    T createIfMissing(String spaceId);
 
     /**
      * Start the kv engine and specifying additional tags for generated metrics

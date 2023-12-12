@@ -13,9 +13,11 @@
 
 package com.baidu.bifromq.starter;
 
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.ICPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.IWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.starter.config.StarterConfig;
 import com.baidu.bifromq.starter.config.standalone.model.InMemEngineConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RocksDBEngineConfig;
@@ -29,18 +31,7 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
     public static final String USER_DIR_PROP = "user.dir";
     public static final String DATA_DIR_PROP = "DATA_DIR";
 
-    protected KVEngineConfigurator<?> buildDataEngineConf(StorageEngineConfig config, String name) {
-        return buildEngineConf(config, name, true, false);
-    }
-
-    protected KVEngineConfigurator<?> buildWALEngineConf(StorageEngineConfig config, String name) {
-        return buildEngineConf(config, name, false, false);
-    }
-
-    private KVEngineConfigurator<?> buildEngineConf(StorageEngineConfig config,
-                                                    String name,
-                                                    boolean disableWAL,
-                                                    boolean atomicFlush) {
+    protected ICPableKVEngineConfigurator buildDataEngineConf(StorageEngineConfig config, String name) {
         if (config instanceof InMemEngineConfig) {
             return InMemKVEngineConfigurator.builder()
                 .build();
@@ -59,15 +50,37 @@ public abstract class BaseEngineStarter<T extends StarterConfig> extends BaseSta
                 dataCheckpointRootDir =
                     Paths.get(dataDir, rocksDBConfig.getDataPathRoot(), name + "_cp");
             }
-            return RocksDBKVEngineConfigurator.builder()
+            return RocksDBCPableKVEngineConfigurator.builder()
                 .dbRootDir(dataRootDir.toString())
                 .dbCheckpointRootDir(dataCheckpointRootDir.toString())
-                .manualCompaction(rocksDBConfig.isManualCompaction())
+                .heuristicCompaction(rocksDBConfig.isManualCompaction())
                 .compactMinTombstoneKeys(rocksDBConfig.getCompactMinTombstoneKeys())
                 .compactMinTombstoneRanges(rocksDBConfig.getCompactMinTombstoneRanges())
-                .compactTombstoneRatio(rocksDBConfig.getCompactTombstoneRatio())
-                .disableWAL(disableWAL)
-                .atomicFlush(atomicFlush)
+                .compactTombstoneKeysRatio(rocksDBConfig.getCompactTombstoneRatio())
+                .build();
+        }
+    }
+
+    protected IWALableKVEngineConfigurator buildWALEngineConf(StorageEngineConfig config, String name) {
+        if (config instanceof InMemEngineConfig) {
+            return InMemKVEngineConfigurator.builder()
+                .build();
+        } else {
+            Path dataRootDir;
+            RocksDBEngineConfig rocksDBConfig = (RocksDBEngineConfig) config;
+            if (Paths.get(rocksDBConfig.getDataPathRoot()).isAbsolute()) {
+                dataRootDir = Paths.get(rocksDBConfig.getDataPathRoot(), name);
+            } else {
+                String userDir = System.getProperty(USER_DIR_PROP);
+                String dataDir = System.getProperty(DATA_DIR_PROP, userDir);
+                dataRootDir = Paths.get(dataDir, rocksDBConfig.getDataPathRoot(), name);
+            }
+            return RocksDBWALableKVEngineConfigurator.builder()
+                .dbRootDir(dataRootDir.toString())
+                .heuristicCompaction(rocksDBConfig.isManualCompaction())
+                .compactMinTombstoneKeys(rocksDBConfig.getCompactMinTombstoneKeys())
+                .compactMinTombstoneRanges(rocksDBConfig.getCompactMinTombstoneRanges())
+                .compactTombstoneKeysRatio(rocksDBConfig.getCompactTombstoneRatio())
                 .asyncWALFlush(rocksDBConfig.isAsyncWALFlush())
                 .fsyncWAL(rocksDBConfig.isFsyncWAL())
                 .build();

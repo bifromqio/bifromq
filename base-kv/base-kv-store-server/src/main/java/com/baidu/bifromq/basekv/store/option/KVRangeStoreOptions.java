@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.basekv.store.option;
 
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.ICPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.IWALableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.util.ProcessUtil;
 import java.nio.file.Paths;
 import lombok.AccessLevel;
@@ -38,16 +40,15 @@ public class KVRangeStoreOptions {
     private KVRangeOptions kvRangeOptions = new KVRangeOptions();
     private int statsCollectIntervalSec = 5;
 
-    private KVEngineConfigurator<?> dataEngineConfigurator = new RocksDBKVEngineConfigurator()
-        .setDisableWAL(true) // data engine no need extra wal
-        .setDbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
+    private ICPableKVEngineConfigurator dataEngineConfigurator = RocksDBCPableKVEngineConfigurator.builder()
+        .dbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
             ProcessUtil.processId(), "data").toString())
-        .setDbCheckpointRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekvcp",
-            ProcessUtil.processId(), "data").toString());
+        .dbCheckpointRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekvcp",
+            ProcessUtil.processId(), "data").toString())
+        .build();
 
-    private KVEngineConfigurator<?> walEngineConfigurator = new RocksDBKVEngineConfigurator()
-        .setDbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
+    private IWALableKVEngineConfigurator walEngineConfigurator = RocksDBWALableKVEngineConfigurator.builder()
+        .dbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
             ProcessUtil.processId(), "wal").toString())
-        .setDbCheckpointRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekvcp",
-            ProcessUtil.processId(), "wal").toString());
+        .build();
 }

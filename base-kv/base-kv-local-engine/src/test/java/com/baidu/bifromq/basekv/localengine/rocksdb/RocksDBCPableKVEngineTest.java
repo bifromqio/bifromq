@@ -13,11 +13,13 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
+import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import java.nio.file.Paths;
 import lombok.SneakyThrows;
 
-public class EnableWALRocksDBKVEngineTest extends AbstractRocksDBKVEngine2Test {
-    protected RocksDBKVEngineConfigurator configurator;
+public class RocksDBCPableKVEngineTest extends AbstractRocksDBKVEngine2Test {
+    private RocksDBCPableKVEngineConfigurator configurator;
 
     @SneakyThrows
     @Override
@@ -25,14 +27,15 @@ public class EnableWALRocksDBKVEngineTest extends AbstractRocksDBKVEngine2Test {
         super.beforeStart();
         String DB_NAME = "testDB";
         String DB_CHECKPOINT_DIR = "testDB_cp";
-        configurator = new RocksDBKVEngineConfigurator()
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDisableWAL(false);
+        configurator = RocksDBCPableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+            .build();
     }
 
+    @SneakyThrows
     @Override
-    protected RocksDBKVEngineConfigurator configurator() {
-        return configurator;
+    protected IKVEngine<? extends ICPableKVSpace> newEngine() {
+        return new RocksDBCPableKVEngine(null, configurator);
     }
 }

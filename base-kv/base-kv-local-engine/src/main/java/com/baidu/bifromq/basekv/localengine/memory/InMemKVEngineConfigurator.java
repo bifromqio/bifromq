@@ -13,49 +13,22 @@
 
 package com.baidu.bifromq.basekv.localengine.memory;
 
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.ICPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.IWALableKVEngineConfigurator;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import lombok.experimental.SuperBuilder;
 
 @Accessors(chain = true)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-public final class InMemKVEngineConfigurator implements KVEngineConfigurator<InMemKVEngineConfigurator> {
+@SuperBuilder(toBuilder = true)
+public final class InMemKVEngineConfigurator implements ICPableKVEngineConfigurator, IWALableKVEngineConfigurator {
     private long gcIntervalInSec = 300; // ms
-
-    public static InMemoryKVEngineConfiguratorBuilder builder() {
-        return new InMemKVEngineConfigurator().toBuilder();
-    }
-
-    public InMemoryKVEngineConfiguratorBuilder toBuilder() {
-        return new InMemoryKVEngineConfiguratorBuilder().gcInterval(this.gcIntervalInSec);
-    }
-
-    public static class InMemoryKVEngineConfiguratorBuilder implements
-        KVEngineConfiguratorBuilder<InMemKVEngineConfigurator> {
-        private long gcInterval;
-
-        InMemoryKVEngineConfiguratorBuilder() {
-        }
-
-        public InMemoryKVEngineConfiguratorBuilder gcInterval(long gcInterval) {
-            this.gcInterval = gcInterval;
-            return this;
-        }
-
-        public InMemKVEngineConfigurator build() {
-            return new InMemKVEngineConfigurator(gcInterval);
-        }
-
-        public String toString() {
-            return "InMemoryKVEngineConfigurator.InMemoryKVEngineConfiguratorBuilder(gcInterval="
-                + this.gcInterval + ")";
-        }
-    }
 }

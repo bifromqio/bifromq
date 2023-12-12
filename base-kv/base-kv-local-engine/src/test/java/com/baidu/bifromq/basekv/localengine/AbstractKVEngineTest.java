@@ -24,7 +24,7 @@ import java.lang.reflect.Method;
 import org.testng.annotations.Test;
 
 public abstract class AbstractKVEngineTest extends MockableTest {
-    protected IKVEngine engine;
+    protected IKVEngine<? extends IKVSpace> engine;
 
     @Override
     protected void doSetup(Method method) {
@@ -47,7 +47,7 @@ public abstract class AbstractKVEngineTest extends MockableTest {
 
     }
 
-    protected abstract IKVEngine newEngine();
+    protected abstract IKVEngine<? extends IKVSpace> newEngine();
 
     @Test
     public void createIfMissing() {
@@ -102,12 +102,12 @@ public abstract class AbstractKVEngineTest extends MockableTest {
     public void keyRangeDestroy() {
         String rangeId = "test_range1";
         IKVSpace range = engine.createIfMissing(rangeId);
-        assertTrue(engine.ranges().containsKey(rangeId));
+        assertTrue(engine.spaces().containsKey(rangeId));
         Disposable disposable = range.metadata().subscribe();
         range.destroy();
         assertTrue(disposable.isDisposed());
-        assertTrue(engine.ranges().isEmpty());
-        assertFalse(engine.ranges().containsKey(rangeId));
+        assertTrue(engine.spaces().isEmpty());
+        assertFalse(engine.spaces().containsKey(rangeId));
     }
 
     @Test

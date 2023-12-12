@@ -16,8 +16,8 @@ package com.baidu.bifromq.basekv.store.wal;
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.KEY_LATEST_SNAPSHOT_BYTES;
 
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.IWALableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
@@ -40,10 +40,12 @@ import lombok.extern.slf4j.Slf4j;
 public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final Map<KVRangeId, KVRangeWALStore> instances = Maps.newConcurrentMap();
-    private final IKVEngine kvEngine;
+    private final IKVEngine<? extends IWALableKVSpace> kvEngine;
 
-    public KVRangeWALStorageEngine(String clusterId, String overrideIdentity, KVEngineConfigurator<?> configurator) {
-        kvEngine = KVEngineFactory.create(overrideIdentity, configurator);
+    public KVRangeWALStorageEngine(String clusterId,
+                                   String overrideIdentity,
+                                   IWALableKVEngineConfigurator configurator) {
+        kvEngine = KVEngineFactory.createWALable(overrideIdentity, configurator);
     }
 
     @Override
@@ -91,7 +93,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     public IKVRangeWALStore create(KVRangeId kvRangeId, Snapshot initSnapshot) {
         checkState();
         instances.computeIfAbsent(kvRangeId, id -> {
-            IKVSpace kvSpace = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
+            IWALableKVSpace kvSpace = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
             kvSpace.toWriter().put(KEY_LATEST_SNAPSHOT_BYTES, initSnapshot.toByteString())
                 .done();
             kvSpace.flush().join();
@@ -117,7 +119,7 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     }
 
     private void loadExisting() {
-        kvEngine.ranges().forEach((String id, IKVSpace kvSpace) -> {
+        kvEngine.spaces().forEach((String id, IWALableKVSpace kvSpace) -> {
             KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
             instances.put(kvRangeId,
                 new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace, store -> instances.remove(kvRangeId, store)));

@@ -15,8 +15,9 @@ package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basekv.localengine.ICPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.localengine.MockableTest;
 import java.io.File;
@@ -32,7 +33,7 @@ import org.testng.annotations.Test;
 public class OverrideIdentityTest extends MockableTest {
     private final String DB_NAME = "testDB";
     private final String DB_CHECKPOINT_DIR = "testDB_cp";
-    private IKVEngine engine;
+    private IKVEngine<? extends ICPableKVSpace> engine;
     public Path dbRootDir;
 
     @SneakyThrows
@@ -51,30 +52,33 @@ public class OverrideIdentityTest extends MockableTest {
     @Test
     public void testOverrideIdentity() {
         String overrideIdentity = UUID.randomUUID().toString();
-        KVEngineConfigurator<?> configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
-        engine = KVEngineFactory.create(overrideIdentity, configurator);
+        ICPableKVEngineConfigurator configurator = RocksDBCPableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+            .build();
+        engine = KVEngineFactory.createCPable(overrideIdentity, configurator);
         engine.start();
         assertEquals(engine.id(), overrideIdentity);
         engine.stop();
         // restart without overrideIdentity specified
-        configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
+        configurator = RocksDBCPableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+            .build();
 
-        engine = KVEngineFactory.create(null, configurator);
+        engine = KVEngineFactory.createCPable(null, configurator);
         engine.start();
 
         assertEquals(engine.id(), overrideIdentity);
         engine.stop();
         // restart with different overrideIdentity specified
         String another = UUID.randomUUID().toString();
-        configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
+        configurator = RocksDBCPableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+            .build();
 
-        engine = KVEngineFactory.create(another, configurator);
+        engine = KVEngineFactory.createCPable(another, configurator);
         engine.start();
 
         assertEquals(engine.id(), overrideIdentity);
@@ -83,21 +87,23 @@ public class OverrideIdentityTest extends MockableTest {
 
     @Test
     public void testCanOnlyOverrideWhenInit() {
-        KVEngineConfigurator<?> configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
+        ICPableKVEngineConfigurator configurator = RocksDBCPableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+            .build();
 
-        engine = KVEngineFactory.create(null, configurator);
+        engine = KVEngineFactory.createCPable(null, configurator);
         engine.start();
         String identity = engine.id();
         engine.stop();
         // restart with overrideIdentity specified
         String overrideIdentity = UUID.randomUUID().toString();
-        configurator = new RocksDBKVEngineConfigurator()
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString());
+        configurator = RocksDBCPableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
+            .build();
 
-        engine = KVEngineFactory.create(overrideIdentity, configurator);
+        engine = KVEngineFactory.createCPable(overrideIdentity, configurator);
         engine.start();
 
         assertEquals(engine.id(), identity);

@@ -28,7 +28,8 @@ import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
@@ -131,14 +132,12 @@ public class RetainStoreTest {
             options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
             options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
         } else {
-            ((RocksDBKVEngineConfigurator) options.getDataEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+            ((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator())
+                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                     .toString())
-                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
-            ((RocksDBKVEngineConfigurator) options.getWalEngineConfigurator())
-                .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_WAL_CHECKPOINT_DIR, uuid)
-                    .toString())
-                .setDbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
+                .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
+            ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator())
+                .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
         }
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),

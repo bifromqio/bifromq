@@ -14,8 +14,7 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import com.baidu.bifromq.basekv.TestUtil;
-import com.baidu.bifromq.basekv.localengine.KVEngineConfigurator;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.raft.BasicStateStoreTest;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
@@ -35,11 +34,11 @@ public class KVRangeWALStoreTest extends BasicStateStoreTest {
 
     @BeforeMethod
     public void setup() throws IOException {
-        KVEngineConfigurator<?> walConfigurator;
+        RocksDBWALableKVEngineConfigurator walConfigurator;
         dbRootDir = Files.createTempDirectory("");
-        walConfigurator = new RocksDBKVEngineConfigurator()
-            .setDbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
-            .setDbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString());
+        walConfigurator = RocksDBWALableKVEngineConfigurator.builder()
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
+            .build();
         stateStorageEngine = new KVRangeWALStorageEngine("testcluster", null, walConfigurator);
         stateStorageEngine.start();
     }

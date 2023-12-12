@@ -27,16 +27,17 @@ import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InMemKVSpaceWriter extends InMemKVSpaceReader implements IKVSpaceWriter {
+public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
+    implements IKVSpaceWriter {
     private final Map<ByteString, ByteString> metadataMap;
     private final ConcurrentSkipListMap<ByteString, ByteString> rangeData;
-    private final InMemKVEngine engine;
+    private final E engine;
     private final InMemKVSpaceWriterHelper helper;
 
     InMemKVSpaceWriter(String id,
                        Map<ByteString, ByteString> metadataMap,
                        ConcurrentSkipListMap<ByteString, ByteString> rangeData,
-                       InMemKVEngine engine,
+                       E engine,
                        ISyncContext syncContext,
                        Consumer<Boolean> afterWrite,
                        String... tags) {
@@ -46,7 +47,7 @@ public class InMemKVSpaceWriter extends InMemKVSpaceReader implements IKVSpaceWr
     InMemKVSpaceWriter(String id,
                        Map<ByteString, ByteString> metadataMap,
                        ConcurrentSkipListMap<ByteString, ByteString> rangeData,
-                       InMemKVEngine engine,
+                       E engine,
                        ISyncContext syncContext,
                        InMemKVSpaceWriterHelper writerHelper,
                        Consumer<Boolean> afterWrite,

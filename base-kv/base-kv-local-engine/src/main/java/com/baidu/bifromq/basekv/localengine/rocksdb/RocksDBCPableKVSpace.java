@@ -16,7 +16,16 @@ package com.baidu.bifromq.basekv.localengine.rocksdb;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.LATEST_CP_KEY;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
@@ -29,6 +38,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -37,40 +47,95 @@ import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.Checkpoint;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.FlushOptions;
 import org.rocksdb.RocksDB;
+import org.rocksdb.WriteOptions;
 
 @Slf4j
-public class RocksDBCheckpointableKVSpace extends RocksDBKVSpace {
+public class RocksDBCPableKVSpace
+    extends RocksDBKVSpace<RocksDBCPableKVEngine, RocksDBCPableKVSpace, RocksDBCPableKVEngineConfigurator>
+    implements ICPableKVSpace {
     private static final String CP_SUFFIX = ".cp";
-    private RocksDBKVEngine engine;
+    private final RocksDBCPableKVEngine engine;
     private final File cpRootDir;
+    private final WriteOptions writeOptions;
     private final Checkpoint checkpoint;
     private final AtomicReference<String> latestCheckpointId = new AtomicReference<>();
+    private final Cache<String, IRocksDBKVSpaceCheckpoint> checkpoints;
+    private final MetricManager metricMgr;
+    // keep a strong ref to latest checkpoint
+    private IKVSpaceCheckpoint latestCheckpoint;
 
     @SneakyThrows
-    public RocksDBCheckpointableKVSpace(String id,
-                                        ColumnFamilyDescriptor cfDesc,
-                                        ColumnFamilyHandle cfHandle,
-                                        RocksDB db,
-                                        RocksDBKVEngineConfigurator configurator,
-                                        RocksDBKVEngine engine,
-                                        Runnable onDestroy,
-                                        String... tags) {
+    public RocksDBCPableKVSpace(String id,
+                                ColumnFamilyDescriptor cfDesc,
+                                ColumnFamilyHandle cfHandle,
+                                RocksDB db,
+                                RocksDBCPableKVEngineConfigurator configurator,
+                                RocksDBCPableKVEngine engine,
+                                Runnable onDestroy,
+                                String... tags) {
         super(id, cfDesc, cfHandle, db, configurator, engine, onDestroy, tags);
         this.engine = engine;
-        cpRootDir = new File(configurator.getDbCheckpointRootDir(), id);
+        cpRootDir = new File(configurator.dbCheckpointRootDir(), id);
         this.checkpoint = Checkpoint.create(db);
+        checkpoints = Caffeine.newBuilder().weakValues().build();
+        writeOptions = new WriteOptions().setDisableWAL(true);
         Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
+        metricMgr = new MetricManager(tags);
     }
 
     @Override
+    protected WriteOptions writeOptions() {
+        return writeOptions;
+    }
+
+    @Override
+    public String checkpoint() {
+        return metricMgr.checkpointTimer.record(() -> {
+            synchronized (this) {
+                IRocksDBKVSpaceCheckpoint cp = doCheckpoint();
+                checkpoints.put(cp.cpId(), cp);
+                latestCheckpoint = cp;
+                return cp.cpId();
+            }
+        });
+    }
+
+    @Override
+    public Optional<IKVSpaceCheckpoint> open(String checkpointId) {
+        return Optional.ofNullable(checkpoints.getIfPresent(checkpointId));
+    }
+
+    @Override
+    protected void doClose() {
+        metricMgr.close();
+        checkpoints.asMap().forEach((cpId, cp) -> cp.close());
+        checkpoint.close();
+        writeOptions.close();
+        super.doClose();
+    }
+
+    @Override
+    protected void doLoad() {
+        loadLatestCheckpoint();
+        super.doLoad();
+    }
+
     protected IRocksDBKVSpaceCheckpoint doCheckpoint() {
         String cpId = genCheckpointId();
         File cpDir = Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
         try {
             // flush before checkpointing
             db.put(cfHandle, LATEST_CP_KEY, cpId.getBytes());
-            doFlush();
+            log.debug("KVSpace[{}] flush start", id);
+            try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
+                db.flush(flushOptions, cfHandle);
+                log.debug("KVSpace[{}] flush complete", id);
+            } catch (Throwable e) {
+                log.error("KVSpace[{}] flush error", id, e);
+                throw new KVEngineException("KVSpace flush error", e);
+            }
             checkpoint.createCheckpoint(cpDir.toString());
             latestCheckpointId.set(cpId);
             return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest);
@@ -80,7 +145,6 @@ public class RocksDBCheckpointableKVSpace extends RocksDBKVSpace {
     }
 
     @SneakyThrows
-    @Override
     protected IRocksDBKVSpaceCheckpoint doLoadLatestCheckpoint() {
         byte[] cpIdBytes = db.get(cfHandle, LATEST_CP_KEY);
         if (cpIdBytes != null) {
@@ -102,10 +166,12 @@ public class RocksDBCheckpointableKVSpace extends RocksDBKVSpace {
         return doCheckpoint();
     }
 
-    @Override
-    protected void doClose() {
-        super.doClose();
-        checkpoint.close();
+    @SneakyThrows
+    private void loadLatestCheckpoint() {
+        IRocksDBKVSpaceCheckpoint checkpoint = doLoadLatestCheckpoint();
+        assert !checkpoints.asMap().containsKey(checkpoint.cpId());
+        checkpoints.put(checkpoint.cpId(), checkpoint);
+        latestCheckpoint = checkpoint;
     }
 
     private String genCheckpointId() {
@@ -154,6 +220,23 @@ public class RocksDBCheckpointableKVSpace extends RocksDBKVSpace {
                 });
         } catch (IOException e) {
             log.error("Failed to clean checkpoint[{}] for kvspace[{}] at path:{}", cpId, id, checkpointDir(cpId));
+        }
+    }
+
+    private class MetricManager {
+        private final Gauge checkpointGauge; // hold a strong reference
+        private final Timer checkpointTimer;
+
+        MetricManager(String... tags) {
+            Tags metricTags = Tags.of(tags);
+            checkpointGauge =
+                KVSpaceMeters.getGauge(id, KVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, metricTags);
+            checkpointTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CheckpointTimer, metricTags);
+        }
+
+        void close() {
+            checkpointGauge.close();
+            checkpointTimer.close();
         }
     }
 }

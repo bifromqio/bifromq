@@ -11,15 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.localengine.memory;
+package com.baidu.bifromq.basekv.localengine;
 
-import com.baidu.bifromq.basekv.localengine.AbstractKVEngineTest;
-import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVEngine;
-
-public class InMemKVEngineTest extends AbstractKVEngineTest {
-    @Override
-    protected IKVEngine<? extends ICPableKVSpace> newEngine() {
-        return new InMemCPableKVEngine(null, new InMemKVEngineConfigurator());
-    }
+public interface ICPableKVEngineConfigurator extends IKVEngineConfigurator {
 }
