@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler;
 
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PING_REQ;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SESSION_CHECK_ERROR;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
@@ -25,11 +26,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.ClientConnected;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -133,6 +138,50 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void persistentSessionWithInbox() {
         connectAndVerify(false, true);
         verifyEvent(1, EventType.CLIENT_CONNECTED);
+    }
+
+    @Test
+    public void authWithCustomAttrs() {
+        String attrKey = "attrKey";
+        String attrVal = "attrVal";
+        mockAuthPass(attrKey, attrVal);
+        mockSessionReg();
+        mockInboxHas(false);
+
+        MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
+        channel.writeInbound(connectMessage);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        MqttConnAckMessage ackMessage = channel.readOutbound();
+        // verifications
+        Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
+        ArgumentCaptor<ClientConnected> eventArgumentCaptor = ArgumentCaptor.forClass(ClientConnected.class);
+        verify(eventCollector).report(eventArgumentCaptor.capture());
+        ClientConnected clientConnected = eventArgumentCaptor.getValue();
+        assertTrue(clientConnected.clientInfo().containsMetadata(attrKey));
+        assertEquals(clientConnected.clientInfo().getMetadataMap().get(attrKey), attrVal);
+    }
+
+    @Test
+    public void reservedMetadataNotOverridable() {
+        String attrKey = MQTT_PROTOCOL_VER_KEY;
+        String attrVal = "attrVal";
+        mockAuthPass(attrKey, attrVal);
+        mockSessionReg();
+        mockInboxHas(false);
+
+        MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
+        channel.writeInbound(connectMessage);
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        MqttConnAckMessage ackMessage = channel.readOutbound();
+        // verifications
+        Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
+        ArgumentCaptor<ClientConnected> eventArgumentCaptor = ArgumentCaptor.forClass(ClientConnected.class);
+        verify(eventCollector).report(eventArgumentCaptor.capture());
+        ClientConnected clientConnected = eventArgumentCaptor.getValue();
+        assertTrue(clientConnected.clientInfo().containsMetadata(attrKey));
+        assertNotEquals(clientConnected.clientInfo().getMetadataMap().get(attrKey), attrVal);
     }
 
     @Test

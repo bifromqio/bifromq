@@ -75,6 +75,7 @@ import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
+import io.micrometer.core.instrument.Tags;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -229,12 +230,15 @@ public abstract class BaseMQTTTest {
         Mockito.lenient().when(settingProvider.provide(eq(MaxTopicFiltersPerSub), anyString())).thenReturn(10);
     }
 
-    protected void mockAuthPass() {
+    protected void mockAuthPass(String... attrsKeyValues) {
+        Map<String, String> attrsMap = new HashMap<>();
+        Tags.of(attrsKeyValues).iterator().forEachRemaining(tag -> attrsMap.put(tag.getKey(), tag.getValue()));
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(userId)
+                    .putAllAttrs(attrsMap)
                     .build())
                 .build()));
     }

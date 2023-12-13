@@ -191,6 +191,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                         clientInfo = ClientInfo.newBuilder()
                             .setTenantId(ok.getTenantId())
                             .setType(MQTT_TYPE_VALUE)
+                            .putAllMetadata(ok.getAttrsMap()) // custom attrs
                             .putMetadata(MQTT_PROTOCOL_VER_KEY, connMsg.variableHeader().version() == 3 ?
                                 MQTT_PROTOCOL_VER_3_1_VALUE : MQTT_PROTOCOL_VER_3_1_1_VALUE)
                             .putMetadata(MQTT_USER_ID_KEY, ok.getUserId())
