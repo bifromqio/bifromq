@@ -57,6 +57,7 @@ import com.baidu.bifromq.starter.config.standalone.model.StateStoreConfig;
 import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
 import com.baidu.bifromq.starter.utils.ConfigUtil;
+import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.google.common.base.Strings;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -122,7 +123,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     @Override
     protected void init(StandaloneConfig config) {
         StandaloneConfigConsolidator.consolidate(config);
-        printConfigures(config);
+        printConfigs(config);
 
         if (!Strings.isNullOrEmpty(config.getClusterConfig().getEnv())) {
             Metrics.globalRegistry.config()
@@ -604,7 +605,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             inboxClient, sessionDictClient, retainClient, settingProviderMgr);
     }
 
-    private void printConfigures(StandaloneConfig config) {
+    private void printConfigs(StandaloneConfig config) {
         List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
         log.info("JVM arguments: \n  {}", String.join("\n  ", arguments));
 
@@ -613,6 +614,11 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         log.info("Following is the initial value of each setting: ");
         for (int i = 0; i < Setting.values().length; ++i) {
             log.info("Setting: {}={}", Setting.values()[i].name(), Setting.values()[i].current(""));
+        }
+
+        log.info("BifroMQ system properties: ");
+        for (int i = 0; i < BifroMQSysProp.values().length; ++i) {
+            log.info("BifroMQSysProp: {}={}", BifroMQSysProp.values()[i].name(), BifroMQSysProp.values()[i].get());
         }
 
         log.info("Consolidated Config: \n{}", ConfigUtil.serialize(config));
