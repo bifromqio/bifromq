@@ -42,6 +42,7 @@ import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
@@ -56,6 +57,7 @@ import com.baidu.bifromq.starter.config.standalone.model.StateStoreConfig;
 import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
 import com.baidu.bifromq.starter.utils.ConfigUtil;
+import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.google.common.base.Strings;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -65,9 +67,12 @@ import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
+
+import java.lang.management.ManagementFactory;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -118,7 +123,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     @Override
     protected void init(StandaloneConfig config) {
         StandaloneConfigConsolidator.consolidate(config);
-        log.info("Consolidated Config: \n{}", ConfigUtil.serialize(config));
+        printConfigs(config);
 
         if (!Strings.isNullOrEmpty(config.getClusterConfig().getEnv())) {
             Metrics.globalRegistry.config()
@@ -598,6 +603,25 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsListenerConfig().getPort(),
             bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
             inboxClient, sessionDictClient, retainClient, settingProviderMgr);
+    }
+
+    private void printConfigs(StandaloneConfig config) {
+        List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
+        log.info("JVM arguments: \n  {}", String.join("\n  ", arguments));
+
+        log.info("Settings, which can be modified at runtime, allowing for dynamic adjustment of BifroMQ's " +
+                "service behavior per tenant. See https://bifromq.io/docs/plugin/setting_provider/");
+        log.info("Following is the initial value of each setting: ");
+        for (Setting setting : Setting.values()) {
+            log.info("Setting: {}={}", setting.name(), setting.current(""));
+        }
+
+        log.info("BifroMQ system properties: ");
+        for (BifroMQSysProp prop : BifroMQSysProp.values()) {
+            log.info("BifroMQSysProp: {}={}", prop.propKey, prop.get());
+        }
+
+        log.info("Consolidated Config: \n{}", ConfigUtil.serialize(config));
     }
 
     public static void main(String[] args) {
