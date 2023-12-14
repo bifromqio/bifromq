@@ -612,13 +612,13 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         log.info("Settings, which can be modified at runtime, allowing for dynamic adjustment of BifroMQ's " +
                 "service behavior per tenant. See https://bifromq.io/docs/plugin/setting_provider/");
         log.info("Following is the initial value of each setting: ");
-        for (int i = 0; i < Setting.values().length; ++i) {
-            log.info("Setting: {}={}", Setting.values()[i].name(), Setting.values()[i].current(""));
+        for (Setting setting : Setting.values()) {
+            log.info("Setting: {}={}", setting.name(), setting.current(""));
         }
 
         log.info("BifroMQ system properties: ");
-        for (int i = 0; i < BifroMQSysProp.values().length; ++i) {
-            log.info("BifroMQSysProp: {}={}", BifroMQSysProp.values()[i].name(), BifroMQSysProp.values()[i].get());
+        for (BifroMQSysProp prop : BifroMQSysProp.values()) {
+            log.info("BifroMQSysProp: {}={}", prop.propKey, prop.get());
         }
 
         log.info("Consolidated Config: \n{}", ConfigUtil.serialize(config));
