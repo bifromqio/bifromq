@@ -31,8 +31,12 @@ BifroMQ 是一个高性能的分布式 MQTT Broker 消息中间件实现，无�
 
 ### Docker
 ```
-docker run -d --name bifromq -p 1883:1883 bifromq/bifromq:latest
+docker run -d -m <MEM_LIMIT> -e MEM_LIMIT='<MEM_LIMIT_IN_BYTES>' --name bifromq -p 1883:1883 bifromq/bifromq:latest
 ```
+
+将`<MEM_LIMIT>`和`<MEM_LIMIT_IN_BYTES>`替换为 Docker 进程的实际内存分配，例如，使用`2G`替换`<MEM_LIMIT>`，使用 `2147483648`
+替换`<MEM_LIMIT_IN_BYTES>`。如果未指定这些值，BifroMQ 默认使用宿主服务器的物理内存来确定JVM参数。这可能导致 Docker
+进程被宿主机的OOM Killer终止，更多供信息[参考](https://bifromq.io/docs/deploy/deploy_with_docker/)。
 
 ### 从源码构建
 
