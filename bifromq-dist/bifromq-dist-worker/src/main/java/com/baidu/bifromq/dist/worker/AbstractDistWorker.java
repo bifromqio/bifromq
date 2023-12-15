@@ -71,7 +71,8 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             builder.distClient,
             builder.settingProvider,
             builder.eventCollector,
-            builder.subBrokerManager);
+            builder.subBrokerManager,
+            builder.loadEstimateWindow);
         rangeBalanceController =
             new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;

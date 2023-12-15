@@ -97,8 +97,13 @@ class RangeSplitBalancer extends StoreBalancer {
             return Optional.empty();
         }
         for (KVRangeDescriptor leaderRangeDescriptor : localLeaderRangeDescriptors) {
-            SplitHint splitHint = leaderRangeDescriptor.getHints(0);
-            assert splitHint.getType().equals(MutationKVLoadBasedSplitHinter.TYPE);
+            Optional<SplitHint> splitHintOpt = leaderRangeDescriptor
+                .getHintsList()
+                .stream()
+                .filter(h -> h.getType().equals(MutationKVLoadBasedSplitHinter.TYPE))
+                .findFirst();
+            assert splitHintOpt.isPresent();
+            SplitHint splitHint = splitHintOpt.get();
             if (splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0) < ioNanosLimitPerRange &&
                 splitHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0) > maxIODensityPerRange && splitHint.hasSplitKey()) {
                 log.debug("Split range[{}] in store[{}]: key={}",

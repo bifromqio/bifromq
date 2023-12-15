@@ -43,7 +43,9 @@ public enum BifroMQSysProp {
     DIST_WORKER_FANOUT_SPLIT_THRESHOLD("dist_worker_fanout_split_threshold", 100000, IntegerParser.POSITIVE),
     DIST_WORKER_SPLIT_MAX_CPU_USAGE("dist_worker_split_max_cpu_usage", 0.8,
         DoubleParser.from(0.0, 1.0, true)),
-
+    DIST_WORKER_LOAD_EST_WINDOW_SECONDS("dist_worker_load_estimation_window_seconds", 5L, LongParser.POSITIVE),
+    DIST_WORKER_SPLIT_IO_NANOS_LIMIT("dist_worker_split_io_nanos_limit", 30_000L, LongParser.POSITIVE),
+    DIST_WORKER_SPLIT_MAX_IO_DENSITY("dist_worker_split_max_io_density", 100, IntegerParser.POSITIVE),
     DIST_WORKER_RANGE_VOTER_COUNT("dist_worker_range_voter_count", 3, IntegerParser.POSITIVE),
     DIST_WORKER_RECOVERY_TIMEOUT_MILLIS("dist_worker_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
     INBOX_DELIVERERS("inbox_deliverers", 100, IntegerParser.POSITIVE),

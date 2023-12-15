@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_LOAD_EST_WINDOW_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST_WINDOW_SECONDS;
 
 import com.baidu.bifromq.apiserver.APIServer;
@@ -67,7 +68,6 @@ import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
-
 import java.lang.management.ManagementFactory;
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -395,6 +395,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig()))
             .subBrokerManager(subBrokerManager)
+            .loadEstimateWindow(Duration.ofSeconds(DIST_WORKER_LOAD_EST_WINDOW_SECONDS.get()))
             .build();
 
         distServer = IDistServer.nonStandaloneBuilder()
@@ -610,7 +611,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         log.info("JVM arguments: \n  {}", String.join("\n  ", arguments));
 
         log.info("Settings, which can be modified at runtime, allowing for dynamic adjustment of BifroMQ's " +
-                "service behavior per tenant. See https://bifromq.io/docs/plugin/setting_provider/");
+            "service behavior per tenant. See https://bifromq.io/docs/plugin/setting_provider/");
         log.info("Following is the initial value of each setting: ");
         for (Setting setting : Setting.values()) {
             log.info("Setting: {}={}", setting.name(), setting.current(""));

@@ -73,6 +73,7 @@ import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
+import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
@@ -621,8 +622,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         rangeWriter.lastAppliedIndex(entry.getIndex());
                                         rangeWriter.done();
                                         if (command.hasRwCoProc()) {
+                                            IKVLoadRecord loadRecord = loadRecorder.stop();
                                             splitHinters.forEach(
-                                                hint -> hint.recordMutate(command.getRwCoProc(), loadRecorder.stop()));
+                                                hint -> hint.recordMutate(command.getRwCoProc(), loadRecord));
                                         }
                                         callback.run();
                                         linearizer.afterLogApplied(entry.getIndex());

@@ -14,4 +14,4 @@
 com.baidu.bifromq.dist.worker.balance.RecoveryBalancerFactory
 com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory
 com.baidu.bifromq.dist.worker.balance.RangeLeaderBalancerFactory
-com.baidu.bifromq.dist.worker.balance.FanoutSplitBalancerFactory
+com.baidu.bifromq.dist.worker.balance.DistWorkerSplitBalancerFactory
