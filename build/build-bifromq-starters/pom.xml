@@ -124,6 +124,7 @@
         </dependency>
     </dependencies>
     <build>
+        <finalName>bifromq-${project.parent.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -138,7 +139,6 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <finalName>bifromq-${project.parent.version}</finalName>
                     <descriptors>
                         <descriptor>assembly/assembly-standalone.xml</descriptor>
                         <descriptor>assembly/assembly-standalone-windows.xml</descriptor>

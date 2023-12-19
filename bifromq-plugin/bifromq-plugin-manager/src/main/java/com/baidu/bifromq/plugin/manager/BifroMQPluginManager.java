@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.pf4j.CompoundPluginLoader;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.ExtensionFactory;
+import org.pf4j.ExtensionFinder;
 import org.pf4j.PluginLoader;
 import org.pf4j.PluginRuntimeException;
 
@@ -31,6 +32,13 @@ public class BifroMQPluginManager extends DefaultPluginManager {
     }
 
     @Override
+    protected ExtensionFinder createExtensionFinder() {
+        BifroMQExtensionFinder extensionFinder = new BifroMQExtensionFinder(this);
+        addPluginStateListener(extensionFinder);
+        return extensionFinder;
+    }
+
+    @Override
     protected ExtensionFactory createExtensionFactory() {
         return new ExtensionFactory() {
             @Override
@@ -40,7 +48,7 @@ public class BifroMQPluginManager extends DefaultPluginManager {
                 try {
                     ClassLoader targetLoader = extensionClass.getClassLoader();
                     Thread.currentThread().setContextClassLoader(targetLoader);
-                    T instance = extensionClass.newInstance();
+                    T instance = extensionClass.getDeclaredConstructor().newInstance();
                     Thread.currentThread().setContextClassLoader(originalLoader);
                     return instance;
                 } catch (Exception e) {
