@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt;
+package com.baidu.bifromq.mqtt.v3;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -35,6 +35,7 @@ import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.IInboxServer;
 import com.baidu.bifromq.inbox.store.IInboxStore;
+import com.baidu.bifromq.mqtt.IMQTTBroker;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.eventcollector.Event;

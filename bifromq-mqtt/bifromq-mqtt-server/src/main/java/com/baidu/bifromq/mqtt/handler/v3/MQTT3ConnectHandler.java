@@ -74,10 +74,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class MQTT3ConnectHandler extends MQTTMessageHandler {
     public static final String NAME = "MQTT3ConnectHandler";
-    private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
     private static final int MIN_CLIENT_KEEP_ALIVE_DURATION = 5;
     private static final int MAX_CLIENT_KEEP_ALIVE_DURATION = 2 * 60 * 60;
-    private static final int MAX_CLIENT_ID_LEN = BifroMQSysProp.MAX_CLIENT_ID_LENGTH.get();
+    private static final int MAX_CLIENT_ID_LEN = BifroMQSysProp.MAX_MQTT3_CLIENT_ID_LENGTH.get();
     private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
     private IDistClient distClient;
     private IInboxClient inboxClient;
@@ -102,7 +101,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         assert msg instanceof MqttConnectMessage;
         MqttConnectMessage connMsg = (MqttConnectMessage) msg;
-        log.trace("Handling mqtt conn message:\n{}", msg);
+        log.trace("Handling MQTT3 conn message:\n{}", msg);
         final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
         String clientIdentifier = connMsg.payload().clientIdentifier();
         if (Strings.isNullOrEmpty(clientIdentifier)) {
@@ -150,7 +149,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
             // registry.remove in onChannelInActive and registry.replace here
             .thenComposeAsync(authResult -> {
                 if (!ctx.channel().isActive()) {
-                    return DONE;
+                    return CompletableFuture.completedFuture(null);
                 }
                 switch (authResult.getTypeCase()) {
                     case REJECT -> {
@@ -162,7 +161,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                         .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
                                         .build(),
                                     getLocal(NotAuthorizedClient.class).peerAddress(clientAddress));
-                                return DONE;
+                                return CompletableFuture.completedFuture(null);
                             }
                             case BadPass -> {
                                 closeConnectionWithSomeDelay(MqttMessageBuilders
@@ -170,7 +169,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                         .returnCode(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD)
                                         .build(),
                                     getLocal(UnauthenticatedClient.class).peerAddress(clientAddress));
-                                return DONE;
+                                return CompletableFuture.completedFuture(null);
                             }
                             // fallthrough
                             default -> {
@@ -180,7 +179,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                         .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                         .build(),
                                     getLocal(AuthError.class).cause(reject.getReason()).peerAddress(clientAddress));
-                                return DONE;
+                                return CompletableFuture.completedFuture(null);
                             }
                         }
                     }
@@ -225,7 +224,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                 closeConnectionWithSomeDelay(getLocal(InvalidTopic.class)
                                     .topic(connMsg.payload().willTopic())
                                     .clientInfo(clientInfo));
-                                return DONE;
+                                return CompletableFuture.completedFuture(null);
                             }
                             // don't do access control check here
                             willMessage = MQTT3SessionHandler.WillMessage
@@ -249,7 +248,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                                 .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                 .build(),
                             getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result"));
-                        return DONE;
+                        return CompletableFuture.completedFuture(null);
                     }
                 }
             }, ctx.channel().eventLoop());
@@ -291,7 +290,7 @@ public class MQTT3ConnectHandler extends MQTTMessageHandler {
                         }, ctx.channel().eventLoop());
                 } else {
                     establishSucceed(mqttConnectMessage, false, true);
-                    return DONE;
+                    return CompletableFuture.completedFuture(null);
                 }
             }, ctx.channel().eventLoop());
     }

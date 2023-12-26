@@ -11,20 +11,19 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt;
+package com.baidu.bifromq.mqtt.handler.v5;
 
-import lombok.extern.slf4j.Slf4j;
-import org.testng.ITestListener;
-import org.testng.ITestResult;
+import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
+import io.netty.handler.codec.mqtt.MqttProperties;
+import java.util.Map;
+import lombok.Builder;
 
-import java.lang.reflect.Method;
-
-@Slf4j
-public class MQTTTestListener implements ITestListener {
-    @Override
-    public void onTestStart(ITestResult result) {
-        String className = result.getInstance().getClass().getName();
-        Method method = result.getMethod().getConstructorOrMethod().getMethod();
-        log.info("Test case[{}.{}] start", className, method.getName());
-    }
+@Builder
+public class MQTT5WillMessage {
+    public final String topic;
+    public final QoS qos;
+    public final boolean retain;
+    public final ByteString payload;
+    public final MqttProperties userProperties;
 }

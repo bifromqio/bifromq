@@ -11,12 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.handler.event;
+package com.baidu.bifromq.mqtt.handler;
 
-public class ConnectionWillClose {
-    public final boolean shouldSendWillMessage;
+import com.baidu.bifromq.plugin.eventcollector.Event;
 
-    public ConnectionWillClose(boolean shouldSendWillMessage) {
-        this.shouldSendWillMessage = shouldSendWillMessage;
+public class MQTTException extends RuntimeException {
+    public MQTTException(String message) {
+        super(message);
+    }
+
+    public MQTTException(Throwable cause) {
+        super(cause);
     }
 }

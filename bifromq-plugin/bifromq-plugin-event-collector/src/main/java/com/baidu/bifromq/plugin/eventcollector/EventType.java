@@ -24,6 +24,7 @@ public enum EventType {
     CONNECT_TIMEOUT,
     IDENTIFIER_REJECTED, // exceed max length
     MALFORMED_CLIENT_IDENTIFIER, // malformed utf8
+    PROTOCOL_ERROR, // malformed utf8
     MALFORMED_USERNAME, // malformed utf8
     MALFORMED_WILL_TOPIC, // malformed utf8
     UNACCEPTED_PROTOCOL_VER,
@@ -49,6 +50,7 @@ public enum EventType {
     SESSION_CREATE_ERROR,
     TOO_LARGE_SUBSCRIPTION,
     TOO_LARGE_UNSUBSCRIPTION,
+    RETAIN_NOT_SUPPORTED,
 
     PING_REQ,
     DISCARD,

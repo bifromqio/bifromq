@@ -11,12 +11,20 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.handler.event;
+package com.baidu.bifromq.mqtt.v3;
 
-public class ConnectionWillClose {
-    public final boolean shouldSendWillMessage;
+import lombok.extern.slf4j.Slf4j;
+import org.testng.ITestListener;
+import org.testng.ITestResult;
 
-    public ConnectionWillClose(boolean shouldSendWillMessage) {
-        this.shouldSendWillMessage = shouldSendWillMessage;
+import java.lang.reflect.Method;
+
+@Slf4j
+public class MQTTTestListener implements ITestListener {
+    @Override
+    public void onTestStart(ITestResult result) {
+        String className = result.getInstance().getClass().getName();
+        Method method = result.getMethod().getConstructorOrMethod().getMethod();
+        log.info("Test case[{}.{}] start", className, method.getName());
     }
 }

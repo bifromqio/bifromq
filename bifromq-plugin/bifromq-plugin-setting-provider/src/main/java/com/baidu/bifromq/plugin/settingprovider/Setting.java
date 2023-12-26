@@ -26,6 +26,7 @@ public enum Setting {
     MaxTopicLevelLength(Integer.class, val -> (int) val > 0, 40),
     MaxTopicLevels(Integer.class, val -> (int) val > 0, 16),
     MaxTopicLength(Integer.class, val -> (int) val > 0 && (int) val < 65536, 255),
+    MaxTopicAlias(Integer.class, val -> (int) val >= 0 && (int) val < 65536, 0),
     MaxSharedGroupMembers(Integer.class, val -> (int) val > 0, 200),
     MaxTopicFiltersPerInbox(Integer.class, val -> (int) val > 0, 100),
     MsgPubPerSec(Integer.class, val -> (int) val >= 0 && (int) val <= 1000, 200),
