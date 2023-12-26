@@ -11,12 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.handler.event;
+package com.baidu.bifromq.mqtt.session.v5;
 
-public class ConnectionWillClose {
-    public final boolean shouldSendWillMessage;
-
-    public ConnectionWillClose(boolean shouldSendWillMessage) {
-        this.shouldSendWillMessage = shouldSendWillMessage;
-    }
+public interface IMQTT5PersistentSession extends IMQTT5Session {
 }

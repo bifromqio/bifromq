@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt;
+package com.baidu.bifromq.mqtt.v3;
 
 import static org.eclipse.paho.client.mqttv3.MqttException.REASON_CODE_INVALID_CLIENT_ID;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -19,6 +19,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.mqtt.TestUtils;
 import com.baidu.bifromq.mqtt.client.MqttTestClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
 import lombok.extern.slf4j.Slf4j;

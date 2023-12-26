@@ -11,12 +11,18 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.handler.event;
+package com.baidu.bifromq.mqtt.session.v5;
 
-public class ConnectionWillClose {
-    public final boolean shouldSendWillMessage;
+import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.TopicMessagePack;
+import io.netty.handler.codec.mqtt.MqttQoS;
+import java.util.concurrent.CompletableFuture;
 
-    public ConnectionWillClose(boolean shouldSendWillMessage) {
-        this.shouldSendWillMessage = shouldSendWillMessage;
-    }
+public interface IMQTT5TransientSession extends IMQTT5Session {
+
+    boolean publish(SubInfo subInfo, TopicMessagePack messagePack);
+
+    CompletableFuture<MqttQoS> subscribe(long reqId, String topicFilter, MqttQoS qos);
+
+    CompletableFuture<Boolean> unsubscribe(long reqId, String topicFilter);
 }

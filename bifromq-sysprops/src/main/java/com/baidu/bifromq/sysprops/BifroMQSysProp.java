@@ -26,7 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 public enum BifroMQSysProp {
     // further check if utf8 string contains any control character or non character according to [MQTT-1.5.3]
     MQTT_UTF8_SANITY_CHECK("mqtt_utf8_sanity_check", false, BooleanParser.INSTANCE),
-    MAX_CLIENT_ID_LENGTH("max_client_id_length", 65535, IntegerParser.from(23, 65536)),
+    MAX_MQTT3_CLIENT_ID_LENGTH("max_mqtt3_client_id_length", 65535, IntegerParser.from(23, 65536)),
+    MAX_MQTT5_CLIENT_ID_LENGTH("max_mqtt5_client_id_length", 65535, IntegerParser.from(23, 65536)),
     SESSION_REGISTER_NUM("session_register_num", 1000, IntegerParser.POSITIVE),
     DATA_PLANE_TOLERABLE_LATENCY_MS("data_plane_tolerable_latency_ms", 100L, LongParser.POSITIVE),
     DATA_PLANE_BURST_LATENCY_MS("data_plane_burst_latency_ms", 1000L, LongParser.POSITIVE),

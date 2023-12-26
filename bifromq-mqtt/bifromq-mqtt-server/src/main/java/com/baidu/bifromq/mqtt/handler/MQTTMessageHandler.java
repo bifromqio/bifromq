@@ -175,8 +175,10 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
             // stop reading messages
             ctx.channel().config().setAutoRead(false);
             closeReason = reason;
-            eventCollector.report((Event<?>) reason.clone());
-            ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(reason));
+            boolean sendWillMessage = shouldSendWillMessage(reason);
+            // report will zero-out the event object
+            eventCollector.report(reason);
+            ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(sendWillMessage));
             scheduledClose = ctx.channel().eventLoop().schedule(() ->
                 farewellAndClose(farewell), randomDelay(), TimeUnit.MILLISECONDS);
         }
@@ -191,11 +193,17 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
             // don't override first close reason
             if (closeReason == null) {
                 closeReason = reason;
-                eventCollector.report((Event<?>) reason.clone());
-                ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(reason));
+                boolean sendWillMessage = shouldSendWillMessage(reason);
+                // report will zero-out the event object
+                eventCollector.report(reason);
+                ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(sendWillMessage));
             }
             farewellAndClose(farewell);
         }
+    }
+
+    protected boolean shouldSendWillMessage(Event<?> reason) {
+        return false;
     }
 
     protected void closeConnectionNow(@NonNull Event<?> reason) {

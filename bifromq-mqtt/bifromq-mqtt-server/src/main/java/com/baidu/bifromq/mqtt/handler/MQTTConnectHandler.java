@@ -14,20 +14,27 @@
 package com.baidu.bifromq.mqtt.handler;
 
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_MALFORMED_PACKET;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
+import static io.netty.handler.codec.mqtt.MqttMessageType.CONNECT;
 
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3ConnectHandler;
+import com.baidu.bifromq.mqtt.handler.v5.MQTT5ConnectHandler;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ConnectTimeout;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ProtocolError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnacceptedProtocolVer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import io.netty.handler.codec.mqtt.MqttConnectVariableHeader;
 import io.netty.handler.codec.mqtt.MqttIdentifierRejectedException;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
+import io.netty.handler.codec.mqtt.MqttMessageType;
 import io.netty.handler.codec.mqtt.MqttUnacceptableProtocolVersionException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ScheduledFuture;
@@ -68,35 +75,70 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
         timeoutCloseTask.cancel(true);
         MqttMessage message = (MqttMessage) msg;
         if (!message.decoderResult().isSuccess()) {
-            // decoded with known protocol violation
             Throwable cause = message.decoderResult().cause();
-            if (cause instanceof MqttIdentifierRejectedException) {
-                closeConnectionWithSomeDelay(MqttMessageBuilders.connAck()
-                        .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
-                        .build(),
-                    getLocal(IdentifierRejected.class)
-                        .peerAddress(remoteAddr));
-            } else if (cause instanceof MqttUnacceptableProtocolVersionException) {
-                closeConnectionWithSomeDelay(MqttMessageBuilders.connAck()
-                        .returnCode(CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION)
-                        .build(),
-                    getLocal(UnacceptedProtocolVer.class)
-                        .peerAddress(remoteAddr));
-            } else {
-                // according to [MQTT-4.8.0-2]
+            if (message.fixedHeader() == null) {
                 closeConnectionWithSomeDelay(
-                    getLocal(ProtocolViolation.class).statement("MQTT-4.8.0-2")
-                );
+                    getLocal(ProtocolError.class).peerAddress(remoteAddr)
+                        .statement("Bad FixedHeader:" + cause.getMessage()));
+                return;
             }
-            log.warn("Failed to decode mqtt connect message: remote={}",
-                remoteAddr, message.decoderResult().cause());
-            return;
+            if (message.fixedHeader().messageType() != CONNECT) {
+                closeConnectionWithSomeDelay(
+                    getLocal(ProtocolError.class).peerAddress(remoteAddr).statement("MQTT-3.1.0-1"));
+                return;
+            }
+            if (!(message.variableHeader() instanceof MqttConnectVariableHeader connVarHeader)) {
+                closeConnectionWithSomeDelay(
+                    getLocal(ProtocolError.class).peerAddress(remoteAddr).statement("MQTT-3.1.0-1"));
+                return;
+            }
+            if (cause instanceof MqttUnacceptableProtocolVersionException) {
+                closeConnectionWithSomeDelay(getLocal(UnacceptedProtocolVer.class).peerAddress(remoteAddr));
+                return;
+            }
+            switch (connVarHeader.version()) {
+                case 3:
+                case 4:
+                    // decode mqtt connect packet error
+                    if (cause instanceof MqttIdentifierRejectedException) {
+                        closeConnectionWithSomeDelay(MqttMessageBuilders.connAck()
+                                .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
+                                .build(),
+                            getLocal(IdentifierRejected.class)
+                                .peerAddress(remoteAddr));
+                    } else {
+                        // according to [MQTT-4.8.0-2]
+                        closeConnectionWithSomeDelay(
+                            getLocal(ProtocolError.class).peerAddress(remoteAddr).statement("MQTT-4.8.0-2"));
+                    }
+                    return;
+                case 5:
+                default:
+                    // decode mqtt connect packet error
+                    if (cause instanceof MqttIdentifierRejectedException) {
+                        closeConnectionWithSomeDelay(MqttMessageBuilders.connAck()
+                                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                    .reasonString(cause.getMessage())
+                                    .build())
+                                .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID)
+                                .build(),
+                            getLocal(IdentifierRejected.class)
+                                .peerAddress(remoteAddr));
+                    } else {
+                        // according to [MQTT-4.13.1-1]
+                        closeConnectionWithSomeDelay(MqttMessageBuilders.connAck()
+                                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                    .reasonString(cause.getMessage())
+                                    .build())
+                                .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET)
+                                .build(),
+                            getLocal(ProtocolError.class).peerAddress(remoteAddr).statement("MQTT-4.13.1-1"));
+                    }
+                    return;
+            }
         } else if (!(message instanceof MqttConnectMessage)) {
             // according to [MQTT-3.1.0-1]
-            closeConnectionWithSomeDelay(
-                getLocal(ProtocolViolation.class)
-                    .statement("MQTT-3.1.0-1")
-            );
+            closeConnectionWithSomeDelay(getLocal(ProtocolError.class).statement("MQTT-3.1.0-1"));
             log.warn("First packet must be mqtt connect message: remote={}", remoteAddr);
             return;
         }
@@ -111,9 +153,13 @@ public class MQTTConnectHandler extends MQTTMessageHandler {
                 ctx.pipeline().remove(this);
                 break;
             case 5:
-                log.warn("MQTT5 not unsupported now, stay tune!");
+                ctx.pipeline().addAfter(MQTTConnectHandler.NAME, MQTT5ConnectHandler.NAME, new MQTT5ConnectHandler());
+                // delegate to MQTT 5 handler
+                ctx.fireChannelRead(connectMessage);
+                ctx.pipeline().remove(this);
+                break;
             default:
-                // TODO: MQTT5
+                log.warn("Unsupported protocol version: {}", connectMessage.variableHeader().version());
         }
     }
 

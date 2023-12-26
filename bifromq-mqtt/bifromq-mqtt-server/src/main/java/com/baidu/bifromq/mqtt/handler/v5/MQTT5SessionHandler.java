@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.handler.v3;
+package com.baidu.bifromq.mqtt.handler.v5;
 
 import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttChannelLatency;
@@ -40,17 +40,6 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildUnsubAction;
 import static com.baidu.bifromq.mqtt.utils.TopicUtil.isValidTopicFilter;
 import static com.baidu.bifromq.mqtt.utils.TopicUtil.parseTopicFilter;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
@@ -58,6 +47,7 @@ import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.metrics.TenantMeter;
+import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MPSThrottler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
 import com.baidu.bifromq.mqtt.handler.SendBufferCapacityHinter;
@@ -66,12 +56,10 @@ import com.baidu.bifromq.mqtt.session.v3.IMQTT3Session;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.mqtt.utils.TopicUtil;
-import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.PubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.SubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.UnsubActionDisallow;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.ClientConnected;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
@@ -94,8 +82,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1PubAc
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2DistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubRecDropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubReced;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDistError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDisted;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Pushed;
@@ -119,7 +105,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
-import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -129,6 +114,7 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageFactory;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttMessageType;
+import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttPubAckMessage;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttPublishVariableHeader;
@@ -152,16 +138,15 @@ import org.apache.commons.collections4.MapIterator;
 import org.apache.commons.collections4.map.LinkedMap;
 
 @Slf4j
-abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3Session {
-    public static final String NAME = "MQTT3SessionHandler";
+abstract class MQTT5SessionHandler extends MQTTMessageHandler implements IMQTT3Session {
+    public static final String NAME = "MQTT5SessionHandler";
     private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
-    private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
-    private final ClientInfo clientInfo;
-    private final int keepAliveTimeSeconds;
+    protected final MqttProperties connProps;
+    protected final TenantSettings tenantSettings;
+
+    protected final ClientInfo clientInfo;
+    protected final int keepAliveTimeSeconds;
     private final long idleTimeoutNanos;
-    private final boolean cleanSession;
-    private final boolean sessionPresent;
-    private final WillMessage willMessage;
     private final LinkedMap<Integer, UnconfirmedQoS1Message> unconfirmedQoS1Messages = new LinkedMap<>();
     // key: id used in qos2 protocol interaction, value: message's original messageId
     private final LinkedMap<Integer, QoS2MessageKey> unconfirmedQoS2Indexes = new LinkedMap<>();
@@ -176,58 +161,43 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     private ISessionRegister sessionRegister;
     private int publishPacketId = 0;
     private long lastActiveAtNanos;
-    private int maxTopicLevelLength;
-    private int maxTopicLevels;
-    private int maxTopicLength;
-    private int maxTopicFiltersPerSub;
-    private boolean retainEnabled;
-    private int retainMatchLimit;
 
-    protected MQTT3SessionHandler(ClientInfo clientInfo, int keepAliveTimeSeconds, boolean cleanSession,
-                                  boolean sessionPresent, WillMessage willMessage) {
+    MQTT5SessionHandler(
+        MqttProperties connProps,
+        TenantSettings settings,
+        int keepAliveTimeSeconds,
+        ClientInfo clientInfo) {
+        this.connProps = connProps;
         this.clientInfo = clientInfo;
+        this.tenantSettings = settings;
         this.keepAliveTimeSeconds = keepAliveTimeSeconds;
         this.idleTimeoutNanos = Duration.ofMillis(keepAliveTimeSeconds * 1500L).toNanos(); // x1.5
-        this.cleanSession = cleanSession;
-        this.willMessage = willMessage;
-        this.sessionPresent = sessionPresent;
         this.tenantMeter = TenantMeter.get(clientInfo.getTenantId());
     }
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
+        long inBandWidth = Math.max(tenantSettings.inboundBandwidth, 0);
+        if (inBandWidth > 0) {
+            ChannelAttrs.trafficShaper(ctx).setReadLimit(inBandWidth);
+        }
+        long outBandWidth = Math.max(tenantSettings.outboundBandwidth, 0);
+        if (outBandWidth > 0) {
+            ChannelAttrs.trafficShaper(ctx).setWriteLimit(outBandWidth);
+        }
+        ChannelAttrs.setMaxPayload(tenantSettings.maxPacketSize, ctx);
+
         sessionCtx.localSessionRegistry.add(channelId(), this);
         bufferCapacityHinter = new SendBufferCapacityHinter(ctx.channel(),
             () -> unconfirmedQoS1Messages.size() + unconfirmedQoS2Messages.size(), 0.2f);
-        String tenantId = clientInfo.getTenantId();
-        int mps = settingProvider.provide(MsgPubPerSec, tenantId);
-        debugMode = settingProvider.provide(DebugModeEnabled, tenantId);
-        maxTopicLevelLength = settingProvider.provide(MaxTopicLevelLength, tenantId);
-        maxTopicLevels = settingProvider.provide(MaxTopicLevels, tenantId);
-        maxTopicLength = settingProvider.provide(MaxTopicLength, tenantId);
-        maxTopicFiltersPerSub = settingProvider.provide(MaxTopicFiltersPerSub, tenantId);
-        retainEnabled = settingProvider.provide(RetainEnabled, tenantId);
-        retainMatchLimit = settingProvider.provide(RetainMessageMatchLimit, tenantId);
 
-        throttler = new MPSThrottler(Math.max(mps, 1));
+        throttler = new MPSThrottler(Math.max(tenantSettings.receiveMaximum, 1));
         sessionRegister = sessionCtx.sessionDictClient.reg(clientInfo, this::kick);
         tenantMeter.recordCount(MqttConnectCount);
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.channel().eventLoop()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
-
-        // report client connected event
-        eventCollector.report(getLocal(ClientConnected.class).clientInfo(clientInfo)
-            .serverId(sessionCtx.serverId)
-            .userSessionId(userSessionId(clientInfo))
-            .keepAliveTimeSeconds(keepAliveTimeSeconds)
-            .cleanSession(cleanSession)
-            .sessionPresent(sessionPresent)
-            .lastWill(willMessage != null ? new ClientConnected.WillInfo().topic(willMessage.topic)
-                .isRetain(willMessage.retain)
-                .qos(willMessage.qos)
-                .payload(willMessage.payload.asReadOnlyByteBuffer()) : null));
     }
 
     @Override
@@ -299,19 +269,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             if (resendUnconfirmedTask != null) {
                 resendUnconfirmedTask.cancel(true);
             }
-            // don't send last will if disconnect by client, MQTT Spec 3.1.2.5 or kicked
-            if (willMessage != null && ((ConnectionWillClose) evt).shouldSendWillMessage) {
-                log.debug("Send will message: {}", willMessage);
-                submitBgTask(() -> distWillMessage(willMessage));
-            }
         }
         ctx.fireUserEventTriggered(evt);
-    }
-
-    @Override
-    protected boolean shouldSendWillMessage(Event<?> closeReason) {
-        return !(closeReason instanceof ByClient) &&
-            (!(closeReason instanceof Kicked) || !isSelfKick((Kicked) closeReason));
     }
 
     @Override
@@ -322,10 +281,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     @Override
     public ClientInfo clientInfo() {
         return clientInfo;
-    }
-
-    public boolean sessionPresent() {
-        return sessionPresent;
     }
 
     private void kick(ClientInfo kicker) {
@@ -356,7 +311,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             mqttMessage.release();
             return;
         }
-        if (!TopicUtil.isValidTopic(topic, maxTopicLevelLength, maxTopicLevels, maxTopicLength)) {
+        if (!TopicUtil.isValidTopic(topic, tenantSettings.maxTopicLevelLength, tenantSettings.maxTopicLevels,
+            tenantSettings.maxTopicLength)) {
             closeConnectionWithSomeDelay(getLocal(InvalidTopic.class)
                 .topic(topic)
                 .clientInfo(clientInfo));
@@ -405,7 +361,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                 .qos(QoS.AT_MOST_ONCE)
                                 .retain(isRetain)
                                 .clientInfo(clientInfo));
-                            return DONE;
+                            return CompletableFuture.completedFuture(null);
                         }
                     }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release()));
             }
@@ -468,7 +424,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                 .topic(topic)
                                 .retain(isRetain)
                                 .clientInfo(clientInfo));
-                            return DONE;
+                            return CompletableFuture.completedFuture(null);
                         }
                     }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release());
             }
@@ -539,7 +495,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                                 .qos(QoS.EXACTLY_ONCE)
                                 .retain(isRetain)
                                 .clientInfo(clientInfo));
-                            return DONE;
+                            return CompletableFuture.completedFuture(null);
                         }
                     }, ctx.channel().eventLoop()).whenComplete((v, e) -> mqttMessage.release());
             }
@@ -559,16 +515,17 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 .clientInfo(clientInfo));
             return;
         }
-        if (topicSubscriptions.size() > maxTopicFiltersPerSub) {
+        if (topicSubscriptions.size() > tenantSettings.maxTopicFiltersPerSub) {
             closeConnectionWithSomeDelay(getLocal(TooLargeSubscription.class)
                 .actual(topicSubscriptions.size())
-                .max(maxTopicFiltersPerSub)
+                .max(tenantSettings.maxTopicFiltersPerSub)
                 .clientInfo(clientInfo));
             return;
         }
         Optional<MqttTopicSubscription> invalidTopicSub = topicSubscriptions.stream()
             .filter(s -> !MQTTUtf8Util.isWellFormed(s.topicName(), SANITY_CHECK) ||
-                !isValidTopicFilter(s.topicName(), maxTopicLevelLength, maxTopicLevels, maxTopicLength))
+                !isValidTopicFilter(s.topicName(), tenantSettings.maxTopicLevelLength, tenantSettings.maxTopicLevels,
+                    tenantSettings.maxTopicLength))
             .findFirst();
         if (invalidTopicSub.isPresent()) {
             if (!MQTTUtf8Util.isWellFormed(invalidTopicSub.get().topicName(), SANITY_CHECK)) {
@@ -590,7 +547,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 .collect(Collectors.toList()))
             .thenAcceptAsync(grantedQoSList -> {
                 if (ctx.channel().isActive()) {
-                    writeAndFlush(MQTT3MessageUtils.toMqttSubAckMessage(messageId, grantedQoSList));
+                    writeAndFlush(MQTT5MessageUtils.toMqttSubAckMessage(messageId, grantedQoSList));
                 }
                 eventCollector.report(getLocal(SubAcked.class)
                     .messageId(messageId)
@@ -614,16 +571,17 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     .clientInfo(clientInfo));
             return;
         }
-        if (topicFilters.size() > maxTopicFiltersPerSub) {
+        if (topicFilters.size() > tenantSettings.maxTopicFiltersPerSub) {
             closeConnectionWithSomeDelay(getLocal(TooLargeUnsubscription.class)
-                .max(maxTopicFiltersPerSub)
+                .max(tenantSettings.maxTopicFiltersPerSub)
                 .actual(topicFilters.size())
                 .clientInfo(clientInfo));
             return;
         }
         Optional<String> invalidTopicFilter = topicFilters.stream()
             .filter(t -> !MQTTUtf8Util.isWellFormed(t, SANITY_CHECK) ||
-                !isValidTopicFilter(t, maxTopicLevelLength, maxTopicLevels, maxTopicLength))
+                !isValidTopicFilter(t, tenantSettings.maxTopicLevelLength, tenantSettings.maxTopicLevels,
+                    tenantSettings.maxTopicLength))
             .findFirst();
         if (invalidTopicFilter.isPresent()) {
             if (!MQTTUtf8Util.isWellFormed(invalidTopicFilter.get(), SANITY_CHECK)) {
@@ -643,7 +601,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             .thenApply(v -> unsubTasks.stream().map(CompletableFuture::join).collect(Collectors.toList()))
             .thenAcceptAsync(unsubReplies -> {
                 if (ctx.channel().isActive()) {
-                    writeAndFlush(MQTT3MessageUtils.toMqttUnsubAckMessage(messageId));
+                    writeAndFlush(MQTT5MessageUtils.toMqttUnsubAckMessage(messageId));
                 }
                 eventCollector.report(getLocal(UnsubAcked.class)
                     .messageId(messageId)
@@ -762,6 +720,8 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         }
     }
 
+    protected abstract void handleDisconnect(MqttMessage mqttMessage);
+
     private List<CompletableFuture<MqttQoS>> doSubscribe(long reqId, List<MqttTopicSubscription> subs) {
         return subs.stream()
             .map(topicSubscription -> cancelOnInactive(authProvider.check(clientInfo(),
@@ -821,11 +781,12 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         if (log.isTraceEnabled()) {
             log.trace("Matching retain message: reqId={}, topicFilter={}, qos={}", reqId, topicFilter, grantedQoS);
         }
-        if (!retainEnabled) {
+        if (!tenantSettings.retainEnabled) {
             return CompletableFuture.completedFuture(true);
         }
         return cancelOnInactive(
-            sessionCtx.retainClient.match(reqId, clientInfo.getTenantId(), topicFilter, retainMatchLimit))
+            sessionCtx.retainClient.match(reqId, clientInfo.getTenantId(), topicFilter,
+                tenantSettings.retainMatchLimit))
             .exceptionally(e -> {
                 log.error("Match failed", e);
                 return MatchReply.newBuilder()
@@ -1324,49 +1285,9 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         return allOf(distTask, retainTask).thenApply(v -> distTask.join() && retainTask.join());
     }
 
-    private CompletableFuture<Void> distWillMessage(WillMessage willMessage) {
-        return authProvider.check(clientInfo(), buildPubAction(willMessage.topic, willMessage.qos, willMessage.retain))
-            .thenComposeAsync(allow -> {
-                if (allow) {
-                    long reqId = System.nanoTime();
-                    return allOf(distWillMessage(reqId, willMessage), retainWillMessage(reqId, willMessage));
-                } else {
-                    eventCollector.report(getLocal(PubActionDisallow.class)
-                        .isLastWill(true)
-                        .topic(willMessage.topic)
-                        .qos(willMessage.qos)
-                        .isRetain(willMessage.retain)
-                        .clientInfo(clientInfo));
-                    return DONE;
-                }
-            }, ctx.channel().eventLoop());
-    }
-
-    private CompletableFuture<Void> distWillMessage(long reqId, WillMessage willMessage) {
-        return sessionCtx.distClient.pub(reqId, willMessage.topic, willMessage.qos, willMessage.payload,
-                Integer.MAX_VALUE, clientInfo)
-            .handleAsync((v, e) -> {
-                if (e != null) {
-                    eventCollector.report(getLocal(WillDistError.class)
-                        .clientInfo(clientInfo)
-                        .reqId(reqId)
-                        .topic(willMessage.topic)
-                        .qos(willMessage.qos)
-                        .size(willMessage.payload.size()));
-                } else {
-                    eventCollector.report(getLocal(WillDisted.class)
-                        .clientInfo(clientInfo)
-                        .reqId(reqId)
-                        .topic(willMessage.topic)
-                        .qos(willMessage.qos)
-                        .size(willMessage.payload.size()));
-                }
-                return null;
-            }, ctx.channel().eventLoop());
-    }
 
     private CompletableFuture<Boolean> retainMessage(long reqId, String topic, QoS qos, ByteBuf payload) {
-        if (!retainEnabled) {
+        if (!tenantSettings.retainEnabled) {
             return CompletableFuture.completedFuture(true);
         }
         if (log.isTraceEnabled()) {
@@ -1419,50 +1340,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                 }, ctx.channel().eventLoop()));
     }
 
-    private CompletableFuture<Void> retainWillMessage(long reqId, WillMessage willMessage) {
-        if (!retainEnabled) {
-            return DONE;
-        }
-        if (!willMessage.retain) {
-            return DONE;
-        }
-        String topic = willMessage.topic;
-        QoS qos = willMessage.qos;
-        ByteString payload = willMessage.payload;
-
-        return sessionCtx.retainClient.retain(
-                reqId,
-                topic,
-                willMessage.qos,
-                payload,
-                Integer.MAX_VALUE,
-                clientInfo)
-            .handleAsync((v, e) -> {
-                switch (v.getResult()) {
-                    case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
-                        .reqId(v.getReqId())
-                        .topic(topic)
-                        .isLastWill(true)
-                        .qos(qos)
-                        .size(payload.size())
-                        .clientInfo(clientInfo));
-                    case CLEARED -> eventCollector.report(getLocal(RetainMsgCleared.class)
-                        .reqId(v.getReqId())
-                        .isLastWill(true)
-                        .clientInfo(clientInfo)
-                        .topic(topic));
-                    default -> eventCollector.report(getLocal(MsgRetainedError.class)
-                        .reqId(v.getReqId())
-                        .clientInfo(clientInfo)
-                        .topic(topic)
-                        .isLastWill(true)
-                        .qos(qos)
-                        .payload(payload.asReadOnlyByteBuffer())
-                        .size(payload.size()));
-                }
-                return null;
-            }, ctx.channel().eventLoop());
-    }
 
     private int nextMessageId() {
         publishPacketId = ++publishPacketId % 65536;
@@ -1488,17 +1365,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         }
     }
 
-    private boolean isSelfKick(Kicked kicked) {
-        ClientInfo kicker = kicked.kicker();
-        if (!MQTT_TYPE_VALUE.equals(kicker.getType())) {
-            return false;
-        }
-        return kicker.getTenantId().equals(clientInfo.getTenantId()) &&
-            kicker.getMetadataOrDefault(MQTT_USER_ID_KEY, "")
-                .equals(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, "")) &&
-            kicker.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, "")
-                .equals(clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
-    }
 
     @Override
     public CompletableFuture<Void> disconnect() {
@@ -1621,14 +1487,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                     ((MqttPublishVariableHeader) mqttMessage.variableHeader()).packetId()), null);
             return mqttMessage;
         }
-    }
-
-    @Builder
-    public static final class WillMessage {
-        public final String topic;
-        public final QoS qos;
-        public final boolean retain;
-        public final ByteString payload;
     }
 
     @Builder

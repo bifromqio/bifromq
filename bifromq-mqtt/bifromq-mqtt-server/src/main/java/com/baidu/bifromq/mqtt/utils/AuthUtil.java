@@ -14,21 +14,27 @@
 package com.baidu.bifromq.mqtt.utils;
 
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.USER_PROPERTY;
 
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.PubAction;
 import com.baidu.bifromq.plugin.authprovider.type.SubAction;
 import com.baidu.bifromq.plugin.authprovider.type.UnsubAction;
+import com.baidu.bifromq.plugin.authprovider.type.UserProperties;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Strings;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import io.netty.handler.codec.mqtt.MqttProperties;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 import lombok.SneakyThrows;
 
 public class AuthUtil {
@@ -64,6 +70,42 @@ public class AuthUtil {
         return authData.build();
     }
 
+    @SneakyThrows
+    public static MQTT5AuthData buildMQTT5AuthData(Channel channel, MqttConnectMessage msg) {
+        assert msg.variableHeader().version() == 5;
+        MQTT5AuthData.Builder authData = MQTT5AuthData.newBuilder();
+        X509Certificate cert = ChannelAttrs.clientCertificate(channel);
+        if (cert != null) {
+            authData.setCert(unsafeWrap(Base64.getEncoder().encode(cert.getEncoded())));
+        }
+        if (msg.variableHeader().hasUserName()) {
+            authData.setUsername(msg.payload().userName());
+        }
+        if (msg.variableHeader().hasPassword()) {
+            authData.setPassword(unsafeWrap(msg.payload().passwordInBytes()));
+        }
+        if (!Strings.isNullOrEmpty(msg.payload().clientIdentifier())) {
+            authData.setClientId(msg.payload().clientIdentifier());
+        }
+        InetSocketAddress remoteAddr = ChannelAttrs.socketAddress(channel);
+        if (remoteAddr != null) {
+            authData.setRemotePort(remoteAddr.getPort())
+                .setChannelId(channel.id().asLongText());
+            InetAddress ip = remoteAddr.getAddress();
+            if (remoteAddr.getAddress() != null) {
+                authData.setRemoteAddr(ip.getHostAddress());
+            }
+        }
+        List<MqttProperties.UserProperty> userPropertyList =
+            (List<MqttProperties.UserProperty>) msg.variableHeader().properties().getProperties(USER_PROPERTY.value());
+        UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
+        for (MqttProperties.UserProperty userProp : userPropertyList) {
+            UserProperties.StringList values =
+                userPropsBuilder.getPropOrDefault(userProp.value().key, UserProperties.StringList.getDefaultInstance());
+            userPropsBuilder.putProp(userProp.value().key, values.toBuilder().addValue(userProp.value().value).build());
+        }
+        return authData.setUserProps(userPropsBuilder.build()).build();
+    }
 
     public static MQTTAction buildPubAction(String topic, QoS qos, boolean retained) {
         return MQTTAction.newBuilder()

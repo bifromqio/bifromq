@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt;
+package com.baidu.bifromq.mqtt.v3;
 
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.clearInvocations;

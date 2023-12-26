@@ -11,12 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.handler.event;
+package com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect;
 
-public class ConnectionWillClose {
-    public final boolean shouldSendWillMessage;
+import com.baidu.bifromq.plugin.eventcollector.EventType;
+import lombok.ToString;
 
-    public ConnectionWillClose(boolean shouldSendWillMessage) {
-        this.shouldSendWillMessage = shouldSendWillMessage;
+@ToString(callSuper = true)
+public final class RetainNotSupported extends ClientDisconnectEvent<RetainNotSupported> {
+    @Override
+    public EventType type() {
+        return EventType.RETAIN_NOT_SUPPORTED;
     }
 }

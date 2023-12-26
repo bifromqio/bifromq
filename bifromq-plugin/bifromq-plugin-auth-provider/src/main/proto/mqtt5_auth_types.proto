@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package mqtt5authtypes;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.plugin.authprovider.type";
+option java_outer_classname = "MQTT5AuthTypesProto";
+option optimize_for = SPEED;
+
+message UserProperties{
+  message StringList{
+    repeated string value = 1;
+  }
+  map<string, StringList> prop = 1;
+}
+message MQTT5AuthData{
+  optional string username = 1;
+  optional bytes password = 2;
+  optional bytes cert = 3;
+  optional string clientId = 4;
+  string remoteAddr = 5;
+  uint32 remotePort = 6;
+  string channelId = 7;
+  UserProperties userProps = 8;
+}
+
+message MQTT5ExtendedAuthData{
+  optional string clientId = 1;
+  string remoteAddr = 2;
+  uint32 remotePort = 3;
+  string channelId = 4;
+  string authMethod = 5;
+  bytes authData = 6;
+  bool reAuth = 7;
+  UserProperties userProps = 8;
+}
+
+message Success{
+  string tenantId = 1;
+  string userId = 2;
+  map<string, string> attrs = 3; // additional attributes filled by auth provider plugin which will be copied to ClientInfo
+  UserProperties userProps = 4; // user properties return back via mqtt5 connack
+}
+
+message Failed{
+  enum Code {
+    BadPass = 0;
+    NotAuthorized = 1;
+    Banned = 2;
+    BadAuthMethod = 3;
+    Error = 4;
+  }
+  Code code = 1;
+  optional string reason = 2; // optional description
+  UserProperties userProps = 3; // user properties return back via mqtt5 connack
+}
+
+message Continue{
+  bytes authData = 1;
+  optional string reason = 2;
+  UserProperties userProps = 3;
+}
+
+message MQTT5AuthResult {
+  oneof Type{
+    Success success = 1;
+    Failed failed = 2;
+  }
+}
+
+message MQTT5ExtendedAuthResult {
+  oneof Type{
+    Success success = 1;
+    Continue continue = 2;
+    Failed failed = 3;
+  }
+}
