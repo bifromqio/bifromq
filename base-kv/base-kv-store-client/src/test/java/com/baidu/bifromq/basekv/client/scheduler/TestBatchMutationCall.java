@@ -20,8 +20,10 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.Set;
 
 public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteString> {
     protected TestBatchMutationCall(KVRangeId rangeId,
@@ -31,10 +33,15 @@ public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteStr
     }
 
     @Override
+    protected BatchCallTask<ByteString, ByteString> newBatch(String storeId, long ver) {
+        return new TestBatchCallTask(storeId, ver);
+    }
+
+    @Override
     protected RWCoProcInput makeBatch(Iterator<ByteString> byteStringIterator) {
-        ByteString finalBS = ByteString.empty();
+        ByteString finalBS = byteStringIterator.hasNext() ? byteStringIterator.next() : ByteString.empty();
         while (byteStringIterator.hasNext()) {
-            finalBS = finalBS.concat(byteStringIterator.next());
+            finalBS = finalBS.concat(ByteString.copyFromUtf8("_")).concat(byteStringIterator.next());
         }
         return RWCoProcInput.newBuilder()
             .setRaw(finalBS)
@@ -54,5 +61,24 @@ public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteStr
     @Override
     protected void handleException(CallTask<ByteString, ByteString, MutationCallBatcherKey> callTask, Throwable e) {
         callTask.callResult.completeExceptionally(e);
+    }
+
+    private static class TestBatchCallTask extends BatchCallTask<ByteString, ByteString> {
+        private final Set<ByteString> keys = new HashSet<>();
+
+        protected TestBatchCallTask(String storeId, long ver) {
+            super(storeId, ver);
+        }
+
+        @Override
+        protected void add(CallTask<ByteString, ByteString, MutationCallBatcherKey> callTask) {
+            super.add(callTask);
+            keys.add(callTask.call);
+        }
+
+        @Override
+        protected boolean isBatchable(CallTask<ByteString, ByteString, MutationCallBatcherKey> callTask) {
+            return !keys.contains(callTask.call);
+        }
     }
 }

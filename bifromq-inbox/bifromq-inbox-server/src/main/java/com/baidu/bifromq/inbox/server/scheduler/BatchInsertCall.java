@@ -20,27 +20,31 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.CallTask;
-import com.baidu.bifromq.inbox.rpc.proto.SendResult;
+import com.baidu.bifromq.inbox.records.ScopedInbox;
+import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InsertResult;
-import com.baidu.bifromq.inbox.storage.proto.MessagePack;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
-public class BatchInsertCall extends BatchMutationCall<MessagePack, SendResult.Result> {
+public class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, BatchInsertReply.Result> {
     protected BatchInsertCall(KVRangeId rangeId, IBaseKVStoreClient storeClient, Duration pipelineExpiryTime) {
         super(rangeId, storeClient, pipelineExpiryTime);
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<MessagePack> messagePackIterator) {
+    protected BatchCallTask<InboxSubMessagePack, BatchInsertReply.Result> newBatch(String storeId, long ver) {
+        return new BatchInsertCallTask(storeId, ver);
+    }
+
+    @Override
+    protected RWCoProcInput makeBatch(Iterator<InboxSubMessagePack> messagePackIterator) {
         BatchInsertRequest.Builder reqBuilder = BatchInsertRequest.newBuilder();
-        messagePackIterator.forEachRemaining(reqBuilder::addSubMsgPack);
+        messagePackIterator.forEachRemaining(reqBuilder::addInboxSubMsgPack);
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()
@@ -51,25 +55,49 @@ public class BatchInsertCall extends BatchMutationCall<MessagePack, SendResult.R
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<MessagePack, SendResult.Result, MutationCallBatcherKey>> batchedTasks,
-                                RWCoProcOutput output) {
-        Map<SubInfo, SendResult.Result> insertResults = new HashMap<>();
-        for (InsertResult result : output.getInboxService().getBatchInsert().getResultsList()) {
-            switch (result.getResult()) {
-                case OK -> insertResults.put(result.getSubInfo(), SendResult.Result.OK);
-                case NO_INBOX -> insertResults.put(result.getSubInfo(), SendResult.Result.NO_INBOX);
-                case ERROR -> insertResults.put(result.getSubInfo(), SendResult.Result.ERROR);
-            }
-        }
-        CallTask<MessagePack, SendResult.Result, MutationCallBatcherKey> task;
+    protected void handleOutput(
+        Queue<CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey>> batchedTasks,
+        RWCoProcOutput output) {
+        assert batchedTasks.size() == output.getInboxService().getBatchInsert().getResultCount();
+        CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> task;
+        int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(insertResults.get(task.call.getSubInfo()));
+            task.callResult.complete(output.getInboxService().getBatchInsert().getResult(i++));
         }
     }
 
     @Override
-    protected void handleException(CallTask<MessagePack, SendResult.Result, MutationCallBatcherKey> callTask,
-                                   Throwable e) {
-        callTask.callResult.complete(SendResult.Result.ERROR);
+    protected void handleException(
+        CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask,
+        Throwable e) {
+        callTask.callResult.complete(
+            BatchInsertReply.Result.newBuilder().setCode(BatchInsertReply.Code.ERROR).build());
+    }
+
+    private static class BatchInsertCallTask extends BatchCallTask<InboxSubMessagePack, BatchInsertReply.Result> {
+        private final Set<ScopedInbox> inboxes = new HashSet<>();
+
+        private BatchInsertCallTask(String storeId, long ver) {
+            super(storeId, ver);
+        }
+
+        @Override
+        protected void add(CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask) {
+            super.add(callTask);
+            inboxes.add(new ScopedInbox(
+                callTask.call.getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation())
+            );
+        }
+
+        @Override
+        protected boolean isBatchable(
+            CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask) {
+            return !inboxes.contains(new ScopedInbox(
+                callTask.call.getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation()));
+        }
     }
 }

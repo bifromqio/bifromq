@@ -21,8 +21,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.mqtt.client.MqttMsg;
-import com.baidu.bifromq.mqtt.client.MqttTestClient;
+import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
+import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;

@@ -53,23 +53,31 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
     }
 
     @Override
-    public void add(CallTask<Req, Resp, MutationCallBatcherKey> callTask) {
+    public final void add(CallTask<Req, Resp, MutationCallBatcherKey> callTask) {
         BatchCallTask<Req, Resp> lastBatchCallTask;
         MutationCallBatcherKey batcherKey = callTask.batcherKey;
         assert callTask.batcherKey.id.equals(rangeId);
         if ((lastBatchCallTask = batchCallTasks.peekLast()) != null) {
             if (lastBatchCallTask.storeId.equals(batcherKey.leaderStoreId) && lastBatchCallTask.ver == batcherKey.ver) {
-                lastBatchCallTask.batchedTasks.add(callTask);
+                if (!lastBatchCallTask.isBatchable(callTask)) {
+                    lastBatchCallTask = newBatch(batcherKey.leaderStoreId, batcherKey.ver);
+                    batchCallTasks.add(lastBatchCallTask);
+                }
+                lastBatchCallTask.add(callTask);
             } else {
-                lastBatchCallTask = new BatchCallTask<>(batcherKey.leaderStoreId, batcherKey.ver);
-                lastBatchCallTask.batchedTasks.add(callTask);
+                lastBatchCallTask = newBatch(batcherKey.leaderStoreId, batcherKey.ver);
+                lastBatchCallTask.add(callTask);
                 batchCallTasks.add(lastBatchCallTask);
             }
         } else {
-            lastBatchCallTask = new BatchCallTask<>(batcherKey.leaderStoreId, batcherKey.ver);
-            lastBatchCallTask.batchedTasks.add(callTask);
+            lastBatchCallTask = newBatch(batcherKey.leaderStoreId, batcherKey.ver);
+            lastBatchCallTask.add(callTask);
             batchCallTasks.add(lastBatchCallTask);
         }
+    }
+
+    protected BatchCallTask<Req, Resp> newBatch(String storeId, long ver) {
+        return new BatchCallTask<>(storeId, ver);
     }
 
     protected abstract RWCoProcInput makeBatch(Iterator<Req> reqIterator);
@@ -138,14 +146,22 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
             .thenCompose(v -> fireBatchCall());
     }
 
-    private static class BatchCallTask<Req, Resp> {
-        final String storeId;
-        final long ver;
-        final LinkedList<CallTask<Req, Resp, MutationCallBatcherKey>> batchedTasks = new LinkedList<>();
+    protected static class BatchCallTask<Req, Resp> {
+        private final String storeId;
+        private final long ver;
+        private final LinkedList<CallTask<Req, Resp, MutationCallBatcherKey>> batchedTasks = new LinkedList<>();
 
-        private BatchCallTask(String storeId, long ver) {
+        protected BatchCallTask(String storeId, long ver) {
             this.storeId = storeId;
             this.ver = ver;
+        }
+
+        protected void add(CallTask<Req, Resp, MutationCallBatcherKey> callTask) {
+            this.batchedTasks.add(callTask);
+        }
+
+        protected boolean isBatchable(CallTask<Req, Resp, MutationCallBatcherKey> callTask) {
+            return true;
         }
     }
 }

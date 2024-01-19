@@ -63,7 +63,7 @@ public class APIServerTest extends MockableTest {
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         apiServer = new APIServer(host, 0, 0,
             bossGroup, workerGroup, null, distClient, mqttBrokerClient, inboxClient,
-                sessionDictClient, retainClient, settingProvider);
+            sessionDictClient, retainClient, settingProvider);
         apiServer.start();
     }
 
@@ -82,7 +82,7 @@ public class APIServerTest extends MockableTest {
             .header(Headers.HEADER_TENANT_ID.header, "BifroMQ-Dev")
             .header(Headers.HEADER_TOPIC.header, "/greeting")
             .header(Headers.HEADER_CLIENT_TYPE.header, "BifroMQ Fan")
-            .header(Headers.HEADER_RETAIN.header,"true" )
+            .header(Headers.HEADER_RETAIN.header, "true")
             .header(Headers.HEADER_PUB_QOS.header, "1")
             .POST(HttpRequest.BodyPublishers.ofString("Hello BifroMQ"))
             .build();

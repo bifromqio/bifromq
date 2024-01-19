@@ -13,11 +13,6 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineExpireTimeSeconds;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineOverflowDropOldest;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineQueueSize;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -25,42 +20,48 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.CallTask;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
+import com.baidu.bifromq.inbox.records.ScopedInbox;
+import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
-import com.baidu.bifromq.inbox.storage.proto.CreateParams;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterList;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 
-public class BatchCreateCall extends BatchMutationCall<CreateInboxRequest, List<String>> {
-    private final ISettingProvider settingProvider;
+public class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
 
-    protected BatchCreateCall(KVRangeId rangeId,
-                              IBaseKVStoreClient distWorkerClient,
-                              ISettingProvider settingProvider,
-                              Duration pipelineExpiryTime) {
+    protected BatchCreateCall(KVRangeId rangeId, IBaseKVStoreClient distWorkerClient, Duration pipelineExpiryTime) {
         super(rangeId, distWorkerClient, pipelineExpiryTime);
-        this.settingProvider = settingProvider;
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<CreateInboxRequest> createInboxRequestIterator) {
+    protected BatchCallTask<CreateRequest, CreateReply> newBatch(String storeId, long ver) {
+        return new BatchCreateCallTask(storeId, ver);
+    }
+
+    @Override
+    protected RWCoProcInput makeBatch(Iterator<CreateRequest> reqIterator) {
         BatchCreateRequest.Builder reqBuilder = BatchCreateRequest.newBuilder();
-        createInboxRequestIterator.forEachRemaining(request -> {
-            ClientInfo client = request.getClientInfo();
+        reqIterator.forEachRemaining(request -> {
+            ClientInfo client = request.getClient();
             String tenantId = client.getTenantId();
-            String scopedInboxIdUtf8 = scopedInboxId(tenantId, request.getInboxId()).toStringUtf8();
-            reqBuilder.putInboxes(scopedInboxIdUtf8, CreateParams.newBuilder()
-                .setExpireSeconds(settingProvider.provide(OfflineExpireTimeSeconds, tenantId))
-                .setLimit(settingProvider.provide(OfflineQueueSize, tenantId))
-                .setDropOldest(settingProvider.provide(OfflineOverflowDropOldest, tenantId))
+            BatchCreateRequest.Params.Builder paramsBuilder = BatchCreateRequest.Params.newBuilder()
+                .setInboxId(request.getInboxId())
+                .setIncarnation(request.getIncarnation()) // new incarnation
+                .setExpirySeconds(request.getExpirySeconds())
+                .setKeepAliveSeconds(request.getKeepAliveSeconds())
+                .setLimit(request.getLimit())
+                .setDropOldest(request.getDropOldest())
                 .setClient(client)
-                .build());
+                .setNow(request.getNow());
+            if (request.hasLwt()) {
+                paramsBuilder.setLwt(request.getLwt());
+            }
+            reqBuilder.addParams(paramsBuilder.build());
         });
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
@@ -72,21 +73,53 @@ public class BatchCreateCall extends BatchMutationCall<CreateInboxRequest, List<
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<CreateInboxRequest, List<String>, MutationCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<CallTask<CreateRequest, CreateReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
-        CallTask<CreateInboxRequest, List<String>, MutationCallBatcherKey> callTask;
+        CallTask<CreateRequest, CreateReply, MutationCallBatcherKey> callTask;
+        assert batchedTasks.size() == output.getInboxService().getBatchCreate().getSucceedCount();
+
+        int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
-            String scopedInboxId = scopedInboxId(callTask.call.getClientInfo().getTenantId(),
-                callTask.call.getInboxId()).toStringUtf8();
-            callTask.callResult.complete(output.getInboxService().getBatchCreate()
-                .getSubsOrDefault(scopedInboxId, TopicFilterList.getDefaultInstance())
-                .getTopicFiltersList());
+            boolean succeed = output.getInboxService().getBatchCreate().getSucceed(i++);
+            callTask.callResult.complete(CreateReply.newBuilder()
+                .setReqId(callTask.call.getReqId())
+                .setCode(succeed ? CreateReply.Code.OK : CreateReply.Code.ERROR)
+                .build());
         }
     }
 
     @Override
-    protected void handleException(CallTask<CreateInboxRequest, List<String>, MutationCallBatcherKey> callTask,
+    protected void handleException(CallTask<CreateRequest, CreateReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.callResult.completeExceptionally(e);
+        callTask.callResult.complete(CreateReply.newBuilder()
+            .setReqId(callTask.call.getReqId())
+            .setCode(CreateReply.Code.ERROR)
+            .build());
+    }
+
+    private static class BatchCreateCallTask extends BatchCallTask<CreateRequest, CreateReply> {
+        private final Set<ScopedInbox> inboxes = new HashSet<>();
+
+        private BatchCreateCallTask(String storeId, long ver) {
+            super(storeId, ver);
+        }
+
+        @Override
+        protected void add(CallTask<CreateRequest, CreateReply, MutationCallBatcherKey> callTask) {
+            super.add(callTask);
+            inboxes.add(new ScopedInbox(
+                callTask.call.getClient().getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation())
+            );
+        }
+
+        @Override
+        protected boolean isBatchable(CallTask<CreateRequest, CreateReply, MutationCallBatcherKey> callTask) {
+            return !inboxes.contains(new ScopedInbox(
+                callTask.call.getClient().getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation()));
+        }
     }
 }

@@ -14,7 +14,6 @@
 package com.baidu.bifromq.mqtt.handler;
 
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
-import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttDecoder;
@@ -28,8 +27,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 
 public class ChannelAttrs {
     public static final AttributeKey<MQTTSessionContext> MQTT_SESSION_CTX = AttributeKey.valueOf("MQTTSessionContext");
-    @VisibleForTesting
-    static final AttributeKey<InetSocketAddress> PEER_ADDR = AttributeKey.valueOf("PeerAddress");
+    public static final AttributeKey<InetSocketAddress> PEER_ADDR = AttributeKey.valueOf("PeerAddress");
 
     public static X509Certificate clientCertificate(Channel channel) {
         SslHandler sslHandler = channel.pipeline().get(SslHandler.class);

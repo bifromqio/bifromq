@@ -13,12 +13,17 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
 import static java.util.Collections.singletonList;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
@@ -40,14 +45,26 @@ import org.testng.annotations.Test;
 public class InboxInsertTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void insert() throws InterruptedException {
-        String tenantId = "tenantA";
-        String inboxId = "insert_inbox";
+        long now = HLC.INST.getPhysical();
+        String tenantId = "tenant-" + now;
+        String inboxId = "insert_inbox-" + now;
+        long incarnation = HLC.INST.getPhysical();
         String delivererKey = "deliverer1";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
-        CreateInboxReply createInboxReply = inboxClient.create(reqId, inboxId, clientInfo).join();
-        assertEquals(createInboxReply.getReqId(), reqId);
-        assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
+        CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
+        assertEquals(createReply.getReqId(), reqId);
+        assertEquals(createReply.getCode(), CreateReply.Code.OK);
 
         IDeliverer writer = inboxClient.open(delivererKey);
         Message msg = Message.newBuilder()
@@ -63,19 +80,28 @@ public class InboxInsertTest extends InboxServiceTest {
             .build();
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)
-            .setInboxId(inboxId)
+            .setInboxId(distInboxId(inboxId, incarnation))
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)
             .build();
         List<DeliveryPack> msgPack = new LinkedList<>();
         msgPack.add(new DeliveryPack(pack, singletonList(subInfo)));
 
-        inboxClient.sub(System.nanoTime(), tenantId, inboxId, "topic", QoS.AT_LEAST_ONCE).join();
+        SubReply reply2 = inboxClient.sub(SubRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setTopicFilter("topic")
+            .setSubQoS(QoS.AT_LEAST_ONCE)
+            .setNow(now)
+            .build()).join();
 
         Map<SubInfo, DeliveryResult> result = writer.deliver(msgPack).join();
         assertEquals(result.get(subInfo), DeliveryResult.OK);
 
-        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
+        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId, incarnation);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
         reader.fetch(fetched -> {
@@ -91,19 +117,30 @@ public class InboxInsertTest extends InboxServiceTest {
 
         reader.close();
         writer.close();
-        inboxClient.delete(reqId, tenantId, inboxId).join();
     }
 
     @Test(groups = "integration")
     public void insertMultiMsgPackWithSameInbox() throws InterruptedException {
-        String tenantId = "trafficB";
-        String inboxId = "insertMultiMsgPackWithSameInbox_inbox";
-        String delivererKey = "deliverer2";
+        long now = HLC.INST.getPhysical();
+        String tenantId = "tenant-" + now;
+        String inboxId = "insert_inbox-" + now;
+        long incarnation = HLC.INST.getPhysical();
+        String delivererKey = "deliverer1";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
-        CreateInboxReply createInboxReply = inboxClient.create(reqId, inboxId, clientInfo).join();
-        assertEquals(createInboxReply.getReqId(), reqId);
-        assertEquals(createInboxReply.getResult(), CreateInboxReply.Result.OK);
+        CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
+        assertEquals(createReply.getReqId(), reqId);
+        assertEquals(createReply.getCode(), CreateReply.Code.OK);
 
         IDeliverer writer = inboxClient.open(delivererKey);
         Message msg = Message.newBuilder()
@@ -123,7 +160,7 @@ public class InboxInsertTest extends InboxServiceTest {
             .build();
         SubInfo subInfo = SubInfo.newBuilder()
             .setTenantId(tenantId)
-            .setInboxId(inboxId)
+            .setInboxId(distInboxId(inboxId, incarnation))
             .setTopicFilter("topic")
             .setSubQoS(QoS.AT_LEAST_ONCE)
             .build();
@@ -132,7 +169,16 @@ public class InboxInsertTest extends InboxServiceTest {
         List<DeliveryPack> msgPack2 = new LinkedList<>();
         msgPack2.add(new DeliveryPack(pack2, singletonList(subInfo)));
 
-        inboxClient.sub(System.nanoTime(), tenantId, inboxId, "topic", QoS.AT_LEAST_ONCE).join();
+        inboxClient.sub(SubRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setTopicFilter("topic")
+            .setSubQoS(QoS.AT_LEAST_ONCE)
+            .setNow(now)
+            .build()).join();
 
         CompletableFuture<Map<SubInfo, DeliveryResult>> writeFuture1 = writer.deliver(msgPack1);
         CompletableFuture<Map<SubInfo, DeliveryResult>> writeFuture2 = writer.deliver(msgPack2);
@@ -145,7 +191,7 @@ public class InboxInsertTest extends InboxServiceTest {
         Map<SubInfo, DeliveryResult> result3 = writeFuture3.join();
         assertEquals(result3.get(subInfo), DeliveryResult.OK);
 
-        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId);
+        IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId, incarnation);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Fetched> fetchedRef = new AtomicReference<>();
         reader.fetch(fetched -> {
@@ -161,7 +207,5 @@ public class InboxInsertTest extends InboxServiceTest {
 
         reader.close();
         writer.close();
-
-        inboxClient.delete(reqId, tenantId, inboxId).join();
     }
 }

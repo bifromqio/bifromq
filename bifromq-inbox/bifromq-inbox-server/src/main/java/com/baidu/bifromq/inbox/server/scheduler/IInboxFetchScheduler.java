@@ -14,9 +14,8 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.storage.proto.FetchParams;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.google.protobuf.ByteString;
 import lombok.AllArgsConstructor;
 
 public interface IInboxFetchScheduler extends IBatchCallScheduler<IInboxFetchScheduler.InboxFetch, Fetched> {
@@ -24,7 +23,9 @@ public interface IInboxFetchScheduler extends IBatchCallScheduler<IInboxFetchSch
 
     @AllArgsConstructor
     class InboxFetch {
-        public final ByteString scopedInboxId;
-        public final FetchParams params;
+        public final String tenantId;
+        public final String inboxId;
+        public final long incarnation;
+        public final BatchFetchRequest.Params params;
     }
 }

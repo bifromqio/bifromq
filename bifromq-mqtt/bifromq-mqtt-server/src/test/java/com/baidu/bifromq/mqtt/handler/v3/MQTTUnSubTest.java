@@ -14,6 +14,8 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
+import static com.baidu.bifromq.inbox.rpc.proto.UnsubReply.Code.ERROR;
+import static com.baidu.bifromq.inbox.rpc.proto.UnsubReply.Code.OK;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC_FILTER;
@@ -22,12 +24,9 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBS
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.inbox.client.InboxUnsubResult;
-import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
@@ -42,101 +41,101 @@ public class MQTTUnSubTest extends BaseMQTTTest {
 
     @Test
     public void transientUnSub() {
-        connectAndVerify(true);
+        setupTransientSession();
         mockAuthCheck(true);
         mockDistUnmatch(true);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
     public void transientMixedUnSubWithDistUnSubFailed() {
-        connectAndVerify(true);
+        setupTransientSession();
         mockAuthCheck(true);
         mockDistUnmatch(true, false, true);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
     public void persistentUnSub() {
-        connectAndVerify(false);
+        setupPersistentSession();
         mockAuthCheck(true);
-        when(inboxClient.unsub(anyLong(), anyString(), anyString(), any())).thenReturn(
-            CompletableFuture.completedFuture(InboxUnsubResult.OK));
+        when(inboxClient.unsub(any())).thenReturn(
+            CompletableFuture.completedFuture(UnsubReply.newBuilder().setCode(OK).build()));
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
     public void persistentMixedSubWithDistUnSubFailed() {
-        connectAndVerify(false);
+        setupPersistentSession();
         mockAuthCheck(true);
         mockDistUnmatch(true, false, true);
-        when(inboxClient.unsub(anyLong(), anyString(), anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.OK))
-            .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.ERROR))
-            .thenReturn(CompletableFuture.completedFuture(InboxUnsubResult.OK));
+        when(inboxClient.unsub(any()))
+            .thenReturn(CompletableFuture.completedFuture(UnsubReply.newBuilder().setCode(OK).build()))
+            .thenReturn(CompletableFuture.completedFuture(UnsubReply.newBuilder().setCode(ERROR).build()))
+            .thenReturn(CompletableFuture.completedFuture(UnsubReply.newBuilder().setCode(OK).build()));
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(2, CLIENT_CONNECTED, UNSUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
     public void unSubWithEmptyTopicList() {
-        connectAndVerify(true);
+        setupTransientSession();
         MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.badMqttUnSubMessageWithoutTopic();
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
+        verifyEvent(CLIENT_CONNECTED, PROTOCOL_VIOLATION);
     }
 
     @Test
     public void unSubWithTooLargeTopicList() {
-        connectAndVerify(true);
+        setupTransientSession();
         MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.qoSMqttUnSubMessages(100);
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, TOO_LARGE_UNSUBSCRIPTION);
+        verifyEvent(CLIENT_CONNECTED, TOO_LARGE_UNSUBSCRIPTION);
     }
 
     @Test
     public void unSubWithMalformedTopic() {
-        connectAndVerify(true);
+        setupTransientSession();
         MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.topicMqttUnSubMessage("/topic\u0000");
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
+        verifyEvent(CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
     }
 
     @Test
     public void unSubWithInvalidTopic() {
-        connectAndVerify(true);
+        setupTransientSession();
         MqttUnsubscribeMessage unSubMessage = MQTTMessageUtils.invalidTopicMqttUnSubMessage();
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
+        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
     }
 
     @Test
     public void unSubWithAuthFailed() {
-        connectAndVerify(true);
+        setupTransientSession();
         mockAuthCheck(false);
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(5, CLIENT_CONNECTED, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW,
+        verifyEvent(CLIENT_CONNECTED, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW,
             UNSUB_ACKED);
     }
 }

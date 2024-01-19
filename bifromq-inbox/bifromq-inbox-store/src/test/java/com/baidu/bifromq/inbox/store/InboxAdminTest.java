@@ -13,164 +13,629 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.UnmatchResult;
-import com.baidu.bifromq.inbox.storage.proto.BatchCheckReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchCreateReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchGetReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.type.QoS;
-import java.time.Clock;
-import java.util.concurrent.CompletableFuture;
-import org.mockito.Mock;
-import org.testng.annotations.BeforeMethod;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.type.ClientInfo;
+import java.time.Duration;
 import org.testng.annotations.Test;
 
 public class InboxAdminTest extends InboxStoreTest {
-    @Mock
-    private Clock clock;
-
-    @BeforeMethod(groups = "integration")
-    public void resetClock() {
-        when(clock.millis()).thenReturn(0L);
-    }
-
-    @Override
-    protected Clock getClock() {
-        return clock;
+    @Test(groups = "integration")
+    public void get() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId1 = "inboxId1-" + System.nanoTime();
+        String inboxId2 = "inboxId2-" + System.nanoTime();
+        BatchGetRequest.Params getParams1 = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId1)
+            .setNow(now)
+            .build();
+        BatchGetRequest.Params getParams2 = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId2)
+            .setNow(now)
+            .build();
+        for (BatchGetReply.Result result : requestGet(getParams1, getParams2)) {
+            assertEquals(result.getVersionCount(), 0);
+        }
     }
 
     @Test(groups = "integration")
-    public void createAndHasCheck() {
+    public void getAfterExpired() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId = "inboxId";
-        BatchCheckReply has = requestHas(tenantId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-        requestCreate(tenantId, inboxId, 10, 100, false);
-        has = requestHas(tenantId, inboxId);
-        assertTrue(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-        requestDelete(tenantId, inboxId);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build();
+        BatchGetReply.Result result = requestGet(getParams).get(0);
+        assertEquals(result.getVersionCount(), 1);
+
+        getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(Duration.ofSeconds(13).toMillis())
+            .build();
+        result = requestGet(getParams).get(0);
+        assertEquals(result.getVersionCount(), 0);
     }
 
     @Test(groups = "integration")
-    public void createOverExpiredOne() {
+    public void createWithLWT() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId = "createOverExpiredOne_inboxId";
-        requestCreate(tenantId, inboxId, 10, 2, false);
-        BatchSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchSubReply.Result.OK);
-        when(clock.millis()).thenReturn(2100L);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(0)
+            .build();
+        BatchGetReply.Result result = requestGet(getParams).get(0);
+        assertEquals(result.getVersionCount(), 0);
 
-        BatchCreateReply reply = requestCreate(tenantId, inboxId, 10, 100, false);
-        assertEquals(reply.getSubsCount(), 1);
-        assertEquals(reply.getSubsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()).getTopicFilters(0),
-            "/a/b/c");
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLwt(lwt)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        boolean succeed = requestCreate(createParams).get(0);
+        assertTrue(succeed);
+        result = requestGet(getParams).get(0);
+        assertEquals(result.getVersionCount(), 1);
+        InboxVersion inboxVersion = result.getVersion(0);
+        assertEquals(inboxVersion.getVersion(), 0);
+        assertEquals(inboxVersion.getIncarnation(), incarnation);
+        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
+        assertEquals(inboxVersion.getExpirySeconds(), 5);
+        assertEquals(inboxVersion.getLwt(), lwt);
+        assertEquals(inboxVersion.getClient(), client);
     }
 
     @Test(groups = "integration")
-    public void deleteAndReturn() {
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), eq(1)))
-            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
+    public void createWithoutLWT() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId = "deleteAndReturnSubs_inboxId";
-        requestCreate(tenantId, inboxId, 10, 2, false);
-        BatchSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchSubReply.Result.OK);
-        when(clock.millis()).thenReturn(2100L);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(0)
+            .build();
+        BatchGetReply.Result result = requestGet(getParams).get(0);
+        assertEquals(result.getVersionCount(), 0);
 
-        BatchTouchReply reply = requestDelete(tenantId, inboxId);
-        assertEquals(reply.getScopedInboxIdCount(), 1);
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        boolean succeed = requestCreate(createParams).get(0);
+        assertTrue(succeed);
+        result = requestGet(getParams).get(0);
+        assertEquals(result.getVersionCount(), 1);
+        InboxVersion inboxVersion = result.getVersion(0);
+        assertEquals(inboxVersion.getVersion(), 0);
+        assertEquals(inboxVersion.getIncarnation(), incarnation);
+        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
+        assertEquals(inboxVersion.getExpirySeconds(), 5);
+        assertFalse(inboxVersion.hasLwt());
+        assertEquals(inboxVersion.getClient(), client);
     }
 
     @Test(groups = "integration")
-    public void subUnsub() {
+    public void createOverExisting() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId = "subUnsub_inbox";
-        assertEquals(requestSub(tenantId, inboxId, "/a/", QoS.AT_MOST_ONCE), BatchSubReply.Result.NO_INBOX);
-        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchUnsubReply.Result.NO_INBOX);
-
-        requestCreate(tenantId, inboxId, 10, 2, false);
-        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchUnsubReply.Result.NO_SUB);
-        assertEquals(requestSub(tenantId, inboxId, "/a/", QoS.AT_MOST_ONCE), BatchSubReply.Result.OK);
-        assertEquals(requestUnsub(tenantId, inboxId, "/a/"), BatchUnsubReply.Result.OK);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        boolean succeed = requestCreate(createParams).get(0);
+        assertTrue(succeed);
+        succeed = requestCreate(createParams).get(0);
+        assertFalse(succeed);
     }
 
     @Test(groups = "integration")
-    public void subExceedLimit() {
+    public void attachNoInbox() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId = "subExceedLimit_inboxId";
-        when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(2);
-        requestCreate(tenantId, inboxId, 10, 2, false);
-        BatchSubReply.Result result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchSubReply.Result.OK);
-
-        // same topic filter
-        result = requestSub(tenantId, inboxId, "/a/b/c", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchSubReply.Result.OK);
-
-        result = requestSub(tenantId, inboxId, "/a/b/", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchSubReply.Result.OK);
-
-        result = requestSub(tenantId, inboxId, "/a/", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchSubReply.Result.EXCEED_LIMIT);
-
-        requestUnsub(tenantId, inboxId, "/a/b/");
-
-        result = requestSub(tenantId, inboxId, "/a/", QoS.EXACTLY_ONCE);
-        assertEquals(result, BatchSubReply.Result.OK);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        BatchAttachReply.Result result = requestAttach(attachParams).get(0);
+        assertEquals(result.getCode(), BatchAttachReply.Code.NO_INBOX);
     }
 
     @Test(groups = "integration")
-    public void expireAndHasCheck() {
+    public void attachConflict() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId = "expireAndHasCheck_inboxId";
-        BatchCheckReply has = requestHas(tenantId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-        requestCreate(tenantId, inboxId, 10, 2, false);
-        has = requestHas(tenantId, inboxId);
-        assertTrue(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-        when(clock.millis()).thenReturn(2100L);
-        has = requestHas(tenantId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-        requestDelete(tenantId, inboxId);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(1)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        BatchAttachReply.Result result = requestAttach(attachParams).get(0);
+        assertSame(result.getCode(), BatchAttachReply.Code.CONFLICT);
     }
 
     @Test(groups = "integration")
-    public void createAndDelete() {
+    public void attachWithoutLWT() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId1 = "createAndDelete_inboxId1";
-        String inboxId2 = "createAndDelete_inboxId2";
-        requestCreate(tenantId, inboxId1, 10, 10, false);
-        requestCreate(tenantId, inboxId2, 10, 10, false);
-        assertTrue(requestHas(tenantId, inboxId1).getExistsMap()
-            .get(scopedInboxId(tenantId, inboxId1).toStringUtf8()));
-        requestDelete(tenantId, inboxId1);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLwt(lwt)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
 
-        assertFalse(requestHas(tenantId, inboxId1).getExistsMap()
-            .get(scopedInboxId(tenantId, inboxId1).toStringUtf8()));
-        assertTrue(requestHas(tenantId, inboxId2).getExistsMap()
-            .get(scopedInboxId(tenantId, inboxId2).toStringUtf8()));
-        requestDelete(tenantId, inboxId1);
-        requestDelete(tenantId, inboxId2);
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setKeepAliveSeconds(1)
+            .setExpirySeconds(1)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        BatchAttachReply.Result result = requestAttach(attachParams).get(0);
+        assertSame(result.getCode(), BatchAttachReply.Code.OK);
+
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build();
+        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
+        assertEquals(inboxVersion.getVersion(), 1);
+        assertEquals(inboxVersion.getKeepAliveSeconds(), 1);
+        assertEquals(inboxVersion.getExpirySeconds(), 1);
+        assertFalse(inboxVersion.hasLwt());
+
+        getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now + Duration.ofSeconds(3).toMillis())
+            .build();
+        assertEquals(requestGet(getParams).get(0).getVersionCount(), 0);
     }
 
     @Test(groups = "integration")
-    public void deleteNonExist() {
+    public void attachWithLWT() {
+        long now = 0;
         String tenantId = "tenantId";
-        String inboxId = "deleteNonExist_inboxId";
-        requestDelete(tenantId, inboxId);
-        BatchCheckReply has = requestHas(tenantId, inboxId);
-        assertFalse(has.getExistsMap().get(scopedInboxId(tenantId, inboxId).toStringUtf8()));
-        requestDelete(tenantId, inboxId);
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setKeepAliveSeconds(1)
+            .setExpirySeconds(1)
+            .setLwt(lwt)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        BatchAttachReply.Result result = requestAttach(attachParams).get(0);
+        assertSame(result.getCode(), BatchAttachReply.Code.OK);
+
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build();
+        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
+        assertEquals(inboxVersion.getVersion(), 1);
+        assertEquals(inboxVersion.getKeepAliveSeconds(), 1);
+        assertEquals(inboxVersion.getExpirySeconds(), 1);
+        assertEquals(inboxVersion.getLwt(), lwt);
+
+        getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now + Duration.ofSeconds(3).toMillis())
+            .build();
+        assertEquals(requestGet(getParams).get(0).getVersionCount(), 0);
+    }
+
+    @Test(groups = "integration")
+    public void detachNoInbox() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setExpirySeconds(5)
+            .setNow(now)
+            .build();
+        BatchDetachReply.Result result = requestDetach(detachParams).get(0);
+        assertEquals(result.getCode(), BatchDetachReply.Code.NO_INBOX);
+    }
+
+    @Test(groups = "integration")
+    public void detachConflict() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(1)
+            .setExpirySeconds(5)
+            .setNow(now)
+            .build();
+        BatchDetachReply.Result result = requestDetach(detachParams).get(0);
+        assertEquals(result.getCode(), BatchDetachReply.Code.CONFLICT);
+    }
+
+    @Test(groups = "integration")
+    public void detach() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLwt(lwt)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        now = Duration.ofSeconds(5).toMillis();
+        BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setExpirySeconds(1)
+            .setNow(now)
+            .build();
+        BatchDetachReply.Result result = requestDetach(detachParams).get(0);
+        assertSame(result.getCode(), BatchDetachReply.Code.OK);
+        assertEquals(result.getLwt(), lwt);
+
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build();
+        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
+        assertEquals(inboxVersion.getVersion(), 1);
+        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
+        assertEquals(inboxVersion.getExpirySeconds(), 1);
+
+        getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now + Duration.ofSeconds(12).toMillis())
+            .build();
+        assertEquals(requestGet(getParams).get(0).getVersionCount(), 0);
+    }
+
+    @Test(groups = "integration")
+    public void detachAndDiscardLWT() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLwt(lwt)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        now = Duration.ofSeconds(5).toMillis();
+        BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setExpirySeconds(1)
+            .setDiscardLWT(true)
+            .setNow(now)
+            .build();
+        BatchDetachReply.Result result = requestDetach(detachParams).get(0);
+        assertSame(result.getCode(), BatchDetachReply.Code.OK);
+        assertFalse(result.hasLwt());
+    }
+
+    @Test(groups = "integration")
+    public void touchNoInbox() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setNow(now)
+            .build();
+        BatchTouchReply.Code code = requestTouch(touchParams).get(0);
+        assertEquals(code, BatchTouchReply.Code.NO_INBOX);
+    }
+
+    @Test(groups = "integration")
+    public void touchConflict() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(1)
+            .setNow(now)
+            .build();
+        BatchTouchReply.Code code = requestTouch(touchParams).get(0);
+        assertEquals(code, BatchTouchReply.Code.CONFLICT);
+    }
+
+    @Test(groups = "integration")
+    public void touch() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLwt(lwt)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        now = Duration.ofSeconds(5).toMillis();
+        BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setNow(now)
+            .build();
+        BatchTouchReply.Code code = requestTouch(touchParams).get(0);
+        assertEquals(code, BatchTouchReply.Code.OK);
+
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build();
+        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
+        assertEquals(inboxVersion.getVersion(), 0);
+        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
+        assertEquals(inboxVersion.getExpirySeconds(), 5);
+
+        getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now + Duration.ofSeconds(13).toMillis())
+            .build();
+        assertEquals(requestGet(getParams).get(0).getVersionCount(), 0);
+    }
+
+    @Test(groups = "integration")
+    public void deleteNoInbox() {
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        BatchDeleteRequest.Params deleteParams = BatchDeleteRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .build();
+        BatchDeleteReply.Result result = requestDelete(deleteParams).get(0);
+        assertEquals(result.getCode(), BatchDeleteReply.Code.NO_INBOX);
+    }
+
+    @Test(groups = "integration")
+    public void deleteConflict() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+
+        BatchDeleteRequest.Params deleteParams = BatchDeleteRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(1)
+            .build();
+        BatchDeleteReply.Result result = requestDelete(deleteParams).get(0);
+        assertEquals(result.getCode(), BatchDeleteReply.Code.CONFLICT);
+    }
+
+    @Test(groups = "integration")
+    public void delete() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
+        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setLwt(lwt)
+            .setClient(client)
+            .setNow(now)
+            .build();
+        requestCreate(createParams);
+        // TODO: make some sub and verify the return values
+
+        BatchDeleteRequest.Params deleteParams = BatchDeleteRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .build();
+        BatchDeleteReply.Result result = requestDelete(deleteParams).get(0);
+        assertEquals(result.getCode(), BatchDeleteReply.Code.OK);
+
+        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build();
+        assertEquals(requestGet(getParams).get(0).getVersionCount(), 0);
     }
 }

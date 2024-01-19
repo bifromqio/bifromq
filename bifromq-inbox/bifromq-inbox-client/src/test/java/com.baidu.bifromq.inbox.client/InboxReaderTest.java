@@ -17,6 +17,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,6 +37,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import lombok.SneakyThrows;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
@@ -55,13 +57,14 @@ public class InboxReaderTest {
     private final String tenantId = "tenantId";
     private final String delivererKey = "delivererKey";
     private final String inboxId = "inboxId";
+    private final long incarnation = 1;
     private final AtomicReference<Subject<InboxFetched>> fetchSubject = new AtomicReference<>();
 
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        when(rpcClient.createMessageStream(eq(tenantId), any(), eq(delivererKey), anyMap(),
-            eq(InboxServiceGrpc.getFetchInboxMethod()))).thenReturn(messageStream);
+        when(rpcClient.createMessageStream(eq(tenantId), isNull(), eq(delivererKey), anyMap(),
+            eq(InboxServiceGrpc.getFetchMethod()))).thenReturn(messageStream);
         when(messageStream.msg()).thenAnswer((Answer<Observable<InboxFetched>>) invocationOnMock -> {
             fetchSubject.set(PublishSubject.create());
             return fetchSubject.get();
@@ -83,19 +86,26 @@ public class InboxReaderTest {
             .setResult(Result.OK)
             .addQos0Seq(1L)
             .build();
-        InboxFetched inboxFetched = InboxFetched.newBuilder().setInboxId(inboxId).setFetched(fetched).build();
-        InboxReader inboxReader = new InboxReader(inboxId, fetchPipeline);
+        InboxReader inboxReader = new InboxReader(inboxId, incarnation, fetchPipeline);
+        inboxReader.hint(10);
+
+        ArgumentCaptor<InboxFetchHint> hintCaptor = ArgumentCaptor.forClass(InboxFetchHint.class);
+        verify(messageStream, times(1)).ack(hintCaptor.capture());
+        InboxFetchHint hint = hintCaptor.getValue();
         inboxReader.fetch(onFetched);
+        InboxFetched inboxFetched = InboxFetched.newBuilder()
+            .setSessionId(hint.getSessionId())
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setFetched(fetched).build();
         fetchSubject.get().onNext(inboxFetched);
         verify(onFetched, times(1)).accept(fetched);
-        verify(rpcClient, times(1)).invoke(eq(tenantId), any(), any(CommitRequest.class),
-            eq(InboxServiceGrpc.getCommitMethod()));
     }
 
     @Test
     public void reFetchAfterError() {
         Fetched fetchedError = Fetched.newBuilder().setResult(Result.ERROR).build();
-        InboxReader inboxReader = new InboxReader(inboxId, fetchPipeline);
+        InboxReader inboxReader = new InboxReader(inboxId, incarnation, fetchPipeline);
         inboxReader.fetch(onFetched);
         fetchSubject.get().onError(new RuntimeException("Test Exception"));
         verify(onFetched, times(1)).accept(fetchedError);
@@ -105,7 +115,7 @@ public class InboxReaderTest {
     @Test
     public void reFetchAfterComplete() {
         Fetched fetchedError = Fetched.newBuilder().setResult(Result.ERROR).build();
-        InboxReader inboxReader = new InboxReader(inboxId, fetchPipeline);
+        InboxReader inboxReader = new InboxReader(inboxId, incarnation, fetchPipeline);
         inboxReader.fetch(onFetched);
         fetchSubject.get().onComplete();
         verify(onFetched, times(1)).accept(fetchedError);
@@ -114,7 +124,8 @@ public class InboxReaderTest {
 
     @Test
     public void registerGC() throws InterruptedException {
-        InboxReader inboxReader = new InboxReader(inboxId, new InboxFetchPipeline(tenantId, delivererKey, rpcClient));
+        InboxReader inboxReader = new InboxReader(inboxId, incarnation,
+            new InboxFetchPipeline(tenantId, delivererKey, rpcClient));
         inboxReader.close();
         inboxReader = null;
         System.gc();

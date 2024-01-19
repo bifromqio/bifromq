@@ -4,6 +4,7 @@ import "commontype/ClientInfo.proto";
 import "commontype/SubInfo.proto";
 import "commontype/TopicMessage.proto";
 import "inboxservice/InboxFetched.proto";
+import "inboxservice/InboxCoProc.proto";
 
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.inbox.rpc.proto";
@@ -12,178 +13,266 @@ option java_outer_classname = "InboxServiceProtos";
 package inboxservice;
 
 service InboxService {
-  rpc hasInbox (HasInboxRequest) returns (HasInboxReply);
-  rpc createInbox (CreateInboxRequest) returns (CreateInboxReply);
-  rpc deleteInbox (DeleteInboxRequest) returns (DeleteInboxReply);
-  rpc touchInbox (TouchInboxRequest) returns (TouchInboxReply);
+  rpc get (GetRequest) returns (GetReply);
+  rpc attach (AttachRequest) returns (AttachReply);
+  rpc detach (DetachRequest) returns (DetachReply);
+  rpc create (CreateRequest) returns (CreateReply);
+  rpc touch (TouchRequest) returns (TouchReply);
   rpc sub(SubRequest) returns (SubReply);
   rpc unsub(UnsubRequest) returns (UnsubReply);
-  rpc expireInbox (ExpireInboxRequest) returns (ExpireInboxReply);
   rpc receive (stream SendRequest) returns (stream SendReply);
-  rpc fetchInbox(stream InboxFetchHint) returns (stream InboxFetched);
+  rpc fetch(stream InboxFetchHint) returns (stream InboxFetched);
   rpc commit(CommitRequest) returns(CommitReply);
+
+  rpc expire (ExpireRequest) returns (ExpireReply);
+  rpc expireAll (ExpireAllRequest) returns (ExpireAllReply);
 }
 
-message CreateInboxRequest {
+message GetRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string inboxId = 3;
+  uint64 now = 4;
+}
+
+message GetReply {
+  enum Code{
+    EXIST = 0;
+    NO_INBOX = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  Code code = 2;
+  repeated inboxservice.InboxVersion inbox = 3; // available when code = EXIST
+}
+
+message AttachRequest {
   uint64 reqId = 1;
   string inboxId = 2;
-  commontype.ClientInfo clientInfo = 3;
+  uint64 incarnation = 3;
+  uint64 version = 4;
+  uint32 expirySeconds = 5;
+  uint32 keepAliveSeconds = 6;
+  optional inboxservice.LWT lwt = 7;
+  commontype.ClientInfo client = 8; // the owner client
+  uint64 now = 9;
 }
 
-message CreateInboxReply {
-  enum Result {
+message AttachReply {
+  enum Code {
+    OK = 0;
+    NO_INBOX = 1;
+    CONFLICT = 2;
+    ERROR = 3;
+  }
+  uint64 reqId = 1;
+  Code code = 2;
+  repeated string topicFilters = 3; // existing subscriptions
+}
+
+message DetachRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  uint64 incarnation = 3;
+  uint64 version = 4;
+  uint32 expirySeconds = 5;
+  bool discardLWT = 6;
+  commontype.ClientInfo client = 7;
+  uint64 now = 8;
+}
+
+message DetachReply {
+  enum Code {
+    OK = 0;
+    NO_INBOX = 1;
+    CONFLICT = 2;
+    ERROR = 3;
+  }
+  uint64 reqId = 1;
+  Code code = 2;
+  repeated string topicFilters = 3; // existing subscriptions
+  optional LWT lwt = 4; // the lwt to trigger if not being discard
+}
+
+message CreateRequest {
+  uint64 reqId = 1;
+  string inboxId = 2;
+  uint64 incarnation = 3;
+  uint32 expirySeconds = 4;
+  uint32 keepAliveSeconds = 5;
+  uint32 limit = 6;
+  bool dropOldest = 7;
+  optional inboxservice.LWT lwt = 8;
+  commontype.ClientInfo client = 9;
+  uint64 now = 10;
+}
+
+message CreateReply {
+  enum Code {
     OK = 0;
     ERROR = 1;
   }
   uint64 reqId = 1;
-  Result result = 2;
+  Code code = 2;
 }
 
-message DeleteInboxRequest {
+message TouchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string inboxId = 3;
+  uint64 incarnation = 4;
+  uint64 version = 5;
+  uint64 now = 6;
 }
 
-message DeleteInboxReply {
-  enum Result {
+message TouchReply {
+  enum Code {
     OK = 0;
-    ERROR = 1;
+    NO_INBOX = 1;
+    CONFLICT = 2;
+    ERROR = 3;
   }
   uint64 reqId = 1;
-  Result result = 2;
+  Code code = 2;
 }
 
-message TouchInboxRequest {
+message ExpireRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string inboxId = 3;
+  uint64 now = 4;
 }
 
-message TouchInboxReply {
+message ExpireReply {
+  enum Code {
+    OK = 0;
+    NOT_FOUND = 1;
+    ERROR = 2;
+  }
   uint64 reqId = 1;
+  Code code = 2;
 }
 
 message SubRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string inboxId = 3;
-  string topicFilter = 4;
-  commontype.QoS subQoS = 5;
+  uint64 incarnation = 4;
+  uint64 version = 5;
+  string topicFilter = 6;
+  commontype.QoS subQoS = 7;
+  uint64 now = 8;
 }
 
 message SubReply {
-  enum Result {
+  enum Code {
     OK = 0;
-    NO_INBOX = 1;
-    EXCEED_LIMIT = 2;
-    ERROR = 3;
+    EXISTS = 1;
+    NO_INBOX = 2;
+    EXCEED_LIMIT = 3;
+    CONFLICT = 4;
+    ERROR = 5;
   }
   uint64 reqId = 1;
-  Result result = 2;
+  Code code = 2;
 }
 
 message UnsubRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string inboxId = 3;
-  string topicFilter = 4;
+  uint64 incarnation = 4;
+  uint64 version = 5;
+  string topicFilter = 6;
+  uint64 now = 7;
 }
 
 message UnsubReply {
-  enum Result {
+  enum Code {
     OK = 0;
     NO_INBOX = 1;
-    ERROR = 2;
+    NO_SUB = 2;
+    CONFLICT = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
-  Result result = 2;
-}
-
-message HasInboxRequest {
-  uint64 reqId = 1;
-  string tenantId = 2;
-  string inboxId = 3;
-}
-
-message HasInboxReply {
-  enum Result{
-    EXIST = 0;
-    NO_INBOX = 1;
-    ERROR = 2;
-  }
-  uint64 reqId = 1;
-  Result result = 2;
-}
-
-message InboxMessagePack{
-  commontype.TopicMessagePack messages = 1;
-  repeated commontype.SubInfo subInfo = 2;
+  Code code = 2;
 }
 
 message SendRequest {
+  message Params{
+    commontype.TopicMessagePack messages = 1;
+    repeated commontype.SubInfo subInfo = 2;
+  }
   uint64 reqId = 1;
-  repeated InboxMessagePack inboxMsgPack = 2;
+  repeated Params params = 2;
 }
 
-message SendResult{
-  enum Result {
+message SendReply {
+  enum Code {
     OK = 0;
     NO_INBOX = 1;
     ERROR = 2;
   }
-  commontype.SubInfo subInfo = 1;
-  Result result = 2;
-}
-
-message SendReply {
+  message Result{
+    commontype.SubInfo subInfo = 1;
+    Code code = 2;
+  }
   uint64 reqId = 1;
-  repeated SendResult result = 2;
+  repeated Result result = 2;
 }
-
 
 message InboxFetchHint {
-  uint64 incarnation = 1;
+  uint64 sessionId = 1;
   string inboxId = 2;
-  int32 capacity = 3;
-  uint64 lastFetchQoS0Seq = 4;
-  uint64 lastFetchQoS1Seq = 5;
-  uint64 lastFetchQoS2Seq = 6;
+  uint64 incarnation = 3;
+  int32 capacity = 4;
+  uint64 lastFetchQoS0Seq = 5;
+  uint64 lastFetchQoS1Seq = 6;
+  uint64 lastFetchQoS2Seq = 7;
 }
 
 message InboxFetched{
-  string inboxId = 1;
-  Fetched fetched = 2;
+  uint64 sessionId = 1;
+  string inboxId = 2;
+  uint64 incarnation = 3;
+  Fetched fetched = 4;
 }
 
 message CommitRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string inboxId = 3;
-  commontype.QoS qos = 4;
-  uint64 upToSeq = 5;
+  uint64 incarnation = 4;
+  uint64 version = 5;
+  commontype.QoS qos = 6;
+  uint64 upToSeq = 7;
+  uint64 now = 8;
 }
 
 message CommitReply {
-  enum Result {
+  enum Code {
     OK = 0;
-    ERROR = 1;
+    NO_INBOX = 1;
+    CONFLICT = 2;
+    ERROR = 3;
   }
   uint64 reqId = 1;
-  Result result = 2;
+  Code code = 2;
 }
 
-message ExpireInboxRequest {
+message ExpireAllRequest {
   uint64 reqId = 1;
-  optional string tenantId = 2;
+  string tenantId = 2;
   uint32 expirySeconds = 3;
+  uint64 now = 4;
 }
 
-message ExpireInboxReply {
-  enum Result {
+message ExpireAllReply {
+  enum Code {
     OK = 0;
     ERROR = 1;
   }
   uint64 reqId = 1;
-  Result result = 2;
+  Code code = 2;
 }

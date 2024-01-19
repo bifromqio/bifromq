@@ -176,7 +176,6 @@ class MQTTTest {
             .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .distClient(distClient)
             .storeClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -192,16 +191,18 @@ class MQTTTest {
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        inboxServer = IInboxServer.nonStandaloneBuilder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .distClient(distClient)
-            .settingProvider(settingProvider)
-            .inboxStoreClient(inboxStoreKVStoreClient)
-            .build();
         retainClient = IRetainClient
             .newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
+            .build();
+        inboxServer = IInboxServer.nonStandaloneBuilder()
+            .rpcServerBuilder(rpcServerBuilder)
+            .inboxClient(inboxClient)
+            .distClient(distClient)
+            .retainClient(retainClient)
+            .settingProvider(settingProvider)
+            .inboxStoreClient(inboxStoreKVStoreClient)
             .build();
         retainStoreKVStoreClient = IBaseKVStoreClient
             .newBuilder()

@@ -14,14 +14,28 @@
 package com.baidu.bifromq.inbox.client;
 
 import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
+import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
+import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
-import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -36,30 +50,32 @@ public interface IInboxClient extends ISubBroker, IConnectable {
         return 1;
     }
 
-    CompletableFuture<InboxCheckResult> has(long reqId, String tenantId, String inboxId);
+    CompletableFuture<GetReply> get(GetRequest request);
 
-    CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo owner);
+    CompletableFuture<CreateReply> create(CreateRequest request);
 
-    CompletableFuture<DeleteInboxReply> delete(long reqId, String tenantId, String inboxId);
+    CompletableFuture<AttachReply> attach(AttachRequest request);
 
-    CompletableFuture<Void> touch(long reqId, String tenantId, String inboxId);
+    CompletableFuture<DetachReply> detach(DetachRequest request);
 
-    CompletableFuture<InboxSubResult> sub(long reqId, String tenantId, String inboxId, String topicFilter, QoS qos);
+    CompletableFuture<TouchReply> touch(TouchRequest request);
 
-    CompletableFuture<InboxUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter);
+    CompletableFuture<SubReply> sub(SubRequest request);
 
-    CompletableFuture<ExpireInboxReply> expireInbox(long reqId, String tenantId, int expirySeconds);
+    CompletableFuture<UnsubReply> unsub(UnsubRequest request);
 
-    IInboxReader openInboxReader(String tenantId, String inboxId);
+    CompletableFuture<ExpireReply> expire(ExpireRequest request);
+
+    CompletableFuture<ExpireAllReply> expireAll(ExpireAllRequest request);
+
+    IInboxReader openInboxReader(String tenantId, String inboxId, long incarnation);
+
+    CompletableFuture<CommitReply> commit(CommitRequest request);
 
     interface IInboxReader {
         void fetch(Consumer<Fetched> consumer);
 
         void hint(int bufferCapacity);
-
-        void touch();
-
-        CompletableFuture<CommitReply> commit(long reqId, QoS qos, long upToSeq);
 
         void close();
     }

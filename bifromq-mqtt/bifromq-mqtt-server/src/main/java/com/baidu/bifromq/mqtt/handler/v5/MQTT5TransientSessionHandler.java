@@ -14,42 +14,29 @@
 package com.baidu.bifromq.mqtt.handler.v5;
 
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
-import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildPubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
-import com.baidu.bifromq.mqtt.handler.event.ConnectionWillClose;
+import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.session.v5.IMQTT5TransientSession;
-import com.baidu.bifromq.plugin.eventcollector.Event;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.PubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Kicked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDistError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDisted;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.PushEvent;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Pushed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Dropped;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetained;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetainedError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import com.google.protobuf.ByteString;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
@@ -64,6 +51,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.annotation.Nullable;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -71,16 +59,15 @@ import lombok.extern.slf4j.Slf4j;
 public class MQTT5TransientSessionHandler extends MQTT5SessionHandler implements IMQTT5TransientSession {
     private final AtomicLong seqNum = new AtomicLong();
     private final Set<String> topicFilters = new HashSet<>();
-    private MQTT5WillMessage willMessage;
 
     @Builder
     MQTT5TransientSessionHandler(MqttProperties connProps,
                                  TenantSettings settings,
+                                 String userSessionId,
                                  int keepAliveTimeSeconds,
                                  ClientInfo clientInfo,
-                                 MQTT5WillMessage willMessage) {
-        super(connProps, settings, keepAliveTimeSeconds, clientInfo);
-        this.willMessage = willMessage;
+                                 @Nullable LWT willMessage) {
+        super(connProps, settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage);
     }
 
     @Override
@@ -361,16 +348,6 @@ public class MQTT5TransientSessionHandler extends MQTT5SessionHandler implements
     }
 
     @Override
-    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
-        if (evt instanceof ConnectionWillClose) {
-            if (willMessage != null && ((ConnectionWillClose) evt).shouldSendWillMessage) {
-                submitBgTask(() -> distWillMessage(willMessage));
-            }
-        }
-        super.userEventTriggered(ctx, evt);
-    }
-
-    @Override
     protected void handleDisconnect(MqttMessage mqttMessage) {
         MqttReasonCodeAndPropertiesVariableHeader variableHeader =
             (MqttReasonCodeAndPropertiesVariableHeader) mqttMessage.variableHeader();
@@ -394,107 +371,4 @@ public class MQTT5TransientSessionHandler extends MQTT5SessionHandler implements
         closeConnectionNow(getLocal(ByClient.class).clientInfo(clientInfo));
     }
 
-    @Override
-    protected boolean shouldSendWillMessage(Event<?> closeReason) {
-        return !(closeReason instanceof ByClient) &&
-            (!(closeReason instanceof Kicked) || !isSelfKick((Kicked) closeReason));
-    }
-
-    private CompletableFuture<Void> distWillMessage(MQTT5WillMessage willMessage) {
-        return authProvider.check(clientInfo(), buildPubAction(willMessage.topic, willMessage.qos, willMessage.retain))
-            .thenComposeAsync(allow -> {
-                if (allow) {
-                    long reqId = System.nanoTime();
-                    return allOf(distWillMessage(reqId, willMessage), retainWillMessage(reqId, willMessage));
-                } else {
-                    eventCollector.report(getLocal(PubActionDisallow.class)
-                        .isLastWill(true)
-                        .topic(willMessage.topic)
-                        .qos(willMessage.qos)
-                        .isRetain(willMessage.retain)
-                        .clientInfo(clientInfo));
-                    return CompletableFuture.completedFuture(null);
-                }
-            }, ctx.channel().eventLoop());
-    }
-
-    private boolean isSelfKick(Kicked kicked) {
-        ClientInfo kicker = kicked.kicker();
-        if (!MQTT_TYPE_VALUE.equals(kicker.getType())) {
-            return false;
-        }
-        return kicker.getTenantId().equals(clientInfo.getTenantId()) &&
-            kicker.getMetadataOrDefault(MQTT_USER_ID_KEY, "")
-                .equals(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, "")) &&
-            kicker.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, "")
-                .equals(clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
-    }
-
-    private CompletableFuture<Void> distWillMessage(long reqId, MQTT5WillMessage willMessage) {
-        return sessionCtx.distClient.pub(reqId, willMessage.topic, willMessage.qos, willMessage.payload,
-                Integer.MAX_VALUE, clientInfo)
-            .handleAsync((v, e) -> {
-                if (e != null) {
-                    eventCollector.report(getLocal(WillDistError.class)
-                        .clientInfo(clientInfo)
-                        .reqId(reqId)
-                        .topic(willMessage.topic)
-                        .qos(willMessage.qos)
-                        .size(willMessage.payload.size()));
-                } else {
-                    eventCollector.report(getLocal(WillDisted.class)
-                        .clientInfo(clientInfo)
-                        .reqId(reqId)
-                        .topic(willMessage.topic)
-                        .qos(willMessage.qos)
-                        .size(willMessage.payload.size()));
-                }
-                return null;
-            }, ctx.channel().eventLoop());
-    }
-
-    private CompletableFuture<Void> retainWillMessage(long reqId, MQTT5WillMessage willMessage) {
-        if (!tenantSettings.retainEnabled) {
-            return CompletableFuture.completedFuture(null);
-        }
-        if (!willMessage.retain) {
-            return CompletableFuture.completedFuture(null);
-        }
-        String topic = willMessage.topic;
-        QoS qos = willMessage.qos;
-        ByteString payload = willMessage.payload;
-
-        return sessionCtx.retainClient.retain(
-                reqId,
-                topic,
-                willMessage.qos,
-                payload,
-                Integer.MAX_VALUE,
-                clientInfo)
-            .handleAsync((v, e) -> {
-                switch (v.getResult()) {
-                    case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
-                        .reqId(v.getReqId())
-                        .topic(topic)
-                        .isLastWill(true)
-                        .qos(qos)
-                        .size(payload.size())
-                        .clientInfo(clientInfo));
-                    case CLEARED -> eventCollector.report(getLocal(RetainMsgCleared.class)
-                        .reqId(v.getReqId())
-                        .isLastWill(true)
-                        .clientInfo(clientInfo)
-                        .topic(topic));
-                    default -> eventCollector.report(getLocal(MsgRetainedError.class)
-                        .reqId(v.getReqId())
-                        .clientInfo(clientInfo)
-                        .topic(topic)
-                        .isLastWill(true)
-                        .qos(qos)
-                        .payload(payload.asReadOnlyByteBuffer())
-                        .size(payload.size()));
-                }
-                return null;
-            }, ctx.channel().eventLoop());
-    }
 }

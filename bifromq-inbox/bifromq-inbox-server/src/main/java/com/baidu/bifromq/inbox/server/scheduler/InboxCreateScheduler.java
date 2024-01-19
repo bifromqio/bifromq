@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
+import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_TOLERABLE_LATENCY_MS;
 
@@ -23,54 +23,46 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
-import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxCreateScheduler extends MutationCallScheduler<CreateInboxRequest, List<String>>
+public class InboxCreateScheduler extends MutationCallScheduler<CreateRequest, CreateReply>
     implements IInboxCreateScheduler {
-    private final ISettingProvider settingProvider;
 
-    public InboxCreateScheduler(IBaseKVStoreClient inboxStoreClient, ISettingProvider settingProvider) {
+    public InboxCreateScheduler(IBaseKVStoreClient inboxStoreClient) {
         super("inbox_server_create", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
-        this.settingProvider = settingProvider;
     }
 
     @Override
-    protected Batcher<CreateInboxRequest, List<String>, MutationCallBatcherKey> newBatcher(String name,
-                                                                                           long tolerableLatencyNanos,
-                                                                                           long burstLatencyNanos,
-                                                                                           MutationCallBatcherKey range) {
-        return new InboxCreateBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient,
-            settingProvider);
+    protected Batcher<CreateRequest, CreateReply, MutationCallBatcherKey> newBatcher(String name,
+                                                                                     long tolerableLatencyNanos,
+                                                                                     long burstLatencyNanos,
+                                                                                     MutationCallBatcherKey range) {
+        return new InboxCreateBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
     }
 
     @Override
-    protected ByteString rangeKey(CreateInboxRequest request) {
-        return scopedInboxId(request.getClientInfo().getTenantId(), request.getInboxId());
+    protected ByteString rangeKey(CreateRequest request) {
+        return inboxKeyPrefix(request.getClient().getTenantId(), request.getInboxId(), request.getIncarnation());
     }
 
-    private static class InboxCreateBatcher extends MutationCallBatcher<CreateInboxRequest, List<String>> {
-        private final ISettingProvider settingProvider;
-
+    private static class InboxCreateBatcher extends MutationCallBatcher<CreateRequest, CreateReply> {
         private InboxCreateBatcher(String name,
                                    long expectLatencyNanos,
                                    long maxTolerableLatencyNanos,
                                    MutationCallBatcherKey range,
-                                   IBaseKVStoreClient inboxStoreClient,
-                                   ISettingProvider settingProvider) {
+                                   IBaseKVStoreClient inboxStoreClient) {
             super(name, expectLatencyNanos, maxTolerableLatencyNanos, range, inboxStoreClient);
-            this.settingProvider = settingProvider;
         }
 
         @Override
-        protected IBatchCall<CreateInboxRequest, List<String>, MutationCallBatcherKey> newBatch() {
-            return new BatchCreateCall(batcherKey.id, storeClient, settingProvider, Duration.ofMinutes(5));
+        protected IBatchCall<CreateRequest, CreateReply, MutationCallBatcherKey> newBatch() {
+            return new BatchCreateCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

@@ -13,20 +13,20 @@
 
 package com.baidu.bifromq.mqtt.v3;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.mqtt.client.MqttMsg;
-import com.baidu.bifromq.mqtt.client.MqttResponse;
-import com.baidu.bifromq.mqtt.client.MqttTestAsyncClient;
-import com.baidu.bifromq.mqtt.client.MqttTestClient;
+import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
+import com.baidu.bifromq.mqtt.v3.client.MqttResponse;
+import com.baidu.bifromq.mqtt.v3.client.MqttTestAsyncClient;
+import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
@@ -35,13 +35,12 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
-import io.reactivex.rxjava3.disposables.Disposable;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -387,9 +386,11 @@ public class MQTTPubSubTest {
         } catch (Exception exception) {
             fail();
         } finally {
-            for (int index = 0; index < topicFilters.length; index++) {
-                client.unsubscribe(topicFilters[index]);
+            for (String topicFilter : topicFilters) {
+                log.info("unsub {}", topicFilter);
+                client.unsubscribe(topicFilter);
             }
+            log.info("finished");
             client.disconnect();
             client.close();
         }

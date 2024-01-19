@@ -35,19 +35,20 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 
+import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Builder;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
-import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -72,7 +73,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     @BeforeMethod
     public void setup() {
         super.setup();
-        connectAndVerify(false);
+        setupPersistentSession();
     }
 
     @AfterMethod
@@ -82,6 +83,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS0Pub() {
+        mockInboxCommit(CommitReply.Code.OK);
         mockAuthCheck(true);
         inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
@@ -90,13 +92,14 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_MOST_ONCE_VALUE);
             assertEquals(message.variableHeader().topicName(), "testTopic");
         }
-        verifyEvent(6, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
+        verifyEvent(CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
         assertEquals(fetchHints.size(), 1);
     }
 
     @Test
     public void qoS0PubAuthFailed() {
         // not by pass
+        mockInboxCommit(CommitReply.Code.OK);
         mockAuthCheck(false);
         mockDistUnmatch(true);
         inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
@@ -105,12 +108,13 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
-        verify(inboxClient, times(5)).unsub(anyLong(), anyString(), anyString(), anyString());
+        verifyEvent(CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
+        verify(inboxClient, times(5)).unsub(any());
     }
 
     @Test
     public void qoS0PubAndHintChange() {
+        mockInboxCommit(CommitReply.Code.OK);
         mockAuthCheck(true);
         int messageCount = 2;
         inboxFetchConsumer.accept(fetch(messageCount, 64 * 1024, QoS.AT_MOST_ONCE));
@@ -120,14 +124,14 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_MOST_ONCE_VALUE);
             assertEquals(message.variableHeader().topicName(), "testTopic");
         }
-        verifyEvent(3, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED);
+        verifyEvent(CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED);
         assertEquals(fetchHints.size(), 1);
     }
 
     @Test
     public void qoS1PubAndAck() {
+        mockInboxCommit(CommitReply.Code.OK);
         mockAuthCheck(true);
-        mockInboxCommit(AT_LEAST_ONCE);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
         channel.runPendingTasks();
@@ -138,15 +142,15 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             assertEquals(message.variableHeader().topicName(), "testTopic");
             channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
         }
-        verifyEvent(7, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
+        verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
             QOS1_CONFIRMED);
-        verify(inboxReader, times(1)).commit(anyLong(), eq(AT_LEAST_ONCE), anyLong());
+        verify(inboxClient, times(1)).commit(argThat(req -> req.getQos() == AT_LEAST_ONCE));
     }
 
     @Test
     public void qoS1PubAndNotAllAck() {
         mockAuthCheck(true);
-        mockInboxCommit(AT_LEAST_ONCE);
+        mockInboxCommit(CommitReply.Code.OK);
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
         channel.runPendingTasks();
@@ -159,8 +163,8 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                 channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
             }
         }
-        verifyEvent(6, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED);
-        verify(inboxReader, times(0)).commit(anyLong(), eq(AT_LEAST_ONCE), anyLong());
+        verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED);
+        verify(inboxClient, times(0)).commit(argThat(req -> req.getQos() == AT_LEAST_ONCE));
     }
 
     @Test
@@ -175,14 +179,14 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(4, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
-        verify(inboxClient, times(messageCount)).unsub(anyLong(), anyString(), anyString(), anyString());
+        verifyEvent(CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
+        verify(inboxClient, times(messageCount)).unsub(any());
     }
 
     @Test
     public void qoS2PubAndRel() {
         mockAuthCheck(true);
-        mockInboxCommit(EXACTLY_ONCE);
+        mockInboxCommit(CommitReply.Code.OK);
         int messageCount = 2;
         inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
         channel.runPendingTasks();
@@ -200,9 +204,9 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             channel.writeInbound(MQTTMessageUtils.publishCompMessage(
                 ((MqttMessageIdVariableHeader) message.variableHeader()).messageId()));
         }
-        verifyEvent(7, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_RECEIVED, QOS2_RECEIVED, QOS2_CONFIRMED,
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_RECEIVED, QOS2_RECEIVED, QOS2_CONFIRMED,
             QOS2_CONFIRMED);
-        verify(inboxReader, times(1)).commit(anyLong(), eq(EXACTLY_ONCE), anyLong());
+        verify(inboxClient, times(1)).commit(argThat(req -> req.getQos() == EXACTLY_ONCE));
     }
 
     @Test
@@ -217,8 +221,8 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(4, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
-        verify(inboxClient, times(messageCount)).unsub(anyLong(), anyString(), anyString(), anyString());
+        verifyEvent(CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
+        verify(inboxClient, times(messageCount)).unsub(any());
     }
 
     @Test
@@ -299,7 +303,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         message = channel.readOutbound();
         assertNull(message);
 
-        verifyEvent(3, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED);
     }
 
     @Test
@@ -307,7 +311,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        verifyEvent(1, CLIENT_CONNECTED);
+        verifyEvent(CLIENT_CONNECTED);
     }
 
     @Test
@@ -315,7 +319,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.NO_INBOX).build());
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        verifyEvent(2, CLIENT_CONNECTED, INBOX_TRANSIENT_ERROR);
+        verifyEvent(CLIENT_CONNECTED, INBOX_TRANSIENT_ERROR);
     }
 
 

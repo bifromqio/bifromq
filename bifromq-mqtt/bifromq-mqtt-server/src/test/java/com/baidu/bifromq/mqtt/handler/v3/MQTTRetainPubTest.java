@@ -23,7 +23,6 @@ import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
 
-import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import lombok.extern.slf4j.Slf4j;
@@ -34,45 +33,49 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
 
     @Test
     public void qoS1PubRetain() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(RETAINED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(3, CLIENT_CONNECTED, MSG_RETAINED, PUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED, PUB_ACKED);
     }
 
     @Test
     public void qoS1PubRetainClear() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(CLEARED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(3, CLIENT_CONNECTED, RETAIN_MSG_CLEARED, PUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, RETAIN_MSG_CLEARED, PUB_ACKED);
     }
 
     @Test
     public void qoS1PubRetainFailed() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(2, CLIENT_CONNECTED, MSG_RETAINED_ERROR);
+        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR);
     }
 
     @Test
     public void qoS2PubRetainFailed() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(2, CLIENT_CONNECTED, MSG_RETAINED_ERROR);
+        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR);
     }
 }

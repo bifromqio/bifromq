@@ -13,6 +13,17 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import com.baidu.bifromq.inbox.server.scheduler.InboxAttachScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxCommitScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxCreateScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxDeleteScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxDetachScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxGetScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxUnSubScheduler;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,8 +32,23 @@ abstract class AbstractInboxServer implements IInboxServer {
     protected final InboxService inboxService;
 
     AbstractInboxServer(AbstractInboxServerBuilder<?> builder) {
-        this.inboxService = new InboxService(builder.settingProvider, builder.distClient,
-            builder.inboxStoreClient, builder.bgTaskExecutor);
+        this.inboxService = InboxService.builder()
+            .inboxClient(builder.inboxClient)
+            .distClient(builder.distClient)
+            .retainClient(builder.retainClient)
+            .inboxStoreClient(builder.inboxStoreClient)
+            .getScheduler(new InboxGetScheduler(builder.inboxStoreClient))
+            .fetchScheduler(new InboxFetchScheduler(builder.inboxStoreClient))
+            .insertScheduler(new InboxInsertScheduler(builder.inboxStoreClient))
+            .commitScheduler(new InboxCommitScheduler(builder.inboxStoreClient))
+            .createScheduler(new InboxCreateScheduler(builder.inboxStoreClient))
+            .attachScheduler(new InboxAttachScheduler(builder.inboxStoreClient))
+            .detachScheduler(new InboxDetachScheduler(builder.inboxStoreClient))
+            .deleteScheduler(new InboxDeleteScheduler(builder.inboxStoreClient))
+            .subScheduler(new InboxSubScheduler(builder.inboxStoreClient))
+            .unsubScheduler(new InboxUnSubScheduler(builder.inboxStoreClient))
+            .touchScheduler(new InboxTouchScheduler(builder.inboxStoreClient))
+            .build();
     }
 
     @Override

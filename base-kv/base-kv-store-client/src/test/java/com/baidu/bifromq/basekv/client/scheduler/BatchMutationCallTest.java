@@ -14,19 +14,19 @@
 package com.baidu.bifromq.basekv.client.scheduler;
 
 import static com.baidu.bifromq.basekv.client.scheduler.Fixtures.setting;
-import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertSame;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
+import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
@@ -36,9 +36,12 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.internal.util.collections.Sets;
 import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -71,7 +74,8 @@ public class BatchMutationCallTest {
         when(storeClient.findByKey(any())).thenReturn(Optional.of(setting(id, "V1", 0)));
         when(storeClient.createMutationPipeline("V1")).thenReturn(mutationPipeline1);
         when(mutationPipeline1.execute(any()))
-            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeRWReply.newBuilder().build()));
+            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeRWReply.newBuilder().build(),
+                CompletableFuture.delayedExecutor(1000, TimeUnit.MILLISECONDS)));
 
         TestMutationCallScheduler scheduler =
             new TestMutationCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
@@ -80,12 +84,18 @@ public class BatchMutationCallTest {
         List<Integer> respList = new CopyOnWriteArrayList<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
-            int req = ThreadLocalRandom.current().nextInt();
+            int req = ThreadLocalRandom.current().nextInt(100);
             reqList.add(req);
             futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req)))
                 .thenAccept((v) -> respList.add(Integer.parseInt(v.toStringUtf8()))));
         }
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+        ArgumentCaptor<KVRangeRWRequest> rwRequestCaptor = ArgumentCaptor.forClass(KVRangeRWRequest.class);
+        verify(mutationPipeline1, atMost(1000)).execute(rwRequestCaptor.capture());
+        for (KVRangeRWRequest request : rwRequestCaptor.getAllValues()) {
+            String[] keys = request.getRwCoProc().getRaw().toStringUtf8().split("_");
+            assertEquals(keys.length, Sets.newSet(keys).size());
+        }
         // the resp order preserved
         assertEquals(reqList, respList);
     }

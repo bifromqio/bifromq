@@ -241,61 +241,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .executor(MoreExecutors.directExecutor())
             .sslContext(clientSslContext)
             .build();
-        inboxClient = IInboxClient.newBuilder()
-            .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
-            .sslContext(clientSslContext)
-            .build();
-        inboxStoreClient = IBaseKVStoreClient.newBuilder()
-            .clusterId(IInboxStore.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
-            .executor(ioClientExecutor)
-            .sslContext(clientSslContext)
-            .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
-                .getQueryPipelinePerStore())
-            .build();
-        inboxStore = IInboxStore.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
-            .bootstrap(config.isBootstrap())
-            .agentHost(agentHost)
-            .crdtService(serverCrdtService)
-            .distClient(distClient)
-            .storeClient(inboxStoreClient)
-            .settingProvider(settingProviderMgr)
-            .eventCollector(eventCollectorMgr)
-            .queryExecutor(queryExecutor)
-            .tickTaskExecutor(tickTaskExecutor)
-            .bgTaskExecutor(bgTaskExecutor)
-            .loadEstimateWindow(Duration.ofSeconds(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
-            .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
-            .purgeDelay(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getPurgeDelaySeconds()))
-            .balanceControllerOptions(
-                toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
-            )
-            .storeOptions(new KVRangeStoreOptions()
-                .setKvRangeOptions(new KVRangeOptions()
-                    .setCompactWALThreshold(config.getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getCompactWALThreshold())
-                    .setEnableLoadEstimation(true))
-                .setDataEngineConfigurator(
-                    buildDataEngineConf(config
-                        .getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getDataEngineConfig(), "inbox_data"))
-                .setWalEngineConfigurator(
-                    buildWALEngineConf(config
-                        .getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getWalEngineConfig(), "inbox_wal")))
-            .build();
-        inboxServer = IInboxServer.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedIORPCServerBuilder)
-            .distClient(distClient)
-            .settingProvider(settingProviderMgr)
-            .inboxStoreClient(inboxStoreClient)
-            .bgTaskExecutor(bgTaskExecutor)
-            .build();
         retainClient = IRetainClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
@@ -345,6 +290,63 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .retainStoreClient(retainStoreClient)
             .build();
+        inboxClient = IInboxClient.newBuilder()
+            .crdtService(clientCrdtService)
+            .executor(MoreExecutors.directExecutor())
+            .sslContext(clientSslContext)
+            .build();
+        inboxStoreClient = IBaseKVStoreClient.newBuilder()
+            .clusterId(IInboxStore.CLUSTER_NAME)
+            .crdtService(clientCrdtService)
+            .executor(ioClientExecutor)
+            .sslContext(clientSslContext)
+            .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
+                .getQueryPipelinePerStore())
+            .build();
+        inboxStore = IInboxStore.nonStandaloneBuilder()
+            .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
+            .bootstrap(config.isBootstrap())
+            .agentHost(agentHost)
+            .crdtService(serverCrdtService)
+            .inboxClient(inboxClient)
+            .storeClient(inboxStoreClient)
+            .settingProvider(settingProviderMgr)
+            .eventCollector(eventCollectorMgr)
+            .queryExecutor(queryExecutor)
+            .tickTaskExecutor(tickTaskExecutor)
+            .bgTaskExecutor(bgTaskExecutor)
+            .loadEstimateWindow(Duration.ofSeconds(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
+            .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
+            .purgeDelay(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getPurgeDelaySeconds()))
+            .balanceControllerOptions(
+                toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
+            )
+            .storeOptions(new KVRangeStoreOptions()
+                .setKvRangeOptions(new KVRangeOptions()
+                    .setCompactWALThreshold(config.getStateStoreConfig()
+                        .getInboxStoreConfig()
+                        .getCompactWALThreshold())
+                    .setEnableLoadEstimation(true))
+                .setDataEngineConfigurator(
+                    buildDataEngineConf(config
+                        .getStateStoreConfig()
+                        .getInboxStoreConfig()
+                        .getDataEngineConfig(), "inbox_data"))
+                .setWalEngineConfigurator(
+                    buildWALEngineConf(config
+                        .getStateStoreConfig()
+                        .getInboxStoreConfig()
+                        .getWalEngineConfig(), "inbox_wal")))
+            .build();
+        inboxServer = IInboxServer.nonStandaloneBuilder()
+            .rpcServerBuilder(sharedIORPCServerBuilder)
+            .inboxClient(inboxClient)
+            .distClient(distClient)
+            .retainClient(retainClient)
+            .settingProvider(settingProviderMgr)
+            .inboxStoreClient(inboxStoreClient)
+            .bgTaskExecutor(bgTaskExecutor)
+            .build();
 
         mqttBrokerClient = IMqttBrokerClient.newBuilder()
             .crdtService(clientCrdtService)
@@ -352,7 +354,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .sslContext(clientSslContext)
             .build();
 
-        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient);
+        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient, inboxClient);
 
         distWorkerClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
@@ -499,6 +501,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         }
         Observable.combineLatest(
                 distWorkerClient.connState(),
+                inboxClient.connState(),
                 inboxClient.connState(),
                 retainStoreClient.connState(),
                 mqttBrokerClient.connState(),

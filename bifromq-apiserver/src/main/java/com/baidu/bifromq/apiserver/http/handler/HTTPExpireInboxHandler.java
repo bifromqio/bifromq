@@ -19,8 +19,10 @@ import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERR
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply.Result;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -64,12 +66,18 @@ public final class HTTPExpireInboxHandler implements IHTTPRequestHandler {
                                                       @Parameter(hidden = true) FullHttpRequest req) {
         try {
             int expirySeconds = Integer.parseInt(getHeader(HEADER_EXPIRY_SECONDS, req, true));
-            log.trace(
-                "Handling http expiry inbox request: reqId={}, tenantId={}, expirySeconds={}",
+            log.trace("Handling http expiry inbox request: reqId={}, tenantId={}, expirySeconds={}",
                 reqId, tenantId, expirySeconds);
-            return inboxClient.expireInbox(reqId, tenantId, expirySeconds)
-                .thenApply(r -> new DefaultFullHttpResponse(req.protocolVersion(), r.getResult() == Result.OK
-                        ? OK : INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER));
+            ExpireAllRequest.Builder reqBuilder = ExpireAllRequest.newBuilder()
+                .setReqId(reqId)
+                .setExpirySeconds(expirySeconds)
+                .setNow(HLC.INST.getPhysical());
+            if (tenantId != null) {
+                reqBuilder.setTenantId(tenantId);
+            }
+            return inboxClient.expireAll(reqBuilder.build())
+                .thenApply(r -> new DefaultFullHttpResponse(req.protocolVersion(),
+                    r.getCode() == ExpireAllReply.Code.OK ? OK : INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER));
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);
         }

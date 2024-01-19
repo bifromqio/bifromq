@@ -42,6 +42,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-inbox-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-inbox-gc</artifactId>
         </dependency>
         <dependency>
@@ -55,6 +59,10 @@
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-dist-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-retain-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -73,11 +81,6 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
         <!-- for testing -->
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-client</artifactId>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-inbox-store</artifactId>

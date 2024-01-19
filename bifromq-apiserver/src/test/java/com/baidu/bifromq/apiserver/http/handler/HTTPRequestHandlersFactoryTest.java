@@ -44,7 +44,7 @@ public class HTTPRequestHandlersFactoryTest extends MockableTest {
     @Test
     public void build() {
         HTTPRequestHandlersFactory handlersFactory = new HTTPRequestHandlersFactory(sessionDictClient,
-                distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider);
+            distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider);
         Collection<IHTTPRequestHandler> handlers = handlersFactory.build();
         assertEquals(handlers.size(), 5);
     }

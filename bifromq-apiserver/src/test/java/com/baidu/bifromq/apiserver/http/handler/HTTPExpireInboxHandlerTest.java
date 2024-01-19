@@ -15,23 +15,22 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TENANT_ID;
+import static com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply.Code.ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply.Result;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import java.util.concurrent.CompletableFuture;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
@@ -59,19 +58,14 @@ public class HTTPExpireInboxHandlerTest extends AbstractHTTPRequestHandlerTest<H
         long reqId = 123;
         String tenantId = "bifromq_dev";
         HTTPExpireInboxHandler handler = new HTTPExpireInboxHandler(inboxClient);
-        when(inboxClient.expireInbox(anyLong(), eq(tenantId), eq(10))).thenReturn(CompletableFuture.completedFuture(
-            ExpireInboxReply.newBuilder()
-                .setResult(Result.OK)
+        when(inboxClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
+            ExpireAllReply.newBuilder()
+                .setCode(ExpireAllReply.Code.OK)
                 .build()));
 
         CompletableFuture<FullHttpResponse> responseCompletableFuture = handler.handle(reqId, tenantId, req);
-        ArgumentCaptor<Long> reqIdCap = ArgumentCaptor.forClass(Long.class);
-        ArgumentCaptor<String> tenantIdCap = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Integer> expireTimeCap = ArgumentCaptor.forClass(Integer.class);
-        verify(inboxClient).expireInbox(reqIdCap.capture(), tenantIdCap.capture(), expireTimeCap.capture());
-        assertEquals(reqIdCap.getValue(), reqId);
-        assertEquals(tenantIdCap.getValue(), tenantId);
-        assertEquals(expireTimeCap.getValue(), 10);
+        verify(inboxClient).expireAll(
+            argThat(r -> r.getReqId() == reqId && r.getTenantId().equals(tenantId) && r.getExpirySeconds() == 10));
         assertEquals(responseCompletableFuture.join().status(), OK);
     }
 
@@ -84,9 +78,9 @@ public class HTTPExpireInboxHandlerTest extends AbstractHTTPRequestHandlerTest<H
         String tenantId = "bifromq_dev";
 
         HTTPExpireInboxHandler handler = new HTTPExpireInboxHandler(inboxClient);
-        when(inboxClient.expireInbox(anyLong(), eq(tenantId), eq(10))).thenReturn(CompletableFuture.completedFuture(
-            ExpireInboxReply.newBuilder()
-                .setResult(Result.ERROR)
+        when(inboxClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
+            ExpireAllReply.newBuilder()
+                .setCode(ERROR)
                 .build()));
         CompletableFuture<FullHttpResponse> responseCompletableFuture = handler.handle(reqId, tenantId, req);
         FullHttpResponse httpResponse = responseCompletableFuture.join();

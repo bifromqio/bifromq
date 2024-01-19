@@ -36,7 +36,7 @@ public enum Setting {
     ByPassPermCheckError(Boolean.class, val -> true, true),
     MaxUserPayloadBytes(Integer.class, val -> (int) val > 0 && (int) val <= 1024 * 1024, 256 * 1024),
     MaxTopicFiltersPerSub(Integer.class, val -> (int) val > 0 && (int) val <= 100, 10),
-    OfflineExpireTimeSeconds(Long.class, val -> (long) val > 0, 24 * 60 * 60L),
+    OfflineExpireTimeSeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
     OfflineQueueSize(Integer.class, val -> (int) val > 0 && (int) val <= 100000, 1000),
     OfflineOverflowDropOldest(Boolean.class, val -> true, false),
     RetainedTopicLimit(Integer.class, val -> (int) val >= 0, 10),

@@ -8,12 +8,25 @@ option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.type";
 option java_outer_classname = "TopicMessageProtos";
 
+message StringPair{
+  string key = 1;
+  string value = 2;
+}
+message UserProperties{
+  repeated StringPair userProperties = 11;
+}
 message Message{
   uint64 messageId = 1;
   QoS pubQoS = 2;
   bytes payload = 3; // user payload
-  uint64 timestamp = 4; // UTC ts
-  uint64 expireTimestamp = 5; // UTC ts
+  uint64 timestamp = 4; // HLC when message received
+  uint64 expireTimestamp = 5; // deprecate!
+  optional bool isUTF8String = 6; // for mqtt5, corresponds to payload format indicator
+  optional string contentType = 7; // for mqtt5
+  optional string responseTopic = 8; // for mqtt5
+  optional bytes  correlationData = 9; // for mqtt5
+  optional uint32 expiryInterval = 10; // for mqtt5
+  optional UserProperties userProperties = 11; // for mqtt5
 }
 
 message TopicMessage {

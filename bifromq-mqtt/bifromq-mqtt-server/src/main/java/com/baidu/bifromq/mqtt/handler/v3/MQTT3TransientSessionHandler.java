@@ -20,7 +20,9 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
+import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.PushEvent;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
@@ -34,6 +36,7 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
 import java.util.HashSet;
@@ -51,11 +54,12 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     private final Set<String> topicFilters = new HashSet<>();
 
     @Builder
-    public MQTT3TransientSessionHandler(ClientInfo clientInfo,
+    public MQTT3TransientSessionHandler(TenantSettings settings,
+                                        String userSessionId,
+                                        ClientInfo clientInfo,
                                         int keepAliveTimeSeconds,
-                                        boolean sessionPresent,
                                         WillMessage willMessage) {
-        super(clientInfo, keepAliveTimeSeconds, true, sessionPresent, willMessage);
+        super(settings, userSessionId, clientInfo, keepAliveTimeSeconds, willMessage);
     }
 
     @Override
@@ -80,6 +84,11 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
                 .toArray(CompletableFuture[]::new)));
         }
         ctx.fireChannelInactive();
+    }
+
+    @Override
+    protected void handleDisconnect(MqttMessage mqttMessage) {
+        closeConnectionNow(getLocal(ByClient.class).clientInfo(clientInfo));
     }
 
     @Override
@@ -267,64 +276,64 @@ public final class MQTT3TransientSessionHandler extends MQTT3SessionHandler impl
     @Override
     public CompletableFuture<MqttQoS> subscribe(long reqId, String topicFilter, MqttQoS qos) {
         return CompletableFuture.supplyAsync(this::checkSubTopicFilters, ctx.channel().eventLoop())
-                .thenCompose(r -> {
-                    if (!r) {
-                        return CompletableFuture.completedFuture(MqttQoS.FAILURE);
-                    }
-                    return cancelOnInactive(distMatch(reqId, topicFilter, qos)
-                            .thenApplyAsync(subResult -> {
-                                if (subResult == MatchResult.OK) {
-                                    topicFilters.add(topicFilter);
-                                    return qos;
-                                }
-                                return MqttQoS.FAILURE;
-                            }, ctx.channel().eventLoop())
-                            .thenCompose(subQos -> {
-                                if (subQos == MqttQoS.FAILURE) {
-                                    return CompletableFuture.completedFuture(MqttQoS.FAILURE);
-                                }
-                                return matchRetainMessages(reqId, topicFilter,
-                                        QoS.values()[qos.ordinal()]).thenApply(
-                                        ok -> ok ? qos : MqttQoS.FAILURE);
-                            }));
-                });
+            .thenCompose(r -> {
+                if (!r) {
+                    return CompletableFuture.completedFuture(MqttQoS.FAILURE);
+                }
+                return cancelOnInactive(distMatch(reqId, topicFilter, qos)
+                    .thenApplyAsync(subResult -> {
+                        if (subResult == MatchResult.OK) {
+                            topicFilters.add(topicFilter);
+                            return qos;
+                        }
+                        return MqttQoS.FAILURE;
+                    }, ctx.channel().eventLoop())
+                    .thenCompose(subQos -> {
+                        if (subQos == MqttQoS.FAILURE) {
+                            return CompletableFuture.completedFuture(MqttQoS.FAILURE);
+                        }
+                        return matchRetainMessages(reqId, topicFilter,
+                            QoS.values()[qos.ordinal()]).thenApply(
+                            ok -> ok ? qos : MqttQoS.FAILURE);
+                    }));
+            });
     }
 
     @Override
     public CompletableFuture<Boolean> unsubscribe(long reqId, String topicFilter) {
         return CompletableFuture.supplyAsync(() -> checkUnsubTopicFilter(topicFilter), ctx.channel().eventLoop())
-                .thenCompose(r -> {
-                    if (!r) {
-                        return CompletableFuture.completedFuture(false);
-                    }
-                    return cancelOnInactive(distUnMatch(reqId, topicFilter)
-                            .handleAsync((v, e) -> {
-                                if (e != null) {
-                                    return false;
-                                } else {
-                                    if (Objects.requireNonNull(v) == UnmatchResult.OK) {
-                                        return true;
-                                    }
-                                    return false;
-                                }
-                            }, ctx.channel().eventLoop()));
-                });
+            .thenCompose(r -> {
+                if (!r) {
+                    return CompletableFuture.completedFuture(false);
+                }
+                return cancelOnInactive(distUnMatch(reqId, topicFilter)
+                    .handleAsync((v, e) -> {
+                        if (e != null) {
+                            return false;
+                        } else {
+                            if (Objects.requireNonNull(v) == UnmatchResult.OK) {
+                                return true;
+                            }
+                            return false;
+                        }
+                    }, ctx.channel().eventLoop()));
+            });
     }
 
     private CompletableFuture<MatchResult> distMatch(long reqId, String topicFilter, MqttQoS qoS) {
         return sessionCtx.distClient.match(reqId, clientInfo().getTenantId(), topicFilter,
-                QoS.forNumber(qoS.value()), channelId(),
-                toDelivererKey(channelId(), sessionCtx.serverId), 0);
+            QoS.forNumber(qoS.value()), channelId(),
+            toDelivererKey(channelId(), sessionCtx.serverId), 0);
     }
 
     private CompletableFuture<UnmatchResult> distUnMatch(long reqId, String topicFilter) {
         return sessionCtx.distClient.unmatch(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
-                toDelivererKey(channelId(), sessionCtx.serverId), 0);
+            toDelivererKey(channelId(), sessionCtx.serverId), 0);
     }
 
     private boolean checkSubTopicFilters() {
         int maxTopicFiltersPerInbox = settingProvider.provide(Setting.MaxTopicFiltersPerInbox,
-                clientInfo().getTenantId());
+            clientInfo().getTenantId());
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
             return false;
         }
