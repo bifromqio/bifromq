@@ -30,12 +30,13 @@ import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-
+import com.baidu.bifromq.retain.client.IRetainClient;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -57,13 +58,16 @@ public abstract class InboxServiceTest {
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
-    private ISettingProvider settingProvider = Setting::current;
     private IEventCollector eventCollector = event -> {
 
     };
 
     @Mock
-    private IDistClient distClient;
+    protected ISettingProvider settingProvider;
+    @Mock
+    protected IDistClient distClient;
+    @Mock
+    protected IRetainClient retainClient;
     private IBaseKVStoreClient inboxStoreClient;
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
@@ -75,8 +79,12 @@ public abstract class InboxServiceTest {
     @BeforeClass(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        when(settingProvider.provide(any(), anyString())).thenAnswer(
+            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
@@ -108,7 +116,6 @@ public abstract class InboxServiceTest {
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .distClient(distClient)
             .storeClient(inboxStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -121,7 +128,9 @@ public abstract class InboxServiceTest {
         inboxServer = IInboxServer.standaloneBuilder()
             .host("127.0.0.1")
             .crdtService(serverCrdtService)
+            .inboxClient(inboxClient)
             .distClient(distClient)
+            .retainClient(retainClient)
             .settingProvider(settingProvider)
             .inboxStoreClient(inboxStoreClient)
             .build();
@@ -152,13 +161,14 @@ public abstract class InboxServiceTest {
     }
 
     @BeforeMethod(alwaysRun = true)
-    public void printCaseStart(Method method) {
+    public void beforeCaseStart(Method method) {
         log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
     }
 
+    @SneakyThrows
     @AfterMethod(alwaysRun = true)
-    public void printCaseFinish(Method method) {
+    public void afterCaseFinish(Method method) {
         log.info("Test case[{}.{}] finished, doing teardown",
-                method.getDeclaringClass().getName(), method.getName());
+            method.getDeclaringClass().getName(), method.getName());
     }
 }

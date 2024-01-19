@@ -13,37 +13,9 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
-import com.google.protobuf.ByteString;
+import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
+import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 
-public interface IInboxTouchScheduler extends IBatchCallScheduler<IInboxTouchScheduler.Touch, Boolean> {
-    class Touch {
-        final String scopedInboxIdUtf8;
-        final boolean keep;
-
-        public Touch(DeleteInboxRequest req) {
-            scopedInboxIdUtf8 = scopedInboxId(req.getTenantId(), req.getInboxId()).toStringUtf8();
-            keep = false;
-        }
-
-        public Touch(TouchInboxRequest req) {
-            scopedInboxIdUtf8 = scopedInboxId(req.getTenantId(), req.getInboxId()).toStringUtf8();
-            keep = true;
-
-        }
-
-        public Touch(ByteString scopedInboxId) {
-            scopedInboxIdUtf8 = scopedInboxId.toStringUtf8();
-            keep = true;
-        }
-
-        public Touch(ByteString scopedInboxId, boolean keep) {
-            scopedInboxIdUtf8 = scopedInboxId.toStringUtf8();
-            this.keep = keep;
-        }
-    }
+public interface IInboxTouchScheduler extends IBatchCallScheduler<TouchRequest, TouchReply> {
 }

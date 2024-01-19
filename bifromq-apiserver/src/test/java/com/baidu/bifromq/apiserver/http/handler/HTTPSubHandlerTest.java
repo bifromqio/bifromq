@@ -13,10 +13,28 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static com.baidu.bifromq.apiserver.Headers.HEADER_DELIVERER_KEY;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_SUBBROKER_ID;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertThrows;
+
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.client.InboxSubResult;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.mqtt.inbox.MqttSubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -26,19 +44,10 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
-
-import java.util.concurrent.CompletableFuture;
-
-import static com.baidu.bifromq.apiserver.Headers.*;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertThrows;
 
 public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHandler> {
     @Mock
@@ -73,7 +82,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
 
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-                .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<Long> reqIdCap = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<String> tenantIdCap = ArgumentCaptor.forClass(String.class);
@@ -81,7 +90,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         ArgumentCaptor<QoS> subQosCap = ArgumentCaptor.forClass(QoS.class);
         ArgumentCaptor<String> inboxIdCap = ArgumentCaptor.forClass(String.class);
         verify(mqttBrokerClient).sub(reqIdCap.capture(), tenantIdCap.capture(),
-                inboxIdCap.capture(), topicFilterCap.capture(), subQosCap.capture());
+            inboxIdCap.capture(), topicFilterCap.capture(), subQosCap.capture());
 
         assertEquals(reqIdCap.getValue(), reqId);
         assertEquals(tenantIdCap.getValue(), tenantId);
@@ -103,7 +112,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-                .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
@@ -124,14 +133,20 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
 
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
-        when(inboxClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-                .thenReturn(CompletableFuture.completedFuture(InboxSubResult.OK));
+        when(inboxClient.get(any()))
+            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder().setCode(GetReply.Code.EXIST)
+                .addInbox(InboxVersion.newBuilder().setIncarnation(1).setVersion(0).build())
+                .build()));
+        when(inboxClient.sub(any()))
+            .thenReturn(CompletableFuture.completedFuture(SubReply.newBuilder().setCode(SubReply.Code.OK).build()));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.OK);
         assertEquals(response.headers().get(HEADER_SUB_QOS.header), "0");
         assertEquals(response.content().readableBytes(), 0);
+
+        verify(inboxClient).sub(argThat(r -> r.getIncarnation() == 1 && r.getVersion() == 0));
     }
 
     @Test
@@ -147,7 +162,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-                .thenReturn(CompletableFuture.completedFuture(MqttSubResult.ERROR));
+            .thenReturn(CompletableFuture.completedFuture(MqttSubResult.ERROR));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
@@ -167,9 +182,33 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         String tenantId = "bifromq_dev";
 
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
+        when(inboxClient.get(any()))
+            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder().setCode(GetReply.Code.ERROR).build()));
 
-        when(inboxClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-                .thenReturn(CompletableFuture.completedFuture(InboxSubResult.NO_INBOX));
+        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), HttpResponseStatus.OK);
+        assertEquals(response.headers().get(HEADER_SUB_QOS.header), "128");
+        assertEquals(response.content().readableBytes(), 0);
+    }
+
+    @Test
+    public void subPersistentInboxFailed1() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC_FILTER.header, "/greeting/#");
+        req.headers().set(HEADER_SUB_QOS.header, "0");
+        req.headers().set(HEADER_INBOX_ID.header, "greeting_inbox");
+        req.headers().set(HEADER_SUBBROKER_ID.header, "1");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
+        when(inboxClient.get(any()))
+            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder().setCode(GetReply.Code.EXIST)
+                .addInbox(InboxVersion.newBuilder().setIncarnation(1).setVersion(0).build())
+                .build()));
+        when(inboxClient.sub(any())).thenReturn(CompletableFuture.completedFuture(SubReply.newBuilder()
+            .setCode(SubReply.Code.NO_INBOX).build()));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
@@ -192,7 +231,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
-                .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());

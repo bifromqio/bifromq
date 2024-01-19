@@ -29,7 +29,6 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply.Builder;
@@ -60,7 +59,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
 
     @Test
     public void qoS0Match() {
-        connectAndVerify(true);
+        setupTransientSession();
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_MOST_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
@@ -74,12 +73,13 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(5, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, SUB_ACKED);
     }
 
     @Test
     public void qoS1Match() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
@@ -93,12 +93,13 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(5, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, SUB_ACKED);
     }
 
     @Test
     public void qoS2Match() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.EXACTLY_ONCE, true);
         mockRetainMatch(1, QoS.EXACTLY_ONCE);
@@ -112,12 +113,13 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(5, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, SUB_ACKED);
     }
 
     @Test
     public void mixedMatch() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_MOST_ONCE, true);
         mockDistMatch(QoS.AT_LEAST_ONCE, true);
@@ -133,12 +135,13 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         }
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(5, CLIENT_CONNECTED, QOS2_PUSHED, QOS1_PUSHED, QOS0_PUSHED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS1_PUSHED, QOS0_PUSHED, SUB_ACKED);
     }
 
     @Test
     public void qoS0MatchFailed() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_MOST_ONCE, true);
         when(retainClient.match(anyLong(), anyString(), anyString(), anyInt()))
@@ -150,7 +153,7 @@ public class MQTTRetainMatchTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {128, 128, 128});
-        verifyEvent(5, CLIENT_CONNECTED, MATCH_RETAIN_ERROR, MATCH_RETAIN_ERROR, MATCH_RETAIN_ERROR, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, MATCH_RETAIN_ERROR, MATCH_RETAIN_ERROR, MATCH_RETAIN_ERROR, SUB_ACKED);
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {

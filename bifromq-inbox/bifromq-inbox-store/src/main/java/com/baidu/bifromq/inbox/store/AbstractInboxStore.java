@@ -20,6 +20,7 @@ import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.InboxUsedSpaceGauge;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -28,7 +29,10 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
+import com.baidu.bifromq.inbox.store.gc.IInboxGCProcessor;
+import com.baidu.bifromq.inbox.store.gc.InboxGCProcessor;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -55,8 +59,9 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
+    private final IInboxClient inboxClient;
     private final KVRangeBalanceController balanceController;
-    private final InboxStoreGCProc inboxStoreGCProc;
+    private final IInboxGCProcessor inboxStoreGCProc;
     private final AsyncRunner jobRunner;
     private final ScheduledExecutorService jobScheduler;
     private final boolean jobExecutorOwner;
@@ -70,10 +75,12 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     public AbstractInboxStore(T builder) {
         this.clusterId = builder.clusterId;
         this.storeClient = builder.storeClient;
+        this.inboxClient = builder.inboxClient;
         this.gcInterval = builder.gcInterval;
         this.statsInterval = builder.statsInterval;
-        coProcFactory = new InboxStoreCoProcFactory(builder.distClient, builder.settingProvider,
-            builder.eventCollector, builder.clock, builder.loadEstimateWindow, builder.purgeDelay);
+        coProcFactory = new InboxStoreCoProcFactory(builder.settingProvider,
+            builder.eventCollector, builder.loadEstimateWindow,
+            builder.purgeDelay);
         balanceController =
             new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
@@ -84,7 +91,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         } else {
             jobScheduler = builder.bgTaskExecutor;
         }
-        this.inboxStoreGCProc = new InboxStoreGCProc(storeClient, jobScheduler);
+        this.inboxStoreGCProc = new InboxGCProcessor(inboxClient, storeClient);
         jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "inboxstore");
     }
 
@@ -154,7 +161,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             List<CompletableFuture<?>> gcFutures = new ArrayList<>();
             while (itr.hasNext()) {
                 KVRangeSetting leaderReplica = itr.next();
-                gcFutures.add(inboxStoreGCProc.gcRange(leaderReplica.id, null, null, 100));
+                gcFutures.add(inboxStoreGCProc.gcRange(leaderReplica.id, null, null, HLC.INST.getPhysical(), 100));
             }
             gcJob = CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0]))
                 .whenComplete((v, e) -> scheduleGC());

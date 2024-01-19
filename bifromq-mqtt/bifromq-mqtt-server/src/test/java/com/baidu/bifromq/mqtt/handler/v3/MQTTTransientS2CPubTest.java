@@ -40,7 +40,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNull;
 
-import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.ClientInfo;
@@ -73,7 +72,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
     @BeforeMethod
     public void setup() {
         super.setup();
-        connectAndVerify(true);
+        setupTransientSession();
         transientSessionHandler = (MQTT3TransientSessionHandler) channel.pipeline().get(MQTT3SessionHandler.NAME);
     }
 
@@ -98,7 +97,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_MOST_ONCE_VALUE);
             assertEquals(message.variableHeader().topicName(), "testTopic");
         }
-        verifyEvent(6, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
+        verifyEvent(CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
     }
 
     @Test
@@ -118,7 +117,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(6, CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
+        verifyEvent(CLIENT_CONNECTED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED, QOS0_DROPPED);
         verify(distClient, times(1))
             .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
@@ -144,7 +143,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
                 assertNull(message);
             }
         }
-        verifyEvent(11, CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED,
+        verifyEvent(CLIENT_CONNECTED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED,
             QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_DROPPED);
     }
 
@@ -168,7 +167,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             assertEquals(message.variableHeader().topicName(), "testTopic");
             channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
         }
-        verifyEvent(7, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
+        verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
             QOS1_CONFIRMED);
     }
 
@@ -189,7 +188,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(6, CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
+        verifyEvent(CLIENT_CONNECTED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
         verify(distClient, times(1))
             .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
@@ -215,7 +214,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
                 assertNull(message);
             }
         }
-        verifyEvent(11, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED,
+        verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED,
             QOS1_PUSHED,
             QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_DROPPED);
     }
@@ -269,8 +268,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             assertNull(message);
         }
 
-        verifyEvent(13, CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED,
-            QOS1_PUSHED,
+        verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED,
             QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED, QOS1_CONFIRMED);
     }
 
@@ -311,7 +309,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 1 + messageCount; i < 1 + messageCount + overFlowCount; i++) {
             eventTypes[i] = QOS1_CONFIRMED;
         }
-        verifyEvent(1 + messageCount + overFlowCount, eventTypes);
+        verifyEvent(eventTypes);
     }
 
     @Test
@@ -340,7 +338,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             channel.writeInbound(MQTTMessageUtils.publishCompMessage(
                 ((MqttMessageIdVariableHeader) message.variableHeader()).messageId()));
         }
-        verifyEvent(4, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_RECEIVED, QOS2_CONFIRMED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_RECEIVED, QOS2_CONFIRMED);
     }
 
     @Test
@@ -360,7 +358,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(6, CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
         verify(distClient, times(1))
             .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
@@ -386,8 +384,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
                 assertNull(message);
             }
         }
-        verifyEvent(11, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED,
-            QOS2_PUSHED,
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED,
             QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_DROPPED);
     }
 
@@ -444,7 +441,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(5, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_CONFIRMED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_CONFIRMED);
     }
 
     @Test
@@ -486,7 +483,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         for (int i = 1 + messageCount; i < 1 + messageCount + overFlowCount; i++) {
             eventTypes[i] = QOS2_CONFIRMED;
         }
-        verifyEvent(1 + messageCount + overFlowCount, eventTypes);
+        verifyEvent(eventTypes);
     }
 
     @Test
@@ -562,7 +559,7 @@ public class MQTTTransientS2CPubTest extends BaseMQTTTest {
         message = channel.readOutbound();
         assertNull(message);
 
-        verifyEvent(3, CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED);
     }
 
 

@@ -21,13 +21,10 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
-import com.baidu.bifromq.inbox.storage.proto.FetchParams;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Queue;
 
 public class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fetched> {
@@ -38,34 +35,30 @@ public class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFet
     }
 
     @Override
-    protected ROCoProcInput makeBatch(Iterator<IInboxFetchScheduler.InboxFetch> inboxFetchIterator) {
-        // key: scopedInboxIdUtf8
-        Map<String, FetchParams> inboxFetches = new HashMap<>(128);
-
-        inboxFetchIterator.forEachRemaining(request ->
-            inboxFetches.compute(request.scopedInboxId.toStringUtf8(), (k, v) -> {
-                if (v == null) {
-                    return request.params;
-                }
-                FetchParams.Builder b = v.toBuilder();
-                if (request.params.hasQos0StartAfter()) {
-                    b.setQos0StartAfter(request.params.getQos1StartAfter());
-                }
-                if (request.params.hasQos1StartAfter()) {
-                    b.setQos1StartAfter(request.params.getQos1StartAfter());
-                }
-                if (request.params.hasQos2StartAfter()) {
-                    b.setQos2StartAfter(request.params.getQos2StartAfter());
-                }
-                b.setMaxFetch(request.params.getMaxFetch());
-                return b.build();
-            }));
+    protected ROCoProcInput makeBatch(Iterator<IInboxFetchScheduler.InboxFetch> reqIterator) {
+        BatchFetchRequest.Builder reqBuilder = BatchFetchRequest.newBuilder();
+        reqIterator.forEachRemaining(request -> {
+            BatchFetchRequest.Params.Builder paramsBuilder = BatchFetchRequest.Params.newBuilder()
+                .setTenantId(request.tenantId)
+                .setInboxId(request.inboxId)
+                .setIncarnation(request.incarnation)
+                .setMaxFetch(request.params.getMaxFetch());
+            if (request.params.hasQos0StartAfter()) {
+                paramsBuilder.setQos0StartAfter(request.params.getQos1StartAfter());
+            }
+            if (request.params.hasQos1StartAfter()) {
+                paramsBuilder.setQos1StartAfter(request.params.getQos1StartAfter());
+            }
+            if (request.params.hasQos2StartAfter()) {
+                paramsBuilder.setQos2StartAfter(request.params.getQos2StartAfter());
+            }
+            reqBuilder.addParams(paramsBuilder.build());
+        });
         long reqId = System.nanoTime();
         return ROCoProcInput.newBuilder()
             .setInboxService(InboxServiceROCoProcInput.newBuilder()
                 .setReqId(reqId)
-                .setBatchFetch(BatchFetchRequest.newBuilder()
-                    .putAllInboxFetch(inboxFetches)
+                .setBatchFetch(reqBuilder
                     .build())
                 .build())
             .build();
@@ -76,11 +69,9 @@ public class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFet
         Queue<CallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey>> batchedTasks,
         ROCoProcOutput output) {
         CallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> task;
+        int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(output.getInboxService()
-                .getBatchFetch()
-                .getResultMap()
-                .get(task.call.scopedInboxId.toStringUtf8()));
+            task.callResult.complete(output.getInboxService().getBatchFetch().getResult(i++));
         }
     }
 

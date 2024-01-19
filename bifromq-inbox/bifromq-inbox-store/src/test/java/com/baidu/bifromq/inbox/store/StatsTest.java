@@ -15,21 +15,59 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.metrics.TenantMetric.InboxUsedSpaceGauge;
 import static org.awaitility.Awaitility.await;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
+import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
+import com.baidu.bifromq.type.ClientInfo;
 import io.micrometer.core.instrument.Meter;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class StatsTest extends InboxStoreTest {
-    @SneakyThrows
     @Test(groups = "integration")
-    public void reportRangeMetrics() {
-        String tenantId = "reportRangeMetrics_tenantId";
-        String inboxId = "reportRangeMetrics_inboxId";
-        requestCreate(tenantId, inboxId, 10, 100, false);
+    public void collectMetrics() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        requestCreate(BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build());
 
+        long reqId = System.nanoTime();
+        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
+            .setReqId(reqId)
+            .build());
+        assertEquals(reply.getReqId(), reqId);
+        assertTrue(reply.getUsedSpacesOrDefault(tenantId, 0) > 0);
+    }
+
+
+    @Test(groups = "integration")
+    public void collectJob() {
+        long now = 0;
+        String tenantId = "tenantId";
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        requestCreate(BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(5)
+            .setExpirySeconds(5)
+            .setClient(client)
+            .setNow(now)
+            .build());
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&

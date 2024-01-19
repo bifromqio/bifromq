@@ -18,19 +18,16 @@ import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
-import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
-import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.type.QoS;
 import io.reactivex.rxjava3.annotations.NonNull;
+import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
@@ -39,61 +36,46 @@ import lombok.extern.slf4j.Slf4j;
 class InboxFetchPipeline {
     private static final Cleaner CLEANER = Cleaner.create();
 
-    private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream;
+    private final IMessageStream<InboxFetched, InboxFetchHint> messageStream;
     private final String tenantId;
-    private final IRPCClient rpcClient;
-    private final Map<String, Consumer<Fetched>> fetcherMap = new ConcurrentHashMap<>();
+    private final Map<InboxFetchSessionId, Consumer<Fetched>> fetcherMap = new ConcurrentHashMap<>();
     private final Cleanable cleanable;
 
     InboxFetchPipeline(String tenantId, String delivererKey, IRPCClient rpcClient) {
         this.tenantId = tenantId;
-        this.rpcClient = rpcClient;
         this.messageStream = rpcClient.createMessageStream(tenantId, null, delivererKey,
             singletonMap(PIPELINE_ATTR_KEY_ID, UUID.randomUUID().toString()),
-            InboxServiceGrpc.getFetchInboxMethod());
+            InboxServiceGrpc.getFetchMethod());
         this.cleanable = CLEANER.register(this, new PipelineCloseAction(messageStream));
         new FetchObserver(messageStream, fetcherMap).observe();
     }
 
-    public void fetch(String inboxId, Consumer<Fetched> consumer) {
-        fetcherMap.put(inboxId, consumer);
+    public void fetch(long sessionId, String inboxId, long incarnation, Consumer<Fetched> consumer) {
+        fetcherMap.put(new InboxFetchSessionId(sessionId, inboxId, incarnation), consumer);
     }
 
-    public void stopFetch(String inboxId) {
-        fetcherMap.remove(inboxId);
+    public void stopFetch(long sessionId, String inboxId, long incarnation) {
+        fetcherMap.remove(new InboxFetchSessionId(sessionId, inboxId, incarnation));
     }
 
-    public void hint(long incarnation, String inboxId, int bufferCapacity, long lastFetchQoS0Seq, long lastFetchQoS1Seq,
+    public void hint(long sessionId,
+                     String inboxId,
+                     long incarnation,
+                     int bufferCapacity,
+                     long lastFetchQoS0Seq,
+                     long lastFetchQoS1Seq,
                      long lastFetchQoS2Seq) {
-        log.trace("Send hint: inboxId={}, capacity={}, client={}", inboxId, bufferCapacity, tenantId);
+        log.trace("Send hint: inboxId={}, incarnation={}, capacity={}, client={}", inboxId, incarnation, bufferCapacity,
+            tenantId);
         messageStream.ack(InboxFetchHint.newBuilder()
-            .setIncarnation(incarnation)
+            .setSessionId(sessionId)
             .setInboxId(inboxId)
+            .setIncarnation(incarnation)
             .setCapacity(bufferCapacity)
             .setLastFetchQoS0Seq(lastFetchQoS0Seq)
             .setLastFetchQoS1Seq(lastFetchQoS1Seq)
             .setLastFetchQoS2Seq(lastFetchQoS2Seq)
             .build());
-    }
-
-    public CompletableFuture<CommitReply> commit(long reqId, String inboxId, QoS qos, long upToSeq) {
-        log.trace("Commit: tenantId={}, inbox={}, qos={}, seq={}", tenantId, inboxId, qos, upToSeq);
-        return rpcClient.invoke(tenantId, null,
-                CommitRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setQos(qos)
-                    .setUpToSeq(upToSeq)
-                    .setInboxId(inboxId)
-                    .build(),
-                InboxServiceGrpc.getCommitMethod())
-            .exceptionally(e -> {
-                log.error("Failed to commit inbox: {}", inboxId, e);
-                return CommitReply.newBuilder()
-                    .setReqId(reqId)
-                    .setResult(CommitReply.Result.ERROR)
-                    .build();
-            });
     }
 
     public void close() {
@@ -102,23 +84,18 @@ class InboxFetchPipeline {
         }
     }
 
-    private static class FetchObserver {
-        private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> stream;
-        private final Map<String, Consumer<Fetched>> fetcherMap;
-
-        public FetchObserver(IMessageStream<InboxFetched, InboxFetchHint> stream,
-                             Map<String, Consumer<Fetched>> fetcherMap) {
-            this.stream = stream;
-            this.fetcherMap = fetcherMap;
-        }
-
+    private record FetchObserver(IMessageStream<InboxFetched, InboxFetchHint> stream,
+                                 Map<InboxFetchSessionId, Consumer<Fetched>> fetcherMap) {
         private void observe() {
             if (!stream.isClosed()) {
                 stream.msg()
-                    .subscribeWith(new io.reactivex.rxjava3.observers.DisposableObserver<InboxFetched>() {
+                    .subscribeWith(new DisposableObserver<InboxFetched>() {
                         @Override
                         public void onNext(@NonNull InboxFetched inboxFetched) {
-                            Consumer<Fetched> fetcher = fetcherMap.get(inboxFetched.getInboxId());
+                            Consumer<Fetched> fetcher = fetcherMap.get(
+                                new InboxFetchSessionId(inboxFetched.getSessionId(),
+                                    inboxFetched.getInboxId(),
+                                    inboxFetched.getIncarnation()));
                             if (fetcher != null) {
                                 Fetched fetched = inboxFetched.getFetched();
                                 fetcher.accept(fetched);
@@ -147,16 +124,14 @@ class InboxFetchPipeline {
         }
     }
 
-    private static class PipelineCloseAction implements Runnable {
-        private final IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream;
-
-        private PipelineCloseAction(IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream) {
-            this.messageStream = messageStream;
-        }
-
+    private record PipelineCloseAction(IMessageStream<InboxFetched, InboxFetchHint> messageStream)
+        implements Runnable {
         @Override
         public void run() {
             messageStream.close();
         }
+    }
+
+    private record InboxFetchSessionId(long sessionId, String inboxId, long incarnation) {
     }
 }

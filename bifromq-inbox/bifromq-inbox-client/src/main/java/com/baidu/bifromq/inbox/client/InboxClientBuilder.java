@@ -14,6 +14,8 @@
 package com.baidu.bifromq.inbox.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.inbox.RPCBluePrint;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -32,6 +34,12 @@ public final class InboxClientBuilder implements IInboxClientBuilder {
     Executor executor;
 
     public IInboxClient build() {
-        return new InboxClient(this);
+        return new InboxClient(IRPCClient.newBuilder()
+            .bluePrint(RPCBluePrint.INSTANCE)
+            .executor(executor)
+            .eventLoopGroup(eventLoopGroup)
+            .crdtService(crdtService)
+            .sslContext(sslContext)
+            .build());
     }
 }

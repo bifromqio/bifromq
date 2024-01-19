@@ -17,10 +17,6 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.atLeast;
@@ -29,6 +25,10 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.messenger.IMessenger;
@@ -38,6 +38,7 @@ import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.schedulers.Timed;
 import io.reactivex.rxjava3.subjects.PublishSubject;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -47,14 +48,16 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
 
+@Slf4j
 public class AutoSeederTest {
     @Mock
     private IMessenger messenger;
@@ -68,8 +71,10 @@ public class AutoSeederTest {
     private Duration joinTimeout = Duration.ofSeconds(1);
     private Duration joinInterval = Duration.ofMillis(100);
     private AutoCloseable closeable;
+
     @BeforeMethod
-    public void setup() {
+    public void setup(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
         closeable = MockitoAnnotations.openMocks(this);
         when(addressResolver.resolve(REMOTE_HOST_1_ENDPOINT)).thenReturn(REMOTE_ADDR_1);
         when(memberList.local()).thenReturn(LOCAL);
@@ -77,7 +82,9 @@ public class AutoSeederTest {
     }
 
     @AfterMethod
-    public void releaseMocks() throws Exception {
+    public void releaseMocks(Method method) throws Exception {
+        log.info("Test case[{}.{}] finished, doing teardown",
+            method.getDeclaringClass().getName(), method.getName());
         closeable.close();
     }
 
@@ -126,6 +133,7 @@ public class AutoSeederTest {
         AutoSeeder seeder =
             new AutoSeeder(messenger, scheduler, memberList, addressResolver, joinTimeout, joinInterval);
         CompletableFuture<Void> joinResult = seeder.join(Collections.singleton(REMOTE_ADDR_1));
+        when(messenger.send(any(), any(), anyBoolean())).thenReturn(CompletableFuture.completedFuture(null));
         verify(messenger, timeout(200).atLeast(1)).send(any(), any(), anyBoolean());
         membersSubject.onNext(new HashMap<>() {{
             put(REMOTE_HOST_1_ENDPOINT, 0);

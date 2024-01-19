@@ -13,21 +13,30 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import static com.baidu.bifromq.mqtt.handler.v3.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
+import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.client.InboxSubResult;
-import com.baidu.bifromq.inbox.client.InboxUnsubResult;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
+import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
+import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3PersistentSession;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCreateError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
@@ -40,8 +49,10 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
+import java.time.Duration;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -52,33 +63,86 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implements IMQTT3PersistentSession {
+    public record ExistingSession(long incarnation, long version) {
+
+    }
+
     // key: the seq that wait for confirm, value: the seq for triggering sending confirm to inbox
     private final SortedMap<Long, Long> qos1ConfirmSeqMap = new TreeMap<>();
     private final SortedMap<Long, Long> qos2ConfirmSeqMap = new TreeMap<>();
+    private final int sessionExpirySeconds;
+    private final boolean sessionPresent;
+    private final long incarnation;
+    private long version;
+    private boolean qos0Confirming = false;
     private boolean qos1Confirming = false;
     private boolean qos2Confirming = false;
+    private long qos0ConfirmUpToSeq;
     private long qos1ConfirmUpToSeq;
     private long qos2ConfirmUpToSeq;
+    private IInboxClient inboxClient;
     private IInboxClient.IInboxReader inboxReader;
+    private long touchIdleTimeMS;
     private ScheduledFuture<?> touchTimeout;
 
     @Builder
-    public MQTT3PersistentSessionHandler(ClientInfo clientInfo, int keepAliveTimeSeconds, WillMessage willMessage,
-                                         boolean sessionPresent) {
-        super(clientInfo, keepAliveTimeSeconds, false, sessionPresent, willMessage);
+    public MQTT3PersistentSessionHandler(TenantSettings settings,
+                                         String userSessionId,
+                                         ClientInfo clientInfo,
+                                         int keepAliveSeconds,
+                                         int sessionExpirySeconds,
+                                         WillMessage willMessage,
+                                         ExistingSession existingSession) {
+        super(settings, userSessionId, clientInfo, keepAliveSeconds, willMessage);
+        this.sessionExpirySeconds = sessionExpirySeconds;
+        this.sessionPresent = existingSession != null;
+        if (sessionPresent) {
+            incarnation = existingSession.incarnation;
+            version = existingSession.version;
+        } else {
+            incarnation = HLC.INST.get();
+        }
+
     }
 
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
-        if (sessionPresent()) {
-            setupInboxPipeline();
+        this.inboxClient = sessionCtx.inboxClient;
+        touchIdleTimeMS = Duration.ofSeconds(keepAliveTimeSeconds).dividedBy(2).toMillis();
+        if (sessionPresent) {
+            AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
+                .setReqId(System.nanoTime())
+                .setInboxId(userSessionId)
+                .setIncarnation(incarnation)
+                .setVersion(version)
+                .setKeepAliveSeconds(keepAliveTimeSeconds)
+                .setExpirySeconds(sessionExpirySeconds)
+                .setClient(clientInfo())
+                .setNow(HLC.INST.getPhysical());
+            cancelOnInactive(inboxClient.attach(reqBuilder.build())
+                .thenAcceptAsync(reply -> {
+                    if (reply.getCode() == AttachReply.Code.OK) {
+                        version++;
+                        setupInboxPipeline();
+                    } else {
+                        closeConnectionWithSomeDelay(getLocal(SessionCreateError.class).clientInfo(clientInfo()));
+                    }
+                }, ctx.channel().eventLoop()));
         } else {
-            cancelOnInactive(sessionCtx.inboxClient.create(System.nanoTime(), userSessionId(clientInfo()),
-                clientInfo()))
-                .thenAcceptAsync(createInboxReply -> {
-                    if (createInboxReply.getResult() == CreateInboxReply.Result.OK) {
+            cancelOnInactive(inboxClient.create(CreateRequest.newBuilder()
+                .setReqId(System.nanoTime())
+                .setInboxId(userSessionId)
+                .setIncarnation(incarnation)
+                .setKeepAliveSeconds(keepAliveTimeSeconds)
+                .setExpirySeconds(sessionExpirySeconds)
+                .setLimit(tenantSettings.inboxQueueLength)
+                .setDropOldest(tenantSettings.inboxDropOldest)
+                .setClient(clientInfo())
+                .build()))
+                .thenAcceptAsync(createReply -> {
+                    if (createReply.getCode() == CreateReply.Code.OK) {
                         setupInboxPipeline();
                     } else {
                         closeConnectionWithSomeDelay(getLocal(SessionCreateError.class).clientInfo(clientInfo()));
@@ -98,6 +162,26 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     }
 
     @Override
+    protected void handleDisconnect(MqttMessage mqttMessage) {
+        inboxClient.detach(DetachRequest.newBuilder()
+                .setReqId(System.nanoTime())
+                .setInboxId(userSessionId)
+                .setIncarnation(incarnation)
+                .setVersion(version)
+                .setExpirySeconds(tenantSettings.maxSEI)
+                .setDiscardLWT(true)
+                .setClient(clientInfo)
+                .setNow(HLC.INST.getPhysical())
+                .build())
+            .thenAccept(v -> {
+                if (v.getCode() == DetachReply.Code.OK) {
+                    version++;
+                }
+            });
+        closeConnectionNow(getLocal(ByClient.class).clientInfo(clientInfo));
+    }
+
+    @Override
     protected void onDistQoS1MessageConfirmed(int messageId, long seq, String topic, Message message,
                                               boolean delivered) {
         // thread the commit using messageId as the reqId
@@ -109,9 +193,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
             log.trace("Committing qos1 up to seq: tenantId={}, inboxId={}, seq={}", clientInfo().getTenantId(),
                 clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), triggerSeq);
             qos1ConfirmUpToSeq = triggerSeq;
-            if (!qos1Confirming) {
-                confirmQoS1();
-            }
+            confirmQoS1();
         }
         rescheduleTouch();
     }
@@ -128,9 +210,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
             log.trace("Committing qos2 up to seq: tenantId={}, inboxId={}, seq={}", clientInfo().getTenantId(),
                 clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), triggerSeq);
             qos2ConfirmUpToSeq = triggerSeq;
-            if (!qos2Confirming) {
-                confirmQoS2();
-            }
+            confirmQoS2();
         }
         rescheduleTouch();
     }
@@ -138,53 +218,164 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
     @Override
     protected CompletableFuture<MqttQoS> doSubscribe(long reqId, MqttTopicSubscription topicSub) {
         rescheduleTouch();
-        String inboxId = userSessionId(clientInfo());
         QoS qos = QoS.forNumber(topicSub.qualityOfService().value());
-        return sessionCtx.inboxClient.sub(reqId, clientInfo().getTenantId(), inboxId, topicSub.topicName(), qos)
-            .handle((v, e) -> {
-                if (e != null) {
-                    return MqttQoS.FAILURE;
-                }
-                if (v == InboxSubResult.OK) {
-                    return topicSub.qualityOfService();
+        return inboxClient.sub(SubRequest.newBuilder()
+                .setReqId(reqId)
+                .setTenantId(clientInfo.getTenantId())
+                .setInboxId(userSessionId)
+                .setIncarnation(incarnation)
+                .setVersion(version)
+                .setTopicFilter(topicSub.topicName())
+                .setSubQoS(qos)
+                .setNow(HLC.INST.getPhysical())
+                .build())
+            .thenApplyAsync(v -> {
+                switch (v.getCode()) {
+                    case OK, EXISTS -> {
+                        return topicSub.qualityOfService();
+                    }
+                    case EXCEED_LIMIT, ERROR -> {
+                        return MqttQoS.FAILURE;
+                    }
+                    case NO_INBOX, CONFLICT ->
+                        closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
                 }
                 return MqttQoS.FAILURE;
-            });
+            }, ctx.channel().eventLoop());
     }
 
     @Override
     protected CompletableFuture<Boolean> doUnsubscribe(long reqId, String topicFilter) {
         rescheduleTouch();
-        String inboxId = userSessionId(clientInfo());
-        return sessionCtx.inboxClient.unsub(reqId, clientInfo().getTenantId(), inboxId, topicFilter)
-            .handle((v, e) -> {
-                if (e != null) {
-                    return false;
+        return inboxClient.unsub(UnsubRequest.newBuilder()
+                .setReqId(reqId)
+                .setTenantId(clientInfo.getTenantId())
+                .setInboxId(userSessionId)
+                .setIncarnation(incarnation)
+                .setVersion(version)
+                .setTopicFilter(topicFilter)
+                .setNow(HLC.INST.getPhysical())
+                .build())
+            .thenApplyAsync(v -> {
+                switch (v.getCode()) {
+                    case OK, NO_SUB -> {
+                        return true;
+                    }
+                    case NO_INBOX, CONFLICT ->
+                        closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
                 }
-                return v == InboxUnsubResult.OK;
-            });
+                return false;
+            }, ctx.channel().eventLoop());
+    }
+
+    private void confirmQoS0() {
+        if (qos0Confirming) {
+            return;
+        }
+        qos0Confirming = true;
+        long upToSeq = qos0ConfirmUpToSeq;
+        tearDownTasks(inboxClient.commit(CommitRequest.newBuilder()
+            .setReqId(HLC.INST.get())
+            .setTenantId(clientInfo.getTenantId())
+            .setInboxId(userSessionId)
+            .setIncarnation(incarnation)
+            .setVersion(version)
+            .setQos(AT_MOST_ONCE)
+            .setUpToSeq(upToSeq)
+            .setNow(HLC.INST.getPhysical())
+            .build()))
+            .thenAcceptAsync(v -> {
+                switch (v.getCode()) {
+                    case OK -> {
+                        qos0Confirming = false;
+                        if (upToSeq < qos0ConfirmUpToSeq) {
+                            confirmQoS0();
+                        }
+                    }
+                    case NO_INBOX, CONFLICT ->
+                        closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
+                    case ERROR -> {
+                        // try again with same version
+                        qos0Confirming = false;
+                        if (upToSeq < qos0ConfirmUpToSeq) {
+                            confirmQoS0();
+                        }
+                    }
+                }
+            }, ctx.channel().eventLoop());
     }
 
     private void confirmQoS1() {
+        if (qos1Confirming) {
+            return;
+        }
+        qos1Confirming = true;
         long upToSeq = qos1ConfirmUpToSeq;
-        tearDownTasks(inboxReader.commit(System.nanoTime(), QoS.AT_LEAST_ONCE, upToSeq))
-            .whenCompleteAsync((v, e) -> {
-                if (upToSeq < qos1ConfirmUpToSeq) {
-                    confirmQoS1();
-                } else {
-                    qos1Confirming = false;
+        tearDownTasks(inboxClient.commit(CommitRequest.newBuilder()
+            .setReqId(HLC.INST.get())
+            .setTenantId(clientInfo.getTenantId())
+            .setInboxId(userSessionId)
+            .setIncarnation(incarnation)
+            .setVersion(version)
+            .setQos(AT_LEAST_ONCE)
+            .setUpToSeq(upToSeq)
+            .setNow(HLC.INST.getPhysical())
+            .build()))
+            .thenAcceptAsync(v -> {
+                switch (v.getCode()) {
+                    case OK -> {
+                        qos1Confirming = false;
+                        if (upToSeq < qos1ConfirmUpToSeq) {
+                            confirmQoS1();
+                        }
+                    }
+                    case NO_INBOX, CONFLICT ->
+                        closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
+                    case ERROR -> {
+                        // try again with same version
+                        qos1Confirming = false;
+                        if (upToSeq < qos1ConfirmUpToSeq) {
+                            confirmQoS1();
+                        }
+                    }
                 }
             }, ctx.channel().eventLoop());
     }
 
     private void confirmQoS2() {
+        if (qos2Confirming) {
+            return;
+        }
+        qos2Confirming = true;
+
         long upToSeq = qos2ConfirmUpToSeq;
-        tearDownTasks(inboxReader.commit(System.nanoTime(), QoS.EXACTLY_ONCE, upToSeq))
-            .whenCompleteAsync((v, e) -> {
-                if (upToSeq < qos2ConfirmUpToSeq) {
-                    confirmQoS2();
-                } else {
-                    qos2Confirming = false;
+        tearDownTasks(inboxClient.commit(CommitRequest.newBuilder()
+            .setReqId(HLC.INST.get())
+            .setTenantId(clientInfo.getTenantId())
+            .setInboxId(userSessionId)
+            .setIncarnation(incarnation)
+            .setVersion(version)
+            .setQos(EXACTLY_ONCE)
+            .setUpToSeq(upToSeq)
+            .setNow(HLC.INST.getPhysical())
+            .build()))
+            .thenAcceptAsync(v -> {
+                switch (v.getCode()) {
+                    case OK -> {
+                        qos2Confirming = false;
+                        if (upToSeq < qos2ConfirmUpToSeq) {
+                            confirmQoS2();
+                        }
+                    }
+                    case NO_INBOX, CONFLICT ->
+                        closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
+                    case ERROR -> {
+                        // try again with same version
+                        qos2Confirming = false;
+                        if (upToSeq < qos2ConfirmUpToSeq) {
+                            confirmQoS2();
+                        }
+                    }
                 }
             }, ctx.channel().eventLoop());
     }
@@ -193,9 +384,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
         if (!ctx.channel().isActive()) {
             return;
         }
-        String inboxId = userSessionId(clientInfo());
-        inboxReader = sessionCtx.inboxClient.openInboxReader(clientInfo().getTenantId(), inboxId);
-
+        inboxReader = inboxClient.openInboxReader(clientInfo().getTenantId(), userSessionId, incarnation);
         inboxReader.fetch(this::consume);
         bufferCapacityHinter.hint(inboxReader::hint);
         // resume channel read after inbox being setup
@@ -208,9 +397,26 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
             touchTimeout.cancel(true);
         }
         touchTimeout = ctx.channel().eventLoop().schedule(() -> {
-            inboxReader.touch();
-            rescheduleTouch();
-        }, 1, TimeUnit.MINUTES);
+            inboxClient.touch(TouchRequest.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .setTenantId(clientInfo.getTenantId())
+                    .setInboxId(userSessionId)
+                    .setIncarnation(incarnation)
+                    .setVersion(version)
+                    .setNow(HLC.INST.getPhysical())
+                    .build())
+                .thenAcceptAsync(v -> {
+                    switch (v.getCode()) {
+                        case OK -> {
+                            rescheduleTouch();
+                        }
+                        case CONFLICT ->
+                            closeConnectionWithSomeDelay(getLocal(InboxTransientError.class).clientInfo(clientInfo()));
+                        case ERROR -> // try again with same version
+                            rescheduleTouch();
+                    }
+                }, ctx.channel().eventLoop());
+        }, touchIdleTimeMS, TimeUnit.MILLISECONDS);
     }
 
     private void consume(Fetched fetched) {
@@ -228,6 +434,12 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                         pubQoS0Message(msg.getTopicFilter(), msg.getMsg(), i + 1 == fetched.getQos0MsgCount(),
                             timestamp);
                     }
+                    if (fetched.getQos0SeqCount() > 0) {
+                        // commit immediately
+                        qos0ConfirmUpToSeq = fetched.getQos0Seq(fetched.getQos0SeqCount() - 1);
+                        confirmQoS0();
+                    }
+
                     // deal with qos1
                     assert fetched.getQos1SeqCount() == fetched.getQos1MsgCount();
                     if (fetched.getQos1SeqCount() > 0) {
@@ -251,8 +463,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
                             InboxMessage distMsg = fetched.getQos2Msg(i);
                             TopicMessage topicMsg = distMsg.getMsg();
                             pubQoS2Message(seq, distMsg.getTopicFilter(), topicMsg,
-                                i + 1 == fetched.getQos2SeqCount(),
-                                timestamp);
+                                i + 1 == fetched.getQos2SeqCount(), timestamp);
                         }
                     }
                     rescheduleTouch();
@@ -339,11 +550,7 @@ public class MQTT3PersistentSessionHandler extends MQTT3SessionHandler implement
             }, ctx.channel().eventLoop());
     }
 
-    protected void pubQoS2Message(long seq,
-                                  String topicFilter,
-                                  TopicMessage topicMsg,
-                                  boolean flush,
-                                  long timestamp) {
+    protected void pubQoS2Message(long seq, String topicFilter, TopicMessage topicMsg, boolean flush, long timestamp) {
         String topic = topicMsg.getTopic();
         Message message = topicMsg.getMessage();
         cancelOnInactive(authProvider.check(clientInfo(), AuthUtil.buildSubAction(topicFilter, EXACTLY_ONCE)))

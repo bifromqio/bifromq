@@ -13,10 +13,13 @@
 
 package com.baidu.bifromq.inbox.util;
 
-import com.baidu.bifromq.inbox.storage.proto.BatchCheckRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
@@ -28,30 +31,17 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.google.protobuf.ByteString;
 
 public class MessageUtil {
-    public static InboxServiceROCoProcInput buildGCRequest(long reqId, ByteString scopedInboxId, String tenantId,
-                                                           Integer expirySeconds, int limit) {
-        GCRequest.Builder reqBuilder = GCRequest.newBuilder()
+    public static InboxServiceRWCoProcInput buildAttachRequest(long reqId, BatchAttachRequest request) {
+        return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setLimit(limit);
-        if (scopedInboxId != null) {
-            reqBuilder.setScopedInboxId(scopedInboxId);
-        }
-        if (tenantId != null) {
-            reqBuilder.setTenantId(tenantId);
-        }
-        if (expirySeconds != null) {
-            reqBuilder.setExpirySeconds(expirySeconds);
-        }
-        return InboxServiceROCoProcInput.newBuilder()
-            .setReqId(reqId)
-            .setGc(reqBuilder.build())
+            .setBatchAttach(request)
             .build();
     }
 
-    public static InboxServiceROCoProcInput buildCollectMetricsRequest(long reqId) {
-        return InboxServiceROCoProcInput.newBuilder()
+    public static InboxServiceRWCoProcInput buildDetachRequest(long reqId, BatchDetachRequest request) {
+        return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setCollectMetrics(CollectMetricsRequest.newBuilder().setReqId(reqId).build())
+            .setBatchDetach(request)
             .build();
     }
 
@@ -62,41 +52,48 @@ public class MessageUtil {
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchSubRequest(long reqId, BatchSubRequest request) {
+    public static InboxServiceRWCoProcInput buildSubRequest(long reqId, BatchSubRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
             .setBatchSub(request)
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchUnsubRequest(long reqId, BatchUnsubRequest request) {
+    public static InboxServiceRWCoProcInput buildUnsubRequest(long reqId, BatchUnsubRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
             .setBatchUnsub(request)
             .build();
     }
 
-
-    public static InboxServiceROCoProcInput buildHasRequest(long reqId, BatchCheckRequest request) {
+    public static InboxServiceROCoProcInput buildGetRequest(long reqId, BatchGetRequest request) {
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setBatchCheck(request)
+            .setBatchGet(request)
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchInboxInsertRequest(long reqId, BatchInsertRequest request) {
+    public static InboxServiceRWCoProcInput buildInsertRequest(long reqId, BatchInsertRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
             .setBatchInsert(request)
             .build();
     }
 
-    public static InboxServiceROCoProcInput buildInboxFetchRequest(long reqId, BatchFetchRequest request) {
+    public static InboxServiceRWCoProcInput buildCommitRequest(long reqId, BatchCommitRequest request) {
+        return InboxServiceRWCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setBatchCommit(request)
+            .build();
+    }
+
+    public static InboxServiceROCoProcInput buildFetchRequest(long reqId, BatchFetchRequest request) {
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
             .setBatchFetch(request)
             .build();
     }
+
 
     public static InboxServiceRWCoProcInput buildTouchRequest(long reqId, BatchTouchRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
@@ -105,10 +102,40 @@ public class MessageUtil {
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildBatchCommitRequest(long reqId, BatchCommitRequest request) {
+    public static InboxServiceROCoProcInput buildGCRequest(long reqId,
+                                                           String tenantId,
+                                                           Integer expirySeconds,
+                                                           ByteString cursor,
+                                                           long now,
+                                                           int limit) {
+        GCRequest.Builder reqBuilder = GCRequest.newBuilder().setLimit(limit).setNow(now);
+        if (tenantId != null) {
+            reqBuilder.setTenantId(tenantId);
+        }
+        if (expirySeconds != null) {
+            reqBuilder.setExpirySeconds(expirySeconds);
+        }
+        if (cursor != null) {
+            reqBuilder.setCursor(cursor);
+        }
+        return InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setGc(reqBuilder.build())
+            .build();
+    }
+
+
+    public static InboxServiceROCoProcInput buildCollectMetricsRequest(long reqId) {
+        return InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setCollectMetrics(CollectMetricsRequest.newBuilder().setReqId(reqId).build())
+            .build();
+    }
+
+    public static InboxServiceRWCoProcInput buildDeleteRequest(long reqId, BatchDeleteRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setBatchCommit(request)
+            .setBatchDelete(request)
             .build();
     }
 }

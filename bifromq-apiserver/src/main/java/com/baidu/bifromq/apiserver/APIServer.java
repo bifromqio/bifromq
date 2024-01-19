@@ -71,7 +71,7 @@ public class APIServer implements IAPIServer {
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
         IHTTPRouteMap routeMap = new HTTPRouteMap(new HTTPRequestHandlersFactory(sessionDictClient,
-                distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider));
+            distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider));
         this.serverChannel =
             buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider));
         if (sslContext != null) {

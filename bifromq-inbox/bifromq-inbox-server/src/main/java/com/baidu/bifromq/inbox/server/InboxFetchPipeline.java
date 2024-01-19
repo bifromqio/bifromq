@@ -13,28 +13,29 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxId;
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-
 import com.baidu.bifromq.baserpc.AckStream;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
-import com.baidu.bifromq.inbox.storage.proto.FetchParams;
+import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.inbox.util.KeyUtil;
 import com.baidu.bifromq.inbox.util.PipelineUtil;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.google.protobuf.ByteString;
+import com.github.benmanes.caffeine.cache.RemovalListener;
 import io.grpc.stub.StreamObserver;
+import io.reactivex.rxjava3.disposables.Disposable;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,42 +44,47 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
     private static final int NOT_KNOWN_CAPACITY = -1;
     private final String id;
     private final String delivererKey;
-    private final Cache<ByteString, FetchState> inboxFetchStates;
+    private final Cache<Long, FetchState> inboxFetchSessions;
+    private final Map<InboxId, Set<Long>> inboxSessionMap = new ConcurrentHashMap<>();
     private final Fetcher fetcher;
-    private final Function<ByteString, CompletableFuture<Void>> toucher;
+    private final Disposable disposable;
     private volatile boolean closed = false;
 
     public InboxFetchPipeline(StreamObserver<InboxFetched> responseObserver,
                               Fetcher fetcher,
-                              Function<ByteString, CompletableFuture<Void>> toucher,
                               InboxFetcherRegistry registry) {
         super(responseObserver);
         this.id = metadata.get(PipelineUtil.PIPELINE_ATTR_KEY_ID);
         this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
 
-        inboxFetchStates = Caffeine.newBuilder()
+        inboxFetchSessions = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofSeconds(120))
+            .evictionListener((RemovalListener<Long, FetchState>) (key, value, cause) -> {
+                if (value != null) {
+                    inboxSessionMap.remove(new InboxId(value.inboxId, value.incarnation));
+                }
+            })
             .build();
         this.fetcher = fetcher;
-        this.toucher = toucher;
         registry.reg(this);
-        ack().doFinally(() -> {
-                touch();
+        disposable = ack().doFinally(() -> {
                 registry.unreg(this);
                 closed = true;
             })
             .subscribe(fetchHint -> {
                 String inboxId = fetchHint.getInboxId();
                 log.trace("Got hint: tenantId={}, inboxId={}\n{}", tenantId, inboxId, fetchHint);
-                ByteString scopedInboxId = KeyUtil.scopedInboxId(tenantId, inboxId);
                 if (fetchHint.getCapacity() < 0) {
-                    inboxFetchStates.invalidate(scopedInboxId);
+                    inboxFetchSessions.invalidate(fetchHint.getSessionId());
                 } else {
-                    FetchState fetchState = inboxFetchStates.asMap().compute(scopedInboxId, (k, v) -> {
+                    FetchState fetchState = inboxFetchSessions.asMap().compute(fetchHint.getSessionId(), (k, v) -> {
                         if (v == null) {
-                            v = new FetchState(fetchHint.getIncarnation());
-                        } else if (v.incarnation.get() < fetchHint.getIncarnation()) {
-                            v.reset(fetchHint.getIncarnation());
+                            v = new FetchState(fetchHint.getInboxId(),
+                                fetchHint.getIncarnation(),
+                                fetchHint.getSessionId());
+                            inboxSessionMap.computeIfAbsent(
+                                new InboxId(fetchHint.getInboxId(), fetchHint.getIncarnation()),
+                                k1 -> new HashSet<>()).add(fetchHint.getSessionId());
                         }
                         v.lastFetchQoS0Seq.set(fetchHint.getLastFetchQoS0Seq());
                         v.lastFetchQoS1Seq.set(fetchHint.getLastFetchQoS1Seq());
@@ -87,7 +93,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                         return v;
                     });
                     log.trace("Fetch state update: tenantId={}, inbox={}\n{}", tenantId, inboxId, fetchState);
-                    fetch(scopedInboxId, fetchState);
+                    fetch(fetchState);
                 }
             });
     }
@@ -115,62 +121,65 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
     }
 
     @Override
-    public boolean signalFetch(String inboxId) {
+    public boolean signalFetch(String inboxId, long incarnation) {
         log.trace("Signal fetch: tenantId={}, inboxId={}", tenantId, inboxId);
         // signal fetch won't refresh expiry
-        FetchState fetchState = inboxFetchStates.getIfPresent(scopedInboxId(tenantId, inboxId));
-        if (fetchState != null) {
-            fetchState.hasMore.set(true);
-            fetchState.signalFetchTS.set(System.nanoTime());
-            fetch(scopedInboxId(tenantId, inboxId), fetchState);
-            return true;
+        Set<Long> sessionIds = inboxSessionMap.getOrDefault(new InboxId(inboxId, incarnation), Collections.emptySet());
+        for (Long sessionId : sessionIds) {
+            FetchState fetchState = inboxFetchSessions.getIfPresent(sessionId);
+            if (fetchState != null) {
+                fetchState.hasMore.set(true);
+                fetchState.signalFetchTS.set(System.nanoTime());
+                fetch(fetchState);
+            }
         }
-        return false;
-    }
-
-    @Override
-    public void touch() {
-        // touch won't refresh expiry
-        inboxFetchStates.asMap().keySet().forEach(toucher::apply);
+        return !sessionIds.isEmpty();
     }
 
     @Override
     public void close() {
         super.close();
+        disposable.dispose();
     }
 
-    private void fetch(ByteString scopedInboxId) {
-        FetchState fetchState = inboxFetchStates.getIfPresent(scopedInboxId);
+    private void fetch(long sessionId) {
+        FetchState fetchState = inboxFetchSessions.getIfPresent(sessionId);
         if (fetchState != null) {
-            fetch(scopedInboxId, fetchState);
+            fetch(fetchState);
         }
     }
 
-    private void fetch(ByteString scopedInboxId, FetchState fetchState) {
+    private void fetch(FetchState fetchState) {
         if (closed) {
             return;
         }
         if (fetchState.fetching.compareAndSet(false, true)) {
-            String inboxId = parseInboxId(scopedInboxId);
+            long sessionId = fetchState.sessionId;
+            String inboxId = fetchState.inboxId;
+            long incarnation = fetchState.incarnation;
             log.trace("Fetching inbox: tenantId={}, inboxId={}", tenantId, inboxId);
             IInboxFetchScheduler.InboxFetch inboxFetch =
-                new IInboxFetchScheduler.InboxFetch(scopedInboxId, FetchParams.newBuilder()
-                    .setMaxFetch(fetchState.downStreamCapacity.get())
-                    .setQos0StartAfter(fetchState.lastFetchQoS0Seq.get())
-                    .setQos1StartAfter(fetchState.lastFetchQoS1Seq.get())
-                    .setQos2StartAfter(fetchState.lastFetchQoS2Seq.get())
-                    .build());
+                new IInboxFetchScheduler.InboxFetch(tenantId, inboxId, incarnation,
+                    BatchFetchRequest.Params.newBuilder()
+                        .setMaxFetch(fetchState.downStreamCapacity.get())
+                        .setQos0StartAfter(fetchState.lastFetchQoS0Seq.get())
+                        .setQos1StartAfter(fetchState.lastFetchQoS1Seq.get())
+                        .setQos2StartAfter(fetchState.lastFetchQoS2Seq.get())
+                        .build());
             long fetchTS = System.nanoTime();
             fetcher.fetch(inboxFetch).whenComplete((fetched, e) -> {
                 if (closed) {
                     return;
                 }
                 if (e != null) {
-                    log.debug("Failed to fetch inbox: tenantId={}, inboxId={}", tenantId, inboxId, e);
+                    log.debug("Failed to fetch inbox: tenantId={}, inboxId={}, incarnation={}",
+                        tenantId, inboxId, incarnation, e);
                     try {
-                        inboxFetchStates.invalidate(scopedInboxId);
+                        inboxFetchSessions.invalidate(sessionId);
                         send(InboxFetched.newBuilder()
+                            .setSessionId(fetchState.sessionId)
                             .setInboxId(inboxId)
+                            .setIncarnation(incarnation)
                             .setFetched(Fetched.newBuilder()
                                 .setResult(Fetched.Result.ERROR)
                                 .build())
@@ -179,9 +188,13 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                         log.debug("Send error", t);
                     }
                 } else {
-                    log.trace("Fetched inbox: tenantId={}, inboxId={}", tenantId, inboxId);
+                    log.trace("Fetched inbox: tenantId={}, inboxId={}, incarnation={}", tenantId, inboxId, incarnation);
                     try {
-                        send(InboxFetched.newBuilder().setInboxId(inboxId).setFetched(fetched).build());
+                        send(InboxFetched.newBuilder()
+                            .setSessionId(sessionId)
+                            .setInboxId(inboxId)
+                            .setIncarnation(incarnation)
+                            .setFetched(fetched).build());
                         int fetchedCount = 0;
                         if (fetched.getQos0MsgCount() > 0 ||
                             fetched.getQos1MsgCount() > 0 ||
@@ -210,9 +223,15 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                             fetchState.hasMore.set(fetchState.signalFetchTS.get() > fetchTS);
                         }
                         fetchState.fetching.set(false);
-                        inboxFetchStates.put(scopedInboxId, fetchState);
+                        inboxFetchSessions.asMap().compute(sessionId, (k, v) -> {
+                            if (v == null) {
+                                inboxSessionMap.computeIfAbsent(new InboxId(fetchState.inboxId, fetchState.incarnation),
+                                    k1 -> new HashSet<>()).add(fetchState.sessionId);
+                            }
+                            return fetchState;
+                        });
                         if (fetchState.downStreamCapacity.get() > 0 && fetchState.hasMore.get()) {
-                            fetch(scopedInboxId);
+                            fetch(sessionId);
                         }
                     } catch (Throwable t) {
                         log.debug("Send error", t);
@@ -226,9 +245,14 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
         CompletableFuture<Fetched> fetch(IInboxFetchScheduler.InboxFetch fetch);
     }
 
+    private record InboxId(String inboxId, long incarnation) {
+    }
+
     @ToString
     private static class FetchState {
-        final AtomicLong incarnation = new AtomicLong();
+        final String inboxId;
+        final long incarnation;
+        final long sessionId;
         final AtomicBoolean fetching = new AtomicBoolean(false);
         final AtomicBoolean hasMore = new AtomicBoolean(true);
         final AtomicLong signalFetchTS = new AtomicLong();
@@ -237,18 +261,10 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
         final AtomicLong lastFetchQoS1Seq = new AtomicLong(-1);
         final AtomicLong lastFetchQoS2Seq = new AtomicLong(-1);
 
-        FetchState(long incarnation) {
-            this.incarnation.set(incarnation);
-        }
-
-        void reset(long incarnation) {
-            this.incarnation.set(incarnation);
-            hasMore.set(true);
-            signalFetchTS.set(0);
-            downStreamCapacity.set(NOT_KNOWN_CAPACITY);
-            lastFetchQoS0Seq.set(-1);
-            lastFetchQoS1Seq.set(-1);
-            lastFetchQoS2Seq.set(-1);
+        FetchState(String inboxId, long incarnation, long sessionId) {
+            this.inboxId = inboxId;
+            this.incarnation = incarnation;
+            this.sessionId = sessionId;
         }
     }
 }

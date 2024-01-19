@@ -28,10 +28,11 @@ import java.util.concurrent.ConcurrentMap;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
+public final class InboxFetcherRegistry implements IInboxFetcherRegistry {
     private final ConcurrentMap<String, Map<String, Map<String, IInboxFetcher>>> fetchers = new ConcurrentHashMap<>();
 
-    void reg(IInboxFetcher fetcher) {
+    @Override
+    public void reg(IInboxFetcher fetcher) {
         fetchers.compute(fetcher.tenantId(), (key, val) -> {
             if (val == null) {
                 val = new HashMap<>();
@@ -47,7 +48,8 @@ final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
         });
     }
 
-    void unreg(IInboxFetcher fetcher) {
+    @Override
+    public void unreg(IInboxFetcher fetcher) {
         fetchers.compute(fetcher.tenantId(), (tenantId, m) -> {
             if (m != null) {
                 m.computeIfPresent(fetcher.delivererKey(), (k, v) -> {
@@ -66,7 +68,8 @@ final class InboxFetcherRegistry implements Iterable<IInboxFetcher> {
         });
     }
 
-    Collection<IInboxFetcher> get(String tenantId, String delivererKey) {
+    @Override
+    public Collection<IInboxFetcher> get(String tenantId, String delivererKey) {
         return fetchers.getOrDefault(tenantId, emptyMap()).getOrDefault(delivererKey, emptyMap()).values();
     }
 

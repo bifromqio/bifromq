@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt.handler.v5;
 
 import static com.baidu.bifromq.mqtt.handler.v3.MQTTSessionIdUtil.userSessionId;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toWillMessage;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
@@ -35,10 +36,17 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSPECIFIED_ERROR;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL;
 
-import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
+import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.mqtt.utils.TopicUtil;
@@ -56,9 +64,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Inval
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.RetainNotSupported;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Strings;
-import com.google.protobuf.UnsafeByteOperations;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectReturnCode;
@@ -77,15 +83,13 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
     private static final int MAX_CLIENT_KEEP_ALIVE_DURATION = 2 * 60 * 60;
     private static final int MAX_CLIENT_ID_LEN = BifroMQSysProp.MAX_MQTT5_CLIENT_ID_LENGTH.get();
     private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
-    private IDistClient distClient;
     private IInboxClient inboxClient;
     private ClientInfo clientInfo;
-    private MQTT5WillMessage willMessage;
+    private LWT willMessage;
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
-        distClient = sessionCtx.distClient;
         inboxClient = sessionCtx.inboxClient;
     }
 
@@ -129,7 +133,7 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
             closeConnectionWithSomeDelay(MqttMessageBuilders
                     .connAck()
                     .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
-                        .reasonString("ClientId missing when not clean start")
+                        .reasonString("ClientId missing when CleanStart is set to true")
                         .build())
                     .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID) // [MQTT-3.1.3-8]
                     .build(),
@@ -225,16 +229,9 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
                                 clientAddr.map(InetSocketAddress::toString).orElse(""))
                             .build();
                         if (connMsg.variableHeader().isWillFlag()) {
-                            willMessage = MQTT5WillMessage
-                                .builder()
-                                .topic(connMsg.payload().willTopic())
-                                .qos(QoS.forNumber(connMsg.variableHeader().willQos()))
-                                .retain(connMsg.variableHeader().isWillRetain())
-                                .payload(UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()))
-                                .userProperties(connMsg.payload().willProperties())
-                                .build();
+                            willMessage = toWillMessage(connMsg);
                             // will topic conforms to tenant spec limit
-                            if (!TopicUtil.isValidTopic(willMessage.topic,
+                            if (!TopicUtil.isValidTopic(willMessage.getTopic(),
                                 settingProvider.provide(MaxTopicLevelLength, clientInfo.getTenantId()),
                                 settingProvider.provide(MaxTopicLevels, clientInfo.getTenantId()),
                                 settingProvider.provide(MaxTopicLength, clientInfo.getTenantId()))) {
@@ -246,12 +243,12 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
                                         .returnCode(CONNECTION_REFUSED_TOPIC_NAME_INVALID)
                                         .build(),
                                     getLocal(InvalidTopic.class)
-                                        .topic(willMessage.topic)
+                                        .topic(willMessage.getTopic())
                                         .clientInfo(clientInfo));
                                 return CompletableFuture.completedFuture(null);
                             }
                             // if retain enabled?
-                            if (willMessage.retain && !settings.retainEnabled) {
+                            if (willMessage.getRetain() && !settings.retainEnabled) {
                                 closeConnectionWithSomeDelay(MqttMessageBuilders
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_RETAIN_NOT_SUPPORTED)
@@ -266,172 +263,96 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
                                 (MqttProperties.IntegerProperty) connMsg.variableHeader().properties()
                                     .getProperty(SESSION_EXPIRY_INTERVAL.value()))
                             .map(MqttProperties.MqttProperty::value);
+                        int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds());
+                        String userSessionId = userSessionId(clientInfo);
                         if (cleanStart) {
-                            long assignedSEI = settings.forceTransient ? 0L : requestSEI.orElse(0);
-                            final long finalSEI = Math.min(assignedSEI, settings.maxSEI);
+                            int assignedSEI = settings.forceTransient ? 0 : requestSEI.orElse(0);
+                            final int finalSEI = Math.min(assignedSEI, settings.maxSEI);
                             if (requestClientId.isEmpty()) {
                                 if (finalSEI == 0) {
-                                    return setupTransientSessionHandler(connMsg, settings, false);
+                                    return setupTransientSessionHandler(connMsg, settings, userSessionId,
+                                        keepAliveSeconds, false);
                                 } else {
-                                    // create new inbox
-                                    return createInbox(reqId,
-                                        clientInfo.getTenantId(),
-                                        ctx.channel().id().asLongText(), // using channel id as the client id
-                                        finalSEI,
-                                        willMessage)
-                                        .exceptionallyAsync(e -> {
-                                            log.error("Failed to create inbox", e);
+                                    return setupPersistentSessionHandler(connMsg, settings, userSessionId, null,
+                                        keepAliveSeconds, finalSEI);
+                                }
+                            } else {
+                                return inboxClient.expire(ExpireRequest.newBuilder()
+                                        .setReqId(reqId)
+                                        .setTenantId(clientInfo.getTenantId())
+                                        .setInboxId(userSessionId)
+                                        .setNow(HLC.INST.getPhysical())
+                                        .build())
+                                    .exceptionallyAsync(e -> {
+                                        log.error("Failed to expire inbox", e);
+                                        return ExpireReply.newBuilder()
+                                            .setReqId(reqId)
+                                            .setCode(ExpireReply.Code.ERROR)
+                                            .build();
+                                    }, ctx.channel().eventLoop())
+                                    .thenAcceptAsync(reply -> {
+                                        if (reply.getCode() == ExpireReply.Code.ERROR) {
                                             closeConnectionWithSomeDelay(MqttMessageBuilders
                                                     .connAck()
                                                     .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
                                                     .build(),
                                                 getLocal(InboxTransientError.class).clientInfo(clientInfo));
-                                            return null;
-                                        }, ctx.channel().eventLoop())
-                                        .thenComposeAsync(
-                                            v -> setupPersistentSessionHandler(connMsg, settings, false, finalSEI),
-                                            ctx.channel().eventLoop());
-                                }
-                            } else {
-                                return expireInbox(reqId, clientInfo.getTenantId(), requestClientId)
-                                    .exceptionallyAsync(e -> {
-                                        log.error("Failed to create inbox", e);
-                                        closeConnectionWithSomeDelay(MqttMessageBuilders
-                                                .connAck()
-                                                .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                                .build(),
-                                            getLocal(InboxTransientError.class).clientInfo(clientInfo));
-                                        return null;
-                                    }, ctx.channel().eventLoop())
-                                    .thenComposeAsync(exists -> {
-                                        if (finalSEI == 0) {
-                                            return setupTransientSessionHandler(connMsg, settings, exists);
                                         } else {
-                                            return createInbox(reqId,
-                                                clientInfo.getTenantId(),
-                                                requestClientId,
-                                                finalSEI,
-                                                willMessage)
-                                                .exceptionallyAsync(e -> {
-                                                    log.error("Failed to create inbox", e);
-                                                    closeConnectionWithSomeDelay(MqttMessageBuilders
-                                                            .connAck()
-                                                            .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                                            .build(),
-                                                        getLocal(InboxTransientError.class).clientInfo(clientInfo));
-                                                    return null;
-                                                }, ctx.channel().eventLoop())
-                                                .thenComposeAsync(
-                                                    v1 -> setupPersistentSessionHandler(connMsg, settings, false,
-                                                        finalSEI)
-                                                    , ctx.channel().eventLoop());
+                                            if (finalSEI == 0) {
+                                                setupTransientSessionHandler(connMsg, settings, userSessionId,
+                                                    keepAliveSeconds, reply.getCode() == ExpireReply.Code.OK);
+                                            } else {
+                                                setupPersistentSessionHandler(connMsg, settings, userSessionId,
+                                                    null, keepAliveSeconds, finalSEI);
+                                            }
                                         }
                                     }, ctx.channel().eventLoop());
                             }
                         } else {
-                            if (settings.forceTransient) {
-                                // updating session if exists by setting SEI to 0 or return false
-                                // upon receiving false from updateIfExists call setup transient session handler, otherwise setup persistent session handler
-                                return updateInbox(reqId, clientInfo.getTenantId(), requestClientId, 0, willMessage)
-                                    .exceptionallyAsync(e -> {
-                                        log.error("Failed to update inbox", e);
+                            int assignedSEI = Math.min(requestSEI.orElse(0), settings.maxSEI);
+
+                            // update session if exists by setting SEI to assignedSEI and will message or return false
+                            // upon receiving false from update call
+                            return inboxClient.get(GetRequest.newBuilder()
+                                    .setReqId(reqId)
+                                    .setTenantId(clientInfo.getTenantId())
+                                    .setInboxId(userSessionId)
+                                    .build())
+                                .exceptionallyAsync(e -> {
+                                    log.error("Failed to update inbox", e);
+                                    return GetReply.newBuilder()
+                                        .setReqId(reqId)
+                                        .setCode(GetReply.Code.ERROR)
+                                        .build();
+                                }, ctx.channel().eventLoop())
+                                .thenAcceptAsync(reply -> {
+                                    if (reply.getCode() == GetReply.Code.ERROR) {
                                         closeConnectionWithSomeDelay(MqttMessageBuilders
                                                 .connAck()
                                                 .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
                                                 .build(),
                                             getLocal(InboxTransientError.class).clientInfo(clientInfo));
-                                        return null;
-                                    }, ctx.channel().eventLoop())
-                                    .thenComposeAsync(sei -> {
-                                        if (sei >= 0) {
-                                            assert sei == 0;
-                                            return setupPersistentSessionHandler(connMsg, settings, true, 0);
+                                    } else if (reply.getCode() == GetReply.Code.EXIST) {
+                                        // reuse existing inbox with the highest incarnation, the old ones will be cleaned up eventually
+                                        InboxVersion inbox = reply.getInbox(reply.getInboxCount() - 1);
+                                        setupPersistentSessionHandler(connMsg,
+                                            settings,
+                                            userSessionId,
+                                            new MQTT5PersistentSessionHandler.ExistingSession(
+                                                inbox.getIncarnation(),
+                                                inbox.getVersion()),
+                                            keepAliveSeconds,
+                                            assignedSEI);
+                                    } else {
+                                        if (assignedSEI == 0) {
+                                            setupTransientSessionHandler(connMsg, settings, userSessionId,
+                                                keepAliveSeconds, false);
                                         } else {
-                                            return setupTransientSessionHandler(connMsg, settings, true);
+                                            setupPersistentSessionHandler(connMsg, settings, userSessionId,
+                                                null, keepAliveSeconds, assignedSEI);
                                         }
-                                    }, ctx.channel().eventLoop());
-                            } else {
-                                if (requestSEI.isEmpty()) {
-                                    // update session if exists by setting will message or return false
-                                    // upon receiving false from updateIfExists call create new session with SEI set to maxSessionExpiryInterval
-                                    // setup persistent session handler
-                                    return updateInbox(reqId, clientInfo.getTenantId(), requestClientId, -1,
-                                        willMessage)
-                                        .exceptionallyAsync(e -> {
-                                            log.error("Failed to update inbox", e);
-                                            closeConnectionWithSomeDelay(MqttMessageBuilders
-                                                    .connAck()
-                                                    .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                                    .build(),
-                                                getLocal(InboxTransientError.class).clientInfo(clientInfo));
-                                            return null;
-                                        }, ctx.channel().eventLoop())
-                                        .thenComposeAsync(sei -> {
-                                            if (sei >= 0) {
-                                                return setupPersistentSessionHandler(connMsg, settings, true, sei);
-                                            } else {
-                                                return createInbox(reqId, clientInfo.getTenantId(), requestClientId,
-                                                    settings.maxSEI, willMessage)
-                                                    .exceptionallyAsync(e -> {
-                                                        log.error("Failed to create inbox", e);
-                                                        closeConnectionWithSomeDelay(MqttMessageBuilders
-                                                                .connAck()
-                                                                .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                                                .build(),
-                                                            getLocal(InboxTransientError.class).clientInfo(clientInfo));
-                                                        return null;
-                                                    }, ctx.channel().eventLoop())
-                                                    .thenComposeAsync(
-                                                        v -> setupPersistentSessionHandler(connMsg, settings,
-                                                            false, settings.maxSEI));
-                                            }
-                                        });
-                                } else {
-                                    long assignedSEI = Math.min(requestSEI.get(), settings.maxSEI);
-                                    // update session if exists by setting SEI to assignedSEI and will message or return false
-                                    // upon receiving false from updateIfExists call
-                                    return updateInbox(reqId, clientInfo.getTenantId(), requestClientId, assignedSEI,
-                                        willMessage)
-                                        .exceptionallyAsync(e -> {
-                                            log.error("Failed to update inbox", e);
-                                            closeConnectionWithSomeDelay(MqttMessageBuilders
-                                                    .connAck()
-                                                    .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                                    .build(),
-                                                getLocal(InboxTransientError.class).clientInfo(clientInfo));
-                                            return null;
-                                        }, ctx.channel().eventLoop())
-                                        .thenComposeAsync(sei -> {
-                                            if (sei >= 0) {
-                                                assert sei == assignedSEI;
-                                                // reuse existing inbox
-                                                return setupPersistentSessionHandler(connMsg, settings, true,
-                                                    sei);
-                                            } else {
-                                                if (assignedSEI == 0) {
-                                                    return setupTransientSessionHandler(connMsg, settings, false);
-                                                } else {
-                                                    // create inbox and setup persistent session handler
-                                                    return createInbox(reqId, clientInfo.getTenantId(), requestClientId,
-                                                        assignedSEI, willMessage)
-                                                        .exceptionallyAsync(e -> {
-                                                            log.error("Failed to create inbox", e);
-                                                            closeConnectionWithSomeDelay(MqttMessageBuilders
-                                                                    .connAck()
-                                                                    .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                                                    .build(),
-                                                                getLocal(InboxTransientError.class).clientInfo(
-                                                                    clientInfo));
-                                                            return null;
-                                                        }, ctx.channel().eventLoop())
-                                                        .thenComposeAsync(
-                                                            v -> setupPersistentSessionHandler(connMsg, settings,
-                                                                false, assignedSEI));
-                                                }
-                                            }
-                                        }, ctx.channel().eventLoop());
-                                }
-                            }
+                                    }
+                                }, ctx.channel().eventLoop());
                         }
                     }
                     default -> {
@@ -452,54 +373,18 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
         return requestKeepAliveSeconds;
     }
 
-    private CompletableFuture<Void> createInbox(long reqId,
-                                                String tenantId,
-                                                String clientId,
-                                                long sessionExpiryInterval,
-                                                @Nullable MQTT5WillMessage willMessage) {
-        return CompletableFuture.completedFuture(null);
-    }
-
-    /**
-     * Update inbox if exists
-     *
-     * @param reqId                 the reqId for tracing
-     * @param tenantId              the tenantId
-     * @param clientId              the clientId
-     * @param sessionExpiryInterval if >=0 update the interval
-     * @param willMessage           the will message to associate with the inbox
-     * @return the updated session expiry interval or -1 stands for no session found
-     */
-    private CompletableFuture<Long> updateInbox(long reqId,
-                                                String tenantId,
-                                                String clientId,
-                                                long sessionExpiryInterval,
-                                                @Nullable MQTT5WillMessage willMessage) {
-        return CompletableFuture.failedFuture(new UnsupportedOperationException("stay tune"));
-    }
-
-    /**
-     * Expire the inbox if exists
-     *
-     * @param reqId    the reqId for tracing
-     * @param tenantId the tenantId
-     * @param clientId the clientId
-     * @return boolean indicating if the inbox exists
-     */
-    private CompletableFuture<Boolean> expireInbox(long reqId, String tenantId, String clientId) {
-        return CompletableFuture.completedFuture(true);
-    }
-
     private CompletableFuture<Void> setupTransientSessionHandler(MqttConnectMessage connMsg,
                                                                  TenantSettings settings,
+                                                                 String userSessionId,
+                                                                 int keepAliveSeconds,
                                                                  boolean sessionExists) {
         if (!ctx.channel().isActive()) {
             return CompletableFuture.completedFuture(null);
         }
-        int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds());
         MQTT5TransientSessionHandler handler = MQTT5TransientSessionHandler.builder()
             .connProps(connMsg.variableHeader().properties())
             .settings(settings)
+            .userSessionId(userSessionId)
             .clientInfo(clientInfo)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .willMessage(willMessage)
@@ -528,31 +413,36 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
         // report client connected event
         eventCollector.report(getLocal(ClientConnected.class).clientInfo(clientInfo)
             .serverId(sessionCtx.serverId)
-            .userSessionId(userSessionId(clientInfo))
+            .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .cleanSession(connMsg.variableHeader().isCleanSession())
             .sessionPresent(sessionExists)
-            .lastWill(willMessage != null ? new ClientConnected.WillInfo().topic(willMessage.topic)
-                .isRetain(willMessage.retain)
-                .qos(willMessage.qos)
-                .payload(willMessage.payload.asReadOnlyByteBuffer()) : null));
-        return CompletableFuture.failedFuture(new UnsupportedOperationException("stay tune"));
+            .lastWill(willMessage != null ? new ClientConnected.WillInfo().topic(willMessage.getTopic())
+                .isRetain(willMessage.getRetain())
+                .qos(willMessage.getMessage().getPubQoS())
+                .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
+        return CompletableFuture.completedFuture(null);
     }
 
     private CompletableFuture<Void> setupPersistentSessionHandler(MqttConnectMessage connMsg,
                                                                   TenantSettings settings,
-                                                                  boolean sessionExists,
-                                                                  long finalSEI) {
+                                                                  String userSessionId,
+                                                                  @Nullable
+                                                                  MQTT5PersistentSessionHandler.ExistingSession existingSession,
+                                                                  int keepAliveSeconds,
+                                                                  int finalSEI) {
         if (!ctx.channel().isActive()) {
             return CompletableFuture.completedFuture(null);
         }
-        int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds());
         MQTT5PersistentSessionHandler handler = MQTT5PersistentSessionHandler.builder()
             .connProps(connMsg.variableHeader().properties())
             .settings(settings)
+            .userSessionId(userSessionId)
             .clientInfo(clientInfo)
+            .existingSession(existingSession)
             .keepAliveTimeSeconds(keepAliveSeconds)
-            .sessionExpiryInterval(finalSEI)
+            .sessionExpirySeconds(finalSEI)
+            .willMessage(willMessage)
             .build();
         // setup transient session handler
         ctx.pipeline().replace(this, MQTT5SessionHandler.NAME, handler);
@@ -574,7 +464,7 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
         connPropsBuilder.topicAliasMaximum(settings.maxTopicAlias);
         ctx.writeAndFlush(MqttMessageBuilders
             .connAck()
-            .sessionPresent(sessionExists)
+            .sessionPresent(existingSession != null)
             .properties(connPropsBuilder.build())
             .returnCode(MqttConnectReturnCode.CONNECTION_ACCEPTED)
             .build());
@@ -582,14 +472,14 @@ public class MQTT5ConnectHandler extends MQTTMessageHandler {
         // report client connected event
         eventCollector.report(getLocal(ClientConnected.class).clientInfo(clientInfo)
             .serverId(sessionCtx.serverId)
-            .userSessionId(userSessionId(clientInfo))
+            .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .cleanSession(connMsg.variableHeader().isCleanSession())
-            .sessionPresent(sessionExists)
-            .lastWill(willMessage != null ? new ClientConnected.WillInfo().topic(willMessage.topic)
-                .isRetain(willMessage.retain)
-                .qos(willMessage.qos)
-                .payload(willMessage.payload.asReadOnlyByteBuffer()) : null));
-        return CompletableFuture.failedFuture(new UnsupportedOperationException("stay tune"));
+            .sessionPresent(existingSession != null)
+            .lastWill(willMessage != null ? new ClientConnected.WillInfo().topic(willMessage.getTopic())
+                .isRetain(willMessage.getRetain())
+                .qos(willMessage.getMessage().getPubQoS())
+                .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
+        return CompletableFuture.completedFuture(null);
     }
 }

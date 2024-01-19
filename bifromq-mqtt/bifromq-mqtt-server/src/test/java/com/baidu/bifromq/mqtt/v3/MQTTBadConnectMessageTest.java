@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.mqtt.TestUtils;
-import com.baidu.bifromq.mqtt.client.MqttTestClient;
+import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;

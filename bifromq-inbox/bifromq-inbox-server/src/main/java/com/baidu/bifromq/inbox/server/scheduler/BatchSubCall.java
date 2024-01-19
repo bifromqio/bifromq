@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedTopicFilter;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -22,13 +20,16 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.Set;
 
 public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     protected BatchSubCall(KVRangeId rangeId,
@@ -38,18 +39,27 @@ public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     }
 
     @Override
+    protected BatchCallTask<SubRequest, SubReply> newBatch(String storeId, long ver) {
+        return new BatchSubCallTask(storeId, ver);
+    }
+
+    @Override
     protected RWCoProcInput makeBatch(Iterator<SubRequest> subRequestIterator) {
         BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder();
-        subRequestIterator.forEachRemaining(request -> reqBuilder.putTopicFilters(
-            scopedTopicFilter(request.getTenantId(), request.getInboxId(),
-                request.getTopicFilter()).toStringUtf8(), request.getSubQoS()));
+        subRequestIterator.forEachRemaining(request -> reqBuilder.addParams(BatchSubRequest.Params.newBuilder()
+            .setTenantId(request.getTenantId())
+            .setInboxId(request.getInboxId())
+            .setIncarnation(request.getIncarnation())
+            .setVersion(request.getVersion())
+            .setTopicFilter(request.getTopicFilter())
+            .setSubQoS(request.getSubQoS())
+            .setNow(request.getNow())
+            .build()));
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()
                 .setReqId(reqId)
-                .setBatchSub(reqBuilder
-                    .setReqId(reqId)
-                    .build())
+                .setBatchSub(reqBuilder.build())
                 .build())
             .build();
     }
@@ -57,17 +67,19 @@ public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     @Override
     protected void handleOutput(Queue<CallTask<SubRequest, SubReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
+        assert batchedTasks.size() == output.getInboxService().getBatchSub().getCodeCount();
         CallTask<SubRequest, SubReply, MutationCallBatcherKey> task;
+        int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(SubReply.newBuilder()
-                .setReqId(task.call.getReqId())
-                .setResult(SubReply.Result.forNumber(output.getInboxService()
-                    .getBatchSub()
-                    .getResultsMap()
-                    .get(scopedTopicFilter(task.call.getTenantId(),
-                        task.call.getInboxId(), task.call.getTopicFilter()).toStringUtf8())
-                    .getNumber()))
-                .build());
+            SubReply.Builder replyBuilder = SubReply.newBuilder().setReqId(task.call.getReqId());
+            switch (output.getInboxService().getBatchSub().getCode(i++)) {
+                case OK -> task.callResult.complete(replyBuilder.setCode(SubReply.Code.OK).build());
+                case EXISTS -> task.callResult.complete(replyBuilder.setCode(SubReply.Code.EXISTS).build());
+                case NO_INBOX -> task.callResult.complete(replyBuilder.setCode(SubReply.Code.NO_INBOX).build());
+                case EXCEED_LIMIT -> task.callResult.complete(replyBuilder.setCode(SubReply.Code.EXCEED_LIMIT).build());
+                case CONFLICT -> task.callResult.complete(replyBuilder.setCode(SubReply.Code.CONFLICT).build());
+                case ERROR -> task.callResult.complete(replyBuilder.setCode(SubReply.Code.ERROR).build());
+            }
         }
 
     }
@@ -76,8 +88,34 @@ public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     protected void handleException(CallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask, Throwable e) {
         callTask.callResult.complete(SubReply.newBuilder()
             .setReqId(callTask.call.getReqId())
-            .setResult(SubReply.Result.ERROR)
+            .setCode(SubReply.Code.ERROR)
             .build());
 
+    }
+
+    private static class BatchSubCallTask extends BatchCallTask<SubRequest, SubReply> {
+        private final Set<ScopedInbox> inboxes = new HashSet<>();
+
+        private BatchSubCallTask(String storeId, long ver) {
+            super(storeId, ver);
+        }
+
+        @Override
+        protected void add(CallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask) {
+            super.add(callTask);
+            inboxes.add(new ScopedInbox(
+                callTask.call.getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation())
+            );
+        }
+
+        @Override
+        protected boolean isBatchable(CallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask) {
+            return !inboxes.contains(new ScopedInbox(
+                callTask.call.getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation()));
+        }
     }
 }

@@ -61,6 +61,7 @@ import com.baidu.bifromq.metrics.TenantMeter;
 import com.baidu.bifromq.mqtt.handler.MPSThrottler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageHandler;
 import com.baidu.bifromq.mqtt.handler.SendBufferCapacityHinter;
+import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.event.ConnectionWillClose;
 import com.baidu.bifromq.mqtt.session.v3.IMQTT3Session;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
@@ -71,7 +72,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.PubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.SubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.UnsubActionDisallow;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.ClientConnected;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
@@ -145,6 +145,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
@@ -156,11 +157,12 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     public static final String NAME = "MQTT3SessionHandler";
     private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
     private static final CompletableFuture<Void> DONE = CompletableFuture.completedFuture(null);
-    private final ClientInfo clientInfo;
-    private final int keepAliveTimeSeconds;
+    protected final TenantSettings tenantSettings;
+
+    protected final ClientInfo clientInfo;
+    protected final String userSessionId;
+    protected final int keepAliveTimeSeconds;
     private final long idleTimeoutNanos;
-    private final boolean cleanSession;
-    private final boolean sessionPresent;
     private final WillMessage willMessage;
     private final LinkedMap<Integer, UnconfirmedQoS1Message> unconfirmedQoS1Messages = new LinkedMap<>();
     // key: id used in qos2 protocol interaction, value: message's original messageId
@@ -183,14 +185,17 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     private boolean retainEnabled;
     private int retainMatchLimit;
 
-    protected MQTT3SessionHandler(ClientInfo clientInfo, int keepAliveTimeSeconds, boolean cleanSession,
-                                  boolean sessionPresent, WillMessage willMessage) {
+    protected MQTT3SessionHandler(TenantSettings settings,
+                                  String userSessionId,
+                                  ClientInfo clientInfo,
+                                  int keepAliveSeconds,
+                                  @Nullable WillMessage willMessage) {
+        this.tenantSettings = settings;
+        this.userSessionId = userSessionId;
         this.clientInfo = clientInfo;
-        this.keepAliveTimeSeconds = keepAliveTimeSeconds;
-        this.idleTimeoutNanos = Duration.ofMillis(keepAliveTimeSeconds * 1500L).toNanos(); // x1.5
-        this.cleanSession = cleanSession;
+        this.keepAliveTimeSeconds = keepAliveSeconds;
+        this.idleTimeoutNanos = Duration.ofMillis(keepAliveSeconds * 1500L).toNanos(); // x1.5
         this.willMessage = willMessage;
-        this.sessionPresent = sessionPresent;
         this.tenantMeter = TenantMeter.get(clientInfo.getTenantId());
     }
 
@@ -216,18 +221,6 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.channel().eventLoop()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
-
-        // report client connected event
-        eventCollector.report(getLocal(ClientConnected.class).clientInfo(clientInfo)
-            .serverId(sessionCtx.serverId)
-            .userSessionId(userSessionId(clientInfo))
-            .keepAliveTimeSeconds(keepAliveTimeSeconds)
-            .cleanSession(cleanSession)
-            .sessionPresent(sessionPresent)
-            .lastWill(willMessage != null ? new ClientConnected.WillInfo().topic(willMessage.topic)
-                .isRetain(willMessage.retain)
-                .qos(willMessage.qos)
-                .payload(willMessage.payload.asReadOnlyByteBuffer()) : null));
     }
 
     @Override
@@ -253,7 +246,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
                         getLocal(ProtocolViolation.class)
                             .statement("MQTT-3.1.0-2")
                             .clientInfo(clientInfo));
-                case DISCONNECT -> closeConnectionNow(getLocal(ByClient.class).clientInfo(clientInfo));
+                case DISCONNECT -> handleDisconnect(mqttMessage);
                 case PINGREQ -> {
                     writeAndFlush(MqttMessage.PINGRESP);
                     if (debugMode) {
@@ -324,14 +317,12 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
         return clientInfo;
     }
 
-    public boolean sessionPresent() {
-        return sessionPresent;
-    }
-
     private void kick(ClientInfo kicker) {
         ctx.channel().eventLoop().execute(() ->
             closeConnectionNow(getLocal(Kicked.class).kicker(kicker).clientInfo(clientInfo)));
     }
+
+    protected abstract void handleDisconnect(MqttMessage mqttMessage);
 
     private void handlePubMsg(MqttPublishMessage mqttMessage) {
         long reqId = mqttMessage.variableHeader().packetId() > 0 ? mqttMessage.variableHeader()
@@ -1079,6 +1070,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
             .record(timestamp - message.getTimestamp(), TimeUnit.MILLISECONDS);
         if (ctx.channel().isActive()) {
             Timer.Sample start = Timer.start();
+
             ctx.write(msg.buildMQTTMessage(sessionCtx.nanoTime()))
                 .addListener(f -> {
                     if (f.isSuccess()) {

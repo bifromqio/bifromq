@@ -14,9 +14,8 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
-import java.util.List;
+import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 
-public interface IInboxCreateScheduler
-    extends IBatchCallScheduler<CreateInboxRequest, List<String>> {
+public interface IInboxCreateScheduler extends IBatchCallScheduler<CreateRequest, CreateReply> {
 }

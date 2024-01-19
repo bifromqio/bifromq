@@ -13,17 +13,28 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.*;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.*;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_DELIVERER_KEY;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getDelivererKey;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
+import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
 import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.client.InboxSubResult;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.mqtt.inbox.MqttSubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -42,7 +53,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-
 import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -95,53 +105,78 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
             int subBrokerId = getRequiredSubBrokerId(req);
             String delivererKey = getDelivererKey(HEADER_DELIVERER_KEY, req, subBrokerId);
             log.trace("Handling http sub request: reqId={}, tenantId={}, topicFilter={}, subQoS={}, inboxId={}, " +
-                    "subBrokerId={}", reqId, tenantId, topicFilter, subQoS, inboxId, subBrokerId);
+                "subBrokerId={}", reqId, tenantId, topicFilter, subQoS, inboxId, subBrokerId);
             CompletableFuture<FullHttpResponse> future;
             if (!TopicUtil.checkTopicFilter(topicFilter, tenantId, settingProvider)) {
                 DefaultFullHttpResponse resp =
-                        new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER);
+                    new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER);
                 resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
                 return CompletableFuture.completedFuture(resp);
             }
             switch (subBrokerId) {
                 case 0:
                     future = mqttClient.sub(reqId, tenantId, inboxId, topicFilter, subQoS)
-                            .thenApply(v -> {
-                                DefaultFullHttpResponse resp =
-                                        new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
-                                if (v == MqttSubResult.OK) {
-                                    resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
-                                }else {
-                                    resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                                }
-                                return resp;
-                            });
+                        .thenApply(v -> {
+                            DefaultFullHttpResponse resp =
+                                new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
+                            if (v == MqttSubResult.OK) {
+                                resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
+                            } else {
+                                resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
+                            }
+                            return resp;
+                        });
                     break;
                 case 1:
-                    future = inboxClient.sub(reqId, tenantId, inboxId, topicFilter, subQoS)
-                            .thenApply(v -> {
-                                DefaultFullHttpResponse resp =
-                                        new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
-                                if (v == InboxSubResult.OK) {
-                                    resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
-                                }else {
-                                    resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                                }
-                                return resp;
-                            });
+                    future = inboxClient.get(GetRequest.newBuilder()
+                            .setReqId(reqId)
+                            .setTenantId(tenantId)
+                            .setInboxId(inboxId)
+                            .setNow(HLC.INST.getPhysical())
+                            .build())
+                        .thenCompose(getReply -> {
+                            if (getReply.getCode() == GetReply.Code.EXIST) {
+                                InboxVersion latest = getReply.getInbox(getReply.getInboxCount() - 1);
+                                return inboxClient.sub(SubRequest.newBuilder()
+                                        .setReqId(reqId)
+                                        .setTenantId(tenantId)
+                                        .setInboxId(inboxId)
+                                        .setIncarnation(latest.getIncarnation())
+                                        .setVersion(latest.getVersion())
+                                        .setTopicFilter(topicFilter)
+                                        .setSubQoS(subQoS)
+                                        .setNow(HLC.INST.getPhysical())
+                                        .build())
+                                    .thenApply(subReply -> {
+                                        DefaultFullHttpResponse resp =
+                                            new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                                                Unpooled.EMPTY_BUFFER);
+                                        if (subReply.getCode() == SubReply.Code.OK) {
+                                            resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
+                                        } else {
+                                            resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
+                                        }
+                                        return resp;
+                                    });
+                            }
+                            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                                Unpooled.EMPTY_BUFFER);
+                            resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
+                            return CompletableFuture.completedFuture(resp);
+                        });
                     break;
                 default:
                     future = distClient.match(reqId, tenantId, topicFilter, subQoS, inboxId, delivererKey, subBrokerId)
-                            .thenApply(v -> {
-                                DefaultFullHttpResponse resp =
-                                        new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
-                                if (v == MatchResult.OK) {
-                                    resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
-                                }else {
-                                    resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                                }
-                                return resp;
-                            });
+                        .thenApply(v -> {
+                            DefaultFullHttpResponse resp =
+                                new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
+                            if (v == MatchResult.OK) {
+                                resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
+                            } else {
+                                resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
+                            }
+                            return resp;
+                        });
             }
             return future;
         } catch (Throwable e) {

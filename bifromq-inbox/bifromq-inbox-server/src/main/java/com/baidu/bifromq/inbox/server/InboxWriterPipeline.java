@@ -15,23 +15,32 @@ package com.baidu.bifromq.inbox.server;
 
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
-import com.baidu.bifromq.inbox.rpc.proto.SendResult;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
-    private final InboxFetcherRegistry registry;
-    private final RequestHandler handler;
+    interface IWriteCallback {
+        void afterWrite(ScopedInbox scopedInbox, String delivererKey);
+    }
+
+    interface ISendRequestHandler {
+        CompletableFuture<SendReply> handle(SendRequest request);
+    }
+
+    private final IWriteCallback writeCallback;
+    private final ISendRequestHandler handler;
     private final String delivererKey;
 
-    public InboxWriterPipeline(InboxFetcherRegistry registry, RequestHandler handler,
+    public InboxWriterPipeline(IWriteCallback writeCallback,
+                               ISendRequestHandler handler,
                                StreamObserver<SendReply> responseObserver) {
         super(responseObserver);
-        this.registry = registry;
+        this.writeCallback = writeCallback;
         this.handler = handler;
         this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
     }
@@ -40,20 +49,12 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
     protected CompletableFuture<SendReply> handleRequest(String ignore, SendRequest request) {
         log.trace("Received inbox write request: deliverer={}, \n{}", delivererKey, request);
         return handler.handle(request).thenApply(v -> {
-            for (SendResult result : v.getResultList()) {
-                if (result.getResult() == SendResult.Result.OK) {
-                    for (IInboxFetcher fetcher : registry.get(result.getSubInfo().getTenantId(), delivererKey)) {
-                        if (fetcher.signalFetch(result.getSubInfo().getInboxId())) {
-                            break;
-                        }
-                    }
+            for (SendReply.Result result : v.getResultList()) {
+                if (result.getCode() == SendReply.Code.OK) {
+                    writeCallback.afterWrite(ScopedInbox.from(result.getSubInfo()), delivererKey);
                 }
             }
             return v;
         });
-    }
-
-    interface RequestHandler {
-        CompletableFuture<SendReply> handle(SendRequest request);
     }
 }

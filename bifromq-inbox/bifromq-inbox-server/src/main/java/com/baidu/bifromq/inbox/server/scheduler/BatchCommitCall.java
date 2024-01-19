@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -22,17 +20,16 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.CommitParams;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.type.QoS;
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
 public class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     protected BatchCommitCall(KVRangeId rangeId,
@@ -42,30 +39,28 @@ public class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitRepl
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<CommitRequest> commitRequestIterator) {
-        Map<String, Long[]> commitParamsMap = new HashMap<>(128);
-        commitRequestIterator.forEachRemaining(call -> {
-            String tenantId = call.getTenantId();
-            String scopedInboxIdUtf8 = scopedInboxId(tenantId, call.getInboxId()).toStringUtf8();
-            Long[] upToSeqs = commitParamsMap.computeIfAbsent(scopedInboxIdUtf8, k -> new Long[3]);
-            QoS qos = call.getQos();
-            upToSeqs[qos.ordinal()] = upToSeqs[qos.ordinal()] == null ?
-                call.getUpToSeq() : Math.max(upToSeqs[qos.ordinal()], call.getUpToSeq());
-        });
+    protected BatchCallTask<CommitRequest, CommitReply> newBatch(String storeId, long ver) {
+        return new BatchCommitCallTask(storeId, ver);
+    }
+
+    @Override
+    protected RWCoProcInput makeBatch(Iterator<CommitRequest> reqIterator) {
         BatchCommitRequest.Builder reqBuilder = BatchCommitRequest.newBuilder();
-        commitParamsMap.forEach((k, v) -> {
-            CommitParams.Builder cb = CommitParams.newBuilder();
-            if (v[0] != null) {
-                cb.setQos0UpToSeq(v[0]);
+        reqIterator.forEachRemaining(req -> {
+            BatchCommitRequest.Params.Builder paramsBuilder = BatchCommitRequest.Params.newBuilder()
+                .setTenantId(req.getTenantId())
+                .setInboxId(req.getInboxId())
+                .setIncarnation(req.getIncarnation())
+                .setVersion(req.getVersion())
+                .setNow(req.getNow());
+            switch (req.getQos()) {
+                case AT_MOST_ONCE -> paramsBuilder.setQos0UpToSeq(req.getUpToSeq());
+                case AT_LEAST_ONCE -> paramsBuilder.setQos1UpToSeq(req.getUpToSeq());
+                case EXACTLY_ONCE -> paramsBuilder.setQos2UpToSeq(req.getUpToSeq());
             }
-            if (v[1] != null) {
-                cb.setQos1UpToSeq(v[1]);
-            }
-            if (v[2] != null) {
-                cb.setQos2UpToSeq(v[2]);
-            }
-            reqBuilder.putInboxCommit(k, cb.build());
+            reqBuilder.addParams(paramsBuilder.build());
         });
+
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()
@@ -78,25 +73,53 @@ public class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitRepl
     @Override
     protected void handleOutput(Queue<CallTask<CommitRequest, CommitReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
+        assert batchedTasks.size() == output.getInboxService().getBatchCommit().getCodeCount();
         CallTask<CommitRequest, CommitReply, MutationCallBatcherKey> task;
+        int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(CommitReply.newBuilder()
-                .setReqId(task.call.getReqId())
-                .setResult(output.getInboxService().getBatchCommit().getResultMap()
-                    .get(scopedInboxId(
-                        task.call.getTenantId(),
-                        task.call.getInboxId()).toStringUtf8()) ?
-                    CommitReply.Result.OK : CommitReply.Result.ERROR)
-                .build());
+            CommitReply.Builder replyBuilder = CommitReply.newBuilder().setReqId(task.call.getReqId());
+            switch (output.getInboxService().getBatchCommit().getCode(i++)) {
+                case OK -> task.callResult.complete(replyBuilder.setCode(CommitReply.Code.OK).build());
+                case NO_INBOX -> task.callResult.complete(replyBuilder.setCode(CommitReply.Code.NO_INBOX).build());
+                case CONFLICT -> task.callResult.complete(replyBuilder.setCode(CommitReply.Code.CONFLICT).build());
+                case ERROR -> task.callResult.complete(replyBuilder.setCode(CommitReply.Code.ERROR).build());
+            }
         }
     }
 
     @Override
-    protected void handleException(CallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask, Throwable e) {
+    protected void handleException(CallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask,
+                                   Throwable e) {
         callTask.callResult.complete(CommitReply.newBuilder()
             .setReqId(callTask.call.getReqId())
-            .setResult(CommitReply.Result.ERROR)
+            .setCode(CommitReply.Code.ERROR)
             .build());
 
+    }
+
+    private static class BatchCommitCallTask extends BatchCallTask<CommitRequest, CommitReply> {
+        private final Set<ScopedInbox> inboxes = new HashSet<>();
+
+        private BatchCommitCallTask(String storeId, long ver) {
+            super(storeId, ver);
+        }
+
+        @Override
+        protected void add(CallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask) {
+            super.add(callTask);
+            inboxes.add(new ScopedInbox(
+                callTask.call.getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation())
+            );
+        }
+
+        @Override
+        protected boolean isBatchable(CallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask) {
+            return !inboxes.contains(new ScopedInbox(
+                callTask.call.getTenantId(),
+                callTask.call.getInboxId(),
+                callTask.call.getIncarnation()));
+        }
     }
 }

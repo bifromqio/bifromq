@@ -20,9 +20,7 @@ public interface IInboxFetcher {
 
     String delivererKey();
 
-    boolean signalFetch(String inboxId);
-
-    void touch();
+    boolean signalFetch(String inboxId, long incarnation);
 
     void close();
 }

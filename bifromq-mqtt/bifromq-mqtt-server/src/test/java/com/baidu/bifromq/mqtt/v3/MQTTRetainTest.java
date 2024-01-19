@@ -24,8 +24,8 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.mqtt.client.MqttMsg;
-import com.baidu.bifromq.mqtt.client.MqttTestClient;
+import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
+import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;

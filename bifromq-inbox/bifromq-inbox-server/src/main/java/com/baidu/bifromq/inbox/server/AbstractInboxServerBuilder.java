@@ -15,20 +15,33 @@ package com.baidu.bifromq.inbox.server;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import java.util.concurrent.ScheduledExecutorService;
 
 abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T>> implements IInboxServerBuilder {
     ISettingProvider settingProvider;
+    IInboxClient inboxClient;
     IDistClient distClient;
+    IRetainClient retainClient;
     IBaseKVStoreClient inboxStoreClient;
     ScheduledExecutorService bgTaskExecutor;
 
     AbstractInboxServerBuilder() {
     }
 
+    public T inboxClient(IInboxClient inboxClient) {
+        this.inboxClient = inboxClient;
+        return thisT();
+    }
     public T distClient(IDistClient distClient) {
         this.distClient = distClient;
+        return thisT();
+    }
+
+    public T retainClient(IRetainClient retainClient) {
+        this.retainClient = retainClient;
         return thisT();
     }
 

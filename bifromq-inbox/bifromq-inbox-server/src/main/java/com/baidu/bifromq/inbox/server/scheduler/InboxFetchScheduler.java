@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_QUEUES_PER_RANGE;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -23,6 +24,7 @@ import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -33,17 +35,17 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
     }
 
     @Override
-    protected Batcher<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> newBatcher(String name,
-                                                                                                long tolerableLatencyNanos,
-                                                                                                long burstLatencyNanos,
-                                                                                                QueryCallBatcherKey inboxReadBatcherKey) {
+    protected Batcher<InboxFetch, Fetched, QueryCallBatcherKey> newBatcher(String name,
+                                                                           long tolerableLatencyNanos,
+                                                                           long burstLatencyNanos,
+                                                                           QueryCallBatcherKey inboxReadBatcherKey) {
         return new InboxFetchBatcher(inboxReadBatcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
             storeClient);
     }
 
     @Override
     protected int selectQueue(InboxFetch request) {
-        int idx = request.scopedInboxId.hashCode() % queuesPerRange;
+        int idx = Objects.hash(request.tenantId, request.inboxId, request.incarnation) % queuesPerRange;
         if (idx < 0) {
             idx += queuesPerRange;
         }
@@ -51,8 +53,8 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
     }
 
     @Override
-    protected ByteString rangeKey(IInboxFetchScheduler.InboxFetch request) {
-        return request.scopedInboxId;
+    protected ByteString rangeKey(InboxFetch request) {
+        return inboxKeyPrefix(request.tenantId, request.inboxId, request.incarnation);
     }
 
     private static class InboxFetchBatcher extends QueryCallBatcher<InboxFetch, Fetched> {

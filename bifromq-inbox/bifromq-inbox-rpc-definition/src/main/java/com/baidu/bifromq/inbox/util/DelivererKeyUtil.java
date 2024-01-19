@@ -18,6 +18,14 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_DELIVERERS;
 public class DelivererKeyUtil {
     private static final int INBOX_GROUPS = INBOX_DELIVERERS.get();
 
+    public static String getSubInboxId(String inboxId, long incarnation) {
+        return inboxId + "_" + incarnation;
+    }
+
+    public static long getIncarnation(String subInboxId) {
+        return Long.parseUnsignedLong(subInboxId.substring(subInboxId.lastIndexOf("_")));
+    }
+
     public static String getDelivererKey(String inboxId) {
         int k = inboxId.hashCode() % INBOX_GROUPS;
         if (k < 0) {

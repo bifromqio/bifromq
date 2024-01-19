@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.scopedInboxId;
+import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
@@ -48,7 +48,7 @@ public class InboxCommitScheduler extends MutationCallScheduler<CommitRequest, C
 
     @Override
     protected ByteString rangeKey(CommitRequest request) {
-        return scopedInboxId(request.getTenantId(), request.getInboxId());
+        return inboxKeyPrefix(request.getTenantId(), request.getInboxId(), request.getIncarnation());
     }
 
     private static class InboxCommitBatcher extends MutationCallBatcher<CommitRequest, CommitReply> {

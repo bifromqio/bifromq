@@ -18,10 +18,9 @@ import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -31,7 +30,7 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     boolean bootstrap;
     IAgentHost agentHost;
     ICRDTService crdtService;
-    IDistClient distClient;
+    IInboxClient inboxClient;
     IBaseKVStoreClient storeClient;
     ISettingProvider settingProvider;
     IEventCollector eventCollector;
@@ -44,7 +43,6 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     Duration statsInterval = Duration.ofSeconds(30);
     Duration gcInterval = Duration.ofMinutes(5);
     Duration purgeDelay = Duration.ofMinutes(30);
-    Clock clock = Clock.systemUTC();
 
     @SuppressWarnings("unchecked")
     private T thisT() {
@@ -71,8 +69,8 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
         return thisT();
     }
 
-    public T distClient(IDistClient distClient) {
-        this.distClient = distClient;
+    public T inboxClient(IInboxClient inboxClient) {
+        this.inboxClient = inboxClient;
         return thisT();
     }
 
@@ -133,11 +131,6 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
 
     public T purgeDelay(Duration purgeDelay) {
         this.purgeDelay = purgeDelay;
-        return thisT();
-    }
-
-    public T clock(Clock clock) {
-        this.clock = clock;
         return thisT();
     }
 }

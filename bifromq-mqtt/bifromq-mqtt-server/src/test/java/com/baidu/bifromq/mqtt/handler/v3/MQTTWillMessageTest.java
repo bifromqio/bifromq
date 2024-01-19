@@ -26,18 +26,23 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.WILL_DIST_ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
-import java.nio.ByteBuffer;
+import io.netty.handler.codec.mqtt.MqttConnAckMessage;
+import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.Assert;
@@ -48,14 +53,14 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
 
     @Test
     public void willWhenIdle() {
-        connectAndVerify(true, false, 30, true, false);
+        setupTransientSessionWithLWT(false);
         mockAuthCheck(true);
         mockDistDist(true);
         channel.advanceTimeBy(100, TimeUnit.SECONDS);
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DISTED);
+        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DISTED);
     }
 
 //    @Test
@@ -85,7 +90,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
 
     @Test
     public void willWhenNotSelfKick() {
-        connectAndVerify(true, false, 30, true, false);
+        setupTransientSessionWithLWT(false);
         mockAuthCheck(true);
         mockDistDist(true);
         onKick.get().accept(ClientInfo.newBuilder()
@@ -95,50 +100,50 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
             .build());
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, KICKED, WILL_DISTED);
+        verifyEvent(CLIENT_CONNECTED, KICKED, WILL_DISTED);
     }
 
     @Test
     public void willAuthCheckFailed() {
-        connectAndVerify(true, false, 30, true, false);
+        setupTransientSessionWithLWT(false);
         mockAuthCheck(false);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, IDLE, PUB_ACTION_DISALLOW);
+        verifyEvent(CLIENT_CONNECTED, IDLE, PUB_ACTION_DISALLOW);
         verify(distClient, times(0)).pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class));
     }
 
     @Test
     public void willDistError() {
-        connectAndVerify(true, false, 30, true, false);
+        setupTransientSessionWithLWT(false);
         mockAuthCheck(true);
         mockDistDist(false);
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
+        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
     }
 
     @Test
     public void willDistDrop() {
-        connectAndVerify(true, false, 30, true, false);
+        setupTransientSessionWithLWT(false);
         mockAuthCheck(true);
         mockDistDrop();
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(3, CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
+        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DIST_ERROR);
     }
 
 
     @Test
     public void willAndRetain() {
-        connectAndVerify(true, false, 30, true, true);
+        setupTransientSessionWithLWT(true);
         mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(RETAINED);
@@ -146,13 +151,13 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED);
+        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED);
     }
 
 
     @Test
     public void willAndRetainClear() {
-        connectAndVerify(true, false, 30, true, true);
+        setupTransientSessionWithLWT(true);
         mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(CLEARED);
@@ -160,12 +165,12 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, RETAIN_MSG_CLEARED);
+        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DISTED, RETAIN_MSG_CLEARED);
     }
 
     @Test
     public void willAndRetainError() {
-        connectAndVerify(true, false, 30, true, true);
+        setupTransientSessionWithLWT(true);
         mockAuthCheck(true);
         mockDistDist(true);
         mockRetainPipeline(ERROR);
@@ -173,6 +178,23 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(4, CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED_ERROR);
+        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED_ERROR);
+    }
+
+    protected void setupTransientSessionWithLWT(boolean willRetain) {
+        mockAuthPass();
+        mockSessionReg();
+        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        MqttConnectMessage connectMessage;
+        if (!willRetain) {
+            connectMessage = MQTTMessageUtils.qoSWillMqttConnectMessage(1, true);
+        } else {
+            connectMessage = MQTTMessageUtils.willRetainMqttConnectMessage(1, true);
+        }
+        channel.writeInbound(connectMessage);
+        channel.runPendingTasks();
+        MqttConnAckMessage ackMessage = channel.readOutbound();
+        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
+        verifyEvent(EventType.CLIENT_CONNECTED);
     }
 }

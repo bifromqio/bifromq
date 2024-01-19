@@ -13,28 +13,49 @@
 
 package com.baidu.bifromq.inbox;
 
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
+
 import com.baidu.bifromq.baserpc.BluePrint;
+import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
+import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
+import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
         .serviceDescriptor(InboxServiceGrpc.getServiceDescriptor())
+        // inbox related rpc must be routed using WCH mode
         // broker client rpc
         .methodSemantic(InboxServiceGrpc.getReceiveMethod(), BluePrint.WCHPipelineUnaryMethod.getInstance())
+        .methodSemantic(InboxServiceGrpc.getFetchMethod(), BluePrint.WCHStreamingMethod.getInstance())
         // both broker and reader client rpc
-        .methodSemantic(InboxServiceGrpc.getHasInboxMethod(), BluePrint.WCHUnaryMethod.<HasInboxRequest>builder()
-            .keyHashFunc(HasInboxRequest::getInboxId).build())
+        .methodSemantic(InboxServiceGrpc.getGetMethod(), BluePrint.WCHUnaryMethod.<GetRequest>builder()
+            .keyHashFunc(hasInboxRequest -> getDelivererKey(hasInboxRequest.getInboxId())).build())
         // reader client rpc
-        .methodSemantic(InboxServiceGrpc.getCreateInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(InboxServiceGrpc.getDeleteInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(InboxServiceGrpc.getTouchInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(InboxServiceGrpc.getSubMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(InboxServiceGrpc.getUnsubMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(InboxServiceGrpc.getExpireInboxMethod(), BluePrint.WRUnaryMethod.getInstance())
-        .methodSemantic(InboxServiceGrpc.getFetchInboxMethod(), BluePrint.WCHStreamingMethod.getInstance())
+        .methodSemantic(InboxServiceGrpc.getAttachMethod(), BluePrint.WCHUnaryMethod.<AttachRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getDetachMethod(), BluePrint.WCHUnaryMethod.<DetachRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getExpireMethod(), BluePrint.WCHUnaryMethod.<ExpireRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getCreateMethod(), BluePrint.WCHUnaryMethod.<CreateRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getTouchMethod(), BluePrint.WCHUnaryMethod.<TouchRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getSubMethod(), BluePrint.WCHUnaryMethod.<SubRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getUnsubMethod(), BluePrint.WCHUnaryMethod.<UnsubRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getCommitMethod(), BluePrint.WCHUnaryMethod
-            .<CommitRequest>builder().keyHashFunc(CommitRequest::getInboxId).build())
+            .<CommitRequest>builder().keyHashFunc(commitRequest -> getDelivererKey(commitRequest.getInboxId()))
+            .build())
+        // expire all
+        .methodSemantic(InboxServiceGrpc.getExpireAllMethod(), BluePrint.WRUnaryMethod.getInstance())
         .build();
 }

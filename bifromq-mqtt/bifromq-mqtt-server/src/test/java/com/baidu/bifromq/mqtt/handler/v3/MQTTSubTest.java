@@ -28,7 +28,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.mqtt.handler.BaseMQTTTest;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.QoS;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
@@ -61,7 +60,8 @@ public class MQTTSubTest extends BaseMQTTTest {
 
     @Test
     public void transientQoS0Sub() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_MOST_ONCE, true);
         mockRetainMatch();
@@ -70,13 +70,14 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
     @Test
     public void transientQoS1Sub() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch();
@@ -85,13 +86,14 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
     @Test
     public void transientQoS2Sub() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
@@ -100,13 +102,14 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
     @Test
     public void transientMixedSub() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_MOST_ONCE, true);
         mockDistMatch(QoS.AT_LEAST_ONCE, true);
@@ -117,13 +120,14 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
     @Test
     public void transientMixedSubWithDistSubFailed() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(true);
         mockDistMatch(QoS.AT_MOST_ONCE, true);
         mockDistMatch(QoS.AT_LEAST_ONCE, true);
@@ -134,13 +138,14 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {0, 1, 128});
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
     @Test
     public void persistentQoS0Sub() {
-        connectAndVerify(false);
+        setupPersistentSession();
+
         mockAuthCheck(true);
         mockInboxSub(QoS.AT_MOST_ONCE, true);
         mockRetainMatch();
@@ -149,12 +154,13 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
     }
 
     @Test
     public void persistentQoS1Sub() {
-        connectAndVerify(false);
+        setupPersistentSession();
+
         mockAuthCheck(true);
         mockInboxSub(QoS.AT_LEAST_ONCE, true);
         mockRetainMatch();
@@ -163,12 +169,13 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
     }
 
     @Test
     public void persistentQoS2Sub() {
-        connectAndVerify(false);
+        setupPersistentSession();
+
         mockAuthCheck(true);
         mockInboxSub(QoS.EXACTLY_ONCE, true);
         mockRetainMatch();
@@ -177,12 +184,13 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
     }
 
     @Test
     public void persistentMixedSub() {
-        connectAndVerify(false);
+        setupPersistentSession();
+
         mockAuthCheck(true);
         mockInboxSub(QoS.AT_MOST_ONCE, true);
         mockInboxSub(QoS.AT_LEAST_ONCE, true);
@@ -193,61 +201,66 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(2, CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
     }
 
     @Test
     public void subWithEmptyTopicList() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         MqttSubscribeMessage subMessage = MQTTMessageUtils.badQoS0MqttSubMessageWithoutTopic();
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
+        verifyEvent(CLIENT_CONNECTED, PROTOCOL_VIOLATION);
     }
 
     @Test
     public void subWithTooLargeTopicList() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         int[] qos = new int[100];
         Arrays.fill(qos, 1);
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, TOO_LARGE_SUBSCRIPTION);
+        verifyEvent(CLIENT_CONNECTED, TOO_LARGE_SUBSCRIPTION);
     }
 
     @Test
     public void subWithMalformedTopic() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         MqttSubscribeMessage subMessage = MQTTMessageUtils.topicMqttSubMessages("/topic\u0000");
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
+        verifyEvent(CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
     }
 
     @Test
     public void subWithInvalidTopic() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         MqttSubscribeMessage subMessage = MQTTMessageUtils.badTopicMqttSubMessages();
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(2, CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
+        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
     }
 
     @Test
     public void subWithAuthFailed() {
-        connectAndVerify(true);
+        setupTransientSession();
+
         mockAuthCheck(false);
         int[] qos = {1, 1, 1};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {128, 128, 128});
-        verifyEvent(5, CLIENT_CONNECTED, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACKED);
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {

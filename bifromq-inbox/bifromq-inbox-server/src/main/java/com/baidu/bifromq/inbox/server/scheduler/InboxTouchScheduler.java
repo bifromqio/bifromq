@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.CONTROL_PLANE_TOLERABLE_LATENCY_MS;
 
@@ -22,12 +23,14 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
+import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchScheduler.Touch, Boolean>
+public class InboxTouchScheduler extends MutationCallScheduler<TouchRequest, TouchReply>
     implements IInboxTouchScheduler {
     public InboxTouchScheduler(IBaseKVStoreClient inboxStoreClient) {
         super("inbox_server_touch", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
@@ -35,19 +38,19 @@ public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchSchedu
     }
 
     @Override
-    protected Batcher<Touch, Boolean, MutationCallBatcherKey> newBatcher(String name,
-                                                                              long tolerableLatencyNanos,
-                                                                              long burstLatencyNanos,
-                                                                              MutationCallBatcherKey batchKey) {
+    protected Batcher<TouchRequest, TouchReply, MutationCallBatcherKey> newBatcher(String name,
+                                                                                   long tolerableLatencyNanos,
+                                                                                   long burstLatencyNanos,
+                                                                                   MutationCallBatcherKey batchKey) {
         return new InboxTouchBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, storeClient);
     }
 
     @Override
-    protected ByteString rangeKey(Touch request) {
-        return ByteString.copyFromUtf8(request.scopedInboxIdUtf8);
+    protected ByteString rangeKey(TouchRequest request) {
+        return inboxKeyPrefix(request.getTenantId(), request.getInboxId(), request.getIncarnation());
     }
 
-    private static class InboxTouchBatcher extends MutationCallBatcher<Touch, Boolean> {
+    private static class InboxTouchBatcher extends MutationCallBatcher<TouchRequest, TouchReply> {
         InboxTouchBatcher(String name,
                           long tolerableLatencyNanos,
                           long burstLatencyNanos,
@@ -57,7 +60,7 @@ public class InboxTouchScheduler extends MutationCallScheduler<IInboxTouchSchedu
         }
 
         @Override
-        protected IBatchCall<Touch, Boolean, MutationCallBatcherKey> newBatch() {
+        protected IBatchCall<TouchRequest, TouchReply, MutationCallBatcherKey> newBatch() {
             return new BatchTouchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }

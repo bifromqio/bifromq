@@ -16,24 +16,28 @@ package com.baidu.bifromq.inbox.client;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.inbox.RPCBluePrint;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateInboxRequest;
-import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.DeleteInboxRequest;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxReply.Result;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireInboxRequest;
-import com.baidu.bifromq.inbox.rpc.proto.HasInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
+import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
+import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchInboxRequest;
+import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
+import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
-import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.QoS;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.base.Preconditions;
@@ -49,14 +53,8 @@ final class InboxClient implements IInboxClient {
     private final IRPCClient rpcClient;
     private final LoadingCache<FetchPipelineKey, InboxFetchPipeline> fetchPipelineCache;
 
-    InboxClient(InboxClientBuilder builder) {
-        this.rpcClient = IRPCClient.newBuilder()
-            .bluePrint(RPCBluePrint.INSTANCE)
-            .executor(builder.executor)
-            .eventLoopGroup(builder.eventLoopGroup)
-            .crdtService(builder.crdtService)
-            .sslContext(builder.sslContext)
-            .build();
+    InboxClient(IRPCClient rpcClient) {
+        this.rpcClient = rpcClient;
         fetchPipelineCache = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
@@ -70,114 +68,117 @@ final class InboxClient implements IInboxClient {
     }
 
     @Override
-    public Observable<IRPCClient.ConnState> connState() {
+    public Observable<ConnState> connState() {
         return rpcClient.connState();
     }
 
     @Override
-    public IInboxReader openInboxReader(String tenantId, String inboxId) {
-        return new InboxReader(inboxId,
+    public IInboxReader openInboxReader(String tenantId, String inboxId, long incarnation) {
+        return new InboxReader(inboxId, incarnation,
             fetchPipelineCache.get(new FetchPipelineKey(tenantId, getDelivererKey(inboxId))));
     }
 
     @Override
-    public CompletableFuture<InboxCheckResult> has(long reqId, String tenantId, String inboxId) {
-        return rpcClient.invoke(tenantId, null, HasInboxRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setInboxId(inboxId)
-                .build(), InboxServiceGrpc.getHasInboxMethod())
-            .thenApply(v -> InboxCheckResult.values()[v.getResult().ordinal()]);
-    }
-
-    @Override
-    public CompletableFuture<CreateInboxReply> create(long reqId, String inboxId, ClientInfo owner) {
-        return rpcClient.invoke(owner.getTenantId(), null, CreateInboxRequest.newBuilder()
-                .setReqId(reqId)
-                .setInboxId(inboxId)
-                .setClientInfo(owner)
-                .build(), InboxServiceGrpc.getCreateInboxMethod())
+    public CompletableFuture<CommitReply> commit(CommitRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getCommitMethod())
             .exceptionally(e -> {
-                log.debug("Failed to create inbox", e);
-                return CreateInboxReply.newBuilder()
-                    .setReqId(reqId)
-                    .setResult(CreateInboxReply.Result.ERROR).build();
+                log.error("Failed to commit inbox", e);
+                return CommitReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(CommitReply.Code.ERROR)
+                    .build();
             });
     }
 
     @Override
-    public CompletableFuture<DeleteInboxReply> delete(long reqId, String tenantId, String inboxId) {
-        return rpcClient.invoke(tenantId, null, DeleteInboxRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setInboxId(inboxId)
-                .build(), InboxServiceGrpc.getDeleteInboxMethod())
-            .exceptionally(e -> DeleteInboxReply.newBuilder()
-                .setReqId(reqId)
-                .setResult(DeleteInboxReply.Result.ERROR)
+    public CompletableFuture<GetReply> get(GetRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getGetMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to get inbox", e);
+                return GetReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(GetReply.Code.ERROR)
+                    .build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<CreateReply> create(CreateRequest request) {
+        return rpcClient.invoke(request.getClient().getTenantId(), null, request, InboxServiceGrpc.getCreateMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to create inbox", e);
+                return CreateReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(CreateReply.Code.ERROR).build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<AttachReply> attach(AttachRequest request) {
+        return rpcClient.invoke(request.getClient().getTenantId(), null, request, InboxServiceGrpc.getAttachMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to attach inbox", e);
+                return AttachReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(AttachReply.Code.ERROR).build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<DetachReply> detach(DetachRequest request) {
+        return rpcClient.invoke(request.getClient().getTenantId(), null, request, InboxServiceGrpc.getDetachMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to attach inbox", e);
+                return DetachReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(DetachReply.Code.ERROR).build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<TouchReply> touch(TouchRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getTouchMethod())
+            .exceptionally(e -> {
+                log.error("Touch inbox failed", e);
+                return TouchReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(TouchReply.Code.ERROR).build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<SubReply> sub(SubRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getSubMethod())
+            .exceptionally(e -> SubReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(SubReply.Code.ERROR)
                 .build());
     }
 
     @Override
-    public CompletableFuture<Void> touch(long reqId, String tenantId, String inboxId) {
-        return rpcClient.invoke(tenantId, null, TouchInboxRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setInboxId(inboxId)
-                .build(), InboxServiceGrpc.getTouchInboxMethod())
-            .handle((v, e) -> {
-                if (e != null) {
-                    log.error("Touch inbox failed: inboxId={}", inboxId, e);
-                }
-                return null;
-            });
-    }
-
-    @Override
-    public CompletableFuture<InboxSubResult> sub(long reqId,
-                                                 String tenantId,
-                                                 String inboxId,
-                                                 String topicFilter,
-                                                 QoS qos) {
-        return rpcClient.invoke(tenantId, null, SubRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setInboxId(inboxId)
-                .setTopicFilter(topicFilter)
-                .setSubQoS(qos)
-                .build(), InboxServiceGrpc.getSubMethod())
-            .exceptionally(e -> SubReply.newBuilder()
-                .setReqId(reqId)
-                .setResult(SubReply.Result.ERROR)
-                .build())
-            .thenApply(v -> InboxSubResult.values()[v.getResult().ordinal()]);
-    }
-
-    @Override
-    public CompletableFuture<InboxUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter) {
-        return rpcClient.invoke(tenantId, null, UnsubRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setInboxId(inboxId)
-                .setTopicFilter(topicFilter)
-                .build(), InboxServiceGrpc.getUnsubMethod())
+    public CompletableFuture<UnsubReply> unsub(UnsubRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getUnsubMethod())
             .exceptionally(e -> UnsubReply.newBuilder()
-                .setReqId(reqId)
-                .setResult(UnsubReply.Result.ERROR)
-                .build())
-            .thenApply(v -> InboxUnsubResult.values()[v.getResult().ordinal()]);
+                .setReqId(request.getReqId())
+                .setCode(UnsubReply.Code.ERROR)
+                .build());
     }
 
     @Override
-    public CompletableFuture<ExpireInboxReply> expireInbox(long reqId, String tenantId, int expirySeconds) {
-        return rpcClient.invoke(tenantId, null, ExpireInboxRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setExpirySeconds(expirySeconds)
-                .build(), InboxServiceGrpc.getExpireInboxMethod())
-            .exceptionally(e -> ExpireInboxReply.newBuilder()
-                .setReqId(reqId)
-                .setResult(Result.ERROR)
+    public CompletableFuture<ExpireReply> expire(ExpireRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getExpireMethod())
+            .exceptionally(e -> ExpireReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(ExpireReply.Code.ERROR)
+                .build());
+    }
+
+    @Override
+    public CompletableFuture<ExpireAllReply> expireAll(ExpireAllRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getExpireAllMethod())
+            .exceptionally(e -> ExpireAllReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(ExpireAllReply.Code.ERROR)
                 .build());
     }
 
