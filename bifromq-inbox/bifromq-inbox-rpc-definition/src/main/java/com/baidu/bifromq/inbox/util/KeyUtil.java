@@ -21,7 +21,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 public class KeyUtil {
-    private static final ByteString SCHEMA_VER = ByteString.copyFrom(new byte[] {0x00});
+    // the first byte indicating the version of KV schema for storing inbox data
+    public static final ByteString SCHEMA_VER = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString QOS0INBOX_SIGN = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString QOS1INBOX_SIGN = ByteString.copyFrom(new byte[] {0x01});
     private static final ByteString QOS2INBOX_SIGN = ByteString.copyFrom(new byte[] {0x11});
@@ -29,59 +30,58 @@ public class KeyUtil {
     private static final ByteString QOS2MSG = ByteString.copyFrom(new byte[] {0x01});
 
     private static int tenantIdLength(ByteString key) {
-        return toInt(key.substring(0, Integer.BYTES));
+        return toInt(key.substring(SCHEMA_VER.size(), SCHEMA_VER.size() + Integer.BYTES));
     }
 
-    private static int inboxIdLength(ByteString key) {
-        return inboxIdLength(key, tenantIdLength(key));
-    }
-
-    private static int inboxIdLength(ByteString key, int tenantIdLength) {
-        return toInt(key.substring(Integer.BYTES + tenantIdLength, tenantIdLength + 2 * Integer.BYTES));
+    private static int inboxIdLength(ByteString key, int tenantPrefixLength) {
+        return toInt(key.substring(tenantPrefixLength, tenantPrefixLength + Integer.BYTES));
     }
 
     public static ByteString tenantPrefix(String tenantId) {
+        // tenantPrefix: <SCHEMA_VER><tenantIdLength><tenantId>
         ByteString tenantIdBS = UnsafeByteOperations.unsafeWrap(tenantId.getBytes(StandardCharsets.UTF_8));
-        return toByteString(tenantIdBS.size()).concat(tenantIdBS);
+        return SCHEMA_VER.concat(toByteString(tenantIdBS.size())).concat(tenantIdBS);
+    }
+
+    private static int tenantPrefixLength(ByteString key) {
+        // tenantPrefix: <SCHEMA_VER><tenantIdLength><tenantId>
+        return SCHEMA_VER.size() + Integer.BYTES + tenantIdLength(key);
     }
 
     public static ByteString inboxPrefix(String tenantId, String inboxId) {
-        // inboxId format: <tenantIdLength><tenantId><inboxIdLength><inboxId>
-        ByteString tenantIdBS = UnsafeByteOperations.unsafeWrap(tenantId.getBytes(StandardCharsets.UTF_8));
+        // inboxPrefix: <TENANT_PREFIX><inboxIdLength><inboxId>
         ByteString inboxIdBS = UnsafeByteOperations.unsafeWrap(inboxId.getBytes(StandardCharsets.UTF_8));
-        return toByteString(tenantIdBS.size())
-            .concat(tenantIdBS)
-            .concat(toByteString(inboxIdBS.size()))
-            .concat(inboxIdBS);
+        return tenantPrefix(tenantId).concat(toByteString(inboxIdBS.size())).concat(inboxIdBS);
     }
 
     private static int inboxPrefixLength(ByteString key) {
-        int tenantIdLen = tenantIdLength(key);
-        int inboxIdLen = inboxIdLength(key, tenantIdLen);
-        return Integer.BYTES + tenantIdLen + Integer.BYTES + inboxIdLen;
+        // inboxPrefix: <TENANT_PREFIX><inboxIdLength><inboxId>
+        int tenantPrefixLength = tenantPrefixLength(key);
+        int inboxIdLen = inboxIdLength(key, tenantPrefixLength);
+        return tenantPrefixLength + Integer.BYTES + inboxIdLen;
     }
 
     public static ByteString inboxKeyPrefix(String tenantId, String inboxId, long incarnation) {
+        // inboxKeyPrefix: <INBOX_PREFIX><incarnation>
         return inboxPrefix(tenantId, inboxId).concat(toByteString(incarnation));
     }
 
     private static int inboxKeyPrefixLength(ByteString key) {
-        int tenantIdLen = tenantIdLength(key);
-        int inboxIdLen = inboxIdLength(key, tenantIdLen);
-        return Integer.BYTES + tenantIdLen + Integer.BYTES + inboxIdLen + Long.BYTES;
+        // inboxKeyPrefix: <INBOX_PREFIX><incarnation>
+        return inboxPrefixLength(key) + Long.BYTES;
     }
 
     public static boolean isInboxKey(ByteString key) {
         int size = key.size();
-        if (size < Integer.BYTES) {
+        if (size < SCHEMA_VER.size() + Integer.BYTES) {
             return false;
         }
         int tenantIdLen = tenantIdLength(key);
-        if (size <= tenantIdLen + Integer.BYTES) {
+        if (size <= SCHEMA_VER.size() + tenantIdLen + Integer.BYTES) {
             return false;
         }
         int inboxIdLen = inboxIdLength(key, tenantIdLen);
-        return size >= tenantIdLen + inboxIdLen + 2 * Integer.BYTES;
+        return size >= SCHEMA_VER.size() + Integer.BYTES + tenantIdLen + Integer.BYTES + inboxIdLen;
     }
 
     public static boolean isMetadataKey(ByteString key) {
@@ -89,24 +89,29 @@ public class KeyUtil {
     }
 
     public static boolean isQoS0MessageKey(ByteString key) {
+        // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS0INBOX_SIGN><SEQ>
         int inboxKeyPrefixLen = inboxKeyPrefixLength(key);
         return key.size() > inboxKeyPrefixLen && key.byteAt(inboxKeyPrefixLen) == QOS0INBOX_SIGN.byteAt(0);
     }
 
     public static boolean isQoS0MessageKey(ByteString key, ByteString inboxKeyPrefix) {
+        // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS0INBOX_SIGN><SEQ>
         return isQoS0MessageKey(key) && key.startsWith(inboxKeyPrefix);
     }
 
     public static boolean isQoS1MessageKey(ByteString key) {
+        // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS1INBOX_SIGN><SEQ>
         int inboxKeyPrefixLen = inboxKeyPrefixLength(key);
         return key.size() > inboxKeyPrefixLen && key.byteAt(inboxKeyPrefixLen) == QOS1INBOX_SIGN.byteAt(0);
     }
 
     public static boolean isQoS1MessageKey(ByteString key, ByteString inboxKeyPrefix) {
+        // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS1INBOX_SIGN><SEQ>
         return isQoS1MessageKey(key) && key.startsWith(inboxKeyPrefix);
     }
 
     public static boolean isQoS2MessageIndexKey(ByteString key) {
+        // QOS2 MessageIndexKey: <INBOX_KEY_PREFIX><QOS2INBOX_SIGN><QOS2INDEX><SWQ>
         int inboxKeyPrefixLen = inboxKeyPrefixLength(key);
         return key.size() > inboxKeyPrefixLen + 2 &&
             key.byteAt(inboxKeyPrefixLen) == QOS2INBOX_SIGN.byteAt(0) &&
@@ -114,19 +119,21 @@ public class KeyUtil {
     }
 
     public static boolean isQoS2MessageIndexKey(ByteString key, ByteString inboxKeyPrefix) {
+        // QOS2 MessageIndexKey: <INBOX_KEY_PREFIX><QOS2INBOX_SIGN><QOS2INDEX><SWQ>
         return isQoS2MessageIndexKey(key) && key.startsWith(inboxKeyPrefix);
     }
 
     public static String parseTenantId(ByteString metadataKey) {
-        int tenantIdLength = toInt(metadataKey.substring(0, Integer.BYTES));
-        return metadataKey.substring(Integer.BYTES, Integer.BYTES + tenantIdLength).toStringUtf8();
+        int tenantIdLength = tenantIdLength(metadataKey);
+        int startAt = SCHEMA_VER.size() + Integer.BYTES;
+        return metadataKey.substring(startAt, startAt + tenantIdLength).toStringUtf8();
     }
 
     public static String parseInboxId(ByteString metadataKey) {
-        int tenantIdLen = tenantIdLength(metadataKey);
-        int inboxIdLen = inboxIdLength(metadataKey, tenantIdLen);
-        return metadataKey.substring(2 * Integer.BYTES + tenantIdLen,
-            2 * Integer.BYTES + tenantIdLen + inboxIdLen).toStringUtf8();
+        int tenantPrefixLength = tenantPrefixLength(metadataKey);
+        int inboxIdLen = inboxIdLength(metadataKey, tenantPrefixLength);
+        return metadataKey.substring(tenantPrefixLength + Integer.BYTES,
+            tenantPrefixLength + Integer.BYTES + inboxIdLen).toStringUtf8();
     }
 
     public static long parseIncarnation(ByteString inboxKey) {
@@ -180,6 +187,8 @@ public class KeyUtil {
     }
 
     public static long parseSeq(ByteString inboxKeyPrefix, ByteString inboxMsgKey) {
+        // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS0INBOX_SIGN><SEQ>
+        // QOS1 MessageKey: <INBOX_KEY_PREFIX><QOS1INBOX_SIGN><SEQ>
         return inboxMsgKey.substring(inboxKeyPrefix.size() + 1).asReadOnlyByteBuffer().getLong();
     }
 
@@ -194,7 +203,6 @@ public class KeyUtil {
     private static ByteString toByteString(long l) {
         return UnsafeByteOperations.unsafeWrap(toBytes(l));
     }
-
 
     private static byte[] toBytes(long l) {
         return ByteBuffer.allocate(Long.BYTES).putLong(l).array();

@@ -41,7 +41,7 @@ public class KeyUtilTest {
 
         assertEquals(KeyUtil.parseInboxId(inboxPrefix), inboxId);
         assertEquals(KeyUtil.parseInboxId(inboxKeyPrefix), inboxId);
-
+        assertEquals(KeyUtil.parseInboxPrefix(inboxKeyPrefix), inboxPrefix);
         assertEquals(KeyUtil.parseIncarnation(inboxKeyPrefix), incarnation);
 
         assertTrue(KeyUtil.isMetadataKey(inboxKeyPrefix));
@@ -50,6 +50,7 @@ public class KeyUtilTest {
         assertEquals(KeyUtil.parseSeq(inboxKeyPrefix, qos0MsgKey), 1);
         assertEquals(KeyUtil.parseTenantId(qos0MsgKey), tenantId);
         assertEquals(KeyUtil.parseInboxId(qos0MsgKey), inboxId);
+        assertEquals(KeyUtil.parseInboxPrefix(qos0MsgKey), inboxPrefix);
         assertEquals(KeyUtil.parseIncarnation(qos0MsgKey), incarnation);
         assertEquals(KeyUtil.parseInboxKeyPrefix(qos0MsgKey), inboxKeyPrefix);
 
@@ -57,6 +58,7 @@ public class KeyUtilTest {
         assertEquals(KeyUtil.parseSeq(inboxKeyPrefix, qos1MsgKey), 1);
         assertEquals(KeyUtil.parseTenantId(qos1MsgKey), tenantId);
         assertEquals(KeyUtil.parseInboxId(qos1MsgKey), inboxId);
+        assertEquals(KeyUtil.parseInboxPrefix(qos1MsgKey), inboxPrefix);
         assertEquals(KeyUtil.parseIncarnation(qos1MsgKey), incarnation);
         assertEquals(KeyUtil.parseInboxKeyPrefix(qos1MsgKey), inboxKeyPrefix);
 
@@ -65,6 +67,7 @@ public class KeyUtilTest {
         assertEquals(KeyUtil.parseQoS2Index(inboxKeyPrefix, qos2InboxIndex), 1);
         assertEquals(KeyUtil.parseTenantId(qos2InboxIndex), tenantId);
         assertEquals(KeyUtil.parseInboxId(qos2InboxIndex), inboxId);
+        assertEquals(KeyUtil.parseInboxPrefix(qos2InboxIndex), inboxPrefix);
         assertEquals(KeyUtil.parseIncarnation(qos2InboxIndex), incarnation);
         assertEquals(KeyUtil.parseInboxKeyPrefix(qos2InboxIndex), inboxKeyPrefix);
     }
