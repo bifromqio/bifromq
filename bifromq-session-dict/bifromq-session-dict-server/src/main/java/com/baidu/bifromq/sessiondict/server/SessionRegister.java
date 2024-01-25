@@ -88,7 +88,9 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
     public boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker) {
         AtomicReference<ClientInfo> found = new AtomicReference<>();
         registeredSession.computeIfPresent(tenantId, (k, v) -> {
-            found.set(v.remove(clientKey));
+            if (v.containsKey(clientKey) && !v.get(clientKey).equals(kicker)) {
+                found.set(v.remove(clientKey));
+            }
             if (v.isEmpty()) {
                 v = null;
             }

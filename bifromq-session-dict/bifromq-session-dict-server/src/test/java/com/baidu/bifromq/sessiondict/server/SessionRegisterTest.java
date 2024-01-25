@@ -205,6 +205,22 @@ public class SessionRegisterTest {
         });
     }
 
+    @Test
+    public void ignoreSelfKick() {
+        test(() -> {
+            SessionRegister register = new SessionRegister(listener, responseObserver);
+            register.onNext(Session.newBuilder()
+                .setReqId(System.nanoTime())
+                .setOwner(owner)
+                .setKeep(true)
+                .build());
+            register.kick(tenantId,
+                new ISessionRegister.ClientKey(userId, owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, clientId)),
+                owner);
+            verify(responseObserver, times(0)).onNext(any());
+        });
+    }
+
 
     private void test(Runnable runnable) {
         Context ctx = Context.ROOT
