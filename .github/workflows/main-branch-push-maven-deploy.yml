@@ -13,31 +13,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Build with Maven
-      run: mvn -B package -DskipTests --file pom.xml
+      - name: Build with Maven
+        run: mvn -B package -DskipTests --file pom.xml
 
-    - name: Set up BoS maven repo
-      uses: actions/setup-java@v3
-      with: # running setup-java again overwrites the settings.xml
-        java-version: '17'
-        distribution: 'temurin'
-        server-id: bos-repo # Value of the distributionManagement/repository/id field of the pom.xml
-        server-username: BOS_REPO_AK # env variable for username in deploy
-        server-password: BOS_REPO_SK # env variable for token in deploy
+      - name: Set up BoS maven repo
+        uses: actions/setup-java@v4
+        with: # running setup-java again overwrites the settings.xml
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: bos-repo # Value of the distributionManagement/repository/id field of the pom.xml
+          server-username: BOS_REPO_AK # env variable for username in deploy
+          server-password: BOS_REPO_SK # env variable for token in deploy
 
-    - name: Publish to BoS maven repo
-      run: mvn clean deploy -P bos-repo-deploy -pl :bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-sub-broker,:bifromq-plugin-setting-provider,:base-env-provider-spi,:base-kv-store-balance-spi,:bifromq-dist-spi -am -DskipTests -Dbos.repo.release=$BOS_REPO_RELEASE -Dbos.repo.snapshot=$BOS_REPO_SNAPSHOT
-      env:
-        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-        MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
-        BOS_REPO_AK: ${{ secrets.BOS_REPO_AK }}
-        BOS_REPO_SK: ${{ secrets.BOS_REPO_SK }}
-        BOS_REPO_RELEASE: ${{ secrets.BOS_REPO_RELEASE }}
-        BOS_REPO_SNAPSHOT: ${{ secrets.BOS_REPO_SNAPSHOT }}
+      - name: Publish to BoS maven repo
+        run: mvn clean deploy -P bos-repo-deploy -pl :bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-sub-broker,:bifromq-plugin-setting-provider,:base-env-provider-spi,:base-kv-store-balance-spi,:bifromq-dist-spi -am -DskipTests -Dbos.repo.release=$BOS_REPO_RELEASE -Dbos.repo.snapshot=$BOS_REPO_SNAPSHOT
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
+          BOS_REPO_AK: ${{ secrets.BOS_REPO_AK }}
+          BOS_REPO_SK: ${{ secrets.BOS_REPO_SK }}
+          BOS_REPO_RELEASE: ${{ secrets.BOS_REPO_RELEASE }}
+          BOS_REPO_SNAPSHOT: ${{ secrets.BOS_REPO_SNAPSHOT }}
