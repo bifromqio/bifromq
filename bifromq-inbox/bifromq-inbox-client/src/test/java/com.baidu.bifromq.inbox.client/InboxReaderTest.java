@@ -30,6 +30,7 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
+import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
@@ -84,7 +85,7 @@ public class InboxReaderTest {
             .thenReturn(CompletableFuture.completedFuture(CommitReply.newBuilder().build()));
         Fetched fetched = Fetched.newBuilder()
             .setResult(Result.OK)
-            .addQos0Seq(1L)
+            .addQos0Msg(InboxMessage.newBuilder().setSeq(1L).build())
             .build();
         InboxReader inboxReader = new InboxReader(inboxId, incarnation, fetchPipeline);
         inboxReader.hint(10);

@@ -23,10 +23,10 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.deliverer.IMessageDeliverer;
+import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
-import com.baidu.bifromq.dist.worker.scheduler.DeliveryScheduler;
-import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -48,7 +48,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final ISubBrokerManager subBrokerManager;
-    private final IDeliveryScheduler scheduler;
+    private final IMessageDeliverer deliverer;
     private final ExecutorService matchExecutor;
     private final Duration loadEstWindow;
     private final int fanoutSplitThreshold = DIST_WORKER_FANOUT_SPLIT_THRESHOLD.get();
@@ -63,7 +63,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
         this.eventCollector = eventCollector;
         this.subBrokerManager = subBrokerManager;
         this.loadEstWindow = loadEstimateWindow;
-        scheduler = new DeliveryScheduler(subBrokerManager);
+        deliverer = new MessageDeliverer(subBrokerManager);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ForkJoinPool(DIST_MATCH_PARALLELISM.get(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {
@@ -93,11 +93,11 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
                                        Supplier<IKVReader> rangeReaderProvider) {
         return new DistWorkerCoProc(id, rangeReaderProvider, eventCollector, settingProvider, distClient,
-            subBrokerManager, scheduler, matchExecutor);
+            subBrokerManager, deliverer, matchExecutor);
     }
 
     public void close() {
-        scheduler.close();
+        deliverer.close();
         matchExecutor.shutdown();
     }
 }

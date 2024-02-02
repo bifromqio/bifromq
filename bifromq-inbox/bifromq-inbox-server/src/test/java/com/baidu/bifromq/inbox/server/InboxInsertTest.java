@@ -25,6 +25,7 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
@@ -94,7 +95,7 @@ public class InboxInsertTest extends InboxServiceTest {
             .setIncarnation(incarnation)
             .setVersion(0)
             .setTopicFilter("topic")
-            .setSubQoS(QoS.AT_LEAST_ONCE)
+            .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
             .setNow(now)
             .build()).join();
 
@@ -112,8 +113,8 @@ public class InboxInsertTest extends InboxServiceTest {
 
         assertTrue(latch.await(5, TimeUnit.SECONDS));
         assertEquals(fetchedRef.get().getResult(), Fetched.Result.OK);
-        assertEquals(fetchedRef.get().getQos1MsgCount(), 1);
-        assertEquals(fetchedRef.get().getQos1Msg(0).getMsg().getMessage(), msg);
+        assertEquals(fetchedRef.get().getSendBufferMsgCount(), 1);
+        assertEquals(fetchedRef.get().getSendBufferMsg(0).getMsg().getMessage(), msg);
 
         reader.close();
         writer.close();
@@ -176,7 +177,7 @@ public class InboxInsertTest extends InboxServiceTest {
             .setIncarnation(incarnation)
             .setVersion(0)
             .setTopicFilter("topic")
-            .setSubQoS(QoS.AT_LEAST_ONCE)
+            .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
             .setNow(now)
             .build()).join();
 
@@ -202,8 +203,8 @@ public class InboxInsertTest extends InboxServiceTest {
 
         assertTrue(latch.await(5, TimeUnit.SECONDS));
         assertEquals(fetchedRef.get().getResult(), Fetched.Result.OK);
-        assertEquals(fetchedRef.get().getQos1MsgCount(), 3);
-        assertEquals(fetchedRef.get().getQos1Msg(0).getMsg().getMessage(), msg);
+        assertEquals(fetchedRef.get().getSendBufferMsgCount(), 3);
+        assertEquals(fetchedRef.get().getSendBufferMsg(0).getMsg().getMessage(), msg);
 
         reader.close();
         writer.close();

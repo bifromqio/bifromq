@@ -25,7 +25,6 @@ import lombok.experimental.Accessors;
 @ToString(callSuper = true)
 public final class QoS1Dropped extends PushEvent<QoS1Dropped> {
     private DropReason reason;
-    private int count;
 
     @Override
     public EventType type() {
@@ -36,6 +35,5 @@ public final class QoS1Dropped extends PushEvent<QoS1Dropped> {
     public void clone(QoS1Dropped orig) {
         super.clone(orig);
         this.reason = orig.reason;
-        this.count = orig.count;
     }
 }

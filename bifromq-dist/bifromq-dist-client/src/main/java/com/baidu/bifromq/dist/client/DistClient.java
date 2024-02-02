@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.dist.client;
 
-import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.RPCBluePrint;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCall;
@@ -25,10 +24,8 @@ import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
-import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
@@ -55,18 +52,12 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<Void> pub(long reqId, String topic, QoS qos, ByteString payload,
-                                       int expirySeconds, ClientInfo publisher) {
-        long now = HLC.INST.getPhysical();
-        long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE :
-            now + TimeUnit.MILLISECONDS.convert(expirySeconds, TimeUnit.SECONDS);
-        return reqScheduler.schedule(new DistServerCall(publisher, topic, Message.newBuilder()
-            .setMessageId(reqId)
-            .setPubQoS(qos)
-            .setPayload(payload)
-            .setTimestamp(now)
-            .setExpireTimestamp(expiry)
-            .build()));
+    public CompletableFuture<DistResult> pub(long reqId, String topic, Message message, ClientInfo publisher) {
+        return reqScheduler.schedule(new DistServerCall(publisher, topic, message))
+            .exceptionally(e -> {
+                log.debug("Failed to pub", e);
+                return DistResult.ERROR;
+            });
     }
 
     @Override
@@ -84,7 +75,11 @@ final class DistClient implements IDistClient {
             .build();
         log.trace("Handling match request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getMatchMethod())
-            .thenApply(v -> MatchResult.values()[v.getResult().getNumber()]);
+            .thenApply(v -> MatchResult.values()[v.getResult().getNumber()])
+            .exceptionally(e -> {
+                log.debug("Failed to match", e);
+                return MatchResult.ERROR;
+            });
     }
 
     @Override
@@ -100,7 +95,11 @@ final class DistClient implements IDistClient {
             .build();
         log.trace("Handling unsub request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnmatchMethod())
-            .thenApply(v -> UnmatchResult.values()[v.getResult().getNumber()]);
+            .thenApply(v -> UnmatchResult.values()[v.getResult().getNumber()])
+            .exceptionally(e -> {
+                log.debug("Failed to unmatch", e);
+                return UnmatchResult.ERROR;
+            });
     }
 
     @Override

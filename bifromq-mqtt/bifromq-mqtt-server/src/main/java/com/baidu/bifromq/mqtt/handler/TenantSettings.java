@@ -27,6 +27,7 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineExpireTime
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineOverflowDropOldest;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineQueueSize;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
 
@@ -45,6 +46,7 @@ public class TenantSettings {
     public final long inboundBandwidth;
     public final long outboundBandwidth;
     public final int receiveMaximum;
+    public final int maxMsgPerSec;
     public final int maxTopicFiltersPerSub;
     public final int inboxQueueLength;
     public final boolean inboxDropOldest;
@@ -61,7 +63,8 @@ public class TenantSettings {
         maxTopicAlias = provider.provide(MaxTopicAlias, tenantId);
         inboundBandwidth = provider.provide(InBoundBandWidth, tenantId);
         outboundBandwidth = provider.provide(OutBoundBandWidth, tenantId);
-        receiveMaximum = provider.provide(MsgPubPerSec, tenantId);
+        maxMsgPerSec = provider.provide(MsgPubPerSec, tenantId);
+        receiveMaximum = provider.provide(ReceivingMaximum, tenantId);
         debugMode = provider.provide(DebugModeEnabled, tenantId);
         maxTopicFiltersPerSub = provider.provide(MaxTopicFiltersPerSub, tenantId);
         inboxQueueLength = provider.provide(OfflineQueueSize, tenantId);

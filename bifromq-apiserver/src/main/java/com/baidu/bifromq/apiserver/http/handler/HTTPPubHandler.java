@@ -19,17 +19,21 @@ import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClient
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRetain;
 import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
-import static io.netty.handler.codec.http.HttpResponseStatus.*;
+import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
+import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
+import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
 import io.netty.buffer.Unpooled;
@@ -97,16 +101,20 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
             }
             if (qos < 0 || qos > 2) {
                 return CompletableFuture.completedFuture(
-                        new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
+                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
             }
             ClientInfo clientInfo = ClientInfo.newBuilder()
                 .setTenantId(tenantId)
                 .setType(clientType)
                 .putAllMetadata(clientMeta)
                 .build();
-            CompletableFuture<Void> distFuture = distClient.pub(reqId, topic, QoS.forNumber(qos),
-                toRetainedByteBuffer(req.content()),
-                Integer.MAX_VALUE, clientInfo);
+            CompletableFuture<DistResult> distFuture = distClient.pub(reqId, topic,
+                Message.newBuilder()
+                    .setPubQoS(QoS.forNumber(qos))
+                    .setPayload(toRetainedByteBuffer(req.content()))
+                    .setExpiryInterval(Integer.MAX_VALUE)
+                    .build(),
+                clientInfo);
             CompletableFuture<Boolean> retainFuture = isRetain ?
                 retainMessage(reqId, topic, toRetainedByteBuffer(req.content()), clientInfo) :
                 CompletableFuture.completedFuture(true);

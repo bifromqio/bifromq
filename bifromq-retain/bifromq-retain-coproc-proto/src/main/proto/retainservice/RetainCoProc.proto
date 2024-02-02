@@ -49,7 +49,6 @@ message MatchParam{
 message BatchMatchRequest{
   uint64 reqId = 1;
   map<string, MatchParam> matchParams = 2; // key: tenantId
-
 }
 
 message MatchError{

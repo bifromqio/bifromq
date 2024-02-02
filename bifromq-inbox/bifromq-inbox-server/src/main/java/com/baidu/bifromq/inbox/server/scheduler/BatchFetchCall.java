@@ -44,13 +44,10 @@ public class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFet
                 .setIncarnation(request.incarnation)
                 .setMaxFetch(request.params.getMaxFetch());
             if (request.params.hasQos0StartAfter()) {
-                paramsBuilder.setQos0StartAfter(request.params.getQos1StartAfter());
+                paramsBuilder.setQos0StartAfter(request.params.getQos0StartAfter());
             }
-            if (request.params.hasQos1StartAfter()) {
-                paramsBuilder.setQos1StartAfter(request.params.getQos1StartAfter());
-            }
-            if (request.params.hasQos2StartAfter()) {
-                paramsBuilder.setQos2StartAfter(request.params.getQos2StartAfter());
+            if (request.params.hasSendBufferStartAfter()) {
+                paramsBuilder.setSendBufferStartAfter(request.params.getSendBufferStartAfter());
             }
             reqBuilder.addParams(paramsBuilder.build());
         });

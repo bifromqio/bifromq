@@ -13,46 +13,20 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import com.baidu.bifromq.baserpc.utils.FutureTracker;
-import com.baidu.bifromq.mqtt.handler.event.ConnectionWillClose;
-import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
-import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
-import com.baidu.bifromq.plugin.eventcollector.Event;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.util.concurrent.Future;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
     private static final int DEFAULT_FLUSH_AFTER_FLUSHES = 64;
     private final int explicitFlushAfterFlushes;
-    private final FutureTracker cancelOnInactiveTasks = new FutureTracker();
-    private final FutureTracker tearDownTasks = new FutureTracker();
     private final Runnable flushTask;
-    private ScheduledFuture<?> scheduledClose;
-    private Event<?> closeReason;
     private int flushPendingCount;
     private Future<?> nextScheduledFlush;
-    protected MQTTSessionContext sessionCtx;
-
-    protected IAuthProvider authProvider;
-
-    protected IEventCollector eventCollector;
-
-    protected ISettingProvider settingProvider;
 
     protected ChannelHandlerContext ctx;
 
@@ -74,10 +48,6 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         this.ctx = ctx;
-        sessionCtx = ChannelAttrs.mqttSessionContext(ctx);
-        authProvider = sessionCtx.authProvider(ctx);
-        eventCollector = sessionCtx.eventCollector;
-        settingProvider = sessionCtx.settingProvider;
     }
 
     @Override
@@ -85,11 +55,6 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
         flushIfNeeded(ctx);
     }
 
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) {
-        cancelOnInactiveTasks.stop();
-        cancelIfUndone(scheduledClose);
-    }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
@@ -130,96 +95,6 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
         } else {
             scheduleFlush(ctx);
         }
-    }
-
-    protected final void resumeChannelRead() {
-        // resume reading
-        ctx.channel().config().setAutoRead(true);
-        ctx.read();
-    }
-
-    protected final void addTearDownHook(Runnable runnable) {
-        tearDownTasks.whenComplete((v, e) -> runnable.run());
-    }
-
-    protected final <T> CompletableFuture<T> cancelOnInactive(CompletableFuture<T> trackedFuture) {
-        return cancelOnInactiveTasks.track(trackedFuture);
-    }
-
-    protected final <T> CompletableFuture<T> tearDownTasks(CompletableFuture<T> trackedFuture) {
-        return tearDownTasks.track(trackedFuture);
-    }
-
-    protected final void submitBgTask(Supplier<CompletableFuture<Void>> bgTaskSupplier) {
-        sessionCtx.addBgTask(bgTaskSupplier);
-    }
-
-    protected void cancelIfUndone(ScheduledFuture<?> task) {
-        if (task != null && !task.isDone() && !task.isCancelled()) {
-            task.cancel(true);
-        }
-    }
-
-    protected boolean closeNotScheduled() {
-        return scheduledClose == null;
-    }
-
-    protected void closeConnectionWithSomeDelay(@NonNull Event<?> reason) {
-        closeConnectionWithSomeDelay(null, reason);
-    }
-
-    protected void closeConnectionWithSomeDelay(MqttMessage farewell, @NonNull Event<?> reason) {
-        // must be called in event loop
-        assert ctx.channel().eventLoop().inEventLoop();
-        if (closeNotScheduled() && ctx.channel().isActive()) {
-            // stop reading messages
-            ctx.channel().config().setAutoRead(false);
-            closeReason = reason;
-            boolean sendWillMessage = shouldSendWillMessage(reason);
-            // report will zero-out the event object
-            eventCollector.report(reason);
-            ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(sendWillMessage));
-            scheduledClose = ctx.channel().eventLoop().schedule(() ->
-                farewellAndClose(farewell), randomDelay(), TimeUnit.MILLISECONDS);
-        }
-    }
-
-    protected void closeConnectionNow(MqttMessage farewell, @NonNull Event<?> reason) {
-        assert ctx.channel().eventLoop().inEventLoop();
-        if (ctx.channel().isActive()) {
-            // stop reading messages
-            ctx.channel().config().setAutoRead(false);
-            cancelIfUndone(scheduledClose);
-            // don't override first close reason
-            if (closeReason == null) {
-                closeReason = reason;
-                boolean sendWillMessage = shouldSendWillMessage(reason);
-                // report will zero-out the event object
-                eventCollector.report(reason);
-                ctx.pipeline().fireUserEventTriggered(new ConnectionWillClose(sendWillMessage));
-            }
-            farewellAndClose(farewell);
-        }
-    }
-
-    protected boolean shouldSendWillMessage(Event<?> reason) {
-        return false;
-    }
-
-    protected void closeConnectionNow(@NonNull Event<?> reason) {
-        closeConnectionNow(null, reason);
-    }
-
-    private void farewellAndClose(MqttMessage farewell) {
-        if (farewell != null) {
-            ctx.writeAndFlush(farewell).addListener(ChannelFutureListener.CLOSE);
-        } else if (ctx.channel().isActive()) {
-            ctx.channel().close();
-        }
-    }
-
-    private long randomDelay() {
-        return ThreadLocalRandom.current().nextLong(1000, 4000);
     }
 
     private void flushIfNeeded(ChannelHandlerContext ctx) {

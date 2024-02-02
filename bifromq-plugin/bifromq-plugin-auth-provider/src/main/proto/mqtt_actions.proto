@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "user_properties.proto";
 import "commontype/QoS.proto";
 
 package checktypes;
@@ -12,15 +13,18 @@ message PubAction {
   string topic = 1;
   commontype.QoS qos = 2;
   bool isRetained = 3;
+  auth_provider.UserProperties userProps = 4;
 }
 
 message SubAction {
   string topicFilter = 1;
   commontype.QoS qos = 2;
+  auth_provider.UserProperties userProps = 5;
 }
 
 message UnsubAction {
   string topicFilter = 1;
+  auth_provider.UserProperties userProps = 2;
 }
 
 message MQTTAction {

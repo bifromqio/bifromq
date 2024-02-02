@@ -2,42 +2,15 @@ syntax = "proto3";
 import "commontype/ClientInfo.proto";
 import "commontype/QoS.proto";
 import "commontype/TopicMessage.proto";
+import "inboxservice/TopicFilterOption.proto";
+import "inboxservice/LWT.proto";
 import "inboxservice/InboxFetched.proto";
 
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.inbox.storage.proto";
-option java_outer_classname = "InboxCoProcProtos2";
+option java_outer_classname = "InboxCoProcProtos";
 
 package inboxservice;
-
-message LWT{
-  string topic = 1;
-  commontype.Message message = 2;
-  uint32 delaySeconds = 3;
-  bool retain = 4;
-}
-message InboxMetadata{
-  string inboxId = 1;
-  uint64 incarnation = 2;
-  uint64 version = 3;
-  uint64 lastActiveTime = 4;
-  uint32 keepAliveSeconds = 5;
-  uint32 expirySeconds = 6;
-  uint32 limit = 7;
-  bool dropOldest = 8;
-  commontype.ClientInfo client = 9; // the owner client
-  map<string, commontype.QoS> topicFilters = 10; // subscribed topic filter
-  optional LWT lwt = 11;
-
-  uint64 qos0StartSeq = 12;
-  uint64 qos0NextSeq = 13;
-
-  uint64 qos1StartSeq = 14;
-  uint64 qos1NextSeq = 15;
-
-  uint64 qos2StartSeq = 16;
-  uint64 qos2NextSeq = 17;
-}
 
 message BatchGetRequest{
   message Params{
@@ -191,7 +164,7 @@ message BatchSubRequest{
     uint64 incarnation = 3;
     uint64 version = 4;
     string topicFilter = 5;
-    commontype.QoS subQoS = 6;
+    TopicFilterOption option = 6;
     uint64 now = 7;
   }
   repeated Params params = 1;
@@ -240,8 +213,7 @@ message BatchFetchRequest{
     uint64 incarnation = 3;
     uint32 maxFetch = 4;
     optional uint64 qos0StartAfter = 5;
-    optional uint64 qos1StartAfter = 6;
-    optional uint64 qos2StartAfter = 7;
+    optional uint64 sendBufferStartAfter = 6;
   }
   repeated Params params = 1;
 }
@@ -292,8 +264,7 @@ message BatchCommitRequest{
     uint64 incarnation = 3;
     uint64 version = 4;
     optional uint64 qos0UpToSeq = 5;
-    optional uint64 qos1UpToSeq = 6;
-    optional uint64 qos2UpToSeq = 7;
+    optional uint64 sendBufferUpToSeq = 6;
     uint64 now = 8;
   }
   repeated Params params = 1;

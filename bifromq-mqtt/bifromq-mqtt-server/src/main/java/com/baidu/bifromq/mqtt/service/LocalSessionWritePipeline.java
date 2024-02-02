@@ -18,23 +18,22 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
-import com.baidu.bifromq.mqtt.session.v3.IMQTT3TransientSession;
+import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteReply> {
-    private final Map<String, IMQTT3TransientSession> sessionMap;
+    private final Map<String, IMQTTTransientSession> sessionMap;
 
-    public LocalSessionWritePipeline(Map<String, IMQTT3TransientSession> sessionMap,
+    public LocalSessionWritePipeline(Map<String, IMQTTTransientSession> sessionMap,
                                      StreamObserver<WriteReply> responseObserver) {
         super(responseObserver);
         this.sessionMap = sessionMap;
@@ -43,38 +42,32 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
     @Override
     protected CompletableFuture<WriteReply> handleRequest(String tenantId, WriteRequest request) {
         log.trace("Handle inbox write request: \n{}", request);
-        WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
-        Set<SubInfo> ok = new HashSet<>();
-        Set<SubInfo> noInbox = new HashSet<>();
+        Map<SubInfo, List<TopicMessagePack>> pubPack = new HashMap<>();
         for (WritePack writePack : request.getPackList()) {
-            TopicMessagePack topicMsgPack = writePack.getMessagePack();
             List<SubInfo> subInfos = writePack.getSubscriberList();
-            Map<IMQTT3TransientSession, SubInfo> inboxes = new HashMap<>();
             for (SubInfo subInfo : subInfos) {
-                IMQTT3TransientSession session = sessionMap.get(subInfo.getInboxId());
-                if (!noInbox.contains(subInfo) && session != null) {
-                    inboxes.put(session, subInfo);
-                } else {
-                    noInbox.add(subInfo);
-                }
+                pubPack.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(writePack.getMessagePack());
             }
-            inboxes.forEach((session, subInfo) -> {
-                boolean succeed = session.publish(subInfo, topicMsgPack);
-                if (succeed) {
-                    ok.add(subInfo);
-                } else {
-                    noInbox.add(subInfo);
-                }
-            });
         }
-        ok.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
-            .setSubInfo(subInfo)
-            .setResult(WriteResult.Result.OK)
-            .build()));
-        noInbox.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
-            .setSubInfo(subInfo)
-            .setResult(WriteResult.Result.NO_INBOX)
-            .build()));
-        return CompletableFuture.completedFuture(replyBuilder.build());
+        List<CompletableFuture<WriteResult>> resultFutures = pubPack.entrySet().stream().map(entry -> {
+            SubInfo subInfo = entry.getKey();
+            List<TopicMessagePack> msgPackList = entry.getValue();
+            IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
+            if (session == null) {
+                return CompletableFuture.completedFuture(WriteResult.newBuilder()
+                    .setSubInfo(subInfo)
+                    .setResult(WriteResult.Result.NO_INBOX)
+                    .build());
+            } else {
+                return session.publish(subInfo, msgPackList)
+                    .thenApply(result -> WriteResult.newBuilder().setSubInfo(subInfo).setResult(result).build());
+            }
+        }).toList();
+        return CompletableFuture.allOf(resultFutures.toArray(CompletableFuture[]::new))
+            .thenApply(v -> resultFutures.stream().map(CompletableFuture::join).toList())
+            .thenApply(results -> WriteReply.newBuilder()
+                .setReqId(request.getReqId())
+                .addAllResult(results)
+                .build());
     }
 }

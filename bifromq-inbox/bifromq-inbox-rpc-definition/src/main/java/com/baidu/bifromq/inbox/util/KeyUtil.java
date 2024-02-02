@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.inbox.util;
 
-import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
-import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import java.nio.ByteBuffer;
@@ -24,10 +22,7 @@ public class KeyUtil {
     // the first byte indicating the version of KV schema for storing inbox data
     public static final ByteString SCHEMA_VER = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString QOS0INBOX_SIGN = ByteString.copyFrom(new byte[] {0x00});
-    private static final ByteString QOS1INBOX_SIGN = ByteString.copyFrom(new byte[] {0x01});
-    private static final ByteString QOS2INBOX_SIGN = ByteString.copyFrom(new byte[] {0x11});
-    private static final ByteString QOS2INDEX = ByteString.copyFrom(new byte[] {0x00});
-    private static final ByteString QOS2MSG = ByteString.copyFrom(new byte[] {0x01});
+    private static final ByteString SEND_BUFFER_SIGN = ByteString.copyFrom(new byte[] {0x01});
 
     private static int tenantIdLength(ByteString key) {
         return toInt(key.substring(SCHEMA_VER.size(), SCHEMA_VER.size() + Integer.BYTES));
@@ -76,12 +71,12 @@ public class KeyUtil {
         if (size < SCHEMA_VER.size() + Integer.BYTES) {
             return false;
         }
-        int tenantIdLen = tenantIdLength(key);
-        if (size <= SCHEMA_VER.size() + tenantIdLen + Integer.BYTES) {
+        int tenantPrefixLength = tenantPrefixLength(key);
+        if (size <= tenantPrefixLength + Integer.BYTES) {
             return false;
         }
-        int inboxIdLen = inboxIdLength(key, tenantIdLen);
-        return size >= SCHEMA_VER.size() + Integer.BYTES + tenantIdLen + Integer.BYTES + inboxIdLen;
+        int inboxIdLen = inboxIdLength(key, tenantPrefixLength);
+        return size >= tenantPrefixLength + Integer.BYTES + inboxIdLen;
     }
 
     public static boolean isMetadataKey(ByteString key) {
@@ -99,28 +94,15 @@ public class KeyUtil {
         return isQoS0MessageKey(key) && key.startsWith(inboxKeyPrefix);
     }
 
-    public static boolean isQoS1MessageKey(ByteString key) {
+    public static boolean isBufferMessageKey(ByteString key) {
         // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS1INBOX_SIGN><SEQ>
         int inboxKeyPrefixLen = inboxKeyPrefixLength(key);
-        return key.size() > inboxKeyPrefixLen && key.byteAt(inboxKeyPrefixLen) == QOS1INBOX_SIGN.byteAt(0);
+        return key.size() > inboxKeyPrefixLen && key.byteAt(inboxKeyPrefixLen) == SEND_BUFFER_SIGN.byteAt(0);
     }
 
-    public static boolean isQoS1MessageKey(ByteString key, ByteString inboxKeyPrefix) {
+    public static boolean isBufferMessageKey(ByteString key, ByteString inboxKeyPrefix) {
         // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS1INBOX_SIGN><SEQ>
-        return isQoS1MessageKey(key) && key.startsWith(inboxKeyPrefix);
-    }
-
-    public static boolean isQoS2MessageIndexKey(ByteString key) {
-        // QOS2 MessageIndexKey: <INBOX_KEY_PREFIX><QOS2INBOX_SIGN><QOS2INDEX><SWQ>
-        int inboxKeyPrefixLen = inboxKeyPrefixLength(key);
-        return key.size() > inboxKeyPrefixLen + 2 &&
-            key.byteAt(inboxKeyPrefixLen) == QOS2INBOX_SIGN.byteAt(0) &&
-            key.byteAt(inboxKeyPrefixLen + 1) == QOS2INDEX.byteAt(0);
-    }
-
-    public static boolean isQoS2MessageIndexKey(ByteString key, ByteString inboxKeyPrefix) {
-        // QOS2 MessageIndexKey: <INBOX_KEY_PREFIX><QOS2INBOX_SIGN><QOS2INDEX><SWQ>
-        return isQoS2MessageIndexKey(key) && key.startsWith(inboxKeyPrefix);
+        return isBufferMessageKey(key) && key.startsWith(inboxKeyPrefix);
     }
 
     public static String parseTenantId(ByteString metadataKey) {
@@ -157,43 +139,18 @@ public class KeyUtil {
         return qos0InboxPrefix(inboxKeyPrefix).concat(toByteString(seq));
     }
 
-    public static ByteString qos1InboxPrefix(ByteString inboxKeyPrefix) {
-        return inboxKeyPrefix.concat(QOS1INBOX_SIGN);
+    public static ByteString sendBufferPrefix(ByteString inboxKeyPrefix) {
+        return inboxKeyPrefix.concat(SEND_BUFFER_SIGN);
     }
 
-    public static ByteString qos1InboxMsgKey(ByteString inboxKeyPrefix, long seq) {
-        return qos1InboxPrefix(inboxKeyPrefix).concat(toByteString(seq));
-    }
-
-    public static ByteString qos2InboxPrefix(ByteString inboxKeyPrefix) {
-        return inboxKeyPrefix.concat(QOS2INBOX_SIGN);
-    }
-
-    public static ByteString qos2InboxIndex(ByteString inboxKeyPrefix, long seq) {
-        return qos2InboxPrefix(inboxKeyPrefix).concat(QOS2INDEX).concat(toByteString(seq));
-    }
-
-    public static ByteString qos2InboxIndexPrefix(ByteString inboxKeyPrefix) {
-        return qos2InboxPrefix(inboxKeyPrefix).concat(QOS2INDEX);
-    }
-
-    public static ByteString qos2InboxMsgKey(ByteString inboxKeyPrefix, ByteString qos2MsgKey) {
-        return qos2InboxPrefix(inboxKeyPrefix).concat(QOS2MSG).concat(qos2MsgKey);
-    }
-
-    public static ByteString buildQoS2MsgKey(InboxMessage message) {
-        TopicMessage userMsg = message.getMsg();
-        return userMsg.getPublisher().toByteString().concat(toByteString(userMsg.getMessage().getMessageId()));
+    public static ByteString bufferMsgKey(ByteString inboxKeyPrefix, long seq) {
+        return sendBufferPrefix(inboxKeyPrefix).concat(toByteString(seq));
     }
 
     public static long parseSeq(ByteString inboxKeyPrefix, ByteString inboxMsgKey) {
         // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS0INBOX_SIGN><SEQ>
         // QOS1 MessageKey: <INBOX_KEY_PREFIX><QOS1INBOX_SIGN><SEQ>
         return inboxMsgKey.substring(inboxKeyPrefix.size() + 1).asReadOnlyByteBuffer().getLong();
-    }
-
-    public static long parseQoS2Index(ByteString inboxKeyPrefix, ByteString qos2InboxIndexKey) {
-        return qos2InboxIndexKey.substring(inboxKeyPrefix.size() + 2).asReadOnlyByteBuffer().getLong();
     }
 
     private static ByteString toByteString(int i) {

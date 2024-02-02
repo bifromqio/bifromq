@@ -18,6 +18,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_RECED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.RETAIN_MSG_CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
@@ -64,7 +65,7 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR);
+        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR, PUB_ACKED);
     }
 
     @Test
@@ -76,6 +77,6 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR);
+        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR, PUB_RECED);
     }
 }

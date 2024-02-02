@@ -13,6 +13,15 @@
 
 package com.baidu.bifromq.retain.store;
 
+import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
+import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
+import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -24,19 +33,21 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.retain.rpc.proto.*;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
+import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
+import com.baidu.bifromq.retain.rpc.proto.MatchParam;
+import com.baidu.bifromq.retain.rpc.proto.MatchResult;
+import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
+import com.baidu.bifromq.retain.rpc.proto.RetainMessagePack;
+import com.baidu.bifromq.retain.rpc.proto.RetainResult;
+import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
+import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
+import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
+import com.baidu.bifromq.retain.rpc.proto.RetainSetMetadata;
 import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.Assert;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.util.HashMap;
@@ -44,12 +55,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
-
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
-import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 public class MockedRetainTest {
     @Mock
@@ -67,12 +79,13 @@ public class MockedRetainTest {
     private String nonWildcardTopicFilter = "a/b/c";
     private String wildcardTopicFilter = "a/#";
     private Message message = Message.newBuilder()
-            .setPayload(ByteString.copyFromUtf8("payload"))
-            .setExpireTimestamp(clock.millis() + Duration.ofDays(7).toMillis())
-            .build();
+        .setPayload(ByteString.copyFromUtf8("payload"))
+        .setTimestamp(HLC.INST.getPhysical())
+        .setExpiryInterval((int) Duration.ofDays(7).toSeconds())
+        .build();
     private TopicMessage topicMessage = TopicMessage.newBuilder()
-            .setTopic(nonWildcardTopicFilter)
-            .build();
+        .setTopic(nonWildcardTopicFilter)
+        .build();
     private RetainStoreCoProc coProc;
     private AutoCloseable closeable;
 
@@ -94,22 +107,22 @@ public class MockedRetainTest {
         Map<String, Integer> topicFilterMap = new HashMap<>();
         topicFilterMap.put(nonWildcardTopicFilter, 1);
         MatchParam param = MatchParam.newBuilder()
-                .putAllTopicFilters(topicFilterMap)
-                .build();
+            .putAllTopicFilters(topicFilterMap)
+            .build();
         map.put(tenantId, param);
         ROCoProcInput input = getROInput(map);
         TopicMessage nonExpiredTopicMessage = topicMessage.toBuilder().setMessage(message).build();
 
         when(kvIterator.isValid())
-                .thenReturn(true);
+            .thenReturn(true);
         when(reader.get(any()))
-                .thenReturn(Optional.of(nonExpiredTopicMessage.toByteString()));
+            .thenReturn(Optional.of(nonExpiredTopicMessage.toByteString()));
 
         ROCoProcOutput output = coProc.query(input, reader).join();
         Assert.assertTrue(output.hasRetainService());
         RetainServiceROCoProcOutput retainOutput = output.getRetainService();
         MatchResult result = retainOutput.getBatchMatch().getResultPackMap()
-                .get(tenantId).getResultsMap().get(nonWildcardTopicFilter);
+            .get(tenantId).getResultsMap().get(nonWildcardTopicFilter);
         Assert.assertEquals(result.getOk().getMessagesCount(), 1);
         Assert.assertEquals(result.getOk().getMessagesList().get(0), nonExpiredTopicMessage);
     }
@@ -120,21 +133,21 @@ public class MockedRetainTest {
         Map<String, Integer> topicFilterMap = new HashMap<>();
         topicFilterMap.put(nonWildcardTopicFilter, 1);
         MatchParam param = MatchParam.newBuilder()
-                .putAllTopicFilters(topicFilterMap)
-                .build();
+            .putAllTopicFilters(topicFilterMap)
+            .build();
         map.put(tenantId, param);
         ROCoProcInput input = getROInput(map);
 
         when(kvIterator.isValid())
-                .thenReturn(true);
+            .thenReturn(true);
         when(reader.get(any()))
-                .thenReturn(Optional.of(topicMessage.toByteString()));
+            .thenReturn(Optional.of(topicMessage.toByteString()));
 
         ROCoProcOutput output = coProc.query(input, reader).join();
         Assert.assertTrue(output.hasRetainService());
         RetainServiceROCoProcOutput retainOutput = output.getRetainService();
         MatchResult result = retainOutput.getBatchMatch().getResultPackMap()
-                .get(tenantId).getResultsMap().get(nonWildcardTopicFilter);
+            .get(tenantId).getResultsMap().get(nonWildcardTopicFilter);
         Assert.assertEquals(result.getOk().getMessagesCount(), 0);
     }
 
@@ -144,21 +157,21 @@ public class MockedRetainTest {
         Map<String, Integer> topicFilterMap = new HashMap<>();
         topicFilterMap.put(nonWildcardTopicFilter, 0);
         MatchParam param = MatchParam.newBuilder()
-                .putAllTopicFilters(topicFilterMap)
-                .build();
+            .putAllTopicFilters(topicFilterMap)
+            .build();
         map.put(tenantId, param);
         ROCoProcInput input = getROInput(map);
 
         when(kvIterator.isValid())
-                .thenReturn(true);
+            .thenReturn(true);
         when(reader.get(any()))
-                .thenReturn(Optional.of(topicMessage.toBuilder().setMessage(message).build().toByteString()));
+            .thenReturn(Optional.of(topicMessage.toBuilder().setMessage(message).build().toByteString()));
 
         ROCoProcOutput output = coProc.query(input, reader).join();
         Assert.assertTrue(output.hasRetainService());
         RetainServiceROCoProcOutput retainOutput = output.getRetainService();
         MatchResult result = retainOutput.getBatchMatch().getResultPackMap()
-                .get(tenantId).getResultsMap().get(nonWildcardTopicFilter);
+            .get(tenantId).getResultsMap().get(nonWildcardTopicFilter);
         Assert.assertEquals(result.getOk().getMessagesCount(), 0);
     }
 
@@ -168,29 +181,29 @@ public class MockedRetainTest {
         Map<String, Integer> topicFilterMap = new HashMap<>();
         topicFilterMap.put(wildcardTopicFilter, 2);
         MatchParam param = MatchParam.newBuilder()
-                .putAllTopicFilters(topicFilterMap)
-                .build();
+            .putAllTopicFilters(topicFilterMap)
+            .build();
         map.put(tenantId, param);
         ROCoProcInput input = getROInput(map);
 
         when(kvIterator.isValid())
-                .thenReturn(true)
-                .thenReturn(true)
-                .thenReturn(true);
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(true);
         when(kvIterator.key())
-                .thenReturn(retainKey(tenantNS, "a/b/c"))
-                .thenReturn(retainKey(tenantNS, "a/b/d"));
+            .thenReturn(retainKey(tenantNS, "a/b/c"))
+            .thenReturn(retainKey(tenantNS, "a/b/d"));
         when(kvIterator.value())
-                .thenReturn(topicMessage.toBuilder().setTopic("a/b/c").setMessage(message)
-                        .build().toByteString())
-                .thenReturn(topicMessage.toBuilder().setTopic("a/b/d").setMessage(message)
-                        .build().toByteString());
+            .thenReturn(topicMessage.toBuilder().setTopic("a/b/c").setMessage(message)
+                .build().toByteString())
+            .thenReturn(topicMessage.toBuilder().setTopic("a/b/d").setMessage(message)
+                .build().toByteString());
 
         ROCoProcOutput output = coProc.query(input, reader).join();
         Assert.assertTrue(output.hasRetainService());
         RetainServiceROCoProcOutput retainOutput = output.getRetainService();
         MatchResult result = retainOutput.getBatchMatch().getResultPackMap()
-                .get(tenantId).getResultsMap().get(wildcardTopicFilter);
+            .get(tenantId).getResultsMap().get(wildcardTopicFilter);
         Assert.assertEquals(result.getOk().getMessagesCount(), 2);
         Assert.assertEquals(result.getOk().getMessagesList().get(0).getTopic(), "a/b/c");
         Assert.assertEquals(result.getOk().getMessagesList().get(1).getTopic(), "a/b/d");
@@ -209,7 +222,7 @@ public class MockedRetainTest {
         RWCoProcOutput output = coProc.mutate(input, reader, writer).get();
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.ERROR);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.ERROR);
     }
 
     @Test
@@ -227,7 +240,7 @@ public class MockedRetainTest {
         verify(writer, times(2)).put(argumentCaptor.capture(), argumentCaptor.capture());
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
         List<ByteString> args = argumentCaptor.getAllValues();
         Assert.assertEquals(args.size(), 4);
         Assert.assertEquals(args.get(0), tenantNS);
@@ -237,9 +250,9 @@ public class MockedRetainTest {
     @Test
     public void testPutRetainMessageNormally() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .setEstExpire(clock.millis() + Duration.ofDays(7).toMillis())
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .setEstExpire(clock.millis() + Duration.ofDays(7).toMillis())
+                .build().toByteString()));
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(message).build());
         }};
@@ -253,7 +266,7 @@ public class MockedRetainTest {
         verify(writer, times(2)).put(argumentCaptor.capture(), argumentCaptor.capture());
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
         List<ByteString> args = argumentCaptor.getAllValues();
         Assert.assertEquals(args.size(), 4);
         Assert.assertEquals(args.get(0), KeyUtil.retainKey(tenantNS, nonWildcardTopicFilter));
@@ -263,17 +276,17 @@ public class MockedRetainTest {
     @Test
     public void testPutRetainMessageViaGC() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .setCount(10)
-                        .setEstExpire(clock.millis() - Duration.ofDays(7).toMillis())
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .setCount(10)
+                .setEstExpire(clock.millis() - Duration.ofDays(7).toMillis())
+                .build().toByteString()));
         when(kvIterator.isValid())
-                .thenReturn(true)
-                .thenReturn(false);
+            .thenReturn(true)
+            .thenReturn(false);
         when(kvIterator.key())
-                .thenReturn(retainKey(tenantNS, "a/b/c"));
+            .thenReturn(retainKey(tenantNS, "a/b/c"));
         when(kvIterator.value())
-                .thenReturn(TopicMessage.getDefaultInstance().toByteString());
+            .thenReturn(TopicMessage.getDefaultInstance().toByteString());
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(message).build());
         }};
@@ -288,7 +301,7 @@ public class MockedRetainTest {
         verify(writer, times(2)).put(argumentCaptor.capture(), argumentCaptor.capture());
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
         List<ByteString> args = argumentCaptor.getAllValues();
         Assert.assertEquals(args.size(), 5);
         Assert.assertEquals(args.get(0), KeyUtil.retainKey(tenantNS, nonWildcardTopicFilter));
@@ -299,12 +312,12 @@ public class MockedRetainTest {
     @Test
     public void testPutRetainMessageWithoutEnoughRoom() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .setCount(10)
-                        .setEstExpire(clock.millis() - Duration.ofDays(7).toMillis())
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .setCount(10)
+                .setEstExpire(clock.millis() - Duration.ofDays(7).toMillis())
+                .build().toByteString()));
         when(kvIterator.isValid())
-                .thenReturn(false);
+            .thenReturn(false);
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(message).build());
         }};
@@ -316,20 +329,21 @@ public class MockedRetainTest {
         RWCoProcOutput output = coProc.mutate(input, reader, writer).get();
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.ERROR);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.ERROR);
     }
 
     @Test
     public void testDeleteRetainMessageWithExpiration() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .build().toByteString()));
         when(reader.get(retainKey(tenantNS, nonWildcardTopicFilter)))
-                .thenReturn(Optional.of(topicMessage.toByteString()));
+            .thenReturn(Optional.of(topicMessage.toByteString()));
 
         Message emptyMsg = Message.newBuilder()
-                .setExpireTimestamp(clock.millis() + Duration.ofDays(7).toMillis())
-                .build();
+            .setTimestamp(HLC.INST.getPhysical())
+            .setExpiryInterval((int) Duration.ofDays(7).toSeconds())
+            .build();
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(emptyMsg).build());
         }};
@@ -341,21 +355,22 @@ public class MockedRetainTest {
         RWCoProcOutput output = coProc.mutate(input, reader, writer).get();
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.CLEARED);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.CLEARED);
     }
 
     @Test
     public void testDeleteRetainMessageWithoutExpiration() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .build().toByteString()));
         when(reader.get(retainKey(tenantNS, nonWildcardTopicFilter)))
-                .thenReturn(Optional.of(topicMessage.toBuilder()
-                        .setMessage(message).build().toByteString()));
+            .thenReturn(Optional.of(topicMessage.toBuilder()
+                .setMessage(message).build().toByteString()));
 
         Message emptyMsg = Message.newBuilder()
-                .setExpireTimestamp(clock.millis() + Duration.ofDays(7).toMillis())
-                .build();
+            .setTimestamp(HLC.INST.getPhysical())
+            .setExpiryInterval((int) Duration.ofDays(7).toSeconds())
+            .build();
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(emptyMsg).build());
         }};
@@ -372,19 +387,19 @@ public class MockedRetainTest {
         Assert.assertEquals(args.get(1), tenantNS);
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.CLEARED);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.CLEARED);
 
     }
 
     @Test
     public void testUpdateRetainMessageNormally() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .setEstExpire(clock.millis() + Duration.ofDays(7).toMillis())
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .setEstExpire(clock.millis() + Duration.ofDays(7).toMillis())
+                .build().toByteString()));
         when(reader.get(retainKey(tenantNS, nonWildcardTopicFilter)))
-                .thenReturn(Optional.of(topicMessage.toBuilder()
-                        .setMessage(message).build().toByteString()));
+            .thenReturn(Optional.of(topicMessage.toBuilder()
+                .setMessage(message).build().toByteString()));
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(message).build());
         }};
@@ -398,7 +413,7 @@ public class MockedRetainTest {
         verify(writer, times(2)).put(argumentCaptor.capture(), argumentCaptor.capture());
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
         List<ByteString> args = argumentCaptor.getAllValues();
         Assert.assertEquals(args.size(), 4);
         Assert.assertEquals(args.get(0), retainKey(tenantNS, nonWildcardTopicFilter));
@@ -408,12 +423,12 @@ public class MockedRetainTest {
     @Test
     public void testUpdateRetainMessageWithExpiration() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .setEstExpire(clock.millis())
-                        .setCount(Integer.MAX_VALUE)
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .setEstExpire(clock.millis())
+                .setCount(Integer.MAX_VALUE)
+                .build().toByteString()));
         when(reader.get(retainKey(tenantNS, nonWildcardTopicFilter)))
-                .thenReturn(Optional.of(topicMessage.toByteString()));
+            .thenReturn(Optional.of(topicMessage.toByteString()));
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(message).build());
         }};
@@ -427,7 +442,7 @@ public class MockedRetainTest {
         verify(writer).put(argumentCaptor.capture(), argumentCaptor.capture());
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.ERROR);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.ERROR);
         List<ByteString> args = argumentCaptor.getAllValues();
         Assert.assertEquals(args.get(0), tenantNS);
     }
@@ -435,19 +450,19 @@ public class MockedRetainTest {
     @Test
     public void testUpdateRetainMessageViaGC() {
         when(reader.get(tenantNS))
-                .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
-                        .setEstExpire(clock.millis())
-                        .setCount(settingProvider.provide(RetainedTopicLimit, tenantId))
-                        .build().toByteString()));
+            .thenReturn(Optional.of(RetainSetMetadata.newBuilder()
+                .setEstExpire(clock.millis())
+                .setCount(settingProvider.provide(RetainedTopicLimit, tenantId))
+                .build().toByteString()));
         when(reader.get(retainKey(tenantNS, nonWildcardTopicFilter)))
-                .thenReturn(Optional.of(topicMessage.toByteString()));
+            .thenReturn(Optional.of(topicMessage.toByteString()));
         when(kvIterator.isValid())
-                .thenReturn(true)
-                .thenReturn(false);
+            .thenReturn(true)
+            .thenReturn(false);
         when(kvIterator.key())
-                .thenReturn(retainKey(tenantNS, nonWildcardTopicFilter));
+            .thenReturn(retainKey(tenantNS, nonWildcardTopicFilter));
         when(kvIterator.value())
-                .thenReturn(TopicMessage.getDefaultInstance().toByteString());
+            .thenReturn(TopicMessage.getDefaultInstance().toByteString());
         Map<String, RetainMessage> topicMessages = new HashMap<>() {{
             put(nonWildcardTopicFilter, RetainMessage.newBuilder().setMessage(message).build());
         }};
@@ -462,7 +477,7 @@ public class MockedRetainTest {
         verify(writer, times(2)).put(argumentCaptor.capture(), argumentCaptor.capture());
         Assert.assertTrue(output.hasRetainService());
         Assert.assertEquals(output.getRetainService().getBatchRetain()
-                .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
+            .getResultsMap().get(tenantId).getResultsMap().get(nonWildcardTopicFilter), RetainResult.RETAINED);
         List<ByteString> args = argumentCaptor.getAllValues();
         Assert.assertEquals(args.size(), 5);
         Assert.assertEquals(args.get(0), retainKey(tenantNS, nonWildcardTopicFilter));
@@ -473,21 +488,21 @@ public class MockedRetainTest {
     private ROCoProcInput getROInput(Map<String, MatchParam> map) {
         ROCoProcInput.Builder builder = ROCoProcInput.newBuilder();
         builder.setRetainService(RetainServiceROCoProcInput.newBuilder()
-                .setBatchMatch(BatchMatchRequest.newBuilder()
-                        .putAllMatchParams(map)
-                        .build())
-                .build());
+            .setBatchMatch(BatchMatchRequest.newBuilder()
+                .putAllMatchParams(map)
+                .build())
+            .build());
         return builder.build();
     }
 
     private RWCoProcInput getRWInput(Map<String, RetainMessagePack> packs) {
         RWCoProcInput.Builder builder = RWCoProcInput.newBuilder();
         builder.setRetainService(RetainServiceRWCoProcInput.newBuilder()
-                        .setBatchRetain(BatchRetainRequest.newBuilder()
-                                .setReqId(System.nanoTime())
-                                .putAllRetainMessagePack(packs)
-                                .build())
-                .build());
+            .setBatchRetain(BatchRetainRequest.newBuilder()
+                .setReqId(System.nanoTime())
+                .putAllRetainMessagePack(packs)
+                .build())
+            .build());
         return builder.build();
     }
 }

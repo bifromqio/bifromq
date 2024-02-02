@@ -19,7 +19,7 @@ import com.baidu.bifromq.mqtt.handler.ByteBufToWebSocketFrameEncoder;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.ClientAddrHandler;
 import com.baidu.bifromq.mqtt.handler.ConnectionRateLimitHandler;
-import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
+import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
@@ -92,10 +92,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 .retainClient(builder.retainClient)
                 .sessionDictClient(builder.sessionDictClient)
                 .sessionRegistry(sessionRegistry())
-                .maxResendTimes(builder.maxResendTimes)
-                .resendDelayMillis(builder.resendDelayMillis)
                 .defaultKeepAliveTimeSeconds(builder.defaultKeepAliveSeconds)
-                .qos2ConfirmWindowSeconds(builder.qos2ConfirmWindowSeconds)
                 .build();
             log.info("Starting MQTT broker");
             beforeBrokerStart();
@@ -170,7 +167,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
+                pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
     }
@@ -187,7 +184,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
+                pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
     }
@@ -211,7 +208,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
+                pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
     }
@@ -236,7 +233,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast("encoder", MqttEncoder.INSTANCE);
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(builder.connectTimeoutSeconds));
+                pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
     }

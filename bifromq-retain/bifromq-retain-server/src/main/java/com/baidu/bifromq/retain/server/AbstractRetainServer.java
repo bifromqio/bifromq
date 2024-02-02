@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.retain.server;
 
+import com.baidu.bifromq.deliverer.MessageDeliverer;
+import com.baidu.bifromq.retain.server.scheduler.MatchCallScheduler;
+import com.baidu.bifromq.retain.server.scheduler.RetainCallScheduler;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -20,7 +23,10 @@ abstract class AbstractRetainServer implements IRetainServer {
     protected final RetainService retainService;
 
     AbstractRetainServer(AbstractRetainServerBuilder<?> builder) {
-        this.retainService = new RetainService(builder.retainStoreClient);
+        this.retainService = new RetainService(
+            new MessageDeliverer(builder.subBrokerManager),
+            new MatchCallScheduler(builder.retainStoreClient),
+            new RetainCallScheduler(builder.retainStoreClient));
     }
 
     @Override

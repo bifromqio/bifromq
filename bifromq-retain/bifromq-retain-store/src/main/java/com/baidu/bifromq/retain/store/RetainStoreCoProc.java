@@ -60,6 +60,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -168,7 +169,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             Optional<ByteString> val = reader.get(KeyUtil.retainKey(tenantNS, topicFilter));
             if (val.isPresent()) {
                 TopicMessage message = TopicMessage.parseFrom(val.get());
-                if (message.getMessage().getExpireTimestamp() > clock.millis()) {
+                if (expireAt(message.getMessage()) > clock.millis()) {
                     return singletonList(message);
                 }
             }
@@ -182,7 +183,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             List<String> topicLevels = KeyUtil.parseTopic(itr.key());
             if (TopicUtil.match(topicLevels, matchLevels)) {
                 TopicMessage message = TopicMessage.parseFrom(itr.value());
-                if (message.getMessage().getExpireTimestamp() > clock.millis()) {
+                if (expireAt(message.getMessage()) > clock.millis()) {
                     messages.add(message);
                 }
             }
@@ -223,7 +224,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 .build();
             ByteString retainKey = KeyUtil.retainKey(tenantNS, topicMessage.getTopic());
             long now = clock.millis();
-            if (topicMessage.getMessage().getExpireTimestamp() <= now) {
+            if (expireAt(topicMessage.getMessage()) <= now) {
                 // already expired
                 return RetainResult.ERROR;
             }
@@ -232,7 +233,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     // this is the first message to be retained
                     RetainSetMetadata metadata = RetainSetMetadata.newBuilder()
                         .setCount(1)
-                        .setEstExpire(topicMessage.getMessage().getExpireTimestamp())
+                        .setEstExpire(expireAt(topicMessage.getMessage()))
                         .build();
                     writer.put(tenantNS, metadata.toByteString());
                     writer.put(retainKey, topicMessage.toByteString());
@@ -251,7 +252,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     // delete existing retained
                     if (val.isPresent()) {
                         TopicMessage existing = TopicMessage.parseFrom(val.get());
-                        if (existing.getMessage().getExpireTimestamp() <= now) {
+                        if (expireAt(existing.getMessage()) <= now) {
                             // the existing has already expired
                             metadata = gc(now, tenantNS, metadata, reader, writer);
                             if (metadata.getCount() > 0) {
@@ -279,8 +280,8 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                             metadata = gc(now, tenantNS, metadata, reader, writer);
                             if (metadata.getCount() < maxRetainTopics) {
                                 metadata = metadata.toBuilder()
-                                    .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
-                                        metadata.getEstExpire()))
+                                    .setEstExpire(
+                                        Math.min(expireAt(topicMessage.getMessage()), metadata.getEstExpire()))
                                     .setCount(metadata.getCount() + 1).build();
                                 writer.put(retainKey, topicMessage.toByteString());
                                 writer.put(tenantNS, metadata.toByteString());
@@ -297,8 +298,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         }
                     } else {
                         metadata = metadata.toBuilder()
-                            .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
-                                metadata.getEstExpire()))
+                            .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadata.getEstExpire()))
                             .setCount(metadata.getCount() + 1).build();
                         writer.put(retainKey, topicMessage.toByteString());
                         writer.put(tenantNS, metadata.toByteString());
@@ -307,12 +307,12 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 } else {
                     // replace existing
                     TopicMessage existing = TopicMessage.parseFrom(val.get());
-                    if (existing.getMessage().getExpireTimestamp() <= now &&
+                    if (expireAt(existing.getMessage()) <= now &&
                         metadata.getCount() >= maxRetainTopics) {
                         metadata = gc(now, tenantNS, metadata, reader, writer);
                         if (metadata.getCount() < maxRetainTopics) {
                             metadata = metadata.toBuilder()
-                                .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
+                                .setEstExpire(Math.min(expireAt(topicMessage.getMessage()),
                                     metadata.getEstExpire()))
                                 .setCount(metadata.getCount() + 1)
                                 .build();
@@ -330,7 +330,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                     }
                     if (metadata.getCount() <= maxRetainTopics) {
                         metadata = metadata.toBuilder()
-                            .setEstExpire(Math.min(topicMessage.getMessage().getExpireTimestamp(),
+                            .setEstExpire(Math.min(expireAt(topicMessage.getMessage()),
                                 metadata.getEstExpire()))
                             .build();
                         writer.put(retainKey, topicMessage.toByteString());
@@ -360,7 +360,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         int expires = 0;
         long earliestExp = Long.MAX_VALUE;
         for (; itr.isValid() && compare(itr.key(), range.getEndKey()) < 0; itr.next()) {
-            long expireTime = TopicMessage.parseFrom(itr.value()).getMessage().getExpireTimestamp();
+            long expireTime = expireAt(TopicMessage.parseFrom(itr.value()).getMessage());
             if (expireTime <= now) {
                 writer.delete(itr.key());
                 expires++;
@@ -399,6 +399,10 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             log.error("Unable to parse metadata");
             return GCReply.newBuilder().setReqId(request.getReqId()).build();
         }
+    }
+
+    private long expireAt(Message message) {
+        return Duration.ofMillis(message.getTimestamp()).plusSeconds(message.getExpiryInterval()).toMillis();
     }
 
     private CollectMetricsReply collectMetrics(CollectMetricsRequest request, IKVReader reader) {

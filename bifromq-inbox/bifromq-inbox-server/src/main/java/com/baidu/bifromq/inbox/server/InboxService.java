@@ -16,13 +16,18 @@ package com.baidu.bifromq.inbox.server;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE;
+import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
@@ -66,11 +71,15 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.inbox.store.gc.IInboxGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxGCProcessor;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
@@ -92,6 +101,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     }
 
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
+    private final ISettingProvider settingProvider;
     private final IInboxClient inboxClient;
     private final IDistClient distClient;
     private final IRetainClient retainClient;
@@ -112,7 +122,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final DelayTaskRunner<ScopedInbox, ExpireSessionTask> delayTaskRunner;
 
     @Builder
-    InboxService(IInboxClient inboxClient,
+    InboxService(ISettingProvider settingProvider,
+                 IInboxClient inboxClient,
                  IDistClient distClient,
                  IRetainClient retainClient,
                  IBaseKVStoreClient inboxStoreClient,
@@ -127,6 +138,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IInboxSubScheduler subScheduler,
                  IInboxUnsubScheduler unsubScheduler,
                  IInboxTouchScheduler touchScheduler) {
+        this.settingProvider = settingProvider;
         this.inboxClient = inboxClient;
         this.distClient = distClient;
         this.retainClient = retainClient;
@@ -308,19 +320,20 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     @Override
     public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
         log.trace("Handling sub {}", request);
+        TopicFilterOption tfOption = request.getOption();
         response(tenantId -> subScheduler.schedule(request)
-                .thenCompose(v -> {
-                    if (v.getCode() == SubReply.Code.OK || v.getCode() == SubReply.Code.EXISTS) {
+                .thenCompose(subReply -> {
+                    if (subReply.getCode() == SubReply.Code.OK || subReply.getCode() == SubReply.Code.EXISTS) {
                         return distClient.match(request.getReqId(),
                                 request.getTenantId(),
                                 request.getTopicFilter(),
-                                request.getSubQoS(),
+                                request.getOption().getQos(),
                                 distInboxId(request.getInboxId(), request.getIncarnation()),
-                                getDelivererKey(request.getInboxId()), 1)
+                                getDelivererKey(request.getInboxId()), inboxClient.id())
                             .thenApply(matchResult -> {
                                 switch (matchResult) {
                                     case OK -> {
-                                        return v;
+                                        return subReply;
                                     }
                                     case EXCEED_LIMIT -> {
                                         return SubReply.newBuilder()
@@ -335,7 +348,42 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                 }
                             });
                     }
-                    return CompletableFuture.completedFuture(v);
+                    return CompletableFuture.completedFuture(subReply);
+                })
+                .thenCompose(subReply -> {
+                    switch (subReply.getCode()) {
+                        case OK, EXISTS -> {
+                            if (!TopicUtil.isSharedSubscription(request.getTopicFilter()) &&
+                                (boolean) settingProvider.provide(RetainEnabled, request.getTenantId()) &&
+                                (tfOption.getRetainHandling() == SEND_AT_SUBSCRIBE ||
+                                    (subReply.getCode() == SubReply.Code.OK &&
+                                        tfOption.getRetainHandling() == SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
+                                return retainClient.match(MatchRequest.newBuilder()
+                                        .setReqId(request.getReqId())
+                                        .setTenantId(request.getTenantId())
+                                        .setInboxId(distInboxId(request.getInboxId(), request.getIncarnation()))
+                                        .setDelivererKey(getDelivererKey(request.getInboxId()))
+                                        .setBrokerId(inboxClient.id())
+                                        .setTopicFilter(request.getTopicFilter())
+                                        .setQos(tfOption.getQos())
+                                        .setLimit(settingProvider.provide(RetainMessageMatchLimit, request.getTenantId()))
+                                        .build())
+                                    .handle((v, e) -> {
+                                        if (e != null) {
+                                            return SubReply.newBuilder()
+                                                .setReqId(request.getReqId())
+                                                .setCode(SubReply.Code.ERROR).build();
+                                        } else {
+                                            return subReply;
+                                        }
+                                    });
+                            }
+                            return CompletableFuture.completedFuture(subReply);
+                        }
+                        default -> {
+                            return CompletableFuture.completedFuture(subReply);
+                        }
+                    }
                 })
                 .exceptionally(e -> {
                     log.debug("Failed to subscribe", e);
@@ -347,7 +395,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                 .whenComplete((v, e) -> {
                     //update monitored deadline record
                     if (v != null &&
-                        (v.getCode() == SubReply.Code.OK || v.getCode() == SubReply.Code.EXCEED_LIMIT)) {
+                        (v.getCode() == SubReply.Code.OK
+                            || v.getCode() == SubReply.Code.EXISTS
+                            || v.getCode() == SubReply.Code.EXCEED_LIMIT)) {
                         ScopedInbox scopedInbox = new ScopedInbox(
                             request.getTenantId(),
                             request.getInboxId(),
@@ -588,11 +638,11 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         public void run() {
             long reqId = HLC.INST.getPhysical();
             if (lwt != null) {
-                CompletableFuture<Void> distLWTFuture = distClient.pub(reqId,
+                CompletableFuture<DistResult> distLWTFuture = distClient.pub(reqId,
                     lwt.getTopic(),
-                    lwt.getMessage().getPubQoS(),
-                    lwt.getMessage().getPayload(),
-                    lwt.getMessage().getExpiryInterval(),
+                    lwt.getMessage().toBuilder()
+                        .setTimestamp(HLC.INST.getPhysical()) // refresh the timestamp
+                        .build(),
                     client);
                 CompletableFuture<RetainReply> retainLWTFuture = lwt.getRetain() ?
                     retainClient.retain(reqId, lwt.getTopic(),
@@ -602,9 +652,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         client) : CompletableFuture.completedFuture(
                     RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build());
                 CompletableFuture.allOf(distLWTFuture, retainLWTFuture)
-                    .thenApply(v -> retainLWTFuture.join().getResult() != RetainReply.Result.ERROR)
                     .whenComplete((v, e) -> {
-                        if (e != null || !v) {
+                        if (e != null
+                            || distLWTFuture.join() == DistResult.ERROR
+                            || retainLWTFuture.join().getResult() == RetainReply.Result.ERROR) {
                             log.warn("Handle LWT error", e);
                             // Delay some time and retry
                             delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(lwt.getDelaySeconds()),

@@ -48,7 +48,7 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
             retainMsgPackBuilders.computeIfAbsent(request.getPublisher().getTenantId(),
                     k -> RetainMessagePack.newBuilder())
                 .putTopicMessages(request.getTopic(), RetainMessage.newBuilder()
-                    .setMessage(request.getMessage())
+                    .setMessage(request.getMessage().toBuilder().setIsRetained(true).build())
                     .setPublisher(request.getPublisher())
                     .build());
         });

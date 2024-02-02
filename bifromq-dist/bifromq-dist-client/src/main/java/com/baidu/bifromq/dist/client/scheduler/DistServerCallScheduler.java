@@ -22,6 +22,7 @@ import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
@@ -37,7 +38,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, Void, BatcherKey>
+public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, DistResult, BatcherKey>
     implements IDistServerCallScheduler {
     private final IRPCClient rpcClient;
 
@@ -48,10 +49,10 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
     }
 
     @Override
-    protected Batcher<DistServerCall, Void, BatcherKey> newBatcher(String name,
-                                                                   long tolerableLatencyNanos,
-                                                                   long burstLatencyNanos,
-                                                                   BatcherKey batcherKey) {
+    protected Batcher<DistServerCall, DistResult, BatcherKey> newBatcher(String name,
+                                                                         long tolerableLatencyNanos,
+                                                                         long burstLatencyNanos,
+                                                                         BatcherKey batcherKey) {
         return new DistServerCallBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
             rpcClient.createRequestPipeline(batcherKey.tenantId, null, null, emptyMap(),
                 DistServiceGrpc.getDistMethod()));
@@ -62,11 +63,11 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
         return Optional.of(new BatcherKey(clientCall.publisher.getTenantId(), Thread.currentThread().getId()));
     }
 
-    private static class DistServerCallBatcher extends Batcher<DistServerCall, Void, BatcherKey> {
+    private static class DistServerCallBatcher extends Batcher<DistServerCall, DistResult, BatcherKey> {
         private final IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln;
 
-        private class DistServerBatchCall implements IBatchCall<DistServerCall, Void, BatcherKey> {
-            private final Queue<CompletableFuture<Void>> tasks = new ArrayDeque<>(64);
+        private class DistServerBatchCall implements IBatchCall<DistServerCall, DistResult, BatcherKey> {
+            private final Queue<CallTask<DistServerCall, DistResult, BatcherKey>> tasks = new ArrayDeque<>(64);
             private Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack =
                 new HashMap<>(128);
 
@@ -76,8 +77,8 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
             }
 
             @Override
-            public void add(CallTask<DistServerCall, Void, BatcherKey> callTask) {
-                tasks.add(callTask.callResult);
+            public void add(CallTask<DistServerCall, DistResult, BatcherKey> callTask) {
+                tasks.add(callTask);
                 clientMsgPack.computeIfAbsent(callTask.call.publisher, k -> new HashMap<>())
                     .computeIfAbsent(callTask.call.topic, k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
                     .addMessage(callTask.call.message);
@@ -97,14 +98,27 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
                 DistRequest request = requestBuilder.build();
                 return ppln.invoke(request).handle((v, e) -> {
                     if (e != null) {
-                        CompletableFuture<Void> onDone;
-                        while ((onDone = tasks.poll()) != null) {
-                            onDone.completeExceptionally(e);
+                        CallTask<DistServerCall, DistResult, BatcherKey> task;
+                        while ((task = tasks.poll()) != null) {
+                            task.callResult.completeExceptionally(e);
                         }
                     } else {
-                        CompletableFuture<Void> onDone;
-                        while ((onDone = tasks.poll()) != null) {
-                            onDone.complete(null);
+                        Map<ClientInfo, Map<String, DistReply.Code>> resultMap = new HashMap<>();
+                        for (int i = 0; i < request.getMessagesCount(); i++) {
+                            PublisherMessagePack pubMsgPack = request.getMessages(i);
+                            DistReply.Result result = v.getResults(i);
+                            resultMap.put(pubMsgPack.getPublisher(), result.getTopicMap());
+                        }
+                        CallTask<DistServerCall, DistResult, BatcherKey> task;
+                        while ((task = tasks.poll()) != null) {
+                            ClientInfo publisher = task.call.publisher;
+                            String topic = task.call.topic;
+                            switch (resultMap.get(publisher).get(topic)) {
+                                case OK -> task.callResult.complete(DistResult.OK);
+                                case NO_MATCH -> task.callResult.complete(DistResult.NO_MATCH);
+                                case EXCEED_LIMIT -> task.callResult.complete(DistResult.EXCEED_LIMIT);
+                                case ERROR -> task.callResult.complete(DistResult.ERROR);
+                            }
                         }
                     }
                     return null;
@@ -121,7 +135,7 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
         }
 
         @Override
-        protected IBatchCall<DistServerCall, Void, BatcherKey> newBatch() {
+        protected IBatchCall<DistServerCall, DistResult, BatcherKey> newBatch() {
             return new DistServerBatchCall();
         }
 

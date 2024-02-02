@@ -35,8 +35,8 @@ import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.mqtt.inbox.MqttSubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.QoS;
 import io.netty.buffer.Unpooled;
@@ -119,7 +119,7 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
                         .thenApply(v -> {
                             DefaultFullHttpResponse resp =
                                 new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
-                            if (v == MqttSubResult.OK) {
+                            if (v.getResult() == com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.OK) {
                                 resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
                             } else {
                                 resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
@@ -144,7 +144,7 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
                                         .setIncarnation(latest.getIncarnation())
                                         .setVersion(latest.getVersion())
                                         .setTopicFilter(topicFilter)
-                                        .setSubQoS(subQoS)
+                                        .setOption(TopicFilterOption.newBuilder().setQos(subQoS).build())
                                         .setNow(HLC.INST.getPhysical())
                                         .build())
                                     .thenApply(subReply -> {

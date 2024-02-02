@@ -41,7 +41,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
-import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
+import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
@@ -56,7 +56,7 @@ import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
-import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
+import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
@@ -183,10 +183,7 @@ public abstract class BaseMQTTTest {
             .retainClient(retainClient)
             .sessionDictClient(sessionDictClient)
             .sessionRegistry(sessionRegistry)
-            .maxResendTimes(2)
-            .resendDelayMillis(100)
             .defaultKeepAliveTimeSeconds(300)
-            .qos2ConfirmWindowSeconds(300)
             .ticker(testTicker)
             .serverId(serverId)
             .build();
@@ -213,7 +210,7 @@ public abstract class BaseMQTTTest {
                 pipeline.addLast("trafficShaper", new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
                 pipeline.addLast("decoder", new MqttDecoder(256 * 1024)); //256kb
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(MQTTConnectHandler.NAME, new MQTTConnectHandler(2));
+                pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(2));
             }
         };
     }
@@ -358,16 +355,13 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockDistDist(boolean success) {
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
-            any(ClientInfo.class)))
-            .thenReturn(success ? CompletableFuture.completedFuture(null) :
-                CompletableFuture.failedFuture(new RuntimeException("Mock error")));
+        when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class)))
+            .thenReturn(CompletableFuture.completedFuture(success ? DistResult.OK : DistResult.ERROR));
     }
 
     protected void mockDistDrop() {
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
-            any(ClientInfo.class)))
-            .thenReturn(CompletableFuture.failedFuture(new ExceedLimitException("Mock exceed limit exception")));
+        when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class)))
+            .thenReturn(CompletableFuture.completedFuture(DistResult.EXCEED_LIMIT));
     }
 
     protected void mockSessionReg() {
@@ -391,7 +385,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockRetainMatch() {
-        when(retainClient.match(anyLong(), anyString(), anyString(), anyInt()))
+        when(retainClient.match(any()))
             .thenReturn(CompletableFuture.completedFuture(
                 MatchReply.newBuilder().setResult(MatchReply.Result.OK).build()
             ));

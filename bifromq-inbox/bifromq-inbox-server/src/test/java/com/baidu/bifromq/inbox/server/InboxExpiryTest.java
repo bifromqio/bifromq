@@ -18,12 +18,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
@@ -56,8 +58,8 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .build())
             .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
-            CompletableFuture.completedFuture(null));
+        when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
+            CompletableFuture.completedFuture(DistResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
@@ -71,7 +73,9 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
         verify(distClient, timeout(5000).times(1))
-            .pub(anyLong(), eq(lwt.getTopic()), eq(QoS.AT_LEAST_ONCE), eq(lwt.getMessage().getPayload()), anyInt(),
+            .pub(anyLong(), eq(lwt.getTopic()),
+                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
+                    m.getPayload().equals(lwt.getMessage().getPayload())),
                 any());
 
         await().until(() -> {
@@ -95,8 +99,8 @@ public class InboxExpiryTest extends InboxServiceTest {
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setRetain(true).setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
-            CompletableFuture.completedFuture(null));
+        when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
+            CompletableFuture.completedFuture(DistResult.OK));
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
             CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
         inboxClient.create(CreateRequest.newBuilder()
@@ -133,8 +137,8 @@ public class InboxExpiryTest extends InboxServiceTest {
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setRetain(true).setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any()))
-            .thenReturn(CompletableFuture.completedFuture(null));
+        when(distClient.pub(anyLong(), anyString(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
             .thenReturn(
                 CompletableFuture.completedFuture(
@@ -153,7 +157,7 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
-        verify(distClient, timeout(10000).times(2)).pub(anyLong(), anyString(), any(), any(), anyInt(), any());
+        verify(distClient, timeout(10000).times(2)).pub(anyLong(), anyString(), any(), any());
         verify(retainClient, timeout(10000).times(2)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
@@ -182,8 +186,8 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .build())
             .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(distClient.pub(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
-            CompletableFuture.completedFuture(null));
+        when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
+            CompletableFuture.completedFuture(DistResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
@@ -206,7 +210,9 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
         verify(distClient, timeout(2000).times(1))
-            .pub(anyLong(), eq(lwt.getTopic()), eq(QoS.AT_LEAST_ONCE), eq(lwt.getMessage().getPayload()), anyInt(),
+            .pub(anyLong(), eq(lwt.getTopic()),
+                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
+                    m.getPayload().equals(lwt.getMessage().getPayload())),
                 any());
     }
 
@@ -243,7 +249,7 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        verify(distClient, timeout(5000).times(0)).pub(anyLong(), anyString(), any(), any(), anyInt(), any());
+        verify(distClient, timeout(5000).times(0)).pub(anyLong(), anyString(), any(), any());
         verify(distClient, timeout(5000).times(1)).unmatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(),
             anyString(), anyInt());
         await().until(() -> {

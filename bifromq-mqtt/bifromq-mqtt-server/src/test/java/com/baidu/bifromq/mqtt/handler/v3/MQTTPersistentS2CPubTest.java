@@ -25,36 +25,29 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
+import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Builder;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
-import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
@@ -144,7 +137,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
             QOS1_CONFIRMED);
-        verify(inboxClient, times(1)).commit(argThat(req -> req.getQos() == AT_LEAST_ONCE));
+        verify(inboxClient, times(3)).commit(argThat(CommitRequest::hasSendBufferUpToSeq));
     }
 
     @Test
@@ -164,7 +157,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
             }
         }
         verifyEvent(CLIENT_CONNECTED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED);
-        verify(inboxClient, times(0)).commit(argThat(req -> req.getQos() == AT_LEAST_ONCE));
+        verify(inboxClient, times(2)).commit(argThat(CommitRequest::hasSendBufferUpToSeq));
     }
 
     @Test
@@ -206,7 +199,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED, QOS2_RECEIVED, QOS2_RECEIVED, QOS2_CONFIRMED,
             QOS2_CONFIRMED);
-        verify(inboxClient, times(1)).commit(argThat(req -> req.getQos() == EXACTLY_ONCE));
+        verify(inboxClient, times(2)).commit(argThat(CommitRequest::hasSendBufferUpToSeq));
     }
 
     @Test
@@ -223,87 +216,6 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         }
         verifyEvent(CLIENT_CONNECTED, QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
         verify(inboxClient, times(messageCount)).unsub(any());
-    }
-
-    @Test
-    public void qoS2PubWithSameSourcePacketId() {
-        mockAuthCheck(true);
-        InboxMessage messagesFromClient1 = InboxMessage.newBuilder()
-            .setTopicFilter("#")
-            .setMsg(
-                TopicMessage.newBuilder()
-                    .setTopic("testTopic1")
-                    .setMessage(
-                        Message.newBuilder()
-                            .setMessageId(1)
-                            .setPayload(ByteString.copyFromUtf8("payload"))
-                            .setTimestamp(System.currentTimeMillis())
-                            .setPubQoS(EXACTLY_ONCE)
-                            .build()
-                    )
-                    .setPublisher(
-                        ClientInfo.newBuilder()
-                            .setTenantId(tenantId)
-                            .setType(MQTT_TYPE_VALUE)
-                            .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
-                            .putMetadata(MQTT_USER_ID_KEY, "testUser")
-                            .putMetadata(MQTT_CLIENT_ID_KEY, "client1")
-                            .putMetadata(MQTT_CHANNEL_ID_KEY, "channel1")
-                            .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:11111")
-                            .build()
-                    )
-                    .build()
-            ).build();
-        InboxMessage messagesFromClient3 = InboxMessage.newBuilder()
-            .setTopicFilter("#")
-            .setMsg(
-                TopicMessage.newBuilder()
-                    .setTopic("testTopic2")
-                    .setMessage(
-                        Message.newBuilder()
-                            .setMessageId(1)
-                            .setPayload(ByteString.copyFromUtf8("payload"))
-                            .setTimestamp(System.currentTimeMillis())
-                            .setPubQoS(QoS.EXACTLY_ONCE)
-                            .build()
-                    )
-                    .setPublisher(
-                        ClientInfo.newBuilder()
-                            .setTenantId(tenantId)
-                            .setType(MQTT_TYPE_VALUE)
-                            .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
-                            .putMetadata(MQTT_USER_ID_KEY, "testUser")
-                            .putMetadata(MQTT_CLIENT_ID_KEY, "client2")
-                            .putMetadata(MQTT_CHANNEL_ID_KEY, "channel2")
-                            .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:22222")
-                            .build()
-                    )
-                    .build()
-            ).build();
-        // four messages from two clients with same packetId
-        Fetched fetched = Fetched.newBuilder()
-            .addQos2Msg(messagesFromClient1)
-            .addQos2Msg(messagesFromClient1)
-            .addQos2Msg(messagesFromClient3)
-            .addQos2Msg(messagesFromClient3)
-            .addAllQos2Seq(Lists.newArrayList(1L, 2L, 3L, 4L))
-            .setResult(Result.OK)
-            .build();
-        inboxFetchConsumer.accept(fetched);
-        channel.runPendingTasks();
-        // should receive two messages from client1 and client2
-        MqttPublishMessage message = channel.readOutbound();
-        assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
-        assertEquals(message.variableHeader().topicName(), "testTopic1");
-
-        message = channel.readOutbound();
-        assertEquals(message.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
-        assertEquals(message.variableHeader().topicName(), "testTopic2");
-
-        message = channel.readOutbound();
-        assertNull(message);
-
-        verifyEvent(CLIENT_CONNECTED, QOS2_PUSHED, QOS2_PUSHED);
     }
 
     @Test
@@ -329,7 +241,9 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         Arrays.fill(bytes, (byte) 1);
         for (int i = 0; i < count; i++) {
             InboxMessage inboxMessage = InboxMessage.newBuilder()
+                .setSeq(i)
                 .setTopicFilter("testTopicFilter")
+                .setOption(TopicFilterOption.newBuilder().setQos(qoS).build())
                 .setMsg(
                     TopicMessage.newBuilder()
                         .setTopic("testTopic")
@@ -349,9 +263,8 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                         .build()
                 ).build();
             switch (qoS) {
-                case AT_MOST_ONCE -> builder.addQos0Msg(inboxMessage).addQos0Seq(i);
-                case AT_LEAST_ONCE -> builder.addQos1Msg(inboxMessage).addQos1Seq(i);
-                case EXACTLY_ONCE -> builder.addQos2Msg(inboxMessage).addQos2Seq(i);
+                case AT_MOST_ONCE -> builder.addQos0Msg(inboxMessage);
+                case AT_LEAST_ONCE, EXACTLY_ONCE -> builder.addSendBufferMsg(inboxMessage);
             }
         }
         return builder.build();

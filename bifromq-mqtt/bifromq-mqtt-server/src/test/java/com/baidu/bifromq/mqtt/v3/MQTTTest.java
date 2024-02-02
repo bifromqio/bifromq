@@ -29,6 +29,8 @@ import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.IRPCServer;
 import com.baidu.bifromq.baserpc.RPCServerBuilder;
+import com.baidu.bifromq.deliverer.IMessageDeliverer;
+import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
@@ -198,10 +200,10 @@ class MQTTTest {
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
+            .settingProvider(settingProvider)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
-            .settingProvider(settingProvider)
             .inboxStoreClient(inboxStoreKVStoreClient)
             .build();
         retainStoreKVStoreClient = IBaseKVStoreClient
@@ -225,10 +227,6 @@ class MQTTTest {
                 .setDataEngineConfigurator(new InMemKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
             .build();
-        retainServer = IRetainServer.nonStandaloneBuilder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .retainStoreClient(retainStoreKVStoreClient)
-            .build();
 
         distWorkerStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
@@ -237,7 +235,11 @@ class MQTTTest {
             .build();
 
         inboxBrokerMgr = new SubBrokerManager(pluginMgr, onlineInboxBrokerClient, inboxClient);
-
+        retainServer = IRetainServer.nonStandaloneBuilder()
+            .rpcServerBuilder(rpcServerBuilder)
+            .subBrokerManager(inboxBrokerMgr)
+            .retainStoreClient(retainStoreKVStoreClient)
+            .build();
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
         distWorker = IDistWorker.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)

@@ -36,6 +36,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.observers.TestObserver;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -191,16 +192,12 @@ public class MQTTPubSubTest {
         Thread.sleep(100); // delay a little bit
         checkFuture.complete(true);
 
-
-        MqttMsg msg = topicSub.timeout(10, TimeUnit.SECONDS).blockingFirst();
-        assertEquals(msg.topic, topic);
-        assertEquals(msg.qos, 0);
-        assertFalse(msg.isDup);
-        assertFalse(msg.isRetain);
-        assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
+        TestObserver<MqttMsg> msgObserver = topicSub.test();
         subClient.unsubscribe(topic);
         subClient.disconnect();
         subClient.close();
+        msgObserver.awaitDone(100, TimeUnit.MILLISECONDS);
+        msgObserver.assertNoValues();
     }
 
     @Test(groups = "integration")

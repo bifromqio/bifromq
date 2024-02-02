@@ -58,5 +58,15 @@ message DistRequest {
 }
 
 message DistReply {
+  enum Code{
+    OK = 0;
+    NO_MATCH = 1;
+    EXCEED_LIMIT = 2;
+    ERROR = 3;
+  }
+  message Result{
+    map<string, Code> topic = 1;
+  }
   uint64 reqId = 1;
+  repeated Result results = 2;
 }

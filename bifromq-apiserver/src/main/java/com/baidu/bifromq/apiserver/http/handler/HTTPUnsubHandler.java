@@ -35,7 +35,6 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.mqtt.inbox.MqttUnsubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -109,7 +108,8 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
                 case 0:
                     future = mqttBrokerClient.unsub(reqId, tenantId, inboxId, topicFilter)
                         .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(),
-                            v == MqttUnsubResult.OK ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER)
+                            v.getResult() == com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.Result.OK ? OK :
+                                NOT_FOUND, Unpooled.EMPTY_BUFFER)
                         );
                     break;
                 case 1:

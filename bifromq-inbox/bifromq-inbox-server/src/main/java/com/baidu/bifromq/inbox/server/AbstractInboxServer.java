@@ -33,6 +33,7 @@ abstract class AbstractInboxServer implements IInboxServer {
 
     AbstractInboxServer(AbstractInboxServerBuilder<?> builder) {
         this.inboxService = InboxService.builder()
+            .settingProvider(builder.settingProvider)
             .inboxClient(builder.inboxClient)
             .distClient(builder.distClient)
             .retainClient(builder.retainClient)

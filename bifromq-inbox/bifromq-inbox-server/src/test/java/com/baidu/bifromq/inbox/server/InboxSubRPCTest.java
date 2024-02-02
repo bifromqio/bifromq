@@ -29,7 +29,9 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
@@ -128,6 +130,8 @@ public class InboxSubRPCTest extends InboxServiceTest {
 
         when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
+            .setResult(MatchReply.Result.OK).build()));
         String topicFilter = "/a/b/c";
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -136,7 +140,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setIncarnation(incarnation)
             .setVersion(0)
             .setTopicFilter(topicFilter)
-            .setSubQoS(QoS.AT_LEAST_ONCE)
+            .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);
@@ -184,6 +188,8 @@ public class InboxSubRPCTest extends InboxServiceTest {
 
         when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
+            .setResult(MatchReply.Result.OK).build()));
         subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -227,6 +233,8 @@ public class InboxSubRPCTest extends InboxServiceTest {
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
         when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
+            .setResult(MatchReply.Result.OK).build()));
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)

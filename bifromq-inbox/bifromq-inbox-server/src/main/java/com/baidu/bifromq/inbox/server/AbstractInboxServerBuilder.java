@@ -35,6 +35,7 @@ abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T
         this.inboxClient = inboxClient;
         return thisT();
     }
+
     public T distClient(IDistClient distClient) {
         this.distClient = distClient;
         return thisT();

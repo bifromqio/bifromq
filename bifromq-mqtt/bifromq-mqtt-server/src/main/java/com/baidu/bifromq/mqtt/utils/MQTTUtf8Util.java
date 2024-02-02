@@ -13,6 +13,11 @@
 
 package com.baidu.bifromq.mqtt.utils;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.StandardCharsets;
+
 public class MQTTUtf8Util {
     private static final int MAX_STRING_LENGTH = 65535; // MQTT-1.5.3
 
@@ -45,6 +50,26 @@ public class MQTTUtf8Util {
             cl = cr;
         }
         return true;
+    }
+
+    public static boolean isValidUTF8Payload(ByteBuffer payload) {
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+        try {
+            CharBuffer charBuffer = decoder.decode(payload);
+            for (int i = 0; i < charBuffer.length(); i++) {
+                char ch = charBuffer.get(i);
+                if (isUnacceptableChar(ch)) {
+                    return false;
+                }
+            }
+        } catch (Throwable e) {
+            return false;
+        }
+        return true;
+    }
+
+    public static boolean isValidUTF8Payload(byte[] payload) {
+        return isValidUTF8Payload(ByteBuffer.wrap(payload));
     }
 
     private static boolean isUnacceptableChar(char ch) {

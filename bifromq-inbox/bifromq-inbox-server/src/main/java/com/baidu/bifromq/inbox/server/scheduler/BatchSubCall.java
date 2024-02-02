@@ -46,15 +46,17 @@ public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     @Override
     protected RWCoProcInput makeBatch(Iterator<SubRequest> subRequestIterator) {
         BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder();
-        subRequestIterator.forEachRemaining(request -> reqBuilder.addParams(BatchSubRequest.Params.newBuilder()
-            .setTenantId(request.getTenantId())
-            .setInboxId(request.getInboxId())
-            .setIncarnation(request.getIncarnation())
-            .setVersion(request.getVersion())
-            .setTopicFilter(request.getTopicFilter())
-            .setSubQoS(request.getSubQoS())
-            .setNow(request.getNow())
-            .build()));
+        subRequestIterator.forEachRemaining(request -> {
+            BatchSubRequest.Params.Builder paramsBuilder = BatchSubRequest.Params.newBuilder()
+                .setTenantId(request.getTenantId())
+                .setInboxId(request.getInboxId())
+                .setIncarnation(request.getIncarnation())
+                .setVersion(request.getVersion())
+                .setTopicFilter(request.getTopicFilter())
+                .setOption(request.getOption())
+                .setNow(request.getNow());
+            reqBuilder.addParams(paramsBuilder.build());
+        });
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()

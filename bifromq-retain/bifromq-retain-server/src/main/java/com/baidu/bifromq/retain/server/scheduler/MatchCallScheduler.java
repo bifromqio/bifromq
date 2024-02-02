@@ -23,15 +23,13 @@ import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.retain.rpc.proto.MatchReply;
-import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class MatchCallScheduler extends QueryCallScheduler<MatchRequest, MatchReply> implements IMatchCallScheduler {
+public class MatchCallScheduler extends QueryCallScheduler<MatchCall, MatchCallResult> implements IMatchCallScheduler {
     public MatchCallScheduler(IBaseKVStoreClient retainStoreClient) {
         super("retain_server_match_batcher", retainStoreClient,
             Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
@@ -39,24 +37,24 @@ public class MatchCallScheduler extends QueryCallScheduler<MatchRequest, MatchRe
     }
 
     @Override
-    protected Batcher<MatchRequest, MatchReply, QueryCallBatcherKey> newBatcher(String name,
-                                                                                long tolerableLatencyNanos,
-                                                                                long burstLatencyNanos,
-                                                                                QueryCallBatcherKey batcherKey) {
+    protected Batcher<MatchCall, MatchCallResult, QueryCallBatcherKey> newBatcher(String name,
+                                                                                  long tolerableLatencyNanos,
+                                                                                  long burstLatencyNanos,
+                                                                                  QueryCallBatcherKey batcherKey) {
         return new MatchCallBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
     }
 
     @Override
-    protected int selectQueue(MatchRequest request) {
+    protected int selectQueue(MatchCall request) {
         return ThreadLocalRandom.current().nextInt(5);
     }
 
     @Override
-    protected ByteString rangeKey(MatchRequest request) {
-        return tenantNS(request.getTenantId());
+    protected ByteString rangeKey(MatchCall request) {
+        return tenantNS(request.tenantId());
     }
 
-    public static class MatchCallBatcher extends QueryCallBatcher<MatchRequest, MatchReply> {
+    public static class MatchCallBatcher extends QueryCallBatcher<MatchCall, MatchCallResult> {
 
         protected MatchCallBatcher(QueryCallBatcherKey batcherKey,
                                    String name,
@@ -67,7 +65,7 @@ public class MatchCallScheduler extends QueryCallScheduler<MatchRequest, MatchRe
         }
 
         @Override
-        protected IBatchCall<MatchRequest, MatchReply, QueryCallBatcherKey> newBatch() {
+        protected IBatchCall<MatchCall, MatchCallResult, QueryCallBatcherKey> newBatch() {
             return new BatchMatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }

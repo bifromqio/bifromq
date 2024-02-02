@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.mqtt.inbox;
 
+import static com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.ERROR;
+import static com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.OK;
+import static java.util.Collections.emptyMap;
+
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
@@ -32,26 +36,22 @@ import com.baidu.bifromq.type.SubInfo;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import io.reactivex.rxjava3.core.Observable;
-import lombok.extern.slf4j.Slf4j;
-
-import java.util.ArrayList;
-import java.util.Iterator;
+import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-
-import static java.util.Collections.emptyMap;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class MqttBrokerClient implements IMqttBrokerClient {
     private final AtomicBoolean hasStopped = new AtomicBoolean();
     private final IRPCClient rpcClient;
     private final Set<String> mqttBrokers;
+    private final Disposable disposable;
 
     MqttBrokerClient(MqttBrokerClientBuilder builder) {
         this.rpcClient = IRPCClient.newBuilder()
@@ -62,10 +62,11 @@ final class MqttBrokerClient implements IMqttBrokerClient {
             .crdtService(builder.crdtService)
             .build();
         this.mqttBrokers = ConcurrentHashMap.newKeySet();
-        this.rpcClient.serverList().subscribe(servers -> {
-            mqttBrokers.clear();
-            mqttBrokers.addAll(servers.keySet());
-        });
+        disposable = this.rpcClient.serverList()
+            .subscribe(servers -> {
+                mqttBrokers.clear();
+                mqttBrokers.addAll(servers.keySet());
+            });
     }
 
     public IDeliverer open(String delivererKey) {
@@ -89,59 +90,52 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     }
 
     @Override
-    public CompletableFuture<MqttSubResult> sub(long reqId, String tenantId, String inboxId,
-                                                String topicFilter, QoS qos) {
-        List<CompletableFuture<SubReply>> futures = new ArrayList<>();
-        Iterator<String> itr = mqttBrokers.iterator();
-        while (itr.hasNext()) {
-            futures.add(rpcClient.invoke(tenantId, itr.next(), SubRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setTenantId(tenantId)
-                            .setInboxId(inboxId)
-                            .setTopicFilter(topicFilter)
-                            .setSubQoS(qos)
-                            .build(),
-                    OnlineInboxBrokerGrpc.getSubMethod()));
-        }
+    public CompletableFuture<SubReply> sub(long reqId, String tenantId, String inboxId,
+                                           String topicFilter, QoS qos) {
+        // TODO: lookup session dict to find the target broker instead of broadcasting
+        List<CompletableFuture<SubReply>> futures = mqttBrokers.stream()
+            .map(broker -> rpcClient.invoke(tenantId, broker, SubRequest.newBuilder()
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setInboxId(inboxId)
+                .setTopicFilter(topicFilter)
+                .setSubQoS(qos)
+                .build(), OnlineInboxBrokerGrpc.getSubMethod())).toList();
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
-                .thenApply(v -> {
-                    boolean allOfSub = futures.stream()
-                            .map(CompletableFuture::join)
-                            .map(SubReply::getResult)
-                            .anyMatch(Boolean::booleanValue);
-                    if (allOfSub) {
-                        return MqttSubResult.OK;
-                    }else {
-                        return MqttSubResult.ERROR;
-                    }
-                });
+            .thenApply(v -> {
+                boolean allOfSub = futures.stream()
+                    .map(CompletableFuture::join)
+                    .map(SubReply::getResult)
+                    .anyMatch(r -> r == OK);
+                if (allOfSub) {
+                    return SubReply.newBuilder().setReqId(reqId).setResult(OK).build();
+                } else {
+                    return SubReply.newBuilder().setReqId(reqId).setResult(ERROR).build();
+                }
+            });
     }
 
     @Override
-    public CompletableFuture<MqttUnsubResult> unsub(long reqId, String tenantId, String inboxId, String topicFilter) {
-        List<CompletableFuture<UnsubReply>> futures = new ArrayList<>();
-        Iterator<String> itr = mqttBrokers.iterator();
-        while (itr.hasNext()) {
-            futures.add(rpcClient.invoke(tenantId, itr.next(), UnsubRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setTenantId(tenantId)
-                            .setInboxId(inboxId)
-                            .setTopicFilter(topicFilter)
-                            .build(),
-                    OnlineInboxBrokerGrpc.getUnsubMethod()));
-        }
+    public CompletableFuture<UnsubReply> unsub(long reqId, String tenantId, String inboxId, String topicFilter) {
+        // TODO: lookup session dict registry to find the target broker instead of broadcasting
+        List<CompletableFuture<UnsubReply>> futures = mqttBrokers.stream()
+            .map(broker -> rpcClient.invoke(tenantId, broker, UnsubRequest.newBuilder()
+                    .setReqId(reqId)
+                    .setTenantId(tenantId)
+                    .setInboxId(inboxId)
+                    .setTopicFilter(topicFilter)
+                    .build(),
+                OnlineInboxBrokerGrpc.getUnsubMethod())).toList();
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
-                .thenApply(v -> {
-                    Optional<UnsubReply.Result> allOfUnsub = futures.stream()
-                            .map(CompletableFuture::join)
-                            .map(UnsubReply::getResult)
-                            .max(Enum::compareTo);
-                    if (allOfUnsub.isPresent() && allOfUnsub.get() == UnsubReply.Result.OK) {
-                        return MqttUnsubResult.OK;
-                    }else {
-                        return MqttUnsubResult.ERROR;
-                    }
-                });
+            .thenApply(v -> {
+                boolean success = futures.stream()
+                    .map(CompletableFuture::join)
+                    .map(UnsubReply::getResult)
+                    .anyMatch(r -> r == UnsubReply.Result.OK || r == UnsubReply.Result.NO_SUB);
+                return UnsubReply.newBuilder()
+                    .setResult(success ? UnsubReply.Result.OK : UnsubReply.Result.ERROR)
+                    .build();
+            });
     }
 
     private class DeliveryPipeline implements IDeliverer {
@@ -174,6 +168,7 @@ final class MqttBrokerClient implements IMqttBrokerClient {
 
         @Override
         public void close() {
+            disposable.dispose();
             ppln.close();
         }
     }

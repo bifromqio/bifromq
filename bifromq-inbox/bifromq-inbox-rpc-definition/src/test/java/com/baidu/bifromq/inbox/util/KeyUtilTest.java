@@ -13,7 +13,9 @@
 
 package com.baidu.bifromq.inbox.util;
 
+import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxKey;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.google.protobuf.ByteString;
@@ -29,8 +31,13 @@ public class KeyUtilTest {
         ByteString inboxPrefix = KeyUtil.inboxPrefix(tenantId, inboxId);
         ByteString inboxKeyPrefix = KeyUtil.inboxKeyPrefix(tenantId, inboxId, incarnation);
         ByteString qos0MsgKey = KeyUtil.qos0InboxMsgKey(inboxKeyPrefix, 1);
-        ByteString qos1MsgKey = KeyUtil.qos1InboxMsgKey(inboxKeyPrefix, 1);
-        ByteString qos2InboxIndex = KeyUtil.qos2InboxIndex(inboxKeyPrefix, 1);
+        ByteString bufferMsgKey = KeyUtil.bufferMsgKey(inboxKeyPrefix, 1);
+
+        assertFalse(isInboxKey(tenantPrefix));
+        assertTrue(isInboxKey(inboxPrefix));
+        assertTrue(isInboxKey(inboxKeyPrefix));
+        assertTrue(isInboxKey(qos0MsgKey));
+        assertTrue(isInboxKey(bufferMsgKey));
 
         assertTrue(inboxPrefix.startsWith(tenantPrefix));
         assertTrue(inboxKeyPrefix.startsWith(inboxPrefix));
@@ -54,21 +61,12 @@ public class KeyUtilTest {
         assertEquals(KeyUtil.parseIncarnation(qos0MsgKey), incarnation);
         assertEquals(KeyUtil.parseInboxKeyPrefix(qos0MsgKey), inboxKeyPrefix);
 
-        assertTrue(KeyUtil.isQoS1MessageKey(qos1MsgKey));
-        assertEquals(KeyUtil.parseSeq(inboxKeyPrefix, qos1MsgKey), 1);
-        assertEquals(KeyUtil.parseTenantId(qos1MsgKey), tenantId);
-        assertEquals(KeyUtil.parseInboxId(qos1MsgKey), inboxId);
-        assertEquals(KeyUtil.parseInboxPrefix(qos1MsgKey), inboxPrefix);
-        assertEquals(KeyUtil.parseIncarnation(qos1MsgKey), incarnation);
-        assertEquals(KeyUtil.parseInboxKeyPrefix(qos1MsgKey), inboxKeyPrefix);
-
-        assertTrue(KeyUtil.isQoS2MessageIndexKey(qos2InboxIndex));
-        assertTrue(KeyUtil.isQoS2MessageIndexKey(qos2InboxIndex, inboxKeyPrefix));
-        assertEquals(KeyUtil.parseQoS2Index(inboxKeyPrefix, qos2InboxIndex), 1);
-        assertEquals(KeyUtil.parseTenantId(qos2InboxIndex), tenantId);
-        assertEquals(KeyUtil.parseInboxId(qos2InboxIndex), inboxId);
-        assertEquals(KeyUtil.parseInboxPrefix(qos2InboxIndex), inboxPrefix);
-        assertEquals(KeyUtil.parseIncarnation(qos2InboxIndex), incarnation);
-        assertEquals(KeyUtil.parseInboxKeyPrefix(qos2InboxIndex), inboxKeyPrefix);
+        assertTrue(KeyUtil.isBufferMessageKey(bufferMsgKey));
+        assertEquals(KeyUtil.parseSeq(inboxKeyPrefix, bufferMsgKey), 1);
+        assertEquals(KeyUtil.parseTenantId(bufferMsgKey), tenantId);
+        assertEquals(KeyUtil.parseInboxId(bufferMsgKey), inboxId);
+        assertEquals(KeyUtil.parseInboxPrefix(bufferMsgKey), inboxPrefix);
+        assertEquals(KeyUtil.parseIncarnation(bufferMsgKey), incarnation);
+        assertEquals(KeyUtil.parseInboxKeyPrefix(bufferMsgKey), inboxKeyPrefix);
     }
 }

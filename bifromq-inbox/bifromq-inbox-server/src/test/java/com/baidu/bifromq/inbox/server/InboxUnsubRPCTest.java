@@ -34,6 +34,7 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
@@ -130,6 +131,8 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
+        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
+            .setResult(MatchReply.Result.OK).build()));
 
         String topicFilter = "/a/b/c";
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
@@ -227,6 +230,8 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
+        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
+            .setResult(MatchReply.Result.OK).build()));
         SubReply subReply = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -299,6 +304,10 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
+        when(distClient.match(anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
+            .setResult(MatchReply.Result.OK).build()));
 
         String topicFilter = "/a/b/c";
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()

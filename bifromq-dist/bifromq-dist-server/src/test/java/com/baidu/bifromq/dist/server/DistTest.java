@@ -18,10 +18,13 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -77,8 +80,15 @@ public class DistTest extends DistServiceTest {
                 .putMetadata("userId", "user" + i)
                 .build();
             try {
-                distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
+                DistResult result = distClient().pub(reqId, "/sport/tennis" + i,
+                        Message.newBuilder()
+                            .setPubQoS(QoS.AT_LEAST_ONCE)
+                            .setPayload(payload)
+                            .setExpiryInterval(Integer.MAX_VALUE)
+                            .build(),
+                        clientInfo)
                     .join();
+                assertEquals(result, DistResult.NO_MATCH);
             } catch (Throwable e) {
                 fail();
             } finally {
@@ -117,8 +127,14 @@ public class DistTest extends DistServiceTest {
                 .putMetadata("userId", "user" + i)
                 .build();
             try {
-                distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
+                DistResult result = distClient().pub(reqId, "/sport/tennis" + i,
+                        Message.newBuilder()
+                            .setPubQoS(QoS.AT_LEAST_ONCE)
+                            .setPayload(payload)
+                            .setExpiryInterval(Integer.MAX_VALUE)
+                            .build(), clientInfo)
                     .join();
+                assertEquals(result, DistResult.OK);
             } catch (Throwable e) {
                 fail();
             } finally {
@@ -159,8 +175,14 @@ public class DistTest extends DistServiceTest {
                 .putMetadata("userId", "user" + i)
                 .build();
             try {
-                distClient().pub(reqId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, clientInfo)
+                DistResult result = distClient().pub(reqId, "sport/tennis" + i, Message.newBuilder()
+                        .setPubQoS(QoS.AT_LEAST_ONCE)
+                        .setPayload(payload)
+                        .setTimestamp(HLC.INST.getPhysical())
+                        .setExpiryInterval(Integer.MAX_VALUE)
+                        .build(), clientInfo)
                     .join();
+                assertEquals(result, DistResult.OK);
             } catch (Throwable e) {
                 fail();
             } finally {
@@ -202,7 +224,12 @@ public class DistTest extends DistServiceTest {
             .putMetadata("userId", "pubUser")
             .build();
         for (int i = 0; i < totalPub; i++) {
-            distClient().pub(reqId, "/sport/tennis", QoS.AT_LEAST_ONCE, payload, Integer.MAX_VALUE, pubClient).join();
+            DistResult result = distClient().pub(reqId, "/sport/tennis", Message.newBuilder()
+                .setPubQoS(QoS.AT_LEAST_ONCE)
+                .setPayload(payload)
+                .setExpiryInterval(Integer.MAX_VALUE)
+                .build(), pubClient).join();
+            assertEquals(result, DistResult.OK);
         }
 
         Thread.sleep(100);

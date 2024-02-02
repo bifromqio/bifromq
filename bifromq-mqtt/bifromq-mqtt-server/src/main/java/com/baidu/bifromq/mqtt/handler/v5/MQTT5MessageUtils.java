@@ -13,6 +13,13 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CONTENT_TYPE;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CORRELATION_DATA;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.RESPONSE_TOPIC;
+
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -21,94 +28,126 @@ import com.baidu.bifromq.type.UserProperties;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
-import io.netty.handler.codec.mqtt.MqttFixedHeader;
-import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
-import io.netty.handler.codec.mqtt.MqttMessageType;
 import io.netty.handler.codec.mqtt.MqttProperties;
+import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
-import io.netty.handler.codec.mqtt.MqttSubAckMessage;
-import io.netty.handler.codec.mqtt.MqttSubAckPayload;
-import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import java.util.List;
 import java.util.Optional;
 
 public class MQTT5MessageUtils {
 
+    @SuppressWarnings("unchecked")
+    static UserProperties toUserProperties(MqttProperties mqttProperties) {
+        UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
+        List<MqttProperties.UserProperty> userPropertyList = (List<MqttProperties.UserProperty>) mqttProperties
+            .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value());
+        if (!userPropertyList.isEmpty()) {
+            userPropertyList.forEach(up -> userPropsBuilder.addUserProperties(
+                StringPair.newBuilder().setKey(up.value().key).setValue(up.value().value).build()));
+        }
+        return userPropsBuilder.build();
+    }
+
+
+    static boolean isUTF8Payload(MqttProperties mqttProperties) {
+        return packetFormatIndicator(mqttProperties).map(i -> i == 1).orElse(false);
+    }
+
+    static Optional<Integer> receiveMaximum(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.RECEIVE_MAXIMUM);
+    }
+
+    static Optional<Integer> topicAliasMaximum(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM);
+    }
+
+    static Optional<Integer> topicAlias(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS);
+    }
+
+    static Optional<Integer> packetFormatIndicator(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, PAYLOAD_FORMAT_INDICATOR);
+    }
+
+    static Optional<Integer> messageExpiryInterval(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.PUBLICATION_EXPIRY_INTERVAL);
+    }
+
+    static Optional<String> contentType(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, CONTENT_TYPE);
+    }
+
+    static Optional<String> responseTopic(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, RESPONSE_TOPIC);
+    }
+
+    static Optional<Integer> integerMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {
+        return Optional.ofNullable((MqttProperties.IntegerProperty) mqttProperties.getProperty(type.value()))
+            .map(MqttProperties.MqttProperty::value);
+    }
+
+    static Optional<String> stringMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {
+        return Optional.ofNullable((MqttProperties.StringProperty) mqttProperties.getProperty(type.value()))
+            .map(MqttProperties.MqttProperty::value);
+    }
+
+    static Optional<ByteString> binaryMqttProperty(MqttProperties mqttProperties,
+                                                   MqttProperties.MqttPropertyType type) {
+        return Optional.ofNullable((MqttProperties.BinaryProperty) mqttProperties.getProperty(type.value()))
+            .map(MqttProperties.MqttProperty::value)
+            .map(UnsafeByteOperations::unsafeWrap);
+    }
+
     static LWT toWillMessage(MqttConnectMessage connMsg) {
         LWT.Builder lwtBuilder = LWT.newBuilder()
             .setTopic(connMsg.payload().willTopic())
             .setRetain(connMsg.variableHeader().isWillRetain())
-            .setDelaySeconds(Optional.ofNullable(
-                    (MqttProperties.IntegerProperty) connMsg.payload().willProperties()
-                        .getProperty(MqttProperties.MqttPropertyType.WILL_DELAY_INTERVAL.value()))
-                .map(MqttProperties.MqttProperty::value).orElse(0));
+            .setDelaySeconds(integerMqttProperty(connMsg.payload().willProperties(),
+                MqttProperties.MqttPropertyType.WILL_DELAY_INTERVAL).orElse(0));
+        Message willMsg = toMessage(0,
+            MqttQoS.valueOf(connMsg.variableHeader().willQos()),
+            connMsg.variableHeader().isWillRetain(),
+            connMsg.payload().willProperties(),
+            UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()));
+        return lwtBuilder.setMessage(willMsg).build();
+    }
+
+    static Message toMessage(MqttPublishMessage pubMsg) {
+        return toMessage(pubMsg.variableHeader().packetId(),
+            pubMsg.fixedHeader().qosLevel(),
+            pubMsg.fixedHeader().isRetain(),
+            pubMsg.variableHeader().properties(),
+            toRetainedByteBuffer(pubMsg.payload()));
+    }
+
+    static Message toMessage(long packetId,
+                             MqttQoS pubQoS,
+                             boolean isRetain,
+                             MqttProperties mqttProperties,
+                             ByteString payload) {
         Message.Builder msgBuilder = Message.newBuilder()
-            .setPubQoS(QoS.forNumber(connMsg.variableHeader().willQos()))
-            .setPayload(UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()));
+            .setMessageId(packetId)
+            .setPubQoS(QoS.forNumber(pubQoS.value()))
+            .setPayload(payload)
+            .setTimestamp(HLC.INST.getPhysical())
+            // MessageExpiryInterval
+            .setExpiryInterval(messageExpiryInterval(mqttProperties).orElse(Integer.MAX_VALUE))
+            .setIsRetain(isRetain);
         // PacketFormatIndicator
-        Optional<Integer> payloadFormatIndicator = Optional.ofNullable(
-                (MqttProperties.IntegerProperty) connMsg.payload().willProperties()
-                    .getProperty(MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR.value()))
-            .map(MqttProperties.MqttProperty::value);
-        payloadFormatIndicator.ifPresent(integer -> msgBuilder.setIsUTF8String(integer == 1));
-        // MessageExpiryInterval
-        Optional<Integer> messageExpiryInterval = Optional.ofNullable(
-                (MqttProperties.IntegerProperty) connMsg.payload().willProperties()
-                    .getProperty(MqttProperties.MqttPropertyType.PUBLICATION_EXPIRY_INTERVAL.value()))
-            .map(MqttProperties.MqttProperty::value);
-        messageExpiryInterval.ifPresent(msgBuilder::setExpiryInterval);
+        packetFormatIndicator(mqttProperties).ifPresent(integer -> msgBuilder.setIsUTF8String(integer == 1));
         // ContentType
-        Optional<String> contentType = Optional.ofNullable(
-                (MqttProperties.StringProperty) connMsg.payload().willProperties()
-                    .getProperty(MqttProperties.MqttPropertyType.CONTENT_TYPE.value()))
-            .map(MqttProperties.MqttProperty::value);
-        contentType.ifPresent(msgBuilder::setContentType);
+        contentType(mqttProperties).ifPresent(msgBuilder::setContentType);
         // ResponseTopic
-        Optional<String> responseTopic = Optional.ofNullable(
-                (MqttProperties.StringProperty) connMsg.payload().willProperties()
-                    .getProperty(MqttProperties.MqttPropertyType.RESPONSE_TOPIC.value()))
-            .map(MqttProperties.MqttProperty::value);
-        responseTopic.ifPresent(msgBuilder::setResponseTopic);
+        responseTopic(mqttProperties).ifPresent(msgBuilder::setResponseTopic);
         // CorrelationData
-        Optional<ByteString> correlationData = Optional.ofNullable(
-                (MqttProperties.BinaryProperty) connMsg.payload().willProperties()
-                    .getProperty(MqttProperties.MqttPropertyType.CORRELATION_DATA.value()))
-            .map(MqttProperties.MqttProperty::value)
-            .map(UnsafeByteOperations::unsafeWrap);
+        Optional<ByteString> correlationData =
+            binaryMqttProperty(mqttProperties, CORRELATION_DATA);
         correlationData.ifPresent(msgBuilder::setCorrelationData);
         // UserProperty
-        List<MqttProperties.UserProperty> userPropertyList =
-            (List<MqttProperties.UserProperty>) connMsg.payload().willProperties()
-                .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value());
-        if (!userPropertyList.isEmpty()) {
-            UserProperties.Builder userProperties = UserProperties.newBuilder();
-            userPropertyList.forEach(
-                up -> StringPair.newBuilder().setKey(up.value().key).setValue(up.value().value).build());
-            msgBuilder.setUserProperties(userProperties.build());
+        UserProperties userProperties = toUserProperties(mqttProperties);
+        if (userProperties.getUserPropertiesCount() > 0) {
+            msgBuilder.setUserProperties(userProperties);
         }
-        return lwtBuilder.setMessage(msgBuilder).build();
-    }
-
-    static MqttSubAckMessage toMqttSubAckMessage(int packetId, List<Integer> ackedQoSs) {
-        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.SUBACK,
-            false,
-            MqttQoS.AT_MOST_ONCE,
-            false,
-            0);
-        MqttMessageIdVariableHeader mqttMessageIdVariableHeader = MqttMessageIdVariableHeader.from(packetId);
-        io.netty.handler.codec.mqtt.MqttSubAckPayload mqttSubAckPayload = new MqttSubAckPayload(ackedQoSs);
-        return new MqttSubAckMessage(mqttFixedHeader,
-            mqttMessageIdVariableHeader,
-            mqttSubAckPayload);
-    }
-
-    static MqttUnsubAckMessage toMqttUnsubAckMessage(int messageId) {
-        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.UNSUBACK,
-            false,
-            MqttQoS.AT_MOST_ONCE,
-            false,
-            0);
-        MqttMessageIdVariableHeader mqttMessageIdVariableHeader = MqttMessageIdVariableHeader.from(messageId);
-        return new MqttUnsubAckMessage(mqttFixedHeader, mqttMessageIdVariableHeader);
+        return msgBuilder.build();
     }
 }

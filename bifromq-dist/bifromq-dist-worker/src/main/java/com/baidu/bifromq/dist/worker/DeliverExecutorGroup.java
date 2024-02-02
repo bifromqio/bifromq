@@ -17,11 +17,11 @@ import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static com.google.common.hash.Hashing.murmur3_128;
 
+import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.entity.NormalMatching;
-import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -48,17 +48,17 @@ class DeliverExecutorGroup {
     private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
     private final IEventCollector eventCollector;
     private final IDistClient distClient;
-    private final IDeliveryScheduler scheduler;
+    private final IMessageDeliverer deliverer;
     private final DeliverExecutor[] fanoutExecutors;
 
-    DeliverExecutorGroup(IDeliveryScheduler scheduler,
+    DeliverExecutorGroup(IMessageDeliverer deliverer,
                          IEventCollector eventCollector,
                          IDistClient distClient,
                          int groupSize) {
         int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
         this.eventCollector = eventCollector;
         this.distClient = distClient;
-        this.scheduler = scheduler;
+        this.deliverer = deliverer;
         orderedSharedMatching = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
@@ -73,7 +73,7 @@ class DeliverExecutorGroup {
                 .build());
         fanoutExecutors = new DeliverExecutor[groupSize];
         for (int i = 0; i < groupSize; i++) {
-            fanoutExecutors[i] = new DeliverExecutor(i, scheduler, eventCollector, distClient);
+            fanoutExecutors[i] = new DeliverExecutor(i, deliverer, eventCollector, distClient);
         }
     }
 

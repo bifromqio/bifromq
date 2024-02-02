@@ -15,11 +15,11 @@ package com.baidu.bifromq.retain.client;
 
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
+import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
 public interface IRetainClient extends IConnectable {
@@ -27,7 +27,7 @@ public interface IRetainClient extends IConnectable {
         return new RetainClientBuilder();
     }
 
-    CompletableFuture<MatchReply> match(long reqId, String tenantId, String topicFilter, int limit);
+    CompletableFuture<MatchReply> match(MatchRequest request);
 
     CompletableFuture<RetainReply> retain(long reqId,
                                           String topic,

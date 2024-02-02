@@ -26,7 +26,7 @@ class InboxReader implements IInboxClient.IInboxReader {
     private final long sessionId = HLC.INST.get();
     private int latestBufferCapacity = 100;
     private volatile long lastFetchQoS0Seq = -1;
-    private volatile long lastFetchQoS1Seq = -1;
+    private volatile long lastFetchSendBufferSeq = -1;
     private volatile long lastFetchQoS2Seq = -1;
 
     public InboxReader(String inboxId,
@@ -41,14 +41,11 @@ class InboxReader implements IInboxClient.IInboxReader {
     public void fetch(Consumer<Fetched> consumer) {
         ppln.fetch(sessionId, inboxId, incarnation, (fetched) -> {
             if (fetched.getResult() == Fetched.Result.OK) {
-                if (fetched.getQos0SeqCount() > 0) {
-                    lastFetchQoS0Seq = fetched.getQos0Seq(fetched.getQos0SeqCount() - 1);
+                if (fetched.getQos0MsgCount() > 0) {
+                    lastFetchQoS0Seq = fetched.getQos0Msg(fetched.getQos0MsgCount() - 1).getSeq();
                 }
-                if (fetched.getQos1MsgCount() > 0) {
-                    lastFetchQoS1Seq = fetched.getQos1Seq(fetched.getQos1MsgCount() - 1);
-                }
-                if (fetched.getQos2SeqCount() > 0) {
-                    lastFetchQoS2Seq = fetched.getQos2Seq(fetched.getQos2SeqCount() - 1);
+                if (fetched.getSendBufferMsgCount() > 0) {
+                    lastFetchSendBufferSeq = fetched.getSendBufferMsg(fetched.getSendBufferMsgCount() - 1).getSeq();
                 }
             }
             consumer.accept(fetched);
@@ -59,8 +56,7 @@ class InboxReader implements IInboxClient.IInboxReader {
     public void hint(int bufferCapacity) {
         latestBufferCapacity = bufferCapacity;
         try {
-            ppln.hint(sessionId, inboxId, incarnation,
-                bufferCapacity, lastFetchQoS0Seq, lastFetchQoS1Seq, lastFetchQoS2Seq);
+            ppln.hint(sessionId, inboxId, incarnation, bufferCapacity, lastFetchQoS0Seq, lastFetchSendBufferSeq);
         } catch (Throwable e) {
             log.warn("Failed to send hint: inboxId={}", inboxId, e);
         }

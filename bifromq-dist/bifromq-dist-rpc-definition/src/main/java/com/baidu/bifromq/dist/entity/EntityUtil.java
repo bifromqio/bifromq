@@ -30,7 +30,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 public class EntityUtil {
-    private static final ByteString INFIX_SUBINFO_INFIX = copyFromUtf8("0");
     private static final ByteString INFIX_MATCH_RECORD_INFIX = copyFromUtf8("1");
     private static final ByteString INFIX_UPPERBOUND_INFIX = copyFromUtf8("2");
     private static final ByteString FLAG_NORMAL = copyFromUtf8("0");

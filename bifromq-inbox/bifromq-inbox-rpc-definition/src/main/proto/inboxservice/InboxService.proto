@@ -4,6 +4,8 @@ import "commontype/ClientInfo.proto";
 import "commontype/SubInfo.proto";
 import "commontype/TopicMessage.proto";
 import "inboxservice/InboxFetched.proto";
+import "inboxservice/LWT.proto";
+import "inboxservice/TopicFilterOption.proto";
 import "inboxservice/InboxCoProc.proto";
 
 option java_multiple_files = true;
@@ -160,7 +162,7 @@ message SubRequest {
   uint64 incarnation = 4;
   uint64 version = 5;
   string topicFilter = 6;
-  commontype.QoS subQoS = 7;
+  TopicFilterOption option = 7;
   uint64 now = 8;
 }
 
@@ -228,8 +230,7 @@ message InboxFetchHint {
   uint64 incarnation = 3;
   int32 capacity = 4;
   uint64 lastFetchQoS0Seq = 5;
-  uint64 lastFetchQoS1Seq = 6;
-  uint64 lastFetchQoS2Seq = 7;
+  uint64 lastFetchSendBufferSeq = 6;
 }
 
 message InboxFetched{
@@ -245,8 +246,8 @@ message CommitRequest {
   string inboxId = 3;
   uint64 incarnation = 4;
   uint64 version = 5;
-  commontype.QoS qos = 6;
-  uint64 upToSeq = 7;
+  optional uint64 qos0UpToSeq = 6;
+  optional uint64 sendBufferUpToSeq = 7;
   uint64 now = 8;
 }
 

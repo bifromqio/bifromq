@@ -30,7 +30,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-scheduler</artifactId>
+            <artifactId>bifromq-deliverer</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -55,10 +55,6 @@
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-setting-provider-helper</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-sub-broker-helper</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

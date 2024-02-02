@@ -1,0 +1,15 @@
+syntax = "proto3";
+import "commontype/TopicMessage.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.storage.proto";
+option java_outer_classname = "LWTProtos";
+
+package inboxservice;
+
+message LWT{
+  string topic = 1;
+  commontype.Message message = 2;
+  uint32 delaySeconds = 3;
+  bool retain = 4;
+}

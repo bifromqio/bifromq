@@ -17,7 +17,7 @@ import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 
-import static com.baidu.bifromq.mqtt.utils.TopicUtil.isValidTopicFilter;
+import static com.baidu.bifromq.util.TopicUtil.isValidTopicFilter;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;

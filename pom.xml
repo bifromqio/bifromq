@@ -30,11 +30,13 @@
         <module>base-hookloader</module>
 
         <module>bifromq-common-type</module>
+        <module>bifromq-util</module>
         <module>bifromq-metrics</module>
         <module>bifromq-sysprops</module>
         <module>bifromq-plugin</module>
 
         <module>bifromq-dist</module>
+        <module>bifromq-deliverer</module>
         <module>bifromq-retain</module>
         <module>bifromq-inbox</module>
         <module>bifromq-session-dict</module>
@@ -242,6 +244,11 @@
             <!-- common type -->
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-util</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-common-type</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -302,6 +309,12 @@
                 <artifactId>bifromq-plugin-manager</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- deliverer -->
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-deliverer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <!-- retain -->
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
@@ -328,7 +341,7 @@
                 <artifactId>bifromq-retain-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- offline inbox -->
+            <!-- inbox -->
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-inbox-client</artifactId>

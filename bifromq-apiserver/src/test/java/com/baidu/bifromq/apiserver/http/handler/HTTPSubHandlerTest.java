@@ -36,7 +36,6 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.mqtt.inbox.MqttSubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.QoS;
@@ -82,7 +81,10 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
 
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(
+                com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.newBuilder()
+                    .setResult(com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.OK)
+                    .build()));
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<Long> reqIdCap = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<String> tenantIdCap = ArgumentCaptor.forClass(String.class);
@@ -112,7 +114,9 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(MqttSubResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.newBuilder()
+                .setResult(com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.OK)
+                .build()));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
@@ -162,7 +166,9 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         HTTPSubHandler handler = new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
 
         when(mqttBrokerClient.sub(anyLong(), anyString(), anyString(), anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(MqttSubResult.ERROR));
+            .thenReturn(CompletableFuture.completedFuture(com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.newBuilder()
+                .setResult(com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.ERROR)
+                .build()));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());

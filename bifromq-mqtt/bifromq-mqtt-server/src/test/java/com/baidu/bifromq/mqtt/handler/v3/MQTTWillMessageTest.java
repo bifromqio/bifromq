@@ -28,7 +28,6 @@ import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
@@ -39,8 +38,6 @@ import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.QoS;
-import com.google.protobuf.ByteString;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import java.util.concurrent.TimeUnit;
@@ -112,8 +109,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(CLIENT_CONNECTED, IDLE, PUB_ACTION_DISALLOW);
-        verify(distClient, times(0)).pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
-            any(ClientInfo.class));
+        verify(distClient, times(0)).pub(anyLong(), anyString(), any(), any(ClientInfo.class));
     }
 
     @Test

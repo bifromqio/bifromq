@@ -53,10 +53,11 @@ public class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitRepl
                 .setIncarnation(req.getIncarnation())
                 .setVersion(req.getVersion())
                 .setNow(req.getNow());
-            switch (req.getQos()) {
-                case AT_MOST_ONCE -> paramsBuilder.setQos0UpToSeq(req.getUpToSeq());
-                case AT_LEAST_ONCE -> paramsBuilder.setQos1UpToSeq(req.getUpToSeq());
-                case EXACTLY_ONCE -> paramsBuilder.setQos2UpToSeq(req.getUpToSeq());
+            if (req.hasQos0UpToSeq()) {
+                paramsBuilder.setQos0UpToSeq(req.getQos0UpToSeq());
+            }
+            if (req.hasSendBufferUpToSeq()) {
+                paramsBuilder.setSendBufferUpToSeq(req.getSendBufferUpToSeq());
             }
             reqBuilder.addParams(paramsBuilder.build());
         });

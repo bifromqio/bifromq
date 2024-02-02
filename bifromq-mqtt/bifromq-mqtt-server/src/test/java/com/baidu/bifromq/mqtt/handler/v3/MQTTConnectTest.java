@@ -14,10 +14,10 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
+import static com.baidu.bifromq.plugin.eventcollector.EventType.INBOX_TRANSIENT_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PING_REQ;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SESSION_CHECK_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SESSION_CLEANUP_ERROR;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.SESSION_CREATE_ERROR;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
@@ -121,7 +121,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        verifyEvent(EventType.SESSION_CREATE_ERROR, EventType.CLIENT_CONNECTED);
+        verifyEvent(EventType.INBOX_TRANSIENT_ERROR, EventType.CLIENT_CONNECTED);
     }
 
 
@@ -150,7 +150,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        verifyEvent(SESSION_CREATE_ERROR, EventType.CLIENT_CONNECTED);
+        verifyEvent(INBOX_TRANSIENT_ERROR, EventType.CLIENT_CONNECTED);
     }
 
     @Test

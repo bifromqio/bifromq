@@ -28,7 +28,6 @@ import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.base.Ticker;
 import io.netty.channel.ChannelHandlerContext;
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
@@ -47,11 +46,7 @@ public final class MQTTSessionContext {
     public final IRetainClient retainClient;
     public final ISessionDictClient sessionDictClient;
     public final String serverId;
-    public final int maxResendTimes;
-    public final int resendDelayMillis;
     public final int defaultKeepAliveTimeSeconds;
-    // track under confirming id count per tenantId
-    private final InUseQoS2MessageIds unreleasedQoS2MessageIds;
     private final FutureTracker bgTaskTracker;
     private final Ticker ticker;
 
@@ -63,10 +58,7 @@ public final class MQTTSessionContext {
                        IInboxClient inboxClient,
                        IRetainClient retainClient,
                        ISessionDictClient sessionDictClient,
-                       int maxResendTimes,
-                       int resendDelayMillis,
                        int defaultKeepAliveTimeSeconds,
-                       int qos2ConfirmWindowSeconds,
                        IEventCollector eventCollector,
                        ISettingProvider settingProvider,
                        Ticker ticker) {
@@ -79,9 +71,6 @@ public final class MQTTSessionContext {
         this.inboxClient = inboxClient;
         this.retainClient = retainClient;
         this.sessionDictClient = sessionDictClient;
-        this.unreleasedQoS2MessageIds = new InUseQoS2MessageIds(Duration.ofSeconds(qos2ConfirmWindowSeconds));
-        this.maxResendTimes = maxResendTimes;
-        this.resendDelayMillis = resendDelayMillis;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
         this.bgTaskTracker = new FutureTracker();
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
@@ -134,18 +123,6 @@ public final class MQTTSessionContext {
                 }
             }
         };
-    }
-
-    public void addForConfirming(String tenantId, String channelId, int qos2MessageId) {
-        unreleasedQoS2MessageIds.use(tenantId, channelId, qos2MessageId);
-    }
-
-    public boolean isConfirming(String tenantId, String channelId, int qos2MessageId) {
-        return unreleasedQoS2MessageIds.inUse(tenantId, channelId, qos2MessageId);
-    }
-
-    public void confirm(String tenantId, String channelId, int qos2MessageId) {
-        unreleasedQoS2MessageIds.release(tenantId, channelId, qos2MessageId);
     }
 
     public void addBgTask(Supplier<CompletableFuture<Void>> taskSupplier) {

@@ -295,8 +295,7 @@ public class RetainStoreTest {
                 .setMessageId(System.nanoTime())
                 .setPayload(ByteString.copyFromUtf8(payload))
                 .setTimestamp(timestamp)
-                .setExpireTimestamp(expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE :
-                    timestamp + Duration.ofSeconds(expirySeconds).toMillis())
+                .setExpiryInterval(expirySeconds)
                 .build())
             .setPublisher(ClientInfo.getDefaultInstance())
             .build();

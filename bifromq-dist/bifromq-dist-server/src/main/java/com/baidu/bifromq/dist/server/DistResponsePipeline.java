@@ -27,6 +27,7 @@ import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
+import com.baidu.bifromq.type.PublisherMessagePack;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
@@ -56,19 +57,50 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
         return distCallScheduler.schedule(new DistWorkerCall(tenantId, request.getMessagesList(),
                 callQueueIdx, tenantFanouts.get(tenantId).estimate()))
             .handle((v, e) -> {
+                DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
-                    eventCollector.report(getLocal(DistError.class)
-                        .reqId(request.getReqId())
-                        .messages(request.getMessagesList())
-                        .code(e.getCause().getClass() == ExceedLimitException.class ? DROP_EXCEED_LIMIT : RPC_FAILURE));
+                    if (e.getCause().getClass() == ExceedLimitException.class) {
+                        for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
+                            DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
+                            for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
+                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.EXCEED_LIMIT);
+                            }
+                            replyBuilder.addResults(resultBuilder.build());
+                        }
+                        eventCollector.report(getLocal(DistError.class)
+                            .reqId(request.getReqId())
+                            .messages(request.getMessagesList())
+                            .code(DROP_EXCEED_LIMIT));
+                    } else {
+                        for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
+                            DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
+                            for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
+                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.ERROR);
+                            }
+                            replyBuilder.addResults(resultBuilder.build());
+                        }
+                        eventCollector.report(getLocal(DistError.class)
+                            .reqId(request.getReqId())
+                            .messages(request.getMessagesList())
+                            .code(RPC_FAILURE));
+                    }
                 } else {
                     tenantFanouts.get(tenantId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
+                    for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
+                        DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
+                        for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
+                            int fanout = v.get(topicPack.getTopic());
+                            resultBuilder.putTopic(topicPack.getTopic(),
+                                fanout > 0 ? DistReply.Code.OK : DistReply.Code.NO_MATCH);
+                        }
+                        replyBuilder.addResults(resultBuilder.build());
+                    }
                     eventCollector.report(getLocal(Disted.class)
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())
                         .fanout(v.values().stream().reduce(0, Integer::sum)));
                 }
-                return DistReply.newBuilder().setReqId(request.getReqId()).build();
+                return replyBuilder.build();
             });
     }
 

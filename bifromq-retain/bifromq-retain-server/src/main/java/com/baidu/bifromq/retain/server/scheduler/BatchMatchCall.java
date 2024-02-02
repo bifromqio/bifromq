@@ -23,17 +23,17 @@ import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
-import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.MatchResultPack;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
 
-public class BatchMatchCall extends BatchQueryCall<MatchRequest, MatchReply> {
+public class BatchMatchCall extends BatchQueryCall<MatchCall, MatchCallResult> {
     protected BatchMatchCall(KVRangeId rangeId,
                              IBaseKVStoreClient storeClient,
                              Duration pipelineExpiryTime) {
@@ -41,11 +41,11 @@ public class BatchMatchCall extends BatchQueryCall<MatchRequest, MatchReply> {
     }
 
     @Override
-    protected ROCoProcInput makeBatch(Iterator<MatchRequest> matchRequestIterator) {
+    protected ROCoProcInput makeBatch(Iterator<MatchCall> matchRequestIterator) {
         Map<String, MatchParam.Builder> matchParamBuilders = new HashMap<>(128);
         matchRequestIterator.forEachRemaining(request ->
-            matchParamBuilders.computeIfAbsent(request.getTenantId(), k -> MatchParam.newBuilder())
-                .putTopicFilters(request.getTopicFilter(), request.getLimit()));
+            matchParamBuilders.computeIfAbsent(request.tenantId(), k -> MatchParam.newBuilder())
+                .putTopicFilters(request.topicFilter(), request.limit()));
         long reqId = System.nanoTime();
         BatchMatchRequest.Builder reqBuilder = BatchMatchRequest
             .newBuilder()
@@ -61,31 +61,23 @@ public class BatchMatchCall extends BatchQueryCall<MatchRequest, MatchReply> {
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<MatchRequest, MatchReply, QueryCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<CallTask<MatchCall, MatchCallResult, QueryCallBatcherKey>> batchedTasks,
                                 ROCoProcOutput output) {
-        CallTask<MatchRequest, MatchReply, QueryCallBatcherKey> task;
+        CallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> task;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(MatchReply.newBuilder()
-                .setReqId(task.call.getReqId())
-                .setResult(MatchReply.Result.OK)
-                .addAllMessages(output.getRetainService()
-                    .getBatchMatch()
-                    .getResultPackMap()
-                    .getOrDefault(task.call.getTenantId(),
-                        MatchResultPack.getDefaultInstance())
-                    .getResultsOrDefault(task.call.getTopicFilter(),
-                        MatchResult.getDefaultInstance()).getOk()
-                    .getMessagesList())
-                .build());
+            task.callResult.complete(new MatchCallResult(MatchReply.Result.OK, output.getRetainService()
+                .getBatchMatch()
+                .getResultPackMap()
+                .getOrDefault(task.call.tenantId(),
+                    MatchResultPack.getDefaultInstance())
+                .getResultsOrDefault(task.call.topicFilter(),
+                    MatchResult.getDefaultInstance()).getOk()
+                .getMessagesList()));
         }
-
     }
 
     @Override
-    protected void handleException(CallTask<MatchRequest, MatchReply, QueryCallBatcherKey> callTask, Throwable e) {
-        callTask.callResult.complete(MatchReply.newBuilder()
-            .setReqId(callTask.call.getReqId())
-            .setResult(MatchReply.Result.ERROR)
-            .build());
+    protected void handleException(CallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> callTask, Throwable e) {
+        callTask.callResult.complete(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList()));
     }
 }

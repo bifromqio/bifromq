@@ -43,6 +43,7 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
@@ -61,7 +62,6 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
-import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -92,7 +92,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final IDistClient distClient;
     private final ISettingProvider settingProvider;
     private final ISubBrokerManager subBrokerManager;
-    private final IDeliveryScheduler scheduler;
+    private final IMessageDeliverer deliverer;
     private final SubscriptionCache routeCache;
     private final DeliverExecutorGroup fanoutExecutorGroup;
 
@@ -102,16 +102,16 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             ISettingProvider settingProvider,
                             IDistClient distClient,
                             ISubBrokerManager subBrokerManager,
-                            IDeliveryScheduler scheduler,
+                            IMessageDeliverer deliverer,
                             Executor matchExecutor) {
         this.id = id;
         this.distClient = distClient;
         this.settingProvider = settingProvider;
         this.subBrokerManager = subBrokerManager;
-        this.scheduler = scheduler;
+        this.deliverer = deliverer;
         this.routeCache = new SubscriptionCache(id, readClientProvider, matchExecutor);
         fanoutExecutorGroup =
-            new DeliverExecutorGroup(scheduler, eventCollector, distClient, DIST_FAN_OUT_PARALLELISM.get());
+            new DeliverExecutorGroup(deliverer, eventCollector, distClient, DIST_FAN_OUT_PARALLELISM.get());
     }
 
     @Override

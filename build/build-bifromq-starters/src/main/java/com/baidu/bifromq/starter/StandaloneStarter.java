@@ -286,10 +286,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                         .getRetainStoreConfig()
                         .getWalEngineConfig(), "retain_wal")))
             .build();
-        retainServer = IRetainServer.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedIORPCServerBuilder)
-            .retainStoreClient(retainStoreClient)
-            .build();
         inboxClient = IInboxClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
@@ -340,22 +336,13 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
+            .settingProvider(settingProviderMgr)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
-            .settingProvider(settingProviderMgr)
             .inboxStoreClient(inboxStoreClient)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
-
-        mqttBrokerClient = IMqttBrokerClient.newBuilder()
-            .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
-            .sslContext(clientSslContext)
-            .build();
-
-        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient, inboxClient);
-
         distWorkerClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(clientCrdtService)
@@ -366,7 +353,18 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .getDistWorkerConfig()
                 .getQueryPipelinePerStore())
             .build();
+        mqttBrokerClient = IMqttBrokerClient.newBuilder()
+            .crdtService(clientCrdtService)
+            .executor(MoreExecutors.directExecutor())
+            .sslContext(clientSslContext)
+            .build();
 
+        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient);
+        retainServer = IRetainServer.nonStandaloneBuilder()
+            .rpcServerBuilder(sharedIORPCServerBuilder)
+            .retainStoreClient(retainStoreClient)
+            .subBrokerManager(subBrokerManager)
+            .build();
         distWorker = IDistWorker.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
             .bootstrap(config.isBootstrap())
@@ -426,9 +424,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .readLimit(mqttServerConfig.getMaxConnBandwidth())
             .writeLimit(mqttServerConfig.getMaxConnBandwidth())
             .defaultKeepAliveSeconds(mqttServerConfig.getDefaultKeepAliveSec())
-            .maxBytesInMessage(mqttServerConfig.getMaxMsgByteSize())
-            .maxResendTimes(mqttServerConfig.getMaxResendTimes())
-            .qos2ConfirmWindowSeconds(mqttServerConfig.getQos2ConfirmWindowSec());
+            .maxBytesInMessage(mqttServerConfig.getMaxMsgByteSize());
         if (mqttServerConfig.getTcpListener().isEnable()) {
             brokerBuilder.buildTcpConnListener()
                 .host(mqttServerConfig.getTcpListener().getHost())

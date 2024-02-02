@@ -29,7 +29,7 @@ public class Overflowed extends ClientEvent<Overflowed> {
     private boolean oldest;
     private int dropCount;
 
-    protected QoS qos;
+    protected boolean isQoS0;
 
     @Override
     public EventType type() {
@@ -41,6 +41,6 @@ public class Overflowed extends ClientEvent<Overflowed> {
         super.clone(orig);
         this.oldest = orig.oldest;
         this.dropCount = orig.dropCount;
-        this.qos = orig.qos;
+        this.isQoS0 = orig.isQoS0;
     }
 }

@@ -13,8 +13,13 @@
 
 package com.baidu.bifromq.mqtt.session;
 
+import com.baidu.bifromq.type.ClientInfo;
 import java.util.concurrent.CompletableFuture;
 
 public interface IMQTTSession {
+    String channelId();
+
+    ClientInfo clientInfo();
+
     CompletableFuture<Void> disconnect();
 }

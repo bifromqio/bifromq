@@ -13,48 +13,49 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import io.netty.handler.codec.mqtt.MqttFixedHeader;
-import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
-import io.netty.handler.codec.mqtt.MqttMessageType;
+import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
+
+import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
+import com.baidu.bifromq.type.Message;
+import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
-import io.netty.handler.codec.mqtt.MqttPublishVariableHeader;
 import io.netty.handler.codec.mqtt.MqttQoS;
-import io.netty.handler.codec.mqtt.MqttSubAckMessage;
-import io.netty.handler.codec.mqtt.MqttSubAckPayload;
-import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
-import java.util.List;
 
 public final class MQTT3MessageUtils {
-    static MqttSubAckMessage toMqttSubAckMessage(int packetId, List<Integer> ackedQoSs) {
-        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.SUBACK,
-            false,
-            MqttQoS.AT_MOST_ONCE,
-            false,
-            0);
-        MqttMessageIdVariableHeader mqttMessageIdVariableHeader = MqttMessageIdVariableHeader.from(packetId);
-        MqttSubAckPayload mqttSubAckPayload = new MqttSubAckPayload(ackedQoSs);
-        return new MqttSubAckMessage(mqttFixedHeader,
-            mqttMessageIdVariableHeader,
-            mqttSubAckPayload);
+
+    static Message toMessage(MqttPublishMessage pubMsg) {
+        return toMessage(pubMsg.variableHeader().packetId(),
+            pubMsg.fixedHeader().qosLevel(),
+            pubMsg.fixedHeader().isRetain(),
+            toRetainedByteBuffer(pubMsg.payload()));
     }
 
-    static MqttPublishMessage toDuplicated(MqttPublishMessage mqttMessage) {
-        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.PUBLISH,
-            true,
-            MqttQoS.AT_LEAST_ONCE,
-            mqttMessage.fixedHeader().isRetain(),
-            0);
-        MqttPublishVariableHeader mqttVariableHeader = mqttMessage.variableHeader();
-        return new MqttPublishMessage(mqttFixedHeader, mqttVariableHeader, mqttMessage.payload());
+    static Message toMessage(long packetId,
+                             MqttQoS pubQoS,
+                             boolean isRetain,
+                             ByteString payload) {
+        return Message.newBuilder()
+            .setMessageId(packetId)
+            .setPubQoS(QoS.forNumber(pubQoS.value()))
+            .setPayload(payload)
+            .setTimestamp(HLC.INST.getPhysical())
+            // MessageExpiryInterval
+            .setExpiryInterval(Integer.MAX_VALUE)
+            .setIsRetain(isRetain)
+            .build();
     }
 
-    static MqttUnsubAckMessage toMqttUnsubAckMessage(int messageId) {
-        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.UNSUBACK,
-            false,
-            MqttQoS.AT_MOST_ONCE,
-            false,
-            0);
-        MqttMessageIdVariableHeader mqttMessageIdVariableHeader = MqttMessageIdVariableHeader.from(messageId);
-        return new MqttUnsubAckMessage(mqttFixedHeader, mqttMessageIdVariableHeader);
+    static MqttPublishMessage toMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message) {
+        return MqttMessageBuilders.publish()
+            .messageId(packetId)
+            .topicName(message.topic())
+            .qos(MqttQoS.valueOf(message.qos().getNumber()))
+            .retained(message.isRetain())
+            .payload(Unpooled.wrappedBuffer(message.message().getPayload().asReadOnlyByteBuffer()))
+            .build();
     }
 }

@@ -17,5 +17,5 @@ import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 
-public interface IMatchCallScheduler extends IBatchCallScheduler<MatchRequest, MatchReply> {
+public interface IMatchCallScheduler extends IBatchCallScheduler<MatchCall, MatchCallResult> {
 }

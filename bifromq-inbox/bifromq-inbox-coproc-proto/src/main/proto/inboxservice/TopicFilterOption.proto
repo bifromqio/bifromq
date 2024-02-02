@@ -1,0 +1,22 @@
+syntax = "proto3";
+import "commontype/QoS.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.storage.proto";
+option java_outer_classname = "TopicFilterOptionProtos";
+
+package inboxservice;
+
+enum RetainHandling{
+  SEND_AT_SUBSCRIBE = 0;
+  SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS = 1;
+  DONT_SEND_AT_SUBSCRIBE = 2;
+
+}
+message TopicFilterOption{
+  commontype.QoS qos = 1;
+  optional uint32 subId = 2;
+  bool retainAsPublished = 3;
+  bool noLocal = 4;
+  RetainHandling retainHandling = 5;
+}

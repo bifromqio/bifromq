@@ -14,7 +14,6 @@
 package com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling;
 
 import com.baidu.bifromq.plugin.eventcollector.ClientEvent;
-import java.nio.ByteBuffer;
 import lombok.ToString;
 
 @ToString(callSuper = true)
@@ -22,8 +21,6 @@ public abstract class DistEvent<T extends DistEvent<T>> extends ClientEvent<T> {
     private long reqId;
 
     private String topic;
-
-    private ByteBuffer payload;
 
     private int size;
 

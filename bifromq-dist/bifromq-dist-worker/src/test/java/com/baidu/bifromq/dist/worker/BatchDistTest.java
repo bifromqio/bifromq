@@ -137,7 +137,6 @@ public class BatchDistTest extends DistWorkerTest {
                 .setPubQoS(qos)
                 .setPayload(payload)
                 .setTimestamp(System.currentTimeMillis())
-                .setExpireTimestamp(Long.MAX_VALUE)
                 .build())
             .build();
     }

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.retain.client;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.retain.RPCBluePrint;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -26,7 +27,6 @@ import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
@@ -61,25 +61,21 @@ final class RetainClient implements IRetainClient {
     }
 
     @Override
-    public CompletableFuture<MatchReply> match(long reqId,
-                                               String tenantId,
-                                               String topicFilter,
-                                               int limit) {
-        log.trace("Handling match request: reqId={}, topicFilter={}", reqId, topicFilter);
-        return rpcClient.invoke(tenantId, null, MatchRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setTopicFilter(topicFilter)
-            .setLimit(limit)
-            .build(), RetainServiceGrpc.getMatchMethod());
+    public CompletableFuture<MatchReply> match(MatchRequest request) {
+        log.trace("Handling match request: {}", request);
+        return rpcClient.invoke(request.getTenantId(), null, request, RetainServiceGrpc.getMatchMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to match", e);
+                return MatchReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(MatchReply.Result.ERROR)
+                    .build();
+            });
     }
 
     @Override
     public CompletableFuture<RetainReply> retain(long reqId, String topic, QoS qos, ByteString payload,
                                                  int expirySeconds, ClientInfo publisher) {
-        long now = System.currentTimeMillis();
-        long expiry = expirySeconds == Integer.MAX_VALUE ? Long.MAX_VALUE : now +
-            TimeUnit.MILLISECONDS.convert(expirySeconds, TimeUnit.SECONDS);
         return rpcClient.invoke(publisher.getTenantId(), null, RetainRequest.newBuilder()
             .setReqId(reqId)
             .setTopic(topic)
@@ -87,8 +83,8 @@ final class RetainClient implements IRetainClient {
                 .setMessageId(reqId)
                 .setPubQoS(qos)
                 .setPayload(payload)
-                .setTimestamp(now)
-                .setExpireTimestamp(expiry)
+                .setTimestamp(HLC.INST.getPhysical())
+                .setExpiryInterval(expirySeconds)
                 .build())
             .setPublisher(publisher)
             .build(), RetainServiceGrpc.getRetainMethod());

@@ -49,8 +49,17 @@ message SubRequest {
 }
 
 message SubReply {
+  enum Result{
+    OK = 0;
+    EXISTS = 1;
+    NO_INBOX = 2;
+    EXCEED_LIMIT = 3;
+    NOT_AUTHORIZED = 4;
+    TOPIC_FILTER_INVALID = 5;
+    ERROR = 6;
+  }
   uint64 reqId = 1;
-  bool result = 2;
+  Result result = 2;
 }
 
 message UnsubRequest {
@@ -62,9 +71,12 @@ message UnsubRequest {
 
 message UnsubReply {
   enum Result {
-    NO_INBOX = 0;
-    OK = 1;
-    ERROR = 2;
+    OK = 0;
+    NO_SUB = 1;
+    NO_INBOX = 2;
+    NOT_AUTHORIZED = 3;
+    TOPIC_FILTER_INVALID = 4;
+    ERROR = 5;
   }
   uint64 reqId = 1;
   Result result = 2;

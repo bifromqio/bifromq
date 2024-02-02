@@ -15,7 +15,7 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.EXCEED_PUB_RATE;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.NO_PUB_PERMISSION;
@@ -29,9 +29,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,18 +40,12 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.QoS;
-import com.google.protobuf.ByteString;
-import io.netty.handler.codec.mqtt.MqttConnAckMessage;
-import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttMessageType;
-import io.netty.handler.codec.mqtt.MqttPubAckMessage;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -71,8 +63,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         verifyEvent(CLIENT_CONNECTED);
-        verify(distClient, times(1)).pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
-            any(ClientInfo.class));
+        verify(distClient, times(1)).pub(anyLong(), anyString(), any(), any(ClientInfo.class));
     }
 
 
@@ -127,8 +118,8 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistDist(true);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        MqttPubAckMessage ackMessage = channel.readOutbound();
-        assertEquals(ackMessage.variableHeader().messageId(), 123);
+        MqttMessage ackMessage = channel.readOutbound();
+        assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 123);
         verifyEvent(CLIENT_CONNECTED, PUB_ACKED);
     }
 
@@ -139,7 +130,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistDist(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR);
+        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR, PUB_ACKED);
     }
 
     @Test
@@ -149,7 +140,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistDrop();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR);
+        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR, PUB_ACKED);
     }
 
 
@@ -157,15 +148,14 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     public void qoS1PubAckWithUnWritable() {
         setupTransientSession();
         mockAuthCheck(true);
-        CompletableFuture<Void> distResult = new CompletableFuture<>();
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
-            any(ClientInfo.class))).thenReturn(distResult);
+        CompletableFuture<DistResult> distResult = new CompletableFuture<>();
+        when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class))).thenReturn(distResult);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         // make channel unWritable
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
         assertFalse(channel.isWritable());
-        distResult.complete(null);
+        distResult.complete(DistResult.OK);
         channel.runPendingTasks();
         verifyEvent(CLIENT_CONNECTED, PUB_ACK_DROPPED);
     }
@@ -193,14 +183,14 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttMessage mqttMessage = channel.readOutbound();
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBREC);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
-        assertTrue(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
+//        assertTrue(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
         // publish release
         channel.writeInbound(MQTTMessageUtils.publishRelMessage(123));
         mqttMessage = channel.readOutbound();
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
         verifyEvent(CLIENT_CONNECTED, PUB_RECED);
-        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
+//        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
     }
 
     @Test
@@ -210,8 +200,8 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistDist(false);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR);
-        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
+        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR, PUB_RECED);
+//        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
     }
 
     @Test
@@ -221,27 +211,25 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistDrop();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR);
-        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
+        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR, PUB_RECED);
+//        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
     }
 
 
     @Test
-    public void qoS2PubAckWithUnWritable() {
+    public void qoS2PubWithUnWritable() {
         setupTransientSession();
         mockAuthCheck(true);
-        CompletableFuture<Void> distResult = new CompletableFuture<>();
-        when(distClient.pub(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
-            any(ClientInfo.class))).thenReturn(distResult);
+        CompletableFuture<DistResult> distResult = new CompletableFuture<>();
+        when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class))).thenReturn(distResult);
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
 
         // make channel unWritable and drop PubRec
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
         assertFalse(channel.isWritable());
-        distResult.complete(null);
+        distResult.complete(DistResult.OK);
         channel.runPendingTasks();
         verifyEvent(CLIENT_CONNECTED, PUB_REC_DROPPED);
-        assertTrue(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
 
         // flush channel
         channel.flush();
@@ -251,7 +239,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         // client did not receive PubRec, resend pub and receive PubRec
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
         channel.runPendingTasks();
-        verifyEvent(CLIENT_CONNECTED, PUB_REC_DROPPED);
+        verifyEvent(CLIENT_CONNECTED, PUB_REC_DROPPED, PUB_RECED);
         MqttMessage mqttMessage = channel.readOutbound();
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBREC);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
@@ -261,8 +249,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mqttMessage = channel.readOutbound();
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
-        verifyEvent(CLIENT_CONNECTED, PUB_REC_DROPPED);
-        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
+        verifyEvent(CLIENT_CONNECTED, PUB_REC_DROPPED, PUB_RECED);
     }
 
     @Test
@@ -276,7 +263,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.runPendingTasks();
         assertFalse(channel.isActive());
         verifyEvent(CLIENT_CONNECTED, PUB_ACTION_DISALLOW, NO_PUB_PERMISSION);
-        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
+//        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
     }
 
     @Test
@@ -311,8 +298,8 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage2 = MQTTMessageUtils.publishQoS1Message("testTopic", 2);
         channel.writeInbound(publishMessage);
         channel.writeInbound(publishMessage2);
-        MqttPubAckMessage ackMessage = channel.readOutbound();
-        assertEquals(ackMessage.variableHeader().messageId(), 1);
-        verifyEvent(CLIENT_CONNECTED, PUB_ACKED, DISCARD);
+        MqttMessage ackMessage = channel.readOutbound();
+        assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 1);
+        verifyEvent(CLIENT_CONNECTED, PUB_ACKED, EXCEED_PUB_RATE);
     }
 }

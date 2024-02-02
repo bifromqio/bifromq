@@ -34,7 +34,6 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.mqtt.inbox.MqttUnsubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -79,7 +78,10 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
 
         HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(
+                com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.newBuilder()
+                    .setResult(com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.Result.OK)
+                    .build()));
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<Long> reqIdCap = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<String> tenantIdCap = ArgumentCaptor.forClass(String.class);
@@ -107,7 +109,9 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
 
         HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.newBuilder()
+                .setResult(com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.Result.OK)
+                .build()));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
@@ -153,7 +157,9 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
 
         HTTPUnsubHandler handler = new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider);
         when(mqttBrokerClient.unsub(anyLong(), anyString(), anyString(), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(MqttUnsubResult.ERROR));
+            .thenReturn(CompletableFuture.completedFuture(com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.newBuilder()
+                .setResult(com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.Result.ERROR)
+                .build()));
 
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());

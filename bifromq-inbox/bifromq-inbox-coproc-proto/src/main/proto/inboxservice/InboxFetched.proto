@@ -15,12 +15,7 @@ message Fetched {
   }
   Result result = 1;
 
-  repeated uint64 qos0Seq = 2;
-  repeated InboxMessage qos0Msg = 3;
+  repeated InboxMessage qos0Msg = 2;
 
-  repeated uint64 qos1Seq = 4;
-  repeated InboxMessage qos1Msg = 5;
-
-  repeated uint64 qos2Seq = 6;
-  repeated InboxMessage qos2Msg = 7;
+  repeated InboxMessage sendBufferMsg = 3;
 }

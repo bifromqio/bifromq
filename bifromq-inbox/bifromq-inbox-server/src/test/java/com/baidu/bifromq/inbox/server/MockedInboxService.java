@@ -13,10 +13,15 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.metrics.RPCMeters;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxAttachScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCreateScheduler;
@@ -29,6 +34,8 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.util.PipelineUtil;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import io.grpc.Context;
 import java.util.HashMap;
@@ -39,6 +46,10 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
 public abstract class MockedInboxService {
+    @Mock
+    protected ISettingProvider settingProvider;
+    @Mock
+    protected IInboxClient inboxClient;
     @Mock
     protected IDistClient distClient;
     @Mock
@@ -77,6 +88,11 @@ public abstract class MockedInboxService {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        when(inboxClient.id()).thenReturn(1);
+        when(settingProvider.provide(any(), anyString())).thenAnswer(invocation -> {
+            Setting setting = invocation.getArgument(0);
+            return setting.current(invocation.getArgument(1));
+        });
         Map<String, String> metaData = new HashMap<>();
         metaData.put(PipelineUtil.PIPELINE_ATTR_KEY_ID, "id");
         Context.current()
@@ -89,6 +105,8 @@ public abstract class MockedInboxService {
             .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metaData)
             .attach();
         inboxService = InboxService.builder()
+            .settingProvider(settingProvider)
+            .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
             .inboxStoreClient(inboxStoreClient)

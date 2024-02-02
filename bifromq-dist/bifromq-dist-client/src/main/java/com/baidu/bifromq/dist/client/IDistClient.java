@@ -15,8 +15,8 @@ package com.baidu.bifromq.dist.client;
 
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
-import com.google.protobuf.ByteString;
 import java.util.concurrent.CompletableFuture;
 
 public interface IDistClient extends IConnectable {
@@ -29,16 +29,12 @@ public interface IDistClient extends IConnectable {
      * completion of the returned future doesn't mean the message has been delivered successfully. There are various
      * events reported during the process.
      *
-     * @param reqId         the caller supplied request id for event tracing
-     * @param topic         the message topic
-     * @param qos           the message original qos
-     * @param payload       the message body
-     * @param expirySeconds the expiry of the message
-     * @param publisher     the publisher of the message which must have non-null tenantId and type field
+     * @param reqId     the caller supplied request id for event tracing
+     * @param topic     the message topic
+     * @param publisher the publisher of the message which must have non-null tenantId and type field
      * @return a future for tracking the publishing process asynchronously
      */
-    CompletableFuture<Void> pub(long reqId, String topic, QoS qos, ByteString payload, int expirySeconds,
-                                ClientInfo publisher);
+    CompletableFuture<DistResult> pub(long reqId, String topic, Message message, ClientInfo publisher);
 
     /**
      * Add a topic match

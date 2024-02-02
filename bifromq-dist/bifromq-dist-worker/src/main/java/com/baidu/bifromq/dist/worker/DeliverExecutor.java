@@ -16,10 +16,10 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.deliverer.DeliveryRequest;
+import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.NormalMatching;
-import com.baidu.bifromq.dist.worker.scheduler.DeliveryRequest;
-import com.baidu.bifromq.dist.worker.scheduler.IDeliveryScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
@@ -40,18 +40,18 @@ import org.jctools.queues.MpscBlockingConsumerArrayQueue;
 public class DeliverExecutor {
     private final IEventCollector eventCollector;
     private final IDistClient distClient;
-    private final IDeliveryScheduler scheduler;
+    private final IMessageDeliverer deliverer;
     private final ExecutorService executor;
     private final ConcurrentLinkedQueue<SendTask> tasks = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean sending = new AtomicBoolean();
 
     public DeliverExecutor(int id,
-                           IDeliveryScheduler scheduler,
+                           IMessageDeliverer deliverer,
                            IEventCollector eventCollector,
                            IDistClient distClient) {
         this.eventCollector = eventCollector;
         this.distClient = distClient;
-        this.scheduler = scheduler;
+        this.deliverer = deliverer;
         executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
                 new MpscBlockingConsumerArrayQueue<>(2),
@@ -89,7 +89,7 @@ public class DeliverExecutor {
         String delivererKey = matched.delivererKey;
         SubInfo sub = matched.subInfo;
         DeliveryRequest request = new DeliveryRequest(sub, subBrokerId, delivererKey, msgPack);
-        scheduler.schedule(request).whenComplete((result, e) -> {
+        deliverer.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
                 log.debug("Failed to deliver", e);
                 eventCollector.report(getLocal(DeliverError.class)

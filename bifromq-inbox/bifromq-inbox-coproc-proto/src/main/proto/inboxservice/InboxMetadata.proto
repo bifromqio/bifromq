@@ -1,0 +1,30 @@
+syntax = "proto3";
+import "commontype/ClientInfo.proto";
+import "inboxservice/TopicFilterOption.proto";
+import "inboxservice/LWT.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.storage.proto";
+option java_outer_classname = "InboxMetadataProtos";
+
+package inboxservice;
+
+message InboxMetadata{
+  string inboxId = 1;
+  uint64 incarnation = 2;
+  uint64 version = 3;
+  uint64 lastActiveTime = 4;
+  uint32 keepAliveSeconds = 5;
+  uint32 expirySeconds = 6;
+  uint32 limit = 7;
+  bool dropOldest = 8; // only work for qos0
+  commontype.ClientInfo client = 9; // the owner client
+  map<string, TopicFilterOption> topicFilters = 10; // subscribed topic filters
+  optional LWT lwt = 11;
+
+  uint64 qos0StartSeq = 12;
+  uint64 qos0NextSeq = 13;
+
+  uint64 sendBufferStartSeq = 14;
+  uint64 sendBufferNextSeq = 15;
+}

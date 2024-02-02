@@ -34,10 +34,19 @@ import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 import lombok.SneakyThrows;
 
 public class AuthUtil {
+    public static UserProperties to(List<MqttProperties.UserProperty> mqttUserPropertyList) {
+        UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
+        for (MqttProperties.UserProperty userProp : mqttUserPropertyList) {
+            UserProperties.StringList values =
+                userPropsBuilder.getPropOrDefault(userProp.value().key, UserProperties.StringList.getDefaultInstance());
+            userPropsBuilder.putProp(userProp.value().key, values.toBuilder().addValue(userProp.value().value).build());
+        }
+        return userPropsBuilder.build();
+    }
+
     @SneakyThrows
     public static MQTT3AuthData buildMQTT3AuthData(Channel channel, MqttConnectMessage msg) {
         assert msg.variableHeader().version() != 5;
@@ -96,15 +105,9 @@ public class AuthUtil {
                 authData.setRemoteAddr(ip.getHostAddress());
             }
         }
-        List<MqttProperties.UserProperty> userPropertyList =
-            (List<MqttProperties.UserProperty>) msg.variableHeader().properties().getProperties(USER_PROPERTY.value());
-        UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
-        for (MqttProperties.UserProperty userProp : userPropertyList) {
-            UserProperties.StringList values =
-                userPropsBuilder.getPropOrDefault(userProp.value().key, UserProperties.StringList.getDefaultInstance());
-            userPropsBuilder.putProp(userProp.value().key, values.toBuilder().addValue(userProp.value().value).build());
-        }
-        return authData.setUserProps(userPropsBuilder.build()).build();
+        UserProperties userProperties = to(
+            (List<MqttProperties.UserProperty>) msg.variableHeader().properties().getProperties(USER_PROPERTY.value()));
+        return authData.setUserProps(userProperties).build();
     }
 
     public static MQTTAction buildPubAction(String topic, QoS qos, boolean retained) {
@@ -113,6 +116,17 @@ public class AuthUtil {
                 .setTopic(topic)
                 .setQos(qos)
                 .setIsRetained(retained)
+                .build())
+            .build();
+    }
+
+    public static MQTTAction buildPubAction(String topic, QoS qos, boolean retained, UserProperties userProps) {
+        return MQTTAction.newBuilder()
+            .setPub(PubAction.newBuilder()
+                .setTopic(topic)
+                .setQos(qos)
+                .setIsRetained(retained)
+                .setUserProps(userProps)
                 .build())
             .build();
     }
@@ -126,10 +140,29 @@ public class AuthUtil {
             .build();
     }
 
+    public static MQTTAction buildSubAction(String topicFilter, QoS qos, UserProperties userProps) {
+        return MQTTAction.newBuilder()
+            .setSub(SubAction.newBuilder()
+                .setTopicFilter(topicFilter)
+                .setQos(qos)
+                .setUserProps(userProps)
+                .build())
+            .build();
+    }
+
     public static MQTTAction buildUnsubAction(String topicFilter) {
         return MQTTAction.newBuilder()
             .setUnsub(UnsubAction.newBuilder()
                 .setTopicFilter(topicFilter)
+                .build())
+            .build();
+    }
+
+    public static MQTTAction buildUnsubAction(String topicFilter, UserProperties userProps) {
+        return MQTTAction.newBuilder()
+            .setUnsub(UnsubAction.newBuilder()
+                .setTopicFilter(topicFilter)
+                .setUserProps(userProps)
                 .build())
             .build();
     }

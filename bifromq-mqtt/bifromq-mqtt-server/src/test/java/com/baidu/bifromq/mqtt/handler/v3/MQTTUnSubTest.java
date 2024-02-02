@@ -125,7 +125,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
+        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER, UNSUB_ACKED);
     }
 
     @Test

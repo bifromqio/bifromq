@@ -14,5 +14,5 @@
 package com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling;
 
 public enum DropReason {
-    ChannelClosed, Overflow, NoSubPermission
+    ChannelClosed, Overflow, NoSubPermission, NoLocal, InternalError
 }

@@ -236,7 +236,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
+        verifyEvent(CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER, SUB_ACKED);
     }
 
     @Test
@@ -247,7 +247,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER);
+        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER, SUB_ACKED);
     }
 
     @Test

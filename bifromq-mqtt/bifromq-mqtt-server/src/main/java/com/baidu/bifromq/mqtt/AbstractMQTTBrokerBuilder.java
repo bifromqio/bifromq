@@ -28,7 +28,6 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     int connectTimeoutSeconds = 20;
     int connectRateLimit = 1000;
     int disconnectRate = 1000;
-    int maxResendTimes = 5;
     int resendDelayMillis = 3000;
     int defaultKeepAliveSeconds = 5 * 60; // 5 min
     int qos2ConfirmWindowSeconds = 5;
@@ -105,23 +104,8 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
         return thisT();
     }
 
-    public T maxResendTimes(int maxResendTimes) {
-        this.maxResendTimes = maxResendTimes;
-        return thisT();
-    }
-
-    public T resendDelayMillis(int resendDelayMillis) {
-        this.resendDelayMillis = resendDelayMillis;
-        return thisT();
-    }
-
     public T defaultKeepAliveSeconds(int defaultKeepAliveSeconds) {
         this.defaultKeepAliveSeconds = defaultKeepAliveSeconds;
-        return thisT();
-    }
-
-    public T qos2ConfirmWindowSeconds(int qos2ConfirmWindowSeconds) {
-        this.qos2ConfirmWindowSeconds = qos2ConfirmWindowSeconds;
         return thisT();
     }
 
