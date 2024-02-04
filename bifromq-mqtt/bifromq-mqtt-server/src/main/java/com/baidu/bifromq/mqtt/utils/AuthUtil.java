@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.utils;
 
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestResponseInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
@@ -101,6 +102,7 @@ public class AuthUtil {
                 authData.setRemoteAddr(ip.getHostAddress());
             }
         }
+        authData.setResponseInfo(requestResponseInformation(msg.variableHeader().properties()));
         UserProperties userProperties = toUserProperties(msg.variableHeader().properties());
         return authData.setUserProps(userProperties).build();
     }

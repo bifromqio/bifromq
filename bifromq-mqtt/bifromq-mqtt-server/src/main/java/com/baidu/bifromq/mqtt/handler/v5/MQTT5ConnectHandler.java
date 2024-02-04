@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler.v5;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestResponseInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toWillMessage;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
@@ -23,6 +24,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_RESPONSE_INFO;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD;
@@ -49,6 +51,7 @@ import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.Continue;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
+import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.EnhancedAuthAbortByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedClientIdentifier;
@@ -196,17 +199,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                     switch (authResult.getTypeCase()) {
                         case SUCCESS -> {
-                            return new OkOrGoAway(ClientInfo.newBuilder()
-                                .setTenantId(authResult.getSuccess().getTenantId())
-                                .setType(MQTT_TYPE_VALUE)
-                                .putAllMetadata(authResult.getSuccess().getAttrsMap()) // custom attrs
-                                .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_5_VALUE)
-                                .putMetadata(MQTT_USER_ID_KEY, authResult.getSuccess().getTenantId())
-                                .putMetadata(MQTT_CLIENT_ID_KEY, message.payload().clientIdentifier())
-                                .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
-                                .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
-                                    Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""))
-                                .build());
+                            return new OkOrGoAway(buildClientInfo(clientAddress, authResult.getSuccess()));
                         }
                         case FAILED -> {
                             Failed failed = authResult.getFailed();
@@ -273,17 +266,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 this.isAuthing = false;
                 final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                 switch (authResult.getTypeCase()) {
-                    case SUCCESS -> extendedAuthFuture.complete(new OkOrGoAway(ClientInfo.newBuilder()
-                        .setTenantId(authResult.getSuccess().getTenantId())
-                        .setType(MQTT_TYPE_VALUE)
-                        .putAllMetadata(authResult.getSuccess().getAttrsMap()) // custom attrs
-                        .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_5_VALUE)
-                        .putMetadata(MQTT_USER_ID_KEY, authResult.getSuccess().getTenantId())
-                        .putMetadata(MQTT_CLIENT_ID_KEY, connMsg.payload().clientIdentifier())
-                        .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
-                        .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
-                            Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""))
-                        .build()));
+                    case SUCCESS -> extendedAuthFuture.complete(new OkOrGoAway(buildClientInfo(
+                        clientAddress, authResult.getSuccess())));
                     case CONTINUE -> {
                         Continue authContinue = authResult.getContinue();
                         MQTT5MessageBuilders.AuthBuilder authBuilder = MQTT5MessageBuilders
@@ -329,6 +313,23 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     }
                 }
             }, ctx.channel().eventLoop());
+    }
+
+    private ClientInfo buildClientInfo(InetSocketAddress clientAddress, Success success) {
+        ClientInfo.Builder clientInfoBuilder = ClientInfo.newBuilder()
+            .setTenantId(success.getTenantId())
+            .setType(MQTT_TYPE_VALUE)
+            .putAllMetadata(success.getAttrsMap()) // custom attrs
+            .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_5_VALUE)
+            .putMetadata(MQTT_USER_ID_KEY, success.getTenantId())
+            .putMetadata(MQTT_CLIENT_ID_KEY, connMsg.payload().clientIdentifier())
+            .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
+            .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
+                Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""));
+        if (success.hasResponseInfo()) {
+            clientInfoBuilder.putMetadata(MQTT_RESPONSE_INFO, success.getResponseInfo());
+        }
+        return clientInfoBuilder.build();
     }
 
     @Override
@@ -497,6 +498,11 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         connPropsBuilder.maximumPacketSize(settings.maxPacketSize);
         connPropsBuilder.topicAliasMaximum(settings.maxTopicAlias);
         connPropsBuilder.receiveMaximum(settings.receiveMaximum);
+        if (requestResponseInformation(connMsg.variableHeader().properties()) &&
+            clientInfo.containsMetadata(MQTT_RESPONSE_INFO)) {
+            // include response information only when client requested it
+            connPropsBuilder.responseInformation(clientInfo.getMetadataOrDefault(MQTT_RESPONSE_INFO, ""));
+        }
         return MqttMessageBuilders
             .connAck()
             .sessionPresent(sessionExists)

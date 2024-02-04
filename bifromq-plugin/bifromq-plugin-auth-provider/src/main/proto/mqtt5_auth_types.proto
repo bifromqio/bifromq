@@ -15,7 +15,8 @@ message MQTT5AuthData{
   string remoteAddr = 5;
   uint32 remotePort = 6;
   string channelId = 7;
-  commontype.UserProperties userProps = 8;
+  bool responseInfo = 8; // for MQTT5 request/response use case
+  commontype.UserProperties userProps = 9;
 }
 
 message MQTT5ExtendedAuthData{
@@ -40,7 +41,8 @@ message Success{
   string tenantId = 1;
   string userId = 2;
   map<string, string> attrs = 3; // additional attributes filled by auth provider plugin which will be copied to ClientInfo
-  commontype.UserProperties userProps = 4; // user properties return back via mqtt5 connack
+  optional string ResponseInfo = 4; // for mqtt5 request/response use case
+  commontype.UserProperties userProps = 5; // user properties return back via mqtt5 connack
 }
 
 message Failed{

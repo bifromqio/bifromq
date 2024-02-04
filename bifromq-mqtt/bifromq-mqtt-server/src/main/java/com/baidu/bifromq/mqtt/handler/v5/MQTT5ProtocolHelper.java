@@ -13,9 +13,12 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.responseTopic;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAlias;
+import static com.baidu.bifromq.mqtt.utils.MQTTUtf8Util.isWellFormed;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.util.TopicUtil.isValidTopic;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.RetainHandling;
@@ -32,7 +35,6 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRecReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode;
-import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedPubRate;
@@ -223,7 +225,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .clientInfo(clientInfo));
         }
         for (MqttTopicSubscription topicSub : topicSubscriptions) {
-            if (!MQTTUtf8Util.isWellFormed(topicSub.topicName(), SANITY_CHECK)) {
+            if (!isWellFormed(topicSub.topicName(), SANITY_CHECK)) {
                 return new GoAway(
                     MqttMessageBuilders.disconnect()
                         .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
@@ -313,7 +315,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         }
 
         for (String topicFilter : topicFilters) {
-            if (!MQTTUtf8Util.isWellFormed(topicFilter, SANITY_CHECK)) {
+            if (!isWellFormed(topicFilter, SANITY_CHECK)) {
                 return new GoAway(
                     MqttMessageBuilders.disconnect()
                         .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
@@ -439,8 +441,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway validatePubMessage(MqttPublishMessage message) {
         String topic = message.variableHeader().topicName();
+        MqttProperties mqttProperties = message.variableHeader().properties();
         // disconnect if malformed packet
-        if (!MQTTUtf8Util.isWellFormed(topic, SANITY_CHECK)) {
+        if (!isWellFormed(topic, SANITY_CHECK)) {
             return new GoAway(
                 MqttMessageBuilders.disconnect()
                     .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
@@ -461,9 +464,31 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .statement("MQTT5-3.3.1-2")
                     .clientInfo(clientInfo));
         }
-        MqttProperties pubMsgProperties = message.variableHeader().properties();
+        if (responseTopic(mqttProperties)
+            .map(responseTopic -> !isWellFormed(topic, SANITY_CHECK)).orElse(false)) {
+            return new GoAway(
+                MqttMessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.TopicNameInvalid.value())
+                    .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT5-3.2.2-13")
+                    .clientInfo(clientInfo));
+        }
+        if (responseTopic(mqttProperties)
+            .map(responseTopic -> !isValidTopic(responseTopic,
+                settings.maxTopicLevelLength,
+                settings.maxTopicLevels,
+                settings.maxTopicLength)).orElse(false)) {
+            return new GoAway(
+                MqttMessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.TopicNameInvalid.value())
+                    .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT5-3.2.2-14")
+                    .clientInfo(clientInfo));
+        }
         // process topic alias
-        Optional<Integer> topicAlias = topicAlias(pubMsgProperties);
+        Optional<Integer> topicAlias = topicAlias(mqttProperties);
         if (settings.maxTopicAlias == 0 && topicAlias.isPresent()) {
             return new GoAway(
                 MqttMessageBuilders.disconnect()

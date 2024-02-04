@@ -98,6 +98,11 @@ public class MQTT5MessageUtils {
         return binaryMqttProperty(mqttProperties, AUTHENTICATION_DATA);
     }
 
+    public static boolean requestResponseInformation(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_RESPONSE_INFORMATION)
+            .orElse(1) == 1;
+    }
+
     static Optional<Integer> integerMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {
         return Optional.ofNullable((MqttProperties.IntegerProperty) mqttProperties.getProperty(type.value()))
             .map(MqttProperties.MqttProperty::value);
