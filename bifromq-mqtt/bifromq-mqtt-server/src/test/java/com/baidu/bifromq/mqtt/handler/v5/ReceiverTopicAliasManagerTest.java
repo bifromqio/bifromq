@@ -18,10 +18,10 @@ import static org.testng.Assert.assertTrue;
 
 import org.testng.annotations.Test;
 
-public class TopicAliasMapTest {
+public class ReceiverTopicAliasManagerTest {
     @Test
     public void case1() {
-        TopicAliasMap topicAliasMap = new TopicAliasMap();
+        ReceiverTopicAliasManager topicAliasMap = new ReceiverTopicAliasManager();
         topicAliasMap.setAlias("topic1", 1);
 
         assertTrue(topicAliasMap.getAlias("topic1").isPresent());
@@ -33,7 +33,7 @@ public class TopicAliasMapTest {
 
     @Test
     public void cass2() {
-        TopicAliasMap topicAliasMap = new TopicAliasMap();
+        ReceiverTopicAliasManager topicAliasMap = new ReceiverTopicAliasManager();
         topicAliasMap.setAlias("topic1", 1);
         topicAliasMap.setAlias("topic2", 1);
 
@@ -45,7 +45,7 @@ public class TopicAliasMapTest {
 
     @Test
     public void case3() {
-        TopicAliasMap topicAliasMap = new TopicAliasMap();
+        ReceiverTopicAliasManager topicAliasMap = new ReceiverTopicAliasManager();
         topicAliasMap.setAlias("topic1", 1);
         topicAliasMap.setAlias("topic1", 2);
 

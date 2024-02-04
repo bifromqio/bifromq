@@ -13,9 +13,11 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.receiveMaximum;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.responseTopic;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAlias;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
 import static com.baidu.bifromq.mqtt.utils.MQTTUtf8Util.isWellFormed;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.util.TopicUtil.isValidTopic;
@@ -68,6 +70,7 @@ import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -76,7 +79,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     private final TenantSettings settings;
     private final ClientInfo clientInfo;
     private final int clientReceiveMaximum;
-    private final TopicAliasMap topicAliasMap;
+    private final ReceiverTopicAliasManager receiverTopicAliasManager;
+    private final SenderTopicAliasManager senderTopicAliasManager;
 
 
     public MQTT5ProtocolHelper(MqttConnectMessage connMsg,
@@ -84,9 +88,11 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                                ClientInfo clientInfo) {
         this.settings = settings;
         this.clientInfo = clientInfo;
-        this.topicAliasMap = new TopicAliasMap();
-        this.clientReceiveMaximum =
-            MQTT5MessageUtils.receiveMaximum(connMsg.variableHeader().properties()).orElse(65535);
+        this.receiverTopicAliasManager = new ReceiverTopicAliasManager();
+        this.senderTopicAliasManager =
+            new SenderTopicAliasManager(topicAliasMaximum(connMsg.variableHeader().properties()).orElse(0),
+                Duration.ofSeconds(60));
+        this.clientReceiveMaximum = receiveMaximum(connMsg.variableHeader().properties()).orElse(65535);
     }
 
     @Override
@@ -190,7 +196,6 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public GoAway validateSubMessage(MqttSubscribeMessage message) {
-        int packetId = message.idAndPropertiesVariableHeader().messageId();
         List<MqttTopicSubscription> topicSubscriptions = message.payload().topicSubscriptions();
         if (topicSubscriptions.isEmpty()) {
             // Ignore instead of disconnect [MQTT-3.8.3-3]
@@ -239,7 +244,6 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public List<SubTask> getSubTask(MqttSubscribeMessage message) {
         Optional<Integer> subId = Optional.ofNullable(
                 (MqttProperties.IntegerProperty) message.idAndPropertiesVariableHeader().properties()
@@ -417,6 +421,22 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message) {
+        Optional<SenderTopicAliasManager.AliasCreationResult> aliasCreationResult =
+            senderTopicAliasManager.tryAlias(message.topic());
+        if (aliasCreationResult.isPresent()) {
+            if (aliasCreationResult.get().isFirstTime()) {
+                return MQTT5MessageBuilders.pub().packetId(packetId)
+                    .setupAlias(true)
+                    .topicAlias(aliasCreationResult.get().alias())
+                    .message(message)
+                    .build();
+            } else {
+                return MQTT5MessageBuilders.pub().packetId(packetId)
+                    .topicAlias(aliasCreationResult.get().alias())
+                    .message(message)
+                    .build();
+            }
+        }
         return MQTT5MessageBuilders.pub().packetId(packetId).message(message).build();
     }
 
@@ -510,7 +530,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         // create or update alias
         if (topic.isEmpty()) {
             if (topicAlias.isPresent()) {
-                Optional<String> aliasedTopic = topicAliasMap.getTopic(topicAlias.get());
+                Optional<String> aliasedTopic = receiverTopicAliasManager.getTopic(topicAlias.get());
                 if (aliasedTopic.isEmpty()) {
                     return new GoAway(
                         MqttMessageBuilders.disconnect()
@@ -530,7 +550,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                         .clientInfo(clientInfo));
             }
         } else {
-            topicAlias.ifPresent(integer -> topicAliasMap.setAlias(topic, integer));
+            topicAlias.ifPresent(integer -> receiverTopicAliasManager.setAlias(topic, integer));
         }
         return null;
     }
@@ -543,7 +563,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             // process topic alias
             Optional<Integer> topicAlias = topicAlias(pubMsgProperties);
             assert topicAlias.isPresent();
-            Optional<String> aliasedTopic = topicAliasMap.getTopic(topicAlias.get());
+            Optional<String> aliasedTopic = receiverTopicAliasManager.getTopic(topicAlias.get());
             assert aliasedTopic.isPresent();
             topic = aliasedTopic.get();
         }

@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-public class TopicAliasMap {
+public class ReceiverTopicAliasManager {
     private final Map<String, Integer> topicToAlias = new HashMap<>();
     private final Map<Integer, String> aliasToTopic = new HashMap<>();
 

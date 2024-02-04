@@ -21,6 +21,7 @@ import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CORREL
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.RESPONSE_TOPIC;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.TOPIC_ALIAS;
 
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
@@ -29,7 +30,6 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubCompReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRecReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
-import com.baidu.bifromq.type.StringPair;
 import com.baidu.bifromq.type.UserProperties;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -134,9 +134,21 @@ public class MQTT5MessageBuilders {
     public static final class PubBuilder {
         private int packetId;
         private MQTTSessionHandler.SubMessage message;
+        private boolean setupAlias;
+        private int topicAlias;
 
         public PubBuilder packetId(int packetId) {
             this.packetId = packetId;
+            return this;
+        }
+
+        public PubBuilder setupAlias(boolean setupAlias) {
+            this.setupAlias = setupAlias;
+            return this;
+        }
+
+        public PubBuilder topicAlias(int alias) {
+            this.topicAlias = alias;
             return this;
         }
 
@@ -146,10 +158,21 @@ public class MQTT5MessageBuilders {
         }
 
         public MqttPublishMessage build() {
+            MqttMessageBuilders.PublishBuilder pubBuilder = MqttMessageBuilders.publish();
             MqttProperties mqttProps = new MqttProperties();
             TopicFilterOption option = message.option();
             if (option.hasSubId()) {
                 mqttProps.add(new MqttProperties.IntegerProperty(SUBSCRIPTION_IDENTIFIER.value(), option.getSubId()));
+            }
+            if (topicAlias > 0) {
+                if (setupAlias) {
+                    pubBuilder.topicName(message.topic());
+                } else {
+                    pubBuilder.topicName("");
+                }
+                mqttProps.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS.value(), topicAlias));
+            } else {
+                pubBuilder.topicName(message.topic());
             }
             if (message.message().getIsUTF8String()) {
                 mqttProps.add(new MqttProperties.IntegerProperty(PAYLOAD_FORMAT_INDICATOR.value(), 1));
@@ -169,9 +192,8 @@ public class MQTT5MessageBuilders {
             if (message.message().getUserProperties().getUserPropertiesCount() > 0) {
                 mqttProps.add(toMqttUserProps(message.message().getUserProperties()));
             }
-            return MqttMessageBuilders.publish()
+            return pubBuilder
                 .messageId(packetId)
-                .topicName(message.topic())
                 .qos(MqttQoS.valueOf(message.qos().getNumber()))
                 .retained(message.isRetain())
                 .payload(Unpooled.wrappedBuffer(message.message().getPayload().asReadOnlyByteBuffer()))

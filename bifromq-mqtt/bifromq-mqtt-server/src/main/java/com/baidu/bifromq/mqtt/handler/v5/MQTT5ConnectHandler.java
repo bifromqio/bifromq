@@ -18,6 +18,7 @@ import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestResponseInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toWillMessage;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
@@ -34,6 +35,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED_5;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PAYLOAD_FORMAT_INVALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PROTOCOL_ERROR;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_RETAIN_NOT_SUPPORTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_TOPIC_NAME_INVALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSPECIFIED_ERROR;
@@ -374,6 +376,19 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected GoAway validate(MqttConnectMessage message, TenantSettings settings, ClientInfo clientInfo) {
+        Optional<Integer> topicAliasMaximum = topicAliasMaximum(message.variableHeader().properties());
+        if (topicAliasMaximum.orElse(0) > settings.maxTopicAlias) {
+            return new GoAway(MqttMessageBuilders
+                .connAck()
+                .returnCode(CONNECTION_REFUSED_QUOTA_EXCEEDED)
+                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .reasonString("Too large TopicAliasMaximum: max=" + settings.maxTopicAlias)
+                    .build())
+                .build(),
+                getLocal(InvalidTopic.class)
+                    .topic(message.payload().willTopic())
+                    .clientInfo(clientInfo));
+        }
         if (message.variableHeader().isWillFlag()) {
             // will topic conforms to tenant spec limit
             if (!TopicUtil.isValidTopic(message.payload().willTopic(),
@@ -382,10 +397,10 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 settings.maxTopicLength)) {
                 return new GoAway(MqttMessageBuilders
                     .connAck()
+                    .returnCode(CONNECTION_REFUSED_TOPIC_NAME_INVALID)
                     .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
                         .reasonString("Will topic exceeds limits")
                         .build())
-                    .returnCode(CONNECTION_REFUSED_TOPIC_NAME_INVALID)
                     .build(),
                     getLocal(InvalidTopic.class)
                         .topic(message.payload().willTopic())
