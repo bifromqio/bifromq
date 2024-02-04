@@ -13,40 +13,36 @@
 
 package com.baidu.bifromq.mqtt.utils;
 
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.USER_PROPERTY;
 
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.PubAction;
 import com.baidu.bifromq.plugin.authprovider.type.SubAction;
 import com.baidu.bifromq.plugin.authprovider.type.UnsubAction;
-import com.baidu.bifromq.plugin.authprovider.type.UserProperties;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.UserProperties;
 import com.google.common.base.Strings;
+import com.google.protobuf.ByteString;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttProperties;
+import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
-import java.util.List;
+import java.util.Optional;
 import lombok.SneakyThrows;
 
 public class AuthUtil {
-    public static UserProperties to(List<MqttProperties.UserProperty> mqttUserPropertyList) {
-        UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
-        for (MqttProperties.UserProperty userProp : mqttUserPropertyList) {
-            UserProperties.StringList values =
-                userPropsBuilder.getPropOrDefault(userProp.value().key, UserProperties.StringList.getDefaultInstance());
-            userPropsBuilder.putProp(userProp.value().key, values.toBuilder().addValue(userProp.value().value).build());
-        }
-        return userPropsBuilder.build();
-    }
-
     @SneakyThrows
     public static MQTT3AuthData buildMQTT3AuthData(Channel channel, MqttConnectMessage msg) {
         assert msg.variableHeader().version() != 5;
@@ -105,9 +101,33 @@ public class AuthUtil {
                 authData.setRemoteAddr(ip.getHostAddress());
             }
         }
-        UserProperties userProperties = to(
-            (List<MqttProperties.UserProperty>) msg.variableHeader().properties().getProperties(USER_PROPERTY.value()));
+        UserProperties userProperties = toUserProperties(msg.variableHeader().properties());
         return authData.setUserProps(userProperties).build();
+    }
+
+    @SneakyThrows
+    public static MQTT5ExtendedAuthData buildMQTT5ExtendedAuthData(Channel channel, MqttConnectMessage msg) {
+        assert msg.variableHeader().version() == 5;
+        MQTT5ExtendedAuthData.Initial.Builder initialBuilder = MQTT5ExtendedAuthData.Initial.newBuilder();
+        initialBuilder.setBasic(buildMQTT5AuthData(channel, msg))
+            .setAuthMethod(authMethod(msg.variableHeader().properties()).get());
+        Optional<ByteString> authData = authData(msg.variableHeader().properties());
+        authData.ifPresent(initialBuilder::setAuthData);
+        return MQTT5ExtendedAuthData.newBuilder()
+            .setInitial(initialBuilder.build())
+            .build();
+    }
+
+    public static MQTT5ExtendedAuthData buildMQTT5ExtendedAuthData(MqttMessage authMsg, boolean isReAuth) {
+        MQTT5ExtendedAuthData.Auth.Builder authBuilder = MQTT5ExtendedAuthData.Auth.newBuilder()
+            .setIsReAuth(isReAuth);
+        MqttProperties authProps = ((MqttReasonCodeAndPropertiesVariableHeader) authMsg.variableHeader()).properties();
+        authMethod(authProps).ifPresent(authBuilder::setAuthMethod);
+        authData(authProps).ifPresent(authBuilder::setAuthData);
+        authBuilder.setUserProps(toUserProperties(authProps));
+        return MQTT5ExtendedAuthData.newBuilder()
+            .setAuth(authBuilder.build())
+            .build();
     }
 
     public static MQTTAction buildPubAction(String topic, QoS qos, boolean retained) {

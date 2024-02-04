@@ -20,11 +20,14 @@ import com.baidu.bifromq.mqtt.handler.MQTTPersistentSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import io.netty.handler.codec.mqtt.MqttMessage;
+import io.netty.handler.codec.mqtt.MqttMessageType;
 import javax.annotation.Nullable;
 import lombok.Builder;
 
 public class MQTT5PersistentSessionHandler extends MQTTPersistentSessionHandler {
     private final IMQTTProtocolHelper helper;
+    private final IReAuthenticator reAuthenticator;
 
     @Builder
     protected MQTT5PersistentSessionHandler(MqttConnectMessage connMsg,
@@ -38,11 +41,20 @@ public class MQTT5PersistentSessionHandler extends MQTTPersistentSessionHandler 
         super(settings, userSessionId, keepAliveTimeSeconds, sessionExpirySeconds, clientInfo, existingSession,
             willMessage);
         this.helper = new MQTT5ProtocolHelper(connMsg, settings, clientInfo);
+        this.reAuthenticator =
+            IReAuthenticator.create(connMsg, authProvider, ctx, clientInfo, this::handleResponseOrGoAway);
     }
 
 
     @Override
-    protected IMQTTProtocolHelper helper() {
+    protected final IMQTTProtocolHelper helper() {
         return helper;
+    }
+
+    @Override
+    protected final void handleOther(MqttMessage message) {
+        if (message.fixedHeader().messageType() == MqttMessageType.AUTH) {
+            reAuthenticator.onAuth(message);
+        }
     }
 }

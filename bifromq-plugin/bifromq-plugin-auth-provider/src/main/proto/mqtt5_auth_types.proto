@@ -1,6 +1,5 @@
 syntax = "proto3";
-import "user_properties.proto";
-
+import "commontype/UserProperties.proto";
 package mqtt5authtypes;
 
 option java_multiple_files = true;
@@ -16,25 +15,32 @@ message MQTT5AuthData{
   string remoteAddr = 5;
   uint32 remotePort = 6;
   string channelId = 7;
-  auth_provider.UserProperties userProps = 8;
+  commontype.UserProperties userProps = 8;
 }
 
 message MQTT5ExtendedAuthData{
-  optional string clientId = 1;
-  string remoteAddr = 2;
-  uint32 remotePort = 3;
-  string channelId = 4;
-  string authMethod = 5;
-  bytes authData = 6;
-  bool reAuth = 7;
-  auth_provider.UserProperties userProps = 8;
+  message Initial{
+    MQTT5AuthData basic = 1;
+    string authMethod = 2;
+    bytes authData = 3;
+  }
+  message Auth{
+    string authMethod = 1;
+    bytes authData = 2;
+    commontype.UserProperties userProps = 3;
+    bool isReAuth = 4;
+  }
+  oneof Type{
+    Initial initial = 1;
+    Auth auth = 2;
+  }
 }
 
 message Success{
   string tenantId = 1;
   string userId = 2;
   map<string, string> attrs = 3; // additional attributes filled by auth provider plugin which will be copied to ClientInfo
-  auth_provider.UserProperties userProps = 4; // user properties return back via mqtt5 connack
+  commontype.UserProperties userProps = 4; // user properties return back via mqtt5 connack
 }
 
 message Failed{
@@ -47,13 +53,13 @@ message Failed{
   }
   Code code = 1;
   optional string reason = 2; // optional description
-  auth_provider.UserProperties userProps = 3; // user properties return back via mqtt5 connack
+  commontype.UserProperties userProps = 3; // user properties return back via mqtt5 connack
 }
 
 message Continue{
   bytes authData = 1;
   optional string reason = 2;
-  auth_provider.UserProperties userProps = 3;
+  commontype.UserProperties userProps = 3;
 }
 
 message MQTT5AuthResult {

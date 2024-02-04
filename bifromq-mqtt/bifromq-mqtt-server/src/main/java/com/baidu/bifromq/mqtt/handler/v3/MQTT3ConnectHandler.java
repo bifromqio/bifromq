@@ -61,6 +61,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectReturnCode;
+import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import java.net.InetSocketAddress;
 import java.util.Optional;
@@ -127,8 +128,6 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                 switch (authResult.getTypeCase()) {
                     case OK -> {
                         Ok ok = authResult.getOk();
-                        Optional<InetSocketAddress> clientAddr =
-                            Optional.ofNullable(ChannelAttrs.socketAddress(ctx.channel()));
                         return new OkOrGoAway(ClientInfo.newBuilder()
                             .setTenantId(ok.getTenantId())
                             .setType(MQTT_TYPE_VALUE)
@@ -139,7 +138,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                             .putMetadata(MQTT_CLIENT_ID_KEY, message.payload().clientIdentifier())
                             .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
                             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
-                                clientAddr.map(InetSocketAddress::toString).orElse(""))
+                                Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""))
                             .build());
                     }
                     case REJECT -> {
@@ -179,6 +178,11 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                     }
                 }
             });
+    }
+
+    @Override
+    protected void handleMqttMessage(MqttMessage message) {
+        // never happen in MQTT3
     }
 
     @Override

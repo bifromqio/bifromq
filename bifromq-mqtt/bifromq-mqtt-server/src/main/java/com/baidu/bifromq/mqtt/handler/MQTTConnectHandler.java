@@ -31,6 +31,7 @@ import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ProtocolError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.ClientConnected;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
@@ -41,6 +42,8 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import io.netty.handler.codec.mqtt.MqttMessage;
+import io.netty.handler.codec.mqtt.MqttMessageType;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -73,6 +76,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     private IInboxClient inboxClient;
     private IEventCollector eventCollector;
     private ISettingProvider settingProvider;
+    private boolean isGoAway;
 
 
     @Override
@@ -85,72 +89,121 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+    public void channelInactive(ChannelHandlerContext ctx) {
         cancellableTasks.stop();
         ctx.fireChannelInactive();
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        assert msg instanceof MqttConnectMessage;
-        MqttConnectMessage connMsg = (MqttConnectMessage) msg;
-        GoAway goAway = sanityCheck(connMsg);
-        if (goAway != null) {
-            handleGoAway(goAway);
-            return;
-        }
-        long reqId = System.nanoTime();
-        cancellableTasks.track(authenticate(connMsg))
-            .thenComposeAsync(okOrGoAway -> {
-                if (okOrGoAway.goAway != null) {
-                    handleGoAway(okOrGoAway.goAway);
-                    return CompletableFuture.completedFuture(null);
-                } else {
-                    ClientInfo clientInfo = okOrGoAway.clientInfo;
-                    TenantSettings settings = new TenantSettings(clientInfo.getTenantId(), settingProvider);
-                    GoAway isInvalid = validate(connMsg, settings, clientInfo);
-                    if (isInvalid != null) {
-                        handleGoAway(isInvalid);
+    public final void channelRead(ChannelHandlerContext ctx, Object msg) {
+        MqttMessage mqttMessage = (MqttMessage) msg;
+        if (mqttMessage.fixedHeader().messageType() == MqttMessageType.CONNECT) {
+            MqttConnectMessage connMsg = (MqttConnectMessage) msg;
+            GoAway goAway = sanityCheck(connMsg);
+            if (goAway != null) {
+                handleGoAway(goAway);
+                return;
+            }
+            long reqId = System.nanoTime();
+            cancellableTasks.track(authenticate(connMsg))
+                .thenComposeAsync(okOrGoAway -> {
+                    if (okOrGoAway.goAway != null) {
+                        handleGoAway(okOrGoAway.goAway);
                         return CompletableFuture.completedFuture(null);
-                    }
-                    LWT willMessage = connMsg.variableHeader().isWillFlag() ? getWillMessage(connMsg) : null;
-                    int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds());
-                    String userSessionId = userSessionId(clientInfo);
-                    String requestClientId = connMsg.payload().clientIdentifier();
-                    if (isCleanSession(connMsg, settings)) {
-                        if (requestClientId.isEmpty()) {
-                            int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                            if (sessionExpiryInterval == 0) {
-                                setupTransientSessionHandler(connMsg,
-                                    settings,
-                                    userSessionId,
-                                    keepAliveSeconds,
-                                    false,
-                                    willMessage,
-                                    clientInfo);
-
-                            } else {
-                                setupPersistentSessionHandler(connMsg, settings, userSessionId,
-                                    keepAliveSeconds, sessionExpiryInterval, null, willMessage, clientInfo);
-                            }
+                    } else {
+                        ClientInfo clientInfo = okOrGoAway.clientInfo;
+                        TenantSettings settings = new TenantSettings(clientInfo.getTenantId(), settingProvider);
+                        GoAway isInvalid = validate(connMsg, settings, clientInfo);
+                        if (isInvalid != null) {
+                            handleGoAway(isInvalid);
                             return CompletableFuture.completedFuture(null);
+                        }
+                        LWT willMessage = connMsg.variableHeader().isWillFlag() ? getWillMessage(connMsg) : null;
+                        int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds());
+                        String userSessionId = userSessionId(clientInfo);
+                        String requestClientId = connMsg.payload().clientIdentifier();
+                        if (isCleanSession(connMsg, settings)) {
+                            if (requestClientId.isEmpty()) {
+                                int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
+                                if (sessionExpiryInterval == 0) {
+                                    setupTransientSessionHandler(connMsg,
+                                        settings,
+                                        userSessionId,
+                                        keepAliveSeconds,
+                                        false,
+                                        willMessage,
+                                        clientInfo);
+
+                                } else {
+                                    setupPersistentSessionHandler(connMsg, settings, userSessionId,
+                                        keepAliveSeconds, sessionExpiryInterval, null, willMessage, clientInfo);
+                                }
+                                return CompletableFuture.completedFuture(null);
+                            } else {
+                                return inboxClient.expire(ExpireRequest.newBuilder()
+                                        .setReqId(reqId)
+                                        .setTenantId(clientInfo.getTenantId())
+                                        .setInboxId(userSessionId)
+                                        .setNow(HLC.INST.getPhysical())
+                                        .build())
+                                    .exceptionallyAsync(e -> {
+                                        log.error("Failed to expire inbox", e);
+                                        return ExpireReply.newBuilder()
+                                            .setReqId(reqId)
+                                            .setCode(ExpireReply.Code.ERROR)
+                                            .build();
+                                    }, ctx.channel().eventLoop())
+                                    .thenAcceptAsync(reply -> {
+                                        if (reply.getCode() == ExpireReply.Code.ERROR) {
+                                            handleGoAway(onCleanSessionFailed(clientInfo));
+                                        } else {
+                                            int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
+                                            if (sessionExpiryInterval == 0) {
+                                                setupTransientSessionHandler(connMsg,
+                                                    settings,
+                                                    userSessionId,
+                                                    keepAliveSeconds,
+                                                    reply.getCode() == ExpireReply.Code.OK,
+                                                    willMessage,
+                                                    clientInfo);
+                                            } else {
+                                                setupPersistentSessionHandler(connMsg, settings, userSessionId,
+                                                    keepAliveSeconds, sessionExpiryInterval, null, willMessage,
+                                                    clientInfo);
+                                            }
+                                        }
+                                    }, ctx.channel().eventLoop());
+                            }
                         } else {
-                            return inboxClient.expire(ExpireRequest.newBuilder()
+                            return inboxClient.get(GetRequest.newBuilder()
                                     .setReqId(reqId)
                                     .setTenantId(clientInfo.getTenantId())
                                     .setInboxId(userSessionId)
-                                    .setNow(HLC.INST.getPhysical())
                                     .build())
                                 .exceptionallyAsync(e -> {
-                                    log.error("Failed to expire inbox", e);
-                                    return ExpireReply.newBuilder()
+                                    log.error("Failed to get inbox", e);
+                                    return GetReply.newBuilder()
                                         .setReqId(reqId)
-                                        .setCode(ExpireReply.Code.ERROR)
+                                        .setCode(GetReply.Code.ERROR)
                                         .build();
                                 }, ctx.channel().eventLoop())
                                 .thenAcceptAsync(reply -> {
-                                    if (reply.getCode() == ExpireReply.Code.ERROR) {
-                                        handleGoAway(onCleanSessionFailed(clientInfo));
+                                    if (reply.getCode() == GetReply.Code.ERROR) {
+                                        handleGoAway(onGetSessionFailed(clientInfo));
+                                    } else if (reply.getCode() == GetReply.Code.EXIST) {
+                                        // reuse existing inbox with the highest incarnation, the old ones will be cleaned up eventually
+                                        InboxVersion inbox = reply.getInbox(reply.getInboxCount() - 1);
+                                        int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
+                                        setupPersistentSessionHandler(connMsg,
+                                            settings,
+                                            userSessionId,
+                                            keepAliveSeconds,
+                                            sessionExpiryInterval,
+                                            new ExistingSession(
+                                                inbox.getIncarnation(),
+                                                inbox.getVersion()),
+                                            willMessage,
+                                            clientInfo);
                                     } else {
                                         int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
                                         if (sessionExpiryInterval == 0) {
@@ -158,9 +211,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                 settings,
                                                 userSessionId,
                                                 keepAliveSeconds,
-                                                reply.getCode() == ExpireReply.Code.OK,
-                                                willMessage,
-                                                clientInfo);
+                                                false,
+                                                willMessage, clientInfo);
                                         } else {
                                             setupPersistentSessionHandler(connMsg, settings, userSessionId,
                                                 keepAliveSeconds, sessionExpiryInterval, null, willMessage, clientInfo);
@@ -168,60 +220,25 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                     }
                                 }, ctx.channel().eventLoop());
                         }
-                    } else {
-                        return inboxClient.get(GetRequest.newBuilder()
-                                .setReqId(reqId)
-                                .setTenantId(clientInfo.getTenantId())
-                                .setInboxId(userSessionId)
-                                .build())
-                            .exceptionallyAsync(e -> {
-                                log.error("Failed to get inbox", e);
-                                return GetReply.newBuilder()
-                                    .setReqId(reqId)
-                                    .setCode(GetReply.Code.ERROR)
-                                    .build();
-                            }, ctx.channel().eventLoop())
-                            .thenAcceptAsync(reply -> {
-                                if (reply.getCode() == GetReply.Code.ERROR) {
-                                    handleGoAway(onGetSessionFailed(clientInfo));
-                                } else if (reply.getCode() == GetReply.Code.EXIST) {
-                                    // reuse existing inbox with the highest incarnation, the old ones will be cleaned up eventually
-                                    InboxVersion inbox = reply.getInbox(reply.getInboxCount() - 1);
-                                    int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                                    setupPersistentSessionHandler(connMsg,
-                                        settings,
-                                        userSessionId,
-                                        keepAliveSeconds,
-                                        sessionExpiryInterval,
-                                        new ExistingSession(
-                                            inbox.getIncarnation(),
-                                            inbox.getVersion()),
-                                        willMessage,
-                                        clientInfo);
-                                } else {
-                                    int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                                    if (sessionExpiryInterval == 0) {
-                                        setupTransientSessionHandler(connMsg,
-                                            settings,
-                                            userSessionId,
-                                            keepAliveSeconds,
-                                            false,
-                                            willMessage, clientInfo);
-                                    } else {
-                                        setupPersistentSessionHandler(connMsg, settings, userSessionId,
-                                            keepAliveSeconds, sessionExpiryInterval, null, willMessage, clientInfo);
-                                    }
-                                }
-                            }, ctx.channel().eventLoop());
                     }
-                }
-            }, ctx.channel().eventLoop());
+                }, ctx.channel().eventLoop());
+        } else {
+            if (mqttMessage.decoderResult().isSuccess()) {
+                handleMqttMessage(mqttMessage);
+            } else {
+                handleGoAway(new GoAway(getLocal(ProtocolError.class)
+                    .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
+                    .statement(mqttMessage.decoderResult().cause().getMessage())));
+            }
+        }
     }
 
 
     protected abstract GoAway sanityCheck(MqttConnectMessage message);
 
     protected abstract CompletableFuture<OkOrGoAway> authenticate(MqttConnectMessage message);
+
+    protected abstract void handleMqttMessage(MqttMessage message);
 
     protected abstract GoAway validate(MqttConnectMessage message, TenantSettings settings, ClientInfo clientInfo);
 
@@ -234,6 +251,22 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     protected abstract GoAway onCleanSessionFailed(ClientInfo clientInfo);
 
     protected abstract GoAway onGetSessionFailed(ClientInfo clientInfo);
+
+    protected abstract ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
+                                                                   TenantSettings settings,
+                                                                   String userSessionId,
+                                                                   int keepAliveSeconds,
+                                                                   @Nullable LWT willMessage,
+                                                                   ClientInfo clientInfo);
+
+    protected abstract ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
+                                                                    TenantSettings settings,
+                                                                    String userSessionId,
+                                                                    int keepAliveSeconds,
+                                                                    int sessionExpiryInterval,
+                                                                    @Nullable ExistingSession existingSession,
+                                                                    @Nullable LWT willMessage,
+                                                                    ClientInfo clientInfo);
 
     private void setupTransientSessionHandler(MqttConnectMessage connMsg,
                                               TenantSettings settings,
@@ -303,21 +336,6 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                 .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
     }
 
-    protected abstract ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
-                                                                   TenantSettings settings,
-                                                                   String userSessionId,
-                                                                   int keepAliveSeconds,
-                                                                   @Nullable LWT willMessage,
-                                                                   ClientInfo clientInfo);
-
-    protected abstract ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
-                                                                    TenantSettings settings,
-                                                                    String userSessionId,
-                                                                    int keepAliveSeconds,
-                                                                    int sessionExpiryInterval,
-                                                                    @Nullable ExistingSession existingSession,
-                                                                    @Nullable LWT willMessage,
-                                                                    ClientInfo clientInfo);
 
     protected abstract MqttConnAckMessage onConnected(MqttConnectMessage connMsg,
                                                       TenantSettings settings,
@@ -327,8 +345,12 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                       boolean sessionExists,
                                                       ClientInfo clientInfo);
 
-    private void handleGoAway(GoAway goAway) {
+    protected void handleGoAway(GoAway goAway) {
         assert ctx.channel().eventLoop().inEventLoop();
+        if (isGoAway) {
+            return;
+        }
+        isGoAway = true;
         if (!ctx.channel().isActive()) {
             return;
         }

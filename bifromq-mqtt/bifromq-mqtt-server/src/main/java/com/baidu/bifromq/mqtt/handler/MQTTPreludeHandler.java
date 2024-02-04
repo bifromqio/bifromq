@@ -31,6 +31,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Unaccept
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectVariableHeader;
 import io.netty.handler.codec.mqtt.MqttIdentifierRejectedException;
@@ -99,67 +100,68 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
         MqttMessage message = (MqttMessage) msg;
         if (!message.decoderResult().isSuccess()) {
             Throwable cause = message.decoderResult().cause();
-            if (message.fixedHeader() == null) {
-                closeConnectionWithRandomDelay(getLocal(ProtocolError.class).peerAddress(remoteAddr)
-                    .statement("Bad FixedHeader:" + cause.getMessage()));
-                return;
-            }
-            if (message.fixedHeader().messageType() != CONNECT) {
-                closeConnectionWithRandomDelay(getLocal(ProtocolError.class).peerAddress(remoteAddr)
-                    .statement("MQTT-3.1.0-1"));
-                return;
-            }
-            if (!(message.variableHeader() instanceof MqttConnectVariableHeader connVarHeader)) {
-                closeConnectionWithRandomDelay(
-                    getLocal(ProtocolError.class).peerAddress(remoteAddr).statement("MQTT-3.1.0-1"));
-                return;
+            if (cause instanceof TooLongFrameException) {
+                closeChannelWithRandomDelay(getLocal(ProtocolError.class)
+                    .statement("Too large packet")
+                    .peerAddress(remoteAddr));
             }
             if (cause instanceof MqttUnacceptableProtocolVersionException) {
-                closeConnectionWithRandomDelay(getLocal(UnacceptedProtocolVer.class)
+                closeChannelWithRandomDelay(getLocal(UnacceptedProtocolVer.class)
                     .peerAddress(remoteAddr));
                 return;
             }
-            switch (connVarHeader.version()) {
-                case 3:
-                case 4:
-                    // decode mqtt connect packet error
-                    if (cause instanceof MqttIdentifierRejectedException) {
-                        closeConnectionWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
-                            MqttMessageBuilders.connAck()
-                                .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
-                                .build());
-                    } else {
-                        closeConnectionWithRandomDelay(getLocal(ProtocolError.class)
-                            .peerAddress(remoteAddr).statement("MQTT3-4.8.0-2"));
-                    }
-                    return;
-                case 5:
-                default:
-                    // decode mqtt connect packet error
-                    if (cause instanceof MqttIdentifierRejectedException) {
-                        closeConnectionWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
-                            MqttMessageBuilders.connAck()
-                                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
-                                    .reasonString(cause.getMessage())
-                                    .build())
-                                .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID)
-                                .build());
-                    } else {
-                        // according to [MQTT-4.13.1-1]
-                        closeConnectionWithRandomDelay(getLocal(ProtocolError.class).peerAddress(remoteAddr)
-                                .statement("MQTT5-4.13.1-1"),
-                            MqttMessageBuilders.connAck()
-                                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
-                                    .reasonString(cause.getMessage())
-                                    .build())
-                                .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET)
-                                .build());
-                    }
-                    return;
+            if (message.fixedHeader() != null && message.fixedHeader().messageType() != CONNECT) {
+                closeChannelWithRandomDelay(getLocal(ProtocolError.class).peerAddress(remoteAddr)
+                    .statement("MQTT-3.1.0-1"));
+                return;
+            }
+            if (message.variableHeader() instanceof MqttConnectVariableHeader connVarHeader) {
+                switch (connVarHeader.version()) {
+                    case 3:
+                    case 4:
+                        // decode mqtt connect packet error
+                        if (cause instanceof MqttIdentifierRejectedException) {
+                            closeChannelWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
+                                MqttMessageBuilders.connAck()
+                                    .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
+                                    .build());
+                        } else {
+                            closeChannelWithRandomDelay(getLocal(ProtocolError.class)
+                                .peerAddress(remoteAddr).statement("MQTT3-4.8.0-2"));
+                        }
+                        return;
+                    case 5:
+                    default:
+                        // decode mqtt connect packet error
+                        if (cause instanceof MqttIdentifierRejectedException) {
+                            closeChannelWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
+                                MqttMessageBuilders.connAck()
+                                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                        .reasonString(cause.getMessage())
+                                        .build())
+                                    .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID)
+                                    .build());
+                        } else {
+                            // according to [MQTT-4.13.1-1]
+                            closeChannelWithRandomDelay(getLocal(ProtocolError.class).peerAddress(remoteAddr)
+                                    .statement("MQTT5-4.13.1-1"),
+                                MqttMessageBuilders.connAck()
+                                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                        .reasonString(cause.getMessage())
+                                        .build())
+                                    .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET)
+                                    .build());
+                        }
+                        return;
+                }
+            } else {
+                closeChannelWithRandomDelay(
+                    getLocal(ProtocolError.class).peerAddress(remoteAddr).statement(cause.getMessage()));
+                return;
             }
         } else if (!(message instanceof MqttConnectMessage)) {
             // according to [MQTT-3.1.0-1]
-            closeConnectionWithRandomDelay(getLocal(ProtocolError.class).statement("MQTT-3.1.0-1"));
+            closeChannelWithRandomDelay(getLocal(ProtocolError.class).statement("MQTT-3.1.0-1"));
             log.warn("First packet must be mqtt connect message: remote={}", remoteAddr);
             return;
         }
@@ -194,11 +196,11 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
         }
     }
 
-    private void closeConnectionWithRandomDelay(Event<?> reason) {
-        closeConnectionWithRandomDelay(reason, null);
+    private void closeChannelWithRandomDelay(Event<?> reason) {
+        closeChannelWithRandomDelay(reason, null);
     }
 
-    private void closeConnectionWithRandomDelay(Event<?> reason, @Nullable MqttMessage farewell) {
+    private void closeChannelWithRandomDelay(Event<?> reason, @Nullable MqttMessage farewell) {
         if (timeoutCloseTask != null) {
             timeoutCloseTask.cancel(true);
         }

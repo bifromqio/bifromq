@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toMqttUserProps;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_DATA;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_METHOD;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CONTENT_TYPE;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CORRELATION_DATA;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR;
@@ -21,13 +24,16 @@ import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SUBSCR
 
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
+import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubCompReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRecReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.type.StringPair;
 import com.baidu.bifromq.type.UserProperties;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.google.protobuf.ByteString;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.mqtt.MqttFixedHeader;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -39,11 +45,16 @@ import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttPubReplyMessageVariableHeader;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
+import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubAckPayload;
 import java.util.List;
 
 public class MQTT5MessageBuilders {
+    public static AuthBuilder auth(String authMethod) {
+        return new AuthBuilder(authMethod);
+    }
+
     public static SubAckBuilder subAck() {
         return new SubAckBuilder();
     }
@@ -64,6 +75,61 @@ public class MQTT5MessageBuilders {
         return new PubCompBuilder();
     }
 
+    public static final class AuthBuilder {
+        private final String authMethod;
+        private ByteString authData;
+        private MQTT5AuthReasonCode reasonCode;
+        private String reasonString;
+        private UserProperties userProps;
+
+        public AuthBuilder(String authMethod) {
+            this.authMethod = authMethod;
+        }
+
+        public AuthBuilder authData(ByteString authData) {
+            this.authData = authData;
+            return this;
+        }
+
+        public AuthBuilder reasonCode(MQTT5AuthReasonCode reasonCode) {
+            this.reasonCode = reasonCode;
+            return this;
+        }
+
+        public AuthBuilder reasonString(String reasonString) {
+            this.reasonString = reasonString;
+            return this;
+        }
+
+        public AuthBuilder userProperties(UserProperties userProps) {
+            this.userProps = userProps;
+            return this;
+        }
+
+        public MqttMessage build() {
+            MqttFixedHeader fixedHeader = new MqttFixedHeader(MqttMessageType.AUTH,
+                false,
+                MqttQoS.AT_MOST_ONCE,
+                false,
+                0);
+            MqttProperties mqttProperties = new MqttProperties();
+            mqttProperties.add(new MqttProperties.StringProperty(AUTHENTICATION_METHOD.value(), authMethod));
+            if (authData != null) {
+                mqttProperties.add(new MqttProperties.BinaryProperty(
+                    AUTHENTICATION_DATA.value(), authData.toByteArray()));
+            }
+            if (!Strings.isNullOrEmpty(reasonString)) {
+                mqttProperties.add(new MqttProperties.StringProperty(
+                    MqttProperties.MqttPropertyType.REASON_STRING.value(), reasonString));
+            }
+            if (userProps != null) {
+                mqttProperties.add(toMqttUserProps(userProps));
+            }
+            MqttReasonCodeAndPropertiesVariableHeader variableHeader =
+                new MqttReasonCodeAndPropertiesVariableHeader(reasonCode.value(), mqttProperties);
+            return new MqttMessage(fixedHeader, variableHeader);
+        }
+    }
 
     public static final class PubBuilder {
         private int packetId;
@@ -101,7 +167,7 @@ public class MQTT5MessageBuilders {
                     new MqttProperties.StringProperty(RESPONSE_TOPIC.value(), message.message().getResponseTopic()));
             }
             if (message.message().getUserProperties().getUserPropertiesCount() > 0) {
-                mqttProps.add(toUserProperties(message.message().getUserProperties()));
+                mqttProps.add(toMqttUserProps(message.message().getUserProperties()));
             }
             return MqttMessageBuilders.publish()
                 .messageId(packetId)
@@ -269,11 +335,4 @@ public class MQTT5MessageBuilders {
         }
     }
 
-    private static MqttProperties.UserProperties toUserProperties(UserProperties userProperties) {
-        MqttProperties.UserProperties userProps = new MqttProperties.UserProperties();
-        for (StringPair stringPair : userProperties.getUserPropertiesList()) {
-            userProps.add(stringPair.getKey(), stringPair.getValue());
-        }
-        return userProps;
-    }
 }

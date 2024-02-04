@@ -14,6 +14,8 @@
 package com.baidu.bifromq.mqtt.handler.v5;
 
 import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_DATA;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_METHOD;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CONTENT_TYPE;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CORRELATION_DATA;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR;
@@ -35,9 +37,16 @@ import java.util.List;
 import java.util.Optional;
 
 public class MQTT5MessageUtils {
+    public static MqttProperties.UserProperties toMqttUserProps(UserProperties userProperties) {
+        MqttProperties.UserProperties userProps = new MqttProperties.UserProperties();
+        for (StringPair stringPair : userProperties.getUserPropertiesList()) {
+            userProps.add(stringPair.getKey(), stringPair.getValue());
+        }
+        return userProps;
+    }
 
     @SuppressWarnings("unchecked")
-    static UserProperties toUserProperties(MqttProperties mqttProperties) {
+    public static UserProperties toUserProperties(MqttProperties mqttProperties) {
         UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
         List<MqttProperties.UserProperty> userPropertyList = (List<MqttProperties.UserProperty>) mqttProperties
             .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value());
@@ -49,19 +58,19 @@ public class MQTT5MessageUtils {
     }
 
 
-    static boolean isUTF8Payload(MqttProperties mqttProperties) {
+    public static boolean isUTF8Payload(MqttProperties mqttProperties) {
         return packetFormatIndicator(mqttProperties).map(i -> i == 1).orElse(false);
     }
 
-    static Optional<Integer> receiveMaximum(MqttProperties mqttProperties) {
+    public static Optional<Integer> receiveMaximum(MqttProperties mqttProperties) {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.RECEIVE_MAXIMUM);
     }
 
-    static Optional<Integer> topicAliasMaximum(MqttProperties mqttProperties) {
+    public static Optional<Integer> topicAliasMaximum(MqttProperties mqttProperties) {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM);
     }
 
-    static Optional<Integer> topicAlias(MqttProperties mqttProperties) {
+    public static Optional<Integer> topicAlias(MqttProperties mqttProperties) {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS);
     }
 
@@ -69,16 +78,24 @@ public class MQTT5MessageUtils {
         return integerMqttProperty(mqttProperties, PAYLOAD_FORMAT_INDICATOR);
     }
 
-    static Optional<Integer> messageExpiryInterval(MqttProperties mqttProperties) {
+    public static Optional<Integer> messageExpiryInterval(MqttProperties mqttProperties) {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.PUBLICATION_EXPIRY_INTERVAL);
     }
 
-    static Optional<String> contentType(MqttProperties mqttProperties) {
+    public static Optional<String> contentType(MqttProperties mqttProperties) {
         return stringMqttProperty(mqttProperties, CONTENT_TYPE);
     }
 
-    static Optional<String> responseTopic(MqttProperties mqttProperties) {
+    public static Optional<String> responseTopic(MqttProperties mqttProperties) {
         return stringMqttProperty(mqttProperties, RESPONSE_TOPIC);
+    }
+
+    public static Optional<String> authMethod(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, AUTHENTICATION_METHOD);
+    }
+
+    public static Optional<ByteString> authData(MqttProperties mqttProperties) {
+        return binaryMqttProperty(mqttProperties, AUTHENTICATION_DATA);
     }
 
     static Optional<Integer> integerMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {

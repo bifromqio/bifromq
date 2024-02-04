@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAlias;
-import static com.baidu.bifromq.mqtt.utils.AuthUtil.to;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.dist.client.DistResult;
@@ -33,7 +33,6 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
-import com.baidu.bifromq.plugin.authprovider.type.UserProperties;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedPubRate;
@@ -51,6 +50,8 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.UserProperties;
+import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
@@ -88,20 +89,12 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public UserProperties getUserProps(MqttPublishMessage mqttMessage) {
-        @SuppressWarnings("unchecked")
-        List<MqttProperties.UserProperty> userPropertyList =
-            (List<MqttProperties.UserProperty>) mqttMessage.variableHeader().properties()
-                .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value());
-        return to(userPropertyList);
+        return toUserProperties(mqttMessage.variableHeader().properties());
     }
 
     @Override
     public UserProperties getUserProps(MqttUnsubscribeMessage mqttMessage) {
-        @SuppressWarnings("unchecked")
-        List<MqttProperties.UserProperty> userPropertyList =
-            (List<MqttProperties.UserProperty>) mqttMessage.idAndPropertiesVariableHeader().properties()
-                .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value());
-        return to(userPropertyList);
+        return toUserProperties(mqttMessage.idAndPropertiesVariableHeader().properties());
     }
 
     @Override
@@ -162,8 +155,20 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public GoAway respondDecodeError(MqttMessage message) {
+        if (message.decoderResult().cause() instanceof TooLongFrameException) {
+            return new GoAway(MqttMessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.PacketTooLarge.value())
+                .build(),
+                getLocal(BadPacket.class)
+                    .cause(message.decoderResult().cause())
+                    .clientInfo(clientInfo));
+        }
+        MqttProperties properties = new MqttProperties();
+        properties.add(new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.REASON_STRING.value(),
+            message.decoderResult().cause().getMessage()));
         return new GoAway(MqttMessageBuilders.disconnect()
             .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
+            .properties(properties)
             .build(),
             getLocal(BadPacket.class)
                 .cause(message.decoderResult().cause())
@@ -238,9 +243,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 (MqttProperties.IntegerProperty) message.idAndPropertiesVariableHeader().properties()
                     .getProperty(MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER.value()))
             .map(MqttProperties.MqttProperty::value);
-        UserProperties userProps =
-            to((List<MqttProperties.UserProperty>) message.idAndPropertiesVariableHeader().properties()
-                .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value()));
+        UserProperties userProps = toUserProperties(message.idAndPropertiesVariableHeader().properties());
         return message.payload().topicSubscriptions().stream()
             .map(sub -> {
                 TopicFilterOption.Builder optionBuilder = TopicFilterOption.newBuilder()

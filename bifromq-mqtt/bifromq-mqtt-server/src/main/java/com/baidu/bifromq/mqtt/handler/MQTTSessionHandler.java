@@ -54,7 +54,6 @@ import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
-import com.baidu.bifromq.plugin.authprovider.type.UserProperties;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
@@ -90,6 +89,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.UserProperties;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelFutureListener;
@@ -290,11 +290,15 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 case PUBCOMP -> handlePubCompMsg(mqttMessage);
                 case SUBSCRIBE -> handleSubMsg((MqttSubscribeMessage) mqttMessage);
                 case UNSUBSCRIBE -> handleUnsubMsg((MqttUnsubscribeMessage) mqttMessage);
-                default -> ctx.fireChannelRead(msg);
+                default -> handleOther(mqttMessage);
             }
         } else {
             handleGoAway(helper().respondDecodeError(mqttMessage));
         }
+    }
+
+    protected void handleOther(MqttMessage message) {
+
     }
 
     protected abstract GoAway handleDisconnect(MqttMessage message);
@@ -868,6 +872,15 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         ctx.read();
     }
 
+    protected void handleResponseOrGoAway(ResponseOrGoAway responseOrGoAway) {
+        if (responseOrGoAway.response() != null) {
+            writeAndFlush(responseOrGoAway.response());
+        } else {
+            assert responseOrGoAway.goAway() != null;
+            handleGoAway(responseOrGoAway.goAway());
+        }
+    }
+
     protected final void handleGoAway(GoAway goAway) {
         assert ctx.channel().eventLoop().inEventLoop();
         if (isGoAway) {
@@ -891,15 +904,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         } else {
             ctx.channel().eventLoop().schedule(() -> ctx.channel().close(),
                 ThreadLocalRandom.current().nextInt(100, 5000), TimeUnit.MILLISECONDS);
-        }
-    }
-
-    private void handleResponseOrGoAway(ResponseOrGoAway responseOrGoAway) {
-        if (responseOrGoAway.response() != null) {
-            writeAndFlush(responseOrGoAway.response());
-        } else {
-            assert responseOrGoAway.goAway() != null;
-            handleGoAway(responseOrGoAway.goAway());
         }
     }
 

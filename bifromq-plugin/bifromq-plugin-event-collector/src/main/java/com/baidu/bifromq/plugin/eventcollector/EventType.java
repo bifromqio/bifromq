@@ -18,13 +18,14 @@ public enum EventType {
 
     // channel close related events
     AUTH_ERROR,
+    ENHANCED_AUTH_ABORT_BY_CLIENT,
     UNAUTHENTICATED_CLIENT,
     NOT_AUTHORIZED_CLIENT,
     CHANNEL_ERROR,
     CONNECT_TIMEOUT,
     IDENTIFIER_REJECTED, // exceed max length
     MALFORMED_CLIENT_IDENTIFIER, // malformed utf8
-    PROTOCOL_ERROR, // malformed utf8
+    PROTOCOL_ERROR,
     MALFORMED_USERNAME, // malformed utf8
     MALFORMED_WILL_TOPIC, // malformed utf8
     UNACCEPTED_PROTOCOL_VER,
@@ -43,6 +44,7 @@ public enum EventType {
     INVALID_TOPIC_FILTER,
     MALFORMED_TOPIC_FILTER, // malformed utf8
     KICKED,
+    RE_AUTH_FAILED,
     NO_PUB_PERMISSION,
     PROTOCOL_VIOLATION,
     EXCEED_RECEIVING_LIMIT,

@@ -1,6 +1,7 @@
 syntax = "proto3";
 import "commontype/QoS.proto";
 import "commontype/ClientInfo.proto";
+import "commontype/UserProperties.proto";
 
 package commontype;
 
@@ -8,13 +9,6 @@ option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.type";
 option java_outer_classname = "TopicMessageProtos";
 
-message StringPair{
-  string key = 1;
-  string value = 2;
-}
-message UserProperties{
-  repeated StringPair userProperties = 11;
-}
 message Message{
   uint64 messageId = 1;
   QoS pubQoS = 2;

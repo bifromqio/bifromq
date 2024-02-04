@@ -19,6 +19,8 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.type.ClientInfo;
@@ -75,6 +77,15 @@ public interface IAuthProvider extends ExtensionPoint {
             }
             return mqtt5AuthResultBuilder.build();
         });
+    }
+
+    default CompletableFuture<MQTT5ExtendedAuthResult> extendedAuth(MQTT5ExtendedAuthData authData) {
+        return CompletableFuture.completedFuture(MQTT5ExtendedAuthResult.newBuilder()
+            .setFailed(Failed.newBuilder()
+                .setCode(Failed.Code.NotAuthorized)
+                .setReason("Not supported")
+                .build())
+            .build());
     }
 
     /**
