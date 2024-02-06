@@ -334,9 +334,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     private void handleSubMsg(MqttSubscribeMessage message) {
-        GoAway goAwayOnInvalid = helper().validateSubMessage(message);
-        if (goAwayOnInvalid != null) {
-            handleGoAway(goAwayOnInvalid);
+        ResponseOrGoAway isInvalid = helper().validateSubMessage(message);
+        if (isInvalid != null) {
+            handleResponseOrGoAway(isInvalid);
             return;
         }
         int packetId = message.variableHeader().messageId();

@@ -125,17 +125,18 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway validateSubMessage(MqttSubscribeMessage message) {
+    public ResponseOrGoAway validateSubMessage(MqttSubscribeMessage message) {
         List<MqttTopicSubscription> topicSubscriptions = message.payload().topicSubscriptions();
         if (topicSubscriptions.isEmpty()) {
             // Ignore instead of disconnect [MQTT-3.8.3-3]
-            return new GoAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.8.3-3").clientInfo(clientInfo));
+            return new ResponseOrGoAway(
+                new GoAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.8.3-3").clientInfo(clientInfo)));
         }
         if (topicSubscriptions.size() > settings.maxTopicFiltersPerSub) {
-            return new GoAway(getLocal(TooLargeSubscription.class)
+            return new ResponseOrGoAway(new GoAway(getLocal(TooLargeSubscription.class)
                 .actual(topicSubscriptions.size())
                 .max(settings.maxTopicFiltersPerSub)
-                .clientInfo(clientInfo));
+                .clientInfo(clientInfo)));
         }
         return null;
     }

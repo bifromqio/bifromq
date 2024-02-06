@@ -200,37 +200,37 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway validateSubMessage(MqttSubscribeMessage message) {
+    public ResponseOrGoAway validateSubMessage(MqttSubscribeMessage message) {
         List<MqttTopicSubscription> topicSubscriptions = message.payload().topicSubscriptions();
         if (topicSubscriptions.isEmpty()) {
             // Ignore instead of disconnect [MQTT-3.8.3-3]
-            return new GoAway(MQTT5MessageBuilders.disconnect()
+            return new ResponseOrGoAway(new GoAway(MQTT5MessageBuilders.disconnect()
                 .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                 .reasonString("MQTT5-3.8.3-2")
                 .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.8.3-2")
-                    .clientInfo(clientInfo));
+                    .clientInfo(clientInfo)));
         }
         if (topicSubscriptions.size() > settings.maxTopicFiltersPerSub) {
-            return new GoAway(
+            return new ResponseOrGoAway(new GoAway(
                 MQTT5MessageBuilders.disconnect()
                     .reasonCode(MQTT5DisconnectReasonCode.AdministrativeAction)
                     .build(),
                 getLocal(TooLargeSubscription.class)
                     .actual(topicSubscriptions.size())
                     .max(settings.maxTopicFiltersPerSub)
-                    .clientInfo(clientInfo));
+                    .clientInfo(clientInfo)));
         }
         for (MqttTopicSubscription topicSub : topicSubscriptions) {
             if (!isWellFormed(topicSub.topicName(), SANITY_CHECK)) {
-                return new GoAway(
+                return new ResponseOrGoAway(new GoAway(
                     MQTT5MessageBuilders.disconnect()
                         .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket)
                         .build(),
                     getLocal(MalformedTopicFilter.class)
                         .topicFilter(topicSub.topicName())
-                        .clientInfo(clientInfo));
+                        .clientInfo(clientInfo)));
             }
         }
         Optional<Integer> subId = Optional.ofNullable(
@@ -239,25 +239,23 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             .map(MqttProperties.MqttProperty::value);
         if (subId.isPresent()) {
             if (subId.get() == 0) {
-                return new GoAway(
+                return new ResponseOrGoAway(new GoAway(
                     MQTT5MessageBuilders.disconnect()
                         .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                         .reasonString("MQTT5-3.8.2.1.2")
                         .build(),
                     getLocal(ProtocolViolation.class)
                         .statement("MQTT5-3.8.2.1.2")
-                        .clientInfo(clientInfo));
+                        .clientInfo(clientInfo)));
             }
             if (!settings.subscriptionIdentifierEnabled) {
-                return new GoAway(
+                return new ResponseOrGoAway(
                     MQTT5MessageBuilders.subAck()
                         .packetId(message.variableHeader().messageId())
                         .reasonCodes(topicSubscriptions.stream()
                             .map(s -> MQTT5SubAckReasonCode.SubscriptionIdentifierNotSupported)
                             .toArray(MQTT5SubAckReasonCode[]::new))
-                        .build(), getLocal(ProtocolViolation.class)
-                    .statement("MQTT5-3.8.2.1.2")
-                    .clientInfo(clientInfo));
+                        .build());
             }
         }
         return null;

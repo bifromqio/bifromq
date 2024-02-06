@@ -80,7 +80,7 @@ public interface IMQTTProtocolHelper {
 
     GoAway respondDuplicateConnect(MqttConnectMessage message);
 
-    GoAway validateSubMessage(MqttSubscribeMessage message);
+    ResponseOrGoAway validateSubMessage(MqttSubscribeMessage message);
 
     List<SubTask> getSubTask(MqttSubscribeMessage message);
 
