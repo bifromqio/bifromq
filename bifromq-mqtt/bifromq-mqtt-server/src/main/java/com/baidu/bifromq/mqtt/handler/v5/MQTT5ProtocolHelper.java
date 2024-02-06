@@ -517,7 +517,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             .map(responseTopic -> !isWellFormed(topic, SANITY_CHECK)).orElse(false)) {
             return new GoAway(
                 MQTT5MessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.TopicNameInvalid)
+                    .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket)
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.2.2-13")
