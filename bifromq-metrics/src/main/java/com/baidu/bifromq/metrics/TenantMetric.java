@@ -19,6 +19,8 @@ public enum TenantMetric {
     MqttConnectionGauge("mqtt.connection.num.gauge", Meter.Type.GAUGE),
     MqttConnectCount("mqtt.connect.count", Meter.Type.COUNTER),
     MqttDisconnectCount("mqtt.disconnect.count", Meter.Type.COUNTER),
+    MqttIngressBytes("mqtt.ingress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttEgressBytes("mqtt.egress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttQoS0IngressBytes("mqtt.ingress.qos0.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttQoS0DistBytes("mqtt.dist.qos0.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttQoS1IngressBytes("mqtt.ingress.qos1.bytes", Meter.Type.DISTRIBUTION_SUMMARY),

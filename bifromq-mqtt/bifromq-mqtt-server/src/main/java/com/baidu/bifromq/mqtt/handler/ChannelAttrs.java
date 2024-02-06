@@ -53,7 +53,7 @@ public class ChannelAttrs {
     }
 
     public static void setMaxPayload(int maxUserPayloadSize, ChannelHandlerContext ctx) {
-        ctx.channel().pipeline().replace(ctx.pipeline().get("decoder"), "decoder",
+        ctx.channel().pipeline().replace(ctx.pipeline().get(MqttDecoder.class.getName()), MqttDecoder.class.getName(),
             new MqttDecoder(maxUserPayloadSize));
         if (maxUserPayloadSize > ctx.channel().config().getWriteBufferHighWaterMark()) {
             ctx.channel().config().setWriteBufferHighWaterMark(maxUserPayloadSize + 1024);

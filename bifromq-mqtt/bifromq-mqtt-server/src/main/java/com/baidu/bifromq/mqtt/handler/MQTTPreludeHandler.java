@@ -17,6 +17,7 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_MALFORMED_PACKET;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PACKET_TOO_LARGE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.CONNECT;
 
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3ConnectHandler;
@@ -100,11 +101,6 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
         MqttMessage message = (MqttMessage) msg;
         if (!message.decoderResult().isSuccess()) {
             Throwable cause = message.decoderResult().cause();
-            if (cause instanceof TooLongFrameException) {
-                closeChannelWithRandomDelay(getLocal(ProtocolError.class)
-                    .statement("Too large packet")
-                    .peerAddress(remoteAddr));
-            }
             if (cause instanceof MqttUnacceptableProtocolVersionException) {
                 closeChannelWithRandomDelay(getLocal(UnacceptedProtocolVer.class)
                     .peerAddress(remoteAddr));
@@ -119,6 +115,11 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                 switch (connVarHeader.version()) {
                     case 3:
                     case 4:
+                        if (cause instanceof TooLongFrameException) {
+                            closeChannelWithRandomDelay(getLocal(ProtocolError.class)
+                                .statement("Too large packet")
+                                .peerAddress(remoteAddr));
+                        }
                         // decode mqtt connect packet error
                         if (cause instanceof MqttIdentifierRejectedException) {
                             closeChannelWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
@@ -132,6 +133,17 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                         return;
                     case 5:
                     default:
+                        if (cause instanceof TooLongFrameException) {
+                            closeChannelWithRandomDelay(getLocal(ProtocolError.class)
+                                    .statement("Too large packet")
+                                    .peerAddress(remoteAddr),
+                                MqttMessageBuilders.connAck()
+                                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                        .reasonString(cause.getMessage())
+                                        .build())
+                                    .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
+                                    .build());
+                        }
                         // decode mqtt connect packet error
                         if (cause instanceof MqttIdentifierRejectedException) {
                             closeChannelWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),

@@ -19,22 +19,29 @@ import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPersistentSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.type.ClientInfo;
+import io.netty.channel.ChannelHandlerContext;
 import javax.annotation.Nullable;
 import lombok.Builder;
 
-public class MQTT3PersistentSessionHandler extends MQTTPersistentSessionHandler {
+public final class MQTT3PersistentSessionHandler extends MQTTPersistentSessionHandler {
     private final IMQTTProtocolHelper helper;
 
     @Builder
-    protected MQTT3PersistentSessionHandler(TenantSettings settings,
-                                            String userSessionId,
-                                            int keepAliveTimeSeconds,
-                                            int sessionExpirySeconds,
-                                            ClientInfo clientInfo,
-                                            @Nullable MQTTConnectHandler.ExistingSession existingSession,
-                                            @Nullable LWT willMessage) {
-        super(settings, userSessionId, keepAliveTimeSeconds, sessionExpirySeconds, clientInfo, existingSession,
-            willMessage);
+    public MQTT3PersistentSessionHandler(TenantSettings settings,
+                                         String userSessionId,
+                                         int keepAliveTimeSeconds,
+                                         int sessionExpirySeconds,
+                                         ClientInfo clientInfo,
+                                         @Nullable MQTTConnectHandler.ExistingSession existingSession,
+                                         @Nullable LWT willMessage,
+                                         ChannelHandlerContext ctx) {
+        super(settings,
+            userSessionId,
+            keepAliveTimeSeconds,
+            sessionExpirySeconds,
+            clientInfo,
+            existingSession,
+            willMessage, ctx);
         this.helper = new MQTT3ProtocolHelper(settings, clientInfo);
     }
 

@@ -19,17 +19,22 @@ import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHEN
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CONTENT_TYPE;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CORRELATION_DATA;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.REASON_STRING;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.RESPONSE_TOPIC;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SERVER_REFERENCE;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.TOPIC_ALIAS;
 
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
+import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5DisconnectReasonCode;
+import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubAckReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubCompReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRecReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
+import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode;
 import com.baidu.bifromq.type.UserProperties;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -48,6 +53,9 @@ import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubAckPayload;
+import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
+import io.netty.handler.codec.mqtt.MqttUnsubAckPayload;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MQTT5MessageBuilders {
@@ -55,12 +63,24 @@ public class MQTT5MessageBuilders {
         return new AuthBuilder(authMethod);
     }
 
+    public static DisconnectBuilder disconnect() {
+        return new DisconnectBuilder();
+    }
+
     public static SubAckBuilder subAck() {
         return new SubAckBuilder();
     }
 
+    public static UnsubAckBuilder unsubAck() {
+        return new UnsubAckBuilder();
+    }
+
     public static PubBuilder pub() {
         return new PubBuilder();
+    }
+
+    public static PubAckBuilder pubAck() {
+        return new PubAckBuilder();
     }
 
     public static PubRecBuilder pubRec() {
@@ -124,6 +144,10 @@ public class MQTT5MessageBuilders {
             }
             if (userProps != null) {
                 mqttProperties.add(toMqttUserProps(userProps));
+            }
+            if (mqttProperties.isEmpty() && reasonCode == MQTT5AuthReasonCode.Success) {
+                // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the AUTH has a Remaining Length of 0
+                return new MqttMessage(fixedHeader);
             }
             MqttReasonCodeAndPropertiesVariableHeader variableHeader =
                 new MqttReasonCodeAndPropertiesVariableHeader(reasonCode.value(), mqttProperties);
@@ -192,6 +216,7 @@ public class MQTT5MessageBuilders {
             if (message.message().getUserProperties().getUserPropertiesCount() > 0) {
                 mqttProps.add(toMqttUserProps(message.message().getUserProperties()));
             }
+
             return pubBuilder
                 .messageId(packetId)
                 .qos(MqttQoS.valueOf(message.qos().getNumber()))
@@ -202,10 +227,63 @@ public class MQTT5MessageBuilders {
         }
     }
 
+    public static final class PubAckBuilder {
+
+        private int packetId;
+        private MQTT5PubAckReasonCode reasonCode;
+        private String reasonString;
+        private UserProperties userProps;
+
+        PubAckBuilder() {
+        }
+
+        public PubAckBuilder reasonCode(MQTT5PubAckReasonCode reasonCode) {
+            this.reasonCode = reasonCode;
+            return this;
+        }
+
+        public PubAckBuilder packetId(int packetId) {
+            this.packetId = packetId;
+            return this;
+        }
+
+        public PubAckBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public PubAckBuilder userProps(UserProperties userProps) {
+            this.userProps = userProps;
+            return this;
+        }
+
+        public MqttMessage build() {
+            MqttFixedHeader fixedHeader =
+                new MqttFixedHeader(MqttMessageType.PUBACK, false, MqttQoS.AT_MOST_ONCE, false, 0);
+            MqttMessageIdVariableHeader varHeader;
+            if (Strings.isNullOrEmpty(reasonString)
+                && userProps == null
+                && reasonCode == MQTT5PubAckReasonCode.Success) {
+                varHeader = MqttMessageIdVariableHeader.from(packetId);
+            } else {
+                MqttProperties mqttProperties = new MqttProperties();
+                if (!Strings.isNullOrEmpty(reasonString)) {
+                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                }
+                if (userProps != null) {
+                    mqttProperties.add(toMqttUserProps(userProps));
+                }
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
+            }
+            return new MqttMessage(fixedHeader, varHeader);
+        }
+    }
+
     public static final class PubRecBuilder {
         private int packetId;
         private MQTT5PubRecReasonCode reasonCode;
-        private MqttProperties properties;
+        private String reasonString;
+        private UserProperties userProps;
 
         PubRecBuilder() {
         }
@@ -220,31 +298,43 @@ public class MQTT5MessageBuilders {
             return this;
         }
 
-        public PubRecBuilder properties(MqttProperties properties) {
-            this.properties = properties;
+        public PubRecBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public PubRecBuilder userProps(UserProperties userProps) {
+            this.userProps = userProps;
             return this;
         }
 
         public MqttMessage build() {
-            if (reasonCode == MQTT5PubRecReasonCode.Success) {
-                MqttFixedHeader fixedHeader =
-                    new MqttFixedHeader(MqttMessageType.PUBREC, false, MqttQoS.AT_MOST_ONCE, false, 2);
-                MqttMessageIdVariableHeader varHeader = MqttMessageIdVariableHeader.from(packetId);
-                return new MqttMessage(fixedHeader, varHeader);
+            MqttFixedHeader fixedHeader =
+                new MqttFixedHeader(MqttMessageType.PUBREC, false, MqttQoS.AT_MOST_ONCE, false, 2);
+            MqttMessageIdVariableHeader varHeader;
+            if (Strings.isNullOrEmpty(reasonString)
+                && userProps == null
+                && reasonCode == MQTT5PubRecReasonCode.Success) {
+                varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
-                MqttFixedHeader fixedHeader =
-                    new MqttFixedHeader(MqttMessageType.PUBREC, false, MqttQoS.AT_MOST_ONCE, false, 3);
-                MqttPubReplyMessageVariableHeader varHeader =
-                    new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), null);
-                return new MqttMessage(fixedHeader, varHeader);
+                MqttProperties mqttProperties = new MqttProperties();
+                if (!Strings.isNullOrEmpty(reasonString)) {
+                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                }
+                if (userProps != null) {
+                    mqttProperties.add(toMqttUserProps(userProps));
+                }
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
             }
+            return new MqttMessage(fixedHeader, varHeader);
         }
     }
 
     public static final class PubRelBuilder {
         private int packetId;
         private MQTT5PubRelReasonCode reasonCode;
-        private MqttProperties properties;
+        private String reasonString;
+        private UserProperties userProps;
 
         PubRelBuilder() {
         }
@@ -259,31 +349,43 @@ public class MQTT5MessageBuilders {
             return this;
         }
 
-        public PubRelBuilder properties(MqttProperties properties) {
-            this.properties = properties;
+        public PubRelBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public PubRelBuilder userProps(UserProperties userProps) {
+            this.userProps = userProps;
             return this;
         }
 
         public MqttMessage build() {
-            if (reasonCode == MQTT5PubRelReasonCode.Success) {
-                MqttFixedHeader fixedHeader =
-                    new MqttFixedHeader(MqttMessageType.PUBREL, false, MqttQoS.AT_MOST_ONCE, false, 2);
-                MqttMessageIdVariableHeader varHeader = MqttMessageIdVariableHeader.from(packetId);
-                return new MqttMessage(fixedHeader, varHeader);
+            MqttFixedHeader fixedHeader =
+                new MqttFixedHeader(MqttMessageType.PUBREL, false, MqttQoS.AT_MOST_ONCE, false, 2);
+            MqttMessageIdVariableHeader varHeader;
+            if (Strings.isNullOrEmpty(reasonString)
+                && userProps == null
+                && reasonCode == MQTT5PubRelReasonCode.Success) {
+                varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
-                MqttFixedHeader fixedHeader =
-                    new MqttFixedHeader(MqttMessageType.PUBREL, false, MqttQoS.AT_MOST_ONCE, false, 3);
-                MqttPubReplyMessageVariableHeader varHeader =
-                    new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), null);
-                return new MqttMessage(fixedHeader, varHeader);
+                MqttProperties mqttProperties = new MqttProperties();
+                if (!Strings.isNullOrEmpty(reasonString)) {
+                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                }
+                if (userProps != null) {
+                    mqttProperties.add(toMqttUserProps(userProps));
+                }
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
             }
+            return new MqttMessage(fixedHeader, varHeader);
         }
     }
 
     public static final class PubCompBuilder {
         private int packetId;
         private MQTT5PubCompReasonCode reasonCode;
-        private MqttProperties properties;
+        private String reasonString;
+        private UserProperties userProps;
 
         PubCompBuilder() {
         }
@@ -298,31 +400,43 @@ public class MQTT5MessageBuilders {
             return this;
         }
 
-        public PubCompBuilder properties(MqttProperties properties) {
-            this.properties = properties;
+        public PubCompBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public PubCompBuilder userProps(UserProperties userProps) {
+            this.userProps = userProps;
             return this;
         }
 
         public MqttMessage build() {
-            if (reasonCode == MQTT5PubCompReasonCode.Success) {
-                MqttFixedHeader fixedHeader =
-                    new MqttFixedHeader(MqttMessageType.PUBCOMP, false, MqttQoS.AT_MOST_ONCE, false, 2);
-                MqttMessageIdVariableHeader varHeader = MqttMessageIdVariableHeader.from(packetId);
-                return new MqttMessage(fixedHeader, varHeader);
+            MqttFixedHeader fixedHeader =
+                new MqttFixedHeader(MqttMessageType.PUBCOMP, false, MqttQoS.AT_MOST_ONCE, false, 2);
+            MqttMessageIdVariableHeader varHeader;
+            if (Strings.isNullOrEmpty(reasonString)
+                && userProps == null
+                && reasonCode == MQTT5PubCompReasonCode.Success) {
+                varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
-                MqttFixedHeader fixedHeader =
-                    new MqttFixedHeader(MqttMessageType.PUBCOMP, false, MqttQoS.AT_MOST_ONCE, false, 3);
-                MqttPubReplyMessageVariableHeader varHeader =
-                    new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), null);
-                return new MqttMessage(fixedHeader, varHeader);
+                MqttProperties mqttProperties = new MqttProperties();
+                if (!Strings.isNullOrEmpty(reasonString)) {
+                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                }
+                if (userProps != null) {
+                    mqttProperties.add(toMqttUserProps(userProps));
+                }
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
             }
+            return new MqttMessage(fixedHeader, varHeader);
         }
     }
 
     public static final class SubAckBuilder {
         private int packetId;
         private List<MQTT5SubAckReasonCode> reasonCodes;
-        private MqttProperties properties;
+        private String reasonString;
+        private UserProperties userProps;
 
         SubAckBuilder() {
 
@@ -338,8 +452,13 @@ public class MQTT5MessageBuilders {
             return this;
         }
 
-        public SubAckBuilder properties(MqttProperties properties) {
-            this.properties = properties;
+        public SubAckBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public SubAckBuilder userProps(UserProperties userProps) {
+            this.userProps = userProps;
             return this;
         }
 
@@ -349,12 +468,121 @@ public class MQTT5MessageBuilders {
                 MqttQoS.AT_MOST_ONCE,
                 false,
                 0);
-            MqttMessageIdAndPropertiesVariableHeader msgIdAndPropsVarHeader =
-                new MqttMessageIdAndPropertiesVariableHeader(packetId, properties);
+            MqttMessageIdVariableHeader variableHeader;
+            if (!Strings.isNullOrEmpty(reasonString) || userProps != null) {
+                MqttProperties mqttProps = new MqttProperties();
+                if (!Strings.isNullOrEmpty(reasonString)) {
+                    mqttProps.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                }
+                if (userProps != null) {
+                    mqttProps.add(toMqttUserProps(userProps));
+                }
+                variableHeader = new MqttMessageIdAndPropertiesVariableHeader(packetId, mqttProps);
+            } else {
+                variableHeader = MqttMessageIdVariableHeader.from(packetId);
+            }
             MqttSubAckPayload mqttSubAckPayload =
                 new MqttSubAckPayload(Lists.transform(reasonCodes, MQTT5SubAckReasonCode::value));
-            return new MqttSubAckMessage(mqttFixedHeader, msgIdAndPropsVarHeader, mqttSubAckPayload);
+            return new MqttSubAckMessage(mqttFixedHeader, variableHeader, mqttSubAckPayload);
         }
     }
 
+    public static final class DisconnectBuilder {
+        private MQTT5DisconnectReasonCode reasonCode;
+        private String reasonString;
+        private UserProperties userProps;
+        private String serverReference;
+
+        DisconnectBuilder() {
+        }
+
+        public DisconnectBuilder reasonCode(MQTT5DisconnectReasonCode reasonCode) {
+            this.reasonCode = reasonCode;
+            return this;
+        }
+
+        public DisconnectBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public DisconnectBuilder userProps(UserProperties userProps) {
+            this.userProps = userProps;
+            return this;
+        }
+
+        public DisconnectBuilder serverReference(String serverReference) {
+            this.serverReference = serverReference;
+            return this;
+        }
+
+        public MqttMessage build() {
+            MqttFixedHeader fixedHeader =
+                new MqttFixedHeader(MqttMessageType.DISCONNECT, false, MqttQoS.AT_MOST_ONCE, false, 0);
+            if (!Strings.isNullOrEmpty(reasonString) || userProps != null || !Strings.isNullOrEmpty(serverReference)) {
+                MqttProperties mqttProps = new MqttProperties();
+                if (!Strings.isNullOrEmpty(reasonString)) {
+                    mqttProps.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                }
+                if (!Strings.isNullOrEmpty(serverReference)) {
+                    mqttProps.add(new MqttProperties.StringProperty(SERVER_REFERENCE.value(), reasonString));
+                }
+                if (userProps != null) {
+                    mqttProps.add(toMqttUserProps(userProps));
+                }
+                MqttReasonCodeAndPropertiesVariableHeader variableHeader =
+                    new MqttReasonCodeAndPropertiesVariableHeader(reasonCode.value(), mqttProps);
+                return new MqttMessage(fixedHeader, variableHeader);
+            }
+            return new MqttMessage(fixedHeader);
+
+        }
+    }
+
+    public static final class UnsubAckBuilder {
+
+        private int packetId;
+        private final List<MQTT5UnsubAckReasonCode> reasonCodes = new ArrayList<>();
+        private String reasonString;
+        private UserProperties userProps;
+
+        UnsubAckBuilder() {
+        }
+
+        public UnsubAckBuilder packetId(int packetId) {
+            this.packetId = packetId;
+            return this;
+        }
+
+        public UnsubAckBuilder addReasonCode(MQTT5UnsubAckReasonCode reasonCode) {
+            this.reasonCodes.add(reasonCode);
+            return this;
+        }
+
+        public UnsubAckBuilder addReasonCodes(MQTT5UnsubAckReasonCode... reasonCodes) {
+            this.reasonCodes.addAll(List.of(reasonCodes));
+            return this;
+        }
+
+        public MqttUnsubAckMessage build() {
+            MqttFixedHeader fixedHeader =
+                new MqttFixedHeader(MqttMessageType.UNSUBACK, false, MqttQoS.AT_MOST_ONCE, false, 0);
+            MqttMessageIdVariableHeader variableHeader;
+            if (!Strings.isNullOrEmpty(reasonString) || userProps != null) {
+                MqttProperties mqttProps = new MqttProperties();
+                if (!Strings.isNullOrEmpty(reasonString)) {
+                    mqttProps.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                }
+                if (userProps != null) {
+                    mqttProps.add(toMqttUserProps(userProps));
+                }
+                variableHeader = new MqttMessageIdAndPropertiesVariableHeader(packetId, mqttProps);
+            } else {
+                variableHeader = MqttMessageIdVariableHeader.from(packetId);
+            }
+            MqttUnsubAckPayload unsubAckPayload =
+                new MqttUnsubAckPayload(Lists.transform(reasonCodes, MQTT5UnsubAckReasonCode::value));
+            return new MqttUnsubAckMessage(fixedHeader, variableHeader, unsubAckPayload);
+        }
+    }
 }

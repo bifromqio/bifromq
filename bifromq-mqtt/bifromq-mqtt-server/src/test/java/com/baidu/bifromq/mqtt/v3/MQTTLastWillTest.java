@@ -24,6 +24,8 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
 import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
@@ -62,8 +64,10 @@ public class MQTTLastWillTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenReturn(CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
 
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
@@ -105,8 +109,11 @@ public class MQTTLastWillTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenReturn(CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -155,8 +162,11 @@ public class MQTTLastWillTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenReturn(CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -202,8 +212,11 @@ public class MQTTLastWillTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenReturn(CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);

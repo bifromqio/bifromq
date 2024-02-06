@@ -23,6 +23,8 @@ import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
 import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
@@ -53,8 +55,11 @@ public class MQTTFanOutTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenReturn(CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+
         doAnswer(invocationOnMock -> {
 //            Event event = invocationOnMock.getArgument(0);
 //            log.info("event: {}", event);

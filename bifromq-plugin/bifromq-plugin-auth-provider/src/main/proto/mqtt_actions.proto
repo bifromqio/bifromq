@@ -34,3 +34,25 @@ message MQTTAction {
     UnsubAction unsub = 3;
   }
 }
+
+message Granted{
+  commontype.UserProperties userProps = 1; // user properties return back via mqtt5 pubAck/pubRel
+}
+
+message Denied{
+  optional string reason = 1;
+  commontype.UserProperties userProps = 2; // user properties return back via mqtt5 pubAck/pubRel or disconnect in case QoS0
+}
+
+message Error{
+  optional string reason = 1;
+  commontype.UserProperties userProps = 2; // user properties return back via mqtt5 pubAck/pubRel or disconnect in case QoS0
+}
+
+message CheckResult {
+  oneof Type{
+    Granted granted = 1;
+    Denied denied = 2;
+    Error error = 3;
+  }
+}

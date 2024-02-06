@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.mqtt.session;
 
-import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
@@ -31,7 +31,6 @@ import io.netty.channel.ChannelHandlerContext;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,7 +46,6 @@ public final class MQTTSessionContext {
     public final ISessionDictClient sessionDictClient;
     public final String serverId;
     public final int defaultKeepAliveTimeSeconds;
-    private final FutureTracker bgTaskTracker;
     private final Ticker ticker;
 
     @Builder
@@ -72,7 +70,6 @@ public final class MQTTSessionContext {
         this.retainClient = retainClient;
         this.sessionDictClient = sessionDictClient;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
-        this.bgTaskTracker = new FutureTracker();
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
     }
 
@@ -83,7 +80,7 @@ public final class MQTTSessionContext {
     public IAuthProvider authProvider(ChannelHandlerContext ctx) {
         // a wrapper to ensure async fifo semantic for check call
         return new IAuthProvider() {
-            private final LinkedHashMap<CompletableFuture<Boolean>, CompletableFuture<Boolean>> checkTaskQueue =
+            private final LinkedHashMap<CompletableFuture<CheckResult>, CompletableFuture<CheckResult>> checkTaskQueue =
                 new LinkedHashMap<>();
 
             @Override
@@ -93,21 +90,26 @@ public final class MQTTSessionContext {
 
             @Override
             public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
-                CompletableFuture<Boolean> task = authProvider.check(client, action);
+                return authProvider.check(client, action);
+            }
+
+            @Override
+            public CompletableFuture<CheckResult> checkPermission(ClientInfo client, MQTTAction action) {
+                CompletableFuture<CheckResult> task = authProvider.checkPermission(client, action);
                 if (task.isDone()) {
                     return task;
                 } else {
                     // queue it for fifo semantic
-                    CompletableFuture<Boolean> onDone = new CompletableFuture<>();
+                    CompletableFuture<CheckResult> onDone = new CompletableFuture<>();
                     // in case authProvider returns same future object;
                     task = task.thenApply(v -> v);
                     checkTaskQueue.put(task, onDone);
                     task.whenCompleteAsync((_v, _e) -> {
-                        Iterator<CompletableFuture<Boolean>> itr = checkTaskQueue.keySet().iterator();
+                        Iterator<CompletableFuture<CheckResult>> itr = checkTaskQueue.keySet().iterator();
                         while (itr.hasNext()) {
-                            CompletableFuture<Boolean> k = itr.next();
+                            CompletableFuture<CheckResult> k = itr.next();
                             if (k.isDone()) {
-                                CompletableFuture<Boolean> r = checkTaskQueue.get(k);
+                                CompletableFuture<CheckResult> r = checkTaskQueue.get(k);
                                 try {
                                     r.complete(k.join());
                                 } catch (Throwable e) {
@@ -125,11 +127,4 @@ public final class MQTTSessionContext {
         };
     }
 
-    public void addBgTask(Supplier<CompletableFuture<Void>> taskSupplier) {
-        bgTaskTracker.track(taskSupplier.get());
-    }
-
-    public void awaitBgTaskDone() {
-        bgTaskTracker.whenComplete((v, e) -> log.debug("All bg tasks done")).join();
-    }
 }

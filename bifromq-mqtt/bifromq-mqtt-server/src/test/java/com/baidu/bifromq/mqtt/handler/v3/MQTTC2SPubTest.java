@@ -153,7 +153,8 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
         // make channel unWritable
-        channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
+        channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
+        channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
         assertFalse(channel.isWritable());
         distResult.complete(DistResult.OK);
         channel.runPendingTasks();
@@ -225,7 +226,8 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
 
         // make channel unWritable and drop PubRec
-        channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
+        channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
+        channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
         assertFalse(channel.isWritable());
         distResult.complete(DistResult.OK);
         channel.runPendingTasks();
@@ -233,6 +235,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
 
         // flush channel
         channel.flush();
+        channel.readOutbound();
         channel.readOutbound();
         assertTrue(channel.isWritable());
 

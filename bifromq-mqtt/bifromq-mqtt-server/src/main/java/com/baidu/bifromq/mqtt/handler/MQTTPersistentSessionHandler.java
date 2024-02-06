@@ -68,7 +68,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private final boolean sessionPresent;
     private final long incarnation;
     private final NavigableMap<Long, SubMessage> stagingBuffer = new TreeMap<>();
-    private IInboxClient inboxClient;
+    private final IInboxClient inboxClient;
     private long version;
     private boolean qos0Confirming = false;
     private boolean inboxConfirming = false;
@@ -85,9 +85,11 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                            int sessionExpirySeconds,
                                            ClientInfo clientInfo,
                                            @Nullable MQTTConnectHandler.ExistingSession existingSession,
-                                           @Nullable LWT willMessage) {
-        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage);
+                                           @Nullable LWT willMessage,
+                                           ChannelHandlerContext ctx) {
+        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
         this.sessionPresent = existingSession != null;
+        this.inboxClient = sessionCtx.inboxClient;
         if (sessionPresent) {
             incarnation = existingSession.incarnation();
             version = existingSession.version();
@@ -98,9 +100,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     @Override
-    public final void handlerAdded(ChannelHandlerContext ctx) {
+    public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
-        this.inboxClient = sessionCtx.inboxClient;
         touchIdleTimeMS = Duration.ofSeconds(keepAliveTimeSeconds).dividedBy(2).toMillis();
         if (sessionPresent) {
             AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
@@ -408,9 +409,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         String topic = topicMsg.getTopic();
         Message message = topicMsg.getMessage();
         ClientInfo publihser = topicMsg.getPublisher();
-        return addFgTask(authProvider.check(clientInfo(), AuthUtil.buildSubAction(topicFilter, QoS.AT_MOST_ONCE)))
-            .thenAcceptAsync(allow -> {
-                if (allow) {
+        return addFgTask(
+            authProvider.checkPermission(clientInfo(), AuthUtil.buildSubAction(topicFilter, QoS.AT_MOST_ONCE)))
+            .thenAcceptAsync(checkResult -> {
+                if (checkResult.hasGranted()) {
                     tenantMeter.timer(MqttQoS0InternalLatency)
                         .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
                     if (option.getNoLocal() && clientInfo.equals(publihser)) {
@@ -452,10 +454,11 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         String topic = topicMsg.getTopic();
         Message message = topicMsg.getMessage();
         ClientInfo publisher = topicMsg.getPublisher();
-        return addFgTask(authProvider.check(clientInfo(), AuthUtil.buildSubAction(topicFilter, AT_LEAST_ONCE)))
-            .thenAcceptAsync(allow -> {
+        return addFgTask(
+            authProvider.checkPermission(clientInfo(), AuthUtil.buildSubAction(topicFilter, AT_LEAST_ONCE)))
+            .thenAcceptAsync(checkResult -> {
                 SubMessage msg = new SubMessage(topic, message, publisher, topicFilter, option);
-                if (allow) {
+                if (checkResult.hasGranted()) {
                     tenantMeter.timer(msg.qos() == AT_LEAST_ONCE ? MqttQoS1InternalLatency : MqttQoS2InternalLatency)
                         .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
                     if (option.getNoLocal() && clientInfo.equals(topicMsg.getPublisher())) {

@@ -19,6 +19,7 @@ import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHEN
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CONTENT_TYPE;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CORRELATION_DATA;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.REASON_STRING;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.RESPONSE_TOPIC;
 
 import com.baidu.bifromq.basehlc.HLC;
@@ -70,6 +71,14 @@ public class MQTT5MessageUtils {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM);
     }
 
+    public static Optional<Integer> subscriptionIdentifier(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER);
+    }
+
+    public static Optional<Integer> maximumPacketSize(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.MAXIMUM_PACKET_SIZE);
+    }
+
     public static Optional<Integer> topicAlias(MqttProperties mqttProperties) {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS);
     }
@@ -100,7 +109,16 @@ public class MQTT5MessageUtils {
 
     public static boolean requestResponseInformation(MqttProperties mqttProperties) {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_RESPONSE_INFORMATION)
-            .orElse(1) == 1;
+            .orElse(0) == 1;
+    }
+
+    public static boolean requestProblemInformation(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_PROBLEM_INFORMATION)
+            .orElse(0) == 1;
+    }
+
+    public static Optional<String> reasonString(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, REASON_STRING);
     }
 
     static Optional<Integer> integerMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {

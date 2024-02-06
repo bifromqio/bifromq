@@ -16,9 +16,12 @@ package com.baidu.bifromq.mqtt.handler.v5;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.maximumPacketSize;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestProblemInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestResponseInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toWillMessage;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
+import static com.baidu.bifromq.mqtt.utils.MQTTMessageSizer.MIN_CONTROL_PACKET_SIZE;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
@@ -31,8 +34,10 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BANNED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_MALFORMED_PACKET;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED_5;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PACKET_TOO_LARGE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PAYLOAD_FORMAT_INVALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PROTOCOL_ERROR;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
@@ -48,6 +53,7 @@ import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
+import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.Continue;
@@ -91,6 +97,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     private IAuthProvider authProvider;
     private boolean isAuthing;
     private MqttConnectMessage connMsg = null;
+    private boolean requestProblemInfo;
     private String authMethod = null;
     private CompletableFuture<OkOrGoAway> extendedAuthFuture;
 
@@ -165,15 +172,6 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
                         .reasonString("Malformed will topic")
                         .build())
-                    .returnCode(CONNECTION_REFUSED_TOPIC_NAME_INVALID) // [MQTT-4.13.1-1]
-                    .build(), getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
-            }
-            if (connMsg.payload().willMessageInBytes().length == 0) {
-                return new GoAway(MqttMessageBuilders
-                    .connAck()
-                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
-                        .reasonString("Empty Will payload")
-                        .build())
                     .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET) // [MQTT-4.13.1-1]
                     .build(), getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
             }
@@ -194,6 +192,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     @Override
     protected CompletableFuture<OkOrGoAway> authenticate(MqttConnectMessage message) {
         this.connMsg = message;
+        this.requestProblemInfo = requestProblemInformation(message.variableHeader().properties());
         Optional<String> authMethodOpt = authMethod(message.variableHeader().properties());
         if (authMethodOpt.isEmpty()) {
             return authProvider.auth(AuthUtil.buildMQTT5AuthData(ctx.channel(), message))
@@ -275,10 +274,13 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                         MQTT5MessageBuilders.AuthBuilder authBuilder = MQTT5MessageBuilders
                             .auth(authMethod)
                             .reasonCode(MQTT5AuthReasonCode.Continue)
-                            .authData(authContinue.getAuthData())
-                            .userProperties(authContinue.getUserProps());
-                        if (authContinue.hasReason()) {
-                            authBuilder.reasonString(authContinue.getReason());
+                            .authData(authContinue.getAuthData());
+                        if (requestProblemInfo) {
+                            // [MQTT-3.1.2-29]
+                            if (authContinue.hasReason()) {
+                                authBuilder.reasonString(authContinue.getReason());
+                            }
+                            authBuilder.userProperties(authContinue.getUserProps());
                         }
                         ctx.channel().writeAndFlush(authBuilder.build());
                     }
@@ -376,6 +378,48 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected GoAway validate(MqttConnectMessage message, TenantSettings settings, ClientInfo clientInfo) {
+        if (MQTTMessageSizer.size(message).encodedBytes() > settings.maxPacketSize) {
+            return new GoAway(MqttMessageBuilders
+                .connAck()
+                .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
+                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .reasonString("Too large connect packet: max=" + settings.maxPacketSize)
+                    .build())
+                .build(),
+                getLocal(ProtocolError.class)
+                    .statement("Too large packet")
+                    .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
+            );
+        }
+        Optional<Integer> requestMaxPacketSize = maximumPacketSize(message.variableHeader().properties());
+        if (requestMaxPacketSize.isPresent()) {
+            if (requestMaxPacketSize.get() < MIN_CONTROL_PACKET_SIZE) {
+                return new GoAway(MqttMessageBuilders
+                    .connAck()
+                    .returnCode(CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC)
+                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                        .reasonString("Invalid max packet size: " + requestMaxPacketSize.get())
+                        .build())
+                    .build(),
+                    getLocal(ProtocolError.class)
+                        .statement("Invalid max packet size:" + requestMaxPacketSize.get())
+                        .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
+                );
+            }
+            if (requestMaxPacketSize.get() > settings.maxPacketSize) {
+                return new GoAway(MqttMessageBuilders
+                    .connAck()
+                    .returnCode(CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC)
+                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                        .reasonString("Max packet size: " + settings.maxPacketSize)
+                        .build())
+                    .build(),
+                    getLocal(ProtocolError.class)
+                        .statement("Invalid max packet size: " + requestMaxPacketSize.get())
+                        .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
+                );
+            }
+        }
         Optional<Integer> topicAliasMaximum = topicAliasMaximum(message.variableHeader().properties());
         if (topicAliasMaximum.orElse(0) > settings.maxTopicAlias) {
             return new GoAway(MqttMessageBuilders
@@ -456,9 +500,13 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg, TenantSettings settings,
-                                                          String userSessionId, int keepAliveSeconds,
-                                                          @Nullable LWT willMessage, ClientInfo clientInfo) {
+    protected ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
+                                                          TenantSettings settings,
+                                                          String userSessionId,
+                                                          int keepAliveSeconds,
+                                                          @Nullable LWT willMessage,
+                                                          ClientInfo clientInfo,
+                                                          ChannelHandlerContext ctx) {
         return MQTT5TransientSessionHandler.builder()
             .connMsg(connMsg)
             .settings(settings)
@@ -466,6 +514,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .clientInfo(clientInfo)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .willMessage(willMessage)
+            .ctx(ctx)
             .build();
     }
 
@@ -477,7 +526,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                                                            int sessionExpiryInterval,
                                                            @Nullable ExistingSession existingSession,
                                                            @Nullable LWT willMessage,
-                                                           ClientInfo clientInfo) {
+                                                           ClientInfo clientInfo,
+                                                           ChannelHandlerContext ctx) {
         return MQTT5PersistentSessionHandler.builder()
             .connMsg(connMsg)
             .settings(settings)
@@ -487,6 +537,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .keepAliveTimeSeconds(keepAliveSeconds)
             .sessionExpirySeconds(sessionExpiryInterval)
             .willMessage(willMessage)
+            .ctx(ctx)
             .build();
     }
 
@@ -524,5 +575,10 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .properties(connPropsBuilder.build())
             .returnCode(MqttConnectReturnCode.CONNECTION_ACCEPTED)
             .build();
+    }
+
+    @Override
+    protected int maxPacketSize(MqttConnectMessage connMsg, TenantSettings settings) {
+        return maximumPacketSize(connMsg.variableHeader().properties()).orElse(settings.maxPacketSize);
     }
 }

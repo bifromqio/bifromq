@@ -25,7 +25,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
-import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttMessageType;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -43,8 +42,8 @@ public interface IReAuthenticator {
         return msg -> {
             if (msg.fixedHeader().messageType() == MqttMessageType.AUTH) {
                 responder.accept(new ResponseOrGoAway(new GoAway(
-                    MqttMessageBuilders.disconnect()
-                        .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+                    MQTT5MessageBuilders.disconnect()
+                        .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                         .build(),
                     getLocal(ProtocolViolation.class)
                         .statement("Re-auth not supported")

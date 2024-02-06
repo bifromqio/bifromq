@@ -28,9 +28,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     int connectTimeoutSeconds = 20;
     int connectRateLimit = 1000;
     int disconnectRate = 1000;
-    int resendDelayMillis = 3000;
     int defaultKeepAliveSeconds = 5 * 60; // 5 min
-    int qos2ConfirmWindowSeconds = 5;
     long writeLimit = 512 * 1024;
     long readLimit = 512 * 1024;
     int maxBytesInMessage = 256 * 1024;

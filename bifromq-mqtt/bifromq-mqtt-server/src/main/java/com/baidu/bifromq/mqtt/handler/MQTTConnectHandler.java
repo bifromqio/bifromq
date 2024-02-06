@@ -42,6 +42,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import io.netty.handler.codec.mqtt.MqttDecoder;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageType;
 import java.util.concurrent.CompletableFuture;
@@ -132,11 +133,19 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                         keepAliveSeconds,
                                         false,
                                         willMessage,
-                                        clientInfo);
+                                        clientInfo,
+                                        ctx);
 
                                 } else {
-                                    setupPersistentSessionHandler(connMsg, settings, userSessionId,
-                                        keepAliveSeconds, sessionExpiryInterval, null, willMessage, clientInfo);
+                                    setupPersistentSessionHandler(connMsg,
+                                        settings,
+                                        userSessionId,
+                                        keepAliveSeconds,
+                                        sessionExpiryInterval,
+                                        null,
+                                        willMessage,
+                                        clientInfo,
+                                        ctx);
                                 }
                                 return CompletableFuture.completedFuture(null);
                             } else {
@@ -165,11 +174,18 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     keepAliveSeconds,
                                                     reply.getCode() == ExpireReply.Code.OK,
                                                     willMessage,
-                                                    clientInfo);
+                                                    clientInfo,
+                                                    ctx);
                                             } else {
-                                                setupPersistentSessionHandler(connMsg, settings, userSessionId,
-                                                    keepAliveSeconds, sessionExpiryInterval, null, willMessage,
-                                                    clientInfo);
+                                                setupPersistentSessionHandler(connMsg,
+                                                    settings,
+                                                    userSessionId,
+                                                    keepAliveSeconds,
+                                                    sessionExpiryInterval,
+                                                    null,
+                                                    willMessage,
+                                                    clientInfo,
+                                                    ctx);
                                             }
                                         }
                                     }, ctx.channel().eventLoop());
@@ -203,7 +219,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                 inbox.getIncarnation(),
                                                 inbox.getVersion()),
                                             willMessage,
-                                            clientInfo);
+                                            clientInfo,
+                                            ctx);
                                     } else {
                                         int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
                                         if (sessionExpiryInterval == 0) {
@@ -212,10 +229,19 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                 userSessionId,
                                                 keepAliveSeconds,
                                                 false,
-                                                willMessage, clientInfo);
+                                                willMessage,
+                                                clientInfo,
+                                                ctx);
                                         } else {
-                                            setupPersistentSessionHandler(connMsg, settings, userSessionId,
-                                                keepAliveSeconds, sessionExpiryInterval, null, willMessage, clientInfo);
+                                            setupPersistentSessionHandler(connMsg,
+                                                settings,
+                                                userSessionId,
+                                                keepAliveSeconds,
+                                                sessionExpiryInterval,
+                                                null,
+                                                willMessage,
+                                                clientInfo,
+                                                ctx);
                                         }
                                     }
                                 }, ctx.channel().eventLoop());
@@ -257,7 +283,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                                    String userSessionId,
                                                                    int keepAliveSeconds,
                                                                    @Nullable LWT willMessage,
-                                                                   ClientInfo clientInfo);
+                                                                   ClientInfo clientInfo,
+                                                                   ChannelHandlerContext ctx);
 
     protected abstract ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
                                                                     TenantSettings settings,
@@ -266,7 +293,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                                     int sessionExpiryInterval,
                                                                     @Nullable ExistingSession existingSession,
                                                                     @Nullable LWT willMessage,
-                                                                    ClientInfo clientInfo);
+                                                                    ClientInfo clientInfo,
+                                                                    ChannelHandlerContext ctx);
 
     private void setupTransientSessionHandler(MqttConnectMessage connMsg,
                                               TenantSettings settings,
@@ -274,14 +302,20 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                               int keepAliveSeconds,
                                               boolean sessionExists,
                                               LWT willMessage,
-                                              ClientInfo clientInfo) {
+                                              ClientInfo clientInfo,
+                                              ChannelHandlerContext ctx) {
+        int maxPacketSize = maxPacketSize(connMsg, settings);
+        ctx.pipeline().addBefore(MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
+            new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
+
         ChannelHandler sessionHandler = buildTransientSessionHandler(
             connMsg,
             settings,
             userSessionId,
             keepAliveSeconds,
             willMessage,
-            clientInfo);
+            clientInfo,
+            ctx);
         assert sessionHandler instanceof IMQTTTransientSession;
         ctx.pipeline().replace(this, IMQTTTransientSession.NAME, sessionHandler);
         ctx.writeAndFlush(onConnected(connMsg, settings,
@@ -308,7 +342,12 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                int sessionExpiryInterval,
                                                @Nullable ExistingSession existingSession,
                                                @Nullable LWT willMessage,
-                                               ClientInfo clientInfo) {
+                                               ClientInfo clientInfo,
+                                               ChannelHandlerContext ctx) {
+        int maxPacketSize = maxPacketSize(connMsg, settings);
+        ctx.pipeline().addBefore(MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
+            new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
+
         ChannelHandler sessionHandler = buildPersistentSessionHandler(connMsg,
             settings,
             userSessionId,
@@ -316,7 +355,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             sessionExpiryInterval,
             existingSession,
             willMessage,
-            clientInfo);
+            clientInfo,
+            ctx);
         assert sessionHandler instanceof IMQTTPersistentSession;
         ctx.pipeline().replace(this, IMQTTPersistentSession.NAME, sessionHandler);
         ctx.writeAndFlush(onConnected(connMsg,
@@ -371,6 +411,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                 ThreadLocalRandom.current().nextInt(100, 5000), TimeUnit.MILLISECONDS);
         }
     }
+
+    protected abstract int maxPacketSize(MqttConnectMessage connMsg, TenantSettings settings);
 
     private int keepAliveSeconds(int requestKeepAliveSeconds) {
         if (requestKeepAliveSeconds == 0) {

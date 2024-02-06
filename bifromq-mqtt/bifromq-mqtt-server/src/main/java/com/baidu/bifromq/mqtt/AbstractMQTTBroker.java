@@ -19,8 +19,8 @@ import com.baidu.bifromq.mqtt.handler.ByteBufToWebSocketFrameEncoder;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.ClientAddrHandler;
 import com.baidu.bifromq.mqtt.handler.ConnectionRateLimitHandler;
-import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
+import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
@@ -145,7 +145,6 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         sessionRegistry().disconnectAll(builder.disconnectRate).join();
         log.debug("All mqtt connection closed");
 
-        sessionContext.awaitBgTaskDone();
         log.debug("All background tasks done");
 
         bossGroup.shutdownGracefully().syncUninterruptibly();
@@ -164,8 +163,9 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("connRateLimiter", connRateLimitHandler);
                 pipeline.addLast("trafficShaper",
                     new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
-                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
-                pipeline.addLast("encoder", MqttEncoder.INSTANCE);
+                pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
+                // insert PacketFilter between Encoder and Decoder
+                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
@@ -181,8 +181,9 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
                 pipeline.addLast("trafficShaper",
                     new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
-                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
-                pipeline.addLast("encoder", MqttEncoder.INSTANCE);
+                pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
+                // insert PacketFilter between Encoder and Decoder
+                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
@@ -205,8 +206,9 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                     MQTT_SUBPROTOCOL_CSV_LIST));
                 pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
                 pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
-                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
-                pipeline.addLast("encoder", MqttEncoder.INSTANCE);
+                pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
+                // insert PacketFilter between Encoder and Decoder
+                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
@@ -230,8 +232,9 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                     MQTT_SUBPROTOCOL_CSV_LIST));
                 pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
                 pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
-                pipeline.addLast("decoder", new MqttDecoder(builder.maxBytesInMessage));
-                pipeline.addLast("encoder", MqttEncoder.INSTANCE);
+                pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
+                // insert PacketFilter between Encoder and Decoder
+                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }

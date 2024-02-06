@@ -56,14 +56,17 @@ import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
-import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
+import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.mqtt.utils.TestTicker;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Denied;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
@@ -208,7 +211,7 @@ public abstract class BaseMQTTTest {
                 embeddedChannel.attr(ChannelAttrs.PEER_ADDR).set(new InetSocketAddress(remoteIp, remotePort));
                 ChannelPipeline pipeline = embeddedChannel.pipeline();
                 pipeline.addLast("trafficShaper", new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
-                pipeline.addLast("decoder", new MqttDecoder(256 * 1024)); //256kb
+                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(256 * 1024)); //256kb
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(2));
             }
@@ -257,8 +260,14 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockAuthCheck(boolean allow) {
-        when(authProvider.check(any(ClientInfo.class), any()))
-            .thenReturn(CompletableFuture.completedFuture(allow));
+        when(authProvider.checkPermission(any(ClientInfo.class), any()))
+            .thenReturn(CompletableFuture.completedFuture(allow ?
+                CheckResult.newBuilder()
+                    .setGranted(Granted.getDefaultInstance())
+                    .build() :
+                CheckResult.newBuilder()
+                    .setDenied(Denied.getDefaultInstance())
+                    .build()));
     }
 
     protected void mockInboxGet(boolean success) {

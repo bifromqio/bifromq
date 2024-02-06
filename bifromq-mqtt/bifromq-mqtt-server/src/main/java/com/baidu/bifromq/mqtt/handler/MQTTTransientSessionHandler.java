@@ -37,7 +37,6 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Pushed;
@@ -78,8 +77,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                                           String userSessionId,
                                           int keepAliveTimeSeconds,
                                           ClientInfo clientInfo,
-                                          @Nullable LWT willMessage) {
-        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage);
+                                          @Nullable LWT willMessage,
+                                          ChannelHandlerContext ctx) {
+        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
     }
 
     @Override
@@ -110,8 +110,6 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     protected GoAway handleDisconnect(MqttMessage message) {
         Optional<Integer> requestSEI = helper().sessionExpiryIntervalOnDisconnect(message);
         if (requestSEI.isPresent() && requestSEI.get() > 0) {
-            eventCollector.report(
-                getLocal(ProtocolViolation.class).statement("MQTT5-3.14.2.2.2").clientInfo(clientInfo));
             return helper().respondDisconnectProtocolError();
         }
         if (helper().isNormalDisconnect(message)) {
@@ -229,9 +227,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                                                           TopicFilterOption option,
                                                           List<TopicMessagePack> topicMsgPacks) {
         QoS subQoS = option.getQos();
-        return addFgTask(authProvider.check(clientInfo(), buildSubAction(topicFilter, subQoS))
-            .thenApplyAsync(allow -> {
-                if (allow) {
+        return addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, subQoS))
+            .thenApplyAsync(checkResult -> {
+                if (checkResult.hasGranted()) {
                     forEach(topicFilter, option, topicMsgPacks, this::logInternalLatency);
                     if (!ctx.channel().isActive()) {
                         forEach(topicFilter, option, topicMsgPacks,

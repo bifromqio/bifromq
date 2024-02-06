@@ -246,24 +246,33 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected final ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg, TenantSettings settings,
-                                                                String userSessionId, int keepAliveSeconds,
-                                                                @Nullable LWT willMessage, ClientInfo clientInfo) {
+    protected final ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
+                                                                TenantSettings settings,
+                                                                String userSessionId,
+                                                                int keepAliveSeconds,
+                                                                @Nullable LWT willMessage,
+                                                                ClientInfo clientInfo,
+                                                                ChannelHandlerContext ctx) {
         return MQTT3TransientSessionHandler.builder()
             .settings(settings)
             .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .clientInfo(clientInfo)
             .willMessage(willMessage)
+            .ctx(ctx)
             .build();
     }
 
     @Override
-    protected final ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg, TenantSettings settings,
-                                                                 String userSessionId, int keepAliveSeconds,
+    protected final ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
+                                                                 TenantSettings settings,
+                                                                 String userSessionId,
+                                                                 int keepAliveSeconds,
                                                                  int sessionExpiryInterval,
                                                                  @Nullable ExistingSession existingSession,
-                                                                 @Nullable LWT willMessage, ClientInfo clientInfo) {
+                                                                 @Nullable LWT willMessage,
+                                                                 ClientInfo clientInfo,
+                                                                 ChannelHandlerContext ctx) {
         return MQTT3PersistentSessionHandler.builder()
             .settings(settings)
             .userSessionId(userSessionId)
@@ -272,6 +281,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .clientInfo(clientInfo)
             .existingSession(existingSession)
             .willMessage(willMessage)
+            .ctx(ctx)
             .build();
     }
 
@@ -288,5 +298,10 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .sessionPresent(sessionExists)
             .returnCode(MqttConnectReturnCode.CONNECTION_ACCEPTED)
             .build();
+    }
+
+    @Override
+    protected int maxPacketSize(MqttConnectMessage connMsg, TenantSettings settings) {
+        return settings.maxPacketSize;
     }
 }

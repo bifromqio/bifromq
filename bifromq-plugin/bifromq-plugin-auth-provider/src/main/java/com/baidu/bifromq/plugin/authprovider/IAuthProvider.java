@@ -14,7 +14,11 @@
 package com.baidu.bifromq.plugin.authprovider;
 
 
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Denied;
+import com.baidu.bifromq.plugin.authprovider.type.Error;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
@@ -95,6 +99,27 @@ public interface IAuthProvider extends ExtensionPoint {
      * @param action the action
      */
     CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action);
+
+    default CompletableFuture<CheckResult> checkPermission(ClientInfo client, MQTTAction action) {
+        return check(client, action)
+            .handle((granted, e) -> {
+                if (e != null) {
+                    return CheckResult.newBuilder()
+                        .setError(Error.newBuilder()
+                            .setReason(e.getMessage())
+                            .build())
+                        .build();
+                } else if (granted) {
+                    return CheckResult.newBuilder()
+                        .setGranted(Granted.getDefaultInstance())
+                        .build();
+                } else {
+                    return CheckResult.newBuilder()
+                        .setDenied(Denied.getDefaultInstance())
+                        .build();
+                }
+            });
+    }
 
     /**
      * This method will be called during broker shutdown

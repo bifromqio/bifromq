@@ -26,13 +26,13 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
 import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
-import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.observers.TestObserver;
@@ -40,8 +40,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.mockito.stubbing.Answer;
-import org.testng.annotations.AfterClass;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -50,7 +49,7 @@ public class MQTTRetainTest {
     private final String tenantId = "testRetainTraffic";
     private final String deviceKey = "testDevice";
 
-    @AfterClass(alwaysRun = true)
+    @AfterMethod(alwaysRun = true)
     public void resetMocks() {
         reset(mqttTest.authProvider, mqttTest.eventCollector);
         clearInvocations(mqttTest.eventCollector);
@@ -65,9 +64,11 @@ public class MQTTRetainTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
-                CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -139,9 +140,10 @@ public class MQTTRetainTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
-                CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -184,15 +186,17 @@ public class MQTTRetainTest {
     @Test(groups = "integration")
     public void clearRetained() {
         when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
-                        .setOk(Ok.newBuilder()
-                                .setTenantId(tenantId)
-                                .setUserId(deviceKey)
-                                .build())
-                        .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-                .thenAnswer((Answer<CompletableFuture<Boolean>>) invocation ->
-                        CompletableFuture.completedFuture(true));
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTenantId(tenantId)
+                    .setUserId(deviceKey)
+                    .build())
+                .build()));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+
 
         lenient().doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
@@ -270,8 +274,11 @@ public class MQTTRetainTest {
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
-            .thenReturn(CompletableFuture.completedFuture(true));
+        when(mqttTest.authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+
         when(mqttTest.settingProvider.provide(Setting.RetainMessageMatchLimit, tenantId)).thenReturn(2);
 
 

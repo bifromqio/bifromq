@@ -18,19 +18,21 @@ import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTTransientSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.type.ClientInfo;
+import io.netty.channel.ChannelHandlerContext;
 import javax.annotation.Nullable;
 import lombok.Builder;
 
-public class MQTT3TransientSessionHandler extends MQTTTransientSessionHandler {
+public final class MQTT3TransientSessionHandler extends MQTTTransientSessionHandler {
     private final IMQTTProtocolHelper helper;
 
     @Builder
-    protected MQTT3TransientSessionHandler(TenantSettings settings,
-                                           String userSessionId,
-                                           int keepAliveTimeSeconds,
-                                           ClientInfo clientInfo,
-                                           @Nullable LWT willMessage) {
-        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage);
+    public MQTT3TransientSessionHandler(TenantSettings settings,
+                                        String userSessionId,
+                                        int keepAliveTimeSeconds,
+                                        ClientInfo clientInfo,
+                                        @Nullable LWT willMessage,
+                                        ChannelHandlerContext ctx) {
+        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
         helper = new MQTT3ProtocolHelper(settings, clientInfo);
     }
 

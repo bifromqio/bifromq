@@ -17,6 +17,7 @@ import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.handler.record.ResponseOrGoAway;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.UserProperties;
@@ -111,17 +112,17 @@ public interface IMQTTProtocolHelper {
 
     Message buildDistMessage(MqttPublishMessage message);
 
-    GoAway onQoS0DistDenied(String topic, Message distMessage);
+    GoAway onQoS0DistDenied(String topic, Message distMessage, CheckResult result);
 
-    ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage);
+    ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
 
-    MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message);
+    MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps);
 
     ResponseOrGoAway respondQoS2PacketInUse(MqttPublishMessage message);
 
-    ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage);
+    ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
 
-    MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message);
+    MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps);
 
     GoAway onIdleTimeout(int keepAliveTimeSeconds);
 }

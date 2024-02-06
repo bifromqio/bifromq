@@ -25,6 +25,7 @@ import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.handler.record.ResponseOrGoAway;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedPubRate;
@@ -293,7 +294,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway onQoS0DistDenied(String topic, Message distMessage) {
+    public GoAway onQoS0DistDenied(String topic, Message distMessage, CheckResult result) {
         return new GoAway(getLocal(NoPubPermission.class)
             .topic(topic)
             .qos(QoS.AT_MOST_ONCE)
@@ -302,7 +303,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage) {
+    public ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
         return new ResponseOrGoAway(new GoAway(getLocal(NoPubPermission.class)
             .qos(AT_LEAST_ONCE)
             .topic(topic)
@@ -311,7 +312,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message) {
+    public MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
         return MqttMessageBuilders.pubAck()
             .packetId(message.variableHeader().packetId())
             .build();
@@ -324,7 +325,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage) {
+    public ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
         return new ResponseOrGoAway(new GoAway(getLocal(NoPubPermission.class)
             .topic(topic)
             .qos(QoS.EXACTLY_ONCE)
@@ -333,7 +334,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message) {
+    public MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
         return MQTT3MessageBuilders.pubRec()
             .packetId(message.variableHeader().packetId())
             .build();

@@ -14,12 +14,15 @@
 package com.baidu.bifromq.mqtt.handler.v5;
 
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.receiveMaximum;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestProblemInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.responseTopic;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.subscriptionIdentifier;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAlias;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
 import static com.baidu.bifromq.mqtt.utils.MQTTUtf8Util.isWellFormed;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.util.TopicUtil.isValidTopic;
 
 import com.baidu.bifromq.dist.client.DistResult;
@@ -37,6 +40,7 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRecReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedPubRate;
@@ -58,7 +62,6 @@ import com.baidu.bifromq.type.UserProperties;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
-import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttPubReplyMessageVariableHeader;
@@ -79,6 +82,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     private final TenantSettings settings;
     private final ClientInfo clientInfo;
     private final int clientReceiveMaximum;
+    private final boolean requestProblemInfo;
     private final ReceiverTopicAliasManager receiverTopicAliasManager;
     private final SenderTopicAliasManager senderTopicAliasManager;
 
@@ -93,6 +97,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             new SenderTopicAliasManager(topicAliasMaximum(connMsg.variableHeader().properties()).orElse(0),
                 Duration.ofSeconds(60));
         this.clientReceiveMaximum = receiveMaximum(connMsg.variableHeader().properties()).orElse(65535);
+        this.requestProblemInfo = requestProblemInformation(connMsg.variableHeader().properties());
     }
 
     @Override
@@ -113,8 +118,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway onInboxTransientError() {
         return new GoAway(
-            MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.UnspecifiedError.value())
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.UnspecifiedError)
                 .build(),
             getLocal(InboxTransientError.class).clientInfo(clientInfo));
     }
@@ -132,18 +137,20 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway onDisconnect() {
         return GoAway.now(
-            MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.ServerShuttingDown.value())
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.ServerShuttingDown)
                 .build(),
             getLocal(ByServer.class).clientInfo(clientInfo));
     }
 
     @Override
     public GoAway respondDisconnectProtocolError() {
-        return new GoAway(MqttMessageBuilders.disconnect()
-            .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value()) // Protocol Error
+        return new GoAway(MQTT5MessageBuilders.disconnect()
+            .reasonCode(MQTT5DisconnectReasonCode.ProtocolError) // Protocol Error
+            .reasonString("MQTT5-3.14.2.2.2")
             .build(),
-            getLocal(ProtocolViolation.class).statement("MQTT5-3.14.2.2.2")
+            getLocal(ProtocolViolation.class)
+                .statement("MQTT5-3.14.2.2.2")
                 .clientInfo(clientInfo));
     }
 
@@ -164,19 +171,16 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway respondDecodeError(MqttMessage message) {
         if (message.decoderResult().cause() instanceof TooLongFrameException) {
-            return new GoAway(MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.PacketTooLarge.value())
+            return new GoAway(MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.PacketTooLarge)
                 .build(),
                 getLocal(BadPacket.class)
                     .cause(message.decoderResult().cause())
                     .clientInfo(clientInfo));
         }
-        MqttProperties properties = new MqttProperties();
-        properties.add(new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.REASON_STRING.value(),
-            message.decoderResult().cause().getMessage()));
-        return new GoAway(MqttMessageBuilders.disconnect()
-            .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
-            .properties(properties)
+        return new GoAway(MQTT5MessageBuilders.disconnect()
+            .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket)
+            .reasonString(message.decoderResult().cause().getMessage())
             .build(),
             getLocal(BadPacket.class)
                 .cause(message.decoderResult().cause())
@@ -186,8 +190,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway respondDuplicateConnect(MqttConnectMessage message) {
         return new GoAway(
-            MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                .reasonString("MQTT5-3.1.0-2")
                 .build(),
             getLocal(ProtocolViolation.class)
                 .statement("MQTT5-3.1.0-2")
@@ -199,8 +204,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         List<MqttTopicSubscription> topicSubscriptions = message.payload().topicSubscriptions();
         if (topicSubscriptions.isEmpty()) {
             // Ignore instead of disconnect [MQTT-3.8.3-3]
-            return new GoAway(MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+            return new GoAway(MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                .reasonString("MQTT5-3.8.3-2")
                 .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.8.3-2")
@@ -212,8 +218,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             .map(MqttProperties.MqttProperty::value);
         if (subId.isPresent() && subId.get() == 0) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                    .reasonString("MQTT5-3.8.2.1.2")
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.8.2.1.2")
@@ -221,8 +228,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         }
         if (topicSubscriptions.size() > settings.maxTopicFiltersPerSub) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.AdministrativeAction.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.AdministrativeAction)
                     .build(),
                 getLocal(TooLargeSubscription.class)
                     .actual(topicSubscriptions.size())
@@ -232,8 +239,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         for (MqttTopicSubscription topicSub : topicSubscriptions) {
             if (!isWellFormed(topicSub.topicName(), SANITY_CHECK)) {
                 return new GoAway(
-                    MqttMessageBuilders.disconnect()
-                        .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
+                    MQTT5MessageBuilders.disconnect()
+                        .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket)
                         .build(),
                     getLocal(MalformedTopicFilter.class)
                         .topicFilter(topicSub.topicName())
@@ -295,22 +302,22 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public GoAway validateUnsubMessage(MqttUnsubscribeMessage message) {
-        int packetId = message.idAndPropertiesVariableHeader().messageId();
         List<String> topicFilters = message.payload().topics();
         if (topicFilters.isEmpty()) {
             // Ignore instead of disconnect [3.10.3-2]
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                    .reasonString("MQTT5-3.10.3-2")
                     .build(),
                 getLocal(ProtocolViolation.class)
-                    .statement("MQTT-3.10.3-2")
+                    .statement("MQTT5-3.10.3-2")
                     .clientInfo(clientInfo));
         }
         if (topicFilters.size() > settings.maxTopicFiltersPerSub) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.AdministrativeAction.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.AdministrativeAction)
                     .build(),
                 getLocal(TooLargeUnsubscription.class)
                     .max(settings.maxTopicFiltersPerSub)
@@ -321,8 +328,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         for (String topicFilter : topicFilters) {
             if (!isWellFormed(topicFilter, SANITY_CHECK)) {
                 return new GoAway(
-                    MqttMessageBuilders.disconnect()
-                        .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
+                    MQTT5MessageBuilders.disconnect()
+                        .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket)
                         .build(),
                     getLocal(MalformedTopicFilter.class)
                         .topicFilter(topicFilter)
@@ -337,27 +344,26 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public MqttUnsubAckMessage respondPacketIdInUse(MqttUnsubscribeMessage message) {
-        return MqttMessageBuilders.unsubAck()
+        return MQTT5MessageBuilders.unsubAck()
             .packetId(message.variableHeader().messageId())
             .addReasonCodes(message.payload().topics().stream()
-                .map(v -> MQTT5UnsubAckReasonCode.PacketIdentifierInUse.value())
-                .toArray(Short[]::new))
+                .map(v -> MQTT5UnsubAckReasonCode.PacketIdentifierInUse)
+                .toArray(MQTT5UnsubAckReasonCode[]::new))
             .build();
     }
 
     @Override
     public MqttUnsubAckMessage buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results) {
-        Short[] reasonCodes = results.stream().map(result -> switch (result) {
+        MQTT5UnsubAckReasonCode[] reasonCodes = results.stream().map(result -> switch (result) {
                 case OK -> MQTT5UnsubAckReasonCode.Success;
                 case NO_SUB -> MQTT5UnsubAckReasonCode.NoSubscriptionExisted;
                 case TOPIC_FILTER_INVALID -> MQTT5UnsubAckReasonCode.TopicFilterInvalid;
                 case NOT_AUTHORIZED -> MQTT5UnsubAckReasonCode.NotAuthorized;
                 default -> MQTT5UnsubAckReasonCode.UnspecifiedError;
             })
-            .map(MQTT5UnsubAckReasonCode::value)
-            .toArray(Short[]::new);
+            .toArray(MQTT5UnsubAckReasonCode[]::new);
 
-        return MqttMessageBuilders.unsubAck()
+        return MQTT5MessageBuilders.unsubAck()
             .packetId(unsubMessage.variableHeader().messageId())
             .addReasonCodes(reasonCodes)
             .build();
@@ -415,7 +421,10 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway onKick(ClientInfo kicker) {
         return GoAway.now(
-            MqttMessageBuilders.disconnect().reasonCode(MQTT5DisconnectReasonCode.SessionTakenOver.value()).build(),
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.SessionTakenOver)
+                .reasonString(kicker.getMetadataOrDefault(MQTT_CLIENT_ADDRESS_KEY, ""))
+                .build(),
             getLocal(Kicked.class).kicker(kicker).clientInfo(clientInfo));
     }
 
@@ -443,8 +452,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway respondReceivingMaximumExceeded() {
         return new GoAway(
-            MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.ReceiveMaximumExceeded.value())
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.ReceiveMaximumExceeded)
                 .build(),
             getLocal(ExceedReceivingLimit.class).limit(settings.receiveMaximum).clientInfo(clientInfo));
     }
@@ -452,21 +461,40 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway respondPubRateExceeded() {
         return new GoAway(
-            MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.MessageRateToHigh.value())
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.MessageRateToHigh)
                 .build(),
             getLocal(ExceedPubRate.class).limit(settings.maxMsgPerSec).clientInfo(clientInfo));
     }
 
     @Override
     public GoAway validatePubMessage(MqttPublishMessage message) {
+        if (message.fixedHeader().isRetain() && !settings.retainEnabled) {
+            return new GoAway(
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.RetainNotSupported)
+                    .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT5-3.2.2-14")
+                    .clientInfo(clientInfo));
+        }
         String topic = message.variableHeader().topicName();
         MqttProperties mqttProperties = message.variableHeader().properties();
+        if (subscriptionIdentifier(mqttProperties).isPresent()) {
+            return new GoAway(
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                    .reasonString("MQTT5-3.3.4-6")
+                    .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT5-3.3.4-6")
+                    .clientInfo(clientInfo));
+        }
         // disconnect if malformed packet
         if (!isWellFormed(topic, SANITY_CHECK)) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket)
                     .build(),
                 getLocal(MalformedTopic.class)
                     .topic(topic)
@@ -477,8 +505,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             message.fixedHeader().isDup()) {
             // ignore the QoS = 0 Dup = 1 messages according to [MQTT-3.3.1-2]
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                    .reasonString("MQTT5-3.3.1-2")
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.3.1-2")
@@ -487,8 +516,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         if (responseTopic(mqttProperties)
             .map(responseTopic -> !isWellFormed(topic, SANITY_CHECK)).orElse(false)) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.TopicNameInvalid.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.TopicNameInvalid)
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.2.2-13")
@@ -500,8 +529,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 settings.maxTopicLevels,
                 settings.maxTopicLength)).orElse(false)) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.TopicNameInvalid.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.TopicNameInvalid)
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.2.2-14")
@@ -511,8 +540,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         Optional<Integer> topicAlias = topicAlias(mqttProperties);
         if (settings.maxTopicAlias == 0 && topicAlias.isPresent()) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.TopicAliasInvalid.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.TopicAliasInvalid)
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.2.2-18")
@@ -520,8 +549,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         }
         if (settings.maxTopicAlias > 0 && topicAlias.orElse(0) > settings.maxTopicAlias) {
             return new GoAway(
-                MqttMessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.TopicAliasInvalid.value())
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.TopicAliasInvalid)
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.2.2-17")
@@ -533,8 +562,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 Optional<String> aliasedTopic = receiverTopicAliasManager.getTopic(topicAlias.get());
                 if (aliasedTopic.isEmpty()) {
                     return new GoAway(
-                        MqttMessageBuilders.disconnect()
-                            .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+                        MQTT5MessageBuilders.disconnect()
+                            .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                            .reasonString("MQTT5-3.3.4")
                             .build(),
                         getLocal(ProtocolViolation.class)
                             .statement("MQTT5-3.3.4")
@@ -542,8 +572,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 }
             } else {
                 return new GoAway(
-                    MqttMessageBuilders.disconnect()
-                        .reasonCode(MQTT5DisconnectReasonCode.ProtocolError.value())
+                    MQTT5MessageBuilders.disconnect()
+                        .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                        .reasonString("MQTT5-3.3.4")
                         .build(),
                     getLocal(ProtocolViolation.class)
                         .statement("MQTT5-3.3.4")
@@ -576,45 +607,90 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway onQoS0DistDenied(String topic, Message distMessage) {
-        return new GoAway(
-            MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.NotAuthorized.value())
-                .build(),
-            getLocal(NoPubPermission.class)
-                .topic(topic)
-                .qos(QoS.AT_MOST_ONCE)
-                .retain(distMessage.getIsRetain())
-                .clientInfo(clientInfo));
+    public GoAway onQoS0DistDenied(String topic, Message distMessage, CheckResult result) {
+        assert !result.hasGranted();
+        return switch (result.getTypeCase()) {
+            case DENIED -> new GoAway(
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.NotAuthorized)
+                    .reasonString(result.getDenied().hasReason() ? result.getDenied().getReason() : null)
+                    .userProps(result.getDenied().getUserProps())
+                    .build(),
+                getLocal(NoPubPermission.class)
+                    .topic(topic)
+                    .qos(QoS.AT_MOST_ONCE)
+                    .retain(distMessage.getIsRetain())
+                    .clientInfo(clientInfo));
+            case ERROR -> new GoAway(
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.UnspecifiedError)
+                    .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
+                    .userProps(result.getError().getUserProps())
+                    .build(),
+                getLocal(NoPubPermission.class)
+                    .topic(topic)
+                    .qos(QoS.AT_MOST_ONCE)
+                    .retain(distMessage.getIsRetain())
+                    .clientInfo(clientInfo));
+            default -> new GoAway(
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.UnspecifiedError)
+                    .build(),
+                getLocal(NoPubPermission.class)
+                    .topic(topic)
+                    .qos(QoS.AT_MOST_ONCE)
+                    .retain(distMessage.getIsRetain())
+                    .clientInfo(clientInfo));
+        };
     }
 
     @Override
-    public ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage) {
-        return new ResponseOrGoAway(MqttMessageBuilders.pubAck()
-            .packetId(packetId)
-            .reasonCode(MQTT5PubAckReasonCode.NotAuthorized.value())
-            .build());
+    public ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
+        assert !result.hasGranted();
+        return switch (result.getTypeCase()) {
+            case DENIED -> new ResponseOrGoAway(MQTT5MessageBuilders.pubAck()
+                .packetId(packetId)
+                .reasonCode(MQTT5PubAckReasonCode.NotAuthorized)
+                .reasonString(result.getDenied().hasReason() ? result.getDenied().getReason() : null)
+                .userProps(result.getDenied().getUserProps())
+                .build());
+            case ERROR -> new ResponseOrGoAway(MQTT5MessageBuilders.pubAck()
+                .packetId(packetId)
+                .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
+                .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
+                .userProps(result.getError().getUserProps())
+                .build());
+            default -> new ResponseOrGoAway(MQTT5MessageBuilders.pubAck()
+                .packetId(packetId)
+                .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
+                .build());
+        };
     }
 
     @Override
-    public MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message) {
+    public MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
         int packetId = message.variableHeader().packetId();
         return switch (result) {
-            case OK -> MqttMessageBuilders.pubAck()
+            case OK -> MQTT5MessageBuilders.pubAck()
                 .packetId(packetId)
-                .reasonCode(MQTT5PubAckReasonCode.Success.value())
+                .reasonCode(MQTT5PubAckReasonCode.Success)
+                .userProps(userProps)
                 .build();
-            case NO_MATCH -> MqttMessageBuilders.pubAck()
+            case NO_MATCH -> MQTT5MessageBuilders.pubAck()
                 .packetId(packetId)
-                .reasonCode(MQTT5PubAckReasonCode.NoMatchingSubscribers.value())
+                .reasonCode(MQTT5PubAckReasonCode.NoMatchingSubscribers)
+                .userProps(userProps)
                 .build();
-            case EXCEED_LIMIT -> MqttMessageBuilders.pubAck()
+            case EXCEED_LIMIT -> MQTT5MessageBuilders.pubAck()
                 .packetId(packetId)
-                .reasonCode(MQTT5PubAckReasonCode.QuotaExceeded.value())
+                .reasonCode(MQTT5PubAckReasonCode.QuotaExceeded)
+                // TODO: specify which quota in reason string
+                .userProps(userProps)
                 .build();
-            case ERROR -> MqttMessageBuilders.pubAck()
+            case ERROR -> MQTT5MessageBuilders.pubAck()
                 .packetId(packetId)
-                .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError.value())
+                .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
+                .userProps(userProps)
                 .build();
         };
     }
@@ -628,32 +704,52 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage) {
-        return new ResponseOrGoAway(MQTT5MessageBuilders.pubRec()
-            .packetId(packetId)
-            .reasonCode(MQTT5PubRecReasonCode.NotAuthorized)
-            .build());
+    public ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
+        assert !result.hasGranted();
+        return switch (result.getTypeCase()) {
+            case DENIED -> new ResponseOrGoAway(MQTT5MessageBuilders.pubRec()
+                .packetId(packetId)
+                .reasonCode(MQTT5PubRecReasonCode.NotAuthorized)
+                .reasonString(result.getDenied().hasReason() ? result.getDenied().getReason() : null)
+                .userProps(result.getDenied().getUserProps())
+                .build());
+            case ERROR -> new ResponseOrGoAway(MQTT5MessageBuilders.pubRec()
+                .packetId(packetId)
+                .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
+                .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
+                .userProps(result.getError().getUserProps())
+                .build());
+            default -> new ResponseOrGoAway(MQTT5MessageBuilders.pubRec()
+                .packetId(packetId)
+                .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
+                .build());
+        };
     }
 
     @Override
-    public MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message) {
+    public MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
         int packetId = message.variableHeader().packetId();
         return switch (result) {
             case OK -> MQTT5MessageBuilders.pubRec()
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.Success)
+                .userProps(userProps)
                 .build();
             case NO_MATCH -> MQTT5MessageBuilders.pubRec()
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.NoMatchingSubscribers)
+                .userProps(userProps)
                 .build();
             case EXCEED_LIMIT -> MQTT5MessageBuilders.pubRec()
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.QuotaExceeded)
+                // TODO: specify which quota in reason string
+                .userProps(userProps)
                 .build();
             case ERROR -> MQTT5MessageBuilders.pubRec()
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
+                .userProps(userProps)
                 .build();
         };
     }
@@ -661,8 +757,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public GoAway onIdleTimeout(int keepAliveTimeSeconds) {
         return GoAway.now(
-            MqttMessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.KeepAliveTimeout.value())
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.KeepAliveTimeout)
                 .build(),
             getLocal(Idle.class)
                 .keepAliveTimeSeconds(keepAliveTimeSeconds)
