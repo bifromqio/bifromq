@@ -145,6 +145,10 @@ public class TopicUtil {
         return tlsb.length() <= maxLevelLength;
     }
 
+    public static boolean isWildcardTopicFilter(String topicFilter) {
+        return topicFilter.indexOf(SINGLE_WILDCARD) >= 0 || topicFilter.indexOf(MULTIPLE_WILDCARD) >= 0;
+    }
+
     public static boolean isSharedSubscription(String topicFilter) {
         return topicFilter.startsWith(ORDERED_SHARE) || topicFilter.startsWith(UNORDERED_SHARE);
     }

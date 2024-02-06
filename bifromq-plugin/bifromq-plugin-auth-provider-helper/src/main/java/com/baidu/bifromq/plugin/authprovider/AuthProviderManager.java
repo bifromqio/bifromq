@@ -16,6 +16,9 @@ package com.baidu.bifromq.plugin.authprovider;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Error;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
@@ -127,6 +130,49 @@ public class AuthProviderManager implements IAuthProvider {
             eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
             return CompletableFuture.completedFuture(
                 settingProvider.provide(ByPassPermCheckError, client.getTenantId()));
+        }
+    }
+
+    @Override
+    public CompletableFuture<CheckResult> checkPermission(ClientInfo client, MQTTAction action) {
+        assert !stopped.get();
+        long start = System.nanoTime();
+        try {
+            return delegate.checkPermission(client, action)
+                .exceptionally(e -> {
+                    eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
+                    boolean byPass = settingProvider.provide(ByPassPermCheckError, client.getTenantId());
+                    if (byPass) {
+                        return CheckResult.newBuilder()
+                            .setGranted(Granted.getDefaultInstance())
+                            .build();
+                    } else {
+                        log.error("Permission check error", e);
+                        return CheckResult.newBuilder()
+                            .setError(Error.newBuilder()
+                                .setReason("Permission check error")
+                                .build())
+                            .build();
+                    }
+                })
+                .thenApply(v -> {
+                    metricMgr.checkCallTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+                    return v;
+                });
+        } catch (Throwable e) {
+            metricMgr.checkCallErrorCounter.increment();
+            eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
+            boolean byPass = settingProvider.provide(ByPassPermCheckError, client.getTenantId());
+            if (byPass) {
+                return CompletableFuture.completedFuture(CheckResult.newBuilder()
+                    .setGranted(Granted.getDefaultInstance())
+                    .build());
+            } else {
+                log.error("Permission check error", e);
+                return CompletableFuture.completedFuture(CheckResult.newBuilder()
+                    .setError(Error.newBuilder().setReason("Permission check error").build())
+                    .build());
+            }
         }
     }
 

@@ -40,6 +40,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PACKET_TOO_LARGE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PAYLOAD_FORMAT_INVALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PROTOCOL_ERROR;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QOS_NOT_SUPPORTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_RETAIN_NOT_SUPPORTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_TOPIC_NAME_INVALID;
@@ -70,9 +71,10 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Protocol
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.RetainNotSupported;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.util.TopicUtil;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -456,7 +458,18 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .connAck()
                     .returnCode(CONNECTION_REFUSED_RETAIN_NOT_SUPPORTED)
                     .build(),
-                    getLocal(RetainNotSupported.class).clientInfo(clientInfo));
+                    getLocal(ProtocolViolation.class)
+                        .statement("Retain not supported")
+                        .clientInfo(clientInfo));
+            }
+            if (message.variableHeader().willQos() > settings.maxQoS.getNumber()) {
+                return new GoAway(MqttMessageBuilders
+                    .connAck()
+                    .returnCode(CONNECTION_REFUSED_QOS_NOT_SUPPORTED)
+                    .build(),
+                    getLocal(ProtocolViolation.class)
+                        .statement("Will QoS not supported")
+                        .clientInfo(clientInfo));
             }
         }
         return null;
@@ -560,6 +573,18 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         }
         if (!settings.retainEnabled) {
             connPropsBuilder.retainAvailable(false);
+        }
+        if (!settings.wildcardSubscriptionEnabled) {
+            connPropsBuilder.wildcardSubscriptionAvailable(false);
+        }
+        if (!settings.subscriptionIdentifierEnabled) {
+            connPropsBuilder.subscriptionIdentifiersAvailable(false);
+        }
+        if (!settings.sharedSubscriptionEnabled) {
+            connPropsBuilder.sharedSubscriptionAvailable(false);
+        }
+        if (settings.maxQoS != QoS.EXACTLY_ONCE) {
+            connPropsBuilder.maximumQos((byte) settings.maxQoS.getNumber());
         }
         connPropsBuilder.maximumPacketSize(settings.maxPacketSize);
         connPropsBuilder.topicAliasMaximum(settings.maxTopicAlias);

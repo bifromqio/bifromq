@@ -23,27 +23,49 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public enum Setting {
     DebugModeEnabled(Boolean.class, val -> true, false),
-    MaxTopicLevelLength(Integer.class, val -> (int) val > 0, 40),
-    MaxTopicLevels(Integer.class, val -> (int) val > 0, 16),
-    MaxTopicLength(Integer.class, val -> (int) val > 0 && (int) val < 65536, 255),
-    MaxTopicAlias(Integer.class, val -> (int) val >= 0 && (int) val < 65536, 10),
-    MaxSharedGroupMembers(Integer.class, val -> (int) val > 0, 200),
-    MaxTopicFiltersPerInbox(Integer.class, val -> (int) val > 0, 100),
-    MsgPubPerSec(Integer.class, val -> (int) val > 0 && (int) val <= 1000, 200),
-    ReceivingMaximum(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 200),
-    InBoundBandWidth(Long.class, val -> (long) val >= 0, 512 * 1024L),
-    OutBoundBandWidth(Long.class, val -> (long) val >= 0, 512 * 1024L),
     ForceTransient(Boolean.class, val -> true, false),
     ByPassPermCheckError(Boolean.class, val -> true, true),
-    MaxUserPayloadBytes(Integer.class, val -> (int) val > 0 && (int) val <= 1024 * 1024, 256 * 1024),
-    MaxTopicFiltersPerSub(Integer.class, val -> (int) val > 0 && (int) val <= 100, 10),
-    OfflineExpireTimeSeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
-    OfflineQueueSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
-    OfflineOverflowDropOldest(Boolean.class, val -> true, false),
-    RetainedTopicLimit(Integer.class, val -> (int) val >= 0, 10),
-    RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10),
     RetainEnabled(Boolean.class, val -> true, true),
+    WildcardSubscriptionEnabled(Boolean.class, val -> true, true),
+    SubscriptionIdentifierEnabled(Boolean.class, val -> true, true),
+    SharedSubscriptionEnabled(Boolean.class, val -> true, true),
+    MaximumQoS(Integer.class, val -> (int) val == 0 || (int) val == 1 || (int) val == 2, 2),
+    MaxTopicLevelLength(Integer.class, val -> (int) val > 0, 40),
+
+    MaxTopicLevels(Integer.class, val -> (int) val > 0, 16),
+
+    MaxTopicLength(Integer.class, val -> (int) val > 0 && (int) val < 65536, 255),
+
+    MaxTopicAlias(Integer.class, val -> (int) val >= 0 && (int) val < 65536, 10),
+
+    MaxSharedGroupMembers(Integer.class, val -> (int) val > 0, 200),
+
+    MaxTopicFiltersPerInbox(Integer.class, val -> (int) val > 0, 100),
+
+    MsgPubPerSec(Integer.class, val -> (int) val > 0 && (int) val <= 1000, 200),
+
+    ReceivingMaximum(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 200),
+
+    InBoundBandWidth(Long.class, val -> (long) val >= 0, 512 * 1024L),
+
+    OutBoundBandWidth(Long.class, val -> (long) val >= 0, 512 * 1024L),
+
+    MaxUserPayloadBytes(Integer.class, val -> (int) val > 0 && (int) val <= 1024 * 1024, 256 * 1024),
+
+    MaxTopicFiltersPerSub(Integer.class, val -> (int) val > 0 && (int) val <= 100, 10),
+
+    OfflineExpireTimeSeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
+
+    OfflineQueueSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
+
+    OfflineOverflowDropOldest(Boolean.class, val -> true, false),
+
+    RetainedTopicLimit(Integer.class, val -> (int) val >= 0, 10),
+
+    RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10),
+
     DistReservedUnitInterval(Long.class, val -> (long) val > 0 && (long) val <= 0xFFFFFFFFL, 0xFFFFFFFFL),
+
     DistLimitUnitInterval(Long.class, val -> (long) val >= 0 && (long) val <= 0xFFFFFFFFL, 0L);
 
     public final Class<?> valueType;

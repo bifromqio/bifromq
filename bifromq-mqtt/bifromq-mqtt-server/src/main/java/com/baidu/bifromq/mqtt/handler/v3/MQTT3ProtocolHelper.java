@@ -280,6 +280,11 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             // ignore the QoS = 0 Dup = 1 messages according to [MQTT-3.3.1-2]
             return new GoAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.3.1-2").clientInfo(clientInfo));
         }
+        if (message.fixedHeader().qosLevel().value() > settings.maxQoS.getNumber()) {
+            return new GoAway(getLocal(ProtocolViolation.class)
+                .statement(message.fixedHeader().qosLevel().value() + " is disabled")
+                .clientInfo(clientInfo));
+        }
         return null;
     }
 

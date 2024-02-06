@@ -45,10 +45,9 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Malforme
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedWillTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.RetainNotSupported;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCheckError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.SessionCleanupError;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -198,7 +197,14 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             }
             // if retain enabled?
             if (message.variableHeader().isWillRetain() && !settings.retainEnabled) {
-                return new GoAway(getLocal(RetainNotSupported.class).clientInfo(clientInfo));
+                return new GoAway(getLocal(ProtocolViolation.class)
+                    .statement("Retain not supported")
+                    .clientInfo(clientInfo));
+            }
+            if (message.variableHeader().willQos() > settings.maxQoS.getNumber()) {
+                return new GoAway(getLocal(ProtocolViolation.class)
+                    .statement("Will QoS not supported")
+                    .clientInfo(clientInfo));
             }
         }
         return null;
@@ -233,7 +239,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
         return new GoAway(MqttMessageBuilders
             .connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-            .build(), getLocal(SessionCleanupError.class).clientInfo(clientInfo));
+            .build(), getLocal(InboxTransientError.class).clientInfo(clientInfo));
     }
 
     @Override
@@ -242,7 +248,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
-            getLocal(SessionCheckError.class).clientInfo(clientInfo));
+            getLocal(InboxTransientError.class).clientInfo(clientInfo));
     }
 
     @Override

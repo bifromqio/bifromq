@@ -212,20 +212,6 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .statement("MQTT5-3.8.3-2")
                     .clientInfo(clientInfo));
         }
-        Optional<Integer> subId = Optional.ofNullable(
-                (MqttProperties.IntegerProperty) message.idAndPropertiesVariableHeader().properties()
-                    .getProperty(MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER.value()))
-            .map(MqttProperties.MqttProperty::value);
-        if (subId.isPresent() && subId.get() == 0) {
-            return new GoAway(
-                MQTT5MessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
-                    .reasonString("MQTT5-3.8.2.1.2")
-                    .build(),
-                getLocal(ProtocolViolation.class)
-                    .statement("MQTT5-3.8.2.1.2")
-                    .clientInfo(clientInfo));
-        }
         if (topicSubscriptions.size() > settings.maxTopicFiltersPerSub) {
             return new GoAway(
                 MQTT5MessageBuilders.disconnect()
@@ -245,6 +231,33 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     getLocal(MalformedTopicFilter.class)
                         .topicFilter(topicSub.topicName())
                         .clientInfo(clientInfo));
+            }
+        }
+        Optional<Integer> subId = Optional.ofNullable(
+                (MqttProperties.IntegerProperty) message.idAndPropertiesVariableHeader().properties()
+                    .getProperty(MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER.value()))
+            .map(MqttProperties.MqttProperty::value);
+        if (subId.isPresent()) {
+            if (subId.get() == 0) {
+                return new GoAway(
+                    MQTT5MessageBuilders.disconnect()
+                        .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                        .reasonString("MQTT5-3.8.2.1.2")
+                        .build(),
+                    getLocal(ProtocolViolation.class)
+                        .statement("MQTT5-3.8.2.1.2")
+                        .clientInfo(clientInfo));
+            }
+            if (!settings.subscriptionIdentifierEnabled) {
+                return new GoAway(
+                    MQTT5MessageBuilders.subAck()
+                        .packetId(message.variableHeader().messageId())
+                        .reasonCodes(topicSubscriptions.stream()
+                            .map(s -> MQTT5SubAckReasonCode.SubscriptionIdentifierNotSupported)
+                            .toArray(MQTT5SubAckReasonCode[]::new))
+                        .build(), getLocal(ProtocolViolation.class)
+                    .statement("MQTT5-3.8.2.1.2")
+                    .clientInfo(clientInfo));
             }
         }
         return null;
@@ -281,6 +294,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 case EXCEED_LIMIT -> MQTT5SubAckReasonCode.QuotaExceeded;
                 case TOPIC_FILTER_INVALID -> MQTT5SubAckReasonCode.TopicFilterInvalid;
                 case NOT_AUTHORIZED -> MQTT5SubAckReasonCode.NotAuthorized;
+                case WILDCARD_NOT_SUPPORTED -> MQTT5SubAckReasonCode.WildcardSubscriptionsNotSupported;
+                case SUBSCRIPTION_IDENTIFIER_NOT_SUPPORTED -> MQTT5SubAckReasonCode.SubscriptionIdentifierNotSupported;
+                case SHARED_SUBSCRIPTION_NOT_SUPPORTED -> MQTT5SubAckReasonCode.SharedSubscriptionsNotSupported;
                 default -> MQTT5SubAckReasonCode.UnspecifiedError;
             };
         }
@@ -476,6 +492,15 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("MQTT5-3.2.2-14")
+                    .clientInfo(clientInfo));
+        }
+        if (message.fixedHeader().qosLevel().value() > settings.maxQoS.getNumber()) {
+            return new GoAway(
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.QoSNotSupported)
+                    .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT5-3.2.2-11")
                     .clientInfo(clientInfo));
         }
         String topic = message.variableHeader().topicName();

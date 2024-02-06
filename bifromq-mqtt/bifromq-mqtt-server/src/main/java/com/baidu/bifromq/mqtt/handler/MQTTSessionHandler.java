@@ -38,7 +38,9 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
+import static com.baidu.bifromq.util.TopicUtil.isSharedSubscription;
 import static com.baidu.bifromq.util.TopicUtil.isValidTopicFilter;
+import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
 import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basehlc.HLC;
@@ -384,6 +386,13 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 .topicFilter(topicFilter)
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.TOPIC_FILTER_INVALID);
+        }
+        if (isWildcardTopicFilter(topicFilter) && !settings.wildcardSubscriptionEnabled) {
+            return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.WILDCARD_NOT_SUPPORTED);
+        }
+
+        if (isSharedSubscription(topicFilter) && !settings.subscriptionIdentifierEnabled) {
+            return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.SHARED_SUBSCRIPTION_NOT_SUPPORTED);
         }
 
         return addFgTask(
