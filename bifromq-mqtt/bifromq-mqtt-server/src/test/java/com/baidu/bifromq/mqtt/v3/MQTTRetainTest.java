@@ -40,6 +40,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
@@ -49,7 +50,7 @@ public class MQTTRetainTest {
     private final String tenantId = "testRetainTraffic";
     private final String deviceKey = "testDevice";
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void resetMocks() {
         reset(mqttTest.authProvider, mqttTest.eventCollector);
         clearInvocations(mqttTest.eventCollector);

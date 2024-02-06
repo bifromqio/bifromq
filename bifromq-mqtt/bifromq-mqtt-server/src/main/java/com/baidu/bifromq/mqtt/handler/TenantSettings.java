@@ -16,6 +16,9 @@ package com.baidu.bifromq.mqtt.handler;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT3Enabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT4Enabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT5Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicAlias;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
@@ -39,6 +42,9 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.QoS;
 
 public class TenantSettings {
+    public final boolean mqtt3Enabled;
+    public final boolean mqtt4Enabled;
+    public final boolean mqtt5Enabled;
     public final boolean debugMode;
     public final boolean forceTransient;
     public final boolean retainEnabled;
@@ -62,6 +68,9 @@ public class TenantSettings {
     public final int retainMatchLimit;
 
     public TenantSettings(String tenantId, ISettingProvider provider) {
+        mqtt3Enabled = provider.provide(MQTT3Enabled, tenantId);
+        mqtt4Enabled = provider.provide(MQTT4Enabled, tenantId);
+        mqtt5Enabled = provider.provide(MQTT5Enabled, tenantId);
         debugMode = provider.provide(DebugModeEnabled, tenantId);
         forceTransient = provider.provide(ForceTransient, tenantId);
         retainEnabled = provider.provide(RetainEnabled, tenantId);

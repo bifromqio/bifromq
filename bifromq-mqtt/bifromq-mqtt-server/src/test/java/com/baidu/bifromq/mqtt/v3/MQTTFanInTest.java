@@ -51,7 +51,7 @@ public class MQTTFanInTest {
     private final String tenantId = "testFanInTraffic";
     private final String deviceKey = "testDevice";
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void setup() {
         when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -72,7 +72,7 @@ public class MQTTFanInTest {
         }).when(mqttTest.eventCollector).report(any(Event.class));
     }
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void resetMocks() {
         reset(mqttTest.authProvider, mqttTest.eventCollector);
         clearInvocations(mqttTest.eventCollector);

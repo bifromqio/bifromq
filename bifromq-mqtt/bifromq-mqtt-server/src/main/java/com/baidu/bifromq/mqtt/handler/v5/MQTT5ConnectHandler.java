@@ -45,6 +45,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_RETAIN_NOT_SUPPORTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_TOPIC_NAME_INVALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSPECIFIED_ERROR;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSUPPORTED_PROTOCOL_VERSION;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL;
 
 import com.baidu.bifromq.inbox.storage.proto.LWT;
@@ -380,9 +381,19 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected GoAway validate(MqttConnectMessage message, TenantSettings settings, ClientInfo clientInfo) {
+        if (message.variableHeader().version() == 5 && !settings.mqtt5Enabled) {
+            return new GoAway(MqttMessageBuilders.connAck()
+                .returnCode(CONNECTION_REFUSED_UNSUPPORTED_PROTOCOL_VERSION)
+                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .reasonString("MQTT5 not enabled")
+                    .build())
+                .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT5 not enabled")
+                    .clientInfo(clientInfo));
+        }
         if (MQTTMessageSizer.size(message).encodedBytes() > settings.maxPacketSize) {
-            return new GoAway(MqttMessageBuilders
-                .connAck()
+            return new GoAway(MqttMessageBuilders.connAck()
                 .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
                 .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
                     .reasonString("Too large connect packet: max=" + settings.maxPacketSize)
@@ -396,8 +407,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         Optional<Integer> requestMaxPacketSize = maximumPacketSize(message.variableHeader().properties());
         if (requestMaxPacketSize.isPresent()) {
             if (requestMaxPacketSize.get() < MIN_CONTROL_PACKET_SIZE) {
-                return new GoAway(MqttMessageBuilders
-                    .connAck()
+                return new GoAway(MqttMessageBuilders.connAck()
                     .returnCode(CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC)
                     .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
                         .reasonString("Invalid max packet size: " + requestMaxPacketSize.get())

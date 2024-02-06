@@ -47,8 +47,9 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
@@ -59,7 +60,7 @@ public class MQTTPubSubTest {
     private final String tenantId = "testPubSubTraffic";
     private final String deviceKey = "testDevice";
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void mock() {
         when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -73,7 +74,6 @@ public class MQTTPubSubTest {
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
 
-
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
             log.debug("event: {}", event);
@@ -81,7 +81,7 @@ public class MQTTPubSubTest {
         }).when(mqttTest.eventCollector).report(any(Event.class));
     }
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void resetMocks() {
         reset(mqttTest.authProvider, mqttTest.eventCollector);
         clearInvocations(mqttTest.eventCollector);

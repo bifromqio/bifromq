@@ -22,6 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public enum Setting {
+    MQTT3Enabled(Boolean.class, val -> true, true),
+    MQTT4Enabled(Boolean.class, val -> true, true),
+    MQTT5Enabled(Boolean.class, val -> true, true),
     DebugModeEnabled(Boolean.class, val -> true, false),
     ForceTransient(Boolean.class, val -> true, false),
     ByPassPermCheckError(Boolean.class, val -> true, true),

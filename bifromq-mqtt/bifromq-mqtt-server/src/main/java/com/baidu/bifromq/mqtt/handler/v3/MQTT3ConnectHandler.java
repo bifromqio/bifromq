@@ -26,6 +26,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -186,6 +187,22 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected GoAway validate(MqttConnectMessage message, TenantSettings settings, ClientInfo clientInfo) {
+        if (message.variableHeader().version() == 3 && !settings.mqtt3Enabled) {
+            return new GoAway(MqttMessageBuilders.connAck()
+                .returnCode(CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION)
+                .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT3.1 not enabled")
+                    .clientInfo(clientInfo));
+        }
+        if (message.variableHeader().version() == 4 && !settings.mqtt4Enabled) {
+            return new GoAway(MqttMessageBuilders.connAck()
+                .returnCode(CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION)
+                .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MQTT3.1.1 not enabled")
+                    .clientInfo(clientInfo));
+        }
         if (message.variableHeader().isWillFlag()) {
             if (!TopicUtil.isValidTopic(message.payload().willTopic(),
                 settings.maxTopicLevelLength,
