@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
@@ -102,7 +104,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     private MqttConnectMessage connMsg = null;
     private boolean requestProblemInfo;
     private String authMethod = null;
-    private CompletableFuture<OkOrGoAway> extendedAuthFuture;
+    private CompletableFuture<AuthResult> extendedAuthFuture;
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
@@ -178,22 +180,12 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET) // [MQTT-4.13.1-1]
                     .build(), getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
             }
-            if (isUTF8Payload(connMsg.payload().willProperties()) &&
-                !MQTTUtf8Util.isValidUTF8Payload(connMsg.payload().willMessageInBytes())) {
-                return new GoAway(MqttMessageBuilders
-                    .connAck()
-                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
-                        .reasonString("payload format is not utf8")
-                        .build())
-                    .returnCode(CONNECTION_REFUSED_PAYLOAD_FORMAT_INVALID) // [MQTT-4.13.1-1]
-                    .build(), getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
-            }
         }
         return null;
     }
 
     @Override
-    protected CompletableFuture<OkOrGoAway> authenticate(MqttConnectMessage message) {
+    protected CompletableFuture<AuthResult> authenticate(MqttConnectMessage message) {
         this.connMsg = message;
         this.requestProblemInfo = requestProblemInformation(message.variableHeader().properties());
         Optional<String> authMethodOpt = authMethod(message.variableHeader().properties());
@@ -203,51 +195,51 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                     switch (authResult.getTypeCase()) {
                         case SUCCESS -> {
-                            return new OkOrGoAway(buildClientInfo(clientAddress, authResult.getSuccess()));
+                            return ok(buildClientInfo(clientAddress, authResult.getSuccess()));
                         }
                         case FAILED -> {
                             Failed failed = authResult.getFailed();
                             switch (failed.getCode()) {
                                 case NotAuthorized -> {
-                                    return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                        .connAck()
-                                        .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED_5)
-                                        .build(),
-                                        getLocal(NotAuthorizedClient.class).peerAddress(clientAddress)));
+                                    return goAway(MqttMessageBuilders
+                                            .connAck()
+                                            .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED_5)
+                                            .build(),
+                                        getLocal(NotAuthorizedClient.class).peerAddress(clientAddress));
                                 }
                                 case BadPass -> {
-                                    return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                        .connAck()
-                                        .returnCode(CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD)
-                                        .build(),
-                                        getLocal(UnauthenticatedClient.class).peerAddress(clientAddress)));
+                                    return goAway(MqttMessageBuilders
+                                            .connAck()
+                                            .returnCode(CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD)
+                                            .build(),
+                                        getLocal(UnauthenticatedClient.class).peerAddress(clientAddress));
                                 }
                                 case Banned -> {
-                                    return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                        .connAck()
-                                        .returnCode(CONNECTION_REFUSED_BANNED)
-                                        .build(),
-                                        getLocal(UnauthenticatedClient.class).peerAddress(clientAddress)));
+                                    return goAway(MqttMessageBuilders
+                                            .connAck()
+                                            .returnCode(CONNECTION_REFUSED_BANNED)
+                                            .build(),
+                                        getLocal(UnauthenticatedClient.class).peerAddress(clientAddress));
                                 }
                                 // fallthrough
                                 default -> {
                                     log.error("Unexpected error from auth provider:{}", failed.getReason());
-                                    return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                        .connAck()
-                                        .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                        .build(),
+                                    return goAway(MqttMessageBuilders
+                                            .connAck()
+                                            .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
+                                            .build(),
                                         getLocal(AuthError.class).cause(failed.getReason())
-                                            .peerAddress(clientAddress)));
+                                            .peerAddress(clientAddress));
                                 }
                             }
                         }
                         default -> {
                             log.error("Unexpected auth result: {}", authResult.getTypeCase());
-                            return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                .build(),
-                                getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result")));
+                            return goAway(MqttMessageBuilders
+                                    .connAck()
+                                    .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
+                                    .build(),
+                                getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result"));
                         }
                     }
                 });
@@ -270,7 +262,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 this.isAuthing = false;
                 final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                 switch (authResult.getTypeCase()) {
-                    case SUCCESS -> extendedAuthFuture.complete(new OkOrGoAway(buildClientInfo(
+                    case SUCCESS -> extendedAuthFuture.complete(ok(buildClientInfo(
                         clientAddress, authResult.getSuccess())));
                     case CONTINUE -> {
                         Continue authContinue = authResult.getContinue();
@@ -290,36 +282,35 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     default -> {
                         Failed failed = authResult.getFailed();
                         switch (failed.getCode()) {
-                            case NotAuthorized ->
-                                extendedAuthFuture.complete(new OkOrGoAway(new GoAway(MqttMessageBuilders
+                            case NotAuthorized -> extendedAuthFuture.complete(goAway(MqttMessageBuilders
                                     .connAck()
                                     .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED_5)
                                     .build(),
-                                    getLocal(NotAuthorizedClient.class).peerAddress(clientAddress))));
-                            case BadPass -> extendedAuthFuture.complete(new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD)
-                                .build(),
-                                getLocal(UnauthenticatedClient.class).peerAddress(clientAddress))));
-                            case Banned -> extendedAuthFuture.complete(new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                .connAck()
-                                .returnCode(CONNECTION_REFUSED_BANNED)
-                                .build(),
-                                getLocal(UnauthenticatedClient.class).peerAddress(clientAddress))));
+                                getLocal(NotAuthorizedClient.class).peerAddress(clientAddress)));
+                            case BadPass -> extendedAuthFuture.complete(goAway(MqttMessageBuilders
+                                    .connAck()
+                                    .returnCode(CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD)
+                                    .build(),
+                                getLocal(UnauthenticatedClient.class).peerAddress(clientAddress)));
+                            case Banned -> extendedAuthFuture.complete(goAway(MqttMessageBuilders
+                                    .connAck()
+                                    .returnCode(CONNECTION_REFUSED_BANNED)
+                                    .build(),
+                                getLocal(UnauthenticatedClient.class).peerAddress(clientAddress)));
                             // fallthrough
                             default -> {
                                 log.error("Unexpected error from auth provider:{}", failed.getReason());
-                                extendedAuthFuture.complete(new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                    .connAck()
-                                    .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
-                                    .build(),
+                                extendedAuthFuture.complete(goAway(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
+                                        .build(),
                                     getLocal(AuthError.class).cause(failed.getReason())
-                                        .peerAddress(clientAddress))));
+                                        .peerAddress(clientAddress)));
                             }
                         }
                     }
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private ClientInfo buildClientInfo(InetSocketAddress clientAddress, Success success) {
@@ -479,6 +470,20 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .build(),
                     getLocal(ProtocolViolation.class)
                         .statement("Will QoS not supported")
+                        .clientInfo(clientInfo));
+            }
+            if (settings.payloadFormatValidationEnabled &&
+                isUTF8Payload(connMsg.payload().willProperties()) &&
+                !MQTTUtf8Util.isValidUTF8Payload(connMsg.payload().willMessageInBytes())) {
+                return new GoAway(MqttMessageBuilders
+                    .connAck()
+                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                        .reasonString("Invalid payload format")
+                        .build())
+                    .returnCode(CONNECTION_REFUSED_PAYLOAD_FORMAT_INVALID) // [MQTT-4.13.1-1]
+                    .build(),
+                    getLocal(ProtocolViolation.class)
+                        .statement("Invalid payload format")
                         .clientInfo(clientInfo));
             }
         }

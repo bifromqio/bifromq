@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
@@ -120,7 +122,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected CompletableFuture<OkOrGoAway> authenticate(MqttConnectMessage message) {
+    protected CompletableFuture<AuthResult> authenticate(MqttConnectMessage message) {
         MQTT3AuthData authData = AuthUtil.buildMQTT3AuthData(ctx.channel(), message);
         return authProvider.auth(authData)
             .thenApply(authResult -> {
@@ -128,7 +130,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                 switch (authResult.getTypeCase()) {
                     case OK -> {
                         Ok ok = authResult.getOk();
-                        return new OkOrGoAway(ClientInfo.newBuilder()
+                        return ok(ClientInfo.newBuilder()
                             .setTenantId(ok.getTenantId())
                             .setType(MQTT_TYPE_VALUE)
                             .putAllMetadata(ok.getAttrsMap()) // custom attrs
@@ -145,36 +147,36 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                         Reject reject = authResult.getReject();
                         switch (reject.getCode()) {
                             case NotAuthorized -> {
-                                return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                    .connAck()
-                                    .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
-                                    .build(),
-                                    getLocal(NotAuthorizedClient.class).peerAddress(clientAddress)));
+                                return goAway(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
+                                        .build(),
+                                    getLocal(NotAuthorizedClient.class).peerAddress(clientAddress));
                             }
                             case BadPass -> {
-                                return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                    .connAck()
-                                    .returnCode(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD)
-                                    .build(),
-                                    getLocal(UnauthenticatedClient.class).peerAddress(clientAddress)));
+                                return goAway(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD)
+                                        .build(),
+                                    getLocal(UnauthenticatedClient.class).peerAddress(clientAddress));
                             }
                             // fallthrough
                             default -> {
                                 log.error("Unexpected error from auth provider:{}", authResult.getReject().getReason());
-                                return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                                    .connAck()
-                                    .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-                                    .build(),
-                                    getLocal(AuthError.class).cause(reject.getReason()).peerAddress(clientAddress)));
+                                return goAway(MqttMessageBuilders
+                                        .connAck()
+                                        .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                                        .build(),
+                                    getLocal(AuthError.class).cause(reject.getReason()).peerAddress(clientAddress));
                             }
                         }
                     }
                     default -> {
-                        return new OkOrGoAway(new GoAway(MqttMessageBuilders
-                            .connAck()
-                            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-                            .build(),
-                            getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result")));
+                        return goAway(MqttMessageBuilders
+                                .connAck()
+                                .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                                .build(),
+                            getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result"));
                     }
                 }
             });

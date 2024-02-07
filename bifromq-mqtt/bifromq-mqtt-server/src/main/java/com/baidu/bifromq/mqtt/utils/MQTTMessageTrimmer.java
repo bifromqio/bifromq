@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt.utils;
 
-import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnAckVariableHeader;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectVariableHeader;
@@ -21,7 +20,6 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttPubReplyMessageVariableHeader;
-import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttPublishVariableHeader;
 import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
@@ -37,16 +35,6 @@ public class MQTTMessageTrimmer {
                 MqttConnectMessage connMsg = (MqttConnectMessage) message;
                 yield new MqttConnectMessage(connMsg.fixedHeader(),
                     trimVarHeader(connMsg.variableHeader(), trimReasonString, trimUserProps), connMsg.payload());
-            }
-            case CONNACK -> {
-                MqttConnAckMessage connAckMsg = (MqttConnAckMessage) message;
-                yield new MqttConnAckMessage(connAckMsg.fixedHeader(),
-                    trimVarHeader(connAckMsg.variableHeader(), trimReasonString, trimUserProps));
-            }
-            case PUBLISH -> {
-                MqttPublishMessage pubMsg = (MqttPublishMessage) message;
-                yield new MqttPublishMessage(pubMsg.fixedHeader(),
-                    trimVarHeader(pubMsg.variableHeader(), trimReasonString, trimUserProps), pubMsg.payload());
             }
             case SUBSCRIBE -> {
                 MqttSubscribeMessage subMsg = (MqttSubscribeMessage) message;
@@ -90,10 +78,10 @@ public class MQTTMessageTrimmer {
                 }
                 yield message;
             }
-            case DISCONNECT, AUTH -> new MqttMessage(message.fixedHeader(),
+            case AUTH -> new MqttMessage(message.fixedHeader(),
                 trimVarHeader((MqttReasonCodeAndPropertiesVariableHeader) message.variableHeader(), trimReasonString,
                     trimUserProps));
-            default -> message;
+            default -> message; // don't trim ConnAck/Disconnect/Publish
         };
     }
 

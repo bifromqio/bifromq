@@ -49,6 +49,7 @@ import io.netty.handler.codec.mqtt.MqttMessageType;
 import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttPubReplyMessageVariableHeader;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
+import io.netty.handler.codec.mqtt.MqttPublishVariableHeader;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
@@ -182,21 +183,21 @@ public class MQTT5MessageBuilders {
         }
 
         public MqttPublishMessage build() {
-            MqttMessageBuilders.PublishBuilder pubBuilder = MqttMessageBuilders.publish();
             MqttProperties mqttProps = new MqttProperties();
             TopicFilterOption option = message.option();
             if (option.hasSubId()) {
                 mqttProps.add(new MqttProperties.IntegerProperty(SUBSCRIPTION_IDENTIFIER.value(), option.getSubId()));
             }
+            String topicName;
             if (topicAlias > 0) {
                 if (setupAlias) {
-                    pubBuilder.topicName(message.topic());
+                    topicName = message.topic();
                 } else {
-                    pubBuilder.topicName("");
+                    topicName = "";
                 }
                 mqttProps.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS.value(), topicAlias));
             } else {
-                pubBuilder.topicName(message.topic());
+                topicName = message.topic();
             }
             if (message.message().getIsUTF8String()) {
                 mqttProps.add(new MqttProperties.IntegerProperty(PAYLOAD_FORMAT_INDICATOR.value(), 1));
@@ -217,13 +218,14 @@ public class MQTT5MessageBuilders {
                 mqttProps.add(toMqttUserProps(message.message().getUserProperties()));
             }
 
-            return pubBuilder
-                .messageId(packetId)
-                .qos(MqttQoS.valueOf(message.qos().getNumber()))
-                .retained(message.isRetain())
-                .payload(Unpooled.wrappedBuffer(message.message().getPayload().asReadOnlyByteBuffer()))
-                .properties(mqttProps)
-                .build();
+
+            MqttFixedHeader mqttFixedHeader =
+                new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.valueOf(message.qos().getNumber()),
+                    message.isRetain(), 0);
+            MqttPublishVariableHeader mqttVariableHeader =
+                new MqttPublishVariableHeader(topicName, packetId, mqttProps);
+            return new MqttPublishMessage(mqttFixedHeader, mqttVariableHeader,
+                Unpooled.wrappedBuffer(message.message().getPayload().asReadOnlyByteBuffer()));
         }
     }
 

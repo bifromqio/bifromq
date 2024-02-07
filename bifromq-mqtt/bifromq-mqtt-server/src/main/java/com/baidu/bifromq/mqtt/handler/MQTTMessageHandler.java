@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
-    private static final int DEFAULT_FLUSH_AFTER_FLUSHES = 64;
+    private static final int DEFAULT_FLUSH_AFTER_FLUSHES = 128;
     private final int explicitFlushAfterFlushes;
     private final Runnable flushTask;
     private int flushPendingCount;
@@ -112,7 +112,7 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
     private void scheduleFlush(final ChannelHandlerContext ctx) {
         if (nextScheduledFlush == null) {
             // Run as soon as possible, but still yield to give a chance for additional writes to enqueue.
-            nextScheduledFlush = ctx.channel().eventLoop().submit(flushTask);
+            nextScheduledFlush = ctx.executor().submit(flushTask);
         }
     }
 

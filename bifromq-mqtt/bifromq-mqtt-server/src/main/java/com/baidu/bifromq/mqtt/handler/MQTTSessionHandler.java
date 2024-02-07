@@ -49,8 +49,7 @@ import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.metrics.TenantMeter;
-import com.baidu.bifromq.mqtt.handler.record.GoAway;
-import com.baidu.bifromq.mqtt.handler.record.ResponseOrGoAway;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
@@ -165,7 +164,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final TenantMeter tenantMeter;
     private final long idleTimeoutNanos;
     private final MPSThrottler throttler;
-    private final FutureTracker fgTasks = new FutureTracker();
+    private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
     private final FutureTracker bgTasks = new FutureTracker();
     private final Set<Integer> inUsePacketIds = new HashSet<>();
 
@@ -215,7 +214,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     @Override
     public final CompletableFuture<Void> disconnect() {
-        ctx.channel().eventLoop().execute(() -> handleGoAway(helper().onDisconnect()));
+        ctx.executor().execute(() -> handleProtocolResponse(helper().onDisconnect()));
         return bgTasks.whenComplete((v, e) -> log.trace("All bg tasks finished: client={}", clientInfo));
     }
 
@@ -223,8 +222,13 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         return willMessage;
     }
 
-    protected final <T> CompletableFuture<T> addFgTask(CompletableFuture<T> task) {
-        return fgTasks.track(task);
+    protected final <T> CompletableFuture<T> addFgTask(CompletableFuture<T> taskFuture) {
+        assert ctx.executor().inEventLoop();
+        if (!taskFuture.isDone()) {
+            fgTasks.add(taskFuture);
+            taskFuture.whenComplete((v, e) -> fgTasks.remove(taskFuture));
+        }
+        return taskFuture;
     }
 
     protected final <T> CompletableFuture<T> addBgTask(CompletableFuture<T> task) {
@@ -239,9 +243,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         ChannelAttrs.setMaxPayload(settings.maxPacketSize, ctx);
         sessionCtx.localSessionRegistry.add(channelId(), this);
         sessionRegister = ChannelAttrs.mqttSessionContext(ctx).sessionDictClient
-            .reg(clientInfo, kicker -> ctx.channel().eventLoop().execute(() -> handleGoAway(helper().onKick(kicker))));
+            .reg(clientInfo, kicker -> ctx.executor().execute(() -> handleProtocolResponse(helper().onKick(kicker))));
         lastActiveAtNanos = sessionCtx.nanoTime();
-        idleTimeoutTask = ctx.channel().eventLoop()
+        idleTimeoutTask = ctx.executor()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
         tenantMeter.recordCount(MqttConnectCount);
     }
@@ -254,7 +258,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (willMessage != null) {
             addBgTask(distWillMessage(willMessage));
         }
-        fgTasks.stop();
+        fgTasks.forEach(t -> t.cancel(true));
         sessionCtx.localSessionRegistry.remove(channelId(), this);
         sessionRegister.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
@@ -265,7 +269,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         super.exceptionCaught(ctx, cause);
         log.debug("ctx: {}, cause:", ctx, cause);
         // if disconnection is caused purely by channel error
-        handleGoAway(GoAway.now(getLocal(ClientChannelError.class).clientInfo(clientInfo).cause(cause)));
+        handleProtocolResponse(
+            ProtocolResponse.goAwayNow(getLocal(ClientChannelError.class).clientInfo(clientInfo).cause(cause)));
     }
 
     @Override
@@ -279,8 +284,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 log.trace("Received mqtt message:{}", mqttMessage);
             }
             switch (mqttMessage.fixedHeader().messageType()) {
-                case CONNECT -> handleGoAway(helper().respondDuplicateConnect((MqttConnectMessage) mqttMessage));
-                case DISCONNECT -> handleGoAway(handleDisconnect(mqttMessage));
+                case CONNECT ->
+                    handleProtocolResponse(helper().respondDuplicateConnect((MqttConnectMessage) mqttMessage));
+                case DISCONNECT -> handleProtocolResponse(handleDisconnect(mqttMessage));
                 case PINGREQ -> {
                     writeAndFlush(MqttMessage.PINGRESP);
                     if (settings.debugMode) {
@@ -297,7 +303,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 default -> handleOther(mqttMessage);
             }
         } else {
-            handleGoAway(helper().respondDecodeError(mqttMessage));
+            handleProtocolResponse(helper().respondDecodeError(mqttMessage));
         }
     }
 
@@ -305,21 +311,21 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     }
 
-    protected abstract GoAway handleDisconnect(MqttMessage message);
+    protected abstract ProtocolResponse handleDisconnect(MqttMessage message);
 
     private void handlePubMsg(MqttPublishMessage mqttMessage) {
         if (isExceedReceivingMaximum()) {
-            handleGoAway(helper().respondReceivingMaximumExceeded());
+            handleProtocolResponse(helper().respondReceivingMaximumExceeded());
             mqttMessage.release();
         }
         if (!throttler.pass()) {
-            handleGoAway(helper().respondPubRateExceeded());
+            handleProtocolResponse(helper().respondPubRateExceeded());
             mqttMessage.release();
             return;
         }
-        GoAway goAwayOnInvalid = helper().validatePubMessage(mqttMessage);
-        if (goAwayOnInvalid != null) {
-            handleGoAway(goAwayOnInvalid);
+        ProtocolResponse isInvalid = helper().validatePubMessage(mqttMessage);
+        if (isInvalid != null) {
+            handleProtocolResponse(isInvalid);
             mqttMessage.release();
             return;
         }
@@ -334,9 +340,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     private void handleSubMsg(MqttSubscribeMessage message) {
-        ResponseOrGoAway isInvalid = helper().validateSubMessage(message);
+        ProtocolResponse isInvalid = helper().validateSubMessage(message);
         if (isInvalid != null) {
-            handleResponseOrGoAway(isInvalid);
+            handleProtocolResponse(isInvalid);
             return;
         }
         int packetId = message.variableHeader().messageId();
@@ -356,7 +362,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .map(MqttTopicSubscription::topicName)
                         .collect(Collectors.toList()))
                     .clientInfo(clientInfo));
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private CompletableFuture<MqttSubAckMessage> doSubscribe(long reqId, MqttSubscribeMessage message) {
@@ -407,7 +413,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                             .clientInfo(clientInfo));
                         return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.NOT_AUTHORIZED);
                     }
-                }, ctx.channel().eventLoop()));
+                }, ctx.executor()));
     }
 
     protected abstract CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId,
@@ -415,9 +421,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                                                        TopicFilterOption option);
 
     private void handleUnsubMsg(MqttUnsubscribeMessage message) {
-        GoAway goAwayOnInvalid = helper().validateUnsubMessage(message);
+        ProtocolResponse goAwayOnInvalid = helper().validateUnsubMessage(message);
         if (goAwayOnInvalid != null) {
-            handleGoAway(goAwayOnInvalid);
+            handleProtocolResponse(goAwayOnInvalid);
             return;
         }
         int packetId = message.variableHeader().messageId();
@@ -434,7 +440,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     .messageId(packetId)
                     .topicFilter(message.payload().topics())
                     .clientInfo(clientInfo));
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private CompletableFuture<MqttUnsubAckMessage> doUnsubscribe(long reqId, MqttUnsubscribeMessage message) {
@@ -471,7 +477,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     // always reply unsub ack
                     return CompletableFuture.completedFuture(IMQTTProtocolHelper.UnsubResult.NOT_AUTHORIZED);
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     protected abstract CompletableFuture<IMQTTProtocolHelper.UnsubResult> unsubTopicFilter(long reqId,
@@ -503,7 +509,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         int packetId = ((MqttMessageIdVariableHeader) message.variableHeader()).messageId();
         if (isConfirming(packetId)) {
             if (helper().isQoS2Received(message)) {
-                handleResponseOrGoAway(helper().respondPubRecMsg(message, false));
+                handleProtocolResponse(helper().respondPubRecMsg(message, false));
                 if (settings.debugMode) {
                     SubMessage received = getConfirming(packetId);
                     eventCollector.report(getLocal(QoS2Received.class)
@@ -520,7 +526,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 confirm(packetId);
             }
         } else {
-            handleResponseOrGoAway(helper().respondPubRecMsg(message, true));
+            handleProtocolResponse(helper().respondPubRecMsg(message, true));
         }
     }
 
@@ -628,7 +634,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         MqttPublishMessage pubMsg = helper().buildMqttPubMessage(packetId(seq), msg);
         Timer.Sample start = Timer.start();
         int msgSize = MQTTMessageSizer.size(pubMsg).encodedBytes();
-        ctx.write(pubMsg).addListener(f -> {
+        writeAndFlush(pubMsg).addListener(f -> {
             if (f.isSuccess()) {
                 switch (pubMsg.fixedHeader().qosLevel()) {
                     case AT_MOST_ONCE -> {
@@ -702,7 +708,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         Message distMessage = helper().buildDistMessage(message);
         UserProperties userProps = helper().getUserProps(message);
         int ingressMsgBytes = MQTTMessageSizer.size(message).encodedBytes();
-        fgTasks.track(checkPubPermission(topic, distMessage, userProps))
+        addFgTask(checkPubPermission(topic, distMessage, userProps))
             .thenComposeAsync(checkResult -> {
                 if (log.isTraceEnabled()) {
                     log.trace("Checked authorization of pub qos0 action: reqId={}, sessionId={}, topic={}:{}",
@@ -722,9 +728,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     .qos(AT_MOST_ONCE)
                     .isRetain(distMessage.getIsRetain())
                     .clientInfo(clientInfo));
-                handleGoAway(helper().onQoS0DistDenied(topic, distMessage, checkResult));
+                handleProtocolResponse(helper().onQoS0DistDenied(topic, distMessage, checkResult));
                 return CompletableFuture.completedFuture(DistResult.ERROR);
-            }, ctx.channel().eventLoop())
+            }, ctx.executor())
             .whenComplete((v, e) -> message.release());
     }
 
@@ -743,7 +749,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         Message distMessage = helper().buildDistMessage(message);
         UserProperties userProps = helper().getUserProps(message);
         int ingressMsgBytes = MQTTMessageSizer.size(message).encodedBytes();
-        fgTasks.track(checkPubPermission(topic, distMessage, userProps))
+        addFgTask(checkPubPermission(topic, distMessage, userProps))
             .thenComposeAsync(checkResult -> {
                 if (checkResult.getTypeCase() == CheckResult.TypeCase.GRANTED) {
                     tenantMeter.recordSummary(MqttQoS1IngressBytes, ingressMsgBytes);
@@ -774,7 +780,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                     .size(message.payload().readableBytes())
                                     .clientInfo(clientInfo));
                             }
-                        }, ctx.channel().eventLoop());
+                        }, ctx.executor());
                 }
                 decReceivingCount();
                 inUsePacketIds.remove(packetId);
@@ -788,10 +794,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     .qos(AT_LEAST_ONCE)
                     .isRetain(distMessage.getIsRetain())
                     .clientInfo(clientInfo));
-                handleResponseOrGoAway(
+                handleProtocolResponse(
                     helper().onQoS1DistDenied(topic, packetId, distMessage, checkResult));
                 return CompletableFuture.completedFuture(null);
-            }, ctx.channel().eventLoop())
+            }, ctx.executor())
             .whenComplete((v, e) -> message.release());
 
     }
@@ -799,7 +805,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private void handleQoS2Pub(long reqId, String topic, MqttPublishMessage message) {
         int packetId = message.variableHeader().packetId();
         if (inUsePacketIds.contains(packetId)) {
-            handleResponseOrGoAway(helper().respondQoS2PacketInUse(message));
+            handleProtocolResponse(helper().respondQoS2PacketInUse(message));
             message.release();
             return;
         }
@@ -808,7 +814,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         Message distMessage = helper().buildDistMessage(message);
         UserProperties userProps = helper().getUserProps(message);
         int ingressMsgBytes = MQTTMessageSizer.size(message).encodedBytes();
-        fgTasks.track(checkPubPermission(topic, distMessage, userProps))
+        addFgTask(checkPubPermission(topic, distMessage, userProps))
             .thenComposeAsync(checkResult -> {
                 if (checkResult.getTypeCase() == CheckResult.TypeCase.GRANTED) {
                     tenantMeter.recordSummary(MqttQoS2IngressBytes, ingressMsgBytes);
@@ -845,7 +851,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                         .clientInfo(clientInfo));
                                 }
                             }
-                        }, ctx.channel().eventLoop());
+                        }, ctx.executor());
                 }
                 decReceivingCount();
                 inUsePacketIds.remove(packetId);
@@ -859,16 +865,17 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     .qos(EXACTLY_ONCE)
                     .isRetain(distMessage.getIsRetain())
                     .clientInfo(clientInfo));
-                handleResponseOrGoAway(
+                handleProtocolResponse(
                     helper().onQoS2DistDenied(topic, packetId, distMessage, checkResult));
                 return CompletableFuture.completedFuture(null);
-            }, ctx.channel().eventLoop()).whenComplete((v, e) -> message.release());
+            }, ctx.executor())
+            .whenComplete((v, e) -> message.release());
     }
 
     private void checkIdle() {
         if (sessionCtx.nanoTime() - lastActiveAtNanos > idleTimeoutNanos) {
             idleTimeoutTask.cancel(true);
-            handleGoAway(helper().onIdleTimeout(keepAliveTimeSeconds));
+            handleProtocolResponse(helper().onIdleTimeout(keepAliveTimeSeconds));
         }
     }
 
@@ -885,38 +892,50 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         ctx.read();
     }
 
-    protected void handleResponseOrGoAway(ResponseOrGoAway responseOrGoAway) {
-        if (responseOrGoAway.response() != null) {
-            writeAndFlush(responseOrGoAway.response());
-        } else {
-            assert responseOrGoAway.goAway() != null;
-            handleGoAway(responseOrGoAway.goAway());
-        }
-    }
-
-    protected final void handleGoAway(GoAway goAway) {
-        assert ctx.channel().eventLoop().inEventLoop();
+    protected void handleProtocolResponse(ProtocolResponse response) {
+        assert ctx.executor().inEventLoop();
         if (isGoAway) {
             return;
         }
-        isGoAway = true;
-        for (Event<?> reason : goAway.reasons()) {
+        for (Event<?> reason : response.reasons()) {
             sessionCtx.eventCollector.report(reason);
         }
         if (!ctx.channel().isActive()) {
             return;
         }
-        // disable auto read
-        ctx.channel().config().setAutoRead(false);
-        if (goAway.rightNow()) {
-            if (goAway.farewell() != null) {
-                writeAndFlush(goAway.farewell()).addListener(ChannelFutureListener.CLOSE);
-            } else {
-                ctx.channel().close();
+        switch (response.action()) {
+            case NoResponse -> {
+                assert response.message() == null;
             }
-        } else {
-            ctx.channel().eventLoop().schedule(() -> ctx.channel().close(),
-                ThreadLocalRandom.current().nextInt(100, 5000), TimeUnit.MILLISECONDS);
+            case Response -> writeAndFlush(response.message());
+            case GoAway, GoAwayNow -> {
+                isGoAway = true;
+                ctx.channel().config().setAutoRead(false);
+                if (response.action() == ProtocolResponse.Action.GoAwayNow) {
+                    ctx.close();
+                } else {
+                    ctx.executor().schedule(() -> ctx.close(),
+                        ThreadLocalRandom.current().nextInt(100, 3000), TimeUnit.MILLISECONDS);
+                }
+            }
+            case ResponseAndGoAway, ResponseAndGoAwayNow -> {
+                isGoAway = true;
+                // disable auto read
+                ctx.channel().config().setAutoRead(false);
+                Runnable farewell = () -> {
+                    if (response.message() != null) {
+                        writeAndFlush(response.message()).addListener(ChannelFutureListener.CLOSE);
+                    } else {
+                        ctx.close();
+                    }
+                };
+                if (response.action() == ProtocolResponse.Action.ResponseAndGoAwayNow) {
+                    farewell.run();
+                } else {
+                    ctx.executor()
+                        .schedule(farewell, ThreadLocalRandom.current().nextInt(100, 3000), TimeUnit.MILLISECONDS);
+                }
+            }
         }
     }
 
@@ -930,8 +949,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 reqId, topic, message.getPubQoS(), message.getPayload().size());
         }
         CompletableFuture<Boolean> retainTask = message.getIsRetain() ?
-            fgTasks.track(retainMessage(reqId, topic, message)) : CompletableFuture.completedFuture(true);
-        CompletableFuture<DistResult> distTask = fgTasks.track(
+            addFgTask(retainMessage(reqId, topic, message)) : CompletableFuture.completedFuture(true);
+        CompletableFuture<DistResult> distTask = addFgTask(
             sessionCtx.distClient.pub(reqId, topic, message, clientInfo)
                 .thenApplyAsync(v -> {
                     switch (v) {
@@ -969,7 +988,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         }
                     }
                     return v;
-                }, ctx.channel().eventLoop()));
+                }, ctx.executor()));
         return allOf(retainTask, distTask).thenApply(v -> distTask.join());
     }
 
@@ -981,7 +1000,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             log.trace("Retaining message: reqId={}, qos={}, topic={}, size={}",
                 reqId, message.getPubQoS(), topic, message.getPayload().size());
         }
-        return fgTasks.track(
+        return addFgTask(
             // TODO: refactoring needed
             sessionCtx.retainClient.retain(
                     reqId,
@@ -1025,7 +1044,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                             yield false;
                         }
                     };
-                }, ctx.channel().eventLoop()));
+                }, ctx.executor()));
     }
 
     private CompletableFuture<Void> distWillMessage(LWT willMessage) {
@@ -1046,7 +1065,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .clientInfo(clientInfo));
                     return CompletableFuture.completedFuture(null);
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private CompletableFuture<Void> distWillMessage(long reqId, LWT willMessage) {
@@ -1071,7 +1090,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .size(willMessage.getMessage().getPayload().size()));
                 }
                 return null;
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private CompletableFuture<Void> retainWillMessage(long reqId, LWT willMessage) {
@@ -1116,7 +1135,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .size(payload.size()));
                 }
                 return null;
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
 }

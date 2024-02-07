@@ -50,7 +50,6 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -157,7 +156,8 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                 });
 
                 long reqId = System.nanoTime();
-                List<CompletableFuture<BatchDistReply>> distReplyFutures = distPacksByRangeReplica.entrySet().stream()
+                @SuppressWarnings("unchecked")
+                CompletableFuture<BatchDistReply>[] distReplyFutures = distPacksByRangeReplica.entrySet().stream()
                     .map(entry -> {
                         KVRangeReplica rangeReplica = entry.getKey();
                         BatchDistRequest batchDist = BatchDistRequest.newBuilder()
@@ -185,12 +185,9 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                 throw new RuntimeException("Failed to exec rw co-proc");
                             });
                     })
-                    .toList();
-                return CompletableFuture.allOf(distReplyFutures.toArray(CompletableFuture[]::new))
-                    .thenApply(v -> distReplyFutures.stream()
-                        .map(CompletableFuture::join)
-                        .collect(Collectors.toList()))
-                    .handle((replyList, e) -> {
+                    .toArray(CompletableFuture[]::new);
+                return CompletableFuture.allOf(distReplyFutures)
+                    .handle((v, e) -> {
                         CallTask<DistWorkerCall, Map<String, Integer>, Integer> task;
                         if (e != null) {
                             while ((task = tasks.poll()) != null) {
@@ -199,19 +196,21 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                         } else {
                             // aggregate fanout from each reply
                             Map<String, Map<String, Integer>> topicFanoutByTenant = new HashMap<>();
-                            replyList.forEach(reply -> reply.getResultMap()
-                                .forEach((tenantId, topicFanout) -> {
+                            for (CompletableFuture<BatchDistReply> replyFuture : distReplyFutures) {
+                                BatchDistReply reply = replyFuture.join();
+                                reply.getResultMap().forEach((tenantId, topicFanout) -> {
                                     topicFanoutByTenant.computeIfAbsent(tenantId, k -> new HashMap<>());
                                     topicFanout.getFanoutMap()
                                         .forEach((topic, fanout) -> topicFanoutByTenant.get(tenantId)
-                                            .compute(topic, (k, v) -> {
-                                                if (v == null) {
-                                                    v = 0;
+                                            .compute(topic, (k, val) -> {
+                                                if (val == null) {
+                                                    val = 0;
                                                 }
-                                                v += fanout;
-                                                return v;
+                                                val += fanout;
+                                                return val;
                                             }));
-                                }));
+                                });
+                            }
                             while ((task = tasks.poll()) != null) {
                                 Map<String, Integer> allTopicFanouts =
                                     topicFanoutByTenant.get(task.call.tenantId);

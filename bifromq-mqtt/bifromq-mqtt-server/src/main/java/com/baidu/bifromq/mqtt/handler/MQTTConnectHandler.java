@@ -59,13 +59,13 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     }
 
-    protected record OkOrGoAway(ClientInfo clientInfo, GoAway goAway) {
-        public OkOrGoAway(GoAway goAway) {
-            this(null, goAway);
+    public record AuthResult(ClientInfo clientInfo, GoAway goAway) {
+        public static AuthResult goAway(MqttMessage farewell, Event<?>... reasons) {
+            return new AuthResult(null, new GoAway(farewell, reasons));
         }
 
-        public OkOrGoAway(ClientInfo clientInfo) {
-            this(clientInfo, null);
+        public static AuthResult ok(ClientInfo clientInfo) {
+            return new AuthResult(clientInfo, null);
         }
     }
 
@@ -161,7 +161,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                             .setReqId(reqId)
                                             .setCode(ExpireReply.Code.ERROR)
                                             .build();
-                                    }, ctx.channel().eventLoop())
+                                    }, ctx.executor())
                                     .thenAcceptAsync(reply -> {
                                         if (reply.getCode() == ExpireReply.Code.ERROR) {
                                             handleGoAway(onCleanSessionFailed(clientInfo));
@@ -188,7 +188,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     ctx);
                                             }
                                         }
-                                    }, ctx.channel().eventLoop());
+                                    }, ctx.executor());
                             }
                         } else {
                             return inboxClient.get(GetRequest.newBuilder()
@@ -202,7 +202,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                         .setReqId(reqId)
                                         .setCode(GetReply.Code.ERROR)
                                         .build();
-                                }, ctx.channel().eventLoop())
+                                }, ctx.executor())
                                 .thenAcceptAsync(reply -> {
                                     if (reply.getCode() == GetReply.Code.ERROR) {
                                         handleGoAway(onGetSessionFailed(clientInfo));
@@ -244,10 +244,10 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                 ctx);
                                         }
                                     }
-                                }, ctx.channel().eventLoop());
+                                }, ctx.executor());
                         }
                     }
-                }, ctx.channel().eventLoop());
+                }, ctx.executor());
         } else {
             if (mqttMessage.decoderResult().isSuccess()) {
                 handleMqttMessage(mqttMessage);
@@ -262,7 +262,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     protected abstract GoAway sanityCheck(MqttConnectMessage message);
 
-    protected abstract CompletableFuture<OkOrGoAway> authenticate(MqttConnectMessage message);
+    protected abstract CompletableFuture<AuthResult> authenticate(MqttConnectMessage message);
 
     protected abstract void handleMqttMessage(MqttMessage message);
 
@@ -305,7 +305,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                               ClientInfo clientInfo,
                                               ChannelHandlerContext ctx) {
         int maxPacketSize = maxPacketSize(connMsg, settings);
-        ctx.pipeline().addBefore(MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
+        ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
 
         ChannelHandler sessionHandler = buildTransientSessionHandler(
@@ -345,7 +345,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                ClientInfo clientInfo,
                                                ChannelHandlerContext ctx) {
         int maxPacketSize = maxPacketSize(connMsg, settings);
-        ctx.pipeline().addBefore(MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
+        ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
 
         ChannelHandler sessionHandler = buildPersistentSessionHandler(connMsg,
@@ -386,7 +386,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                       ClientInfo clientInfo);
 
     protected void handleGoAway(GoAway goAway) {
-        assert ctx.channel().eventLoop().inEventLoop();
+        assert ctx.executor().inEventLoop();
         if (isGoAway) {
             return;
         }
@@ -407,7 +407,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         if (goAway.rightNow()) {
             doGoAway.run();
         } else {
-            ctx.channel().eventLoop().schedule(doGoAway,
+            ctx.executor().schedule(doGoAway,
                 ThreadLocalRandom.current().nextInt(100, 5000), TimeUnit.MILLISECONDS);
         }
     }

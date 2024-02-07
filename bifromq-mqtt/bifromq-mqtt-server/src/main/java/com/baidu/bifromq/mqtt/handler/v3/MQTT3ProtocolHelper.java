@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.goAway;
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.goAwayNow;
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.response;
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.responseNothing;
 import static com.baidu.bifromq.mqtt.handler.v3.MQTT3MessageUtils.toMessage;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
@@ -22,8 +26,7 @@ import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
-import com.baidu.bifromq.mqtt.handler.record.GoAway;
-import com.baidu.bifromq.mqtt.handler.record.ResponseOrGoAway;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
@@ -85,8 +88,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway onInboxTransientError() {
-        return new GoAway(getLocal(InboxTransientError.class).clientInfo(clientInfo));
+    public ProtocolResponse onInboxTransientError() {
+        return goAway(getLocal(InboxTransientError.class).clientInfo(clientInfo));
     }
 
     @Override
@@ -105,38 +108,37 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway onDisconnect() {
-        return GoAway.now(getLocal(ByServer.class).clientInfo(clientInfo));
+    public ProtocolResponse onDisconnect() {
+        return goAwayNow((getLocal(ByServer.class).clientInfo(clientInfo)));
     }
 
     @Override
-    public GoAway respondDisconnectProtocolError() {
-        return new GoAway(getLocal(ProtocolViolation.class).statement("Never happen in mqtt3").clientInfo(clientInfo));
+    public ProtocolResponse respondDisconnectProtocolError() {
+        return goAway(getLocal(ProtocolViolation.class).statement("Never happen in mqtt3").clientInfo(clientInfo));
     }
 
     @Override
-    public GoAway respondDecodeError(MqttMessage message) {
-        return new GoAway(getLocal(BadPacket.class).cause(message.decoderResult().cause()).clientInfo(clientInfo));
+    public ProtocolResponse respondDecodeError(MqttMessage message) {
+        return goAway(getLocal(BadPacket.class).cause(message.decoderResult().cause()).clientInfo(clientInfo));
     }
 
     @Override
-    public GoAway respondDuplicateConnect(MqttConnectMessage message) {
-        return new GoAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.1.0-2").clientInfo(clientInfo));
+    public ProtocolResponse respondDuplicateConnect(MqttConnectMessage message) {
+        return goAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.1.0-2").clientInfo(clientInfo));
     }
 
     @Override
-    public ResponseOrGoAway validateSubMessage(MqttSubscribeMessage message) {
+    public ProtocolResponse validateSubMessage(MqttSubscribeMessage message) {
         List<MqttTopicSubscription> topicSubscriptions = message.payload().topicSubscriptions();
         if (topicSubscriptions.isEmpty()) {
             // Ignore instead of disconnect [MQTT-3.8.3-3]
-            return new ResponseOrGoAway(
-                new GoAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.8.3-3").clientInfo(clientInfo)));
+            return goAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.8.3-3").clientInfo(clientInfo));
         }
         if (topicSubscriptions.size() > settings.maxTopicFiltersPerSub) {
-            return new ResponseOrGoAway(new GoAway(getLocal(TooLargeSubscription.class)
+            return goAway(getLocal(TooLargeSubscription.class)
                 .actual(topicSubscriptions.size())
                 .max(settings.maxTopicFiltersPerSub)
-                .clientInfo(clientInfo)));
+                .clientInfo(clientInfo));
         }
         return null;
     }
@@ -178,24 +180,23 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway validateUnsubMessage(MqttUnsubscribeMessage message) {
+    public ProtocolResponse validateUnsubMessage(MqttUnsubscribeMessage message) {
         List<String> topicFilters = message.payload().topics();
         if (topicFilters.isEmpty()) {
             // Ignore instead of disconnect [3.10.3-2]
-            return new GoAway(getLocal(ProtocolViolation.class).statement("MQTT-3.10.3-2").clientInfo(clientInfo));
+            return goAway(getLocal(ProtocolViolation.class).statement("MQTT-3.10.3-2").clientInfo(clientInfo));
         }
         if (topicFilters.size() > settings.maxTopicFiltersPerSub) {
-            return new GoAway(getLocal(TooLargeUnsubscription.class)
+            return goAway(getLocal(TooLargeUnsubscription.class)
                 .max(settings.maxTopicFiltersPerSub)
                 .actual(topicFilters.size())
                 .clientInfo(clientInfo));
         }
         for (String topicFilter : topicFilters) {
             if (!MQTTUtf8Util.isWellFormed(topicFilter, SANITY_CHECK)) {
-                return new GoAway(
-                    getLocal(MalformedTopicFilter.class)
-                        .topicFilter(topicFilter)
-                        .clientInfo(clientInfo));
+                return goAway(getLocal(MalformedTopicFilter.class)
+                    .topicFilter(topicFilter)
+                    .clientInfo(clientInfo));
             }
         }
         return null;
@@ -225,14 +226,14 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ResponseOrGoAway respondPubRecMsg(MqttMessage message, boolean packetIdNotFound) {
+    public ProtocolResponse respondPubRecMsg(MqttMessage message, boolean packetIdNotFound) {
         if (packetIdNotFound) {
-            return new ResponseOrGoAway(new GoAway(getLocal(ProtocolViolation.class)
+            return goAway(getLocal(ProtocolViolation.class)
                 .statement("MQTT3-4.3.3-1")
-                .clientInfo(clientInfo)));
+                .clientInfo(clientInfo));
         }
         int packetId = ((MqttMessageIdVariableHeader) message.variableHeader()).messageId();
-        return new ResponseOrGoAway(MQTT3MessageBuilders.pubRel().packetId(packetId).build());
+        return response(MQTT3MessageBuilders.pubRel().packetId(packetId).build());
     }
 
     @Override
@@ -242,30 +243,37 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway onKick(ClientInfo kicker) {
-        return GoAway.now(getLocal(Kicked.class).kicker(kicker).clientInfo(clientInfo));
+    public ProtocolResponse onKick(ClientInfo kicker) {
+        return goAwayNow(getLocal(Kicked.class).kicker(kicker).clientInfo(clientInfo));
     }
 
     @Override
     public MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message) {
-        return MQTT3MessageUtils.toMqttPubMessage(packetId, message);
+        return MQTT3MessageBuilders.pub()
+            .messageId(packetId)
+            .topicName(message.topic())
+            .qos(message.qos())
+            .retained(message.isRetain())
+            .payload(message.message().getPayload())
+            .build();
     }
 
     @Override
-    public GoAway respondReceivingMaximumExceeded() {
-        return new GoAway(getLocal(ExceedReceivingLimit.class).limit(settings.receiveMaximum).clientInfo(clientInfo));
+    public ProtocolResponse respondReceivingMaximumExceeded() {
+        return responseNothing(
+            getLocal(ExceedReceivingLimit.class).limit(settings.receiveMaximum).clientInfo(clientInfo));
     }
 
     @Override
-    public GoAway respondPubRateExceeded() {
-        return new GoAway(getLocal(ExceedPubRate.class).limit(settings.maxMsgPerSec).clientInfo(clientInfo));
+    public ProtocolResponse respondPubRateExceeded() {
+        return responseNothing(getLocal(ExceedPubRate.class).limit(settings.maxMsgPerSec).clientInfo(clientInfo));
     }
 
     @Override
-    public GoAway validatePubMessage(MqttPublishMessage message) {
+    public ProtocolResponse validatePubMessage(MqttPublishMessage message) {
         String topic = message.variableHeader().topicName();
         if (!MQTTUtf8Util.isWellFormed(topic, SANITY_CHECK)) {
-            return new GoAway(getLocal(MalformedTopic.class)
+            return goAway(getLocal(MalformedTopic.class)
                 .topic(topic)
                 .clientInfo(clientInfo));
         }
@@ -273,16 +281,16 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             settings.maxTopicLevelLength,
             settings.maxTopicLevels,
             settings.maxTopicLength)) {
-            return new GoAway(getLocal(InvalidTopic.class)
+            return goAway(getLocal(InvalidTopic.class)
                 .topic(topic)
                 .clientInfo(clientInfo));
         }
         if (message.fixedHeader().qosLevel() == MqttQoS.AT_MOST_ONCE && message.fixedHeader().isDup()) {
             // ignore the QoS = 0 Dup = 1 messages according to [MQTT-3.3.1-2]
-            return new GoAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.3.1-2").clientInfo(clientInfo));
+            return goAway(getLocal(ProtocolViolation.class).statement("MQTT3-3.3.1-2").clientInfo(clientInfo));
         }
         if (message.fixedHeader().qosLevel().value() > settings.maxQoS.getNumber()) {
-            return new GoAway(getLocal(ProtocolViolation.class)
+            return goAway(getLocal(ProtocolViolation.class)
                 .statement(message.fixedHeader().qosLevel().value() + " is disabled")
                 .clientInfo(clientInfo));
         }
@@ -300,8 +308,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway onQoS0DistDenied(String topic, Message distMessage, CheckResult result) {
-        return new GoAway(getLocal(NoPubPermission.class)
+    public ProtocolResponse onQoS0DistDenied(String topic, Message distMessage, CheckResult result) {
+        return goAway(getLocal(NoPubPermission.class)
             .topic(topic)
             .qos(QoS.AT_MOST_ONCE)
             .retain(distMessage.getIsRetain())
@@ -309,12 +317,12 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
-        return new ResponseOrGoAway(new GoAway(getLocal(NoPubPermission.class)
+    public ProtocolResponse onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
+        return goAway(getLocal(NoPubPermission.class)
             .qos(AT_LEAST_ONCE)
             .topic(topic)
             .retain(distMessage.getIsRetain())
-            .clientInfo(clientInfo)));
+            .clientInfo(clientInfo));
     }
 
     @Override
@@ -325,18 +333,17 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ResponseOrGoAway respondQoS2PacketInUse(MqttPublishMessage message) {
-        return new ResponseOrGoAway(
-            new GoAway(getLocal(ProtocolViolation.class).statement("MQTT3-2.3.1-4").clientInfo(clientInfo)));
+    public ProtocolResponse respondQoS2PacketInUse(MqttPublishMessage message) {
+        return goAway(getLocal(ProtocolViolation.class).statement("MQTT3-2.3.1-4").clientInfo(clientInfo));
     }
 
     @Override
-    public ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
-        return new ResponseOrGoAway(new GoAway(getLocal(NoPubPermission.class)
+    public ProtocolResponse onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
+        return goAway(getLocal(NoPubPermission.class)
             .topic(topic)
             .qos(QoS.EXACTLY_ONCE)
             .retain(distMessage.getIsRetain())
-            .clientInfo(clientInfo)));
+            .clientInfo(clientInfo));
     }
 
     @Override
@@ -347,8 +354,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public GoAway onIdleTimeout(int keepAliveTimeSeconds) {
-        return GoAway.now(getLocal(Idle.class)
+    public ProtocolResponse onIdleTimeout(int keepAliveTimeSeconds) {
+        return goAwayNow(getLocal(Idle.class)
             .keepAliveTimeSeconds(keepAliveTimeSeconds)
             .clientInfo(clientInfo));
     }

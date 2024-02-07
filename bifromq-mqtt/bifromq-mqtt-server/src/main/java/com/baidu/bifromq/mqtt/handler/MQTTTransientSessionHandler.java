@@ -31,7 +31,7 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.mqtt.handler.record.GoAway;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
@@ -107,7 +107,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
-    protected GoAway handleDisconnect(MqttMessage message) {
+    protected ProtocolResponse handleDisconnect(MqttMessage message) {
         Optional<Integer> requestSEI = helper().sessionExpiryIntervalOnDisconnect(message);
         if (requestSEI.isPresent() && requestSEI.get() > 0) {
             return helper().respondDisconnectProtocolError();
@@ -115,7 +115,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         if (helper().isNormalDisconnect(message)) {
             discardLWT();
         }
-        return GoAway.now(getLocal(ByClient.class).clientInfo(clientInfo));
+        return ProtocolResponse.goAwayNow(getLocal(ByClient.class).clientInfo(clientInfo));
     }
 
     @Override
@@ -145,7 +145,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                         return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.ERROR);
                     }
                 }
-            }, ctx.channel().eventLoop())
+            }, ctx.executor())
             .thenComposeAsync(subResult -> {
                 switch (subResult) {
                     case OK, EXISTS -> {
@@ -180,7 +180,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                         return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.ERROR);
                     }
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     @Override
@@ -195,7 +195,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 } else {
                     return IMQTTProtocolHelper.UnsubResult.OK;
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     @Override
@@ -205,22 +205,25 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         if (option == null) {
             return CompletableFuture.completedFuture(WriteResult.Result.NO_INBOX);
         }
-        publish(topicFilter, option, topicMsgPacks);
+        CompletableFuture.completedFuture(true)
+            .thenAcceptAsync(v -> publish(topicFilter, option, topicMsgPacks), ctx.executor());
         return CompletableFuture.completedFuture(WriteResult.Result.OK);
     }
 
     @Override
     public CompletableFuture<SubReply.Result> subscribe(long reqId, String topicFilter, MqttQoS qos) {
-        return checkAndSubscribe(reqId, topicFilter, TopicFilterOption.newBuilder()
-            .setQos(QoS.forNumber(qos.value()))
-            .build(), UserProperties.getDefaultInstance())
-            .thenApply(subResult -> SubReply.Result.forNumber(subResult.ordinal()));
+        return CompletableFuture.completedFuture(true)
+            .thenComposeAsync(v -> checkAndSubscribe(reqId, topicFilter, TopicFilterOption.newBuilder()
+                .setQos(QoS.forNumber(qos.value()))
+                .build(), UserProperties.getDefaultInstance())
+                .thenApply(subResult -> SubReply.Result.forNumber(subResult.ordinal())), ctx.executor());
     }
 
     @Override
     public CompletableFuture<UnsubReply.Result> unsubscribe(long reqId, String topicFilter) {
-        return checkAndUnsubscribe(reqId, topicFilter, UserProperties.getDefaultInstance())
-            .thenApply(unsubResult -> UnsubReply.Result.forNumber(unsubResult.ordinal()));
+        return CompletableFuture.completedFuture(true)
+            .thenComposeAsync(v -> checkAndUnsubscribe(reqId, topicFilter, UserProperties.getDefaultInstance())
+                .thenApply(unsubResult -> UnsubReply.Result.forNumber(unsubResult.ordinal())), ctx.executor());
     }
 
     private CompletableFuture<WriteResult.Result> publish(String topicFilter,
@@ -270,7 +273,6 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                         });
                     }
                     drainInbox();
-                    flush(true);
                     return WriteResult.Result.OK;
                 } else {
                     forEach(topicFilter, option, topicMsgPacks,
@@ -279,7 +281,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                     addBgTask(this.unsubTopicFilter(System.nanoTime(), topicFilter));
                     return WriteResult.Result.NO_INBOX;
                 }
-            }, ctx.channel().eventLoop()));
+            }, ctx.executor()));
     }
 
     private void drainInbox() {

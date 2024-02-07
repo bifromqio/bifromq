@@ -35,7 +35,7 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.mqtt.handler.record.GoAway;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTPersistentSession;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
@@ -123,9 +123,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         version++;
                         setupInboxReader();
                     } else {
-                        handleGoAway(helper().onInboxTransientError());
+                        handleProtocolResponse(helper().onInboxTransientError());
                     }
-                }, ctx.channel().eventLoop()));
+                }, ctx.executor()));
         } else {
             CreateRequest.Builder reqBuilder = CreateRequest.newBuilder()
                 .setReqId(System.nanoTime())
@@ -146,9 +146,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     if (reply.getCode() == CreateReply.Code.OK) {
                         setupInboxReader();
                     } else {
-                        handleGoAway(helper().onInboxTransientError());
+                        handleProtocolResponse(helper().onInboxTransientError());
                     }
-                }, ctx.channel().eventLoop()));
+                }, ctx.executor()));
         }
     }
 
@@ -163,7 +163,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     @Override
-    protected final GoAway handleDisconnect(MqttMessage message) {
+    protected final ProtocolResponse handleDisconnect(MqttMessage message) {
         Optional<Integer> requestSEI = helper().sessionExpiryIntervalOnDisconnect(message);
         int finalSEI =
             settings.forceTransient ? 0 : Math.min(requestSEI.orElse(sessionExpirySeconds), settings.maxSEI);
@@ -206,7 +206,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .setNow(HLC.INST.getPhysical())
                 .build());
         }
-        return GoAway.now(getLocal(ByClient.class).clientInfo(clientInfo));
+        return ProtocolResponse.goAwayNow(getLocal(ByClient.class).clientInfo(clientInfo));
     }
 
     @Override
@@ -236,10 +236,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     case ERROR -> {
                         return IMQTTProtocolHelper.SubResult.ERROR;
                     }
-                    case NO_INBOX, CONFLICT -> handleGoAway(helper().onInboxTransientError());
+                    case NO_INBOX, CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
                 }
                 return IMQTTProtocolHelper.SubResult.ERROR;
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     @Override
@@ -264,14 +264,14 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         return IMQTTProtocolHelper.UnsubResult.NO_SUB;
                     }
                     case NO_INBOX, CONFLICT -> {
-                        handleGoAway(helper().onInboxTransientError());
+                        handleProtocolResponse(helper().onInboxTransientError());
                         return IMQTTProtocolHelper.UnsubResult.ERROR;
                     }
                     default -> {
                         return IMQTTProtocolHelper.UnsubResult.ERROR;
                     }
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private void setupInboxReader() {
@@ -309,7 +309,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             confirmQoS0();
                         }
                     }
-                    case NO_INBOX, CONFLICT -> handleGoAway(helper().onInboxTransientError());
+                    case NO_INBOX, CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
                     case ERROR -> {
                         // try again with same version
                         qos0Confirming = false;
@@ -318,7 +318,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         }
                     }
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     @Override
@@ -326,7 +326,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         inboxConfirmedUpToSeq = seq;
         stagingBuffer.remove(seq);
         confirmSendBuffer();
-        ctx.channel().eventLoop().execute(this::drainStaging);
+        ctx.executor().execute(this::drainStaging);
     }
 
     private void confirmSendBuffer() {
@@ -354,7 +354,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             inboxReader.hint(clientReceiveQuota());
                         }
                     }
-                    case NO_INBOX, CONFLICT -> handleGoAway(helper().onInboxTransientError());
+                    case NO_INBOX, CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
                     case ERROR -> {
                         // try again with same version
                         inboxConfirming = false;
@@ -365,14 +365,14 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         }
                     }
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private void consume(Fetched fetched) {
         log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, sendBuffer={}", clientInfo().getTenantId(),
             clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0MsgCount(),
             fetched.getSendBufferMsgCount());
-        ctx.channel().eventLoop().execute(() -> {
+        ctx.executor().execute(() -> {
             switch (fetched.getResult()) {
                 case OK -> {
                     // deal with qos0
@@ -381,7 +381,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                 .stream()
                                 .map(this::pubQoS0Message)
                                 .toArray(CompletableFuture[]::new))
-                            .whenCompleteAsync((v, e) -> flush(true), ctx.channel().eventLoop());
+                            .whenCompleteAsync((v, e) -> flush(true), ctx.executor());
                         // commit immediately
                         qos0ConfirmUpToSeq = fetched.getQos0Msg(fetched.getQos0MsgCount() - 1).getSeq();
                         confirmQoS0();
@@ -392,12 +392,12 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                 .stream()
                                 .map(this::pubBufferedMessage)
                                 .toArray(CompletableFuture[]::new))
-                            .whenCompleteAsync((v, e) -> drainStaging(), ctx.channel().eventLoop());
+                            .whenCompleteAsync((v, e) -> drainStaging(), ctx.executor());
                     }
                     rescheduleTouch();
                 }
                 case ERROR -> inboxReader.hint(clientReceiveQuota());
-                case NO_INBOX -> handleGoAway(helper().onInboxTransientError());
+                case NO_INBOX -> handleProtocolResponse(helper().onInboxTransientError());
             }
         });
     }
@@ -444,7 +444,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         .clientInfo(clientInfo()));
                     addBgTask(unsubTopicFilter(message.getMessageId(), topicFilter));
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private CompletableFuture<Void> pubBufferedMessage(InboxMessage inboxMsg) {
@@ -512,7 +512,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     }
                     addBgTask(unsubTopicFilter(message.getMessageId(), topicFilter));
                 }
-            }, ctx.channel().eventLoop());
+            }, ctx.executor());
     }
 
     private void drainStaging() {
@@ -534,7 +534,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         if (touchTimeout != null) {
             touchTimeout.cancel(true);
         }
-        touchTimeout = ctx.channel().eventLoop().schedule(() -> {
+        touchTimeout = ctx.executor().schedule(() -> {
             inboxClient.touch(TouchRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setTenantId(clientInfo.getTenantId())
@@ -546,9 +546,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .thenAcceptAsync(v -> {
                     switch (v.getCode()) {
                         case OK, ERROR -> rescheduleTouch();
-                        case CONFLICT -> handleGoAway(helper().onInboxTransientError());
+                        case CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
                     }
-                }, ctx.channel().eventLoop());
+                }, ctx.executor());
         }, touchIdleTimeMS, TimeUnit.MILLISECONDS);
     }
 }

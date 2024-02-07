@@ -40,7 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class MQTTMessageSizer {
-    public static final int MIN_CONTROL_PACKET_SIZE = 10;
+    public static final int MIN_CONTROL_PACKET_SIZE = 16;
 
     public record MqttMessageSize(MqttVarHeaderBytes varHeaderBytes, int payloadBytes) {
         private static final MqttMessageSize ZERO_BYTES_REMAINING_LENGTH = new MqttMessageSize(null, 0);

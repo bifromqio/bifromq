@@ -80,8 +80,12 @@ public final class MQTTSessionContext {
     public IAuthProvider authProvider(ChannelHandlerContext ctx) {
         // a wrapper to ensure async fifo semantic for check call
         return new IAuthProvider() {
-            private final LinkedHashMap<CompletableFuture<CheckResult>, CompletableFuture<CheckResult>> checkTaskQueue =
+            private final LinkedHashMap<CompletableFuture<CheckResult>, CompletableFuture<CheckResult>>
+                checkPermissionTaskQueue =
                 new LinkedHashMap<>();
+
+            private final LinkedHashMap<CompletableFuture<Boolean>, CompletableFuture<Boolean>>
+                checkTaskQueue = new LinkedHashMap<>();
 
             @Override
             public CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData) {
@@ -90,7 +94,34 @@ public final class MQTTSessionContext {
 
             @Override
             public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
-                return authProvider.check(client, action);
+                CompletableFuture<Boolean> task = authProvider.check(client, action);
+                if (task.isDone()) {
+                    return task;
+                } else {
+                    // queue it for fifo semantic
+                    CompletableFuture<Boolean> onDone = new CompletableFuture<>();
+                    // in case authProvider returns same future object;
+                    task = task.thenApply(v -> v);
+                    checkTaskQueue.put(task, onDone);
+                    task.whenCompleteAsync((_v, _e) -> {
+                        Iterator<CompletableFuture<Boolean>> itr = checkTaskQueue.keySet().iterator();
+                        while (itr.hasNext()) {
+                            CompletableFuture<Boolean> k = itr.next();
+                            if (k.isDone()) {
+                                CompletableFuture<Boolean> r = checkTaskQueue.get(k);
+                                try {
+                                    r.complete(k.join());
+                                } catch (Throwable e) {
+                                    r.completeExceptionally(e);
+                                }
+                                itr.remove();
+                            } else {
+                                break;
+                            }
+                        }
+                    }, ctx.channel().eventLoop());
+                    return onDone;
+                }
             }
 
             @Override
@@ -103,13 +134,13 @@ public final class MQTTSessionContext {
                     CompletableFuture<CheckResult> onDone = new CompletableFuture<>();
                     // in case authProvider returns same future object;
                     task = task.thenApply(v -> v);
-                    checkTaskQueue.put(task, onDone);
+                    checkPermissionTaskQueue.put(task, onDone);
                     task.whenCompleteAsync((_v, _e) -> {
-                        Iterator<CompletableFuture<CheckResult>> itr = checkTaskQueue.keySet().iterator();
+                        Iterator<CompletableFuture<CheckResult>> itr = checkPermissionTaskQueue.keySet().iterator();
                         while (itr.hasNext()) {
                             CompletableFuture<CheckResult> k = itr.next();
                             if (k.isDone()) {
-                                CompletableFuture<CheckResult> r = checkTaskQueue.get(k);
+                                CompletableFuture<CheckResult> r = checkPermissionTaskQueue.get(k);
                                 try {
                                     r.complete(k.join());
                                 } catch (Throwable e) {
@@ -120,7 +151,7 @@ public final class MQTTSessionContext {
                                 break;
                             }
                         }
-                    }, ctx.channel().eventLoop());
+                    }, ctx.executor());
                     return onDone;
                 }
             }

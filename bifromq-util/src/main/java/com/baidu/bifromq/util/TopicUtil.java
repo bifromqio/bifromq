@@ -16,7 +16,6 @@ package com.baidu.bifromq.util;
 public class TopicUtil {
     private static final String UNORDERED_SHARE = "$share/";
     private static final String ORDERED_SHARE = "$oshare/";
-
     public static final char TOPIC_SEPARATOR = '/';
     public static final char NULL = '\u0000';
     public static final char SINGLE_WILDCARD = '+';
@@ -31,27 +30,27 @@ public class TopicUtil {
         if (topic.startsWith(ORDERED_SHARE) || topic.startsWith(UNORDERED_SHARE)) {
             return false;
         }
-        StringBuilder tlsb = new StringBuilder();
+        int topicLevelLength = 0;
         int level = 1;
         for (int i = 0; i < topic.length(); i++) {
             if (topic.charAt(i) == TOPIC_SEPARATOR) {
                 if (++level > maxLevel) {
                     return false;
                 }
-                if (tlsb.length() > maxLevelLength) {
+                if (topicLevelLength > maxLevelLength) {
                     return false;
                 }
-                tlsb.delete(0, tlsb.length());
+                topicLevelLength = 0;
             } else {
                 char c = topic.charAt(i);
                 if (c == NULL || c == SINGLE_WILDCARD || c == MULTIPLE_WILDCARD) {
                     // [MQTT-4.7.3-2] and [MQTT-4.7.1-1]
                     return false;
                 }
-                tlsb.append(c);
+                topicLevelLength++;
             }
         }
-        return tlsb.length() <= maxLevelLength;
+        return topicLevelLength <= maxLevelLength;
     }
 
     public static boolean isValidTopicFilter(String topicFilter, int maxLevelLength, int maxLevel, int maxLength) {
@@ -68,7 +67,7 @@ public class TopicUtil {
             return false;
         }
         int i = 0;
-        StringBuilder tlsb = new StringBuilder();
+        int topicLevelLength = 0;
         if (topicFilter.startsWith(ORDERED_SHARE) || topicFilter.startsWith(UNORDERED_SHARE)) {
             // validate share name
             for (i = topicFilter.indexOf(TOPIC_SEPARATOR) + 1; i < topicFilter.length(); i++) {
@@ -80,9 +79,9 @@ public class TopicUtil {
                     // [MQTT-4.8.2-2]
                     return false;
                 }
-                tlsb.append(c);
+                topicLevelLength++;
             }
-            if (tlsb.length() == 0) {
+            if (topicLevelLength == 0) {
                 // [MQTT-4.8.2-1]
                 return false;
             }
@@ -90,7 +89,7 @@ public class TopicUtil {
                 // [MQTT-4.8.2-2]
                 return false;
             }
-            tlsb.delete(0, tlsb.length());
+            topicLevelLength = 0;
             // skip one separator to real topicFilter start pos
             i++;
         }
@@ -101,10 +100,10 @@ public class TopicUtil {
                 if (++level > maxLevel) {
                     return false;
                 }
-                if (tlsb.length() > maxLevelLength) {
+                if (topicLevelLength > maxLevelLength) {
                     return false;
                 }
-                tlsb.delete(0, tlsb.length());
+                topicLevelLength = 0;
             } else {
                 char c = topicFilter.charAt(i);
                 if (c == NULL) {
@@ -136,13 +135,13 @@ public class TopicUtil {
                     }
 
                 }
-                tlsb.append(c);
+                topicLevelLength++;
             }
         }
         if (level > maxLevel) {
             return false;
         }
-        return tlsb.length() <= maxLevelLength;
+        return topicLevelLength <= maxLevelLength;
     }
 
     public static boolean isWildcardTopicFilter(String topicFilter) {
@@ -168,5 +167,4 @@ public class TopicUtil {
         }
         return topicFilter;
     }
-
 }

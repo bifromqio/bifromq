@@ -13,11 +13,13 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewell;
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewellNow;
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.response;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
-import com.baidu.bifromq.mqtt.handler.record.GoAway;
-import com.baidu.bifromq.mqtt.handler.record.ResponseOrGoAway;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5DisconnectReasonCode;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
@@ -27,10 +29,10 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ReAuthFailed;
 import com.baidu.bifromq.type.ClientInfo;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,20 +41,20 @@ public class ReAuthenticator implements IReAuthenticator {
     private final ClientInfo clientInfo;
     private final IAuthProvider authProvider;
     private final String origAuthMethod;
-    private final ChannelHandlerContext ctx;
-    private final Consumer<ResponseOrGoAway> responder;
+    private final Executor executor;
+    private final Consumer<ProtocolResponse> responder;
     private boolean isStarting;
     private boolean isAuthing;
 
     public ReAuthenticator(ClientInfo clientInfo,
                            IAuthProvider authProvider,
                            String origAuthMethod,
-                           ChannelHandlerContext ctx,
-                           Consumer<ResponseOrGoAway> responder) {
+                           Consumer<ProtocolResponse> responder,
+                           Executor executor) {
         this.clientInfo = clientInfo;
         this.authProvider = authProvider;
         this.origAuthMethod = origAuthMethod;
-        this.ctx = ctx;
+        this.executor = executor;
         this.responder = responder;
     }
 
@@ -63,87 +65,87 @@ public class ReAuthenticator implements IReAuthenticator {
         switch (reasonCode) {
             case Continue -> {
                 if (!isStarting) {
-                    responder.accept(new ResponseOrGoAway(new GoAway(
+                    responder.accept(farewell(
                         MQTT5MessageBuilders.disconnect()
                             .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                             .reasonString("Re-auth not started")
                             .build(),
                         getLocal(ProtocolViolation.class)
                             .statement("Re-auth not started")
-                            .clientInfo(clientInfo))));
+                            .clientInfo(clientInfo)));
                     return;
                 }
                 if (isAuthing) {
-                    responder.accept(new ResponseOrGoAway(new GoAway(
+                    responder.accept(farewell(
                         MQTT5MessageBuilders.disconnect()
                             .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                             .reasonString("Unexpected auth packet during re-auth")
                             .build(),
                         getLocal(ProtocolViolation.class)
                             .statement("Unexpected auth packet during re-auth")
-                            .clientInfo(clientInfo))));
+                            .clientInfo(clientInfo)));
                     return;
                 }
                 Optional<String> authMethodOpt = authMethod(variableHeader.properties());
                 if (authMethodOpt.isEmpty() || !authMethodOpt.get().equals(origAuthMethod)) {
-                    responder.accept(new ResponseOrGoAway(new GoAway(
+                    responder.accept(farewell(
                         MQTT5MessageBuilders.disconnect()
                             .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                             .reasonString("Invalid auth method: " + authMethodOpt.orElse(""))
                             .build(),
                         getLocal(ProtocolViolation.class)
                             .statement("Invalid auth method: " + authMethodOpt.orElse(""))
-                            .clientInfo(clientInfo))));
+                            .clientInfo(clientInfo)));
                     return;
                 }
                 authenticate(AuthUtil.buildMQTT5ExtendedAuthData(authMessage, false));
             }
             case ReAuth -> {
                 if (isStarting) {
-                    responder.accept(new ResponseOrGoAway(new GoAway(
+                    responder.accept(farewell(
                         MQTT5MessageBuilders.disconnect()
                             .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                             .reasonString("Re-auth in-progress")
                             .build(),
                         getLocal(ProtocolViolation.class)
                             .statement("Re-auth in-progress")
-                            .clientInfo(clientInfo))));
+                            .clientInfo(clientInfo)));
                     return;
                 }
                 if (isAuthing) {
-                    responder.accept(new ResponseOrGoAway(new GoAway(
+                    responder.accept(farewell(
                         MQTT5MessageBuilders.disconnect()
                             .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                             .reasonString("Re-auth in-progress")
                             .build(),
                         getLocal(ProtocolViolation.class)
                             .statement("Re-auth in-progress")
-                            .clientInfo(clientInfo))));
+                            .clientInfo(clientInfo)));
                     return;
                 }
                 Optional<String> authMethodOpt = authMethod(variableHeader.properties());
                 if (authMethodOpt.isEmpty() || !authMethodOpt.get().equals(origAuthMethod)) {
-                    responder.accept(new ResponseOrGoAway(new GoAway(
+                    responder.accept(farewell(
                         MQTT5MessageBuilders.disconnect()
                             .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                             .reasonString("Invalid auth method: " + authMethodOpt.orElse(""))
                             .build(),
                         getLocal(ProtocolViolation.class)
                             .statement("Invalid auth method: " + authMethodOpt.orElse(""))
-                            .clientInfo(clientInfo))));
+                            .clientInfo(clientInfo)));
                     return;
                 }
                 isStarting = true;
                 authenticate(AuthUtil.buildMQTT5ExtendedAuthData(authMessage, true));
             }
-            default -> responder.accept(new ResponseOrGoAway(new GoAway(
+            default -> responder.accept(farewell(
                 MQTT5MessageBuilders.disconnect()
                     .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                     .reasonString("Invalid reason code: " + reasonCode.value())
                     .build(),
                 getLocal(ProtocolViolation.class)
                     .statement("Invalid reason code: " + reasonCode.value())
-                    .clientInfo(clientInfo))));
+                    .clientInfo(clientInfo)));
         }
     }
 
@@ -155,7 +157,7 @@ public class ReAuthenticator implements IReAuthenticator {
                 switch (authResult.getTypeCase()) {
                     case SUCCESS -> {
                         isStarting = false;
-                        responder.accept(new ResponseOrGoAway(MQTT5MessageBuilders.auth(origAuthMethod)
+                        responder.accept(response(MQTT5MessageBuilders.auth(origAuthMethod)
                             .reasonCode(MQTT5AuthReasonCode.Success)
                             .build()));
                     }
@@ -169,15 +171,15 @@ public class ReAuthenticator implements IReAuthenticator {
                         if (authContinue.hasReason()) {
                             authBuilder.reasonString(authContinue.getReason());
                         }
-                        responder.accept(new ResponseOrGoAway(authBuilder.build()));
+                        responder.accept(response(authBuilder.build()));
                     }
-                    default -> responder.accept(new ResponseOrGoAway(GoAway.now(MQTT5MessageBuilders.disconnect()
+                    default -> responder.accept(farewellNow(MQTT5MessageBuilders.disconnect()
                             .reasonCode(MQTT5DisconnectReasonCode.NotAuthorized)
                             .build(),
                         getLocal(ReAuthFailed.class)
                             .clientInfo(clientInfo)
-                    )));
+                    ));
                 }
-            }, ctx.channel().eventLoop());
+            }, executor);
     }
 }

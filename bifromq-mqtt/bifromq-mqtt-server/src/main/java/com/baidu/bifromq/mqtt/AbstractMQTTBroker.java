@@ -61,7 +61,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         this.builder = builder;
         this.bossGroup = NettyUtil.createEventLoopGroup(builder.mqttBossELGThreads,
             EnvProvider.INSTANCE.newThreadFactory("mqtt-boss-elg"));
-        this.workerGroup = NettyUtil.createEventLoopGroup(builder.mqttWorkerELGThrreads,
+        this.workerGroup = NettyUtil.createEventLoopGroup(builder.mqttWorkerELGThreads,
             EnvProvider.INSTANCE.newThreadFactory("mqtt-worker-elg"));
         connRateLimitHandler = new ConnectionRateLimitHandler(builder.connectRateLimit);
         remoteAddrHandler = new ClientAddrHandler();

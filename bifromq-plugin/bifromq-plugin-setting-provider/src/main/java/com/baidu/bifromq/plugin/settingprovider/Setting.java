@@ -28,6 +28,7 @@ public enum Setting {
     DebugModeEnabled(Boolean.class, val -> true, false),
     ForceTransient(Boolean.class, val -> true, false),
     ByPassPermCheckError(Boolean.class, val -> true, true),
+    PayloadFormatValidationEnabled(Boolean.class, val -> true, true),
     RetainEnabled(Boolean.class, val -> true, true),
     WildcardSubscriptionEnabled(Boolean.class, val -> true, true),
     SubscriptionIdentifierEnabled(Boolean.class, val -> true, true),

@@ -39,8 +39,11 @@ public final class MQTT5TransientSessionHandler extends MQTTTransientSessionHand
                                         ChannelHandlerContext ctx) {
         super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
         this.helper = new MQTT5ProtocolHelper(connMsg, settings, clientInfo);
-        this.reAuthenticator =
-            IReAuthenticator.create(connMsg, authProvider, ctx, clientInfo, this::handleResponseOrGoAway);
+        this.reAuthenticator = IReAuthenticator.create(connMsg,
+            authProvider,
+            clientInfo,
+            this::handleProtocolResponse,
+            ctx.executor());
     }
 
     @Override

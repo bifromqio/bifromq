@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.plugin.authprovider;
 
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
@@ -22,6 +23,9 @@ import com.google.common.base.Strings;
 import java.util.concurrent.CompletableFuture;
 
 class DevOnlyAuthProvider implements IAuthProvider {
+    private static final CheckResult GRANTED = CheckResult.newBuilder().setGranted(
+        com.baidu.bifromq.plugin.authprovider.type.Granted.getDefaultInstance()).build();
+
     @Override
     public CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData) {
         if (!Strings.isNullOrEmpty(authData.getUsername())) {
@@ -53,5 +57,10 @@ class DevOnlyAuthProvider implements IAuthProvider {
     @Override
     public CompletableFuture<Boolean> check(ClientInfo clientInfo, MQTTAction action) {
         return CompletableFuture.completedFuture(true);
+    }
+
+    @Override
+    public CompletableFuture<CheckResult> checkPermission(ClientInfo client, MQTTAction action) {
+        return CompletableFuture.completedFuture(GRANTED);
     }
 }

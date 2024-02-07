@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
-import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.maximumPacketSize;
-
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
@@ -51,8 +49,11 @@ public final class MQTT5PersistentSessionHandler extends MQTTPersistentSessionHa
             willMessage,
             ctx);
         this.helper = new MQTT5ProtocolHelper(connMsg, settings, clientInfo);
-        this.reAuthenticator =
-            IReAuthenticator.create(connMsg, authProvider, ctx, clientInfo, this::handleResponseOrGoAway);
+        this.reAuthenticator = IReAuthenticator.create(connMsg,
+            authProvider,
+            clientInfo,
+            this::handleProtocolResponse,
+            ctx.executor());
     }
 
     @Override

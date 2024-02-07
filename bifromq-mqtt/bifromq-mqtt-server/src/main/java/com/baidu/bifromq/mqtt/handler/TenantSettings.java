@@ -31,6 +31,7 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineExpireTime
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineOverflowDropOldest;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineQueueSize;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.PayloadFormatValidationEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
@@ -47,6 +48,7 @@ public class TenantSettings {
     public final boolean mqtt5Enabled;
     public final boolean debugMode;
     public final boolean forceTransient;
+    public final boolean payloadFormatValidationEnabled;
     public final boolean retainEnabled;
     public final boolean wildcardSubscriptionEnabled;
     public final boolean subscriptionIdentifierEnabled;
@@ -73,6 +75,7 @@ public class TenantSettings {
         mqtt5Enabled = provider.provide(MQTT5Enabled, tenantId);
         debugMode = provider.provide(DebugModeEnabled, tenantId);
         forceTransient = provider.provide(ForceTransient, tenantId);
+        payloadFormatValidationEnabled = provider.provide(PayloadFormatValidationEnabled, tenantId);
         retainEnabled = provider.provide(RetainEnabled, tenantId);
         wildcardSubscriptionEnabled = provider.provide(WildcardSubscriptionEnabled, tenantId);
         subscriptionIdentifierEnabled = provider.provide(SubscriptionIdentifierEnabled, tenantId);

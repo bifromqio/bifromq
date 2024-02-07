@@ -15,8 +15,7 @@ package com.baidu.bifromq.mqtt.handler;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.mqtt.handler.record.GoAway;
-import com.baidu.bifromq.mqtt.handler.record.ResponseOrGoAway;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -64,23 +63,23 @@ public interface IMQTTProtocolHelper {
 
     boolean checkPacketIdUsage();
 
-    GoAway onInboxTransientError();
+    ProtocolResponse onInboxTransientError();
 
     Optional<Integer> sessionExpiryIntervalOnDisconnect(MqttMessage disconnectMessage);
 
-    GoAway onDisconnect();
+    ProtocolResponse onDisconnect();
 
-    GoAway respondDisconnectProtocolError();
+    ProtocolResponse respondDisconnectProtocolError();
 
     boolean isNormalDisconnect(MqttMessage message);
 
     boolean isDisconnectWithLWT(MqttMessage message);
 
-    GoAway respondDecodeError(MqttMessage message);
+    ProtocolResponse respondDecodeError(MqttMessage message);
 
-    GoAway respondDuplicateConnect(MqttConnectMessage message);
+    ProtocolResponse respondDuplicateConnect(MqttConnectMessage message);
 
-    ResponseOrGoAway validateSubMessage(MqttSubscribeMessage message);
+    ProtocolResponse validateSubMessage(MqttSubscribeMessage message);
 
     List<SubTask> getSubTask(MqttSubscribeMessage message);
 
@@ -88,7 +87,7 @@ public interface IMQTTProtocolHelper {
 
     MqttSubAckMessage respondPacketIdInUse(MqttSubscribeMessage message);
 
-    GoAway validateUnsubMessage(MqttUnsubscribeMessage message);
+    ProtocolResponse validateUnsubMessage(MqttUnsubscribeMessage message);
 
     MqttUnsubAckMessage respondPacketIdInUse(MqttUnsubscribeMessage message);
 
@@ -98,35 +97,35 @@ public interface IMQTTProtocolHelper {
 
     boolean isQoS2Received(MqttMessage message);
 
-    ResponseOrGoAway respondPubRecMsg(MqttMessage message, boolean packetIdNotFound);
+    ProtocolResponse respondPubRecMsg(MqttMessage message, boolean packetIdNotFound);
 
     int clientReceiveMaximum();
 
-    GoAway onKick(ClientInfo kicker);
+    ProtocolResponse onKick(ClientInfo kicker);
 
     MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message);
 
-    GoAway respondReceivingMaximumExceeded();
+    ProtocolResponse respondReceivingMaximumExceeded();
 
-    GoAway respondPubRateExceeded();
+    ProtocolResponse respondPubRateExceeded();
 
-    GoAway validatePubMessage(MqttPublishMessage message);
+    ProtocolResponse validatePubMessage(MqttPublishMessage message);
 
     String getTopic(MqttPublishMessage message);
 
     Message buildDistMessage(MqttPublishMessage message);
 
-    GoAway onQoS0DistDenied(String topic, Message distMessage, CheckResult result);
+    ProtocolResponse onQoS0DistDenied(String topic, Message distMessage, CheckResult result);
 
-    ResponseOrGoAway onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
+    ProtocolResponse onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
 
     MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps);
 
-    ResponseOrGoAway respondQoS2PacketInUse(MqttPublishMessage message);
+    ProtocolResponse respondQoS2PacketInUse(MqttPublishMessage message);
 
-    ResponseOrGoAway onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
+    ProtocolResponse onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
 
     MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps);
 
-    GoAway onIdleTimeout(int keepAliveTimeSeconds);
+    ProtocolResponse onIdleTimeout(int keepAliveTimeSeconds);
 }

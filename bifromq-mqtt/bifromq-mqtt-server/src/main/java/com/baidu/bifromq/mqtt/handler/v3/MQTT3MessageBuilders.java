@@ -13,13 +13,22 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.mqtt.MqttFixedHeader;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttMessageType;
+import io.netty.handler.codec.mqtt.MqttPublishMessage;
+import io.netty.handler.codec.mqtt.MqttPublishVariableHeader;
 import io.netty.handler.codec.mqtt.MqttQoS;
 
 public class MQTT3MessageBuilders {
+    public static PublishBuilder pub() {
+        return new PublishBuilder();
+    }
+
     public static PubRecBuilder pubRec() {
         return new PubRecBuilder();
     }
@@ -32,6 +41,50 @@ public class MQTT3MessageBuilders {
         return new PubCompBuilder();
     }
 
+    public static final class PublishBuilder {
+        private String topic;
+        private boolean retained;
+        private QoS qos;
+        private ByteString payload;
+        private int messageId;
+
+        PublishBuilder() {
+        }
+
+        public PublishBuilder topicName(String topic) {
+            this.topic = topic;
+            return this;
+        }
+
+        public PublishBuilder retained(boolean retained) {
+            this.retained = retained;
+            return this;
+        }
+
+        public PublishBuilder qos(QoS qos) {
+            this.qos = qos;
+            return this;
+        }
+
+        public PublishBuilder payload(ByteString payload) {
+            this.payload = payload;
+            return this;
+        }
+
+        public PublishBuilder messageId(int messageId) {
+            this.messageId = messageId;
+            return this;
+        }
+
+        public MqttPublishMessage build() {
+            MqttFixedHeader mqttFixedHeader =
+                new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.valueOf(qos.getNumber()), retained, 0);
+            MqttPublishVariableHeader mqttVariableHeader =
+                new MqttPublishVariableHeader(topic, messageId, null);
+            return new MqttPublishMessage(mqttFixedHeader, mqttVariableHeader,
+                Unpooled.wrappedBuffer(payload.asReadOnlyByteBuffer()));
+        }
+    }
 
     public static final class PubRecBuilder {
         private int packetId;

@@ -16,12 +16,9 @@ package com.baidu.bifromq.mqtt.handler.v3;
 import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
-import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 
@@ -46,16 +43,6 @@ public final class MQTT3MessageUtils {
             // MessageExpiryInterval
             .setExpiryInterval(Integer.MAX_VALUE)
             .setIsRetain(isRetain)
-            .build();
-    }
-
-    static MqttPublishMessage toMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message) {
-        return MqttMessageBuilders.publish()
-            .messageId(packetId)
-            .topicName(message.topic())
-            .qos(MqttQoS.valueOf(message.qos().getNumber()))
-            .retained(message.isRetain())
-            .payload(Unpooled.wrappedBuffer(message.message().getPayload().asReadOnlyByteBuffer()))
             .build();
     }
 }

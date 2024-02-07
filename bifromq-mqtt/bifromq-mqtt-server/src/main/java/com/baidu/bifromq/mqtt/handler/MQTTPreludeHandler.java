@@ -76,7 +76,7 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
         remoteAddr = ChannelAttrs.socketAddress(ctx.channel());
-        timeoutCloseTask = ctx.channel().eventLoop().schedule(() -> {
+        timeoutCloseTask = ctx.executor().schedule(() -> {
             eventCollector.report(getLocal(ConnectTimeout.class).peerAddress(remoteAddr));
             ctx.channel().close();
         }, timeoutInSec, TimeUnit.SECONDS);
@@ -182,13 +182,15 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
         switch (connectMessage.variableHeader().version()) {
             case 3:
             case 4:
-                ctx.pipeline().addAfter(MQTTPreludeHandler.NAME, MQTT3ConnectHandler.NAME, new MQTT3ConnectHandler());
+                ctx.pipeline().addAfter(ctx.executor(),
+                    MQTTPreludeHandler.NAME, MQTT3ConnectHandler.NAME, new MQTT3ConnectHandler());
                 // delegate to MQTT 3 handler
                 ctx.fireChannelRead(connectMessage);
                 ctx.pipeline().remove(this);
                 break;
             case 5:
-                ctx.pipeline().addAfter(MQTTPreludeHandler.NAME, MQTT5ConnectHandler.NAME, new MQTT5ConnectHandler());
+                ctx.pipeline().addAfter(ctx.executor(),
+                    MQTTPreludeHandler.NAME, MQTT5ConnectHandler.NAME, new MQTT5ConnectHandler());
                 // delegate to MQTT 5 handler
                 ctx.fireChannelRead(connectMessage);
                 ctx.pipeline().remove(this);
@@ -218,16 +220,15 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
         }
         eventCollector.report(reason);
         assert closeConnectionTask == null;
-        closeConnectionTask = ctx.channel().eventLoop()
-            .schedule(() -> {
-                if (!ctx.channel().isActive()) {
-                    return;
-                }
-                if (farewell != null) {
-                    ctx.writeAndFlush(farewell).addListener(ChannelFutureListener.CLOSE);
-                } else {
-                    ctx.channel().close();
-                }
-            }, ThreadLocalRandom.current().nextInt(5000), TimeUnit.MILLISECONDS);
+        closeConnectionTask = ctx.executor().schedule(() -> {
+            if (!ctx.channel().isActive()) {
+                return;
+            }
+            if (farewell != null) {
+                ctx.writeAndFlush(farewell).addListener(ChannelFutureListener.CLOSE);
+            } else {
+                ctx.channel().close();
+            }
+        }, ThreadLocalRandom.current().nextInt(5000), TimeUnit.MILLISECONDS);
     }
 }

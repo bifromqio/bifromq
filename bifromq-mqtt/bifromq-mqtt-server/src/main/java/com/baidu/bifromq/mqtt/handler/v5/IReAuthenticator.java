@@ -13,41 +13,45 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewell;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
-import com.baidu.bifromq.mqtt.handler.record.GoAway;
-import com.baidu.bifromq.mqtt.handler.record.ResponseOrGoAway;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5DisconnectReasonCode;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.type.ClientInfo;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageType;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 public interface IReAuthenticator {
     static IReAuthenticator create(MqttConnectMessage connMsg,
                                    IAuthProvider authProvider,
-                                   ChannelHandlerContext ctx,
                                    ClientInfo clientInfo,
-                                   Consumer<ResponseOrGoAway> responder) {
+                                   Consumer<ProtocolResponse> responder,
+                                   Executor executor) {
         Optional<String> authMethodOpt = authMethod(connMsg.variableHeader().properties());
         if (authMethodOpt.isPresent()) {
-            return new ReAuthenticator(clientInfo, authProvider, authMethodOpt.get(), ctx, responder);
+            return new ReAuthenticator(clientInfo,
+                authProvider,
+                authMethodOpt.get(),
+                responder,
+                executor);
         }
         return msg -> {
             if (msg.fixedHeader().messageType() == MqttMessageType.AUTH) {
-                responder.accept(new ResponseOrGoAway(new GoAway(
+                responder.accept(farewell(
                     MQTT5MessageBuilders.disconnect()
                         .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
                         .build(),
                     getLocal(ProtocolViolation.class)
                         .statement("Re-auth not supported")
-                        .clientInfo(clientInfo))));
+                        .clientInfo(clientInfo)));
             }
         };
     }

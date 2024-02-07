@@ -49,25 +49,28 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
                 pubPack.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(writePack.getMessagePack());
             }
         }
-        List<CompletableFuture<WriteResult>> resultFutures = pubPack.entrySet().stream().map(entry -> {
-            SubInfo subInfo = entry.getKey();
-            List<TopicMessagePack> msgPackList = entry.getValue();
-            IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
-            if (session == null) {
-                return CompletableFuture.completedFuture(WriteResult.newBuilder()
-                    .setSubInfo(subInfo)
-                    .setResult(WriteResult.Result.NO_INBOX)
-                    .build());
-            } else {
-                return session.publish(subInfo, msgPackList)
-                    .thenApply(result -> WriteResult.newBuilder().setSubInfo(subInfo).setResult(result).build());
-            }
-        }).toList();
-        return CompletableFuture.allOf(resultFutures.toArray(CompletableFuture[]::new))
-            .thenApply(v -> resultFutures.stream().map(CompletableFuture::join).toList())
-            .thenApply(results -> WriteReply.newBuilder()
-                .setReqId(request.getReqId())
-                .addAllResult(results)
-                .build());
+        CompletableFuture<WriteResult>[] resultFutures = pubPack.entrySet().stream()
+            .map(entry -> {
+                SubInfo subInfo = entry.getKey();
+                List<TopicMessagePack> msgPackList = entry.getValue();
+                IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
+                if (session == null) {
+                    return CompletableFuture.completedFuture(WriteResult.newBuilder()
+                        .setSubInfo(subInfo)
+                        .setResult(WriteResult.Result.NO_INBOX)
+                        .build());
+                } else {
+                    return session.publish(subInfo, msgPackList)
+                        .thenApply(result -> WriteResult.newBuilder().setSubInfo(subInfo).setResult(result).build());
+                }
+            }).toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(resultFutures)
+            .thenApply(results -> {
+                WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
+                for (CompletableFuture<WriteResult> future : resultFutures) {
+                    replyBuilder.addResult(future.join());
+                }
+                return replyBuilder.build();
+            });
     }
 }
