@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.metrics.benchmark;
 
-import com.baidu.bifromq.metrics.TenantMeter;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 
 @State(Scope.Benchmark)
 public class TenantMeterBenchmarkState {
-    public final TenantMeter meter = TenantMeter.get("trafficA");
+    public final ITenantMeter meter = ITenantMeter.get("trafficA");
 
 }

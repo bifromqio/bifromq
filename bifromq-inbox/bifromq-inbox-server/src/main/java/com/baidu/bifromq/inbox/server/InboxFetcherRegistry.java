@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.metrics.TenantMeter.gauging;
-import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.InboxFetcherGauge;
 import static java.util.Collections.emptyMap;
 

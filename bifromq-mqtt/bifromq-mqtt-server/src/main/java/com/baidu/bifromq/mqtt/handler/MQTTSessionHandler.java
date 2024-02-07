@@ -48,7 +48,7 @@ import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.metrics.TenantMeter;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
@@ -161,7 +161,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final String userSessionId;
     protected final int keepAliveTimeSeconds;
     protected final ClientInfo clientInfo;
-    protected final TenantMeter tenantMeter;
+    protected final ITenantMeter tenantMeter;
     private final long idleTimeoutNanos;
     private final MPSThrottler throttler;
     private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
@@ -192,7 +192,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         this.keepAliveTimeSeconds = keepAliveTimeSeconds;
         this.clientInfo = clientInfo;
         this.willMessage = willMessage;
-        this.tenantMeter = TenantMeter.get(clientInfo.getTenantId());
+        this.tenantMeter = ITenantMeter.get(clientInfo.getTenantId());
         this.throttler = new MPSThrottler(settings.maxMsgPerSec);
         this.idleTimeoutNanos = Duration.ofMillis(keepAliveTimeSeconds * 1500L).toNanos(); // x1.5
         sessionCtx = ChannelAttrs.mqttSessionContext(ctx);
@@ -634,7 +634,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         MqttPublishMessage pubMsg = helper().buildMqttPubMessage(packetId(seq), msg);
         Timer.Sample start = Timer.start();
         int msgSize = MQTTMessageSizer.size(pubMsg).encodedBytes();
-        writeAndFlush(pubMsg).addListener(f -> {
+        ctx.write(pubMsg).addListener(f -> {
             if (f.isSuccess()) {
                 switch (pubMsg.fixedHeader().qosLevel()) {
                     case AT_MOST_ONCE -> {

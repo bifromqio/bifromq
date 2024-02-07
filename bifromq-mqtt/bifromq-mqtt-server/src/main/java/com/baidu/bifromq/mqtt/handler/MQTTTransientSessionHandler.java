@@ -269,6 +269,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                         });
                     }
                     drainInbox();
+                    flush(true);
                 } else {
                     forEach(topicFilter, option, topicMsgPacks,
                         bufferMsg -> reportDropEvent(bufferMsg, DropReason.NoSubPermission));

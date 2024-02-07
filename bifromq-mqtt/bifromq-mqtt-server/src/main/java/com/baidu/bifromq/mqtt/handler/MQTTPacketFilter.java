@@ -20,7 +20,7 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 
-import com.baidu.bifromq.metrics.TenantMeter;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.OversizePacketDropped;
@@ -39,7 +39,7 @@ public class MQTTPacketFilter extends ChannelDuplexHandler {
     public static final String NAME = "MQTT5SizeBasedPacketFilter";
     private final ClientInfo clientInfo;
     private final IEventCollector eventCollector;
-    private final TenantMeter tenantMeter;
+    private final ITenantMeter tenantMeter;
     private final int maxPacketSize;
     private final boolean enableTrim;
 
@@ -48,7 +48,7 @@ public class MQTTPacketFilter extends ChannelDuplexHandler {
                             ClientInfo clientInfo,
                             IEventCollector eventCollector) {
         this.eventCollector = eventCollector;
-        tenantMeter = TenantMeter.get(clientInfo.getTenantId());
+        tenantMeter = ITenantMeter.get(clientInfo.getTenantId());
         this.clientInfo = clientInfo;
         this.maxPacketSize = Math.min(maxPacketSize, settings.maxPacketSize);
         this.enableTrim = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "").equals(MQTT_PROTOCOL_VER_5_VALUE);
@@ -73,7 +73,7 @@ public class MQTTPacketFilter extends ChannelDuplexHandler {
             super.write(ctx, msg, promise);
             return;
         }
-        if (enableTrim) {
+        if (enableTrim && isTrimable(mqttMessage)) {
             encodedBytes.set(messageSize.encodedBytes(true, false));
             if (encodedBytes.get() <= maxPacketSize) {
                 // trim reason string
@@ -93,5 +93,12 @@ public class MQTTPacketFilter extends ChannelDuplexHandler {
             getLocal(OversizePacketDropped.class)
                 .mqttPacketType(mqttMessage.fixedHeader().messageType().value())
                 .clientInfo(clientInfo));
+    }
+
+    private boolean isTrimable(MqttMessage message) {
+        return switch (message.fixedHeader().messageType()) {
+            case PUBLISH, CONNACK, DISCONNECT -> false;
+            default -> true;
+        };
     }
 }

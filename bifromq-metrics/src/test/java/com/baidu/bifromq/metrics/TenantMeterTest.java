@@ -26,13 +26,13 @@ public class TenantMeterTest {
     @Test
     public void get() throws InterruptedException {
         String tenantId = "testing_traffic";
-        TenantMeter meter = TenantMeter.get(tenantId);
+        ITenantMeter meter = ITenantMeter.get(tenantId);
         meter.recordCount(TenantMetric.MqttConnectCount);
         assertTrue(Metrics.globalRegistry.getMeters().stream()
             .anyMatch(m -> tenantId.equals(m.getId().getTag(TAG_TENANT_ID))));
         meter = null;
         System.gc();
-        TenantMeter.cleanUp();
+        TenantMeterCache.cleanUp();
         System.gc();
         Thread.sleep(100);
         await().until(() -> {

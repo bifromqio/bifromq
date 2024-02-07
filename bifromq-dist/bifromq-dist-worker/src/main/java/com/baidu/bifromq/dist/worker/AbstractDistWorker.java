@@ -15,8 +15,8 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildCollectMetricsRequest;
-import static com.baidu.bifromq.metrics.TenantMeter.gauging;
-import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.DistUsedSpaceGauge;
 
 import com.baidu.bifromq.baseenv.EnvProvider;

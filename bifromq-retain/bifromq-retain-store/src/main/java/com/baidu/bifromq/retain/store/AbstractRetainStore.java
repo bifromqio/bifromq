@@ -14,8 +14,8 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.metrics.TenantMeter.gauging;
-import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.RetainUsedSpaceGauge;
 import static com.baidu.bifromq.retain.utils.MessageUtil.buildCollectMetricsRequest;
 

@@ -14,8 +14,8 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-import static com.baidu.bifromq.metrics.TenantMeter.gauging;
-import static com.baidu.bifromq.metrics.TenantMeter.stopGauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
+import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectionGauge;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;

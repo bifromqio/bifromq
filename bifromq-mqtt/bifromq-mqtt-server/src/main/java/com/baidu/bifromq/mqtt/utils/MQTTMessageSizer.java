@@ -105,7 +105,7 @@ public class MQTTMessageSizer {
             }
             case PUBACK -> {
                 if (message.variableHeader() instanceof MqttPubReplyMessageVariableHeader pubReplyVarHeader) {
-                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK &&
+                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK ||
                         !pubReplyVarHeader.properties().isEmpty()) {
                         MqttVarHeaderBytes varHeaderBytes = sizePubReplyHeader(pubReplyVarHeader);
                         return new MqttMessageSize(varHeaderBytes, 0);
@@ -117,7 +117,7 @@ public class MQTTMessageSizer {
             }
             case PUBREC -> {
                 if (message.variableHeader() instanceof MqttPubReplyMessageVariableHeader pubReplyVarHeader) {
-                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK &&
+                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK ||
                         !pubReplyVarHeader.properties().isEmpty()) {
                         MqttVarHeaderBytes varHeaderBytes = sizePubReplyHeader(pubReplyVarHeader);
                         return new MqttMessageSize(varHeaderBytes, 0);
@@ -128,7 +128,7 @@ public class MQTTMessageSizer {
             }
             case PUBREL -> {
                 if (message.variableHeader() instanceof MqttPubReplyMessageVariableHeader pubReplyVarHeader) {
-                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK &&
+                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK ||
                         !pubReplyVarHeader.properties().isEmpty()) {
                         MqttVarHeaderBytes varHeaderBytes = sizePubReplyHeader(pubReplyVarHeader);
                         return new MqttMessageSize(varHeaderBytes, 0);
@@ -139,7 +139,7 @@ public class MQTTMessageSizer {
             }
             case PUBCOMP -> {
                 if (message.variableHeader() instanceof MqttPubReplyMessageVariableHeader pubReplyVarHeader) {
-                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK &&
+                    if (pubReplyVarHeader.reasonCode() != MqttPubReplyMessageVariableHeader.REASON_CODE_OK ||
                         !pubReplyVarHeader.properties().isEmpty()) {
                         MqttVarHeaderBytes varHeaderBytes = sizePubReplyHeader(pubReplyVarHeader);
                         return new MqttMessageSize(varHeaderBytes, 0);
@@ -331,7 +331,6 @@ public class MQTTMessageSizer {
                 case SUBSCRIPTION_IDENTIFIER_AVAILABLE -> minBytes += sizeSubscriptionIdentifierAvailable(mqttProperty);
                 case SHARED_SUBSCRIPTION_AVAILABLE -> minBytes += sizeSharedSubscriptionAvailable(mqttProperty);
             }
-            return new MqttPropertiesBytes(minBytes, reasonStringBytes, userPropsBytes);
         }
         // The Property Length is encoded as a Variable Byte Integer. The Property Length does not include the bytes used to encode itself, but includes the length of the Properties. If there are no properties, this MUST be indicated by including a Property Length of zero [MQTT5-2.2.2-1].
         return new MqttPropertiesBytes(minBytes, reasonStringBytes, userPropsBytes);

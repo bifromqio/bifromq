@@ -13,14 +13,12 @@
 
 package com.baidu.bifromq.mqtt.utils;
 
-import io.netty.handler.codec.mqtt.MqttConnAckVariableHeader;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectVariableHeader;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttPubReplyMessageVariableHeader;
-import io.netty.handler.codec.mqtt.MqttPublishVariableHeader;
 import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
@@ -98,24 +96,6 @@ public class MQTTMessageTrimmer {
             header.isWillFlag(),
             header.isCleanSession(),
             header.keepAliveTimeSeconds(),
-            trimMqttProps(header.properties(), trimReasonString, trimUserProps));
-    }
-
-    private static MqttConnAckVariableHeader trimVarHeader(MqttConnAckVariableHeader header,
-                                                           boolean trimReasonString,
-                                                           boolean trimUserProps) {
-        return new MqttConnAckVariableHeader(
-            header.connectReturnCode(),
-            header.isSessionPresent(),
-            trimMqttProps(header.properties(), trimReasonString, trimUserProps));
-    }
-
-    private static MqttPublishVariableHeader trimVarHeader(MqttPublishVariableHeader header,
-                                                           boolean trimReasonString,
-                                                           boolean trimUserProps) {
-        return new MqttPublishVariableHeader(
-            header.topicName(),
-            header.packetId(),
             trimMqttProps(header.properties(), trimReasonString, trimUserProps));
     }
 
