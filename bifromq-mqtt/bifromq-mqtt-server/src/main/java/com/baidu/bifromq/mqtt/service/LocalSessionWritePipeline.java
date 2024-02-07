@@ -23,9 +23,11 @@ import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
@@ -42,35 +44,46 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
     @Override
     protected CompletableFuture<WriteReply> handleRequest(String tenantId, WriteRequest request) {
         log.trace("Handle inbox write request: \n{}", request);
-        Map<SubInfo, List<TopicMessagePack>> pubPack = new HashMap<>();
+        WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
+        Set<SubInfo> ok = new HashSet<>();
+        Set<SubInfo> noSub = new HashSet<>();
+        Map<IMQTTTransientSession, Map<SubInfo, List<TopicMessagePack>>> deliveryMap = new HashMap<>();
         for (WritePack writePack : request.getPackList()) {
+            TopicMessagePack topicMsgPack = writePack.getMessagePack();
             List<SubInfo> subInfos = writePack.getSubscriberList();
             for (SubInfo subInfo : subInfos) {
-                pubPack.computeIfAbsent(subInfo, k -> new LinkedList<>()).add(writePack.getMessagePack());
+                if (!noSub.contains(subInfo)) {
+                    IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
+                    if (session != null) {
+                        deliveryMap.computeIfAbsent(session, k -> new HashMap<>())
+                            .computeIfAbsent(subInfo, k -> new LinkedList<>())
+                            .add(topicMsgPack);
+                    } else {
+                        // no session found for the subscription
+                        noSub.add(subInfo);
+                    }
+                }
             }
         }
-        CompletableFuture<WriteResult>[] resultFutures = pubPack.entrySet().stream()
-            .map(entry -> {
-                SubInfo subInfo = entry.getKey();
-                List<TopicMessagePack> msgPackList = entry.getValue();
-                IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
-                if (session == null) {
-                    return CompletableFuture.completedFuture(WriteResult.newBuilder()
-                        .setSubInfo(subInfo)
-                        .setResult(WriteResult.Result.NO_INBOX)
-                        .build());
+        deliveryMap.forEach((session, subMsgPacks) -> {
+            for (SubInfo subInfo : subMsgPacks.keySet()) {
+                boolean succeed = session.publish(subInfo, subMsgPacks.get(subInfo));
+                if (succeed) {
+                    ok.add(subInfo);
                 } else {
-                    return session.publish(subInfo, msgPackList)
-                        .thenApply(result -> WriteResult.newBuilder().setSubInfo(subInfo).setResult(result).build());
+                    // no sub found in session
+                    noSub.add(subInfo);
                 }
-            }).toArray(CompletableFuture[]::new);
-        return CompletableFuture.allOf(resultFutures)
-            .thenApply(results -> {
-                WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
-                for (CompletableFuture<WriteResult> future : resultFutures) {
-                    replyBuilder.addResult(future.join());
-                }
-                return replyBuilder.build();
-            });
+            }
+        });
+        ok.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
+            .setSubInfo(subInfo)
+            .setResult(WriteResult.Result.OK)
+            .build()));
+        noSub.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
+            .setSubInfo(subInfo)
+            .setResult(WriteResult.Result.NO_INBOX)
+            .build()));
+        return CompletableFuture.completedFuture(replyBuilder.build());
     }
 }

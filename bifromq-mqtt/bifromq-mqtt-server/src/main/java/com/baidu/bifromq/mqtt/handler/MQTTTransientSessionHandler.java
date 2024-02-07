@@ -34,7 +34,6 @@ import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
@@ -199,15 +198,14 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
-    public CompletableFuture<WriteResult.Result> publish(SubInfo subInfo, List<TopicMessagePack> topicMsgPacks) {
+    public boolean publish(SubInfo subInfo, List<TopicMessagePack> topicMsgPacks) {
         String topicFilter = subInfo.getTopicFilter();
         TopicFilterOption option = topicFilters.get(topicFilter);
         if (option == null) {
-            return CompletableFuture.completedFuture(WriteResult.Result.NO_INBOX);
+            return false;
         }
-        CompletableFuture.completedFuture(true)
-            .thenAcceptAsync(v -> publish(topicFilter, option, topicMsgPacks), ctx.executor());
-        return CompletableFuture.completedFuture(WriteResult.Result.OK);
+        ctx.executor().execute(() -> publish(topicFilter, option, topicMsgPacks));
+        return true;
     }
 
     @Override
@@ -226,12 +224,10 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 .thenApply(unsubResult -> UnsubReply.Result.forNumber(unsubResult.ordinal())), ctx.executor());
     }
 
-    private CompletableFuture<WriteResult.Result> publish(String topicFilter,
-                                                          TopicFilterOption option,
-                                                          List<TopicMessagePack> topicMsgPacks) {
+    private void publish(String topicFilter, TopicFilterOption option, List<TopicMessagePack> topicMsgPacks) {
         QoS subQoS = option.getQos();
-        return addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, subQoS))
-            .thenApplyAsync(checkResult -> {
+        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, subQoS))
+            .thenAcceptAsync(checkResult -> {
                 if (checkResult.hasGranted()) {
                     forEach(topicFilter, option, topicMsgPacks, this::logInternalLatency);
                     if (!ctx.channel().isActive()) {
@@ -273,13 +269,11 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                         });
                     }
                     drainInbox();
-                    return WriteResult.Result.OK;
                 } else {
                     forEach(topicFilter, option, topicMsgPacks,
                         bufferMsg -> reportDropEvent(bufferMsg, DropReason.NoSubPermission));
                     // treat no permission as no_inbox
                     addBgTask(this.unsubTopicFilter(System.nanoTime(), topicFilter));
-                    return WriteResult.Result.NO_INBOX;
                 }
             }, ctx.executor()));
     }
