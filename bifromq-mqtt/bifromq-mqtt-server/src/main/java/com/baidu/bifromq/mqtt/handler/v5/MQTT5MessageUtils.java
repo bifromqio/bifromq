@@ -36,8 +36,134 @@ import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import java.util.List;
 import java.util.Optional;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 public class MQTT5MessageUtils {
+    @NoArgsConstructor(access = AccessLevel.PRIVATE)
+    public static class MqttPropertiesBuilder {
+        private final MqttProperties mqttProperties = new MqttProperties();
+
+        public MqttPropertiesBuilder addSubscriptionIdentifier(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER.value(),
+                    value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addReceiveMaximum(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.RECEIVE_MAXIMUM.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addTopicAliasMaximum(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addMaximumPacketSize(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.MAXIMUM_PACKET_SIZE.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addSessionExpiryInterval(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL.value(),
+                    value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addServerKeepAlive(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.SERVER_KEEP_ALIVE.value(),
+                    value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addServerReference(String value) {
+            mqttProperties.add(
+                new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.SERVER_REFERENCE.value(),
+                    value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addTopicAlias(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.TOPIC_ALIAS.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addUserProperty(String key, String value) {
+            mqttProperties.add(new MqttProperties.UserProperty(key, value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addUserProperties(UserProperties userProperties) {
+            userProperties.getUserPropertiesList().forEach(pair -> addUserProperty(pair.getKey(), pair.getValue()));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addPayloadFormatIndicator(int value) {
+            mqttProperties.add(new MqttProperties.IntegerProperty(PAYLOAD_FORMAT_INDICATOR.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addContentType(String value) {
+            mqttProperties.add(new MqttProperties.StringProperty(CONTENT_TYPE.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addResponseTopic(String value) {
+            mqttProperties.add(new MqttProperties.StringProperty(RESPONSE_TOPIC.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addCorrelationData(ByteString value) {
+            mqttProperties.add(new MqttProperties.BinaryProperty(CORRELATION_DATA.value(), value.toByteArray()));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addReasonString(String value) {
+            mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addAuthMethod(String value) {
+            mqttProperties.add(new MqttProperties.StringProperty(AUTHENTICATION_METHOD.value(), value));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addAuthData(ByteString value) {
+            mqttProperties.add(new MqttProperties.BinaryProperty(AUTHENTICATION_DATA.value(), value.toByteArray()));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addRequestResponseInformation(boolean value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.REQUEST_RESPONSE_INFORMATION.value(),
+                    value ? 1 : 0));
+            return this;
+        }
+
+        public MqttPropertiesBuilder addRequestProblemInformation(boolean value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.REQUEST_PROBLEM_INFORMATION.value(),
+                    value ? 1 : 0));
+            return this;
+        }
+
+        public MqttProperties build() {
+            return mqttProperties;
+        }
+    }
+
+    public static MqttPropertiesBuilder mqttProps() {
+        return new MqttPropertiesBuilder();
+    }
+
     public static MqttProperties.UserProperties toMqttUserProps(UserProperties userProperties) {
         MqttProperties.UserProperties userProps = new MqttProperties.UserProperties();
         for (StringPair stringPair : userProperties.getUserPropertiesList()) {

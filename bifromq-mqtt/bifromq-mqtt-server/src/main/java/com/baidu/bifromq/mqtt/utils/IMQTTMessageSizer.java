@@ -1,0 +1,89 @@
+/*
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.mqtt.utils;
+
+import static io.netty.buffer.ByteBufUtil.utf8Bytes;
+
+import io.netty.handler.codec.mqtt.MqttMessage;
+
+public interface IMQTTMessageSizer {
+    int MIN_CONTROL_PACKET_SIZE = 16;
+
+    interface MqttMessageSize {
+        int encodedBytes();
+
+        int encodedBytes(boolean includeUserProps, boolean includeReasonString);
+    }
+
+    static IMQTTMessageSizer mqtt3() {
+        return MQTT3MessageSizer.INSTANCE;
+    }
+
+    static IMQTTMessageSizer mqtt5() {
+        return MQTT5MessageSizer.INSTANCE;
+    }
+
+    MqttMessageSize sizeOf(MqttMessage message);
+
+    IMQTTMessageSizer.MqttMessageSize TWO_BYTES_REMAINING_LENGTH =
+        new IMQTTMessageSizer.MqttMessageSize() {
+            @Override
+            public int encodedBytes() {
+                return 4;
+            }
+
+            @Override
+            public int encodedBytes(boolean includeUserProps, boolean includeReasonString) {
+                return 4;
+            }
+        };
+
+    IMQTTMessageSizer.MqttMessageSize ZERO_BYTES_REMAINING_LENGTH =
+        new IMQTTMessageSizer.MqttMessageSize() {
+            @Override
+            public int encodedBytes() {
+                return 2;
+            }
+
+            @Override
+            public int encodedBytes(boolean includeUserProps, boolean includeReasonString) {
+                return 2;
+            }
+        };
+
+
+    static int sizeBinary(byte[] binary) {
+        // 2 bytes for encoding size prefix in Binary Data, [MQTT5-1.5.6]
+        return 2 + binary.length;
+    }
+
+    static int sizeUTF8EncodedString(String s) {
+        int rsBytes = utf8Bytes(s);
+        // 2 bytes for encoding size prefix in UTF-8 Encoded String, [MQTT5-1.5.7]
+        return 2 + rsBytes;
+    }
+
+    static int varIntBytes(int i) {
+        int bytes = 0;
+        do {
+            int digit = i % 128;
+            i /= 128;
+            if (i > 0) {
+                digit |= 0x80;
+            }
+            bytes++;
+        } while (i > 0);
+        return bytes;
+    }
+}

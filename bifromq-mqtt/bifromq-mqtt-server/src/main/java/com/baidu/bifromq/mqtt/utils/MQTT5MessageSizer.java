@@ -36,25 +36,17 @@ import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubAckPayload;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribePayload;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class MQTTMessageSizer {
-    public static final int MIN_CONTROL_PACKET_SIZE = 16;
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public class MQTT5MessageSizer implements IMQTTMessageSizer {
+    static final IMQTTMessageSizer INSTANCE = new MQTT5MessageSizer();
 
-    public record MqttMessageSize(MqttVarHeaderBytes varHeaderBytes, int payloadBytes) {
-        private static final MqttMessageSize ZERO_BYTES_REMAINING_LENGTH = new MqttMessageSize(null, 0);
-        private static final MqttMessageSize TWO_BYTES_REMAINING_LENGTH =
-            new MqttMessageSize(new MqttVarHeaderBytes(2, 0, 0), 0);
-
-        static MqttMessageSize zeroBytesRemainingLength() {
-            return ZERO_BYTES_REMAINING_LENGTH;
-        }
-
-        static MqttMessageSize twoBytesRemainingLength() {
-            return TWO_BYTES_REMAINING_LENGTH;
-        }
-
+    private record MqttMessageSize(MqttVarHeaderBytes varHeaderBytes, int payloadBytes)
+        implements IMQTTMessageSizer.MqttMessageSize {
         public int encodedBytes() {
             return encodedBytes(true, true);
         }
@@ -72,27 +64,27 @@ public class MQTTMessageSizer {
             if (includeReasonString) {
                 totalVarHeaderBytes += varHeaderBytes.reasonStringBytes;
             }
-            totalVarHeaderBytes = varIntBytes(totalVarHeaderBytes) + totalVarHeaderBytes;
             // 1 byte for fixHeader byte0
             // varInt encoding remainingLength(variableHeaderBytes + payloadBytes)
-            return 1 + varIntBytes(totalVarHeaderBytes + payloadBytes) + totalVarHeaderBytes + payloadBytes;
+            return 1 + IMQTTMessageSizer.varIntBytes(totalVarHeaderBytes + payloadBytes) + totalVarHeaderBytes +
+                payloadBytes;
         }
     }
 
-    public record MqttVarHeaderBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
+    private record MqttVarHeaderBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
 
     }
 
-    public record MqttPropertiesBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
+    private record MqttPropertiesBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
     }
 
-    public static MqttMessageSize size(MqttMessage message) {
+    public IMQTTMessageSizer.MqttMessageSize sizeOf(MqttMessage message) {
         switch (message.fixedHeader().messageType()) {
             case CONNECT -> {
                 MqttConnectMessage connMsg = ((MqttConnectMessage) message);
                 return new MqttMessageSize(
                     sizeConnVarHeader(connMsg.variableHeader()),
-                    sizeConnPayload(connMsg.payload())
+                    sizeConnPayload(connMsg)
                 );
             }
             case CONNACK -> {
@@ -112,7 +104,7 @@ public class MQTTMessageSizer {
                     }
                 }
                 //  The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the PUBACK has a Remaining Length of 2. [MQTT5-3.4.2.1]
-                return MqttMessageSize.twoBytesRemainingLength();
+                return TWO_BYTES_REMAINING_LENGTH;
 
             }
             case PUBREC -> {
@@ -124,7 +116,7 @@ public class MQTTMessageSizer {
                     }
                 }
                 // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the PUBREC has a Remaining Length of 2 [MQTT5-3.5.2.1]
-                return MqttMessageSize.twoBytesRemainingLength();
+                return TWO_BYTES_REMAINING_LENGTH;
             }
             case PUBREL -> {
                 if (message.variableHeader() instanceof MqttPubReplyMessageVariableHeader pubReplyVarHeader) {
@@ -135,7 +127,7 @@ public class MQTTMessageSizer {
                     }
                 }
                 // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the PUBREL has a Remaining Length of 2 [MQTT5-3.6.2.1]
-                return MqttMessageSize.twoBytesRemainingLength();
+                return TWO_BYTES_REMAINING_LENGTH;
             }
             case PUBCOMP -> {
                 if (message.variableHeader() instanceof MqttPubReplyMessageVariableHeader pubReplyVarHeader) {
@@ -146,7 +138,7 @@ public class MQTTMessageSizer {
                     }
                 }
                 // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the PUBCOMP has a Remaining Length of 2 [MQTT5-3.7.2.1]
-                return MqttMessageSize.twoBytesRemainingLength();
+                return TWO_BYTES_REMAINING_LENGTH;
             }
             case SUBSCRIBE -> {
                 MqttSubscribeMessage subMsg = (MqttSubscribeMessage) message;
@@ -179,7 +171,7 @@ public class MQTTMessageSizer {
             case DISCONNECT -> {
                 if (message.variableHeader() == null) {
                     // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Normal disconnecton) and there are no Properties. In this case the DISCONNECT has a Remaining Length of 0 [MQTT5-3.14.2.1]
-                    return MqttMessageSize.zeroBytesRemainingLength();
+                    return ZERO_BYTES_REMAINING_LENGTH;
                 } else {
                     MqttVarHeaderBytes varHeaderBytes = sizeReasonCodeAndPropertiesVarHeader(
                         (MqttReasonCodeAndPropertiesVariableHeader) message.variableHeader());
@@ -187,12 +179,12 @@ public class MQTTMessageSizer {
                 }
             }
             case PINGREQ, PINGRESP -> {
-                return MqttMessageSize.zeroBytesRemainingLength();
+                return ZERO_BYTES_REMAINING_LENGTH;
             }
             case AUTH -> {
                 if (message.variableHeader() == null) {
                     // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the AUTH has a Remaining Length of 0 [MQTT5-3.15.2.1]
-                    return MqttMessageSize.zeroBytesRemainingLength();
+                    return ZERO_BYTES_REMAINING_LENGTH;
                 } else {
                     MqttVarHeaderBytes varHeaderBytes = sizeReasonCodeAndPropertiesVarHeader(
                         (MqttReasonCodeAndPropertiesVariableHeader) message.variableHeader());
@@ -201,12 +193,12 @@ public class MQTTMessageSizer {
             }
             default -> {
                 log.error("Unknown message type for sizing: {}", message.fixedHeader().messageType());
-                return MqttMessageSize.ZERO_BYTES_REMAINING_LENGTH;
+                return ZERO_BYTES_REMAINING_LENGTH;
             }
         }
     }
 
-    private static MqttVarHeaderBytes sizeConnVarHeader(MqttConnectVariableHeader header) {
+    private MqttVarHeaderBytes sizeConnVarHeader(MqttConnectVariableHeader header) {
         MqttPropertiesBytes propsBytes = sizeMqttProperties(header.properties());
         // 6 bytes for UTF8 encoded string(MQTT)
         // 1 byte for ProtocolVersion
@@ -217,14 +209,14 @@ public class MQTTMessageSizer {
             propsBytes.userPropsBytes);
     }
 
-    private static MqttVarHeaderBytes sizeConnAckVarHeader(MqttConnAckVariableHeader header) {
+    private MqttVarHeaderBytes sizeConnAckVarHeader(MqttConnAckVariableHeader header) {
         MqttPropertiesBytes propsBytes = sizeMqttProperties(header.properties());
         // 1 byte for ConnectAcknowledgeFlags
         // 1 byte for ReasonCode
         return new MqttVarHeaderBytes(2 + propsBytes.minBytes, propsBytes.reasonStringBytes, propsBytes.userPropsBytes);
     }
 
-    private static MqttVarHeaderBytes sizeReasonCodeAndPropertiesVarHeader(
+    private MqttVarHeaderBytes sizeReasonCodeAndPropertiesVarHeader(
         MqttReasonCodeAndPropertiesVariableHeader header) {
         MqttPropertiesBytes mqttPropsBytes = sizeMqttProperties(header.properties());
         // 1 byte for encoding reason code
@@ -232,22 +224,25 @@ public class MQTTMessageSizer {
             mqttPropsBytes.userPropsBytes);
     }
 
-    private static int sizeConnPayload(MqttConnectPayload payload) {
-        int clientIdBytes = utf8Bytes(payload.clientIdentifier());
-        int usernameBytes = payload.userName() != null ? utf8Bytes(payload.userName()) : 0;
-        int passwordBytes = payload.passwordInBytes().length;
+    private int sizeConnPayload(MqttConnectMessage message) {
+        MqttConnectPayload payload = message.payload();
+        int clientIdBytes = IMQTTMessageSizer.sizeUTF8EncodedString(payload.clientIdentifier());
+        int usernameBytes =
+            message.variableHeader().hasUserName() ? IMQTTMessageSizer.sizeUTF8EncodedString(payload.userName()) : 0;
+        int passwordBytes =
+            message.variableHeader().hasPassword() ? IMQTTMessageSizer.sizeBinary(payload.passwordInBytes()) : 0;
         int payloadSize = clientIdBytes + usernameBytes + passwordBytes;
-        if (payload.willTopic() != null) {
-            payloadSize += utf8Bytes(payload.willTopic());
-            payloadSize += payload.willMessageInBytes().length;
+        if (message.variableHeader().isWillFlag()) {
+            payloadSize += IMQTTMessageSizer.sizeUTF8EncodedString(payload.willTopic());
+            payloadSize += IMQTTMessageSizer.sizeBinary(payload.willMessageInBytes());
             MqttPropertiesBytes willPropBytes = sizeMqttProperties(payload.willProperties());
             payloadSize += willPropBytes.minBytes + willPropBytes.reasonStringBytes + willPropBytes.userPropsBytes;
         }
         return payloadSize;
     }
 
-    private static MqttVarHeaderBytes sizePubVarHeader(MqttPublishVariableHeader header) {
-        int topicNameBytes = utf8Bytes(header.topicName());
+    private MqttVarHeaderBytes sizePubVarHeader(MqttPublishVariableHeader header) {
+        int topicNameBytes = IMQTTMessageSizer.sizeUTF8EncodedString(header.topicName());
         // A PUBLISH packet MUST NOT contain a Packet Identifier if its QoS value is set to 0 [MQTT5-2.2.1-2]
         int packetIdBytes = header.packetId() == 0 ? 0 : 2;
         MqttPropertiesBytes propBytes = sizeMqttProperties(header.properties());
@@ -257,47 +252,47 @@ public class MQTTMessageSizer {
             propBytes.userPropsBytes);
     }
 
-    private static MqttVarHeaderBytes sizePubReplyHeader(MqttPubReplyMessageVariableHeader header) {
+    private MqttVarHeaderBytes sizePubReplyHeader(MqttPubReplyMessageVariableHeader header) {
         MqttPropertiesBytes propBytes = sizeMqttProperties(header.properties());
         // 2 bytes for encoding packetId
         // 1 byte for encoding reason code
         return new MqttVarHeaderBytes(3 + propBytes.minBytes, propBytes.reasonStringBytes, propBytes.userPropsBytes);
     }
 
-    private static MqttVarHeaderBytes sizeIdAndPropsVarHeader(MqttMessageIdAndPropertiesVariableHeader header) {
+    private MqttVarHeaderBytes sizeIdAndPropsVarHeader(MqttMessageIdAndPropertiesVariableHeader header) {
         MqttPropertiesBytes propsBytes = sizeMqttProperties(header.properties());
         // 2 bytes for encoding packetId
         return new MqttVarHeaderBytes(2 + propsBytes.minBytes, propsBytes.reasonStringBytes, propsBytes.userPropsBytes);
     }
 
-    private static int sizeSubPayload(MqttSubscribePayload payload) {
+    private int sizeSubPayload(MqttSubscribePayload payload) {
         int totalBytes = 0;
         for (MqttTopicSubscription sub : payload.topicSubscriptions()) {
             // 1 byte for encoding subscription options
-            totalBytes += 1 + sizeUTF8EncodedString(sub.topicName());
+            totalBytes += 1 + IMQTTMessageSizer.sizeUTF8EncodedString(sub.topicName());
         }
         return totalBytes;
     }
 
-    private static int sizeUnsubPayload(MqttUnsubscribePayload payload) {
+    private int sizeUnsubPayload(MqttUnsubscribePayload payload) {
         int totalBytes = 0;
         for (String topicFilter : payload.topics()) {
-            totalBytes += sizeUTF8EncodedString(topicFilter);
+            totalBytes += IMQTTMessageSizer.sizeUTF8EncodedString(topicFilter);
         }
         return totalBytes;
     }
 
-    private static int sizeSubAckPayload(MqttSubAckPayload payload) {
+    private int sizeSubAckPayload(MqttSubAckPayload payload) {
         // 1 byte for each reason code
         return payload.reasonCodes().size();
     }
 
-    private static int sizeUnsubAckPayload(MqttUnsubAckPayload payload) {
+    private int sizeUnsubAckPayload(MqttUnsubAckPayload payload) {
         // 1 byte for each reason code
         return payload.unsubscribeReasonCodes().size();
     }
 
-    private static MqttPropertiesBytes sizeMqttProperties(MqttProperties mqttProps) {
+    private MqttPropertiesBytes sizeMqttProperties(MqttProperties mqttProps) {
         int minBytes = 0;
         int reasonStringBytes = 0;
         int userPropsBytes = 0;
@@ -333,168 +328,169 @@ public class MQTTMessageSizer {
             }
         }
         // The Property Length is encoded as a Variable Byte Integer. The Property Length does not include the bytes used to encode itself, but includes the length of the Properties. If there are no properties, this MUST be indicated by including a Property Length of zero [MQTT5-2.2.2-1].
-        return new MqttPropertiesBytes(minBytes, reasonStringBytes, userPropsBytes);
+        return new MqttPropertiesBytes(IMQTTMessageSizer.varIntBytes(minBytes) + minBytes, reasonStringBytes,
+            userPropsBytes);
     }
 
-    private static <T> int sizePacketFormatIndicator(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizePacketFormatIndicator(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x01) PacketFormatIndicator
         // 1 byte for encoding value 0|1
         return 2;
     }
 
-    private static <T> int sizeMessageExpiryInterval(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeMessageExpiryInterval(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x02) MessageExpiryInterval
         // 4 byte5 for encoding expiry interval value
         return 5;
     }
 
-    private static <T> int sizeContentType(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeContentType(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.StringProperty;
         // 1 byte for encoding propertyId: (0x03) ContentType
         return 1 + utf8Bytes(((MqttProperties.StringProperty) mqttProp).value());
     }
 
-    private static <T> int sizeResponseTopic(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeResponseTopic(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.StringProperty;
         // 1 byte for encoding propertyId: (0x08) ResponseTopic
         return 1 + utf8Bytes(((MqttProperties.StringProperty) mqttProp).value());
     }
 
-    private static <T> int sizeCorrelationData(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeCorrelationData(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.BinaryProperty;
         // 1 byte for encoding propertyId: (0x09) CorrelationData
-        return 1 + sizeBinary(((MqttProperties.BinaryProperty) mqttProp).value());
+        return 1 + IMQTTMessageSizer.sizeBinary(((MqttProperties.BinaryProperty) mqttProp).value());
     }
 
-    private static <T> int sizeSubscriptionIdentifier(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeSubscriptionIdentifier(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x0B) SubscriptionIdentifier
-        return 1 + varIntBytes(((MqttProperties.IntegerProperty) mqttProp).value());
+        return 1 + IMQTTMessageSizer.varIntBytes(((MqttProperties.IntegerProperty) mqttProp).value());
     }
 
-    private static <T> int sizeSessionExpiryInterval(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeSessionExpiryInterval(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x11) SessionExpiryInterval
         // 4 bytes for encoding SEI value
         return 5;
     }
 
-    private static <T> int sizeAssignedIdentifier(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeAssignedIdentifier(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.StringProperty;
         // 1 byte for encoding propertyId: (0x12) AssignedIdentifier
         return 1 + utf8Bytes(((MqttProperties.StringProperty) mqttProp).value());
     }
 
-    private static <T> int sizeServerKeepAlive(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeServerKeepAlive(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x12) AssignedIdentifier
         // 2 bytes for encoding keepAlive value;
         return 3;
     }
 
-    private static <T> int sizeAuthMethod(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeAuthMethod(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.StringProperty;
         // 1 byte for encoding propertyId: (0x15) AuthenticationMethod
-        return 1 + sizeUTF8EncodedString((String) mqttProp.value());
+        return 1 + IMQTTMessageSizer.sizeUTF8EncodedString((String) mqttProp.value());
     }
 
-    private static <T> int sizeAuthData(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeAuthData(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.BinaryProperty;
         // 1 byte for encoding propertyId: (0x16) AuthenticationData
-        return 1 + sizeBinary(((MqttProperties.BinaryProperty) mqttProp).value());
+        return 1 + IMQTTMessageSizer.sizeBinary(((MqttProperties.BinaryProperty) mqttProp).value());
     }
 
-    private static <T> int sizeRequestProblemInformation(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeRequestProblemInformation(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x17) RequestProblemInformation
         // 1 byte for encoding 0|1
         return 2;
     }
 
-    private static <T> int sizeWillDelayInterval(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeWillDelayInterval(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x18) WillDelayInterval
         // 4 bytes for encoding delay interval value
         return 5;
     }
 
-    private static <T> int sizeRequestResponseInformation(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeRequestResponseInformation(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x19) RequestResponseInformation
         // 1 byte for encoding 0|1
         return 2;
     }
 
-    private static <T> int sizeResponseInformaiton(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeResponseInformaiton(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.StringProperty;
         // 1 byte for encoding propertyId: (0x1A) ResponseInformation
         return 1 + utf8Bytes(((MqttProperties.StringProperty) mqttProp).value());
     }
 
-    private static <T> int sizeServerReference(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeServerReference(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.StringProperty;
         // 1 byte for encoding propertyId: (0x1C) ServerReference
         return 1 + utf8Bytes(((MqttProperties.StringProperty) mqttProp).value());
     }
 
-    private static <T> int sizeReasonStringProp(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeReasonStringProp(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.StringProperty;
         // 1 byte for encoding propertyId: (0x1F) ReasonString
-        return 1 + sizeUTF8EncodedString((String) mqttProp.value());
+        return 1 + IMQTTMessageSizer.sizeUTF8EncodedString((String) mqttProp.value());
     }
 
-    private static <T> int sizeReceiveMaximum(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeReceiveMaximum(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x21) ReceiveMaximum
         // 2 bytes for encoding receive maximum value
         return 3;
     }
 
-    private static <T> int sizeTopicAliasMaximum(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeTopicAliasMaximum(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x22) TopicAliasMaximum
         // 2 bytes for encoding topic alias maximum value
         return 3;
     }
 
-    private static <T> int sizeTopicAlias(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeTopicAlias(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x23) TopicAlias
         // 2 bytes for encoding alias value
         return 3;
     }
 
-    private static <T> int sizeMaximumQoS(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeMaximumQoS(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x24) MaximumQoS
         // 1 bytes for encoding 0|1 value
         return 2;
     }
 
-    private static <T> int sizeRetainAvailable(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeRetainAvailable(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x25) RetainAvailable
         // 1 bytes for encoding 0|1 value
         return 2;
     }
 
-    private static <T> int sizeMaximumPacketSize(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeMaximumPacketSize(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x27) MaximumPacketSize
         // 4 bytes for encoding max packet size value
         return 5;
     }
 
-    private static <T> int sizeWildcardSubscriptionAvailable(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeWildcardSubscriptionAvailable(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x28) WildcardSubscriptionAvailable
         // 1 byte for encoding 0|1 value
         return 2;
     }
 
-    private static <T> int sizeSubscriptionIdentifierAvailable(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeSubscriptionIdentifierAvailable(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x29) SubscriptionIdentifierAvailable
         // 1 byte for encoding 0|1 value
@@ -502,46 +498,22 @@ public class MQTTMessageSizer {
 
     }
 
-    private static <T> int sizeSharedSubscriptionAvailable(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeSharedSubscriptionAvailable(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.IntegerProperty;
         // 1 byte for encoding propertyId: (0x2A) SharedSubscriptionAvailable
         // 1 byte for encoding 0|1 value
         return 2;
     }
 
-    private static <T> int sizeUserProp(MqttProperties.MqttProperty<T> mqttProp) {
+    private <T> int sizeUserProp(MqttProperties.MqttProperty<T> mqttProp) {
         assert mqttProp instanceof MqttProperties.UserProperties;
         int totalBytes = 0;
         for (MqttProperties.StringPair pair : ((MqttProperties.UserProperties) mqttProp).value()) {
             // 1 byte for encoding propertyId: (0x26) UserProperty
             totalBytes += 1;
-            totalBytes += sizeUTF8EncodedString(pair.key);
-            totalBytes += sizeUTF8EncodedString(pair.value);
+            totalBytes += IMQTTMessageSizer.sizeUTF8EncodedString(pair.key);
+            totalBytes += IMQTTMessageSizer.sizeUTF8EncodedString(pair.value);
         }
         return totalBytes;
-    }
-
-    private static int sizeBinary(byte[] binary) {
-        // 2 bytes for encoding size prefix in Binary Data, [MQTT5-1.5.6]
-        return 2 + binary.length;
-    }
-
-    private static int sizeUTF8EncodedString(String s) {
-        int rsBytes = utf8Bytes(s);
-        // 2 bytes for encoding size prefix in UTF-8 Encoded String, [MQTT5-1.5.7]
-        return 2 + rsBytes;
-    }
-
-    private static int varIntBytes(int i) {
-        int bytes = 0;
-        do {
-            int digit = i % 128;
-            i /= 128;
-            if (i > 0) {
-                digit |= 0x80;
-            }
-            bytes++;
-        } while (i > 0);
-        return bytes;
     }
 }

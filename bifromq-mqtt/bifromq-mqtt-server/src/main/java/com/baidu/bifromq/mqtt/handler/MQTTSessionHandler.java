@@ -36,6 +36,8 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildPubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildUnsubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
@@ -53,7 +55,7 @@ import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
-import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
+import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
@@ -173,6 +175,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final MQTTSessionContext sessionCtx;
     protected final IAuthProvider authProvider;
     protected final IEventCollector eventCollector;
+    private final IMQTTMessageSizer sizer;
     private LWT willMessage;
     private boolean isGoAway;
     private ScheduledFuture<?> idleTimeoutTask;
@@ -187,6 +190,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                  ClientInfo clientInfo,
                                  @Nullable LWT willMessage,
                                  ChannelHandlerContext ctx) {
+        this.sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "").equals(MQTT_PROTOCOL_VER_5_VALUE) ?
+            IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
         this.ctx = ctx;
         this.settings = settings;
         this.userSessionId = userSessionId;
@@ -335,7 +340,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         int packetId = mqttMessage.variableHeader().packetId();
         long reqId = packetId > 0 ? packetId : System.nanoTime();
         String topic = helper().getTopic(mqttMessage);
-        int ingressMsgBytes = MQTTMessageSizer.size(mqttMessage).encodedBytes();
+        int ingressMsgBytes = sizer.sizeOf(mqttMessage).encodedBytes();
         (switch (mqttMessage.fixedHeader().qosLevel()) {
             case AT_MOST_ONCE -> handleQoS0Pub(reqId, topic, mqttMessage, ingressMsgBytes);
             case AT_LEAST_ONCE -> handleQoS1Pub(reqId, topic, mqttMessage, ingressMsgBytes);
@@ -638,7 +643,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private void sendMqttPubMessage(long seq, SubMessage msg, String topicFilter, ClientInfo publisher) {
         MqttPublishMessage pubMsg = helper().buildMqttPubMessage(packetId(seq), msg);
         Timer.Sample start = Timer.start();
-        int msgSize = MQTTMessageSizer.size(pubMsg).encodedBytes();
+        int msgSize = sizer.sizeOf(pubMsg).encodedBytes();
         ctx.write(pubMsg).addListener(f -> {
             if (f.isSuccess()) {
                 switch (pubMsg.fixedHeader().qosLevel()) {

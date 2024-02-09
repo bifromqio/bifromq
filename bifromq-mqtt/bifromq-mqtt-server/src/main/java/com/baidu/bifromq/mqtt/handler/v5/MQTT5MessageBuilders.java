@@ -13,18 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
-import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toMqttUserProps;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_DATA;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_METHOD;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CONTENT_TYPE;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CORRELATION_DATA;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.PAYLOAD_FORMAT_INDICATOR;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.REASON_STRING;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.RESPONSE_TOPIC;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SERVER_REFERENCE;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.TOPIC_ALIAS;
-
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
@@ -132,19 +120,18 @@ public class MQTT5MessageBuilders {
                 MqttQoS.AT_MOST_ONCE,
                 false,
                 0);
-            MqttProperties mqttProperties = new MqttProperties();
-            mqttProperties.add(new MqttProperties.StringProperty(AUTHENTICATION_METHOD.value(), authMethod));
+            MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
+            propsBuilder.addAuthMethod(authMethod);
             if (authData != null) {
-                mqttProperties.add(new MqttProperties.BinaryProperty(
-                    AUTHENTICATION_DATA.value(), authData.toByteArray()));
+                propsBuilder.addAuthData(authData);
             }
             if (!Strings.isNullOrEmpty(reasonString)) {
-                mqttProperties.add(new MqttProperties.StringProperty(
-                    MqttProperties.MqttPropertyType.REASON_STRING.value(), reasonString));
+                propsBuilder.addReasonString(reasonString);
             }
             if (userProps != null) {
-                mqttProperties.add(toMqttUserProps(userProps));
+                propsBuilder.addUserProperties(userProps);
             }
+            MqttProperties mqttProperties = propsBuilder.build();
             if (mqttProperties.isEmpty() && reasonCode == MQTT5AuthReasonCode.Success) {
                 // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the AUTH has a Remaining Length of 0
                 return new MqttMessage(fixedHeader);
@@ -182,10 +169,10 @@ public class MQTT5MessageBuilders {
         }
 
         public MqttPublishMessage build() {
-            MqttProperties mqttProps = new MqttProperties();
+            MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
             TopicFilterOption option = message.option();
             if (option.hasSubId()) {
-                mqttProps.add(new MqttProperties.IntegerProperty(SUBSCRIPTION_IDENTIFIER.value(), option.getSubId()));
+                propsBuilder.addSubscriptionIdentifier(option.getSubId());
             }
             String topicName;
             if (topicAlias > 0) {
@@ -194,35 +181,31 @@ public class MQTT5MessageBuilders {
                 } else {
                     topicName = "";
                 }
-                mqttProps.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS.value(), topicAlias));
+                propsBuilder.addTopicAlias(topicAlias);
             } else {
                 topicName = message.topic();
             }
             if (message.message().getIsUTF8String()) {
-                mqttProps.add(new MqttProperties.IntegerProperty(PAYLOAD_FORMAT_INDICATOR.value(), 1));
+                propsBuilder.addPayloadFormatIndicator(1);
             }
             if (message.message().hasContentType()) {
-                mqttProps.add(
-                    new MqttProperties.StringProperty(CONTENT_TYPE.value(), message.message().getContentType()));
+                propsBuilder.addContentType(message.message().getContentType());
             }
             if (message.message().hasCorrelationData()) {
-                mqttProps.add(new MqttProperties.BinaryProperty(CORRELATION_DATA.value(),
-                    message.message().getCorrelationData().toByteArray()));
+                propsBuilder.addCorrelationData(message.message().getCorrelationData());
             }
             if (message.message().hasResponseTopic()) {
-                mqttProps.add(
-                    new MqttProperties.StringProperty(RESPONSE_TOPIC.value(), message.message().getResponseTopic()));
+                propsBuilder.addResponseTopic(message.message().getResponseTopic());
             }
             if (message.message().getUserProperties().getUserPropertiesCount() > 0) {
-                mqttProps.add(toMqttUserProps(message.message().getUserProperties()));
+                propsBuilder.addUserProperties(message.message().getUserProperties());
             }
-
 
             MqttFixedHeader mqttFixedHeader =
                 new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.valueOf(message.qos().getNumber()),
                     message.isRetain(), 0);
             MqttPublishVariableHeader mqttVariableHeader =
-                new MqttPublishVariableHeader(topicName, packetId, mqttProps);
+                new MqttPublishVariableHeader(topicName, packetId, propsBuilder.build());
             return new MqttPublishMessage(mqttFixedHeader, mqttVariableHeader,
                 Unpooled.wrappedBuffer(message.message().getPayload().asReadOnlyByteBuffer()));
         }
@@ -267,14 +250,14 @@ public class MQTT5MessageBuilders {
                 && reasonCode == MQTT5PubAckReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
-                MqttProperties mqttProperties = new MqttProperties();
+                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
-                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                    propsBuilder.addReasonString(reasonString);
                 }
                 if (userProps != null) {
-                    mqttProperties.add(toMqttUserProps(userProps));
+                    propsBuilder.addUserProperties(userProps);
                 }
-                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());
             }
             return new MqttMessage(fixedHeader, varHeader);
         }
@@ -318,14 +301,14 @@ public class MQTT5MessageBuilders {
                 && reasonCode == MQTT5PubRecReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
-                MqttProperties mqttProperties = new MqttProperties();
+                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
-                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                    propsBuilder.addReasonString(reasonString);
                 }
                 if (userProps != null) {
-                    mqttProperties.add(toMqttUserProps(userProps));
+                    propsBuilder.addUserProperties(userProps);
                 }
-                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());
             }
             return new MqttMessage(fixedHeader, varHeader);
         }
@@ -369,14 +352,14 @@ public class MQTT5MessageBuilders {
                 && reasonCode == MQTT5PubRelReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
-                MqttProperties mqttProperties = new MqttProperties();
+                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
-                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                    propsBuilder.addReasonString(reasonString);
                 }
                 if (userProps != null) {
-                    mqttProperties.add(toMqttUserProps(userProps));
+                    propsBuilder.addUserProperties(userProps);
                 }
-                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());
             }
             return new MqttMessage(fixedHeader, varHeader);
         }
@@ -420,14 +403,14 @@ public class MQTT5MessageBuilders {
                 && reasonCode == MQTT5PubCompReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
-                MqttProperties mqttProperties = new MqttProperties();
+                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
-                    mqttProperties.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                    propsBuilder.addReasonString(reasonString);
                 }
                 if (userProps != null) {
-                    mqttProperties.add(toMqttUserProps(userProps));
+                    propsBuilder.addUserProperties(userProps);
                 }
-                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), mqttProperties);
+                varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());
             }
             return new MqttMessage(fixedHeader, varHeader);
         }
@@ -471,14 +454,14 @@ public class MQTT5MessageBuilders {
                 0);
             MqttMessageIdVariableHeader variableHeader;
             if (!Strings.isNullOrEmpty(reasonString) || userProps != null) {
-                MqttProperties mqttProps = new MqttProperties();
+                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
-                    mqttProps.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                    propsBuilder.addReasonString(reasonString);
                 }
                 if (userProps != null) {
-                    mqttProps.add(toMqttUserProps(userProps));
+                    propsBuilder.addUserProperties(userProps);
                 }
-                variableHeader = new MqttMessageIdAndPropertiesVariableHeader(packetId, mqttProps);
+                variableHeader = new MqttMessageIdAndPropertiesVariableHeader(packetId, propsBuilder.build());
             } else {
                 variableHeader = MqttMessageIdVariableHeader.from(packetId);
             }
@@ -521,18 +504,18 @@ public class MQTT5MessageBuilders {
             MqttFixedHeader fixedHeader =
                 new MqttFixedHeader(MqttMessageType.DISCONNECT, false, MqttQoS.AT_MOST_ONCE, false, 0);
             if (!Strings.isNullOrEmpty(reasonString) || userProps != null || !Strings.isNullOrEmpty(serverReference)) {
-                MqttProperties mqttProps = new MqttProperties();
+                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
-                    mqttProps.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                    propsBuilder.addReasonString(reasonString);
                 }
                 if (!Strings.isNullOrEmpty(serverReference)) {
-                    mqttProps.add(new MqttProperties.StringProperty(SERVER_REFERENCE.value(), reasonString));
+                    propsBuilder.addServerReference(serverReference);
                 }
                 if (userProps != null) {
-                    mqttProps.add(toMqttUserProps(userProps));
+                    propsBuilder.addUserProperties(userProps);
                 }
                 MqttReasonCodeAndPropertiesVariableHeader variableHeader =
-                    new MqttReasonCodeAndPropertiesVariableHeader(reasonCode.value(), mqttProps);
+                    new MqttReasonCodeAndPropertiesVariableHeader(reasonCode.value(), propsBuilder.build());
                 return new MqttMessage(fixedHeader, variableHeader);
             }
             return new MqttMessage(fixedHeader);
@@ -565,19 +548,29 @@ public class MQTT5MessageBuilders {
             return this;
         }
 
+        public UnsubAckBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public UnsubAckBuilder userProps(UserProperties userProps) {
+            this.userProps = userProps;
+            return this;
+        }
+
         public MqttUnsubAckMessage build() {
             MqttFixedHeader fixedHeader =
                 new MqttFixedHeader(MqttMessageType.UNSUBACK, false, MqttQoS.AT_MOST_ONCE, false, 0);
             MqttMessageIdVariableHeader variableHeader;
             if (!Strings.isNullOrEmpty(reasonString) || userProps != null) {
-                MqttProperties mqttProps = new MqttProperties();
+                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
-                    mqttProps.add(new MqttProperties.StringProperty(REASON_STRING.value(), reasonString));
+                    propsBuilder.addReasonString(reasonString);
                 }
                 if (userProps != null) {
-                    mqttProps.add(toMqttUserProps(userProps));
+                    propsBuilder.addUserProperties(userProps);
                 }
-                variableHeader = new MqttMessageIdAndPropertiesVariableHeader(packetId, mqttProps);
+                variableHeader = new MqttMessageIdAndPropertiesVariableHeader(packetId, propsBuilder.build());
             } else {
                 variableHeader = MqttMessageIdVariableHeader.from(packetId);
             }

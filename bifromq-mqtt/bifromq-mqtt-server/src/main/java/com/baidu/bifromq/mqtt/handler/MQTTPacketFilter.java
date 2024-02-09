@@ -20,7 +20,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 
 import com.baidu.bifromq.metrics.ITenantMeter;
-import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
+import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.OversizePacketDropped;
 import com.baidu.bifromq.type.ClientInfo;
@@ -40,6 +40,7 @@ public class MQTTPacketFilter extends ChannelOutboundHandlerAdapter {
     private final ITenantMeter tenantMeter;
     private final int maxPacketSize;
     private final boolean enableTrim;
+    private final IMQTTMessageSizer sizer;
 
     public MQTTPacketFilter(int maxPacketSize,
                             TenantSettings settings,
@@ -50,13 +51,14 @@ public class MQTTPacketFilter extends ChannelOutboundHandlerAdapter {
         this.clientInfo = clientInfo;
         this.maxPacketSize = Math.min(maxPacketSize, settings.maxPacketSize);
         this.enableTrim = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "").equals(MQTT_PROTOCOL_VER_5_VALUE);
+        this.sizer = enableTrim ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
     }
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         assert msg instanceof MqttMessage;
         MqttMessage mqttMessage = (MqttMessage) msg;
-        MQTTMessageSizer.MqttMessageSize messageSize = MQTTMessageSizer.size(mqttMessage);
+        IMQTTMessageSizer.MqttMessageSize messageSize = sizer.sizeOf(mqttMessage);
         AtomicInteger encodedBytes = new AtomicInteger(messageSize.encodedBytes());
         if (encodedBytes.get() <= maxPacketSize) {
             promise.addListener(future -> tenantMeter.recordSummary(MqttEgressBytes, encodedBytes.get()));

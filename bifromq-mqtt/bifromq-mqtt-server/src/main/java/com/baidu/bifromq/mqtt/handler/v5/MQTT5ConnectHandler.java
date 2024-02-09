@@ -23,7 +23,7 @@ import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestProblem
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestResponseInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toWillMessage;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
-import static com.baidu.bifromq.mqtt.utils.MQTTMessageSizer.MIN_CONTROL_PACKET_SIZE;
+import static com.baidu.bifromq.mqtt.utils.MQTT5MessageSizer.MIN_CONTROL_PACKET_SIZE;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
@@ -57,7 +57,7 @@ import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
-import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
+import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.Continue;
@@ -383,7 +383,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .statement("MQTT5 not enabled")
                     .clientInfo(clientInfo));
         }
-        if (MQTTMessageSizer.size(message).encodedBytes() > settings.maxPacketSize) {
+        if (IMQTTMessageSizer.mqtt5().sizeOf(message).encodedBytes() > settings.maxPacketSize) {
             return new GoAway(MqttMessageBuilders.connAck()
                 .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
                 .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
