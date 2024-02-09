@@ -22,6 +22,7 @@ import static io.netty.handler.codec.mqtt.MqttMessageType.CONNECT;
 
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3ConnectHandler;
 import com.baidu.bifromq.mqtt.handler.v5.MQTT5ConnectHandler;
+import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelError;
@@ -119,9 +120,7 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                             closeChannelWithRandomDelay(getLocal(ProtocolError.class)
                                 .statement("Too large packet")
                                 .peerAddress(remoteAddr));
-                        }
-                        // decode mqtt connect packet error
-                        if (cause instanceof MqttIdentifierRejectedException) {
+                        } else if (cause instanceof MqttIdentifierRejectedException) {
                             closeChannelWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
                                 MqttMessageBuilders.connAck()
                                     .returnCode(CONNECTION_REFUSED_IDENTIFIER_REJECTED)
@@ -143,9 +142,8 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                                         .build())
                                     .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
                                     .build());
-                        }
-                        // decode mqtt connect packet error
-                        if (cause instanceof MqttIdentifierRejectedException) {
+                        } else if (cause instanceof MqttIdentifierRejectedException) {
+                            // decode mqtt connect packet error
                             closeChannelWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
                                 MqttMessageBuilders.connAck()
                                     .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
@@ -205,9 +203,7 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
         // simple strategy: shutdown the channel directly
         log.warn("ctx: {}, cause:", ctx, cause);
         eventCollector.report(getLocal(ChannelError.class).peerAddress(remoteAddr).cause(cause));
-        if (ctx.channel().isActive()) {
-            ctx.channel().close();
-        }
+        ctx.channel().close();
     }
 
     private void closeChannelWithRandomDelay(Event<?> reason) {

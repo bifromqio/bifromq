@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.utils;
 
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3MessageBuilders;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -28,7 +29,7 @@ import io.netty.handler.codec.mqtt.MqttVersion;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class MQTT3MessageSizerTest {
+public class MQTT3MessageSizerTest extends MockableTest {
     private final IMQTTMessageSizer sizer = IMQTTMessageSizer.mqtt3();
     private EmbeddedChannel channel;
 

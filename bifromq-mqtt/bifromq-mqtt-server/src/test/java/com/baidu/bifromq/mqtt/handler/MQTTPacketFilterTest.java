@@ -89,7 +89,6 @@ public class MQTTPacketFilterTest extends MockableTest {
     @Test
     public void logEgressMetric() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
-            // 模拟MyUtility.staticMethod()方法
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
             MQTTPacketFilter testFilter =
                 new MQTTPacketFilter(150, settings, mqtt3Client, eventCollector);
@@ -109,7 +108,6 @@ public class MQTTPacketFilterTest extends MockableTest {
     @Test
     public void trimReasonStringOnly() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
-            // 模拟MyUtility.staticMethod()方法
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
             // trim is enabled for MQTT5 client
             MQTTPacketFilter testFilter =
@@ -139,7 +137,6 @@ public class MQTTPacketFilterTest extends MockableTest {
     @Test
     public void trimReasonStringAndUserProps() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
-            // 模拟MyUtility.staticMethod()方法
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
             // trim is enabled for MQTT5 client
             MQTTPacketFilter testFilter =
@@ -169,10 +166,9 @@ public class MQTTPacketFilterTest extends MockableTest {
     @Test
     public void dropUntrimableMessage() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
-            // 模拟MyUtility.staticMethod()方法
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
             MQTTPacketFilter testFilter =
-                new MQTTPacketFilter(110, settings, mqtt3Client, eventCollector);
+                new MQTTPacketFilter(108, settings, mqtt3Client, eventCollector);
             EmbeddedChannel channel = new EmbeddedChannel(testFilter);
             MqttProperties props = new MqttProperties();
             props.add(new MqttProperties.UserProperties(List.of(new MqttProperties.StringPair("key", "val"))));

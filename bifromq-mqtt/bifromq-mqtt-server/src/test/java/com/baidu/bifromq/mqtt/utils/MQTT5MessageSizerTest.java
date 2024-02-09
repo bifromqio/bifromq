@@ -17,6 +17,7 @@ import static io.netty.handler.codec.mqtt.MqttSubscriptionOption.RetainedHandlin
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
+import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageBuilders;
 import com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils;
@@ -46,7 +47,7 @@ import io.netty.handler.codec.mqtt.MqttVersion;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class MQTT5MessageSizerTest {
+public class MQTT5MessageSizerTest extends MockableTest {
     private final IMQTTMessageSizer sizer = IMQTTMessageSizer.mqtt5();
 
     private EmbeddedChannel channel;
