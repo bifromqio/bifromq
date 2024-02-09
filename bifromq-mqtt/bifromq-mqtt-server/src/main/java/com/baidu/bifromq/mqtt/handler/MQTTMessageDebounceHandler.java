@@ -41,14 +41,12 @@ public class MQTTMessageDebounceHandler extends ChannelDuplexHandler {
             MqttMessage msg;
             while ((msg = buffer.poll()) != null) {
                 ctx.fireChannelRead(msg);
-                ReferenceCountUtil.release(msg);
             }
             ctx.read();
         } else {
             MqttMessage msg = buffer.poll();
             if (msg != null) {
                 ctx.fireChannelRead(msg);
-                ReferenceCountUtil.release(msg);
             } else {
                 readOne = true;
                 ctx.read();
@@ -62,11 +60,10 @@ public class MQTTMessageDebounceHandler extends ChannelDuplexHandler {
         if (ctx.channel().config().isAutoRead()) {
             ctx.fireChannelRead(msg);
         } else {
-            buffer.offer(ReferenceCountUtil.retain((MqttMessage) msg));
+            buffer.offer((MqttMessage) msg);
             if (readOne) {
                 MqttMessage mqttMsg = buffer.poll();
                 ctx.fireChannelRead(mqttMsg);
-                ReferenceCountUtil.release(mqttMsg);
                 readOne = false;
             }
         }
