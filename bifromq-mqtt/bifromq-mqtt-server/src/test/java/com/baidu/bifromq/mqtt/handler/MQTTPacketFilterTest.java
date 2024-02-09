@@ -67,21 +67,6 @@ public class MQTTPacketFilterTest extends MockableTest {
         .build();
 
     @Test
-    public void logIngressMetric() {
-        try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
-            // 模拟MyUtility.staticMethod()方法
-            mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
-            MQTTPacketFilter testFilter =
-                new MQTTPacketFilter(10, settings, mqtt5Client, eventCollector);
-            EmbeddedChannel channel = new EmbeddedChannel(testFilter);
-            ByteBuf msg = Unpooled.wrappedBuffer(new byte[100]);
-            channel.writeInbound(msg);
-            verify(tenantMeter).recordSummary(TenantMetric.MqttIngressBytes, 100);
-            assertTrue(channel.finish());
-        }
-    }
-
-    @Test
     public void mqtt3DropPacket() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
             // 模拟MyUtility.staticMethod()方法
@@ -128,7 +113,7 @@ public class MQTTPacketFilterTest extends MockableTest {
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
             // trim is enabled for MQTT5 client
             MQTTPacketFilter testFilter =
-                new MQTTPacketFilter(10, settings, mqtt5Client, eventCollector);
+                new MQTTPacketFilter(17, settings, mqtt5Client, eventCollector);
             EmbeddedChannel channel = new EmbeddedChannel(testFilter);
             MqttProperties props = new MqttProperties();
             props.add(new MqttProperties.UserProperties(List.of(new MqttProperties.StringPair("key", "val"))));

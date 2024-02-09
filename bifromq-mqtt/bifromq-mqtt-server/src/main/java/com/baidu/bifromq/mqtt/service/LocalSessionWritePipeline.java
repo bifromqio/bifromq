@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt.service;
 
+import static java.util.Collections.singletonList;
+
 import com.baidu.bifromq.baserpc.ResponsePipeline;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
@@ -22,9 +24,7 @@ import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,17 +47,19 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
         WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
         Set<SubInfo> ok = new HashSet<>();
         Set<SubInfo> noSub = new HashSet<>();
-        Map<IMQTTTransientSession, Map<SubInfo, List<TopicMessagePack>>> deliveryMap = new HashMap<>();
         for (WritePack writePack : request.getPackList()) {
             TopicMessagePack topicMsgPack = writePack.getMessagePack();
             List<SubInfo> subInfos = writePack.getSubscriberList();
             for (SubInfo subInfo : subInfos) {
-                if (!noSub.contains(subInfo)) {
+                if (!noSub.contains(subInfo) && !ok.contains(subInfo)) {
                     IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
                     if (session != null) {
-                        deliveryMap.computeIfAbsent(session, k -> new HashMap<>())
-                            .computeIfAbsent(subInfo, k -> new LinkedList<>())
-                            .add(topicMsgPack);
+                        boolean success = session.publish(subInfo, singletonList(topicMsgPack));
+                        if (success) {
+                            ok.add(subInfo);
+                        } else {
+                            noSub.add(subInfo);
+                        }
                     } else {
                         // no session found for the subscription
                         noSub.add(subInfo);
@@ -65,17 +67,6 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
                 }
             }
         }
-        deliveryMap.forEach((session, subMsgPacks) -> {
-            for (SubInfo subInfo : subMsgPacks.keySet()) {
-                boolean succeed = session.publish(subInfo, subMsgPacks.get(subInfo));
-                if (succeed) {
-                    ok.add(subInfo);
-                } else {
-                    // no sub found in session
-                    noSub.add(subInfo);
-                }
-            }
-        });
         ok.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
             .setSubInfo(subInfo)
             .setResult(WriteResult.Result.OK)

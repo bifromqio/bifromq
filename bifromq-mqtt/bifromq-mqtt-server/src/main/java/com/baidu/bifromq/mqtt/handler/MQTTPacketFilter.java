@@ -14,7 +14,6 @@
 package com.baidu.bifromq.mqtt.handler;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttEgressBytes;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressBytes;
 import static com.baidu.bifromq.mqtt.utils.MQTTMessageTrimmer.trim;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
@@ -25,9 +24,8 @@ import com.baidu.bifromq.mqtt.utils.MQTTMessageSizer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.OversizePacketDropped;
 import com.baidu.bifromq.type.ClientInfo;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * The packet filter is a duplex handler, MUST be configured after MqttEncoder and before MqttDecoder
  */
-public class MQTTPacketFilter extends ChannelDuplexHandler {
+public class MQTTPacketFilter extends ChannelOutboundHandlerAdapter {
     public static final String NAME = "MQTT5SizeBasedPacketFilter";
     private final ClientInfo clientInfo;
     private final IEventCollector eventCollector;
@@ -52,14 +50,6 @@ public class MQTTPacketFilter extends ChannelDuplexHandler {
         this.clientInfo = clientInfo;
         this.maxPacketSize = Math.min(maxPacketSize, settings.maxPacketSize);
         this.enableTrim = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "").equals(MQTT_PROTOCOL_VER_5_VALUE);
-    }
-
-    @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (msg instanceof ByteBuf) {
-            tenantMeter.recordSummary(MqttIngressBytes, ((ByteBuf) msg).readableBytes());
-        }
-        super.channelRead(ctx, msg);
     }
 
     @Override

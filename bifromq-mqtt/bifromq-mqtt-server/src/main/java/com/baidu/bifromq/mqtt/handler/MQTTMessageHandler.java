@@ -60,7 +60,6 @@ public abstract class MQTTMessageHandler extends ChannelDuplexHandler {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // To ensure we not miss to flush anything, do it now.
         flushIfNeeded(ctx);
-        ctx.fireExceptionCaught(cause);
     }
 
     @Override

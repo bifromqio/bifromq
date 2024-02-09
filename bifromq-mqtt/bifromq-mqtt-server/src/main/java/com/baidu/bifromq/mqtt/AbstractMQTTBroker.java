@@ -21,6 +21,7 @@ import com.baidu.bifromq.mqtt.handler.ClientAddrHandler;
 import com.baidu.bifromq.mqtt.handler.ConnectionRateLimitHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
+import com.baidu.bifromq.mqtt.handler.SlowDownOnMemPressureHandler;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
@@ -164,9 +165,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("trafficShaper",
                     new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                 pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
-                // insert PacketFilter between Encoder and Decoder
+                // insert PacketFilter here
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                pipeline.addLast(SlowDownOnMemPressureHandler.NAME, new SlowDownOnMemPressureHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
@@ -182,9 +184,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("trafficShaper",
                     new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                 pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
-                // insert PacketFilter between Encoder and Decoder
+                // insert PacketFilter here
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                pipeline.addLast(SlowDownOnMemPressureHandler.NAME, new SlowDownOnMemPressureHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
@@ -207,9 +210,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
                 pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
                 pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
-                // insert PacketFilter between Encoder and Decoder
+                // insert PacketFilter here
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                pipeline.addLast(SlowDownOnMemPressureHandler.NAME, new SlowDownOnMemPressureHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
@@ -233,9 +237,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
                 pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
                 pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
-                // insert PacketFilter between Encoder and Decoder
+                // insert PacketFilter between Encoder
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                pipeline.addLast(SlowDownOnMemPressureHandler.NAME, new SlowDownOnMemPressureHandler());
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });

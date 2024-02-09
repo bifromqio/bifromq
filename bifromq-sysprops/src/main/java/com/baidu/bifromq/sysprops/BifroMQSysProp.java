@@ -24,6 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public enum BifroMQSysProp {
+    INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE("ingress_slowdown_direct_memory_usage", 0.8,
+        DoubleParser.from(0.1, 1.0, false)),
     // further check if utf8 string contains any control character or non character according to [MQTT-1.5.3]
     MQTT_UTF8_SANITY_CHECK("mqtt_utf8_sanity_check", false, BooleanParser.INSTANCE),
     MAX_MQTT3_CLIENT_ID_LENGTH("max_mqtt3_client_id_length", 65535, IntegerParser.from(23, 65536)),

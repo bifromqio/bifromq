@@ -229,45 +229,44 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, subQoS))
             .thenAcceptAsync(checkResult -> {
                 if (checkResult.hasGranted()) {
-                    forEach(topicFilter, option, topicMsgPacks, this::logInternalLatency);
-                    if (!ctx.channel().isActive()) {
-                        forEach(topicFilter, option, topicMsgPacks,
-                            bufferMsg -> reportDropEvent(bufferMsg, DropReason.ChannelClosed));
-                    } else {
-                        forEach(topicFilter, option, topicMsgPacks, subMsg -> {
-                            if (option.getNoLocal() && clientInfo.equals(subMsg.publisher())) {
-                                // skip local sub
-                                if (settings.debugMode) {
-                                    reportDropEvent(subMsg, DropReason.NoLocal);
-                                }
-                                return;
+                    forEach(topicFilter, option, topicMsgPacks, subMsg -> {
+                        logInternalLatency(subMsg);
+                        if (!ctx.channel().isActive()) {
+                            reportDropEvent(subMsg, DropReason.ChannelClosed);
+                            return;
+                        }
+                        if (option.getNoLocal() && clientInfo.equals(subMsg.publisher())) {
+                            // skip local sub
+                            if (settings.debugMode) {
+                                reportDropEvent(subMsg, DropReason.NoLocal);
                             }
-                            if (subMsg.qos() == QoS.AT_MOST_ONCE) {
-                                if (ctx.channel().isWritable()) {
-                                    // drop qos0 message if channel is not writable
-                                    sendQoS0SubMessage(subMsg);
-                                    if (settings.debugMode) {
-                                        eventCollector.report(getLocal(QoS0Pushed.class)
-                                            .reqId(subMsg.message().getMessageId())
-                                            .isRetain(subMsg.isRetain())
-                                            .sender(subMsg.publisher())
-                                            .topic(subMsg.topic())
-                                            .matchedFilter(subMsg.topicFilter())
-                                            .size(subMsg.message().getPayload().size())
-                                            .clientInfo(clientInfo()));
-                                    }
-                                } else {
-                                    reportDropEvent(subMsg, DropReason.Overflow);
+                            return;
+                        }
+                        if (subMsg.qos() == QoS.AT_MOST_ONCE) {
+                            if (ctx.channel().isWritable()) {
+                                // drop qos0 message if channel is not writable
+                                sendQoS0SubMessage(subMsg);
+                                if (settings.debugMode) {
+                                    eventCollector.report(getLocal(QoS0Pushed.class)
+                                        .reqId(subMsg.message().getMessageId())
+                                        .isRetain(subMsg.isRetain())
+                                        .sender(subMsg.publisher())
+                                        .topic(subMsg.topic())
+                                        .matchedFilter(subMsg.topicFilter())
+                                        .size(subMsg.message().getPayload().size())
+                                        .clientInfo(clientInfo()));
                                 }
                             } else {
-                                if (inbox.size() >= settings.inboxQueueLength) {
-                                    reportDropEvent(subMsg, DropReason.Overflow);
-                                    return;
-                                }
-                                inbox.put(msgSeqNo++, subMsg);
+                                reportDropEvent(subMsg, DropReason.Overflow);
                             }
-                        });
-                    }
+                        } else {
+                            if (inbox.size() >= settings.inboxQueueLength) {
+                                reportDropEvent(subMsg, DropReason.Overflow);
+                                return;
+                            }
+                            inbox.put(msgSeqNo++, subMsg);
+                        }
+                    });
                     drainInbox();
                     flush(true);
                 } else {
@@ -299,7 +298,6 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             case AT_LEAST_ONCE -> tenantMeter.timer(MqttQoS1InternalLatency);
             default -> tenantMeter.timer(MqttQoS2InternalLatency);
         }).record(HLC.INST.getPhysical() - message.message().getTimestamp(), TimeUnit.MILLISECONDS);
-
     }
 
     private void reportDropEvent(SubMessage subMsg, DropReason reason) {

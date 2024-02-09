@@ -27,6 +27,15 @@ public class MQTTMessageDebounceHandler extends ChannelDuplexHandler {
     private boolean readOne = false;
 
     @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        MqttMessage msg;
+        while ((msg = buffer.poll()) != null) {
+            ReferenceCountUtil.release(msg);
+        }
+        super.channelInactive(ctx);
+    }
+
+    @Override
     public void read(ChannelHandlerContext ctx) {
         if (ctx.channel().config().isAutoRead()) {
             MqttMessage msg;
