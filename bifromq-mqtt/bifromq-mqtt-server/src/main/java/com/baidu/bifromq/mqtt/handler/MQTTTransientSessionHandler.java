@@ -51,7 +51,6 @@ import com.baidu.bifromq.type.UserProperties;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +59,7 @@ import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
@@ -67,7 +67,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler implements IMQTTTransientSession {
-    private final Map<String, TopicFilterOption> topicFilters = new HashMap<>();
+    // the topicFilters could be accessed concurrently
+    private final Map<String, TopicFilterOption> topicFilters = new ConcurrentHashMap<>();
     private final NavigableMap<Long, SubMessage> inbox = new TreeMap<>();
     private long nextSendSeq = 0;
     private long msgSeqNo = 0;

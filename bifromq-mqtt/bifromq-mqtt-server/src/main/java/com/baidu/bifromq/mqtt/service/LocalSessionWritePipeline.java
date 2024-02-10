@@ -51,7 +51,7 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
             TopicMessagePack topicMsgPack = writePack.getMessagePack();
             List<SubInfo> subInfos = writePack.getSubscriberList();
             for (SubInfo subInfo : subInfos) {
-                if (!noSub.contains(subInfo) && !ok.contains(subInfo)) {
+                if (!noSub.contains(subInfo)) {
                     IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
                     if (session != null) {
                         boolean success = session.publish(subInfo, singletonList(topicMsgPack));
