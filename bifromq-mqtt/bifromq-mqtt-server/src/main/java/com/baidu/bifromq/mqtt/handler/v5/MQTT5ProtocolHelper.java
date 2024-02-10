@@ -466,7 +466,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ProtocolResponse respondReceivingMaximumExceeded() {
+    public ProtocolResponse respondReceivingMaximumExceeded(MqttPublishMessage message) {
         return farewell(
             MQTT5MessageBuilders.disconnect()
                 .reasonCode(MQTT5DisconnectReasonCode.ReceiveMaximumExceeded)
@@ -475,7 +475,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ProtocolResponse respondPubRateExceeded() {
+    public ProtocolResponse respondPubRateExceeded(MqttPublishMessage message) {
         return farewell(
             MQTT5MessageBuilders.disconnect()
                 .reasonCode(MQTT5DisconnectReasonCode.MessageRateToHigh)

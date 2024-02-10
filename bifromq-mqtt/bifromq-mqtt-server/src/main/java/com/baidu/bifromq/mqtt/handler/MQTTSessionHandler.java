@@ -323,11 +323,11 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private void handlePubMsg(MqttPublishMessage mqttMessage) {
 
         if (isExceedReceivingMaximum()) {
-            handleProtocolResponse(helper().respondReceivingMaximumExceeded());
+            handleProtocolResponse(helper().respondReceivingMaximumExceeded(mqttMessage));
             mqttMessage.release();
         }
         if (!throttler.pass()) {
-            handleProtocolResponse(helper().respondPubRateExceeded());
+            handleProtocolResponse(helper().respondPubRateExceeded(mqttMessage));
             mqttMessage.release();
             return;
         }

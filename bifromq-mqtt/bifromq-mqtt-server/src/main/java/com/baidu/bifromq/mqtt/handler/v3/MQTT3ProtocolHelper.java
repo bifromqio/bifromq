@@ -31,8 +31,6 @@ import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedPubRate;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedReceivingLimit;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Idle;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
@@ -43,6 +41,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPub
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeUnsubscription;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.Discard;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -259,14 +258,25 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ProtocolResponse respondReceivingMaximumExceeded() {
-        return responseNothing(
-            getLocal(ExceedReceivingLimit.class).limit(settings.receiveMaximum).clientInfo(clientInfo));
+    public ProtocolResponse respondReceivingMaximumExceeded(MqttPublishMessage message) {
+        return responseNothing(getLocal(Discard.class)
+            .rateLimit(settings.maxMsgPerSec)
+            .reqId(message.variableHeader().packetId())
+            .qos(QoS.forNumber(message.fixedHeader().qosLevel().value()))
+            .topic(message.variableHeader().topicName())
+            .size(message.payload().readableBytes())
+            .clientInfo(clientInfo));
     }
 
     @Override
-    public ProtocolResponse respondPubRateExceeded() {
-        return responseNothing(getLocal(ExceedPubRate.class).limit(settings.maxMsgPerSec).clientInfo(clientInfo));
+    public ProtocolResponse respondPubRateExceeded(MqttPublishMessage message) {
+        return responseNothing(getLocal(Discard.class)
+            .rateLimit(settings.maxMsgPerSec)
+            .reqId(message.variableHeader().packetId())
+            .qos(QoS.forNumber(message.fixedHeader().qosLevel().value()))
+            .topic(message.variableHeader().topicName())
+            .size(message.payload().readableBytes())
+            .clientInfo(clientInfo));
     }
 
     @Override

@@ -29,12 +29,16 @@ public final class EventLogger implements IEventCollector {
     public void report(Event<?> event) {
         if (LOG.isDebugEnabled()) {
             switch (event.type()) {
-                case QOS0_DIST_ERROR,
+                case DISCARD,
+                    QOS0_DIST_ERROR,
                     QOS1_DIST_ERROR,
                     QOS2_DIST_ERROR,
                     DIST_ERROR,
                     OVERFLOWED,
+                    QOS0_DROPPED,
                     QOS1_DROPPED,
+                    QOS2_DROPPED,
+                    OVERSIZE_PACKET_DROPPED,
                     DELIVER_ERROR -> LOG.debug("Message dropped due to {}", event.type());
                 default -> {
                     if (event instanceof ChannelClosedEvent || event instanceof ClientDisconnectEvent) {

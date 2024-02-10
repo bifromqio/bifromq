@@ -105,9 +105,9 @@ public interface IMQTTProtocolHelper {
 
     MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message);
 
-    ProtocolResponse respondReceivingMaximumExceeded();
+    ProtocolResponse respondReceivingMaximumExceeded(MqttPublishMessage mqttMessage);
 
-    ProtocolResponse respondPubRateExceeded();
+    ProtocolResponse respondPubRateExceeded(MqttPublishMessage mqttMessage);
 
     ProtocolResponse validatePubMessage(MqttPublishMessage message);
 
