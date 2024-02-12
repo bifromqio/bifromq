@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.plugin.subbroker;
 
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -37,10 +37,10 @@ class NoInboxSubBroker implements ISubBroker {
     public IDeliverer open(String delivererKey) {
         return new IDeliverer() {
             @Override
-            public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
-                Map<SubInfo, DeliveryResult> deliveryResults = new HashMap<>();
+            public CompletableFuture<Map<MatchInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
+                Map<MatchInfo, DeliveryResult> deliveryResults = new HashMap<>();
                 for (DeliveryPack pack : packs) {
-                    pack.inboxes.forEach(subInfo -> deliveryResults.put(subInfo, DeliveryResult.NO_INBOX));
+                    pack.matchInfos.forEach(subInfo -> deliveryResults.put(subInfo, DeliveryResult.NO_INBOX));
                 }
                 return CompletableFuture.completedFuture(deliveryResults);
             }

@@ -13,10 +13,23 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
+import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 abstract class AbstractSessionDictServerBuilder<T extends AbstractSessionDictServerBuilder<T>>
     implements ISessionDictServerBuilder {
+    IMqttBrokerClient mqttBrokerClient;
+
+    public T mqttBrokerClient(IMqttBrokerClient mqttBrokerClient) {
+        this.mqttBrokerClient = mqttBrokerClient;
+        return thisT();
+    }
+
+    @SuppressWarnings("unchecked")
+    private T thisT() {
+        return (T) this;
+    }
 }

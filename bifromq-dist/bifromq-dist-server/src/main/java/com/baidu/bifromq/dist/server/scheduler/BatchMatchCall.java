@@ -45,10 +45,10 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
         while (reqIterator.hasNext()) {
             MatchRequest subCall = reqIterator.next();
             String qInboxId =
-                toQInboxId(subCall.getBroker(), subCall.getInboxId(), subCall.getDelivererKey());
+                toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
             String scopedTopicFilter =
                 toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
-            reqBuilder.putScopedTopicFilter(scopedTopicFilter, subCall.getSubQoS());
+            reqBuilder.addScopedTopicFilter(scopedTopicFilter);
         }
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
@@ -72,7 +72,7 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
         while ((callTask = batchedTasks.poll()) != null) {
             BatchMatchReply reply = output.getDistService().getBatchMatch();
             MatchRequest subCall = callTask.call;
-            String qInboxId = toQInboxId(subCall.getBroker(), subCall.getInboxId(), subCall.getDelivererKey());
+            String qInboxId = toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
             String scopedTopicFilter = toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
             BatchMatchReply.Result result = reply.getResultsOrDefault(scopedTopicFilter, BatchMatchReply.Result.ERROR);
             callTask.callResult.complete(MatchReply.newBuilder()

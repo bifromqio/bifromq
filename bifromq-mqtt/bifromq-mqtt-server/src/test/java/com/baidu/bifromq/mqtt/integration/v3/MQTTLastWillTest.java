@@ -11,60 +11,47 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.v3;
+package com.baidu.bifromq.mqtt.integration.v3;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
-import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
+import com.baidu.bifromq.mqtt.integration.MQTTTest;
+import com.baidu.bifromq.mqtt.integration.v3.client.MqttMsg;
+import com.baidu.bifromq.mqtt.integration.v3.client.MqttTestClient;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
-import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.Event;
-import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class MQTTLastWillTest {
-    private final MQTTTest mqttTest = MQTTTest.getInstance();
-    private final String tenantId = "testLastWillTraffic";
-
-    @AfterClass(alwaysRun = true)
-    public void resetMocks() {
-        reset(mqttTest.authProvider, mqttTest.eventCollector);
-        clearInvocations(mqttTest.eventCollector);
-    }
-
+public class MQTTLastWillTest extends MQTTTest {
     @Test(groups = "integration")
     public void lastWillQoS1() {
         String deviceKey = "testDevice";
         String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
-        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
+        when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.checkPermission(any(), any()))
+        when(authProvider.checkPermission(any(), any()))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
@@ -74,20 +61,19 @@ public class MQTTLastWillTest {
         lwtPubConnOpts.setCleanSession(true);
         lwtPubConnOpts.setWill(willTopic, willPayload.toByteArray(), 1, false);
         lwtPubConnOpts.setUserName(userName);
-        MqttTestClient lwtPubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtPubclient");
+        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);
         lwtSubConnOpts.setUserName(userName);
 
-        MqttTestClient lwtSubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtSubClient");
+        MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
 
         log.info("Kill client");
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        kill(deviceKey, "lwtPubclient").join();
 
         MqttMsg msg = topicSub.blockingFirst();
         assertEquals(msg.topic, willTopic);
@@ -102,14 +88,14 @@ public class MQTTLastWillTest {
         String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
-        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
+        when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.checkPermission(any(), any()))
+        when(authProvider.checkPermission(any(), any()))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
@@ -119,22 +105,21 @@ public class MQTTLastWillTest {
             Event event = invocationOnMock.getArgument(0);
             log.info("event: {}", event.type());
             return null;
-        }).when(mqttTest.eventCollector).report(any(Event.class));
+        }).when(eventCollector).report(any(Event.class));
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);
         lwtPubConnOpts.setWill(willTopic, willPayload.toByteArray(), 1, true);
         lwtPubConnOpts.setUserName(userName);
-        MqttTestClient lwtPubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtPubclient");
+        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        kill(deviceKey, "lwtPubclient").join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);
         lwtSubConnOpts.setUserName(userName);
 
-        MqttTestClient lwtSubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtSubClient");
+        MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
 
@@ -155,14 +140,14 @@ public class MQTTLastWillTest {
         String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
-        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
+        when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.checkPermission(any(), any()))
+        when(authProvider.checkPermission(any(), any()))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
@@ -172,25 +157,24 @@ public class MQTTLastWillTest {
             Event event = invocationOnMock.getArgument(0);
             log.info("event: {}", event.type());
             return null;
-        }).when(mqttTest.eventCollector).report(any(Event.class));
+        }).when(eventCollector).report(any(Event.class));
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);
         lwtPubConnOpts.setWill(willTopic, willPayload.toByteArray(), 2, false);
         lwtPubConnOpts.setUserName(userName);
-        MqttTestClient lwtPubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtPubclient");
+        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);
         lwtSubConnOpts.setUserName(userName);
 
-        MqttTestClient lwtSubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtSubClient");
+        MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2);
 
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        kill(deviceKey, "lwtPubclient").join();
 
         MqttMsg msg = topicSub.blockingFirst();
         assertEquals(msg.topic, willTopic);
@@ -205,14 +189,14 @@ public class MQTTLastWillTest {
         String userName = tenantId + "/" + deviceKey;
         String willTopic = "willTopic";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
-        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
+        when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.checkPermission(any(), any()))
+        when(authProvider.checkPermission(any(), any()))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
@@ -222,16 +206,15 @@ public class MQTTLastWillTest {
         lwtPubConnOpts.setCleanSession(true);
         lwtPubConnOpts.setWill(willTopic, willPayload.toByteArray(), 2, true);
         lwtPubConnOpts.setUserName(userName);
-        MqttTestClient lwtPubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtPubclient");
+        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
-        mqttTest.sessionDictClient.kill(System.nanoTime(), tenantId, deviceKey,
-            "lwtPubclient", ClientInfo.getDefaultInstance()).join();
+        kill(deviceKey, "lwtPubclient").join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
         lwtSubConnOpts.setCleanSession(true);
         lwtSubConnOpts.setUserName(userName);
 
-        MqttTestClient lwtSubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtSubClient");
+        MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
         Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2);
 

@@ -109,7 +109,7 @@ public class MQTT5MessageSizerTest extends MockableTest {
 
     @Test
     public void testPubAck() {
-        MqttMessage message = MQTT5MessageBuilders.pubAck()
+        MqttMessage message = MQTT5MessageBuilders.pubAck(true)
             .packetId(1)
             .reasonCode(MQTT5PubAckReasonCode.Success)
             .reasonString("reasonString")
@@ -121,7 +121,7 @@ public class MQTT5MessageSizerTest extends MockableTest {
                 .build())
             .build();
         verifySize(message);
-        message = MQTT5MessageBuilders.pubAck()
+        message = MQTT5MessageBuilders.pubAck(true)
             .packetId(1)
             .reasonCode(MQTT5PubAckReasonCode.Success)
             .build();
@@ -130,13 +130,13 @@ public class MQTT5MessageSizerTest extends MockableTest {
 
     @Test
     public void testPubRec() {
-        MqttMessage message = MQTT5MessageBuilders.pubRec()
+        MqttMessage message = MQTT5MessageBuilders.pubRec(true)
             .packetId(1)
             .reasonCode(MQTT5PubRecReasonCode.Success)
             .reasonString("reasonString")
             .build();
         verifySize(message);
-        message = MQTT5MessageBuilders.pubRec()
+        message = MQTT5MessageBuilders.pubRec(true)
             .packetId(1)
             .reasonCode(MQTT5PubRecReasonCode.Success)
             .build();
@@ -145,13 +145,13 @@ public class MQTT5MessageSizerTest extends MockableTest {
 
     @Test
     public void testPubRel() {
-        MqttMessage message = MQTT5MessageBuilders.pubRel()
+        MqttMessage message = MQTT5MessageBuilders.pubRel(true)
             .packetId(1)
             .reasonCode(MQTT5PubRelReasonCode.Success)
             .reasonString("reasonString")
             .build();
         verifySize(message);
-        message = MQTT5MessageBuilders.pubRel()
+        message = MQTT5MessageBuilders.pubRel(true)
             .packetId(1)
             .reasonCode(MQTT5PubRelReasonCode.Success)
             .build();
@@ -160,13 +160,13 @@ public class MQTT5MessageSizerTest extends MockableTest {
 
     @Test
     public void testPubComp() {
-        MqttMessage message = MQTT5MessageBuilders.pubComp()
+        MqttMessage message = MQTT5MessageBuilders.pubComp(true)
             .packetId(1)
             .reasonCode(MQTT5PubCompReasonCode.Success)
             .reasonString("reasonString")
             .build();
         verifySize(message);
-        message = MQTT5MessageBuilders.pubComp()
+        message = MQTT5MessageBuilders.pubComp(true)
             .packetId(1)
             .reasonCode(MQTT5PubCompReasonCode.Success)
             .build();

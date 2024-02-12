@@ -50,7 +50,7 @@ public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, Matc
     }
 
     protected ByteString rangeKey(MatchRequest call) {
-        String qInboxId = toQInboxId(call.getBroker(), call.getInboxId(), call.getDelivererKey());
+        String qInboxId = toQInboxId(call.getBrokerId(), call.getReceiverId(), call.getDelivererKey());
         return toMatchRecordKey(call.getTenantId(), call.getTopicFilter(), qInboxId);
     }
 

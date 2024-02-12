@@ -18,10 +18,10 @@ import static com.baidu.bifromq.dist.util.TopicUtil.TOPIC_SEPARATOR;
 import static com.baidu.bifromq.dist.util.TopicUtil.UNORDERED_SHARE;
 import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
 
-import com.baidu.bifromq.type.QoS;
+import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.EqualsAndHashCode;
 
@@ -32,17 +32,16 @@ public class GroupMatching extends Matching {
     @EqualsAndHashCode.Exclude
     public final boolean ordered;
     @EqualsAndHashCode.Exclude
-    public final List<NormalMatching> inboxList;
+    public final List<NormalMatching> receiverList;
 
-    public final Map<String, QoS> inboxMap;
-
+    public final List<String> receiverIds;
     private final String origTopicFilter;
 
-    GroupMatching(ByteString key, String group, boolean ordered, Map<String, QoS> inboxes) {
+    GroupMatching(ByteString key, String group, boolean ordered, List<String> scopedReceiverIds) {
         super(key);
         this.group = group;
         this.ordered = ordered;
-        this.inboxMap = inboxes;
+        this.receiverIds = scopedReceiverIds;
         if (ordered) {
             origTopicFilter =
                 ORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + unescape(escapedTopicFilter);
@@ -50,8 +49,8 @@ public class GroupMatching extends Matching {
             origTopicFilter =
                 UNORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + unescape(escapedTopicFilter);
         }
-        this.inboxList = inboxes.entrySet().stream()
-            .map(e -> new NormalMatching(key, origTopicFilter, e.getKey(), e.getValue()))
+        this.receiverList = Sets.newLinkedHashSet(scopedReceiverIds).stream()
+            .map(receiverId -> new NormalMatching(key, origTopicFilter, receiverId))
             .collect(Collectors.toList());
     }
 

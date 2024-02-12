@@ -14,8 +14,11 @@
 package com.baidu.bifromq.sessiondict;
 
 import com.baidu.bifromq.baserpc.BluePrint;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
+import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest;
 
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
@@ -25,5 +28,14 @@ public class RPCBluePrint {
             BluePrint.WCHUnaryMethod.<KillRequest>builder()
                 .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))
                 .build())
+        .methodSemantic(SessionDictServiceGrpc.getGetMethod(), BluePrint.WCHUnaryMethod.<GetRequest>builder()
+            .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))
+            .build())
+        .methodSemantic(SessionDictServiceGrpc.getSubMethod(), BluePrint.WCHUnaryMethod.<SubRequest>builder()
+            .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))
+            .build())
+        .methodSemantic(SessionDictServiceGrpc.getUnsubMethod(), BluePrint.WCHUnaryMethod.<UnsubRequest>builder()
+            .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))
+            .build())
         .build();
 }

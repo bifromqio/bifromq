@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.plugin.subbroker;
 
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.google.common.base.Preconditions;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
@@ -69,7 +69,7 @@ final class MonitoredSubBroker implements ISubBroker {
         }
 
         @Override
-        public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
+        public CompletableFuture<Map<MatchInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
             try {
                 Timer.Sample start = Timer.start();
                 return deliverer.deliver(packs).whenComplete((v, e) -> start.stop(deliverCallTimer));

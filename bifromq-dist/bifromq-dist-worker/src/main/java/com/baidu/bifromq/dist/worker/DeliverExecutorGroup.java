@@ -103,8 +103,8 @@ class DeliverExecutorGroup {
                 GroupMatching groupMatching = (GroupMatching) matching;
                 if (!groupMatching.ordered) {
                     // pick one route randomly
-                    send(groupMatching.inboxList.get(
-                        ThreadLocalRandom.current().nextInt(groupMatching.inboxList.size())), msgPack);
+                    send(groupMatching.receiverList.get(
+                        ThreadLocalRandom.current().nextInt(groupMatching.receiverList.size())), msgPack);
                 } else {
                     // ordered shared subscription
                     Map<NormalMatching, TopicMessagePack.Builder> orderedRoutes = new HashMap<>();
@@ -118,7 +118,7 @@ class DeliverExecutorGroup {
                                         (from, into) -> into.putInt(from.hashCode()),
                                         (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
                                         Comparator.comparing(a -> a.scopedInboxId));
-                                groupMatching.inboxList.forEach(hash::add);
+                                groupMatching.receiverList.forEach(hash::add);
                                 return hash.get(k);
                             });
                         // ordered share sub

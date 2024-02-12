@@ -32,6 +32,7 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2ExternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2IngressBytes;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.packetId;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.messageExpiryInterval;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildPubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildUnsubAction;
@@ -53,10 +54,11 @@ import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
+import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
-import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.Event;
@@ -77,6 +79,8 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubRe
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubReced;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDisted;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Pushed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Confirmed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Pushed;
@@ -95,6 +99,7 @@ import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
+import com.baidu.bifromq.util.UTF8Util;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelFutureListener;
@@ -104,6 +109,7 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttPubAckMessage;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
+import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
@@ -224,6 +230,22 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         return bgTasks.whenComplete((v, e) -> log.trace("All bg tasks finished: client={}", clientInfo));
     }
 
+    @Override
+    public final CompletableFuture<SubReply.Result> subscribe(long reqId, String topicFilter, QoS qos) {
+        return CompletableFuture.completedFuture(true)
+            .thenComposeAsync(v -> checkAndSubscribe(reqId, topicFilter, TopicFilterOption.newBuilder()
+                .setQos(qos)
+                .build(), UserProperties.getDefaultInstance())
+                .thenApply(subResult -> SubReply.Result.forNumber(subResult.ordinal())), ctx.executor());
+    }
+
+    @Override
+    public final CompletableFuture<UnsubReply.Result> unsubscribe(long reqId, String topicFilter) {
+        return CompletableFuture.completedFuture(true)
+            .thenComposeAsync(v -> checkAndUnsubscribe(reqId, topicFilter, UserProperties.getDefaultInstance())
+                .thenApply(unsubResult -> UnsubReply.Result.forNumber(unsubResult.ordinal())), ctx.executor());
+    }
+
     protected final LWT willMessage() {
         return willMessage;
     }
@@ -238,7 +260,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     protected final <T> CompletableFuture<T> addBgTask(CompletableFuture<T> task) {
-        return bgTasks.track(task);
+        return bgTasks.track(sessionCtx.trackBgTask(task));
     }
 
     @Override
@@ -388,7 +410,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                                                        String topicFilter,
                                                                                        TopicFilterOption option,
                                                                                        UserProperties userProps) {
-        if (!MQTTUtf8Util.isWellFormed(topicFilter, SANITY_CHECK)) {
+        if (!UTF8Util.isWellFormed(topicFilter, SANITY_CHECK)) {
             eventCollector.report(getLocal(MalformedTopicFilter.class)
                 .topicFilter(topicFilter)
                 .clientInfo(clientInfo));
@@ -642,8 +664,23 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     private void sendMqttPubMessage(long seq, SubMessage msg, String topicFilter, ClientInfo publisher) {
         MqttPublishMessage pubMsg = helper().buildMqttPubMessage(packetId(seq), msg);
+        if (messageExpiryInterval(pubMsg.variableHeader().properties()).orElse(Integer.MAX_VALUE) < 0) {
+            //  If the Message Expiry Interval has passed and the Server has not managed to start onward delivery to a matching subscriber, then it MUST delete the copy of the message for that subscriber [MQTT-3.3.2-5]
+            return;
+        }
         Timer.Sample start = Timer.start();
         int msgSize = sizer.sizeOf(pubMsg).encodedBytes();
+        if (!ctx.channel().isWritable() && pubMsg.fixedHeader().qosLevel() == MqttQoS.AT_MOST_ONCE) {
+            eventCollector.report(getLocal(QoS0Dropped.class)
+                .reason(DropReason.Overflow)
+                .isRetain(false)
+                .sender(publisher)
+                .topic(msg.topic)
+                .matchedFilter(topicFilter)
+                .size(msgSize)
+                .clientInfo(clientInfo()));
+            return;
+        }
         ctx.write(pubMsg).addListener(f -> {
             if (f.isSuccess()) {
                 switch (pubMsg.fixedHeader().qosLevel()) {

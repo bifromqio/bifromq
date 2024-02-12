@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import com.baidu.bifromq.mqtt.session.IMQTTSession;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,12 +22,7 @@ abstract class AbstractLocalSessionServer<T extends AbstractLocalSessionServerBu
     protected final LocalSessionBrokerService service;
 
     public AbstractLocalSessionServer(T builder) {
-        service = new LocalSessionBrokerService();
-    }
-
-    @Override
-    public CompletableFuture<Void> disconnectAll(int disconnectRate) {
-        return service.disconnectAll(disconnectRate);
+        service = new LocalSessionBrokerService(builder.sessionRegistry, builder.distService);
     }
 
     protected void afterServiceStart() {
@@ -49,20 +41,5 @@ abstract class AbstractLocalSessionServer<T extends AbstractLocalSessionServerBu
     public void shutdown() {
         beforeServiceStop();
         service.close();
-    }
-
-    @Override
-    public final void add(String sessionId, IMQTTSession session) {
-        service.reg(sessionId, session);
-    }
-
-    @Override
-    public final boolean remove(String sessionId, IMQTTSession session) {
-        return service.unreg(sessionId, session);
-    }
-
-    @Override
-    public final List<IMQTTSession> removeAll() {
-        throw new UnsupportedOperationException("Unimplemented");
     }
 }

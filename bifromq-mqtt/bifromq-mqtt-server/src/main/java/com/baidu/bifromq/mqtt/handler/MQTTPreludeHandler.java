@@ -22,7 +22,7 @@ import static io.netty.handler.codec.mqtt.MqttMessageType.CONNECT;
 
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3ConnectHandler;
 import com.baidu.bifromq.mqtt.handler.v5.MQTT5ConnectHandler;
-import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageBuilders;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelError;
@@ -137,7 +137,7 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                                     .statement("Too large packet")
                                     .peerAddress(remoteAddr),
                                 MqttMessageBuilders.connAck()
-                                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                    .properties(MQTT5MessageBuilders.connAckProperties()
                                         .reasonString(cause.getMessage())
                                         .build())
                                     .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
@@ -146,7 +146,7 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                             // decode mqtt connect packet error
                             closeChannelWithRandomDelay(getLocal(IdentifierRejected.class).peerAddress(remoteAddr),
                                 MqttMessageBuilders.connAck()
-                                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                    .properties(MQTT5MessageBuilders.connAckProperties()
                                         .reasonString(cause.getMessage())
                                         .build())
                                     .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID)
@@ -156,7 +156,7 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                             closeChannelWithRandomDelay(getLocal(ProtocolError.class).peerAddress(remoteAddr)
                                     .statement("MQTT5-4.13.1-1"),
                                 MqttMessageBuilders.connAck()
-                                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                                    .properties(MQTT5MessageBuilders.connAckProperties()
                                         .reasonString(cause.getMessage())
                                         .build())
                                     .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET)

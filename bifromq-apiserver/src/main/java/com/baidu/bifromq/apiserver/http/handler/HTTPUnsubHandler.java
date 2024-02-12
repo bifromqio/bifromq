@@ -13,29 +13,18 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_DELIVERER_KEY;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_ID;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getDelivererKey;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_USER_ID;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
-import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
+import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
+import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpResponseStatus.UNAUTHORIZED;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.apiserver.utils.TopicUtil;
-import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.UnmatchResult;
-import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
-import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
-import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -56,35 +45,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Path("/unsub")
 public final class HTTPUnsubHandler implements IHTTPRequestHandler {
-    private final IMqttBrokerClient mqttBrokerClient;
-    private final IInboxClient inboxClient;
-    private final IDistClient distClient;
-    private final ISettingProvider settingProvider;
+    private final ISessionDictClient sessionDictClient;
 
-    public HTTPUnsubHandler(IMqttBrokerClient mqttBrokerClient,
-                            IInboxClient inboxClient,
-                            IDistClient distClient,
-                            ISettingProvider settingProvider) {
-        this.mqttBrokerClient = mqttBrokerClient;
-        this.inboxClient = inboxClient;
-        this.distClient = distClient;
-        this.settingProvider = settingProvider;
+    public HTTPUnsubHandler(ISessionDictClient sessionDictClient) {
+        this.sessionDictClient = sessionDictClient;
     }
 
     @DELETE
-    @Operation(summary = "Remove a topic subscription from an inbox")
+    @Operation(summary = "Remove a topic subscription from a mqtt session")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the id of tenant"),
+        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true, description = "the id of user who established the session"),
+        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true, description = "the client id of the mqtt session"),
         @Parameter(name = "topic_filter", in = ParameterIn.HEADER, required = true, description = "the topic filter to remove"),
-        @Parameter(name = "inbox_id", in = ParameterIn.HEADER, required = true, description = "the inbox for receiving subscribed messages"),
-        @Parameter(name = "deliverer_key", in = ParameterIn.HEADER, description = "deliverer key for subBroker"),
-        @Parameter(name = "subbroker_id", in = ParameterIn.HEADER, required = true, schema = @Schema(implementation = Integer.class), description = "the id of the subbroker hosting the inbox"),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Success"),
-        @ApiResponse(responseCode = "404", description = "Topic filter not found"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized to remove subscription of the given topic filter"),
+        @ApiResponse(responseCode = "404", description = "No session found for the given user and client id"),
     })
 
     @Override
@@ -93,60 +73,29 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
                                                       @Parameter(hidden = true) FullHttpRequest req) {
         try {
             String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
-            String inboxId = getHeader(HEADER_INBOX_ID, req, true);
-            int subBrokerId = getRequiredSubBrokerId(req);
-            String delivererKey = getDelivererKey(HEADER_DELIVERER_KEY, req, subBrokerId);
-            log.trace(
-                "Handling http unsub request: reqId={}, tenantId={}, topicFilter={}, inboxId={}, subBrokerId={}",
-                reqId, tenantId, topicFilter, inboxId, subBrokerId);
-            if (!TopicUtil.checkTopicFilter(topicFilter, tenantId, settingProvider)) {
-                return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(),
-                    FORBIDDEN, Unpooled.EMPTY_BUFFER));
-            }
-            CompletableFuture<FullHttpResponse> future;
-            switch (subBrokerId) {
-                case 0:
-                    future = mqttBrokerClient.unsub(reqId, tenantId, inboxId, topicFilter)
-                        .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(),
-                            v.getResult() == com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply.Result.OK ? OK :
-                                NOT_FOUND, Unpooled.EMPTY_BUFFER)
-                        );
-                    break;
-                case 1:
-                    future = inboxClient.get(GetRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setTenantId(tenantId)
-                            .setInboxId(inboxId)
-                            .setNow(HLC.INST.getPhysical())
-                            .build())
-                        .thenCompose(getReply -> {
-                            if (getReply.getCode() == GetReply.Code.EXIST) {
-                                InboxVersion latest = getReply.getInbox(getReply.getInboxCount() - 1);
-                                return inboxClient.unsub(UnsubRequest.newBuilder()
-                                        .setReqId(reqId)
-                                        .setTenantId(tenantId)
-                                        .setInboxId(inboxId)
-                                        .setIncarnation(latest.getIncarnation())
-                                        .setVersion(latest.getVersion())
-                                        .setTopicFilter(topicFilter)
-                                        .setNow(HLC.INST.getPhysical())
-                                        .build())
-                                    .thenApply(unsubReply -> new DefaultFullHttpResponse(req.protocolVersion(),
-                                        unsubReply.getCode() == UnsubReply.Code.OK ? OK : NOT_FOUND,
-                                        Unpooled.EMPTY_BUFFER));
-                            }
-                            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
-                                Unpooled.EMPTY_BUFFER);
-                            return CompletableFuture.completedFuture(resp);
-                        });
-                    break;
-                default:
-                    future = distClient.unmatch(reqId, tenantId, topicFilter, inboxId, delivererKey, subBrokerId)
-                        .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(),
-                            v == UnmatchResult.OK ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER)
-                        );
-            }
-            return future;
+            String userId = getHeader(HEADER_USER_ID, req, true);
+            String clientId = getHeader(HEADER_CLIENT_ID, req, true);
+            log.trace("Handling http unsub request: reqId={}, tenantId={}, topicFilter={}, userId={}, " +
+                "clientId={}", reqId, tenantId, topicFilter, userId, clientId);
+            return sessionDictClient.unsub(com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest.newBuilder()
+                    .setReqId(reqId)
+                    .setTenantId(tenantId)
+                    .setUserId(userId)
+                    .setClientId(clientId)
+                    .setTopicFilter(topicFilter)
+                    .build())
+                .thenApply(reply -> switch (reply.getResult()) {
+                    case OK, NO_SUB -> new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                        Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
+                    case TOPIC_FILTER_INVALID -> new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                        Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
+                    case NO_SESSION ->
+                        new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER);
+                    case NOT_AUTHORIZED ->
+                        new DefaultFullHttpResponse(req.protocolVersion(), UNAUTHORIZED, Unpooled.EMPTY_BUFFER);
+                    default -> new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                        Unpooled.EMPTY_BUFFER);
+                });
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);
         }

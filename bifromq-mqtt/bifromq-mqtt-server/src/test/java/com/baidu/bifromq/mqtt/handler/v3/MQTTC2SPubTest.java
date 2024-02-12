@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.EXCEED_PUB_RATE;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
@@ -303,6 +304,6 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeInbound(publishMessage2);
         MqttMessage ackMessage = channel.readOutbound();
         assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 1);
-        verifyEvent(CLIENT_CONNECTED, PUB_ACKED, EXCEED_PUB_RATE);
+        verifyEvent(CLIENT_CONNECTED, PUB_ACKED, DISCARD);
     }
 }

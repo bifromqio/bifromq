@@ -53,18 +53,6 @@ public class HTTPHeaderUtilsTest {
     }
 
     @Test
-    public void getRequiredSubBrokerId() {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
-        assertThrows(() -> HTTPHeaderUtils.getRequiredSubBrokerId(req));
-
-        req.headers().set(Headers.HEADER_SUBBROKER_ID.header, "0");
-        assertEquals(HTTPHeaderUtils.getRequiredSubBrokerId(req), 0);
-
-        req.headers().set(Headers.HEADER_SUBBROKER_ID.header, "int-unparsable");
-        assertThrows(() -> HTTPHeaderUtils.getRequiredSubBrokerId(req));
-    }
-
-    @Test
     public void getClientMeta() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
         assertTrue(HTTPHeaderUtils.getClientMeta(req).isEmpty());

@@ -11,14 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.utils;
+package com.baidu.bifromq.util;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
 
-public class MQTTUtf8Util {
+public class UTF8Util {
     private static final int MAX_STRING_LENGTH = 65535; // MQTT-1.5.3
 
     public static boolean isWellFormed(String str, boolean sanityCheck) {

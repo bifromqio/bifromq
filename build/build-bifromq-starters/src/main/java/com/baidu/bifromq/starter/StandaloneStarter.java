@@ -228,14 +228,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         }
         SslContext clientSslContext = config.getRpcClientConfig().getSslConfig() != null ?
             buildClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
-        sessionDictClient = ISessionDictClient.newBuilder()
-            .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
-            .sslContext(clientSslContext)
-            .build();
-        sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedIORPCServerBuilder)
-            .build();
         distClient = IDistClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(MoreExecutors.directExecutor())
@@ -360,6 +352,17 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
 
         subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient);
+
+        sessionDictClient = ISessionDictClient.newBuilder()
+            .crdtService(clientCrdtService)
+            .executor(MoreExecutors.directExecutor())
+            .sslContext(clientSslContext)
+            .build();
+
+        sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
+            .rpcServerBuilder(sharedIORPCServerBuilder)
+            .mqttBrokerClient(mqttBrokerClient)
+            .build();
         retainServer = IRetainServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .retainStoreClient(retainStoreClient)
@@ -601,7 +604,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             sslContext = buildServerSslContext(apiServerConfig.getHttpsListenerConfig().getSslConfig());
         }
         return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsListenerConfig().getPort(),
-            bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
+            bossELG, workerELG, sslContext, distClient,
             inboxClient, sessionDictClient, retainClient, settingProviderMgr);
     }
 

@@ -26,7 +26,7 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceGrpc;
 import com.baidu.bifromq.retain.server.scheduler.IMatchCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.IRetainCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.MatchCall;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.util.List;
@@ -65,15 +65,11 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
     public void match(MatchRequest request, StreamObserver<MatchReply> responseObserver) {
         log.trace("Handling match request:\n{}", request);
         response((tenantId, metadata) -> matchCallScheduler
-            .schedule(new MatchCall(request.getTenantId(), request.getTopicFilter(), request.getLimit()))
+            .schedule(new MatchCall(request.getMatchInfo().getTenantId(), request.getMatchInfo().getTopicFilter(),
+                request.getLimit()))
             .thenCompose(matchCallResult -> {
                 if (matchCallResult.result() == MatchReply.Result.OK) {
-                    SubInfo subInfo = SubInfo.newBuilder()
-                        .setTenantId(request.getTenantId())
-                        .setInboxId(request.getInboxId())
-                        .setSubQoS(request.getQos())
-                        .setTopicFilter(request.getTopicFilter())
-                        .build();
+                    MatchInfo matchInfo = request.getMatchInfo();
                     List<CompletableFuture<DeliveryResult>> deliveryResults = matchCallResult.retainMessages()
                         .stream()
                         .map(retainedMsg -> {
@@ -84,7 +80,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                                     .setPublisher(retainedMsg.getPublisher())
                                     .build())
                                 .build();
-                            return messageDeliverer.schedule(new DeliveryRequest(subInfo,
+                            return messageDeliverer.schedule(new DeliveryRequest(matchInfo,
                                 request.getBrokerId(), request.getDelivererKey(), topicMessagePack));
                         }).toList();
                     return CompletableFuture.allOf(deliveryResults.toArray(CompletableFuture[]::new))

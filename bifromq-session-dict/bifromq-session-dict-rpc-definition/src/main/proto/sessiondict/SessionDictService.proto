@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+import "commontype/QoS.proto";
 import "commontype/ClientInfo.proto";
 
 package sessiondict;
@@ -12,6 +13,9 @@ option optimize_for = SPEED;
 service SessionDictService {
   rpc dict (stream Session) returns (stream Quit);
   rpc kill (KillRequest) returns(KillReply);
+  rpc get(GetRequest) returns(GetReply);
+  rpc sub(SubRequest) returns(SubReply);
+  rpc unsub(UnsubRequest) returns(UnsubReply);
 }
 
 message Session {
@@ -38,6 +42,66 @@ message KillReply {
   enum Result{
     OK = 0;
     ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message GetRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string userId = 3;
+  string clientId = 4;
+}
+message GetReply {
+  enum Result{
+    OK = 0;
+    NOT_FOUND = 1;
+    ERROR = 2;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+  commontype.ClientInfo owner = 3;
+}
+message SubRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string userId = 3;
+  string clientId = 4;
+  string topicFilter = 5;
+  commontype.QoS qos = 6;
+}
+
+message SubReply {
+  enum Result{
+    OK = 0;
+    EXISTS = 1;
+    NO_SESSION = 2;
+    EXCEED_LIMIT = 3;
+    NOT_AUTHORIZED = 4;
+    TOPIC_FILTER_INVALID = 5;
+    ERROR = 6;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message UnsubRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string userId = 3;
+  string clientId = 4;
+  string topicFilter = 5;
+}
+
+message UnsubReply {
+  enum Result{
+    OK = 0;
+    NO_SUB = 1;
+    NO_SESSION = 2;
+    NOT_AUTHORIZED = 3;
+    TOPIC_FILTER_INVALID = 4;
+    ERROR = 5;
   }
   uint64 reqId = 1;
   Result result = 2;

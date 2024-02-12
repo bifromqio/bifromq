@@ -45,10 +45,6 @@ public final class HTTPHeaderUtils {
         return qos;
     }
 
-    public static int getRequiredSubBrokerId(HttpRequest req) {
-        return Integer.parseInt(getHeader(HEADER_SUBBROKER_ID, req, true));
-    }
-
     public static Map<String, String> getClientMeta(HttpRequest req) {
         Map<String, String> clientMeta = new HashMap<>();
         for (Map.Entry<String, String> entry : req.headers()) {

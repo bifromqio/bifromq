@@ -25,5 +25,7 @@ public interface ISessionRegister {
 
     boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker);
 
+    ClientInfo owner(String tenantId, ClientKey clientKey);
+
     void stop();
 }

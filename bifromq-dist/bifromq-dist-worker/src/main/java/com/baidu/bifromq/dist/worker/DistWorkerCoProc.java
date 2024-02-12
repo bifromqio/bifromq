@@ -60,13 +60,11 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
-import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -75,6 +73,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -188,15 +187,15 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                                        Set<String> touchedTenants,
                                        Set<ScopedTopic> touchedTopics) {
         BatchMatchReply.Builder replyBuilder = BatchMatchReply.newBuilder().setReqId(request.getReqId());
-        Map<ByteString, Map<String, QoS>> groupMatchRecords = new HashMap<>();
-        request.getScopedTopicFilterMap().forEach((scopedTopicFilter, subQoS) -> {
+        Map<ByteString, List<String>> groupMatchRecords = new HashMap<>();
+        request.getScopedTopicFilterList().forEach(scopedTopicFilter -> {
             String tenantId = parseTenantIdFromScopedTopicFilter(scopedTopicFilter);
             String qInboxId = parseQInboxIdFromScopedTopicFilter(scopedTopicFilter);
             String topicFilter = parseTopicFilterFromScopedTopicFilter(scopedTopicFilter);
             if (isNormalTopicFilter(topicFilter)) {
                 ByteString normalMatchRecordKey = toNormalMatchRecordKey(tenantId, topicFilter, qInboxId);
                 if (!reader.exist(normalMatchRecordKey)) {
-                    writer.put(normalMatchRecordKey, MatchRecord.newBuilder().setNormal(subQoS).build().toByteString());
+                    writer.put(normalMatchRecordKey, ByteString.EMPTY);
                     if (isWildcardTopicFilter(topicFilter)) {
                         touchedTenants.add(tenantId);
                     }
@@ -209,7 +208,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 replyBuilder.putResults(scopedTopicFilter, BatchMatchReply.Result.OK);
             } else {
                 ByteString groupMatchRecordKey = toGroupMatchRecordKey(tenantId, topicFilter);
-                groupMatchRecords.computeIfAbsent(groupMatchRecordKey, k -> new HashMap<>()).put(qInboxId, subQoS);
+                groupMatchRecords.computeIfAbsent(groupMatchRecordKey, k -> new LinkedList<>()).add(qInboxId);
             }
         });
         groupMatchRecords.forEach((groupMatchRecordKey, newGroupMembers) -> {
@@ -217,7 +216,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             GroupMatchRecord.Builder matchGroup = reader.get(groupMatchRecordKey)
                 .map(b -> {
                     try {
-                        return MatchRecord.parseFrom(b).getGroup();
+                        return GroupMatchRecord.parseFrom(b);
                     } catch (InvalidProtocolBufferException e) {
                         log.error("Unable to parse GroupMatchRecord", e);
                         return GroupMatchRecord.getDefaultInstance();
@@ -227,12 +226,10 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
             boolean updated = false;
             int maxMembers = settingProvider.provide(Setting.MaxSharedGroupMembers, tenantId);
-            for (String newQInboxId : newGroupMembers.keySet()) {
-                QoS newSubQoS = newGroupMembers.get(newQInboxId);
-                QoS oldSubQoS = matchGroup.getEntryMap().get(newQInboxId);
-                if (oldSubQoS != newSubQoS) {
-                    if (oldSubQoS != null || matchGroup.getEntryCount() < maxMembers) {
-                        matchGroup.putEntry(newQInboxId, newSubQoS);
+            for (String newQInboxId : newGroupMembers) {
+                if (!matchGroup.getQReceiverIdList().contains(newQInboxId)) {
+                    if (matchGroup.getQReceiverIdCount() < maxMembers) {
+                        matchGroup.addQReceiverId(newQInboxId);
                         replyBuilder.putResults(toScopedTopicFilter(tenantId, newQInboxId,
                                 parseOriginalTopicFilter(groupMatchRecordKey.toStringUtf8())),
                             BatchMatchReply.Result.OK);
@@ -249,7 +246,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 }
             }
             if (updated) {
-                writer.put(groupMatchRecordKey, MatchRecord.newBuilder().setGroup(matchGroup).build().toByteString());
+                writer.put(groupMatchRecordKey, matchGroup.build().toByteString());
                 String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());
                 if (isWildcardTopicFilter(groupTopicFilter)) {
                     touchedTenants.add(parseTenantId(groupMatchRecordKey));
@@ -304,9 +301,9 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 Matching matching = parseMatchRecord(groupMatchRecordKey, value.get());
                 assert matching instanceof GroupMatching;
                 GroupMatching groupMatching = (GroupMatching) matching;
-                Map<String, QoS> existing = Maps.newHashMap(groupMatching.inboxMap);
+                Set<String> existing = Sets.newLinkedHashSet(groupMatching.receiverIds);
                 for (String delQInboxId : delGroupMembers) {
-                    if (existing.remove(delQInboxId) != null) {
+                    if (existing.remove(delQInboxId)) {
                         replyBuilder.putResults(
                             toScopedTopicFilter(tenantId, delQInboxId, groupMatching.originalTopicFilter()),
                             BatchUnmatchReply.Result.OK);
@@ -317,14 +314,13 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             BatchUnmatchReply.Result.NOT_EXISTED);
                     }
                 }
-                if (existing.size() != groupMatching.inboxMap.size()) {
+                if (existing.size() != groupMatching.receiverIds.size()) {
                     if (existing.isEmpty()) {
                         writer.delete(groupMatchRecordKey);
                     } else {
-                        writer.put(groupMatchRecordKey, MatchRecord.newBuilder()
-                            .setGroup(GroupMatchRecord.newBuilder()
-                                .putAllEntry(existing)
-                                .build()).build()
+                        writer.put(groupMatchRecordKey, GroupMatchRecord.newBuilder()
+                            .addAllQReceiverId(existing)
+                            .build()
                             .toByteString());
                     }
                     String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());

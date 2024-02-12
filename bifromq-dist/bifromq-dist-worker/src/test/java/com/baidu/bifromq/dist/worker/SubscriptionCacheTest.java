@@ -33,9 +33,7 @@ import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
-import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.QoS;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -221,9 +219,7 @@ public class SubscriptionCacheTest {
         when(kvIterator.key())
             .thenReturn(EntityUtil.toMatchRecordKey(scopedTopic.tenantId, sharedTopicFilter, qInboxId));
         when(kvIterator.value())
-            .thenReturn(MatchRecord.newBuilder()
-                .setGroup(GroupMatchRecord.newBuilder().putEntry(qInboxId, QoS.AT_MOST_ONCE).build())
-                .build().toByteString());
+            .thenReturn(GroupMatchRecord.newBuilder().addQReceiverId(qInboxId).build().toByteString());
 
         SubscriptionCache.MatchResult matchResult = cache.get(scopedTopic).join();
         assertEquals(matchResult.routes.size(), 1);
@@ -232,10 +228,9 @@ public class SubscriptionCacheTest {
             GroupMatching matching = (GroupMatching) entry;
             assertEquals(matching.tenantId, scopedTopic.tenantId);
             assertEquals(matching.originalTopicFilter(), sharedTopicFilter);
-            NormalMatching inbox = matching.inboxList.get(0);
+            NormalMatching inbox = matching.receiverList.get(0);
             assertEquals(inbox.subBrokerId, 0);
-            assertEquals(inbox.subInfo.getInboxId(), "inbox1");
-            assertEquals(inbox.subInfo.getSubQoS(), QoS.AT_MOST_ONCE);
+            assertEquals(inbox.matchInfo.getReceiverId(), "inbox1");
             assertEquals(inbox.delivererKey, "deliverer1");
         }
     }

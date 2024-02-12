@@ -63,7 +63,7 @@ final class RetainClient implements IRetainClient {
     @Override
     public CompletableFuture<MatchReply> match(MatchRequest request) {
         log.trace("Handling match request: {}", request);
-        return rpcClient.invoke(request.getTenantId(), null, request, RetainServiceGrpc.getMatchMethod())
+        return rpcClient.invoke(request.getMatchInfo().getTenantId(), null, request, RetainServiceGrpc.getMatchMethod())
             .exceptionally(e -> {
                 log.debug("Failed to match", e);
                 return MatchReply.newBuilder()

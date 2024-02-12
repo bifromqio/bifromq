@@ -13,68 +13,25 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static java.util.Collections.singletonList;
-
 import com.baidu.bifromq.baserpc.ResponsePipeline;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
-import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
-import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteReply> {
-    private final Map<String, IMQTTTransientSession> sessionMap;
+    private final ILocalDistService localDistService;
 
-    public LocalSessionWritePipeline(Map<String, IMQTTTransientSession> sessionMap,
-                                     StreamObserver<WriteReply> responseObserver) {
+    public LocalSessionWritePipeline(ILocalDistService localDistService, StreamObserver<WriteReply> responseObserver) {
         super(responseObserver);
-        this.sessionMap = sessionMap;
+        this.localDistService = localDistService;
     }
 
     @Override
     protected CompletableFuture<WriteReply> handleRequest(String tenantId, WriteRequest request) {
         log.trace("Handle inbox write request: \n{}", request);
-        WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
-        Set<SubInfo> ok = new HashSet<>();
-        Set<SubInfo> noSub = new HashSet<>();
-        for (WritePack writePack : request.getPackList()) {
-            TopicMessagePack topicMsgPack = writePack.getMessagePack();
-            List<SubInfo> subInfos = writePack.getSubscriberList();
-            for (SubInfo subInfo : subInfos) {
-                if (!noSub.contains(subInfo)) {
-                    IMQTTTransientSession session = sessionMap.get(subInfo.getInboxId());
-                    if (session != null) {
-                        boolean success = session.publish(subInfo, singletonList(topicMsgPack));
-                        if (success) {
-                            ok.add(subInfo);
-                        } else {
-                            noSub.add(subInfo);
-                        }
-                    } else {
-                        // no session found for the subscription
-                        noSub.add(subInfo);
-                    }
-                }
-            }
-        }
-        ok.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
-            .setSubInfo(subInfo)
-            .setResult(WriteResult.Result.OK)
-            .build()));
-        noSub.forEach(subInfo -> replyBuilder.addResult(WriteResult.newBuilder()
-            .setSubInfo(subInfo)
-            .setResult(WriteResult.Result.NO_INBOX)
-            .build()));
-        return CompletableFuture.completedFuture(replyBuilder.build());
+        return localDistService.dist(request);
     }
 }

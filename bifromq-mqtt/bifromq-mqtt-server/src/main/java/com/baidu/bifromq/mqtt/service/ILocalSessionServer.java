@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-public interface ILocalSessionServer extends ILocalSessionRegistry {
+public interface ILocalSessionServer {
     static StandaloneLocalSessionServerBuilder standaloneBuilder() {
         return new StandaloneLocalSessionServerBuilder();
     }

@@ -14,7 +14,13 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.SubReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.UnsubReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -27,6 +33,12 @@ public interface ISessionDictClient extends IConnectable {
     ISessionRegister reg(ClientInfo owner, Consumer<ClientInfo> onKick);
 
     CompletableFuture<KillReply> kill(long reqId, String tenantId, String userId, String clientId, ClientInfo killer);
+
+    CompletableFuture<GetReply> get(GetRequest request);
+
+    CompletableFuture<SubReply> sub(SubRequest request);
+
+    CompletableFuture<UnsubReply> unsub(UnsubRequest request);
 
     void stop();
 }

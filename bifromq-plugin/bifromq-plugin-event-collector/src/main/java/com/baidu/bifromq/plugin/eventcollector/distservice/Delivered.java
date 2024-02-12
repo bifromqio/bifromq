@@ -15,7 +15,7 @@ package com.baidu.bifromq.plugin.eventcollector.distservice;
 
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import lombok.Getter;
 import lombok.Setter;
@@ -29,7 +29,7 @@ import lombok.experimental.Accessors;
 public final class Delivered extends Event<Delivered> {
     private int brokerId;
     private String delivererKey;
-    private SubInfo subInfo;
+    private MatchInfo subInfo;
     private TopicMessagePack messages;
 
     @Override

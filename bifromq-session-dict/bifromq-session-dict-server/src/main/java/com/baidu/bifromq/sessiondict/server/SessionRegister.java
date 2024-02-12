@@ -22,6 +22,7 @@ import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.type.ClientInfo;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.Disposable;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,6 +106,11 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
             return true;
         }
         return false;
+    }
+
+    @Override
+    public ClientInfo owner(String tenantId, ClientKey clientKey) {
+        return registeredSession.getOrDefault(tenantId, Collections.emptyMap()).get(clientKey);
     }
 
     @Override

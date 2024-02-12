@@ -13,42 +13,29 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_DELIVERER_KEY;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_INBOX_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_ID;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getDelivererKey;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_USER_ID;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubBrokerId;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
-import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
+import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
+import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
+import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpResponseStatus.UNAUTHORIZED;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.apiserver.utils.TopicUtil;
-import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.MatchResult;
-import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
-import com.baidu.bifromq.inbox.rpc.proto.SubReply;
-import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
 import com.baidu.bifromq.type.QoS;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.mqtt.MqttQoS;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
-import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -61,38 +48,30 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Path("/sub")
 public final class HTTPSubHandler implements IHTTPRequestHandler {
-    private final IMqttBrokerClient mqttClient;
-    private final IInboxClient inboxClient;
-    private final IDistClient distClient;
-    private final ISettingProvider settingProvider;
+    private final ISessionDictClient sessionDictClient;
 
-    public HTTPSubHandler(IMqttBrokerClient mqttClient,
-                          IInboxClient inboxClient,
-                          IDistClient distClient,
-                          ISettingProvider settingProvider) {
-        this.mqttClient = mqttClient;
-        this.inboxClient = inboxClient;
-        this.distClient = distClient;
-        this.settingProvider = settingProvider;
+    public HTTPSubHandler(ISessionDictClient sessionDictClient
+    ) {
+        this.sessionDictClient = sessionDictClient;
     }
 
     @PUT
-    @Operation(summary = "Add a topic subscription to an inbox")
+    @Operation(summary = "Add a topic subscription to a mqtt session")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the id of tenant"),
+        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true, description = "the id of user who established the session"),
+        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true, description = "the client id of the mqtt session"),
         @Parameter(name = "topic_filter", in = ParameterIn.HEADER, required = true, description = "the topic filter to add"),
         @Parameter(name = "sub_qos", in = ParameterIn.HEADER, schema = @Schema(allowableValues = {"0", "1",
-            "2"}), required = true, description = "the qos of the subscription"),
-        @Parameter(name = "inbox_id", in = ParameterIn.HEADER, required = true, description = "the inbox for receiving subscribed messages"),
-        @Parameter(name = "deliverer_key", in = ParameterIn.HEADER, description = "deliverer key for subBroker"),
-        @Parameter(name = "subbroker_id", in = ParameterIn.HEADER, required = true, schema = @Schema(implementation = Integer.class), description = "the id of the subbroker hosting the inbox"),
+            "2"}), required = true, description = "the qos of the subscription")
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Success", headers = {
-            @Header(name = "sub_qos", description = "the sub qos granted", schema = @Schema(allowableValues = {"0", "1",
-                "2"}))}),
+        @ApiResponse(responseCode = "200", description = "Success"),
+        @ApiResponse(responseCode = "400", description = "Request is invalid"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized to make subscription using the given topic filter"),
+        @ApiResponse(responseCode = "404", description = "No session found for the given user and client id"),
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
@@ -101,84 +80,31 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
         try {
             String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
             QoS subQoS = getRequiredSubQoS(req);
-            String inboxId = getHeader(HEADER_INBOX_ID, req, true);
-            int subBrokerId = getRequiredSubBrokerId(req);
-            String delivererKey = getDelivererKey(HEADER_DELIVERER_KEY, req, subBrokerId);
-            log.trace("Handling http sub request: reqId={}, tenantId={}, topicFilter={}, subQoS={}, inboxId={}, " +
-                "subBrokerId={}", reqId, tenantId, topicFilter, subQoS, inboxId, subBrokerId);
-            CompletableFuture<FullHttpResponse> future;
-            if (!TopicUtil.checkTopicFilter(topicFilter, tenantId, settingProvider)) {
-                DefaultFullHttpResponse resp =
-                    new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER);
-                resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                return CompletableFuture.completedFuture(resp);
-            }
-            switch (subBrokerId) {
-                case 0:
-                    future = mqttClient.sub(reqId, tenantId, inboxId, topicFilter, subQoS)
-                        .thenApply(v -> {
-                            DefaultFullHttpResponse resp =
-                                new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
-                            if (v.getResult() == com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.OK) {
-                                resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
-                            } else {
-                                resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                            }
-                            return resp;
-                        });
-                    break;
-                case 1:
-                    future = inboxClient.get(GetRequest.newBuilder()
-                            .setReqId(reqId)
-                            .setTenantId(tenantId)
-                            .setInboxId(inboxId)
-                            .setNow(HLC.INST.getPhysical())
-                            .build())
-                        .thenCompose(getReply -> {
-                            if (getReply.getCode() == GetReply.Code.EXIST) {
-                                InboxVersion latest = getReply.getInbox(getReply.getInboxCount() - 1);
-                                return inboxClient.sub(SubRequest.newBuilder()
-                                        .setReqId(reqId)
-                                        .setTenantId(tenantId)
-                                        .setInboxId(inboxId)
-                                        .setIncarnation(latest.getIncarnation())
-                                        .setVersion(latest.getVersion())
-                                        .setTopicFilter(topicFilter)
-                                        .setOption(TopicFilterOption.newBuilder().setQos(subQoS).build())
-                                        .setNow(HLC.INST.getPhysical())
-                                        .build())
-                                    .thenApply(subReply -> {
-                                        DefaultFullHttpResponse resp =
-                                            new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                                                Unpooled.EMPTY_BUFFER);
-                                        if (subReply.getCode() == SubReply.Code.OK) {
-                                            resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
-                                        } else {
-                                            resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                                        }
-                                        return resp;
-                                    });
-                            }
-                            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                                Unpooled.EMPTY_BUFFER);
-                            resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                            return CompletableFuture.completedFuture(resp);
-                        });
-                    break;
-                default:
-                    future = distClient.match(reqId, tenantId, topicFilter, subQoS, inboxId, delivererKey, subBrokerId)
-                        .thenApply(v -> {
-                            DefaultFullHttpResponse resp =
-                                new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER);
-                            if (v == MatchResult.OK) {
-                                resp.headers().set(HEADER_SUB_QOS.header, subQoS.getNumber());
-                            } else {
-                                resp.headers().set(HEADER_SUB_QOS.header, MqttQoS.FAILURE.value());
-                            }
-                            return resp;
-                        });
-            }
-            return future;
+            String userId = getHeader(HEADER_USER_ID, req, true);
+            String clientId = getHeader(HEADER_CLIENT_ID, req, true);
+            log.trace("Handling http sub request: reqId={}, tenantId={}, topicFilter={}, subQoS={}, userId={}, " +
+                "clientId={}", reqId, tenantId, topicFilter, subQoS, userId, clientId);
+            return sessionDictClient.sub(SubRequest.newBuilder()
+                    .setReqId(reqId)
+                    .setTenantId(tenantId)
+                    .setUserId(userId)
+                    .setClientId(clientId)
+                    .setTopicFilter(topicFilter)
+                    .setQos(subQoS)
+                    .build())
+                .thenApply(reply -> switch (reply.getResult()) {
+                    case OK, EXISTS -> new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                        Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
+                    case EXCEED_LIMIT, TOPIC_FILTER_INVALID ->
+                        new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                            Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
+                    case NOT_AUTHORIZED ->
+                        new DefaultFullHttpResponse(req.protocolVersion(), UNAUTHORIZED, Unpooled.EMPTY_BUFFER);
+                    case NO_SESSION ->
+                        new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER);
+                    default -> new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                        Unpooled.EMPTY_BUFFER);
+                });
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);
         }

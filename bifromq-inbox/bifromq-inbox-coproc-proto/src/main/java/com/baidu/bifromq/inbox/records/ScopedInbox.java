@@ -13,8 +13,7 @@
 
 package com.baidu.bifromq.inbox.records;
 
-import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import java.util.Comparator;
 
 public record ScopedInbox(String tenantId, String inboxId, long incarnation) implements Comparable<ScopedInbox> {
@@ -27,19 +26,18 @@ public record ScopedInbox(String tenantId, String inboxId, long incarnation) imp
         return inboxId + SEPARATOR + incarnation;
     }
 
-    public static ScopedInbox from(SubInfo subInfo) {
-        int splitAt = subInfo.getInboxId().lastIndexOf(SEPARATOR);
+    public static ScopedInbox from(MatchInfo subInfo) {
+        int splitAt = subInfo.getReceiverId().lastIndexOf(SEPARATOR);
         return new ScopedInbox(subInfo.getTenantId(),
-            subInfo.getInboxId().substring(0, splitAt),
-            Long.parseUnsignedLong(subInfo.getInboxId().substring(splitAt + 1)));
+            subInfo.getReceiverId().substring(0, splitAt),
+            Long.parseUnsignedLong(subInfo.getReceiverId().substring(splitAt + 1)));
     }
 
-    public SubInfo convertTo(String topicFilter, QoS subQoS) {
-        return SubInfo.newBuilder()
+    public MatchInfo convertTo(String topicFilter) {
+        return MatchInfo.newBuilder()
             .setTenantId(tenantId)
-            .setInboxId(inboxId + SEPARATOR + incarnation)
+            .setReceiverId(inboxId + SEPARATOR + incarnation)
             .setTopicFilter(topicFilter)
-            .setSubQoS(subQoS)
             .build();
     }
 

@@ -17,6 +17,7 @@ import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewell;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewellNow;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.response;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.messageExpiryInterval;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.receiveMaximum;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestProblemInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.responseTopic;
@@ -24,10 +25,10 @@ import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.subscriptionId
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAlias;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
-import static com.baidu.bifromq.mqtt.utils.MQTTUtf8Util.isWellFormed;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.util.TopicUtil.isValidTopic;
+import static com.baidu.bifromq.util.UTF8Util.isWellFormed;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.RetainHandling;
@@ -43,7 +44,6 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRecReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode;
-import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
@@ -63,6 +63,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
+import com.baidu.bifromq.util.UTF8Util;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -389,12 +390,12 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public MqttMessage onPubRelReceived(MqttMessage message, boolean packetIdFound) {
         if (packetIdFound) {
-            return MQTT5MessageBuilders.pubComp()
+            return MQTT5MessageBuilders.pubComp(requestProblemInfo)
                 .packetId(((MqttMessageIdVariableHeader) message.variableHeader()).messageId())
                 .reasonCode(MQTT5PubCompReasonCode.Success)
                 .build();
         } else {
-            return MQTT5MessageBuilders.pubComp()
+            return MQTT5MessageBuilders.pubComp(requestProblemInfo)
                 .packetId(((MqttMessageIdVariableHeader) message.variableHeader()).messageId())
                 .reasonCode(MQTT5PubCompReasonCode.PacketIdentifierNotFound)
                 .build();
@@ -415,14 +416,14 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             (MqttPubReplyMessageVariableHeader) message.variableHeader();
         int packetId = variableHeader.messageId();
         if (packetIdNotFound) {
-            return farewell(MQTT5MessageBuilders.pubRel()
+            return farewell(MQTT5MessageBuilders.pubRel(requestProblemInfo)
                     .packetId(packetId)
                     .reasonCode(
                         MQTT5PubRelReasonCode.PacketIdentifierNotFound)
                     .build(),
                 getLocal(ProtocolViolation.class).statement("MQTT5-4.3.3-8").clientInfo(clientInfo));
         } else {
-            return response(MQTT5MessageBuilders.pubRel()
+            return response(MQTT5MessageBuilders.pubRel(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRelReasonCode.Success)
                 .build());
@@ -505,6 +506,16 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
         }
         String topic = message.variableHeader().topicName();
         MqttProperties mqttProperties = message.variableHeader().properties();
+        if (messageExpiryInterval(mqttProperties).orElse(Integer.MAX_VALUE) == 0) {
+            return farewell(
+                MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ProtocolError)
+                    .reasonString("MessageExpiryInterval must be positive integer")
+                    .build(),
+                getLocal(ProtocolViolation.class)
+                    .statement("MessageExpiryInterval must be positive integer")
+                    .clientInfo(clientInfo));
+        }
         if (subscriptionIdentifier(mqttProperties).isPresent()) {
             return farewell(
                 MQTT5MessageBuilders.disconnect()
@@ -562,7 +573,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .clientInfo(clientInfo));
         }
         if (settings.payloadFormatValidationEnabled && isUTF8Payload(mqttProperties) &&
-            !MQTTUtf8Util.isValidUTF8Payload(message.payload().nioBuffer())) {
+            !UTF8Util.isValidUTF8Payload(message.payload().nioBuffer())) {
             return switch (message.fixedHeader().qosLevel()) {
                 case AT_MOST_ONCE -> farewell(
                     MQTT5MessageBuilders.disconnect()
@@ -572,11 +583,11 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     getLocal(ProtocolViolation.class)
                         .statement("MQTT5-3.3.2.3.2")
                         .clientInfo(clientInfo));
-                case AT_LEAST_ONCE -> response(MQTT5MessageBuilders.pubAck()
+                case AT_LEAST_ONCE -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                     .packetId(message.variableHeader().packetId())
                     .reasonCode(MQTT5PubAckReasonCode.PayloadFormatInvalid)
                     .build());
-                case EXACTLY_ONCE -> response(MQTT5MessageBuilders.pubRec()
+                case EXACTLY_ONCE -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                     .packetId(message.variableHeader().packetId())
                     .reasonCode(MQTT5PubRecReasonCode.PayloadFormatInvalid)
                     .build());
@@ -702,19 +713,19 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
         assert !result.hasGranted();
         return switch (result.getTypeCase()) {
-            case DENIED -> response(MQTT5MessageBuilders.pubAck()
+            case DENIED -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.NotAuthorized)
                 .reasonString(result.getDenied().hasReason() ? result.getDenied().getReason() : null)
                 .userProps(result.getDenied().getUserProps())
                 .build());
-            case ERROR -> response(MQTT5MessageBuilders.pubAck()
+            case ERROR -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
                 .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
                 .userProps(result.getError().getUserProps())
                 .build());
-            default -> response(MQTT5MessageBuilders.pubAck()
+            default -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
                 .build());
@@ -725,23 +736,23 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
         int packetId = message.variableHeader().packetId();
         return switch (result) {
-            case OK -> MQTT5MessageBuilders.pubAck()
+            case OK -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.Success)
                 .userProps(userProps)
                 .build();
-            case NO_MATCH -> MQTT5MessageBuilders.pubAck()
+            case NO_MATCH -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.NoMatchingSubscribers)
                 .userProps(userProps)
                 .build();
-            case EXCEED_LIMIT -> MQTT5MessageBuilders.pubAck()
+            case EXCEED_LIMIT -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.QuotaExceeded)
                 // TODO: specify which quota in reason string
                 .userProps(userProps)
                 .build();
-            case ERROR -> MQTT5MessageBuilders.pubAck()
+            case ERROR -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
                 .userProps(userProps)
@@ -751,7 +762,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse respondQoS2PacketInUse(MqttPublishMessage message) {
-        return response(MQTT5MessageBuilders.pubRec()
+        return response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
             .packetId(message.variableHeader().packetId())
             .reasonCode(MQTT5PubRecReasonCode.PacketIdentifierInUse)
             .build());
@@ -761,19 +772,19 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
         assert !result.hasGranted();
         return switch (result.getTypeCase()) {
-            case DENIED -> response(MQTT5MessageBuilders.pubRec()
+            case DENIED -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.NotAuthorized)
                 .reasonString(result.getDenied().hasReason() ? result.getDenied().getReason() : null)
                 .userProps(result.getDenied().getUserProps())
                 .build());
-            case ERROR -> response(MQTT5MessageBuilders.pubRec()
+            case ERROR -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
                 .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
                 .userProps(result.getError().getUserProps())
                 .build());
-            default -> response(MQTT5MessageBuilders.pubRec()
+            default -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
                 .build());
@@ -784,23 +795,23 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
         int packetId = message.variableHeader().packetId();
         return switch (result) {
-            case OK -> MQTT5MessageBuilders.pubRec()
+            case OK -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.Success)
                 .userProps(userProps)
                 .build();
-            case NO_MATCH -> MQTT5MessageBuilders.pubRec()
+            case NO_MATCH -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.NoMatchingSubscribers)
                 .userProps(userProps)
                 .build();
-            case EXCEED_LIMIT -> MQTT5MessageBuilders.pubRec()
+            case EXCEED_LIMIT -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.QuotaExceeded)
                 // TODO: specify which quota in reason string
                 .userProps(userProps)
                 .build();
-            case ERROR -> MQTT5MessageBuilders.pubRec()
+            case ERROR -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
                 .userProps(userProps)

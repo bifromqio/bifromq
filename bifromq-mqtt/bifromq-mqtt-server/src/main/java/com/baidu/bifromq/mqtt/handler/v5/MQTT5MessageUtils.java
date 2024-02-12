@@ -155,6 +155,13 @@ public class MQTT5MessageUtils {
             return this;
         }
 
+        public MqttPropertiesBuilder addMessageExpiryInterval(int value) {
+            mqttProperties.add(
+                new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.PUBLICATION_EXPIRY_INTERVAL.value(),
+                    value));
+            return this;
+        }
+
         public MqttProperties build() {
             return mqttProperties;
         }
@@ -240,7 +247,7 @@ public class MQTT5MessageUtils {
 
     public static boolean requestProblemInformation(MqttProperties mqttProperties) {
         return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_PROBLEM_INFORMATION)
-            .orElse(0) == 1;
+            .orElse(1) == 1;
     }
 
     public static Optional<String> reasonString(MqttProperties mqttProperties) {
@@ -296,7 +303,7 @@ public class MQTT5MessageUtils {
             .setPubQoS(QoS.forNumber(pubQoS.value()))
             .setPayload(payload)
             .setTimestamp(HLC.INST.getPhysical())
-            // MessageExpiryInterval
+            // If absent, the Application Message does not expire, we use Integer.MAX_VALUE to represent this.
             .setExpiryInterval(messageExpiryInterval(mqttProperties).orElse(Integer.MAX_VALUE))
             .setIsRetain(isRetain);
         // PacketFormatIndicator

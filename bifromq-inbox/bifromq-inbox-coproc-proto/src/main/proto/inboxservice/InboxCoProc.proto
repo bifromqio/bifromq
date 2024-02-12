@@ -1,6 +1,5 @@
 syntax = "proto3";
 import "commontype/ClientInfo.proto";
-import "commontype/QoS.proto";
 import "commontype/TopicMessage.proto";
 import "inboxservice/TopicFilterOption.proto";
 import "inboxservice/LWT.proto";
@@ -224,9 +223,8 @@ message BatchFetchReply{
 
 // insert won't change version & lastActive timestamp
 message SubMessagePack{
-  commontype.QoS subQoS = 4;
-  string topicFilter = 5;
-  repeated commontype.TopicMessagePack messages = 6;
+  string topicFilter = 1;
+  repeated commontype.TopicMessagePack messages = 2;
 }
 message InboxSubMessagePack{
   string tenantId = 1;
@@ -247,8 +245,7 @@ message BatchInsertReply{
   }
   message InsertionResult{
     string topicFilter = 1;
-    commontype.QoS subQoS = 2;
-    bool rejected = 3; // if the insertion for the topic filter is rejected
+    bool rejected = 2; // if the insertion for the topic filter is rejected
   }
   message Result{
     Code code = 1;

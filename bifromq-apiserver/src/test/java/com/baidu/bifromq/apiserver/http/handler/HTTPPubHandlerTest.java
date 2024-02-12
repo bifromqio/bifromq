@@ -15,11 +15,9 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_META_PREFIX;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_PUB_QOS;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_RETAIN;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_QOS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -33,8 +31,6 @@ import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.retain.client.IRetainClient;
-import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
 import io.netty.buffer.ByteBuf;
@@ -50,8 +46,6 @@ import org.testng.annotations.Test;
 public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHandler> {
     @Mock
     private IDistClient distClient;
-    @Mock
-    private IRetainClient retainClient;
     private ISettingProvider settingProvider = Setting::current;
 
     @Override
@@ -63,23 +57,22 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
     @Test
     public void pub() {
-
         ByteBuf content = Unpooled.wrappedBuffer("Hello BifroMQ".getBytes());
         DefaultFullHttpRequest req = buildRequest(HttpMethod.POST, content);
         req.headers().set(HEADER_TOPIC.header, "admin_user");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
-        req.headers().set(HEADER_PUB_QOS.header, "1");
+        req.headers().set(HEADER_QOS.header, "1");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
         handler.handle(reqId, tenantId, req);
         verify(distClient).pub(eq(reqId),
             eq(req.headers().get(HEADER_TOPIC.header)),
@@ -92,23 +85,11 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
     }
 
     @Test
-    public void pubSucceed() {
-        DefaultFullHttpRequest req = buildRequest();
-        req.headers().set(HEADER_TOPIC.header, "/greeting");
-        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
-        req.headers().set(HEADER_PUB_QOS.header, "1");
-        req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
-        long reqId = 123;
-        String tenantId = "bifromq_dev";
-
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
-
-        when(distClient.pub(anyLong(), anyString(), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
-        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
-        assertEquals(response.protocolVersion(), req.protocolVersion());
-        assertEquals(response.status(), HttpResponseStatus.OK);
-        assertEquals(response.content().readableBytes(), 0);
+    public void distResults() {
+        dist(DistResult.OK, HttpResponseStatus.OK);
+        dist(DistResult.NO_MATCH, HttpResponseStatus.OK);
+        dist(DistResult.ERROR, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        dist(DistResult.EXCEED_LIMIT, HttpResponseStatus.BAD_REQUEST);
     }
 
     @Test
@@ -116,12 +97,12 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC.header, "/greeting");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
-        req.headers().set(HEADER_PUB_QOS.header, "3");
+        req.headers().set(HEADER_QOS.header, "3");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
@@ -131,27 +112,22 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         assertEquals(response.content().readableBytes(), 0);
     }
 
-    @Test
-    public void pubWithRetain() {
+    public void dist(DistResult result, HttpResponseStatus expectedStatus) {
         DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC.header, "/greeting");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
-        req.headers().set(HEADER_PUB_QOS.header, "2");
-        req.headers().set(HEADER_RETAIN.header, "true");
+        req.headers().set(HEADER_QOS.header, "1");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, retainClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
-        when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
-            .thenReturn(CompletableFuture.completedFuture(RetainReply.getDefaultInstance()));
+            .thenReturn(CompletableFuture.completedFuture(result));
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
-        assertEquals(response.status(), HttpResponseStatus.OK);
-        assertEquals(response.content().readableBytes(), 0);
+        assertEquals(response.status(), expectedStatus);
     }
 
     private DefaultFullHttpRequest buildRequest() {

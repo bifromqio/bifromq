@@ -24,7 +24,7 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -66,7 +66,7 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryRequest, Delive
 
         private class DeliveryBatchCall implements IBatchCall<DeliveryRequest, DeliveryResult, DelivererKey> {
             private final Queue<CallTask<DeliveryRequest, DeliveryResult, DelivererKey>> tasks = new ArrayDeque<>(128);
-            private Map<MessagePackWrapper, Set<SubInfo>> batch = new HashMap<>(128);
+            private Map<MessagePackWrapper, Set<MatchInfo>> batch = new HashMap<>(128);
 
             @Override
             public void reset() {
@@ -76,7 +76,7 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryRequest, Delive
             @Override
             public void add(CallTask<DeliveryRequest, DeliveryResult, DelivererKey> callTask) {
                 batch.computeIfAbsent(callTask.call.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
-                    .add(callTask.call.subInfo);
+                    .add(callTask.call.matchInfo);
                 tasks.add(callTask);
             }
 
@@ -94,11 +94,11 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryRequest, Delive
                         } else {
                             CallTask<DeliveryRequest, DeliveryResult, DelivererKey> task;
                             while ((task = tasks.poll()) != null) {
-                                DeliveryResult result = reply.get(task.call.subInfo);
+                                DeliveryResult result = reply.get(task.call.matchInfo);
                                 if (result != null) {
                                     task.callResult.complete(result);
                                 } else {
-                                    log.warn("No write result for sub: {}", task.call.subInfo);
+                                    log.warn("No write result for sub: {}", task.call.matchInfo);
                                     task.callResult.complete(DeliveryResult.OK);
                                 }
                             }

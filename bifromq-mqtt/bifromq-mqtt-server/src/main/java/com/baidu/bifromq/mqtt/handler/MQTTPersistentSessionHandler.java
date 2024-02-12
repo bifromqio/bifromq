@@ -430,8 +430,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         }
                         return;
                     }
-                    SubMessage subMsg = new SubMessage(topic, message, publihser, topicFilter, option);
-                    sendQoS0SubMessage(subMsg);
+                    sendQoS0SubMessage(new SubMessage(topic, message, publihser, topicFilter, option));
                 } else {
                     eventCollector.report(getLocal(QoS0Dropped.class)
                         .reason(DropReason.NoSubPermission)

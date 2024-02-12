@@ -22,7 +22,7 @@ import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.google.common.collect.Iterables;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -37,19 +37,19 @@ class InboxDeliverPipeline implements IDeliverer {
     }
 
     @Override
-    public CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
+    public CompletableFuture<Map<MatchInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
         long reqId = System.nanoTime();
         return ppln.invoke(SendRequest.newBuilder()
                 .setReqId(reqId)
                 .addAllParams(Iterables.transform(packs,
                     e -> SendRequest.Params.newBuilder()
                         .setMessages(e.messagePack)
-                        .addAllSubInfo(e.inboxes)
+                        .addAllMatchInfo(e.matchInfos)
                         .build()))
                 .build())
             .thenApply(sendReply -> sendReply.getResultList().stream()
                 .collect(Collectors.toMap(
-                    SendReply.Result::getSubInfo,
+                    SendReply.Result::getMatchInfo,
                     e -> switch (e.getCode()) {
                         case OK -> DeliveryResult.OK;
                         case NO_INBOX -> DeliveryResult.NO_INBOX;

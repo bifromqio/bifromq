@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,14 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.v3.client;
+package com.baidu.bifromq.mqtt.utils;
 
-public class MqttResponse {
-    public final byte type;
-    public final int messageId;
+public class SubUtil {
+    public static String localize(String receiverId) {
+        return "1" + receiverId;
+    }
 
-    public MqttResponse(byte type, int messageId) {
-        this.type = type;
-        this.messageId = messageId;
+    public static String globalize(String receiverId) {
+        return "0" + receiverId;
     }
 }

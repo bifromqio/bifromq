@@ -11,25 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.v3.client;
+package com.baidu.bifromq.mqtt.integration.v5.client;
 
-import com.google.protobuf.ByteString;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+public class MqttResponse {
+    public final byte type;
+    public final int messageId;
 
-public class MqttMsg {
-    public final int id;
-    public final int qos;
-    public final String topic;
-    public final ByteString payload;
-    public final boolean isRetain;
-    public final boolean isDup;
-
-    MqttMsg(String topic, MqttMessage message) {
-        id = message.getId();
-        this.topic = topic;
-        payload = ByteString.copyFrom(message.getPayload());
-        isDup = message.isDuplicate();
-        isRetain = message.isRetained();
-        qos = message.getQos();
+    public MqttResponse(byte type, int messageId) {
+        this.type = type;
+        this.messageId = messageId;
     }
 }

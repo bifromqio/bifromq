@@ -29,8 +29,8 @@ import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
@@ -71,11 +71,11 @@ public class DistQoS1Test extends DistWorkerTest {
         when(mqttBroker.open("server1")).thenReturn(writer1);
 
         when(writer1.deliver(any())).thenAnswer(
-            (Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            (Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                    for (MatchInfo subInfo : inboxWrite.matchInfos) {
                         resultMap.put(subInfo, DeliveryResult.NO_INBOX);
                     }
                 }
@@ -85,7 +85,7 @@ public class DistQoS1Test extends DistWorkerTest {
         when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
             CompletableFuture.completedFuture(null));
 
-        sub(tenantA, "/a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
@@ -110,7 +110,7 @@ public class DistQoS1Test extends DistWorkerTest {
         verify(distClient, timeout(200).atLeastOnce())
             .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
-        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
     }
 
     @SneakyThrows
@@ -125,11 +125,11 @@ public class DistQoS1Test extends DistWorkerTest {
         when(mqttBroker.open("server1")).thenReturn(writer1);
 
         when(writer1.deliver(any())).thenAnswer(
-            (Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            (Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                    for (MatchInfo subInfo : inboxWrite.matchInfos) {
                         resultMap.put(subInfo, DeliveryResult.NO_INBOX);
                     }
                 }
@@ -139,7 +139,7 @@ public class DistQoS1Test extends DistWorkerTest {
         when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
-        sub(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
+        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
@@ -168,6 +168,6 @@ public class DistQoS1Test extends DistWorkerTest {
 
         verify(eventCollector, timeout(200).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
 
-        unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
+        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
     }
 }

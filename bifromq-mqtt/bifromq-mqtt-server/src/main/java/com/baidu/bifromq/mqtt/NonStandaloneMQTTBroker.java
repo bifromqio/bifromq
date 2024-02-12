@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt;
 
-import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.ILocalSessionServer;
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,13 +24,10 @@ final class NonStandaloneMQTTBroker extends AbstractMQTTBroker<NonStandaloneMQTT
     public NonStandaloneMQTTBroker(NonStandaloneMQTTBrokerBuilder builder) {
         super(builder);
         sessionServer = ILocalSessionServer.nonStandaloneBuilder()
-                .rpcServerBuilder(builder.rpcServerBuilder)
-                .build();
-    }
-
-    @Override
-    protected ILocalSessionRegistry sessionRegistry() {
-        return sessionServer;
+            .rpcServerBuilder(builder.rpcServerBuilder)
+            .sessionRegistry(builder.sessionRegistry)
+            .distService(builder.distService)
+            .build();
     }
 
     @Override

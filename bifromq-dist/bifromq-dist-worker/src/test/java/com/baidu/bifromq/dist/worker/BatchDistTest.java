@@ -19,7 +19,6 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,9 +28,9 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import java.util.List;
@@ -73,23 +72,23 @@ public class BatchDistTest extends DistWorkerTest {
         when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
         when(inboxBroker.open("batch2")).thenReturn(writer2);
         when(writer1.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
+                Map<TopicMessagePack, List<MatchInfo>> msgPack = invocation.getArgument(0);
                 return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
                     .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
             });
         when(writer2.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
-                Map<TopicMessagePack, List<SubInfo>> msgPack = invocation.getArgument(0);
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
+                Map<TopicMessagePack, List<MatchInfo>> msgPack = invocation.getArgument(0);
                 return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
                     .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
             });
 
-        sub(tenantA, "/a/1", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "/a/2", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "/a/2", AT_MOST_ONCE, MqttBroker, "inbox3", "batch1");
-        sub(tenantA, "/a/3", AT_LEAST_ONCE, InboxService, "inbox2", "batch2");
-        sub(tenantA, "/a/4", AT_LEAST_ONCE, InboxService, "inbox2", "batch2");
+        match(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/a/2", MqttBroker, "inbox3", "batch1");
+        match(tenantA, "/a/3", InboxService, "inbox2", "batch2");
+        match(tenantA, "/a/4", InboxService, "inbox2", "batch2");
 
         BatchDistReply reply = dist(tenantA,
             List.of(
@@ -115,11 +114,11 @@ public class BatchDistTest extends DistWorkerTest {
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/3").intValue(), 1);
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/4").intValue(), 1);
 
-        unsub(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
-        unsub(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");
-        unsub(tenantA, "/a/2", MqttBroker, "inbox3", "batch1");
-        unsub(tenantA, "/a/3", InboxService, "inbox2", "batch2");
-        unsub(tenantA, "/a/4", InboxService, "inbox2", "batch2");
+        unmatch(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/a/2", MqttBroker, "inbox3", "batch1");
+        unmatch(tenantA, "/a/3", InboxService, "inbox2", "batch2");
+        unmatch(tenantA, "/a/4", InboxService, "inbox2", "batch2");
     }
 
     private TopicMessagePack.PublisherPack toMsg(String tenantId, QoS qos, ByteString payload) {

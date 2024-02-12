@@ -1,6 +1,6 @@
 syntax = "proto3";
 import "commontype/QoS.proto";
-import "commontype/SubInfo.proto";
+import "commontype/MatchInfo.proto";
 import "commontype/TopicMessage.proto";
 
 option java_multiple_files = true;
@@ -17,7 +17,7 @@ service OnlineInboxBroker {
 
 message WritePack{
   commontype.TopicMessagePack messagePack = 1;
-  repeated commontype.SubInfo subscriber = 2;
+  repeated commontype.MatchInfo matchInfo = 2;
 }
 
 message WriteRequest {
@@ -31,7 +31,7 @@ message WriteResult{
     NO_INBOX = 1;
     ERROR = 2;
   }
-  commontype.SubInfo subInfo = 1;
+  commontype.MatchInfo matchInfo = 1;
   Result result = 2;
 }
 
@@ -43,7 +43,7 @@ message WriteReply {
 message SubRequest {
   uint64 reqId = 1;
   string tenantId = 2;
-  string inboxId = 3;
+  string sessionId = 3;
   string topicFilter = 4;
   commontype.QoS subQoS = 5;
 }
@@ -65,7 +65,7 @@ message SubReply {
 message UnsubRequest {
   uint64 reqId = 1;
   string tenantId = 2;
-  string inboxId = 3;
+  string sessionId = 3;
   string topicFilter = 4;
 }
 

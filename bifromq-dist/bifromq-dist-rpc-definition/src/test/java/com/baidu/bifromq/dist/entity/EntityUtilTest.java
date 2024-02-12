@@ -13,18 +13,16 @@
 
 package com.baidu.bifromq.dist.entity;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
-import com.baidu.bifromq.dist.rpc.proto.MatchRecord;
-import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.google.protobuf.ByteString;
 import org.testng.annotations.Test;
 
@@ -45,20 +43,17 @@ public class EntityUtilTest {
     public void testParseNormalMatchRecord() {
         String scopedInboxId = toQInboxId(MqttBroker, "inbox1", "delivererKey1");
         ByteString key = toMatchRecordKey("tenantId", "/a/b/c", scopedInboxId);
-        MatchRecord normal = MatchRecord.newBuilder()
-            .setNormal(QoS.AT_MOST_ONCE).build();
-        Matching matching = parseMatchRecord(key, normal.toByteString());
+        Matching matching = parseMatchRecord(key, ByteString.EMPTY);
         assertEquals(matching.tenantId, "tenantId");
         assertEquals(matching.escapedTopicFilter, escape("/a/b/c"));
         assertEquals(matching.originalTopicFilter(), "/a/b/c");
         assertTrue(matching instanceof NormalMatching);
         assertEquals(((NormalMatching) matching).scopedInboxId, scopedInboxId);
 
-        SubInfo subInfo = ((NormalMatching) matching).subInfo;
-        assertEquals(subInfo.getTenantId(), "tenantId");
-        assertEquals(subInfo.getSubQoS(), normal.getNormal());
-        assertEquals(subInfo.getInboxId(), "inbox1");
-        assertEquals(subInfo.getTopicFilter(), "/a/b/c");
+        MatchInfo matchInfo = ((NormalMatching) matching).matchInfo;
+        assertEquals(matchInfo.getTenantId(), "tenantId");
+        assertEquals(matchInfo.getReceiverId(), "inbox1");
+        assertEquals(matchInfo.getTopicFilter(), "/a/b/c");
 
         assertEquals(((NormalMatching) matching).subBrokerId, MqttBroker);
         assertEquals(((NormalMatching) matching).delivererKey, "delivererKey1");
@@ -66,12 +61,10 @@ public class EntityUtilTest {
 
     @Test
     public void testParseGroupMatchRecord() {
-        String scopedInboxId = toQInboxId(MqttBroker, "inbox1", "server1");
-        ByteString key = toMatchRecordKey("tenantId", "$share/group//a/b/c", scopedInboxId);
-        MatchRecord record = MatchRecord.newBuilder()
-            .setGroup(GroupMatchRecord.newBuilder()
-                .putEntry(scopedInboxId, QoS.AT_MOST_ONCE)
-                .build())
+        String scopedReceiverId = toQInboxId(MqttBroker, "inbox1", "server1");
+        ByteString key = toMatchRecordKey("tenantId", "$share/group//a/b/c", scopedReceiverId);
+        GroupMatchRecord record = GroupMatchRecord.newBuilder()
+            .addQReceiverId(scopedReceiverId)
             .build();
         Matching matching = parseMatchRecord(key, record.toByteString());
         assertEquals(matching.tenantId, "tenantId");
@@ -79,13 +72,12 @@ public class EntityUtilTest {
         assertEquals(matching.originalTopicFilter(), "$share/group//a/b/c");
         assertTrue(matching instanceof GroupMatching);
         assertEquals(((GroupMatching) matching).group, "group");
-        assertEquals(((GroupMatching) matching).inboxList.get(0).scopedInboxId, scopedInboxId);
+        assertEquals(((GroupMatching) matching).receiverList.get(0).scopedInboxId, scopedReceiverId);
 
-        SubInfo subInfo = ((GroupMatching) matching).inboxList.get(0).subInfo;
-        assertEquals(subInfo.getSubQoS(), record.getGroup().getEntryMap().get(scopedInboxId));
-        assertEquals(subInfo.getInboxId(), "inbox1");
-        assertEquals(((GroupMatching) matching).inboxList.get(0).subBrokerId, MqttBroker);
-        assertEquals(((GroupMatching) matching).inboxList.get(0).delivererKey, "server1");
+        MatchInfo matchInfo = ((GroupMatching) matching).receiverList.get(0).matchInfo;
+        assertEquals(matchInfo.getReceiverId(), "inbox1");
+        assertEquals(((GroupMatching) matching).receiverList.get(0).subBrokerId, MqttBroker);
+        assertEquals(((GroupMatching) matching).receiverList.get(0).delivererKey, "server1");
 
     }
 }

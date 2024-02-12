@@ -19,15 +19,12 @@ public enum Headers {
     HEADER_TOPIC("topic"),
     HEADER_TOPIC_FILTER("topic_filter"),
     HEADER_SUB_QOS("sub_qoS"),
-    HEADER_INBOX_ID("inbox_id"),
-    HEADER_SUBBROKER_ID("subbroker_id"),
     HEADER_CLIENT_TYPE("client_type"),
     HEADER_CLIENT_META_PREFIX("client_meta_"),
     HEADER_USER_ID("user_id"),
     HEADER_CLIENT_ID("client_id"),
     HEADER_RETAIN("retain"),
-    HEADER_PUB_QOS("pub_qos"),
-    HEADER_DELIVERER_KEY("deliverer_key"),
+    HEADER_QOS("qos"),
     HEADER_EXPIRY_SECONDS("expiry_seconds");
 
     public final String header;

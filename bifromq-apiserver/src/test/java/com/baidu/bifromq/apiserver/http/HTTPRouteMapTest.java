@@ -59,7 +59,7 @@ public class HTTPRouteMapTest extends MockableTest {
 
     @Test
     public void getHandler() {
-        HTTPPubHandler pubHandler = new HTTPPubHandler(distClient, retainClient, settingProvider);
+        HTTPPubHandler pubHandler = new HTTPPubHandler(distClient, settingProvider);
         Collection<IHTTPRequestHandler> ret = Collections.singleton(pubHandler);
         when(handlersFactory.build()).thenReturn(ret);
         HTTPRouteMap routeMap = new HTTPRouteMap(handlersFactory);

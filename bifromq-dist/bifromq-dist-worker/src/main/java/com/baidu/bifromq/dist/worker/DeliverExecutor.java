@@ -24,7 +24,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Delivered;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -87,7 +87,7 @@ public class DeliverExecutor {
     private void send(NormalMatching matched, TopicMessagePack msgPack) {
         int subBrokerId = matched.subBrokerId;
         String delivererKey = matched.delivererKey;
-        SubInfo sub = matched.subInfo;
+        MatchInfo sub = matched.matchInfo;
         DeliveryRequest request = new DeliveryRequest(sub, subBrokerId, delivererKey, msgPack);
         deliverer.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
@@ -106,11 +106,11 @@ public class DeliverExecutor {
                         .messages(msgPack));
                     case NO_INBOX -> {
                         // unsub as side effect
-                        SubInfo subInfo = matched.subInfo;
+                        MatchInfo subInfo = matched.matchInfo;
                         distClient.unmatch(System.nanoTime(),
                             subInfo.getTenantId(),
                             subInfo.getTopicFilter(),
-                            subInfo.getInboxId(),
+                            subInfo.getReceiverId(),
                             delivererKey,
                             subBrokerId);
                         eventCollector.report(getLocal(DeliverNoInbox.class)

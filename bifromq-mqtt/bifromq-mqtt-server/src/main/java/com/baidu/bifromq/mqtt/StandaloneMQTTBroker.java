@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt;
 
-import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.ILocalSessionServer;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,19 +23,16 @@ final class StandaloneMQTTBroker extends AbstractMQTTBroker<StandaloneMQTTBroker
     public StandaloneMQTTBroker(StandaloneMQTTBrokerBuilder builder) {
         super(builder);
         sessionServer = ILocalSessionServer.standaloneBuilder()
-                .id(builder.id)
-                .host(builder.rpcHost)
-                .port(builder.rpcPort)
-                .executor(builder.ioExecutor)
-                .bossEventLoopGroup(builder.rpcBossGroup)
-                .workerEventLoopGroup(builder.rpcWorkerGroup)
-                .crdtService(builder.crdtService)
-                .build();
-    }
-
-    @Override
-    protected ILocalSessionRegistry sessionRegistry() {
-        return sessionServer;
+            .id(builder.id)
+            .host(builder.rpcHost)
+            .port(builder.rpcPort)
+            .executor(builder.ioExecutor)
+            .bossEventLoopGroup(builder.rpcBossGroup)
+            .workerEventLoopGroup(builder.rpcWorkerGroup)
+            .crdtService(builder.crdtService)
+            .sessionRegistry(builder.sessionRegistry)
+            .distService(builder.distService)
+            .build();
     }
 
     @Override

@@ -27,6 +27,7 @@ import static com.baidu.bifromq.mqtt.utils.MQTT5MessageSizer.MIN_CONTROL_PACKET_
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
@@ -58,7 +59,6 @@ import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
-import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.Continue;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
@@ -79,6 +79,7 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.util.TopicUtil;
+import com.baidu.bifromq.util.UTF8Util;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
@@ -118,10 +119,10 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
         // sanity check
         final String requestClientId = connMsg.payload().clientIdentifier();
-        if (!MQTTUtf8Util.isWellFormed(requestClientId, SANITY_CHECK)) {
+        if (!UTF8Util.isWellFormed(requestClientId, SANITY_CHECK)) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("Malformed clientId")
                     .build())
                 .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID) // [MQTT-3.1.3-8]
@@ -131,7 +132,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         if (requestClientId.length() > MAX_CLIENT_ID_LEN) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("Max " + MAX_CLIENT_ID_LEN + "chars allowed")
                     .build())
                 .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID) // [MQTT-3.1.3-8]
@@ -141,7 +142,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         if (connMsg.variableHeader().isCleanSession() && requestClientId.isEmpty()) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("ClientId missing when CleanStart is set to true")
                     .build())
                 .returnCode(CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID) // [MQTT-3.1.3-8]
@@ -149,10 +150,10 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 getLocal(MalformedClientIdentifier.class).peerAddress(clientAddress));
         }
         if (connMsg.variableHeader().hasUserName() &&
-            !MQTTUtf8Util.isWellFormed(connMsg.payload().userName(), SANITY_CHECK)) {
+            !UTF8Util.isWellFormed(connMsg.payload().userName(), SANITY_CHECK)) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("Malformed username")
                     .build())
                 .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET) // [MQTT-4.13.1-1]
@@ -163,7 +164,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             authData(connMsg.variableHeader().properties()).isPresent()) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("Missing auth method for authData")
                     .build())
                 .returnCode(CONNECTION_REFUSED_PROTOCOL_ERROR) // [MQTT-4.13.1-1]
@@ -171,10 +172,10 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 getLocal(MalformedUserName.class).peerAddress(clientAddress));
         }
         if (connMsg.variableHeader().isWillFlag()) {
-            if (!MQTTUtf8Util.isWellFormed(connMsg.payload().willTopic(), SANITY_CHECK)) {
+            if (!UTF8Util.isWellFormed(connMsg.payload().willTopic(), SANITY_CHECK)) {
                 return new GoAway(MqttMessageBuilders
                     .connAck()
-                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .properties(MQTT5MessageBuilders.connAckProperties()
                         .reasonString("Malformed will topic")
                         .build())
                     .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET) // [MQTT-4.13.1-1]
@@ -319,11 +320,12 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .setType(MQTT_TYPE_VALUE)
             .putAllMetadata(success.getAttrsMap()) // custom attrs
             .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_5_VALUE)
-            .putMetadata(MQTT_USER_ID_KEY, success.getTenantId())
+            .putMetadata(MQTT_USER_ID_KEY, success.getUserId())
             .putMetadata(MQTT_CLIENT_ID_KEY, connMsg.payload().clientIdentifier())
             .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
-                Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""));
+                Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""))
+            .putMetadata(MQTT_CLIENT_BROKER_KEY, ChannelAttrs.mqttSessionContext(ctx).serverId);
         if (success.hasResponseInfo()) {
             clientInfoBuilder.putMetadata(MQTT_RESPONSE_INFO, success.getResponseInfo());
         }
@@ -375,7 +377,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         if (message.variableHeader().version() == 5 && !settings.mqtt5Enabled) {
             return new GoAway(MqttMessageBuilders.connAck()
                 .returnCode(CONNECTION_REFUSED_UNSUPPORTED_PROTOCOL_VERSION)
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("MQTT5 not enabled")
                     .build())
                 .build(),
@@ -386,7 +388,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         if (IMQTTMessageSizer.mqtt5().sizeOf(message).encodedBytes() > settings.maxPacketSize) {
             return new GoAway(MqttMessageBuilders.connAck()
                 .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("Too large connect packet: max=" + settings.maxPacketSize)
                     .build())
                 .build(),
@@ -400,7 +402,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             if (requestMaxPacketSize.get() < MIN_CONTROL_PACKET_SIZE) {
                 return new GoAway(MqttMessageBuilders.connAck()
                     .returnCode(CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC)
-                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .properties(MQTT5MessageBuilders.connAckProperties()
                         .reasonString("Invalid max packet size: " + requestMaxPacketSize.get())
                         .build())
                     .build(),
@@ -413,7 +415,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 return new GoAway(MqttMessageBuilders
                     .connAck()
                     .returnCode(CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC)
-                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .properties(MQTT5MessageBuilders.connAckProperties()
                         .reasonString("Max packet size: " + settings.maxPacketSize)
                         .build())
                     .build(),
@@ -428,7 +430,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             return new GoAway(MqttMessageBuilders
                 .connAck()
                 .returnCode(CONNECTION_REFUSED_QUOTA_EXCEEDED)
-                .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("Too large TopicAliasMaximum: max=" + settings.maxTopicAlias)
                     .build())
                 .build(),
@@ -445,7 +447,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 return new GoAway(MqttMessageBuilders
                     .connAck()
                     .returnCode(CONNECTION_REFUSED_TOPIC_NAME_INVALID)
-                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .properties(MQTT5MessageBuilders.connAckProperties()
                         .reasonString("Will topic exceeds limits")
                         .build())
                     .build(),
@@ -474,10 +476,10 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             }
             if (settings.payloadFormatValidationEnabled &&
                 isUTF8Payload(connMsg.payload().willProperties()) &&
-                !MQTTUtf8Util.isValidUTF8Payload(connMsg.payload().willMessageInBytes())) {
+                !UTF8Util.isValidUTF8Payload(connMsg.payload().willMessageInBytes())) {
                 return new GoAway(MqttMessageBuilders
                     .connAck()
-                    .properties(new MqttMessageBuilders.ConnAckPropertiesBuilder()
+                    .properties(MQTT5MessageBuilders.connAckProperties()
                         .reasonString("Invalid payload format")
                         .build())
                     .returnCode(CONNECTION_REFUSED_PAYLOAD_FORMAT_INVALID) // [MQTT-4.13.1-1]
@@ -576,8 +578,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                                              int sessionExpiryInterval,
                                              boolean sessionExists,
                                              ClientInfo clientInfo) {
-        MqttMessageBuilders.ConnAckPropertiesBuilder connPropsBuilder =
-            new MqttMessageBuilders.ConnAckPropertiesBuilder();
+        MQTT5MessageBuilders.ConnAckPropertiesBuilder connPropsBuilder = MQTT5MessageBuilders.connAckProperties();
         if (connMsg.variableHeader().keepAliveTimeSeconds() != keepAliveSeconds) {
             connPropsBuilder.serverKeepAlive(keepAliveSeconds);
         }

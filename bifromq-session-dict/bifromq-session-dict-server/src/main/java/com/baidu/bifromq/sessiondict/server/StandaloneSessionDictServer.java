@@ -21,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class StandaloneSessionDictServer extends AbstractSessionDictServer {
     private final IRPCServer rpcServer;
-    private final SessionDictService service = new SessionDictService();
 
     StandaloneSessionDictServer(StandaloneSessionDictServerBuilder builder) {
         super(builder);

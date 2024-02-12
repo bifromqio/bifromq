@@ -40,7 +40,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.inbox.records.SubscribedTopicFilter;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
@@ -531,7 +530,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             InboxMetadata metadata = metadataOpt.get();
             InboxMetadata.Builder metadataBuilder = metadataOpt.get().toBuilder();
             if (metadata.getTopicFiltersCount() < maxTopicFilters) {
-                if (metadataBuilder.containsTopicFilters(params.getTopicFilter())) {
+                TopicFilterOption option = metadataBuilder.getTopicFiltersMap().get(params.getTopicFilter());
+                if (option != null && option.equals(params.getOption())) {
                     replyBuilder.addCode(BatchSubReply.Code.EXISTS);
                 } else {
                     metadataBuilder.putTopicFilters(params.getTopicFilter(), params.getOption());
@@ -700,15 +700,13 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     .setCode(BatchInsertReply.Code.OK);
                 List<SubMessage> qos0MsgList = new ArrayList<>();
                 List<SubMessage> bufferMsgList = new ArrayList<>();
-                Map<SubscribedTopicFilter, Boolean> reject = new HashMap<>();
+                Map<String, Boolean> reject = new HashMap<>();
                 for (SubMessagePack messagePack : params.getMessagePackList()) {
                     TopicFilterOption tfOption = metadata.getTopicFiltersMap().get(messagePack.getTopicFilter());
                     if (tfOption == null) {
-                        reject.put(new SubscribedTopicFilter(messagePack.getTopicFilter(), messagePack.getSubQoS()),
-                            true);
+                        reject.put(messagePack.getTopicFilter(), true);
                     } else {
-                        reject.put(new SubscribedTopicFilter(messagePack.getTopicFilter(), messagePack.getSubQoS()),
-                            false);
+                        reject.put(messagePack.getTopicFilter(), false);
                         for (TopicMessagePack topicMsgPack : messagePack.getMessagesList()) {
                             String topic = topicMsgPack.getTopic();
                             for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
@@ -721,7 +719,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                         message
                                     );
                                     QoS finalQoS = QoS.forNumber(
-                                        Math.min(message.getPubQoS().getNumber(), messagePack.getSubQoS().getNumber()));
+                                        Math.min(message.getPubQoS().getNumber(), tfOption.getQos().getNumber()));
                                     assert finalQoS != null;
                                     switch (finalQoS) {
                                         case AT_MOST_ONCE -> qos0MsgList.add(subMessage);
@@ -734,8 +732,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 }
                 resBuilder.addAllInsertionResult(reject.entrySet().stream()
                     .map(e -> BatchInsertReply.InsertionResult.newBuilder()
-                        .setTopicFilter(e.getKey().topicFilter())
-                        .setSubQoS(e.getKey().subQoS())
+                        .setTopicFilter(e.getKey())
                         .setRejected(e.getValue())
                         .build()).toList());
                 InboxMetadata.Builder metadataBuilder = metadata.toBuilder();

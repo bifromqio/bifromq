@@ -15,6 +15,10 @@ package com.baidu.bifromq.mqtt;
 
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.mqtt.service.ILocalDistService;
+import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
+import com.baidu.bifromq.mqtt.service.LocalDistService;
+import com.baidu.bifromq.mqtt.service.LocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -40,6 +44,8 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     IInboxClient inboxClient;
     IRetainClient retainClient;
     ISessionDictClient sessionDictClient;
+    ILocalSessionRegistry sessionRegistry;
+    ILocalDistService distService;
     ConnListenerBuilder.TCPConnListenerBuilder<T> tcpListenerBuilder;
     ConnListenerBuilder.TLSConnListenerBuilder<T> tlsListenerBuilder;
     ConnListenerBuilder.WSConnListenerBuilder<T> wsListenerBuilder;
@@ -147,6 +153,8 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
 
     public T distClient(IDistClient distClient) {
         this.distClient = distClient;
+        sessionRegistry = new LocalSessionRegistry();
+        distService = new LocalDistService(brokerId(), distClient);
         return thisT();
     }
 

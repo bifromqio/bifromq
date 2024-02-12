@@ -17,7 +17,6 @@ import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -30,14 +29,15 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
 
     public HTTPRequestHandlersFactory(ISessionDictClient sessionDictClient,
                                       IDistClient distClient,
-                                      IMqttBrokerClient mqttBrokerClient,
                                       IInboxClient inboxClient,
                                       IRetainClient retainClient,
                                       ISettingProvider settingProvider) {
+        register(new HTTPGetSessionInfoHandler(sessionDictClient));
         register(new HTTPKickHandler(sessionDictClient));
-        register(new HTTPPubHandler(distClient, retainClient, settingProvider));
-        register(new HTTPSubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider));
-        register(new HTTPUnsubHandler(mqttBrokerClient, inboxClient, distClient, settingProvider));
+        register(new HTTPRetainHandler(retainClient, settingProvider));
+        register(new HTTPPubHandler(distClient, settingProvider));
+        register(new HTTPSubHandler(sessionDictClient));
+        register(new HTTPUnsubHandler(sessionDictClient));
         register(new HTTPExpireInboxHandler(inboxClient));
     }
 

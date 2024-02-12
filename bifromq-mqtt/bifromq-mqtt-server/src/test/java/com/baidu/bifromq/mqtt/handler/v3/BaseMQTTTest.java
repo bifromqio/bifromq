@@ -58,8 +58,10 @@ import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
+import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
-import com.baidu.bifromq.mqtt.session.IMQTTSession;
+import com.baidu.bifromq.mqtt.service.LocalDistService;
+import com.baidu.bifromq.mqtt.service.LocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.mqtt.utils.TestTicker;
@@ -133,38 +135,14 @@ public abstract class BaseMQTTTest {
     protected AtomicReference<Consumer<ClientInfo>> onKick = new AtomicReference<>();
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
-    protected ILocalSessionRegistry sessionRegistry = new ILocalSessionRegistry() {
-        private Map<String, IMQTTSession> sessions = new HashMap<>();
-
-        @Override
-        public CompletableFuture<Void> disconnectAll(int disconnectRate) {
-            return CompletableFuture.allOf(
-                sessions.values().stream().map(IMQTTSession::disconnect).toArray(CompletableFuture[]::new));
-        }
-
-        @Override
-        public void add(String sessionId, IMQTTSession session) {
-            sessions.put(sessionId, session);
-        }
-
-        @Override
-        public boolean remove(String sessionId, IMQTTSession session) {
-            return sessions.remove(sessionId, session);
-        }
-
-        @Override
-        public List<IMQTTSession> removeAll() {
-            List<IMQTTSession> ret = new ArrayList<>(sessions.values());
-            sessions.clear();
-            return ret;
-        }
-    };
     protected EmbeddedChannel channel;
     protected String serverId = "testServerId";
     protected String tenantId = "testTenantA";
     protected String userId = "testDeviceKey";
     protected String clientId = "testClientId";
     protected String delivererKey = "testGroupKey";
+    protected ILocalSessionRegistry sessionRegistry;
+    protected ILocalDistService distService;
     protected String remoteIp = "127.0.0.1";
     protected int remotePort = 8888;
     protected long disconnectDelay = 5000;
@@ -177,6 +155,8 @@ public abstract class BaseMQTTTest {
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         testTicker = new TestTicker();
+        sessionRegistry = new LocalSessionRegistry();
+        distService = new LocalDistService(serverId, distClient);
         sessionContext = MQTTSessionContext.builder()
             .authProvider(authProvider)
             .eventCollector(eventCollector)
@@ -185,7 +165,8 @@ public abstract class BaseMQTTTest {
             .inboxClient(inboxClient)
             .retainClient(retainClient)
             .sessionDictClient(sessionDictClient)
-            .sessionRegistry(sessionRegistry)
+            .localSessionRegistry(sessionRegistry)
+            .localDistService(distService)
             .defaultKeepAliveTimeSeconds(300)
             .ticker(testTicker)
             .serverId(serverId)
@@ -339,9 +320,15 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockDistMatch(QoS qos, boolean success) {
-        when(distClient.match(anyLong(), anyString(), anyString(), eq(qos), anyString(), anyString(), anyInt()))
+        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
+
+    protected void mockDistMatch(String topic, boolean success) {
+        when(distClient.match(anyLong(), anyString(), eq(topic), anyString(), anyString(), anyInt()))
+            .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
+    }
+
 
     protected void mockInboxSub(QoS qos, boolean success) {
         when(inboxClient.sub(any())).thenReturn(CompletableFuture.completedFuture(

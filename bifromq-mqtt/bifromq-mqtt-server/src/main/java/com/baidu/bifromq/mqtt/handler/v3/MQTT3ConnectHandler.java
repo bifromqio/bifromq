@@ -18,6 +18,7 @@ import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
@@ -36,7 +37,7 @@ import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
-import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
+import com.baidu.bifromq.util.UTF8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
@@ -100,7 +101,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                     getLocal(IdentifierRejected.class).peerAddress(clientAddress));
             }
         }
-        if (!MQTTUtf8Util.isWellFormed(requestClientId, SANITY_CHECK)) {
+        if (!UTF8Util.isWellFormed(requestClientId, SANITY_CHECK)) {
             return new GoAway(getLocal(MalformedClientIdentifier.class).peerAddress(clientAddress));
         }
         if (requestClientId.length() > MAX_CLIENT_ID_LEN) {
@@ -111,11 +112,11 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                 getLocal(IdentifierRejected.class).peerAddress(clientAddress));
         }
         if (message.variableHeader().hasUserName() &&
-            !MQTTUtf8Util.isWellFormed(message.payload().userName(), SANITY_CHECK)) {
+            !UTF8Util.isWellFormed(message.payload().userName(), SANITY_CHECK)) {
             return new GoAway(getLocal(MalformedUserName.class).peerAddress(clientAddress));
         }
         if (message.variableHeader().isWillFlag() &&
-            !MQTTUtf8Util.isWellFormed(message.payload().willTopic(), SANITY_CHECK)) {
+            !UTF8Util.isWellFormed(message.payload().willTopic(), SANITY_CHECK)) {
             return new GoAway(getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
         }
         return null;
@@ -141,6 +142,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                             .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
                             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
                                 Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""))
+                            .putMetadata(MQTT_CLIENT_BROKER_KEY, ChannelAttrs.mqttSessionContext(ctx).serverId)
                             .build());
                     }
                     case REJECT -> {

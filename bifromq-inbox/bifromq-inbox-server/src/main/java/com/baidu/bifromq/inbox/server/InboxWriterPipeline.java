@@ -51,7 +51,7 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
         return handler.handle(request).thenApply(v -> {
             for (SendReply.Result result : v.getResultList()) {
                 if (result.getCode() == SendReply.Code.OK) {
-                    writeCallback.afterWrite(ScopedInbox.from(result.getSubInfo()), delivererKey);
+                    writeCallback.afterWrite(ScopedInbox.from(result.getMatchInfo()), delivererKey);
                 }
             }
             return v;

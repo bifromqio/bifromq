@@ -14,7 +14,6 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.metrics.TenantMetric.DistUsedSpaceGauge;
-import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static org.awaitility.Awaitility.await;
 
 import io.micrometer.core.instrument.Meter;
@@ -27,11 +26,9 @@ public class StatsTest extends DistWorkerTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void reportRangeMetrics() {
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
 
-        sub(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
-        sub(tenantB, "/#", AT_MOST_ONCE, InboxService, "inbox2", "server2");
+        match(tenantB, "/#", InboxService, "inbox2", "server2");
 
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {

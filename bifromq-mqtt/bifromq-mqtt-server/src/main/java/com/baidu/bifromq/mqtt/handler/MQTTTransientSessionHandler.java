@@ -22,6 +22,7 @@ import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEE
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXISTS;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.OK;
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.service.ILocalDistService.globalize;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.util.TopicUtil.isSharedSubscription;
@@ -32,25 +33,20 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Pushed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Dropped;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import com.baidu.bifromq.type.UserProperties;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
-import io.netty.handler.codec.mqtt.MqttQoS;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -92,16 +88,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
         if (!topicFilters.isEmpty()) {
-            addBgTask(CompletableFuture.allOf(topicFilters.keySet().stream()
-                .map(topicFilter -> sessionCtx.distClient.unmatch(System.nanoTime(), clientInfo().getTenantId(),
-                        topicFilter, channelId(), toDelivererKey(channelId(), sessionCtx.serverId), 0)
-                    .exceptionally(e -> {
-                        log.debug("Failed to unsub: tenantId={}, topicFilter={}, inboxId={}, delivererKey={}",
-                            clientInfo().getTenantId(), topicFilter, channelId(),
-                            toDelivererKey(channelId(), sessionCtx.serverId), e);
-                        return UnmatchResult.ERROR;
-                    }))
-                .toArray(CompletableFuture[]::new)));
+            topicFilters.forEach((topicFilter, option) ->
+                addBgTask(sessionCtx.localDistService.unmatch(System.nanoTime(), topicFilter, this)));
         }
         ctx.fireChannelInactive();
     }
@@ -130,7 +118,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
-        return addMatchRecord(reqId, topicFilter, option.getQos())
+        return addMatchRecord(reqId, topicFilter)
             .thenComposeAsync(subResult -> {
                 switch (subResult) {
                     case OK -> {
@@ -155,12 +143,13 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                                     option.getRetainHandling() == SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
                             return addFgTask(sessionCtx.retainClient.match(MatchRequest.newBuilder()
                                 .setReqId(reqId)
-                                .setTenantId(clientInfo.getTenantId())
-                                .setInboxId(channelId())
-                                .setDelivererKey(toDelivererKey(channelId(), sessionCtx.serverId))
+                                .setMatchInfo(MatchInfo.newBuilder()
+                                    .setTenantId(clientInfo.getTenantId())
+                                    .setTopicFilter(topicFilter)
+                                    .setReceiverId(globalize(channelId()))
+                                    .build())
+                                .setDelivererKey(toDelivererKey(globalize(channelId()), sessionCtx.serverId))
                                 .setBrokerId(0)
-                                .setTopicFilter(topicFilter)
-                                .setQos(option.getQos())
                                 .setLimit(settings.retainMatchLimit)
                                 .build()))
                                 .handle((v, e) -> {
@@ -199,30 +188,14 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
-    public boolean publish(SubInfo subInfo, List<TopicMessagePack> topicMsgPacks) {
-        String topicFilter = subInfo.getTopicFilter();
+    public boolean publish(MatchInfo matchInfo, List<TopicMessagePack> topicMsgPacks) {
+        String topicFilter = matchInfo.getTopicFilter();
         TopicFilterOption option = topicFilters.get(topicFilter);
         if (option == null) {
             return false;
         }
         ctx.executor().execute(() -> publish(topicFilter, option, topicMsgPacks));
         return true;
-    }
-
-    @Override
-    public CompletableFuture<SubReply.Result> subscribe(long reqId, String topicFilter, MqttQoS qos) {
-        return CompletableFuture.completedFuture(true)
-            .thenComposeAsync(v -> checkAndSubscribe(reqId, topicFilter, TopicFilterOption.newBuilder()
-                .setQos(QoS.forNumber(qos.value()))
-                .build(), UserProperties.getDefaultInstance())
-                .thenApply(subResult -> SubReply.Result.forNumber(subResult.ordinal())), ctx.executor());
-    }
-
-    @Override
-    public CompletableFuture<UnsubReply.Result> unsubscribe(long reqId, String topicFilter) {
-        return CompletableFuture.completedFuture(true)
-            .thenComposeAsync(v -> checkAndUnsubscribe(reqId, topicFilter, UserProperties.getDefaultInstance())
-                .thenApply(unsubResult -> UnsubReply.Result.forNumber(unsubResult.ordinal())), ctx.executor());
     }
 
     private void publish(String topicFilter, TopicFilterOption option, List<TopicMessagePack> topicMsgPacks) {
@@ -244,22 +217,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                             return;
                         }
                         if (subMsg.qos() == QoS.AT_MOST_ONCE) {
-                            if (ctx.channel().isWritable()) {
-                                // drop qos0 message if channel is not writable
-                                sendQoS0SubMessage(subMsg);
-                                if (settings.debugMode) {
-                                    eventCollector.report(getLocal(QoS0Pushed.class)
-                                        .reqId(subMsg.message().getMessageId())
-                                        .isRetain(subMsg.isRetain())
-                                        .sender(subMsg.publisher())
-                                        .topic(subMsg.topic())
-                                        .matchedFilter(subMsg.topicFilter())
-                                        .size(subMsg.message().getPayload().size())
-                                        .clientInfo(clientInfo()));
-                                }
-                            } else {
-                                reportDropEvent(subMsg, DropReason.Overflow);
-                            }
+                            sendQoS0SubMessage(subMsg);
                         } else {
                             if (inbox.size() >= settings.inboxQueueLength) {
                                 reportDropEvent(subMsg, DropReason.Overflow);
@@ -350,16 +308,11 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         }
     }
 
-    private CompletableFuture<MatchResult> addMatchRecord(long reqId, String topicFilter, QoS subQoS) {
-        return sessionCtx.distClient.match(reqId,
-            clientInfo().getTenantId(),
-            topicFilter,
-            subQoS, channelId(),
-            toDelivererKey(channelId(), sessionCtx.serverId), 0);
+    private CompletableFuture<MatchResult> addMatchRecord(long reqId, String topicFilter) {
+        return sessionCtx.localDistService.match(reqId, topicFilter, this);
     }
 
     private CompletableFuture<UnmatchResult> removeMatchRecord(long reqId, String topicFilter) {
-        return sessionCtx.distClient.unmatch(reqId, clientInfo().getTenantId(), topicFilter, channelId(),
-            toDelivererKey(channelId(), sessionCtx.serverId), 0);
+        return sessionCtx.localDistService.unmatch(reqId, topicFilter, this);
     }
 }

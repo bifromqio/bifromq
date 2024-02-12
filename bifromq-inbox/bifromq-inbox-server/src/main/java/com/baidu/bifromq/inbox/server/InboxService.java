@@ -79,6 +79,7 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
@@ -327,7 +328,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         return distClient.match(request.getReqId(),
                                 request.getTenantId(),
                                 request.getTopicFilter(),
-                                request.getOption().getQos(),
                                 distInboxId(request.getInboxId(), request.getIncarnation()),
                                 getDelivererKey(request.getInboxId()), inboxClient.id())
                             .thenApply(matchResult -> {
@@ -360,12 +360,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                         tfOption.getRetainHandling() == SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
                                 return retainClient.match(MatchRequest.newBuilder()
                                         .setReqId(request.getReqId())
-                                        .setTenantId(request.getTenantId())
-                                        .setInboxId(distInboxId(request.getInboxId(), request.getIncarnation()))
+                                        .setMatchInfo(MatchInfo.newBuilder()
+                                            .setTenantId(request.getTenantId())
+                                            .setTopicFilter(request.getTopicFilter())
+                                            .setReceiverId(distInboxId(request.getInboxId(), request.getIncarnation()))
+                                            .build())
                                         .setDelivererKey(getDelivererKey(request.getInboxId()))
                                         .setBrokerId(inboxClient.id())
-                                        .setTopicFilter(request.getTopicFilter())
-                                        .setQos(tfOption.getQos())
                                         .setLimit(settingProvider.provide(RetainMessageMatchLimit, request.getTenantId()))
                                         .build())
                                     .handle((v, e) -> {

@@ -23,7 +23,6 @@ import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.SlowDownOnMemPressureHandler;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
-import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
@@ -70,8 +69,6 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         new NettyEventExecutorMetrics(workerGroup).bindTo(Metrics.globalRegistry);
     }
 
-    protected abstract ILocalSessionRegistry sessionRegistry();
-
     protected void beforeBrokerStart() {
 
     }
@@ -85,6 +82,8 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         try {
             sessionContext = MQTTSessionContext.builder()
                 .serverId(builder.brokerId())
+                .localSessionRegistry(builder.sessionRegistry)
+                .localDistService(builder.distService)
                 .authProvider(builder.authProvider)
                 .eventCollector(builder.eventCollector)
                 .settingProvider(builder.settingProvider)
@@ -92,7 +91,6 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 .inboxClient(builder.inboxClient)
                 .retainClient(builder.retainClient)
                 .sessionDictClient(builder.sessionDictClient)
-                .sessionRegistry(sessionRegistry())
                 .defaultKeepAliveTimeSeconds(builder.defaultKeepAliveSeconds)
                 .build();
             log.info("Starting MQTT broker");
@@ -143,9 +141,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
             wssChannelF.channel().close().syncUninterruptibly();
             log.debug("Stopped accepting mqtt connection over wss channel");
         }
-        sessionRegistry().disconnectAll(builder.disconnectRate).join();
+        sessionContext.localSessionRegistry.disconnectAll(builder.disconnectRate).join();
         log.debug("All mqtt connection closed");
 
+        sessionContext.awaitBgTasksFinish();
         log.debug("All background tasks done");
 
         bossGroup.shutdownGracefully().syncUninterruptibly();

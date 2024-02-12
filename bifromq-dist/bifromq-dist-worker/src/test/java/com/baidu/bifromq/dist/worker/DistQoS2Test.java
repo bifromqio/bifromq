@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
-import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,8 +24,8 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
@@ -68,31 +66,31 @@ public class DistQoS2Test extends DistWorkerTest {
         when(mqttBroker.open("server2")).thenReturn(writer2);
 
         when(writer1.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                    for (MatchInfo subInfo : inboxWrite.matchInfos) {
                         resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
             });
         when(writer2.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
+                    for (MatchInfo subInfo : inboxWrite.matchInfos) {
                         resultMap.put(subInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
             });
 
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "server1");
-        sub(tenantA, "/#", AT_LEAST_ONCE, MqttBroker, "inbox1", "server1");
-        sub(tenantA, "/#", EXACTLY_ONCE, MqttBroker, "inbox2", "server2");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
+        match(tenantA, "/#", MqttBroker, "inbox1", "server1");
+        match(tenantA, "/#", MqttBroker, "inbox2", "server2");
         BatchDistReply reply = dist(tenantA, EXACTLY_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
 
@@ -102,11 +100,11 @@ public class DistQoS2Test extends DistWorkerTest {
         verify(writer1, timeout(200).atLeastOnce()).deliver(msgCap.capture());
         for (DeliveryPack pack : msgCap.getValue()) {
             TopicMessagePack msgs = pack.messagePack;
-            Iterable<SubInfo> subInfos = pack.inboxes;
+            Iterable<MatchInfo> subInfos = pack.matchInfos;
             assertEquals(msgs.getTopic(), "/a/b/c");
             for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
                 for (Message msg : publisherPack.getMessageList()) {
-                    for (SubInfo subInfo : subInfos) {
+                    for (MatchInfo subInfo : subInfos) {
                         assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
                     }
                 }
@@ -131,8 +129,8 @@ public class DistQoS2Test extends DistWorkerTest {
             assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
         }
 
-        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
-        unsub(tenantA, "/#", MqttBroker, "inbox1", "server1");
-        unsub(tenantA, "/#", MqttBroker, "inbox2", "server2");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
+        unmatch(tenantA, "/#", MqttBroker, "inbox1", "server1");
+        unmatch(tenantA, "/#", MqttBroker, "inbox2", "server2");
     }
 }

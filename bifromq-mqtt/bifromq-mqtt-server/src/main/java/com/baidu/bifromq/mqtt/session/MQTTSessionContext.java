@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.mqtt.session;
 
+import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
@@ -38,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 public final class MQTTSessionContext {
     private final IAuthProvider authProvider;
     public final ILocalSessionRegistry localSessionRegistry;
+    public final ILocalDistService localDistService;
     public final IEventCollector eventCollector;
     public final ISettingProvider settingProvider;
     public final IDistClient distClient;
@@ -47,10 +50,12 @@ public final class MQTTSessionContext {
     public final String serverId;
     public final int defaultKeepAliveTimeSeconds;
     private final Ticker ticker;
+    private final FutureTracker futureTracker = new FutureTracker();
 
     @Builder
     MQTTSessionContext(String serverId,
-                       ILocalSessionRegistry sessionRegistry,
+                       ILocalSessionRegistry localSessionRegistry,
+                       ILocalDistService localDistService,
                        IAuthProvider authProvider,
                        IDistClient distClient,
                        IInboxClient inboxClient,
@@ -61,7 +66,8 @@ public final class MQTTSessionContext {
                        ISettingProvider settingProvider,
                        Ticker ticker) {
         this.serverId = serverId;
-        this.localSessionRegistry = sessionRegistry;
+        this.localSessionRegistry = localSessionRegistry;
+        this.localDistService = localDistService;
         this.authProvider = authProvider;
         this.eventCollector = eventCollector;
         this.settingProvider = settingProvider;
@@ -158,4 +164,13 @@ public final class MQTTSessionContext {
         };
     }
 
+    public <T> CompletableFuture<T> trackBgTask(CompletableFuture<T> task) {
+        return futureTracker.track(task);
+    }
+
+    public CompletableFuture<Void> awaitBgTasksFinish() {
+        CompletableFuture<Void> onDone = new CompletableFuture<>();
+        futureTracker.whenComplete((v, e) -> onDone.complete(null));
+        return onDone;
+    }
 }

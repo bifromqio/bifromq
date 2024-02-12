@@ -14,14 +14,13 @@
 package com.baidu.bifromq.inbox.server;
 
 import com.baidu.bifromq.inbox.records.ScopedInbox;
-import com.baidu.bifromq.inbox.records.SubscribedTopicFilter;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.SubMessagePack;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -41,13 +40,12 @@ public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
 
     @Override
     public CompletableFuture<SendReply> handle(SendRequest request) {
-        Map<ScopedInbox, Map<SubscribedTopicFilter, List<TopicMessagePack>>> msgsByInbox = new HashMap<>();
+        Map<ScopedInbox, Map<String, List<TopicMessagePack>>> msgsByInbox = new HashMap<>();
         // group messages by inboxId
         for (SendRequest.Params params : request.getParamsList()) {
-            for (SubInfo subInfo : params.getSubInfoList()) {
+            for (MatchInfo subInfo : params.getMatchInfoList()) {
                 msgsByInbox.computeIfAbsent(ScopedInbox.from(subInfo), k -> new HashMap<>())
-                    .computeIfAbsent(SubscribedTopicFilter.from(subInfo),
-                        k -> new LinkedList<>())
+                    .computeIfAbsent(subInfo.getTopicFilter(), k -> new LinkedList<>())
                     .add(params.getMessages());
             }
         }
@@ -59,8 +57,7 @@ public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                     .setIncarnation(entry.getKey().incarnation())
                     .addAllMessagePack(entry.getValue().entrySet().stream()
                         .map(e -> SubMessagePack.newBuilder()
-                            .setTopicFilter(e.getKey().topicFilter())
-                            .setSubQoS(e.getKey().subQoS())
+                            .setTopicFilter(e.getKey())
                             .addAllMessages(e.getValue())
                             .build()).toList())
                     .build())
@@ -78,33 +75,30 @@ public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                 assert results.size() == msgsByInbox.size();
                 int i = 0;
                 SendReply.Builder replyBuilder = SendReply.newBuilder().setReqId(request.getReqId());
-                Map<SubInfo, SendReply.Code> subInfoMap = new HashMap<>();
+                Map<MatchInfo, SendReply.Code> subInfoMap = new HashMap<>();
                 for (ScopedInbox scopedInbox : msgsByInbox.keySet()) {
                     BatchInsertReply.Result result = results.get(i++);
                     switch (result.getCode()) {
                         case OK -> {
                             for (BatchInsertReply.InsertionResult insertionResult : result.getInsertionResultList()) {
-                                subInfoMap.putIfAbsent(scopedInbox.convertTo(insertionResult.getTopicFilter(),
-                                        insertionResult.getSubQoS()),
+                                subInfoMap.putIfAbsent(scopedInbox.convertTo(insertionResult.getTopicFilter()),
                                     insertionResult.getRejected() ? SendReply.Code.NO_INBOX :
                                         SendReply.Code.OK);
                             }
                         }
                         case NO_INBOX -> {
-                            for (SubscribedTopicFilter topicFilterAndQoS : msgsByInbox.get(scopedInbox)
+                            for (String topicFilter : msgsByInbox.get(scopedInbox)
                                 .keySet()) {
                                 subInfoMap.putIfAbsent(
-                                    scopedInbox.convertTo(topicFilterAndQoS.topicFilter(),
-                                        topicFilterAndQoS.subQoS()),
+                                    scopedInbox.convertTo(topicFilter),
                                     SendReply.Code.NO_INBOX);
                             }
                         }
                         case ERROR -> {
-                            for (SubscribedTopicFilter topicFilterAndQoS : msgsByInbox.get(scopedInbox)
+                            for (String topicFilter : msgsByInbox.get(scopedInbox)
                                 .keySet()) {
                                 subInfoMap.putIfAbsent(
-                                    scopedInbox.convertTo(topicFilterAndQoS.topicFilter(),
-                                        topicFilterAndQoS.subQoS()),
+                                    scopedInbox.convertTo(topicFilter),
                                     SendReply.Code.ERROR);
                             }
                         }
@@ -112,7 +106,7 @@ public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                 }
                 return replyBuilder.addAllResult(subInfoMap.entrySet().stream()
                         .map(e -> SendReply.Result.newBuilder()
-                            .setSubInfo(e.getKey())
+                            .setMatchInfo(e.getKey())
                             .setCode(e.getValue())
                             .build()).toList())
                     .build();

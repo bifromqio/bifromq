@@ -11,13 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.v3;
+package com.baidu.bifromq.mqtt.integration;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -49,39 +48,45 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.server.IRetainServer;
 import com.baidu.bifromq.retain.store.IRetainStore;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
+import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.PluginManager;
-import org.testng.annotations.AfterSuite;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
 
 @Slf4j
-class MQTTTest {
-    protected static final String brokerURI = "tcp://127.0.0.1:1883";
+public abstract class MQTTTest {
+    protected static final String BROKER_URI = "tcp://127.0.0.1:1883";
     @Mock
     protected IAuthProvider authProvider;
-
     @Mock
     protected IEventCollector eventCollector;
     @Mock
     protected ISettingProvider settingProvider;
-
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
     private IRPCServer sharedRpcServer;
     private IMqttBrokerClient onlineInboxBrokerClient;
-    protected ISessionDictClient sessionDictClient;
+    private ISessionDictClient sessionDictClient;
     private ISessionDictServer sessionDictServer;
     private IDistClient distClient;
     private IBaseKVStoreClient distWorkerStoreClient;
@@ -102,27 +107,14 @@ class MQTTTest {
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
+    protected String tenantId;
 
-    private static MQTTTest singleInstance;
-
-    public static MQTTTest getInstance() {
-        if (singleInstance == null) {
-            singleInstance = new MQTTTest();
-            singleInstance.setup();
-        }
-        return singleInstance;
+    protected MQTTTest() {
     }
 
-    private MQTTTest() {
-    }
-
-    private void setup() {
+    @BeforeClass(alwaysRun = true, groups = "integration")
+    public final void setupClass() {
         closeable = MockitoAnnotations.openMocks(this);
-        doAnswer(invocationOnMock -> {
-            Event event = invocationOnMock.getArgument(0);
-            event.clone(event.getClass().getConstructor().newInstance());
-            return null;
-        }).when(eventCollector).report(any(Event.class));
 
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         pluginMgr = new DefaultPluginManager();
@@ -162,6 +154,7 @@ class MQTTTest {
             .build();
         sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
+            .mqttBrokerClient(onlineInboxBrokerClient)
             .build();
         inboxClient = IInboxClient.newBuilder()
             .crdtService(clientCrdtService)
@@ -335,14 +328,8 @@ class MQTTTest {
             });
     }
 
-    @AfterSuite(groups = "integration")
-    public static void teardown() throws Exception {
-        if (singleInstance != null) {
-            singleInstance.shutdown();
-        }
-    }
-
-    public void shutdown() throws Exception {
+    @AfterClass(alwaysRun = true, groups = "integration")
+    public final void tearDownClass() throws Exception {
         log.info("Start to tearing down");
         mqttBroker.shutdown();
         log.info("Mqtt broker shut down");
@@ -394,7 +381,37 @@ class MQTTTest {
         log.info("Shutdown bg task executor");
         bgTaskExecutor.shutdownNow();
         closeable.close();
+    }
 
-        singleInstance = null;
+    @BeforeMethod(groups = "integration")
+    public final void setupTest(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+        tenantId = System.nanoTime() + "";
+        doAnswer(invocationOnMock -> {
+            Event event = invocationOnMock.getArgument(0);
+            event.clone(event.getClass().getConstructor().newInstance());
+            return null;
+        }).when(eventCollector).report(any(Event.class));
+        doSetup(method);
+    }
+
+    protected CompletableFuture<KillReply.Result> kill(String userId, String clientId) {
+        return sessionDictClient.kill(System.nanoTime(), tenantId, userId, clientId, ClientInfo.newBuilder()
+            .setTenantId(tenantId)
+            .setType("Killer")
+            .build()).thenApply(KillReply::getResult);
+    }
+
+    protected void doSetup(Method method) {
+    }
+
+    @AfterMethod(groups = "integration")
+    private void tearDownTest(Method method) {
+        log.info("Test case[{}.{}] finished", method.getDeclaringClass().getName(), method.getName());
+        doTearDown(method);
+        Mockito.reset(authProvider, eventCollector, settingProvider);
+    }
+
+    protected void doTearDown(Method method) {
     }
 }

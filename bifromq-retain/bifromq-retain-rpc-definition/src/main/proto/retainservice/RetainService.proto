@@ -1,7 +1,7 @@
 syntax = "proto3";
 import "commontype/ClientInfo.proto";
+import "commontype/MatchInfo.proto";
 import "commontype/TopicMessage.proto";
-import "commontype/QoS.proto";
 
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.retain.rpc.proto";
@@ -33,13 +33,10 @@ message RetainReply {
 
 message MatchRequest {
   uint64 reqId = 1;
-  string tenantId = 2;
-  string inboxId = 3;
-  string delivererKey = 4;
-  uint32 brokerId = 5;
-  string topicFilter = 6;
-  commontype.QoS qos = 7;
-  uint32 limit = 8;
+  commontype.MatchInfo matchInfo = 3;
+  string delivererKey = 5;
+  uint32 brokerId = 6;
+  uint32 limit = 7;
 }
 
 message MatchReply {

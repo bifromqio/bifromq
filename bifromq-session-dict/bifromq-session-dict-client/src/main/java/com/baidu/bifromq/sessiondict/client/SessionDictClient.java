@@ -16,9 +16,15 @@ package com.baidu.bifromq.sessiondict.client;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.sessiondict.RPCBluePrint;
 import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
+import com.baidu.bifromq.sessiondict.rpc.proto.SubReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.UnsubReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -77,6 +83,46 @@ final class SessionDictClient implements ISessionDictClient {
                 .setResult(KillReply.Result.ERROR)
                 .build());
     }
+
+    @Override
+    public CompletableFuture<GetReply> get(GetRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request,
+                SessionDictServiceGrpc.getGetMethod())
+            .exceptionally(e -> {
+                log.debug("Get failed", e);
+                return GetReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(GetReply.Result.ERROR)
+                    .build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<SubReply> sub(SubRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request,
+                SessionDictServiceGrpc.getSubMethod())
+            .exceptionally(e -> {
+                log.debug("Sub failed", e);
+                return SubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(SubReply.Result.ERROR)
+                    .build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<UnsubReply> unsub(UnsubRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request,
+                SessionDictServiceGrpc.getUnsubMethod())
+            .exceptionally(e -> {
+                log.debug("Unsub failed", e);
+                return UnsubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(UnsubReply.Result.ERROR)
+                    .build();
+            });
+    }
+
 
     @Override
     public void stop() {

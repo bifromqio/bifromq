@@ -23,7 +23,6 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.QoS;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,17 +60,19 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<MatchResult> match(long reqId, String tenantId, String topicFilter, QoS qos,
-                                                String inboxId,
-                                                String delivererKey, int subBrokerId) {
+    public CompletableFuture<MatchResult> match(long reqId,
+                                                String tenantId,
+                                                String topicFilter,
+                                                String receiverId,
+                                                String delivererKey,
+                                                int subBrokerId) {
         MatchRequest request = MatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setTopicFilter(topicFilter)
-            .setSubQoS(qos)
-            .setInboxId(inboxId)
+            .setReceiverId(receiverId)
             .setDelivererKey(delivererKey)
-            .setBroker(subBrokerId)
+            .setBrokerId(subBrokerId)
             .build();
         log.trace("Handling match request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getMatchMethod())
@@ -83,15 +84,15 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<UnmatchResult> unmatch(long reqId, String tenantId, String topicFilter, String inbox,
+    public CompletableFuture<UnmatchResult> unmatch(long reqId, String tenantId, String topicFilter, String receiverId,
                                                     String delivererKey, int subBrokerId) {
         UnmatchRequest request = UnmatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setTopicFilter(topicFilter)
-            .setInboxId(inbox)
+            .setReceiverId(receiverId)
             .setDelivererKey(delivererKey)
-            .setBroker(subBrokerId)
+            .setBrokerId(subBrokerId)
             .build();
         log.trace("Handling unsub request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnmatchMethod())

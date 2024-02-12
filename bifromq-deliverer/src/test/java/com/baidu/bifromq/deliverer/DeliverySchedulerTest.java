@@ -23,7 +23,7 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
@@ -61,18 +61,18 @@ public class DeliverySchedulerTest {
 
     @Test
     public void writeSucceed() {
-        SubInfo subInfo = SubInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(
-            CompletableFuture.completedFuture(Collections.singletonMap(subInfo, DeliveryResult.OK)));
+            CompletableFuture.completedFuture(Collections.singletonMap(matchInfo, DeliveryResult.OK)));
         DeliveryResult result = testDeliverer.schedule(request).join();
         assertEquals(result, DeliveryResult.OK);
     }
 
     @Test
     public void writeIncompleteResult() {
-        SubInfo subInfo = SubInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
         DeliveryResult result = testDeliverer.schedule(request).join();
         assertEquals(result, DeliveryResult.OK);
@@ -80,18 +80,18 @@ public class DeliverySchedulerTest {
 
     @Test
     public void writeNoInbox() {
-        SubInfo subInfo = SubInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(
-            CompletableFuture.completedFuture(Collections.singletonMap(subInfo, DeliveryResult.NO_INBOX)));
+            CompletableFuture.completedFuture(Collections.singletonMap(matchInfo, DeliveryResult.NO_INBOX)));
         DeliveryResult result = testDeliverer.schedule(request).join();
         assertEquals(result, DeliveryResult.NO_INBOX);
     }
 
     @Test(expectedExceptions = RuntimeException.class)
     public void writeFail() {
-        SubInfo subInfo = SubInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(subInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(anyList())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("Mock Exception")));
         testDeliverer.schedule(request).join();

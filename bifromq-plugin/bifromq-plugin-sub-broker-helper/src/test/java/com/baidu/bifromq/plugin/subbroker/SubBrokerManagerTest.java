@@ -19,7 +19,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.List;
 import java.util.Map;
@@ -76,9 +76,9 @@ public class SubBrokerManagerTest {
         ISubBroker subBroker = subBrokerManager.get(1);
         IDeliverer deliverer = subBroker.open("Deliverer1");
         TopicMessagePack msgPack = TopicMessagePack.newBuilder().build();
-        SubInfo subInfo = SubInfo.newBuilder().build();
+        MatchInfo subInfo = MatchInfo.newBuilder().build();
         Iterable<DeliveryPack> pack = List.of(new DeliveryPack(msgPack, List.of(subInfo)));
-        Map<SubInfo, DeliveryResult> resultMap = deliverer.deliver(pack).join();
+        Map<MatchInfo, DeliveryResult> resultMap = deliverer.deliver(pack).join();
         assertEquals(resultMap.get(subInfo), DeliveryResult.NO_INBOX);
     }
 

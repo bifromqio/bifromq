@@ -23,7 +23,6 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
@@ -48,8 +47,6 @@ public class APIServerTest extends MockableTest {
     @Mock
     private IDistClient distClient;
     @Mock
-    private IMqttBrokerClient mqttBrokerClient;
-    @Mock
     private IInboxClient inboxClient;
     @Mock
     private ISessionDictClient sessionDictClient;
@@ -63,7 +60,7 @@ public class APIServerTest extends MockableTest {
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         apiServer = new APIServer(host, 0, 0,
-            bossGroup, workerGroup, null, distClient, mqttBrokerClient, inboxClient,
+            bossGroup, workerGroup, null, distClient, inboxClient,
             sessionDictClient, retainClient, settingProvider);
         apiServer.start();
     }
@@ -84,7 +81,7 @@ public class APIServerTest extends MockableTest {
             .header(Headers.HEADER_TOPIC.header, "/greeting")
             .header(Headers.HEADER_CLIENT_TYPE.header, "BifroMQ Fan")
             .header(Headers.HEADER_RETAIN.header, "true")
-            .header(Headers.HEADER_PUB_QOS.header, "1")
+            .header(Headers.HEADER_QOS.header, "1")
             .POST(HttpRequest.BodyPublishers.ofString("Hello BifroMQ"))
             .build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(

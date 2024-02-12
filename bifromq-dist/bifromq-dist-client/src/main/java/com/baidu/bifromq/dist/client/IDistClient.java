@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.client;
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
 
 public interface IDistClient extends IConnectable {
@@ -42,17 +41,15 @@ public interface IDistClient extends IConnectable {
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
      * @param topicFilter  the topic filter to apply
-     * @param qos          the qos associated with the topic filter
-     * @param inboxId      the id of the receiving inbox which is hosted by corresponding sub broker
-     * @param delivererKey the key of the deliverer via which the message will be sent to the inbox
-     * @param subBrokerId  the hosting subbroker of the inbox
+     * @param receiverId   the id of the receiver hosted by the subbroker
+     * @param delivererKey the key of the deliverer via which the message will be sent to the receiver
+     * @param subBrokerId  the hosting subbroker of the receiver
      * @return correspond to Mqtt Sub QoS
      */
     CompletableFuture<MatchResult> match(long reqId,
                                          String tenantId,
                                          String topicFilter,
-                                         QoS qos,
-                                         String inboxId,
+                                         String receiverId,
                                          String delivererKey,
                                          int subBrokerId);
 
@@ -62,15 +59,15 @@ public interface IDistClient extends IConnectable {
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
      * @param topicFilter  the topic filter to remove
-     * @param inboxId      the id of the receiving inbox which is hosted by corresponding sub broker
-     * @param delivererKey the key of the deliverer via which the message will be sent to the inbox
-     * @param subBrokerId  the hosting subbroker of the inbox
-     * @return true for remove successfully, false for subscription not found
+     * @param receiverId   the id of the receiver hosted by the subbroker
+     * @param delivererKey the key of the deliverer via which the message will be sent to the receiver
+     * @param subBrokerId  the hosting subbroker of the receiver
+     * @return true for remove successfully, false for match not found
      */
     CompletableFuture<UnmatchResult> unmatch(long reqId,
                                              String tenantId,
                                              String topicFilter,
-                                             String inboxId,
+                                             String receiverId,
                                              String delivererKey,
                                              int subBrokerId);
 

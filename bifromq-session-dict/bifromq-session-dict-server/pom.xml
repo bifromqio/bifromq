@@ -31,11 +31,23 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-util</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-setting-provider</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-metrics</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-session-dict-rpc-definition</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-mqtt-broker-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

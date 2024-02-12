@@ -35,10 +35,10 @@ import com.baidu.bifromq.dist.server.scheduler.IUnmatchCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.MatchCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.UnmatchCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.eventcollector.distservice.SubscribeError;
-import com.baidu.bifromq.plugin.eventcollector.distservice.Subscribed;
-import com.baidu.bifromq.plugin.eventcollector.distservice.UnsubscribeError;
-import com.baidu.bifromq.plugin.eventcollector.distservice.Unsubscribed;
+import com.baidu.bifromq.plugin.eventcollector.distservice.MatchError;
+import com.baidu.bifromq.plugin.eventcollector.distservice.Matched;
+import com.baidu.bifromq.plugin.eventcollector.distservice.UnmatchError;
+import com.baidu.bifromq.plugin.eventcollector.distservice.Unmatched;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -77,13 +77,12 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
             .handle((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to exec SubRequest, tenantId={}, req={}", tenantId, request, e);
-                    eventCollector.report(getLocal(SubscribeError.class)
+                    eventCollector.report(getLocal(MatchError.class)
                         .reqId(request.getReqId())
-                        .qos(request.getSubQoS())
                         .topicFilter(request.getTopicFilter())
                         .tenantId(request.getTenantId())
-                        .inboxId(request.getInboxId())
-                        .subBrokerId(request.getBroker())
+                        .receiverId(request.getReceiverId())
+                        .subBrokerId(request.getBrokerId())
                         .delivererKey(request.getDelivererKey()));
                     return MatchReply.newBuilder()
                         .setReqId(request.getReqId())
@@ -91,13 +90,12 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                         .build();
 
                 }
-                eventCollector.report(getLocal(Subscribed.class)
+                eventCollector.report(getLocal(Matched.class)
                     .reqId(request.getReqId())
-                    .qos(request.getSubQoS())
                     .topicFilter(request.getTopicFilter())
                     .tenantId(request.getTenantId())
-                    .inboxId(request.getInboxId())
-                    .subBrokerId(request.getBroker())
+                    .receiverId(request.getReceiverId())
+                    .subBrokerId(request.getBrokerId())
                     .delivererKey(request.getDelivererKey()));
                 return v;
             }), responseObserver);
@@ -108,24 +106,24 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
             .handle((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to exec UnsubRequest, tenantId={}, req={}", tenantId, request, e);
-                    eventCollector.report(getLocal(UnsubscribeError.class)
+                    eventCollector.report(getLocal(UnmatchError.class)
                         .reqId(request.getReqId())
                         .topicFilter(request.getTopicFilter())
                         .tenantId(request.getTenantId())
-                        .inboxId(request.getInboxId())
-                        .subBrokerId(request.getBroker())
+                        .receiverId(request.getReceiverId())
+                        .subBrokerId(request.getBrokerId())
                         .delivererKey(request.getDelivererKey()));
                     return UnmatchReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(UnmatchReply.Result.ERROR)
                         .build();
                 }
-                eventCollector.report(getLocal(Unsubscribed.class)
+                eventCollector.report(getLocal(Unmatched.class)
                     .reqId(request.getReqId())
                     .topicFilter(request.getTopicFilter())
                     .tenantId(request.getTenantId())
-                    .inboxId(request.getInboxId())
-                    .subBrokerId(request.getBroker())
+                    .receiverId(request.getReceiverId())
+                    .subBrokerId(request.getBrokerId())
                     .delivererKey(request.getDelivererKey()));
                 return v;
             }), responseObserver);

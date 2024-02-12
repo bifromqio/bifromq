@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,8 +27,8 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
@@ -49,12 +48,12 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class DistQoS0Test extends DistWorkerTest {
-    Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>> answer = invocation -> {
+    Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>> answer = invocation -> {
         Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-        Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+        Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
         for (DeliveryPack inboxWrite : inboxPacks) {
             log.info("deliver topic: {}", inboxWrite.messagePack.getTopic());
-            for (SubInfo subInfo : inboxWrite.inboxes) {
+            for (MatchInfo subInfo : inboxWrite.matchInfos) {
                 resultMap.put(subInfo, DeliveryResult.OK);
             }
         }
@@ -94,12 +93,12 @@ public class DistQoS0Test extends DistWorkerTest {
         // expected behavior: inbox1 gets 2 messages, inbox2 get 1 message
         when(mqttBroker.open("batch1")).thenReturn(writer1);
 
-        sub(tenantA, "TopicA/#", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        match(tenantA, "TopicA/#", MqttBroker, "inbox1", "batch1");
 
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "TopicB", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault("TopicB", 0).intValue(), 0);
 
-        unsub(tenantA, "TopicA/#", InboxService, "inbox1", "batch1");
+        unmatch(tenantA, "TopicA/#", InboxService, "inbox1", "batch1");
     }
 
     @Test(groups = "integration")
@@ -111,9 +110,9 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(inboxBroker.open("batch2")).thenReturn(writer2);
 
-        sub(tenantA, "/你好/hello/😄", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "/#", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "/#", AT_LEAST_ONCE, InboxService, "inbox2", "batch2");
+        match(tenantA, "/你好/hello/😄", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/#", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/#", InboxService, "inbox2", "batch2");
 
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/你好/hello/😄", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/你好/hello/😄").intValue(), 3);
@@ -124,7 +123,7 @@ public class DistQoS0Test extends DistWorkerTest {
         for (Iterable<DeliveryPack> packs : msgCap.getAllValues()) {
             for (DeliveryPack pack : packs) {
                 TopicMessagePack msgPack = pack.messagePack;
-                Set<SubInfo> subInfos = Sets.newHashSet(pack.inboxes);
+                Set<MatchInfo> subInfos = Sets.newHashSet(pack.matchInfos);
                 assertEquals(msgPack.getTopic(), "/你好/hello/😄");
                 for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
                     for (Message msg : publisherPack.getMessageList()) {
@@ -148,9 +147,9 @@ public class DistQoS0Test extends DistWorkerTest {
             }
         }
 
-        unsub(tenantA, "/你好/hello/😄", MqttBroker, "inbox1", "batch1");
-        unsub(tenantA, "/#", MqttBroker, "inbox1", "batch1");
-        unsub(tenantA, "/#", InboxService, "inbox2", "batch2");
+        unmatch(tenantA, "/你好/hello/😄", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/#", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/#", InboxService, "inbox2", "batch2");
     }
 
     @Test(groups = "integration")
@@ -161,19 +160,19 @@ public class DistQoS0Test extends DistWorkerTest {
         // expected behavior: inbox1 gets 1 messages
         when(mqttBroker.open("batch1")).thenReturn(writer1);
 
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox2", "batch1");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox2", "batch1");
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 2);
         ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
         verify(writer1, after(1000).atMost(2)).deliver(list1.capture());
         log.info("Case3: verify writer1, list size is {}", list1.getAllValues().size());
         int msgCount = 0;
-        Set<SubInfo> subInfos = new HashSet<>();
+        Set<MatchInfo> subInfos = new HashSet<>();
         for (Iterable<DeliveryPack> packs : list1.getAllValues()) {
             for (DeliveryPack pack : packs) {
                 TopicMessagePack msgs = pack.messagePack;
-                pack.inboxes.forEach(subInfos::add);
+                pack.matchInfos.forEach(subInfos::add);
                 assertEquals(msgs.getTopic(), "/a/b/c");
                 for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
                     for (Message msg : publisherPack.getMessageList()) {
@@ -186,8 +185,8 @@ public class DistQoS0Test extends DistWorkerTest {
         assertEquals(subInfos.size(), 2);
         assertEquals(msgCount, 2);
 
-        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
-        unsub(tenantA, "/a/b/c", MqttBroker, "inbox2", "batch1");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox2", "batch1");
     }
 
     @Test(groups = "integration")
@@ -199,8 +198,8 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(mqttBroker.open("batch2")).thenReturn(writer2);
 
-        sub(tenantA, "$share/group//a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "$share/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox2", "batch2");
+        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
             assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c"), 1);
@@ -232,8 +231,8 @@ public class DistQoS0Test extends DistWorkerTest {
         }
         assertEquals(list1.getAllValues().size() + list2.getAllValues().size(), 10);
 
-        unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "batch1");
-        unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
     }
 
     @Test(groups = "integration")
@@ -246,8 +245,8 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(mqttBroker.open("batch2")).thenReturn(writer2);
 
-        sub(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "$oshare/group//a/b/c", AT_LEAST_ONCE, MqttBroker, "inbox2", "batch2");
+        match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
 
         for (int i = 0; i < 10; i++) {
             BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
@@ -276,8 +275,8 @@ public class DistQoS0Test extends DistWorkerTest {
         }
         assertTrue(list1.getAllValues().isEmpty() || list2.getAllValues().isEmpty());
 
-        unsub(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox1", "batch1");
-        unsub(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
     }
 
     @Test(groups = "integration")
@@ -292,9 +291,9 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch2")).thenReturn(writer2);
         when(mqttBroker.open("batch3")).thenReturn(writer3);
 
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantA, "$share/group//a/b/c", AT_MOST_ONCE, MqttBroker, "inbox2", "batch2");
-        sub(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE, MqttBroker, "inbox3", "batch3");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
         for (int i = 0; i < 1; ++i) {
             BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
             assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
@@ -304,9 +303,9 @@ public class DistQoS0Test extends DistWorkerTest {
         verify(writer2, timeout(1000).times(1)).deliver(any());
         verify(writer3, timeout(1000).times(1)).deliver(any());
 
-        unsub(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
-        unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
-        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
+        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
     }
 
     @Test(groups = "integration")
@@ -317,8 +316,8 @@ public class DistQoS0Test extends DistWorkerTest {
         // expected behavior: inbox1 gets 1 messages
         when(mqttBroker.open("batch1")).thenReturn(writer1);
 
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
-        sub(tenantB, "#", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        match(tenantB, "#", MqttBroker, "inbox1", "batch1");
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
 
@@ -339,8 +338,8 @@ public class DistQoS0Test extends DistWorkerTest {
         }
         assertEquals(msgCount, 1);
 
-        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
-        unsub(tenantB, "#", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantB, "#", MqttBroker, "inbox1", "batch1");
     }
 
     @Test(groups = "integration")
@@ -356,7 +355,7 @@ public class DistQoS0Test extends DistWorkerTest {
         // topic: "/a/b/c"
         // sub: inbox1 -> [(/a/b/c, qos0)]
         // expected behavior: inbox1 gets 1 message
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer1, timeout(1000).times(1)).deliver(any());
         clearInvocations(writer1, writer2, writer3);
@@ -366,7 +365,7 @@ public class DistQoS0Test extends DistWorkerTest {
         // action: delete inbox1 match record
         // sub: no sub
         // expected behavior: inbox1 gets no messages
-        unsub(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer1, timeout(1000).times(0)).deliver(any());
         clearInvocations(writer1, writer2, writer3);
@@ -376,7 +375,7 @@ public class DistQoS0Test extends DistWorkerTest {
         // action: inbox2 join shared group
         // sub: inbox2 -> [($share/group/a/b/c, qos0)]
         // expected behavior: inbox2 gets 1 message
-        sub(tenantA, "$share/group//a/b/c", AT_MOST_ONCE, MqttBroker, "inbox2", "batch2");
+        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer2, timeout(1000).times(1)).deliver(any());
         clearInvocations(writer1, writer2, writer3);
@@ -386,9 +385,8 @@ public class DistQoS0Test extends DistWorkerTest {
         // action: inbox2 leaves the shared group and inbox3 joins
         // sub: inbox3 -> [($share/group/a/b/c, qos0)]
         // expected behavior: inbox2 gets no messages and inbox3 gets 1
-        unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
-        sub(tenantA, "$share/group//a/b/c", AT_MOST_ONCE,
-            MqttBroker, "inbox3", "batch3");
+        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox3", "batch3");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer2, timeout(1000).times(0)).deliver(any());
         verify(writer3, timeout(1000).times(1)).deliver(any());
@@ -399,9 +397,8 @@ public class DistQoS0Test extends DistWorkerTest {
         // action: inbox2 joins an ordered shared group and inbox3 leaves the shared group
         // sub: inbox2 -> [($oshare/group/a/b/c, qos0)]
         // expected behavior: inbox2 gets 1 message and inbox3 gets none
-        sub(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE,
-            MqttBroker, "inbox2", "batch2");
-        unsub(tenantA, "$share/group//a/b/c", MqttBroker, "inbox3", "batch3");
+        match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox3", "batch3");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer2, timeout(1000).times(1)).deliver(any());
         verify(writer3, timeout(1000).times(0)).deliver(any());
@@ -412,15 +409,14 @@ public class DistQoS0Test extends DistWorkerTest {
         // action: inbox3 joins the ordered shared group and inbox2 leaves
         // sub: inbox3 -> [($oshare/group/a/b/c, qos0)]
         // expected behavior: inbox2 gets no messages and inbox3 gets 1
-        unsub(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
-        sub(tenantA, "$oshare/group//a/b/c", AT_MOST_ONCE,
-            MqttBroker, "inbox3", "batch3");
+        unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
+        match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer2, timeout(1000).times(0)).deliver(any());
         verify(writer3, timeout(1000).times(1)).deliver(any());
 
         // clear
-        unsub(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
+        unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
     }
 
     @Test(groups = "integration")
@@ -432,7 +428,7 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(mqttBroker.open("batch2")).thenReturn(writer2);
         when(mqttBroker.open("batch3")).thenReturn(writer3);
-        sub(tenantA, "/a/b/c", AT_MOST_ONCE, MqttBroker, "inbox1", "batch1");
+        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer1, timeout(1000).times(1)).deliver(any());
         clearInvocations(writer1, writer2, writer3);
@@ -442,7 +438,7 @@ public class DistQoS0Test extends DistWorkerTest {
         // action: inbox2 sub the wildcard topic "/#"
         // sub: inbox1 -> [(/a/b/c, qos0)], inbox2 -> [(/#, qos0)]
         // expected behavior: inbox1 gets 1 message and inbox2 gets 1 either
-        sub(tenantA, "/#", AT_MOST_ONCE, MqttBroker, "inbox2", "batch2");
+        match(tenantA, "/#", MqttBroker, "inbox2", "batch2");
         Thread.sleep(1100);
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer1, timeout(1000).times(1)).deliver(any());
@@ -456,8 +452,8 @@ public class DistQoS0Test extends DistWorkerTest {
         // inbox2 -> [(/#, qos0)],
         // inbox3 -> [(#share/group/#, qos0), (#oshare/group/#, qos0)]
         // expected behavior: inbox1 and inbox2 gets 1 message, inbox3 gets 2
-        sub(tenantA, "$share/group/#", AT_MOST_ONCE, MqttBroker, "inbox3", "batch3");
-        sub(tenantA, "$oshare/group/#", AT_MOST_ONCE, MqttBroker, "inbox3", "batch3");
+        match(tenantA, "$share/group/#", MqttBroker, "inbox3", "batch3");
+        match(tenantA, "$oshare/group/#", MqttBroker, "inbox3", "batch3");
         // wait for cache refresh after writing
         Thread.sleep(1100);
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
@@ -466,8 +462,8 @@ public class DistQoS0Test extends DistWorkerTest {
         verify(writer3, timeout(1000).atLeastOnce()).deliver(any());
 
         // clear
-        unsub(tenantA, "/#", MqttBroker, "inbox2", "batch2");
-        unsub(tenantA, "$share/group/#", MqttBroker, "inbox3", "batch3");
-        unsub(tenantA, "$oshare/group/#", MqttBroker, "inbox3", "batch3");
+        unmatch(tenantA, "/#", MqttBroker, "inbox2", "batch2");
+        unmatch(tenantA, "$share/group/#", MqttBroker, "inbox3", "batch3");
+        unmatch(tenantA, "$oshare/group/#", MqttBroker, "inbox3", "batch3");
     }
 }

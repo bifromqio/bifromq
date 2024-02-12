@@ -14,15 +14,15 @@
 package com.baidu.bifromq.mqtt.service;
 
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface ILocalSessionRegistry {
+
     void add(String sessionId, IMQTTSession session);
 
     boolean remove(String sessionId, IMQTTSession session);
 
-    List<IMQTTSession> removeAll();
+    IMQTTSession get(String sessionId);
 
     CompletableFuture<Void> disconnectAll(int disconnectRate);
 }

@@ -270,8 +270,8 @@ public abstract class DistWorkerTest {
             method.getDeclaringClass().getName(), method.getName());
     }
 
-    protected BatchMatchReply.Result sub(String tenantId, String topicFilter, QoS subQoS,
-                                         int subBroker, String inboxId, String delivererKey) {
+    protected BatchMatchReply.Result match(String tenantId, String topicFilter,
+                                           int subBroker, String inboxId, String delivererKey) {
         long reqId = ThreadLocalRandom.current().nextInt();
         String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
         KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
@@ -279,7 +279,7 @@ public abstract class DistWorkerTest {
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchMatch(BatchMatchRequest.newBuilder()
                 .setReqId(reqId)
-                .putScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter), subQoS)
+                .addScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter))
                 .build())
             .build();
         KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -295,8 +295,8 @@ public abstract class DistWorkerTest {
         return batchMatchReply.getResultsMap().get(scopedTopicFilter);
     }
 
-    protected BatchUnmatchReply.Result unsub(String tenantId, String topicFilter, int subBroker, String inboxId,
-                                             String delivererKey) {
+    protected BatchUnmatchReply.Result unmatch(String tenantId, String topicFilter, int subBroker, String inboxId,
+                                               String delivererKey) {
         long reqId = ThreadLocalRandom.current().nextInt();
         String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
         KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();

@@ -1,5 +1,4 @@
 syntax = "proto3";
-import "commontype/QoS.proto";
 import "commontype/TopicMessage.proto";
 import "distservice/TopicFanout.proto";
 
@@ -10,19 +9,12 @@ option java_outer_classname = "DistCoProcProtos";
 package distservice;
 
 message GroupMatchRecord {
-  map<string, commontype.QoS> entry = 1; // qualified inboxId to NormalMatchRecord
-}
-
-message MatchRecord {
-  oneof Record{
-    commontype.QoS normal = 1;
-    GroupMatchRecord group = 2;
-  }
+  repeated string qReceiverId = 1; // qualified inboxId
 }
 
 message BatchMatchRequest {
   uint64 reqId = 1;
-  map<string, commontype.QoS> scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+  repeated string scopedTopicFilter = 2;// tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
 }
 
 message BatchMatchReply {

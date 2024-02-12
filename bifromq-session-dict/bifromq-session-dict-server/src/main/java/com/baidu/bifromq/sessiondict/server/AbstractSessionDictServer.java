@@ -20,7 +20,7 @@ abstract class AbstractSessionDictServer implements ISessionDictServer {
     protected final SessionDictService service;
 
     AbstractSessionDictServer(AbstractSessionDictServerBuilder<?> builder) {
-        service = new SessionDictService();
+        service = new SessionDictService(builder.mqttBrokerClient);
     }
 
     @Override

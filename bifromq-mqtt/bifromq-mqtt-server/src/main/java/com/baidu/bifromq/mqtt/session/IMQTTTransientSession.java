@@ -15,7 +15,7 @@ package com.baidu.bifromq.mqtt.session;
 
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import java.util.List;
@@ -24,9 +24,6 @@ import java.util.concurrent.CompletableFuture;
 public interface IMQTTTransientSession extends IMQTTSession {
     String NAME = "MQTTTransientSession";
 
-    boolean publish(SubInfo subInfo, List<TopicMessagePack> messagePack);
+    boolean publish(MatchInfo matchInfo, List<TopicMessagePack> messagePack);
 
-    CompletableFuture<SubReply.Result> subscribe(long reqId, String topicFilter, MqttQoS qos);
-
-    CompletableFuture<UnsubReply.Result> unsubscribe(long reqId, String topicFilter);
 }

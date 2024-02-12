@@ -11,20 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.v3;
+package com.baidu.bifromq.mqtt.integration.v3.client;
 
-import lombok.extern.slf4j.Slf4j;
-import org.testng.ITestListener;
-import org.testng.ITestResult;
+public class MqttResponse {
+    public final byte type;
+    public final int messageId;
 
-import java.lang.reflect.Method;
-
-@Slf4j
-public class MQTTTestListener implements ITestListener {
-    @Override
-    public void onTestStart(ITestResult result) {
-        String className = result.getInstance().getClass().getName();
-        Method method = result.getMethod().getConstructorOrMethod().getMethod();
-        log.info("Test case[{}.{}] start", className, method.getName());
+    public MqttResponse(byte type, int messageId) {
+        this.type = type;
+        this.messageId = messageId;
     }
 }

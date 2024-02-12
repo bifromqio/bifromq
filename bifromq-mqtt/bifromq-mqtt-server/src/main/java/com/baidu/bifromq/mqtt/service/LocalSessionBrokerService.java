@@ -23,53 +23,42 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
-import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
-import com.google.common.util.concurrent.RateLimiter;
 import io.grpc.stub.StreamObserver;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Metrics;
-import io.netty.handler.codec.mqtt.MqttQoS;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxBrokerImplBase {
-    private final ConcurrentMap<String, IMQTTSession> sessionMap = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, IMQTTTransientSession> transientSessionMap = new ConcurrentHashMap<>();
-    private final Gauge connCountGauge;
+    private final ILocalSessionRegistry localSessionRegistry;
+    private final ILocalDistService localDistService;
 
-    public LocalSessionBrokerService() {
-        connCountGauge = Gauge.builder("mqtt.server.connection.gauge", sessionMap::size)
-            .register(Metrics.globalRegistry);
+    public LocalSessionBrokerService(ILocalSessionRegistry registry, ILocalDistService service) {
+        this.localSessionRegistry = registry;
+        this.localDistService = service;
     }
 
     @Override
     public StreamObserver<WriteRequest> write(StreamObserver<WriteReply> responseObserver) {
-        return new LocalSessionWritePipeline(transientSessionMap, responseObserver);
+        return new LocalSessionWritePipeline(localDistService, responseObserver);
     }
 
     @Override
     public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
         response(tenantId -> {
-            if (!transientSessionMap.containsKey(request.getInboxId())) {
-                return CompletableFuture.completedFuture(SubReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setResult(SubReply.Result.NO_INBOX)
-                    .build());
-            } else {
-                IMQTTTransientSession session = transientSessionMap.get(request.getInboxId());
+            IMQTTSession session = localSessionRegistry.get(request.getSessionId());
+            if (session != null) {
                 SubReply.Builder builder = SubReply.newBuilder();
                 builder.setReqId(request.getReqId());
-                return session.subscribe(request.getReqId(), request.getTopicFilter(),
-                        MqttQoS.valueOf(request.getSubQoSValue()))
+                return session.subscribe(request.getReqId(), request.getTopicFilter(), request.getSubQoS())
                     .thenApply(v -> SubReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(v)
                         .build());
+            } else {
+                return CompletableFuture.completedFuture(SubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(SubReply.Result.NO_INBOX)
+                    .build());
             }
         }, responseObserver);
     }
@@ -77,54 +66,22 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
     @Override
     public void unsub(UnsubRequest request, StreamObserver<UnsubReply> responseObserver) {
         response(tenantId -> {
-            if (!transientSessionMap.containsKey(request.getInboxId())) {
-                return CompletableFuture.completedFuture(UnsubReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setResult(UnsubReply.Result.NO_INBOX)
-                    .build());
-            } else {
-                IMQTTTransientSession session = transientSessionMap.get(request.getInboxId());
+            IMQTTSession session = localSessionRegistry.get(request.getSessionId());
+            if (session != null) {
                 return session.unsubscribe(request.getReqId(), request.getTopicFilter())
                     .thenApply(v -> UnsubReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(v)
                         .build());
+            } else {
+                return CompletableFuture.completedFuture(UnsubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(UnsubReply.Result.NO_INBOX)
+                    .build());
             }
         }, responseObserver);
     }
 
-    void reg(String sessionId, IMQTTSession session) {
-        sessionMap.putIfAbsent(sessionId, session);
-        if (session instanceof IMQTTTransientSession) {
-            transientSessionMap.putIfAbsent(sessionId, (IMQTTTransientSession) session);
-        }
-    }
-
-    boolean unreg(String sessionId, IMQTTSession session) {
-        transientSessionMap.remove(sessionId);
-        return sessionMap.remove(sessionId, session);
-    }
-
-    public CompletableFuture<Void> disconnectAll(int disconnectRate) {
-        RateLimiter limiter = RateLimiter.create(Math.max(1, disconnectRate));
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (String sessionId : sessionMap.keySet()) {
-            limiter.acquire();
-            futures.add(disconnect(sessionId));
-        }
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-    }
-
     public void close() {
-        Metrics.globalRegistry.remove(connCountGauge);
-    }
-
-    private CompletableFuture<Void> disconnect(String sessionId) {
-        IMQTTSession session = sessionMap.remove(sessionId);
-        transientSessionMap.remove(sessionId);
-        if (session != null) {
-            return session.disconnect();
-        }
-        return CompletableFuture.completedFuture(null);
     }
 }

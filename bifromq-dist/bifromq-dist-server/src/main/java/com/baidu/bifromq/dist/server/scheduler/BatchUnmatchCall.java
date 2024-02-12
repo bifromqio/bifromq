@@ -45,7 +45,7 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
         while (reqIterator.hasNext()) {
             UnmatchRequest subCall = reqIterator.next();
             String qInboxId =
-                toQInboxId(subCall.getBroker(), subCall.getInboxId(), subCall.getDelivererKey());
+                toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
             String scopedTopicFilter =
                 toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
             reqBuilder.addScopedTopicFilter(scopedTopicFilter);
@@ -73,7 +73,7 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
         while ((callTask = batchedTasks.poll()) != null) {
             BatchUnmatchReply reply = output.getDistService().getBatchUnmatch();
             UnmatchRequest request = callTask.call;
-            String qInboxId = toQInboxId(request.getBroker(), request.getInboxId(), request.getDelivererKey());
+            String qInboxId = toQInboxId(request.getBrokerId(), request.getReceiverId(), request.getDelivererKey());
             String scopedTopicFilter = toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
             BatchUnmatchReply.Result result =
                 reply.getResultsOrDefault(scopedTopicFilter, BatchUnmatchReply.Result.ERROR);

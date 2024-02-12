@@ -24,9 +24,9 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SubInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
@@ -58,12 +58,12 @@ public class DistTest extends DistServiceTest {
     @Test(groups = "integration", dependsOnMethods = "distWithFanOutSub")
     public void distWithNoSub() {
         Mockito.lenient().when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, DeliveryResult.OK);
+                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
+                        resultMap.put(matchInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -102,12 +102,12 @@ public class DistTest extends DistServiceTest {
     @Test(groups = "integration")
     public void distWithSub() {
         Mockito.lenient().when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, DeliveryResult.OK);
+                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
+                        resultMap.put(matchInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -117,7 +117,7 @@ public class DistTest extends DistServiceTest {
         ClientInfo clientInfo;
         int total = 1;
         for (int i = 0; i < total; i++) {
-            distClient().match(reqId, tenantId, "/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0)
+            distClient().match(reqId, tenantId, "/sport/tennis" + i, "inbox" + i, "server1", 0)
                 .join();
         }
         CountDownLatch latch = new CountDownLatch(total);
@@ -148,12 +148,12 @@ public class DistTest extends DistServiceTest {
     @Test(groups = "integration")
     public void distWithSharedSub() {
         Mockito.lenient().when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, DeliveryResult.OK);
+                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
+                        resultMap.put(matchInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -165,7 +165,7 @@ public class DistTest extends DistServiceTest {
         int totalMsg = 1;
         for (int i = 0; i < totalSub; i++) {
             MatchResult subResult =
-                distClient().match(reqId, tenantId, "$share/g1/sport/tennis" + i, QoS.AT_LEAST_ONCE, "inbox" + i,
+                distClient().match(reqId, tenantId, "$share/g1/sport/tennis" + i, "inbox" + i,
                     "server1", 0).join();
             assertEquals(subResult, MatchResult.OK);
         }
@@ -197,14 +197,14 @@ public class DistTest extends DistServiceTest {
     public void distWithFanOutSub() {
         List<Iterable<DeliveryPack>> capturedArguments = new CopyOnWriteArrayList<>();
         when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<SubInfo, DeliveryResult>>>) invocation -> {
+            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
                 Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
                 // the argument object will be reused, so make a clone
                 capturedArguments.add(inboxPacks);
-                Map<SubInfo, DeliveryResult> resultMap = new HashMap<>();
+                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
                 for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (SubInfo subInfo : inboxWrite.inboxes) {
-                        resultMap.put(subInfo, DeliveryResult.OK);
+                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
+                        resultMap.put(matchInfo, DeliveryResult.OK);
                     }
                 }
                 return CompletableFuture.completedFuture(resultMap);
@@ -214,7 +214,7 @@ public class DistTest extends DistServiceTest {
         ByteString payload = ByteString.EMPTY;
         int totalInbox = 100;
         for (int i = 0; i < totalInbox; i++) {
-            distClient().match(reqId, tenantId, "/sport/tennis", QoS.AT_LEAST_ONCE, "inbox" + i, "server1", 0)
+            distClient().match(reqId, tenantId, "/sport/tennis", "inbox" + i, "server1", 0)
                 .join();
         }
 
@@ -234,17 +234,17 @@ public class DistTest extends DistServiceTest {
 
         Thread.sleep(100);
 
-        Set<SubInfo> subInfos = new HashSet<>();
+        Set<MatchInfo> matchInfos = new HashSet<>();
         int msgCount = 0;
         for (Iterable<DeliveryPack> writeReq : capturedArguments) {
             for (DeliveryPack pack : writeReq) {
                 TopicMessagePack msgs = pack.messagePack;
-                Set<SubInfo> inboxes = Sets.newHashSet(pack.inboxes);
-                subInfos.addAll(inboxes);
+                Set<MatchInfo> inboxes = Sets.newHashSet(pack.matchInfos);
+                matchInfos.addAll(inboxes);
                 msgCount += msgs.getMessageCount() * inboxes.size();
             }
         }
-        assertEquals(subInfos.size(), totalInbox);
+        assertEquals(matchInfos.size(), totalInbox);
         assertEquals(msgCount, totalInbox * totalPub);
     }
 }

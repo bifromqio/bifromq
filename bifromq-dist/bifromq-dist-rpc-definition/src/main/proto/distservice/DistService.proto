@@ -1,5 +1,4 @@
 syntax = "proto3";
-import "commontype/QoS.proto";
 import "commontype/TopicMessage.proto";
 
 option java_multiple_files = true;
@@ -17,11 +16,10 @@ service DistService {
 message MatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
-  string inboxId = 3; // the inbox id defined in calling sub broker service identified by CN field of client cert
-  string topicFilter = 4;
-  commontype.QoS subQoS = 5;
-  uint32 broker = 6;
-  string delivererKey = 7;
+  string topicFilter = 3;
+  string receiverId = 4; // the structure of receiver id is defined by caller
+  uint32 brokerId = 5;
+  string delivererKey = 6;
 }
 
 message MatchReply {
@@ -37,9 +35,9 @@ message MatchReply {
 message UnmatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
-  string inboxId = 3; // the inbox id defined in calling sub broker service identified by CN field of client cert
+  string receiverId = 3; // the structure of receiver id is defined by caller
   string topicFilter = 4;
-  uint32 broker = 5;
+  uint32 brokerId = 5;
   string delivererKey = 6;
 }
 

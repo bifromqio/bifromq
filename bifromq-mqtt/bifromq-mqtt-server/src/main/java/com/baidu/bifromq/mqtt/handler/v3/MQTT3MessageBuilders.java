@@ -118,7 +118,7 @@ public class MQTT3MessageBuilders {
 
         public MqttMessage build() {
             MqttFixedHeader fixedHeader =
-                new MqttFixedHeader(MqttMessageType.PUBREL, false, MqttQoS.AT_MOST_ONCE, false, 2);
+                new MqttFixedHeader(MqttMessageType.PUBREL, false, MqttQoS.AT_LEAST_ONCE, false, 2);
             MqttMessageIdVariableHeader varHeader = MqttMessageIdVariableHeader.from(packetId);
             return new MqttMessage(fixedHeader, varHeader);
         }

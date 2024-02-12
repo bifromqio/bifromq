@@ -14,54 +14,12 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DROPPED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_PUSHED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_CONFIRMED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DROPPED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_PUSHED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNull;
 
-import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.SubInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
-import com.google.common.collect.Lists;
-import com.google.protobuf.ByteString;
-import io.netty.handler.codec.mqtt.MqttMessage;
-import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
-import io.netty.handler.codec.mqtt.MqttPublishMessage;
-import io.netty.handler.codec.mqtt.MqttQoS;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
 
 @Slf4j
 public class MQTTTransientS2CPubTest extends BaseMQTTTest {

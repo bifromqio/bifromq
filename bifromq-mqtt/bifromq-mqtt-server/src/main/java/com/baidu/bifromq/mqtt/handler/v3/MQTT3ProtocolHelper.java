@@ -27,7 +27,7 @@ import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
-import com.baidu.bifromq.mqtt.utils.MQTTUtf8Util;
+import com.baidu.bifromq.util.UTF8Util;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
@@ -192,7 +192,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
                 .clientInfo(clientInfo));
         }
         for (String topicFilter : topicFilters) {
-            if (!MQTTUtf8Util.isWellFormed(topicFilter, SANITY_CHECK)) {
+            if (!UTF8Util.isWellFormed(topicFilter, SANITY_CHECK)) {
                 return goAway(getLocal(MalformedTopicFilter.class)
                     .topicFilter(topicFilter)
                     .clientInfo(clientInfo));
@@ -282,7 +282,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public ProtocolResponse validatePubMessage(MqttPublishMessage message) {
         String topic = message.variableHeader().topicName();
-        if (!MQTTUtf8Util.isWellFormed(topic, SANITY_CHECK)) {
+        if (!UTF8Util.isWellFormed(topic, SANITY_CHECK)) {
             return goAway(getLocal(MalformedTopic.class)
                 .topic(topic)
                 .clientInfo(clientInfo));

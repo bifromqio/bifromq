@@ -11,32 +11,30 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.v3;
+package com.baidu.bifromq.mqtt.integration.v3;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
-import com.baidu.bifromq.mqtt.v3.client.MqttMsg;
-import com.baidu.bifromq.mqtt.v3.client.MqttResponse;
-import com.baidu.bifromq.mqtt.v3.client.MqttTestAsyncClient;
-import com.baidu.bifromq.mqtt.v3.client.MqttTestClient;
+import com.baidu.bifromq.mqtt.integration.MQTTTest;
+import com.baidu.bifromq.mqtt.integration.v3.client.MqttMsg;
+import com.baidu.bifromq.mqtt.integration.v3.client.MqttResponse;
+import com.baidu.bifromq.mqtt.integration.v3.client.MqttTestAsyncClient;
+import com.baidu.bifromq.mqtt.integration.v3.client.MqttTestClient;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
-import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.observers.TestObserver;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -47,44 +45,24 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Listeners(MQTTTestListener.class)
-public class MQTTPubSubTest {
-    private final MQTTTest mqttTest = MQTTTest.getInstance();
-    private final String tenantId = "testPubSubTraffic";
+public class MQTTPubSubTest extends MQTTTest {
     private final String deviceKey = "testDevice";
 
-    @BeforeClass(alwaysRun = true)
-    public void mock() {
-        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
+    protected void doSetup(Method method) {
+        when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId(tenantId)
                     .setUserId(deviceKey)
                     .build())
                 .build()));
-        when(mqttTest.authProvider.checkPermission(any(), any()))
+        when(authProvider.checkPermission(any(), any()))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
-
-        doAnswer(invocationOnMock -> {
-            Event event = invocationOnMock.getArgument(0);
-            log.debug("event: {}", event);
-            return null;
-        }).when(mqttTest.eventCollector).report(any(Event.class));
-    }
-
-    @AfterClass(alwaysRun = true)
-    public void resetMocks() {
-        reset(mqttTest.authProvider, mqttTest.eventCollector);
-        clearInvocations(mqttTest.eventCollector);
     }
 
     @Test(groups = "integration")
@@ -179,16 +157,16 @@ public class MQTTPubSubTest {
         connOpts.setCleanSession(true);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestAsyncClient pubClient = new MqttTestAsyncClient(MQTTTest.brokerURI, MqttClient.generateClientId());
+        MqttTestAsyncClient pubClient = new MqttTestAsyncClient(BROKER_URI, MqttClient.generateClientId());
         pubClient.connect(connOpts);
 
-        MqttTestClient subClient = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
+        MqttTestClient subClient = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
         subClient.connect(connOpts);
         Observable<MqttMsg> topicSub = subClient.subscribe(topic, 1);
 
         // publish qos0 and quick disconnect
         CompletableFuture<CheckResult> checkFuture = new CompletableFuture<>();
-        when(mqttTest.authProvider.checkPermission(any(), any())).thenReturn(checkFuture);
+        when(authProvider.checkPermission(any(), any())).thenReturn(checkFuture);
         pubClient.publish(topic, 0, ByteString.copyFromUtf8("hello"), false);
         pubClient.disconnect().join();
         pubClient.close();
@@ -265,7 +243,7 @@ public class MQTTPubSubTest {
 
         log.info("Connect sub client and disconnect");
         // make a offline subscription
-        MqttTestClient subClient = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
+        MqttTestClient subClient = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
         subClient.connect(subClientOpts);
         subClient.subscribe(topic, subQoS);
         subClient.disconnect();
@@ -274,7 +252,7 @@ public class MQTTPubSubTest {
         MqttConnectOptions pubClientOpts = new MqttConnectOptions();
         pubClientOpts.setCleanSession(true);
         pubClientOpts.setUserName(tenantId + "/pubClient");
-        MqttTestClient pubClient = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
+        MqttTestClient pubClient = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
         pubClient.connect(pubClientOpts);
         pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
 
@@ -314,7 +292,7 @@ public class MQTTPubSubTest {
         connOpts.setCleanSession(cleanSession);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestClient client = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
+        MqttTestClient client = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
         client.connect(connOpts);
         Observable<MqttMsg> topicSub = client.subscribe(topicFilter, subQoS);
         client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
@@ -337,7 +315,7 @@ public class MQTTPubSubTest {
         connOpts.setCleanSession(cleanSession);
         connOpts.setUserName(tenantId + "/" + deviceKey);
 
-        MqttTestClient client = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
+        MqttTestClient client = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
         client.connect(connOpts);
         client.messageArrived().subscribe(mqttMsg -> {
             msgList.add(mqttMsg);

@@ -19,7 +19,6 @@ import com.baidu.bifromq.apiserver.http.handler.HTTPRequestHandlersFactory;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -60,7 +59,6 @@ public class APIServer implements IAPIServer {
                      EventLoopGroup workerGroup,
                      SslContext sslContext,
                      IDistClient distClient,
-                     IMqttBrokerClient mqttBrokerClient,
                      IInboxClient inboxClient,
                      ISessionDictClient sessionDictClient,
                      IRetainClient retainClient,
@@ -71,7 +69,7 @@ public class APIServer implements IAPIServer {
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
         IHTTPRouteMap routeMap = new HTTPRouteMap(new HTTPRequestHandlersFactory(sessionDictClient,
-            distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider));
+            distClient, inboxClient, retainClient, settingProvider));
         this.serverChannel =
             buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider));
         if (sslContext != null) {

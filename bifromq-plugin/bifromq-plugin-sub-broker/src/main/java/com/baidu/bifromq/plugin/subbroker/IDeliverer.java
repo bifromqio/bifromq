@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.plugin.subbroker;
 
-import com.baidu.bifromq.type.SubInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -24,7 +24,7 @@ public interface IDeliverer {
      * @param packs a pack of messages to be delivered
      * @return a future of result
      */
-    CompletableFuture<Map<SubInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs);
+    CompletableFuture<Map<MatchInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs);
 
     /**
      * This method will be called whenever it's determined in IDLE state, release any resources associated if any.

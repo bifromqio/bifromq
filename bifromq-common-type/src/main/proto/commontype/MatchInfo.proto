@@ -1,5 +1,4 @@
 syntax = "proto3";
-import "commontype/QoS.proto";
 
 package commontype;
 
@@ -7,9 +6,8 @@ option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.type";
 option java_outer_classname = "SubInfoProtos";
 
-message SubInfo {
+message MatchInfo {
   string tenantId = 1;
-  string inboxId = 2;
-  QoS subQoS = 3;
-  string topicFilter = 4;
+  string topicFilter = 2;
+  string receiverId = 3;
 }

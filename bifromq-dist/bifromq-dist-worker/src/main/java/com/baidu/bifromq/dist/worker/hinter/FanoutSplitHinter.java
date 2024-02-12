@@ -83,7 +83,7 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
             case BATCHMATCH -> {
                 BatchMatchRequest request = input.getDistService().getBatchMatch();
                 Map<ByteString, RecordEstimation> matchRecordKeyPrefixMap = new HashMap<>();
-                request.getScopedTopicFilterMap().forEach((stf_str, subQoS) -> {
+                request.getScopedTopicFilterList().forEach((stf_str) -> {
                     String tenantId = parseTenantIdFromScopedTopicFilter(stf_str);
                     String topicFilter = parseTopicFilterFromScopedTopicFilter(stf_str);
                     String qInboxId = parseQInboxIdFromScopedTopicFilter(stf_str);

@@ -129,9 +129,9 @@ public class MQTTSubTest extends BaseMQTTTest {
         setupTransientSession();
 
         mockAuthCheck(true);
-        mockDistMatch(QoS.AT_MOST_ONCE, true);
-        mockDistMatch(QoS.AT_LEAST_ONCE, true);
-        mockDistMatch(QoS.EXACTLY_ONCE, false);
+        mockDistMatch("testTopic0", true);
+        mockDistMatch("testTopic1", true);
+        mockDistMatch("testTopic2", false);
         mockRetainMatch();
         int[] qos = {0, 1, 2};
         MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(qos);

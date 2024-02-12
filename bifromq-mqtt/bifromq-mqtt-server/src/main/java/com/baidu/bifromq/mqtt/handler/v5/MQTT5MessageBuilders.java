@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static io.netty.util.internal.ObjectUtil.checkPositive;
+
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
@@ -43,12 +46,17 @@ import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubAckPayload;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubAckPayload;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MQTT5MessageBuilders {
     public static AuthBuilder auth(String authMethod) {
         return new AuthBuilder(authMethod);
+    }
+
+    public static ConnAckPropertiesBuilder connAckProperties() {
+        return new ConnAckPropertiesBuilder();
     }
 
     public static DisconnectBuilder disconnect() {
@@ -67,20 +75,20 @@ public class MQTT5MessageBuilders {
         return new PubBuilder();
     }
 
-    public static PubAckBuilder pubAck() {
-        return new PubAckBuilder();
+    public static PubAckBuilder pubAck(boolean includeProblemInfo) {
+        return new PubAckBuilder(includeProblemInfo);
     }
 
-    public static PubRecBuilder pubRec() {
-        return new PubRecBuilder();
+    public static PubRecBuilder pubRec(boolean includeProblemInfo) {
+        return new PubRecBuilder(includeProblemInfo);
     }
 
-    public static PubRelBuilder pubRel() {
-        return new PubRelBuilder();
+    public static PubRelBuilder pubRel(boolean includeProblemInfo) {
+        return new PubRelBuilder(includeProblemInfo);
     }
 
-    public static PubCompBuilder pubComp() {
-        return new PubCompBuilder();
+    public static PubCompBuilder pubComp(boolean includeProblemInfo) {
+        return new PubCompBuilder(includeProblemInfo);
     }
 
     public static final class AuthBuilder {
@@ -142,6 +150,192 @@ public class MQTT5MessageBuilders {
         }
     }
 
+    public static final class ConnAckPropertiesBuilder {
+        private String clientId;
+        private Long sessionExpiryInterval;
+        private int receiveMaximum;
+        private Byte maximumQos;
+        private Boolean retain;
+        private Long maximumPacketSize;
+        private int topicAliasMaximum;
+        private String reasonString;
+        private final MqttProperties.UserProperties userProperties = new MqttProperties.UserProperties();
+        private Boolean wildcardSubscriptionAvailable;
+        private Boolean subscriptionIdentifiersAvailable;
+        private Boolean sharedSubscriptionAvailable;
+        private Integer serverKeepAlive;
+        private String responseInformation;
+        private String serverReference;
+        private String authenticationMethod;
+        private byte[] authenticationData;
+
+        public MqttProperties build() {
+            final MqttProperties props = new MqttProperties();
+            if (clientId != null) {
+                props.add(new MqttProperties.StringProperty(
+                    MqttProperties.MqttPropertyType.ASSIGNED_CLIENT_IDENTIFIER.value(),
+                    clientId));
+            }
+            if (sessionExpiryInterval != null) {
+                props.add(new MqttProperties.IntegerProperty(
+                    MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL.value(), sessionExpiryInterval.intValue()));
+            }
+            if (receiveMaximum > 0) {
+                props.add(new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.RECEIVE_MAXIMUM.value(),
+                    receiveMaximum));
+            }
+            if (maximumQos != null) {
+                props.add(new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.MAXIMUM_QOS.value(),
+                    receiveMaximum));
+            }
+            if (maximumPacketSize != null) {
+                props.add(
+                    new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.MAXIMUM_PACKET_SIZE.value(),
+                        maximumPacketSize.intValue()));
+            }
+            props.add(new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM.value(),
+                topicAliasMaximum));
+            if (reasonString != null) {
+                props.add(new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.REASON_STRING.value(),
+                    reasonString));
+            }
+            if (!userProperties.value().isEmpty()) {
+                props.add(userProperties);
+            }
+            if (retain != null) {
+                props.add(new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.RETAIN_AVAILABLE.value(),
+                    retain ? 1 : 0));
+            }
+            if (wildcardSubscriptionAvailable != null) {
+                props.add(new MqttProperties.IntegerProperty(
+                    MqttProperties.MqttPropertyType.WILDCARD_SUBSCRIPTION_AVAILABLE.value(),
+                    wildcardSubscriptionAvailable ? 1 : 0));
+            }
+            if (subscriptionIdentifiersAvailable != null) {
+                props.add(new MqttProperties.IntegerProperty(
+                    MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER_AVAILABLE.value(),
+                    subscriptionIdentifiersAvailable ? 1 : 0));
+            }
+            if (sharedSubscriptionAvailable != null) {
+                props.add(new MqttProperties.IntegerProperty(
+                    MqttProperties.MqttPropertyType.SHARED_SUBSCRIPTION_AVAILABLE.value(),
+                    sharedSubscriptionAvailable ? 1 : 0));
+            }
+            if (serverKeepAlive != null) {
+                props.add(new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.SERVER_KEEP_ALIVE.value(),
+                    serverKeepAlive));
+            }
+            if (responseInformation != null) {
+                props.add(
+                    new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.RESPONSE_INFORMATION.value(),
+                        responseInformation));
+            }
+            if (serverReference != null) {
+                props.add(new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.SERVER_REFERENCE.value(),
+                    serverReference));
+            }
+            if (authenticationMethod != null) {
+                props.add(
+                    new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.AUTHENTICATION_METHOD.value(),
+                        authenticationMethod));
+            }
+            if (authenticationData != null) {
+                props.add(new MqttProperties.BinaryProperty(MqttProperties.MqttPropertyType.AUTHENTICATION_DATA.value(),
+                    authenticationData));
+            }
+
+            return props;
+        }
+
+        public ConnAckPropertiesBuilder sessionExpiryInterval(long seconds) {
+            this.sessionExpiryInterval = seconds;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder receiveMaximum(int value) {
+            this.receiveMaximum = checkPositive(value, "value");
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder maximumQos(byte value) {
+            if (value != 0 && value != 1) {
+                throw new IllegalArgumentException("maximum QoS property could be 0 or 1");
+            }
+            this.maximumQos = value;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder retainAvailable(boolean retain) {
+            this.retain = retain;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder maximumPacketSize(long size) {
+            this.maximumPacketSize = checkPositive(size, "size");
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder assignedClientId(String clientId) {
+            this.clientId = clientId;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder topicAliasMaximum(int value) {
+            this.topicAliasMaximum = value;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder reasonString(String reason) {
+            this.reasonString = reason;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder userProperty(String name, String value) {
+            userProperties.add(name, value);
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder wildcardSubscriptionAvailable(boolean value) {
+            this.wildcardSubscriptionAvailable = value;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder subscriptionIdentifiersAvailable(boolean value) {
+            this.subscriptionIdentifiersAvailable = value;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder sharedSubscriptionAvailable(boolean value) {
+            this.sharedSubscriptionAvailable = value;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder serverKeepAlive(int seconds) {
+            this.serverKeepAlive = seconds;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder responseInformation(String value) {
+            this.responseInformation = value;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder serverReference(String host) {
+            this.serverReference = host;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder authenticationMethod(String methodName) {
+            this.authenticationMethod = methodName;
+            return this;
+        }
+
+        public ConnAckPropertiesBuilder authenticationData(byte[] rawData) {
+            this.authenticationData = rawData.clone();
+            return this;
+        }
+    }
+
     public static final class PubBuilder {
         private int packetId;
         private MQTTSessionHandler.SubMessage message;
@@ -200,6 +394,13 @@ public class MQTT5MessageBuilders {
             if (message.message().getUserProperties().getUserPropertiesCount() > 0) {
                 propsBuilder.addUserProperties(message.message().getUserProperties());
             }
+            if (message.message().getExpiryInterval() < Integer.MAX_VALUE) {
+                // If absent, the Application Message does not expire
+                int leftDelayInterval = (int) Duration.ofMillis(
+                    Duration.ofSeconds(message.message().getExpiryInterval()).toMillis() -
+                        (HLC.INST.getPhysical() - message.message().getTimestamp())).toSeconds();
+                propsBuilder.addMessageExpiryInterval(leftDelayInterval);
+            }
 
             MqttFixedHeader mqttFixedHeader =
                 new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.valueOf(message.qos().getNumber()),
@@ -213,12 +414,14 @@ public class MQTT5MessageBuilders {
 
     public static final class PubAckBuilder {
 
+        private final boolean includeProblemInfo;
         private int packetId;
         private MQTT5PubAckReasonCode reasonCode;
         private String reasonString;
         private UserProperties userProps;
 
-        PubAckBuilder() {
+        PubAckBuilder(boolean includeProblemInfo) {
+            this.includeProblemInfo = includeProblemInfo;
         }
 
         public PubAckBuilder reasonCode(MQTT5PubAckReasonCode reasonCode) {
@@ -245,16 +448,15 @@ public class MQTT5MessageBuilders {
             MqttFixedHeader fixedHeader =
                 new MqttFixedHeader(MqttMessageType.PUBACK, false, MqttQoS.AT_MOST_ONCE, false, 0);
             MqttMessageIdVariableHeader varHeader;
-            if (Strings.isNullOrEmpty(reasonString)
-                && userProps == null
+            if ((!includeProblemInfo || (Strings.isNullOrEmpty(reasonString) && userProps == null))
                 && reasonCode == MQTT5PubAckReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
                 MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
-                if (!Strings.isNullOrEmpty(reasonString)) {
+                if (includeProblemInfo && !Strings.isNullOrEmpty(reasonString)) {
                     propsBuilder.addReasonString(reasonString);
                 }
-                if (userProps != null) {
+                if (includeProblemInfo && userProps != null) {
                     propsBuilder.addUserProperties(userProps);
                 }
                 varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());
@@ -264,12 +466,15 @@ public class MQTT5MessageBuilders {
     }
 
     public static final class PubRecBuilder {
+        private final boolean includeProblemInfo;
+
         private int packetId;
         private MQTT5PubRecReasonCode reasonCode;
         private String reasonString;
         private UserProperties userProps;
 
-        PubRecBuilder() {
+        PubRecBuilder(boolean includeProblemInfo) {
+            this.includeProblemInfo = includeProblemInfo;
         }
 
         public PubRecBuilder reasonCode(MQTT5PubRecReasonCode reasonCode) {
@@ -296,16 +501,15 @@ public class MQTT5MessageBuilders {
             MqttFixedHeader fixedHeader =
                 new MqttFixedHeader(MqttMessageType.PUBREC, false, MqttQoS.AT_MOST_ONCE, false, 2);
             MqttMessageIdVariableHeader varHeader;
-            if (Strings.isNullOrEmpty(reasonString)
-                && userProps == null
+            if ((!includeProblemInfo || Strings.isNullOrEmpty(reasonString) && userProps == null)
                 && reasonCode == MQTT5PubRecReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
                 MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
-                if (!Strings.isNullOrEmpty(reasonString)) {
+                if (includeProblemInfo && !Strings.isNullOrEmpty(reasonString)) {
                     propsBuilder.addReasonString(reasonString);
                 }
-                if (userProps != null) {
+                if (includeProblemInfo && userProps != null) {
                     propsBuilder.addUserProperties(userProps);
                 }
                 varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());
@@ -315,12 +519,14 @@ public class MQTT5MessageBuilders {
     }
 
     public static final class PubRelBuilder {
+        private final boolean includeProblemInfo;
         private int packetId;
         private MQTT5PubRelReasonCode reasonCode;
         private String reasonString;
         private UserProperties userProps;
 
-        PubRelBuilder() {
+        PubRelBuilder(boolean includeProblemInfo) {
+            this.includeProblemInfo = includeProblemInfo;
         }
 
         public PubRelBuilder reasonCode(MQTT5PubRelReasonCode reasonCode) {
@@ -345,18 +551,17 @@ public class MQTT5MessageBuilders {
 
         public MqttMessage build() {
             MqttFixedHeader fixedHeader =
-                new MqttFixedHeader(MqttMessageType.PUBREL, false, MqttQoS.AT_MOST_ONCE, false, 2);
+                new MqttFixedHeader(MqttMessageType.PUBREL, false, MqttQoS.AT_LEAST_ONCE, false, 2);
             MqttMessageIdVariableHeader varHeader;
-            if (Strings.isNullOrEmpty(reasonString)
-                && userProps == null
+            if ((!includeProblemInfo || Strings.isNullOrEmpty(reasonString) && userProps == null)
                 && reasonCode == MQTT5PubRelReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
                 MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
-                if (!Strings.isNullOrEmpty(reasonString)) {
+                if (includeProblemInfo && !Strings.isNullOrEmpty(reasonString)) {
                     propsBuilder.addReasonString(reasonString);
                 }
-                if (userProps != null) {
+                if (includeProblemInfo && userProps != null) {
                     propsBuilder.addUserProperties(userProps);
                 }
                 varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());
@@ -366,12 +571,14 @@ public class MQTT5MessageBuilders {
     }
 
     public static final class PubCompBuilder {
+        private final boolean includeProblemInfo;
         private int packetId;
         private MQTT5PubCompReasonCode reasonCode;
         private String reasonString;
         private UserProperties userProps;
 
-        PubCompBuilder() {
+        PubCompBuilder(boolean includeProblemInfo) {
+            this.includeProblemInfo = includeProblemInfo;
         }
 
         public PubCompBuilder reasonCode(MQTT5PubCompReasonCode reasonCode) {
@@ -398,16 +605,15 @@ public class MQTT5MessageBuilders {
             MqttFixedHeader fixedHeader =
                 new MqttFixedHeader(MqttMessageType.PUBCOMP, false, MqttQoS.AT_MOST_ONCE, false, 2);
             MqttMessageIdVariableHeader varHeader;
-            if (Strings.isNullOrEmpty(reasonString)
-                && userProps == null
+            if ((!includeProblemInfo || Strings.isNullOrEmpty(reasonString) && userProps == null)
                 && reasonCode == MQTT5PubCompReasonCode.Success) {
                 varHeader = MqttMessageIdVariableHeader.from(packetId);
             } else {
                 MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
-                if (!Strings.isNullOrEmpty(reasonString)) {
+                if (includeProblemInfo && !Strings.isNullOrEmpty(reasonString)) {
                     propsBuilder.addReasonString(reasonString);
                 }
-                if (userProps != null) {
+                if (includeProblemInfo && userProps != null) {
                     propsBuilder.addUserProperties(userProps);
                 }
                 varHeader = new MqttPubReplyMessageVariableHeader(packetId, reasonCode.value(), propsBuilder.build());

@@ -1,6 +1,6 @@
 syntax = "proto3";
 import "commontype/ClientInfo.proto";
-import "commontype/SubInfo.proto";
+import "commontype/MatchInfo.proto";
 import "commontype/TopicMessage.proto";
 import "inboxservice/InboxFetched.proto";
 import "inboxservice/LWT.proto";
@@ -203,7 +203,7 @@ message UnsubReply {
 message SendRequest {
   message Params{
     commontype.TopicMessagePack messages = 1;
-    repeated commontype.SubInfo subInfo = 2;
+    repeated commontype.MatchInfo matchInfo = 2;
   }
   uint64 reqId = 1;
   repeated Params params = 2;
@@ -216,7 +216,7 @@ message SendReply {
     ERROR = 2;
   }
   message Result{
-    commontype.SubInfo subInfo = 1;
+    commontype.MatchInfo matchInfo = 1;
     Code code = 2;
   }
   uint64 reqId = 1;

@@ -25,9 +25,18 @@ public interface IMqttBrokerClient extends ISubBroker, IConnectable {
         return new MqttBrokerClientBuilder();
     }
 
-    CompletableFuture<SubReply> sub(long reqId, String tenantId, String inboxId, String topicFilter, QoS qos);
+    CompletableFuture<SubReply> sub(long reqId,
+                                    String tenantId,
+                                    String sessionId,
+                                    String topicFilter,
+                                    QoS qos,
+                                    String brokerServerId);
 
-    CompletableFuture<UnsubReply> unsub(long reqId, String tenantId, String inboxId, String topicFilter);
+    CompletableFuture<UnsubReply> unsub(long reqId,
+                                        String tenantId,
+                                        String sessionId,
+                                        String topicFilter,
+                                        String brokerServerId);
 
     @Override
     default int id() {
