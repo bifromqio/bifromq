@@ -339,11 +339,17 @@ public class MQTT5MessageBuilders {
     public static final class PubBuilder {
         private int packetId;
         private MQTTSessionHandler.SubMessage message;
+        private boolean dup;
         private boolean setupAlias;
         private int topicAlias;
 
         public PubBuilder packetId(int packetId) {
             this.packetId = packetId;
+            return this;
+        }
+
+        public PubBuilder dup(boolean dup) {
+            this.dup = dup;
             return this;
         }
 
@@ -403,7 +409,7 @@ public class MQTT5MessageBuilders {
             }
 
             MqttFixedHeader mqttFixedHeader =
-                new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.valueOf(message.qos().getNumber()),
+                new MqttFixedHeader(MqttMessageType.PUBLISH, dup, MqttQoS.valueOf(message.qos().getNumber()),
                     message.isRetain(), 0);
             MqttPublishVariableHeader mqttVariableHeader =
                 new MqttPublishVariableHeader(topicName, packetId, propsBuilder.build());

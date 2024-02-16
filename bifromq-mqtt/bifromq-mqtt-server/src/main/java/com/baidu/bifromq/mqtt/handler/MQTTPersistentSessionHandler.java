@@ -523,7 +523,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         while (clientReceiveQuota() > 0 && itr.hasNext()) {
             Map.Entry<Long, SubMessage> entry = itr.next();
             long seq = entry.getKey();
-            sendSubMessage(seq, entry.getValue());
+            sendConfirmableMessage(seq, entry.getValue());
             nextSendSeq = seq + 1;
         }
         flush(true);

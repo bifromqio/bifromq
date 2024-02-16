@@ -246,7 +246,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         while (clientReceiveQuota() > 0 && itr.hasNext()) {
             Map.Entry<Long, SubMessage> entry = itr.next();
             long seq = entry.getKey();
-            sendSubMessage(seq, entry.getValue());
+            sendConfirmableMessage(seq, entry.getValue());
             nextSendSeq = seq + 1;
         }
     }

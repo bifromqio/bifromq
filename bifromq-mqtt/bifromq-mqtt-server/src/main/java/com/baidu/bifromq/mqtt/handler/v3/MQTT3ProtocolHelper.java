@@ -27,7 +27,6 @@ import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
-import com.baidu.bifromq.util.UTF8Util;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
@@ -48,6 +47,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.TopicUtil;
+import com.baidu.bifromq.util.UTF8Util;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
@@ -247,12 +247,13 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message) {
+    public MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message, boolean isDup) {
         return MQTT3MessageBuilders.pub()
             .messageId(packetId)
             .topicName(message.topic())
             .qos(message.qos())
             .retained(message.isRetain())
+            .dup(isDup)
             .payload(message.message().getPayload())
             .build();
     }

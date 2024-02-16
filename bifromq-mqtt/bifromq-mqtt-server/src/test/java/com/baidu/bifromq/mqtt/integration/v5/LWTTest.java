@@ -72,15 +72,18 @@ public class LWTTest extends MQTTTest {
         lastWillTest(0, 0, 0);
         lastWillTest(0, 0, 1);
         lastWillTest(0, 0, 2);
-        lastWillTest(0, 1, 0);
-        lastWillTest(0, 1, 1);
-        lastWillTest(0, 1, 2);
-        lastWillTest(1, 0, 0);
-        lastWillTest(1, 0, 1);
-        lastWillTest(1, 0, 2);
-        lastWillTest(1, 1, 0);
-        lastWillTest(1, 1, 1);
-        lastWillTest(1, 1, 2);
+        lastWillTest(0, 2, 0);
+        lastWillTest(0, 2, 1);
+        lastWillTest(0, 2, 2);
+        lastWillTest(2, 0, 0);
+        lastWillTest(2, 0, 1);
+        lastWillTest(2, 0, 2);
+        lastWillTest(1, 3, 0);
+        lastWillTest(1, 3, 1);
+        lastWillTest(1, 3, 2);
+        lastWillTest(3, 1, 0);
+        lastWillTest(3, 1, 1);
+        lastWillTest(3, 1, 2);
     }
 
     @Test(groups = "integration")

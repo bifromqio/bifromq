@@ -103,7 +103,7 @@ public interface IMQTTProtocolHelper {
 
     ProtocolResponse onKick(ClientInfo kicker);
 
-    MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message);
+    MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message, boolean isDup);
 
     ProtocolResponse respondReceivingMaximumExceeded(MqttPublishMessage mqttMessage);
 

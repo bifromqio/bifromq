@@ -43,6 +43,7 @@ public class MQTT3MessageBuilders {
 
     public static final class PublishBuilder {
         private String topic;
+        private boolean dup;
         private boolean retained;
         private QoS qos;
         private ByteString payload;
@@ -58,6 +59,11 @@ public class MQTT3MessageBuilders {
 
         public PublishBuilder retained(boolean retained) {
             this.retained = retained;
+            return this;
+        }
+
+        public PublishBuilder dup(boolean dup) {
+            this.dup = dup;
             return this;
         }
 
@@ -78,7 +84,7 @@ public class MQTT3MessageBuilders {
 
         public MqttPublishMessage build() {
             MqttFixedHeader mqttFixedHeader =
-                new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.valueOf(qos.getNumber()), retained, 0);
+                new MqttFixedHeader(MqttMessageType.PUBLISH, dup, MqttQoS.valueOf(qos.getNumber()), retained, 0);
             MqttPublishVariableHeader mqttVariableHeader =
                 new MqttPublishVariableHeader(topic, messageId, null);
             return new MqttPublishMessage(mqttFixedHeader, mqttVariableHeader,

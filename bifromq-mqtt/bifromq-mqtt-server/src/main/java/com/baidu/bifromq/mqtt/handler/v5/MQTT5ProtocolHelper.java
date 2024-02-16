@@ -446,7 +446,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message) {
+    public MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message, boolean isDup) {
         Optional<SenderTopicAliasManager.AliasCreationResult> aliasCreationResult =
             senderTopicAliasManager.tryAlias(message.topic());
         if (aliasCreationResult.isPresent()) {

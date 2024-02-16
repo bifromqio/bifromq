@@ -13,12 +13,14 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ResendTimeoutSeconds;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT3Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT4Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT5Enabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxResendTimes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicAlias;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
@@ -64,6 +66,8 @@ public class TenantSettings {
     public final long outboundBandwidth;
     public final int receiveMaximum;
     public final int maxMsgPerSec;
+    public final int maxResendTimes;
+    public final int resendTimeoutSeconds;
     public final int maxTopicFiltersPerSub;
     public final int inboxQueueLength;
     public final boolean inboxDropOldest;
@@ -90,6 +94,8 @@ public class TenantSettings {
         inboundBandwidth = provider.provide(InBoundBandWidth, tenantId);
         outboundBandwidth = provider.provide(OutBoundBandWidth, tenantId);
         maxMsgPerSec = provider.provide(MsgPubPerSec, tenantId);
+        maxResendTimes = provider.provide(MaxResendTimes, tenantId);
+        resendTimeoutSeconds = provider.provide(ResendTimeoutSeconds, tenantId);
         receiveMaximum = provider.provide(ReceivingMaximum, tenantId);
         maxTopicFiltersPerSub = provider.provide(MaxTopicFiltersPerSub, tenantId);
         inboxQueueLength = provider.provide(OfflineQueueSize, tenantId);
