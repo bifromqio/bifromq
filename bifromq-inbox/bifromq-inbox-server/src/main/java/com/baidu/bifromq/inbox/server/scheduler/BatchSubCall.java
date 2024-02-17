@@ -30,7 +30,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     protected BatchSubCall(KVRangeId rangeId,
                            IBaseKVStoreClient distWorkerClient,
@@ -88,6 +90,7 @@ public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
 
     @Override
     protected void handleException(CallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask, Throwable e) {
+        log.debug("Failed to batch sub", e);
         callTask.callResult.complete(SubReply.newBuilder()
             .setReqId(callTask.call.getReqId())
             .setCode(SubReply.Code.ERROR)

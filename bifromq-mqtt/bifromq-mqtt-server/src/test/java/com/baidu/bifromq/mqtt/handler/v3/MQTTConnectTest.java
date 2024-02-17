@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
@@ -98,6 +99,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuthPass();
         mockSessionReg();
         mockInboxGet(InboxVersion.newBuilder().setIncarnation(1).build());
+        mockInboxReader();
         mockAttach(AttachReply.Code.OK);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
@@ -117,9 +119,8 @@ public class MQTTConnectTest extends BaseMQTTTest {
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
-        MqttConnAckMessage ackMessage = channel.readOutbound();
-        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        verifyEvent(EventType.INBOX_TRANSIENT_ERROR, EventType.CLIENT_CONNECTED);
+        assertNull(channel.readOutbound());
+        verifyEvent(INBOX_TRANSIENT_ERROR);
     }
 
 
@@ -128,6 +129,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuthPass();
         mockSessionReg();
         mockInboxGet();
+        mockInboxReader();
         mockInboxCreate(CreateReply.Code.OK);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
@@ -142,13 +144,13 @@ public class MQTTConnectTest extends BaseMQTTTest {
         mockAuthPass();
         mockSessionReg();
         mockInboxGet();
+        mockInboxReader();
         mockInboxCreate(CreateReply.Code.ERROR);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
-        MqttConnAckMessage ackMessage = channel.readOutbound();
-        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        verifyEvent(INBOX_TRANSIENT_ERROR, EventType.CLIENT_CONNECTED);
+        assertNull(channel.readOutbound());
+        verifyEvent(INBOX_TRANSIENT_ERROR);
     }
 
     @Test

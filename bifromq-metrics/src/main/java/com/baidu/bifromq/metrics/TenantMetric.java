@@ -19,6 +19,8 @@ public enum TenantMetric {
     MqttConnectionGauge("mqtt.connection.num.gauge", Meter.Type.GAUGE),
     MqttConnectCount("mqtt.connect.count", Meter.Type.COUNTER),
     MqttDisconnectCount("mqtt.disconnect.count", Meter.Type.COUNTER),
+    MqttLivePersistentSessionGauge("mqtt.psession.live.num.gauge", Meter.Type.GAUGE),
+    MqttPersistentSessionGauge("mqtt.psession.num.gauge", Meter.Type.GAUGE),
     MqttIngressBytes("mqtt.ingress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttEgressBytes("mqtt.egress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttQoS0IngressBytes("mqtt.ingress.qos0.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
@@ -40,8 +42,7 @@ public enum TenantMetric {
     MqttChannelLatency("mqtt.channel.latency", Meter.Type.TIMER),
     DistUsedSpaceGauge("dist.used.space.gauge", Meter.Type.GAUGE),
     InboxUsedSpaceGauge("inbox.used.space.gauge", Meter.Type.GAUGE),
-    RetainUsedSpaceGauge("retain.used.space.gauge", Meter.Type.GAUGE),
-    InboxFetcherGauge("inbox.fetcher.num.gauge", Meter.Type.GAUGE);
+    RetainUsedSpaceGauge("retain.used.space.gauge", Meter.Type.GAUGE);
 
     public final String metricName;
     public final Meter.Type meterType;

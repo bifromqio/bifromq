@@ -46,20 +46,22 @@ public class InboxGCProcessor implements IInboxGCProcessor {
     }
 
     @Override
-    public final CompletableFuture<Result> gcRange(KVRangeId rangeId,
+    public final CompletableFuture<Result> gcRange(long reqId,
+                                                   KVRangeId rangeId,
                                                    @Nullable String tenantId,
                                                    @Nullable Integer expirySeconds,
                                                    long now,
                                                    int limit) {
         CompletableFuture<Result> onDone = new CompletableFuture<>();
         AtomicInteger count = new AtomicInteger();
-        doGC(rangeId, tenantId, expirySeconds, null, now, limit, onDone, count);
-        onDone.whenComplete((v, e) -> log.debug("[InboxGC] tenant[{}] gc {} inboxes from range[{}]",
-            tenantId, count.get(), KVRangeIdUtil.toString(rangeId)));
+        doGC(reqId, rangeId, tenantId, expirySeconds, null, now, limit, onDone, count);
+        onDone.whenComplete((v, e) -> log.debug("[InboxGC] gc {} inboxes from range[{}]: reqId={}",
+            reqId, count.get(), KVRangeIdUtil.toString(rangeId)));
         return onDone;
     }
 
-    private void doGC(KVRangeId rangeId,
+    private void doGC(long reqId,
+                      KVRangeId rangeId,
                       @Nullable String tenantId,
                       @Nullable Integer expirySeconds,
                       @Nullable ByteString cursor,
@@ -72,28 +74,28 @@ public class InboxGCProcessor implements IInboxGCProcessor {
                 if (gcReply.getCode() == GCReply.Code.ERROR) {
                     return CompletableFuture.completedFuture(gcReply);
                 }
-                List<GCReply.Inbox> inboxList = gcReply.getInboxList();
+                List<GCReply.GCCandidate> inboxList = gcReply.getCandidateList();
                 count.addAndGet(inboxList.size());
-                log.debug("[InboxGC] scan success: rangeId={}, size={}", KVRangeIdUtil.toString(rangeId),
-                    inboxList.size());
+                log.debug("[InboxGC] scan success: reqId={}, rangeId={}, size={}",
+                    reqId, KVRangeIdUtil.toString(rangeId), inboxList.size());
                 return CompletableFuture.allOf(inboxList.stream()
                         .map(inbox -> inboxClient.detach(DetachRequest.newBuilder()
                                 .setReqId(System.nanoTime())
                                 .setInboxId(inbox.getInboxId())
                                 .setIncarnation(inbox.getIncarnation())
                                 .setVersion(inbox.getVersion())
-                                .setExpirySeconds(0)
+                                .setExpirySeconds(expirySeconds != null ? 0 : inbox.getExpirySeconds())
                                 .setDiscardLWT(false)
                                 .setClient(inbox.getClient())
                                 .setNow(now)
                                 .build())
                             .thenAccept(v -> {
                                 if (v.getCode() != DetachReply.Code.OK && v.getCode() != DetachReply.Code.NO_INBOX) {
-                                    log.error("Failed to clean expired inbox: tenantId={}, inboxId={}",
-                                        tenantId, inbox.getInboxId());
+                                    log.error("Failed to detach inbox: reqId={}, inboxId={}", reqId,
+                                        inbox.getInboxId());
                                 } else {
-                                    log.debug("[InboxGC] clean success: tenantId={}, inboxId={}",
-                                        tenantId, inbox.getInboxId());
+                                    log.debug("[InboxGC] detach success: reqId={}, inboxId={}", reqId,
+                                        inbox.getInboxId());
                                 }
                             }))
                         .toArray(CompletableFuture[]::new))
@@ -101,11 +103,11 @@ public class InboxGCProcessor implements IInboxGCProcessor {
             })
             .whenComplete((gcReply, e) -> {
                 if (e != null || gcReply.getCode() == GCReply.Code.ERROR) {
-                    log.debug("Failed to gc inboxes");
+                    log.debug("Failed to gc inboxes: reqId={}", reqId);
                     onDone.complete(Result.ERROR);
                 } else {
                     if (gcReply.hasCursor()) {
-                        doGC(rangeId, tenantId, expirySeconds, gcReply.getCursor(), now, limit, onDone, count);
+                        doGC(reqId, rangeId, tenantId, expirySeconds, gcReply.getCursor(), now, limit, onDone, count);
                     } else {
                         onDone.complete(Result.OK);
                     }

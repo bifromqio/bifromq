@@ -127,6 +127,7 @@ abstract class InboxStoreTest {
     private ScheduledExecutorService bgTaskExecutor;
     public Path dbRootDir;
 
+    private KVRangeStoreOptions options;
     protected IBaseKVStoreClient storeClient;
     protected StandaloneInboxStore testStore;
 
@@ -156,14 +157,13 @@ abstract class InboxStoreTest {
         serverCrdtService.start(agentHost);
 
         String uuid = UUID.randomUUID().toString();
-        KVRangeStoreOptions options = new KVRangeStoreOptions();
+        options = new KVRangeStoreOptions();
         ((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator())
             .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
                 .toString())
             .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
         ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator())
             .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
-        KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
@@ -177,6 +177,16 @@ abstract class InboxStoreTest {
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
+        buildStoreServer();
+        testStore.start();
+
+        storeClient.connState().filter(connState -> connState == IConnectable.ConnState.READY).blockingFirst();
+        storeClient.join();
+        log.info("Setup finished, and start testing");
+    }
+
+    private void buildStoreServer() {
+        KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         testStore = (StandaloneInboxStore) IInboxStore.standaloneBuilder()
             .bootstrap(true)
             .host("127.0.0.1")
@@ -195,11 +205,12 @@ abstract class InboxStoreTest {
             .gcInterval(Duration.ofSeconds(1))
             .statsInterval(Duration.ofSeconds(1))
             .build();
-        testStore.start();
+    }
 
-        storeClient.connState().filter(connState -> connState == IConnectable.ConnState.READY).blockingFirst();
-        storeClient.join();
-        log.info("Setup finished, and start testing");
+    protected void restartStoreServer() {
+        testStore.stop();
+        buildStoreServer();
+        testStore.start();
     }
 
     @AfterClass(groups = "integration")

@@ -113,7 +113,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 .filter(connState -> connState == IConnectable.ConnState.READY)
                 .takeUntil(connState -> connState == IConnectable.ConnState.READY)
                 .doOnComplete(() -> {
-                    scheduleGC();
+                    scheduleGC(Duration.ofSeconds(5));
                     scheduleStats();
                 })
                 .subscribe();
@@ -144,11 +144,11 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         }
     }
 
-    private void scheduleGC() {
+    private void scheduleGC(Duration delay) {
         if (status.get() != Status.STARTED) {
             return;
         }
-        jobScheduler.schedule(this::gc, gcInterval.toSeconds(), TimeUnit.SECONDS);
+        jobScheduler.schedule(this::gc, delay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void gc() {
@@ -159,12 +159,15 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             List<KVRangeSetting> settings = storeClient.findByBoundary(FULL_BOUNDARY);
             Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
             List<CompletableFuture<?>> gcFutures = new ArrayList<>();
+            long reqId = HLC.INST.getPhysical();
             while (itr.hasNext()) {
                 KVRangeSetting leaderReplica = itr.next();
-                gcFutures.add(inboxStoreGCProc.gcRange(leaderReplica.id, null, null, HLC.INST.getPhysical(), 100));
+                gcFutures.add(
+                    inboxStoreGCProc.gcRange(reqId, leaderReplica.id, null, null,
+                        HLC.INST.getPhysical(), Integer.MAX_VALUE));
             }
             gcJob = CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0]))
-                .whenComplete((v, e) -> scheduleGC());
+                .whenComplete((v, e) -> scheduleGC(gcInterval));
         });
     }
 
@@ -238,8 +241,8 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 return reply.getRoCoProcResult().getInboxService().getCollectedMetrics();
             })
             .exceptionally(e -> {
-                log.error("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",
-                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
+                log.debug("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",
+                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver, e);
                 return CollectMetricsReply.newBuilder().setReqId(reqId).build();
             });
     }

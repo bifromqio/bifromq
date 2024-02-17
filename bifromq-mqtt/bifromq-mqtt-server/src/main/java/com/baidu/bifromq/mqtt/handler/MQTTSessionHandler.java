@@ -196,6 +196,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private long lastActiveAtNanos;
     private final LinkedHashMap<Integer, ConfirmingMessage> unconfirmedPacketIds = new LinkedHashMap<>();
     private final TreeSet<ConfirmingMessage> resendQueue;
+    private final CompletableFuture<Void> onInitialized = new CompletableFuture<>();
+    ;
     private ScheduledFuture<?> resendTask;
     private int receivingCount = 0;
 
@@ -254,6 +256,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         return CompletableFuture.completedFuture(true)
             .thenComposeAsync(v -> checkAndUnsubscribe(reqId, topicFilter, UserProperties.getDefaultInstance())
                 .thenApply(unsubResult -> UnsubReply.Result.forNumber(unsubResult.ordinal())), ctx.executor());
+    }
+
+    public final CompletableFuture<Void> awaitInitialized() {
+        return onInitialized;
+    }
+
+    protected final void onInitialized() {
+        onInitialized.complete(null);
     }
 
     protected final LWT willMessage() {

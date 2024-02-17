@@ -387,7 +387,7 @@ public abstract class MQTTTest {
     public final void setupTest(Method method) {
         log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
         tenantId = System.nanoTime() + "";
-        doAnswer(invocationOnMock -> {
+        lenient().doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
             event.clone(event.getClass().getConstructor().newInstance());
             return null;

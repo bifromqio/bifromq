@@ -81,6 +81,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
+        onInitialized();
         resumeChannelRead();
     }
 

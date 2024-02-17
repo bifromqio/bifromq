@@ -69,7 +69,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private final long incarnation;
     private final NavigableMap<Long, SubMessage> stagingBuffer = new TreeMap<>();
     private final IInboxClient inboxClient;
-    private long version;
+    private long version = 0;
     private boolean qos0Confirming = false;
     private boolean inboxConfirming = false;
     private long nextSendSeq = 0;
@@ -282,6 +282,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         inboxReader.fetch(this::consume);
         inboxReader.hint(clientReceiveMaximum());
         // resume channel read after inbox being setup
+        onInitialized();
         resumeChannelRead();
         rescheduleTouch();
     }

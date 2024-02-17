@@ -18,6 +18,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
@@ -59,7 +60,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void getAfterExpired() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
@@ -85,7 +86,7 @@ public class InboxAdminTest extends InboxStoreTest {
         getParams = BatchGetRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setNow(Duration.ofSeconds(13).toMillis())
+            .setNow(Duration.ofMillis(now).plusSeconds(13).toMillis())
             .build();
         result = requestGet(getParams).get(0);
         assertEquals(result.getVersionCount(), 0);
@@ -93,7 +94,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void createWithLWT() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
@@ -131,7 +132,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void createWithoutLWT() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
@@ -139,7 +140,7 @@ public class InboxAdminTest extends InboxStoreTest {
         BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setNow(0)
+            .setNow(now)
             .build();
         BatchGetReply.Result result = requestGet(getParams).get(0);
         assertEquals(result.getVersionCount(), 0);
@@ -238,7 +239,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void attachWithoutLWT() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
@@ -288,7 +289,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void attachWithLWT() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
@@ -385,7 +386,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void detach() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
@@ -402,7 +403,7 @@ public class InboxAdminTest extends InboxStoreTest {
             .build();
         requestCreate(createParams);
 
-        now = Duration.ofSeconds(5).toMillis();
+        now = Duration.ofMillis(now).plusSeconds(5).toMillis();
         BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
@@ -514,7 +515,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void touch() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
@@ -531,7 +532,7 @@ public class InboxAdminTest extends InboxStoreTest {
             .build();
         requestCreate(createParams);
 
-        now = Duration.ofSeconds(5).toMillis();
+        now = Duration.ofMillis(now).plusSeconds(5).toMillis();
         BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)

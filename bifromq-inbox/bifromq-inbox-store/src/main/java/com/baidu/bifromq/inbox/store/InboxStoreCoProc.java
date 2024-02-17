@@ -31,6 +31,7 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.sendBufferPrefix;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
@@ -112,6 +113,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class InboxStoreCoProc implements IKVRangeCoProc {
+    private static long initTime;
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final Cache<ByteString, Optional<InboxMetadata>> inboxMetadataCache;
@@ -119,6 +121,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     InboxStoreCoProc(ISettingProvider settingProvider,
                      IEventCollector eventCollector,
                      Duration purgeDelay) {
+        initTime = HLC.INST.getPhysical();
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         inboxMetadataCache = Caffeine.newBuilder()
@@ -630,11 +633,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             if (isMetadataKey(itr.key())) {
                 InboxMetadata metadata = InboxMetadata.parseFrom(itr.value());
                 if (isGCable(metadata, request)) {
-                    if (replyBuilder.getInboxCount() < request.getLimit()) {
-                        replyBuilder.addInbox(GCReply.Inbox.newBuilder()
+                    if (replyBuilder.getCandidateCount() < request.getLimit()) {
+                        replyBuilder.addCandidate(GCReply.GCCandidate.newBuilder()
                             .setInboxId(metadata.getInboxId())
                             .setIncarnation(metadata.getIncarnation())
                             .setVersion(metadata.getVersion())
+                            .setExpirySeconds(metadata.getExpirySeconds())
                             .setClient(metadata.getClient())
                             .build());
                     } else {
@@ -995,9 +999,15 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     private boolean hasExpired(InboxMetadata metadata, int expirySeconds, long nowTS) {
+        Duration lastActiveTime = Duration.ofMillis(metadata.getLastActiveTime());
+        if (Duration.ofMillis(initTime).compareTo(lastActiveTime) > 0) {
+            // if lastActiveTime is before boot time, it may be expired
+            // detach operation will refresh lastActiveTime
+            return true;
+        }
         Duration now = Duration.ofMillis(nowTS);
         // now > 1.5 * keepAlive + expirySeconds since last active time
-        Duration expireAt = Duration.ofMillis(metadata.getLastActiveTime())
+        Duration expireAt = lastActiveTime
             .plus(Duration.ofMillis((long) (Duration.ofSeconds(metadata.getKeepAliveSeconds()).toMillis() * 1.5)))
             .plus(Duration.ofSeconds(expirySeconds));
         return now.compareTo(expireAt) > 0;

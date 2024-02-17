@@ -18,9 +18,9 @@ import java.util.Comparator;
 
 public record ScopedInbox(String tenantId, String inboxId, long incarnation) implements Comparable<ScopedInbox> {
     private static final String SEPARATOR = "_";
-    private static Comparator<ScopedInbox> COMPARATOR =
-        Comparator.comparing(ScopedInbox::tenantId).thenComparing(ScopedInbox::inboxId)
-            .thenComparing(ScopedInbox::incarnation);
+    private static final Comparator<ScopedInbox> COMPARATOR = Comparator.comparing(ScopedInbox::tenantId)
+        .thenComparing(ScopedInbox::inboxId)
+        .thenComparing(ScopedInbox::incarnation);
 
     public static String distInboxId(String inboxId, long incarnation) {
         return inboxId + SEPARATOR + incarnation;

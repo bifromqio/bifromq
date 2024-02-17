@@ -290,14 +290,15 @@ message GCReply {
     OK = 0;
     ERROR = 1;
   }
-  message Inbox{
+  message GCCandidate{
     string inboxId = 2;
     uint64 incarnation = 3;
     uint64 version = 4;
-    commontype.ClientInfo client = 5;
+    uint32 expirySeconds = 5;
+    commontype.ClientInfo client = 6;
   }
   Code code = 1;
-  repeated Inbox inbox = 2;
+  repeated GCCandidate candidate = 2;
   optional bytes cursor = 3;
 }
 

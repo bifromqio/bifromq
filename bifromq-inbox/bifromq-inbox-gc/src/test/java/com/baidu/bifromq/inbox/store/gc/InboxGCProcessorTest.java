@@ -35,12 +35,15 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
+import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -77,20 +80,23 @@ public class InboxGCProcessorTest {
     }
 
 
+    @SneakyThrows
     @Test
     public void testScanFailed() {
         when(storeClient.query(anyString(), any(KVRangeRORequest.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
         IInboxGCProcessor.Result result =
-            inboxGCProc.gcRange(rangeId, tenantId, 10, HLC.INST.getPhysical(), 100).join();
+            inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, HLC.INST.getPhysical(), 100).join();
         assertEquals(result, IInboxGCProcessor.Result.ERROR);
+        Duration d = Duration.ofMillis(Integer.MAX_VALUE);
+        System.out.println(d.toSeconds());
     }
 
     @Test
     public void testScanNoRange() {
         when(storeClient.findById(rangeId)).thenReturn(Optional.empty());
         IInboxGCProcessor.Result result =
-            inboxGCProc.gcRange(rangeId, tenantId, 10, HLC.INST.getPhysical(), 100).join();
+            inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, HLC.INST.getPhysical(), 100).join();
         assertEquals(result, IInboxGCProcessor.Result.ERROR);
     }
 
@@ -104,15 +110,15 @@ public class InboxGCProcessorTest {
                 .setInboxService(InboxServiceROCoProcOutput.newBuilder()
                     .setGc(GCReply.newBuilder()
                         .setCode(GCReply.Code.OK)
-                        .addInbox(GCReply.Inbox.newBuilder()
+                        .addCandidate(GCReply.GCCandidate.newBuilder()
                             .setInboxId("inbox1")
                             .setClient(clientInfo)
                             .build())
-                        .addInbox(GCReply.Inbox.newBuilder()
+                        .addCandidate(GCReply.GCCandidate.newBuilder()
                             .setInboxId("inbox2")
                             .setClient(clientInfo)
                             .build())
-                        .addInbox(GCReply.Inbox.newBuilder()
+                        .addCandidate(GCReply.GCCandidate.newBuilder()
                             .setInboxId("inbox3")
                             .setClient(clientInfo)
                             .build())
@@ -134,7 +140,8 @@ public class InboxGCProcessorTest {
         when(inboxClient.detach(any())).thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder()
             .setCode(DetachReply.Code.OK)
             .build()));
-        IInboxGCProcessor.Result result = inboxGCProc.gcRange(rangeId, tenantId, 10, now, 2).join();
+        IInboxGCProcessor.Result result =
+            inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, now, 2).join();
         assertEquals(result, IInboxGCProcessor.Result.OK);
         ArgumentCaptor<KVRangeRORequest> queryCap = ArgumentCaptor.forClass(KVRangeRORequest.class);
         verify(storeClient, times(2)).query(anyString(), queryCap.capture());
@@ -180,7 +187,7 @@ public class InboxGCProcessorTest {
             .setCode(DetachReply.Code.OK)
             .build()));
 
-        inboxGCProc.gcRange(rangeId, tenantId, 10, HLC.INST.getPhysical(), 2);
+        inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, HLC.INST.getPhysical(), 2);
         verify(storeClient, times(2)).query(anyString(), any());
         verify(inboxClient, times(0)).detach(any());
     }

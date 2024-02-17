@@ -38,7 +38,7 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
         register(new HTTPPubHandler(distClient, settingProvider));
         register(new HTTPSubHandler(sessionDictClient));
         register(new HTTPUnsubHandler(sessionDictClient));
-        register(new HTTPExpireInboxHandler(inboxClient));
+        register(new HTTPExpireSessionHandler(inboxClient));
     }
 
     @Override

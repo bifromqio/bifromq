@@ -59,11 +59,11 @@ public enum Setting {
     ResendTimeoutSeconds(Integer.class, val -> (int) val > 0, 10),
     MaxTopicFiltersPerSub(Integer.class, val -> (int) val > 0 && (int) val <= 100, 10),
 
-    OfflineExpireTimeSeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
+    MaxSessionExpirySeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
 
-    OfflineQueueSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
+    SessionInboxSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
 
-    OfflineOverflowDropOldest(Boolean.class, val -> true, false),
+    QoS0DropOldest(Boolean.class, val -> true, false),
 
     RetainedTopicLimit(Integer.class, val -> (int) val >= 0, 10),
 

@@ -15,6 +15,9 @@ package com.baidu.bifromq.mqtt.handler;
 
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_P_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_T_VALUE;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
@@ -38,7 +41,6 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -278,23 +280,23 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     protected abstract GoAway onGetSessionFailed(ClientInfo clientInfo);
 
-    protected abstract ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
-                                                                   TenantSettings settings,
-                                                                   String userSessionId,
-                                                                   int keepAliveSeconds,
-                                                                   @Nullable LWT willMessage,
-                                                                   ClientInfo clientInfo,
-                                                                   ChannelHandlerContext ctx);
+    protected abstract MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
+                                                                       TenantSettings settings,
+                                                                       String userSessionId,
+                                                                       int keepAliveSeconds,
+                                                                       @Nullable LWT willMessage,
+                                                                       ClientInfo clientInfo,
+                                                                       ChannelHandlerContext ctx);
 
-    protected abstract ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
-                                                                    TenantSettings settings,
-                                                                    String userSessionId,
-                                                                    int keepAliveSeconds,
-                                                                    int sessionExpiryInterval,
-                                                                    @Nullable ExistingSession existingSession,
-                                                                    @Nullable LWT willMessage,
-                                                                    ClientInfo clientInfo,
-                                                                    ChannelHandlerContext ctx);
+    protected abstract MQTTSessionHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
+                                                                        TenantSettings settings,
+                                                                        String userSessionId,
+                                                                        int keepAliveSeconds,
+                                                                        int sessionExpiryInterval,
+                                                                        @Nullable ExistingSession existingSession,
+                                                                        @Nullable LWT willMessage,
+                                                                        ClientInfo clientInfo,
+                                                                        ChannelHandlerContext ctx);
 
     private void setupTransientSessionHandler(MqttConnectMessage connMsg,
                                               TenantSettings settings,
@@ -305,10 +307,13 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                               ClientInfo clientInfo,
                                               ChannelHandlerContext ctx) {
         int maxPacketSize = maxPacketSize(connMsg, settings);
+        clientInfo = clientInfo.toBuilder()
+            .putMetadata(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
+            .build();
         ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
 
-        ChannelHandler sessionHandler = buildTransientSessionHandler(
+        MQTTSessionHandler sessionHandler = buildTransientSessionHandler(
             connMsg,
             settings,
             userSessionId,
@@ -318,21 +323,25 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             ctx);
         assert sessionHandler instanceof IMQTTTransientSession;
         ctx.pipeline().replace(this, IMQTTTransientSession.NAME, sessionHandler);
-        ctx.writeAndFlush(onConnected(connMsg, settings,
-            userSessionId, keepAliveSeconds, 0, false, clientInfo));
-        // report client connected event
-        eventCollector.report(getLocal(ClientConnected.class)
-            .serverId(sessionCtx.serverId)
-            .clientInfo(clientInfo)
-            .userSessionId(userSessionId)
-            .keepAliveTimeSeconds(keepAliveSeconds)
-            .cleanSession(connMsg.variableHeader().isCleanSession())
-            .sessionPresent(sessionExists)
-            .lastWill(willMessage != null ? new ClientConnected.WillInfo()
-                .topic(willMessage.getTopic())
-                .isRetain(willMessage.getRetain())
-                .qos(willMessage.getMessage().getPubQoS())
-                .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
+        ClientInfo finalClientInfo = clientInfo;
+        sessionHandler.awaitInitialized()
+            .thenAcceptAsync(v -> {
+                ctx.writeAndFlush(onConnected(connMsg, settings,
+                    userSessionId, keepAliveSeconds, 0, false, finalClientInfo));
+                // report client connected event
+                eventCollector.report(getLocal(ClientConnected.class)
+                    .serverId(sessionCtx.serverId)
+                    .clientInfo(finalClientInfo)
+                    .userSessionId(userSessionId)
+                    .keepAliveTimeSeconds(keepAliveSeconds)
+                    .cleanSession(connMsg.variableHeader().isCleanSession())
+                    .sessionPresent(sessionExists)
+                    .lastWill(willMessage != null ? new ClientConnected.WillInfo()
+                        .topic(willMessage.getTopic())
+                        .isRetain(willMessage.getRetain())
+                        .qos(willMessage.getMessage().getPubQoS())
+                        .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
+            }, ctx.executor());
     }
 
     private void setupPersistentSessionHandler(MqttConnectMessage connMsg,
@@ -345,10 +354,13 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                ClientInfo clientInfo,
                                                ChannelHandlerContext ctx) {
         int maxPacketSize = maxPacketSize(connMsg, settings);
+        clientInfo = clientInfo.toBuilder()
+            .putMetadata(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_P_VALUE)
+            .build();
         ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
 
-        ChannelHandler sessionHandler = buildPersistentSessionHandler(connMsg,
+        MQTTSessionHandler sessionHandler = buildPersistentSessionHandler(connMsg,
             settings,
             userSessionId,
             keepAliveSeconds,
@@ -359,21 +371,26 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             ctx);
         assert sessionHandler instanceof IMQTTPersistentSession;
         ctx.pipeline().replace(this, IMQTTPersistentSession.NAME, sessionHandler);
-        ctx.writeAndFlush(onConnected(connMsg,
-            settings, userSessionId, keepAliveSeconds, sessionExpiryInterval, existingSession != null, clientInfo));
-        // report client connected event
-        eventCollector.report(getLocal(ClientConnected.class)
-            .serverId(sessionCtx.serverId)
-            .clientInfo(clientInfo)
-            .userSessionId(userSessionId)
-            .keepAliveTimeSeconds(keepAliveSeconds)
-            .cleanSession(connMsg.variableHeader().isCleanSession())
-            .sessionPresent(existingSession != null)
-            .lastWill(willMessage != null ? new ClientConnected.WillInfo()
-                .topic(willMessage.getTopic())
-                .isRetain(willMessage.getRetain())
-                .qos(willMessage.getMessage().getPubQoS())
-                .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
+        ClientInfo finalClientInfo = clientInfo;
+        sessionHandler.awaitInitialized()
+            .thenAcceptAsync(v -> {
+                ctx.writeAndFlush(onConnected(connMsg,
+                    settings, userSessionId, keepAliveSeconds, sessionExpiryInterval, existingSession != null,
+                    finalClientInfo));
+                // report client connected event
+                eventCollector.report(getLocal(ClientConnected.class)
+                    .serverId(sessionCtx.serverId)
+                    .clientInfo(finalClientInfo)
+                    .userSessionId(userSessionId)
+                    .keepAliveTimeSeconds(keepAliveSeconds)
+                    .cleanSession(connMsg.variableHeader().isCleanSession())
+                    .sessionPresent(existingSession != null)
+                    .lastWill(willMessage != null ? new ClientConnected.WillInfo()
+                        .topic(willMessage.getTopic())
+                        .isRetain(willMessage.getRetain())
+                        .qos(willMessage.getMessage().getPubQoS())
+                        .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
+            }, ctx.executor());
     }
 
 

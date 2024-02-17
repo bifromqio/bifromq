@@ -29,9 +29,9 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaximumQoS;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineExpireTimeSeconds;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineOverflowDropOldest;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OfflineQueueSize;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxSessionExpirySeconds;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.QoS0DropOldest;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.SessionInboxSize;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.PayloadFormatValidationEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
@@ -85,7 +85,7 @@ public class TenantSettings {
         subscriptionIdentifierEnabled = provider.provide(SubscriptionIdentifierEnabled, tenantId);
         sharedSubscriptionEnabled = provider.provide(SharedSubscriptionEnabled, tenantId);
         maxQoS = QoS.forNumber(provider.provide(MaximumQoS, tenantId));
-        maxSEI = provider.provide(OfflineExpireTimeSeconds, tenantId);
+        maxSEI = provider.provide(MaxSessionExpirySeconds, tenantId);
         maxTopicLevelLength = provider.provide(MaxTopicLevelLength, tenantId);
         maxTopicLevels = provider.provide(MaxTopicLevels, tenantId);
         maxTopicLength = provider.provide(MaxTopicLength, tenantId);
@@ -98,8 +98,8 @@ public class TenantSettings {
         resendTimeoutSeconds = provider.provide(ResendTimeoutSeconds, tenantId);
         receiveMaximum = provider.provide(ReceivingMaximum, tenantId);
         maxTopicFiltersPerSub = provider.provide(MaxTopicFiltersPerSub, tenantId);
-        inboxQueueLength = provider.provide(OfflineQueueSize, tenantId);
-        inboxDropOldest = provider.provide(OfflineOverflowDropOldest, tenantId);
+        inboxQueueLength = provider.provide(SessionInboxSize, tenantId);
+        inboxDropOldest = provider.provide(QoS0DropOldest, tenantId);
         retainMatchLimit = provider.provide(RetainMessageMatchLimit, tenantId);
     }
 }

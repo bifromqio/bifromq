@@ -41,20 +41,20 @@ import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Path("/expireinbox")
-public final class HTTPExpireInboxHandler implements IHTTPRequestHandler {
+@Path("/session")
+public final class HTTPExpireSessionHandler implements IHTTPRequestHandler {
     private final IInboxClient inboxClient;
 
-    public HTTPExpireInboxHandler(IInboxClient inboxClient) {
+    public HTTPExpireSessionHandler(IInboxClient inboxClient) {
         this.inboxClient = inboxClient;
     }
 
     @DELETE
-    @Operation(summary = "Expire inbox manually")
+    @Operation(summary = "Expire inactive persistent session using given expiry time")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
-        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, required = true, description = "the inboxes expiry time"),
+        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, required = true, description = "the overridden session expiry time in seconds"),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {

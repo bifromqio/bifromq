@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
-import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.InboxFetcherGauge;
 import static java.util.Collections.emptyMap;
 
 import com.google.common.collect.Iterators;
@@ -36,8 +33,6 @@ public final class InboxFetcherRegistry implements IInboxFetcherRegistry {
         fetchers.compute(fetcher.tenantId(), (key, val) -> {
             if (val == null) {
                 val = new HashMap<>();
-                gauging(fetcher.tenantId(), InboxFetcherGauge,
-                    () -> fetchers.getOrDefault(fetcher.tenantId(), emptyMap()).size());
             }
             IInboxFetcher prevFetcher = val.computeIfAbsent(fetcher.delivererKey(), k -> new ConcurrentHashMap<>())
                 .put(fetcher.id(), fetcher);
@@ -60,7 +55,6 @@ public final class InboxFetcherRegistry implements IInboxFetcherRegistry {
                     return v;
                 });
                 if (m.isEmpty()) {
-                    stopGauging(fetcher.tenantId(), InboxFetcherGauge);
                     return null;
                 }
             }

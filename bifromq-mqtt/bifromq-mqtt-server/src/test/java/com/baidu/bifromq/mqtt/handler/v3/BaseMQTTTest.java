@@ -265,7 +265,6 @@ public abstract class BaseMQTTTest {
                 .addAllInbox(List.of(inboxVersions))
                 .build()));
     }
-
     protected void mockInboxGetError() {
         when(inboxClient.get(any()))
             .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()

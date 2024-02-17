@@ -82,7 +82,7 @@ final class InboxClient implements IInboxClient {
     public CompletableFuture<CommitReply> commit(CommitRequest request) {
         return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getCommitMethod())
             .exceptionally(e -> {
-                log.error("Failed to commit inbox", e);
+                log.debug("Failed to commit inbox", e);
                 return CommitReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(CommitReply.Code.ERROR)
@@ -139,7 +139,7 @@ final class InboxClient implements IInboxClient {
     public CompletableFuture<TouchReply> touch(TouchRequest request) {
         return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getTouchMethod())
             .exceptionally(e -> {
-                log.error("Touch inbox failed", e);
+                log.debug("Touch inbox failed", e);
                 return TouchReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(TouchReply.Code.ERROR).build();
@@ -149,37 +149,49 @@ final class InboxClient implements IInboxClient {
     @Override
     public CompletableFuture<SubReply> sub(SubRequest request) {
         return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getSubMethod())
-            .exceptionally(e -> SubReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(SubReply.Code.ERROR)
-                .build());
+            .exceptionally(e -> {
+                log.debug("Failed to sub inbox", e);
+                return SubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(SubReply.Code.ERROR)
+                    .build();
+            });
     }
 
     @Override
     public CompletableFuture<UnsubReply> unsub(UnsubRequest request) {
         return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getUnsubMethod())
-            .exceptionally(e -> UnsubReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(UnsubReply.Code.ERROR)
-                .build());
+            .exceptionally(e -> {
+                log.debug("Failed to unsub inbox", e);
+                return UnsubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(UnsubReply.Code.ERROR)
+                    .build();
+            });
     }
 
     @Override
     public CompletableFuture<ExpireReply> expire(ExpireRequest request) {
         return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getExpireMethod())
-            .exceptionally(e -> ExpireReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(ExpireReply.Code.ERROR)
-                .build());
+            .exceptionally(e -> {
+                log.debug("Failed to expire inbox", e);
+                return ExpireReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ExpireReply.Code.ERROR)
+                    .build();
+            });
     }
 
     @Override
     public CompletableFuture<ExpireAllReply> expireAll(ExpireAllRequest request) {
         return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getExpireAllMethod())
-            .exceptionally(e -> ExpireAllReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setCode(ExpireAllReply.Code.ERROR)
-                .build());
+            .exceptionally(e -> {
+                log.debug("Failed to expire inboxes", e);
+                return ExpireAllReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(ExpireAllReply.Code.ERROR)
+                    .build();
+            });
     }
 
     @Override

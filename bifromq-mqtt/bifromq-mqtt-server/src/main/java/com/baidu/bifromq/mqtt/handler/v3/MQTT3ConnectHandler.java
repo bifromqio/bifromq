@@ -34,6 +34,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
+import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
@@ -273,13 +274,13 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected final ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
-                                                                TenantSettings settings,
-                                                                String userSessionId,
-                                                                int keepAliveSeconds,
-                                                                @Nullable LWT willMessage,
-                                                                ClientInfo clientInfo,
-                                                                ChannelHandlerContext ctx) {
+    protected final MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
+                                                                    TenantSettings settings,
+                                                                    String userSessionId,
+                                                                    int keepAliveSeconds,
+                                                                    @Nullable LWT willMessage,
+                                                                    ClientInfo clientInfo,
+                                                                    ChannelHandlerContext ctx) {
         return MQTT3TransientSessionHandler.builder()
             .settings(settings)
             .userSessionId(userSessionId)
@@ -291,7 +292,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected final ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
+    protected final MQTTSessionHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
                                                                  TenantSettings settings,
                                                                  String userSessionId,
                                                                  int keepAliveSeconds,

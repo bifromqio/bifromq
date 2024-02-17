@@ -54,6 +54,7 @@ import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSIO
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
+import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
@@ -530,7 +531,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected ChannelHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
+    protected MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
                                                           TenantSettings settings,
                                                           String userSessionId,
                                                           int keepAliveSeconds,
@@ -549,15 +550,15 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected ChannelHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
-                                                           TenantSettings settings,
-                                                           String userSessionId,
-                                                           int keepAliveSeconds,
-                                                           int sessionExpiryInterval,
-                                                           @Nullable ExistingSession existingSession,
-                                                           @Nullable LWT willMessage,
-                                                           ClientInfo clientInfo,
-                                                           ChannelHandlerContext ctx) {
+    protected MQTTSessionHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
+                                                               TenantSettings settings,
+                                                               String userSessionId,
+                                                               int keepAliveSeconds,
+                                                               int sessionExpiryInterval,
+                                                               @Nullable ExistingSession existingSession,
+                                                               @Nullable LWT willMessage,
+                                                               ClientInfo clientInfo,
+                                                               ChannelHandlerContext ctx) {
         return MQTT5PersistentSessionHandler.builder()
             .connMsg(connMsg)
             .settings(settings)

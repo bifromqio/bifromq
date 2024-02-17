@@ -22,7 +22,8 @@ public interface IInboxGCProcessor {
         OK, ERROR;
     }
 
-    CompletableFuture<Result> gcRange(KVRangeId rangeId,
+    CompletableFuture<Result> gcRange(long reqId,
+                                      KVRangeId rangeId,
                                       @Nullable String tenantId,
                                       @Nullable Integer expirySeconds,
                                       long now,
