@@ -607,7 +607,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                     IKVRangeWriter<?> rangeWriter = kvRange.toWriter(loadRecorder);
                     IKVReader borrowedReader = kvRange.borrowDataReader();
                     IKVReader recordableReader = new LoadRecordableKVReader(borrowedReader, loadRecorder);
-                    applyCommand(entry.getTerm(), entry.getIndex(), command, recordableReader, rangeWriter)
+                    long version = kvRange.version();
+                    State state = kvRange.state();
+                    Boundary boundary = kvRange.boundary();
+                    applyCommand(version, state, boundary, entry.getTerm(), entry.getIndex(), command, recordableReader,
+                        rangeWriter)
                         .whenComplete((callback, e) -> {
                             if (onDone.isCancelled()) {
                                 rangeWriter.abort();
@@ -730,13 +734,18 @@ public class KVRangeFSM implements IKVRangeFSM {
         return onDone;
     }
 
-    private CompletableFuture<Runnable> applyCommand(long logTerm, long logIndex,
-                                                     KVRangeCommand command, IKVReader dataReader,
+    private CompletableFuture<Runnable> applyCommand(long ver,
+                                                     State state,
+                                                     Boundary boundary,
+                                                     long logTerm,
+                                                     long logIndex,
+                                                     KVRangeCommand command,
+                                                     IKVReader dataReader,
                                                      IKVRangeWritable<?> rangeWriter) {
         CompletableFuture<Runnable> onDone = new CompletableFuture<>();
-        long ver = rangeWriter.version();
-        State state = rangeWriter.state();
-        Boundary boundary = rangeWriter.boundary();
+//        long ver = rangeWriter.version();
+//        State state = rangeWriter.state();
+//        Boundary boundary = rangeWriter.boundary();
         long reqVer = command.getVer();
         String taskId = command.getTaskId();
         log.trace(
