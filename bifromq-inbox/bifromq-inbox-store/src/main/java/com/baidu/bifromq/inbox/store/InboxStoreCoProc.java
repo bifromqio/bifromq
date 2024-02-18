@@ -247,16 +247,14 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     private BatchFetchReply batchFetch(BatchFetchRequest request, IKVReader reader) {
         BatchFetchReply.Builder replyBuilder = BatchFetchReply.newBuilder();
-        reader.refresh();
-        IKVIterator itr = reader.iterator();
         for (BatchFetchRequest.Params params : request.getParamsList()) {
-            replyBuilder.addResult(fetch(params, itr, reader));
+            replyBuilder.addResult(fetch(params, reader));
 
         }
         return replyBuilder.build();
     }
 
-    private Fetched fetch(BatchFetchRequest.Params params, IKVIterator itr, IKVReader reader) {
+    private Fetched fetch(BatchFetchRequest.Params params, IKVReader reader) {
         Fetched.Builder replyBuilder = Fetched.newBuilder();
         int fetchCount = params.getMaxFetch();
         try {
@@ -271,14 +269,17 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             long startFetchFromSeq = !params.hasQos0StartAfter()
                 ? metadata.getQos0StartSeq()
                 : Math.max(params.getQos0StartAfter() + 1, metadata.getQos0StartSeq());
-            fetchFromInbox(metadataKey, Integer.MAX_VALUE, startFetchFromSeq, metadata.getQos0NextSeq(),
-                KeyUtil::isQoS0MessageKey, KeyUtil::qos0InboxMsgKey, Fetched.Builder::addQos0Msg, itr, replyBuilder);
+            fetchFromInbox(metadataKey, Integer.MAX_VALUE, metadata.getQos0StartSeq(), startFetchFromSeq,
+                metadata.getQos0NextSeq(),
+                KeyUtil::qos0InboxMsgKey, Fetched.Builder::addQos0Msg, reader,
+                replyBuilder);
             // deal with qos12 queue
             startFetchFromSeq = !params.hasSendBufferStartAfter()
                 ? metadata.getSendBufferStartSeq()
                 : Math.max(params.getSendBufferStartAfter() + 1, metadata.getSendBufferStartSeq());
-            fetchFromInbox(metadataKey, fetchCount, startFetchFromSeq, metadata.getSendBufferNextSeq(),
-                KeyUtil::isBufferMessageKey, KeyUtil::bufferMsgKey, Fetched.Builder::addSendBufferMsg, itr,
+            fetchFromInbox(metadataKey, fetchCount, metadata.getSendBufferStartSeq(), startFetchFromSeq,
+                metadata.getSendBufferNextSeq(),
+                KeyUtil::bufferMsgKey, Fetched.Builder::addSendBufferMsg, reader,
                 replyBuilder);
             return replyBuilder.setResult(Fetched.Result.OK).build();
         } catch (InvalidProtocolBufferException e) {
@@ -286,48 +287,36 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         }
     }
 
-    private int fetchFromInbox(ByteString inboxKeyPrefix,
-                               int fetchCount,
-                               long startFetchFromSeq,
-                               long nextSeq,
-                               BiFunction<ByteString, ByteString, Boolean> keyChecker,
-                               BiFunction<ByteString, Long, ByteString> keyGenerator,
-                               BiConsumer<Fetched.Builder, InboxMessage> messageConsumer,
-                               IKVIterator itr,
-                               Fetched.Builder replyBuilder) throws InvalidProtocolBufferException {
+    private void fetchFromInbox(ByteString inboxKeyPrefix,
+                                int fetchCount,
+                                long startSeq,
+                                long startFetchFromSeq,
+                                long nextSeq,
+                                BiFunction<ByteString, Long, ByteString> keyGenerator,
+                                BiConsumer<Fetched.Builder, InboxMessage> messageConsumer,
+                                IKVReader reader,
+                                Fetched.Builder replyBuilder) throws InvalidProtocolBufferException {
         if (startFetchFromSeq < nextSeq) {
-            itr.seekForPrev(keyGenerator.apply(inboxKeyPrefix, startFetchFromSeq));
-            if (itr.isValid() && keyChecker.apply(itr.key(), inboxKeyPrefix)) {
-                long beginSeq = parseSeq(inboxKeyPrefix, itr.key());
-                InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
-                for (int i = (int) (startFetchFromSeq - beginSeq); i < messageList.getMessageCount(); i++) {
-                    if (fetchCount > 0) {
-                        assert messageList.getMessage(i).getSeq() == beginSeq + i;
-                        messageConsumer.accept(replyBuilder, messageList.getMessage(i));
-                        fetchCount--;
-                    } else {
-                        break;
+            while (startSeq < nextSeq && fetchCount > 0) {
+                ByteString startKey = keyGenerator.apply(inboxKeyPrefix, startSeq);
+                Optional<ByteString> msgListData = reader.get(startKey);
+                assert msgListData.isPresent();
+                List<InboxMessage> messageList = InboxMessageList.parseFrom(msgListData.get()).getMessageList();
+                long lastSeq = messageList.get(messageList.size() - 1).getSeq();
+                if (lastSeq >= startFetchFromSeq) {
+                    for (InboxMessage inboxMsg : messageList) {
+                        if (inboxMsg.getSeq() >= startFetchFromSeq) {
+                            messageConsumer.accept(replyBuilder, inboxMsg);
+                            fetchCount--;
+                            if (fetchCount == 0) {
+                                break;
+                            }
+                        }
                     }
                 }
-            }
-            itr.next();
-            outer:
-            while (fetchCount > 0 && itr.isValid() && keyChecker.apply(itr.key(), inboxKeyPrefix)) {
-                long startSeq = parseSeq(inboxKeyPrefix, itr.key());
-                InboxMessageList messageList = InboxMessageList.parseFrom(itr.value());
-                for (int i = 0; i < messageList.getMessageCount(); i++) {
-                    if (fetchCount > 0) {
-                        assert messageList.getMessage(i).getSeq() == startSeq + i;
-                        messageConsumer.accept(replyBuilder, messageList.getMessage(i));
-                        fetchCount--;
-                    } else {
-                        break outer;
-                    }
-                }
-                itr.next();
+                startSeq = lastSeq + 1;
             }
         }
-        return fetchCount;
     }
 
     private Runnable batchCreate(BatchCreateRequest request,
