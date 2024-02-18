@@ -27,6 +27,7 @@ import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
 import com.baidu.bifromq.basekv.localengine.SyncContext;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -76,7 +77,6 @@ abstract class RocksDBKVSpace<
     private final Runnable onDestroy;
     private final AtomicBoolean compacting = new AtomicBoolean(false);
     private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = BehaviorSubject.create();
-    private final RocksDBKVEngineIterator metaItr;
     private final ISyncContext syncContext = new SyncContext();
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
     private final MetricManager metricMgr;
@@ -109,8 +109,6 @@ abstract class RocksDBKVSpace<
         compactionExecutor = new ThreadPoolExecutor(1, 1,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("keyrange-compactor"));
-
-        metaItr = new RocksDBKVEngineIterator(db, cfHandle, null, META_SECTION_START, META_SECTION_END);
 
         metricMgr = new MetricManager(tags);
     }
@@ -151,19 +149,26 @@ abstract class RocksDBKVSpace<
     }
 
     protected void doLoad() {
-        loadMetadata();
-    }
-
-    private void loadMetadata() {
         metadataRefresher.runIfNeeded(() -> {
-            Map<ByteString, ByteString> metaMap = new HashMap<>();
-            metaItr.refresh();
-            for (metaItr.seekToFirst(); metaItr.isValid(); metaItr.next()) {
-                metaMap.put(fromMetaKey(metaItr.key()), unsafeWrap(metaItr.value()));
-            }
-            if (!metaMap.isEmpty()) {
+            try (RocksDBKVEngineIterator metaItr =
+                     new RocksDBKVEngineIterator(db, cfHandle, null, META_SECTION_START, META_SECTION_END)) {
+                Map<ByteString, ByteString> metaMap = new HashMap<>();
+                for (metaItr.seekToFirst(); metaItr.isValid(); metaItr.next()) {
+                    metaMap.put(fromMetaKey(metaItr.key()), unsafeWrap(metaItr.value()));
+                }
                 metadataSubject.onNext(Collections.unmodifiableMap(metaMap));
             }
+        });
+    }
+
+    private void updateMetadata(Map<ByteString, ByteString> metadataUpdates) {
+        metadataRefresher.runIfNeeded(() -> {
+            if (metadataUpdates.isEmpty()) {
+                return;
+            }
+            Map<ByteString, ByteString> metaMap = Maps.newHashMap(metadataSubject.getValue());
+            metaMap.putAll(metadataUpdates);
+            metadataSubject.onNext(Collections.unmodifiableMap(metaMap));
         });
     }
 
@@ -188,21 +193,13 @@ abstract class RocksDBKVSpace<
     public IKVSpaceWriter toWriter() {
         return new RocksDBKVSpaceWriter<>(id, db, cfHandle, engine, writeOptions(), syncContext,
             writeStats.newRecorder(),
-            metadataUpdated -> {
-                if (metadataUpdated) {
-                    this.loadMetadata();
-                }
-            }, tags);
+            this::updateMetadata, tags);
     }
 
     //For internal use only
     IKVSpaceWriter toWriter(RocksDBKVSpaceWriterHelper helper) {
         return new RocksDBKVSpaceWriter<>(id, db, cfHandle, engine, syncContext, helper, writeStats.newRecorder(),
-            metadataUpdated -> {
-                if (metadataUpdated) {
-                    this.loadMetadata();
-                }
-            }, tags
+            this::updateMetadata, tags
         );
     }
 
@@ -223,7 +220,6 @@ abstract class RocksDBKVSpace<
     protected void doClose() {
         log.debug("Close key range[{}]", id);
         metricMgr.close();
-        metaItr.close();
         cfDesc.getOptions().close();
         synchronized (compacting) {
             db.destroyColumnFamilyHandle(cfHandle);

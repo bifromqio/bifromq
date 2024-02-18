@@ -24,6 +24,7 @@ import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +55,7 @@ class RocksDBKVSpaceWriter<
                          WriteOptions writeOptions,
                          ISyncContext syncContext,
                          IWriteStatsRecorder.IRecorder writeStatsRecorder,
-                         Consumer<Boolean> afterWrite,
+                         Consumer<Map<ByteString, ByteString>> afterWrite,
                          String... tags) {
         this(id, db, cfHandle, engine, syncContext,
             new RocksDBKVSpaceWriterHelper(db, writeOptions), writeStatsRecorder, afterWrite, tags);
@@ -67,7 +68,7 @@ class RocksDBKVSpaceWriter<
                          ISyncContext syncContext,
                          RocksDBKVSpaceWriterHelper writerHelper,
                          IWriteStatsRecorder.IRecorder writeStatsRecorder,
-                         Consumer<Boolean> afterWrite,
+                         Consumer<Map<ByteString, ByteString>> afterWrite,
                          String... tags) {
         super(id, Tags.of(tags));
         this.db = db;
@@ -142,7 +143,7 @@ class RocksDBKVSpaceWriter<
 
     @Override
     public IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, Boundary boundary) {
-        RocksDBKVSpace toKeyRange = (RocksDBKVSpace) engine.createIfMissing(targetRangeId);
+        RocksDBKVSpace<?, ?, ?> toKeyRange = engine.createIfMissing(targetRangeId);
         try {
             // move data
             int c = 0;
@@ -164,7 +165,7 @@ class RocksDBKVSpaceWriter<
 
     @Override
     public IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, Boundary boundary) {
-        RocksDBKVSpace fromKeyRange = (RocksDBKVSpace) engine.createIfMissing(fromRangeId);
+        RocksDBKVSpace<?, ?, ?> fromKeyRange = engine.createIfMissing(fromRangeId);
         try {
             // move data
             try (IKVSpaceIterator itr = fromKeyRange.newIterator(boundary)) {

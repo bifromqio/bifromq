@@ -42,8 +42,8 @@ class RocksDBKVSpaceWriterHelper {
     private final RocksDB db;
     private final WriteOptions writeOptions;
     private final WriteBatch batch;
-    private final Map<ColumnFamilyHandle, Consumer<Boolean>> afterWriteCallbacks = new HashMap<>();
-    private final Map<ColumnFamilyHandle, Boolean> metadataChanges = new HashMap<>();
+    private final Map<ColumnFamilyHandle, Consumer<Map<ByteString, ByteString>>> afterWriteCallbacks = new HashMap<>();
+    private final Map<ColumnFamilyHandle, Map<ByteString, ByteString>> metadataChanges = new HashMap<>();
     private final Set<ISyncContext.IMutator> mutators = new HashSet<>();
 
     RocksDBKVSpaceWriterHelper(RocksDB db, WriteOptions writeOptions) {
@@ -57,16 +57,19 @@ class RocksDBKVSpaceWriterHelper {
         mutators.add(mutator);
     }
 
-    void addAfterWriteCallback(ColumnFamilyHandle cfHandle, Consumer<Boolean> afterWrite) {
+    void addAfterWriteCallback(ColumnFamilyHandle cfHandle, Consumer<Map<ByteString, ByteString>> afterWrite) {
         afterWriteCallbacks.put(cfHandle, afterWrite);
-        metadataChanges.put(cfHandle, false);
+        metadataChanges.put(cfHandle, new HashMap<>());
     }
 
     void metadata(ColumnFamilyHandle cfHandle, ByteString metaKey, ByteString metaValue) throws RocksDBException {
         byte[] key = toMetaKey(metaKey);
         batch.singleDelete(cfHandle, key);
         batch.put(cfHandle, key, metaValue.toByteArray());
-        metadataChanges.computeIfPresent(cfHandle, (k, v) -> true);
+        metadataChanges.computeIfPresent(cfHandle, (k, v) -> {
+            v.put(metaKey, metaValue);
+            return v;
+        });
     }
 
     void insert(ColumnFamilyHandle cfHandle, ByteString key, ByteString value) throws RocksDBException {
@@ -118,7 +121,9 @@ class RocksDBKVSpaceWriterHelper {
         }
         finalRun.get().run();
         for (ColumnFamilyHandle columnFamilyHandle : afterWriteCallbacks.keySet()) {
-            afterWriteCallbacks.get(columnFamilyHandle).accept(metadataChanges.get(columnFamilyHandle));
+            Map<ByteString, ByteString> updatedMetadata = metadataChanges.get(columnFamilyHandle);
+            afterWriteCallbacks.get(columnFamilyHandle).accept(updatedMetadata);
+            updatedMetadata.clear();
         }
     }
 
