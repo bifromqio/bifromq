@@ -51,6 +51,9 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     private final DistributionSummary batchBuildTimeSummary;
     private final DistributionSummary batchSizeSummary;
     private final DistributionSummary queueingTimeSummary;
+    private final double alphaIncrease = 0.2;
+    private final double alphaDecrease = 0.05;
+    private final AtomicInteger emaMaxBatchSize = new AtomicInteger();
     private volatile int maxBatchSize = Integer.MAX_VALUE;
 
     protected Batcher(BatcherKey batcherKey, String name, long tolerableLatencyNanos, long burstLatencyNanos) {
@@ -185,10 +188,14 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     }
 
     private void updateMaxBatchSize(int batchSize, long latency) {
-        if (latency == tolerableLatencyNanos) {
-            maxBatchSize = batchSize;
-        } else {
-            maxBatchSize = Math.max(1, (int) (batchSize * tolerableLatencyNanos * 1.0 / latency));
-        }
+        int calculatedMaxBatchSize = latency == tolerableLatencyNanos ? batchSize :
+            Math.max(1, (int) (batchSize * tolerableLatencyNanos * 1.0 / latency));
+        maxBatchSize = Math.max(1, emaMaxBatchSize.updateAndGet(old -> {
+            if (old == 0) {
+                return calculatedMaxBatchSize;
+            }
+            double alpha = calculatedMaxBatchSize > old ? alphaIncrease : alphaDecrease;
+            return (int) (alpha * calculatedMaxBatchSize + (1 - alpha) * old);
+        }));
     }
 }
