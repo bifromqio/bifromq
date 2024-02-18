@@ -300,7 +300,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             while (startSeq < nextSeq && fetchCount > 0) {
                 ByteString startKey = keyGenerator.apply(inboxKeyPrefix, startSeq);
                 Optional<ByteString> msgListData = reader.get(startKey);
-                assert msgListData.isPresent();
+                // the startSeq may not reflect the latest seq of the first message when query is non-linearized
+                // it may point to the message was committed.
+                if (msgListData.isEmpty()) {
+                    startSeq++;
+                    continue;
+                }
                 List<InboxMessage> messageList = InboxMessageList.parseFrom(msgListData.get()).getMessageList();
                 long lastSeq = messageList.get(messageList.size() - 1).getSeq();
                 if (lastSeq >= startFetchFromSeq) {
