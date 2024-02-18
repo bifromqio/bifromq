@@ -218,6 +218,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     @SneakyThrows
     private BatchGetReply batchGet(BatchGetRequest request, IKVReader reader) {
         BatchGetReply.Builder replyBuilder = BatchGetReply.newBuilder();
+        reader.refresh();
         IKVIterator kvItr = reader.iterator();
         for (BatchGetRequest.Params params : request.getParamsList()) {
             BatchGetReply.Result.Builder resultBuilder = BatchGetReply.Result.newBuilder();
@@ -246,6 +247,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     private BatchFetchReply batchFetch(BatchFetchRequest request, IKVReader reader) {
         BatchFetchReply.Builder replyBuilder = BatchFetchReply.newBuilder();
+        reader.refresh();
         IKVIterator itr = reader.iterator();
         for (BatchFetchRequest.Params params : request.getParamsList()) {
             replyBuilder.addResult(fetch(params, itr, reader));
@@ -480,6 +482,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Set<ByteString> toBeRemoved = new HashSet<>();
+        reader.refresh();
+        IKVIterator itr = reader.iterator();
         for (BatchDeleteRequest.Params params : request.getParamsList()) {
             ByteString metadataKey = inboxKeyPrefix(params.getTenantId(), params.getInboxId(), params.getIncarnation());
             Optional<InboxMetadata> metadataOpt = getInboxMetadata(metadataKey, reader);
@@ -502,7 +506,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 .clearLwt()
                 .build();
             writer.put(metadataKey, metadata.toByteString());
-            clearInbox(metadataKey, metadata, reader.iterator(), writer);
+            clearInbox(metadataKey, metadata, itr, writer);
             toBeRemoved.add(metadataKey);
             replyBuilder.addResult(BatchDeleteReply.Result
                 .newBuilder()
@@ -615,6 +619,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         long start = System.nanoTime();
         long yieldThreshold = TimeUnit.NANOSECONDS.convert(100, TimeUnit.MILLISECONDS);
         GCReply.Builder replyBuilder = GCReply.newBuilder().setCode(GCReply.Code.OK);
+        reader.refresh();
         IKVIterator itr = reader.iterator();
         if (request.hasCursor()) {
             itr.seek(request.getCursor());
@@ -656,6 +661,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private CollectMetricsReply collect(CollectMetricsRequest request, IKVReader reader) {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
         try {
+            reader.refresh();
             IKVIterator itr = reader.iterator();
             for (itr.seekToFirst(); itr.isValid(); ) {
                 String tenantId = parseTenantId(itr.key());
@@ -684,7 +690,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  BatchInsertReply.Builder replyBuilder,
                                  IKVReader reader,
                                  IKVWriter writer) {
-        IKVIterator itr = reader.iterator();
         Map<ByteString, InboxMetadata> toBeCached = new HashMap<>();
         Map<ClientInfo, Map<QoS, Integer>> dropCountMap = new HashMap<>();
         Map<ClientInfo, Boolean> dropOldestMap = new HashMap<>();
@@ -742,7 +747,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
                 dropOldestMap.put(metadata.getClient(), metadata.getDropOldest());
                 Map<QoS, Integer> dropCounts = insertInbox(metadataKey, qos0MsgList, bufferMsgList,
-                    metadataBuilder, itr, reader, writer);
+                    metadataBuilder, reader, writer);
                 metadata = metadataBuilder.build();
                 replyBuilder.addResult(resBuilder.build());
                 writer.put(metadataKey, metadata.toByteString());
@@ -782,7 +787,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                           List<SubMessage> qos0MsgList,
                                           List<SubMessage> bufferedMsgList,
                                           InboxMetadata.Builder metaBuilder,
-                                          IKVIterator itr,
                                           IKVReader reader,
                                           IKVWriter writer) throws InvalidProtocolBufferException {
         Map<QoS, Integer> dropCounts = new HashMap<>();
@@ -791,7 +795,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             long nextSeq = metaBuilder.getQos0NextSeq();
             int dropCount = insertToInbox(inboxKeyPrefix, startSeq, nextSeq, metaBuilder.getLimit(),
                 metaBuilder.getDropOldest(), KeyUtil::qos0InboxMsgKey,
-                metaBuilder::setQos0StartSeq, metaBuilder::setQos0NextSeq, qos0MsgList, itr, writer);
+                metaBuilder::setQos0StartSeq, metaBuilder::setQos0NextSeq, qos0MsgList, reader, writer);
             if (dropCount > 0) {
                 dropCounts.put(QoS.AT_MOST_ONCE, dropCount);
             }
@@ -801,7 +805,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             long nextSeq = metaBuilder.getSendBufferNextSeq();
             int dropCount = insertToInbox(inboxKeyPrefix, startSeq, nextSeq, metaBuilder.getLimit(),
                 false, KeyUtil::bufferMsgKey,
-                metaBuilder::setSendBufferStartSeq, metaBuilder::setSendBufferNextSeq, bufferedMsgList, itr, writer);
+                metaBuilder::setSendBufferStartSeq, metaBuilder::setSendBufferNextSeq, bufferedMsgList, reader, writer);
             if (dropCount > 0) {
                 dropCounts.put(QoS.AT_LEAST_ONCE, dropCount);
             }
@@ -818,7 +822,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                               Function<Long, InboxMetadata.Builder> startSeqSetter,
                               Function<Long, InboxMetadata.Builder> nextSeqSetter,
                               List<SubMessage> messages,
-                              IKVIterator itr,
+                              IKVReader reader,
                               IKVWriter writer) throws InvalidProtocolBufferException {
         int newMsgCount = messages.size();
         int currCount = (int) (nextSeq - startSeq);
@@ -838,6 +842,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     writer.insert(keyGenerator.apply(inboxKeyPrefix, startSeq + dropCount),
                         buildInboxMessageList(startSeq + dropCount, messages).toByteString());
                 } else {
+                    reader.refresh();
+                    IKVIterator itr = reader.iterator();
                     // drop partially
                     itr.seekForPrev(keyGenerator.apply(inboxKeyPrefix, startSeq + dropCount));
                     long beginSeq = parseSeq(inboxKeyPrefix, itr.key());
@@ -912,7 +918,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  BatchCommitReply.Builder replyBuilder,
                                  IKVReader reader,
                                  IKVWriter writer) {
-        IKVIterator itr = reader.iterator();
         Map<ByteString, InboxMetadata> toUpdate = new HashMap<>();
         for (BatchCommitRequest.Params params : request.getParamsList()) {
             ByteString metadataKey = inboxKeyPrefix(params.getTenantId(), params.getInboxId(), params.getIncarnation());
@@ -928,7 +933,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             try {
                 InboxMetadata metadata = metadataOpt.get();
                 InboxMetadata.Builder metaBuilder = metadata.toBuilder();
-                commitInbox(metadataKey, params, metaBuilder, itr, writer);
+                commitInbox(metadataKey, params, metaBuilder, reader, writer);
                 metadata = metaBuilder
                     .setLastActiveTime(params.getNow())
                     .build();
@@ -949,21 +954,21 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private void commitInbox(ByteString scopedInboxId,
                              BatchCommitRequest.Params params,
                              InboxMetadata.Builder metaBuilder,
-                             IKVIterator itr,
+                             IKVReader reader,
                              IKVWriter writer) throws InvalidProtocolBufferException {
         if (params.hasQos0UpToSeq()) {
             long startSeq = metaBuilder.getQos0StartSeq();
             long nextSeq = metaBuilder.getQos0NextSeq();
             long commitSeq = params.getQos0UpToSeq();
             commitToInbox(scopedInboxId, startSeq, nextSeq, commitSeq, KeyUtil::qos0InboxMsgKey,
-                metaBuilder::setQos0StartSeq, itr, writer);
+                metaBuilder::setQos0StartSeq, reader, writer);
         }
         if (params.hasSendBufferUpToSeq()) {
             long startSeq = metaBuilder.getSendBufferStartSeq();
             long nextSeq = metaBuilder.getSendBufferNextSeq();
             long commitSeq = params.getSendBufferUpToSeq();
             commitToInbox(scopedInboxId, startSeq, nextSeq, commitSeq, KeyUtil::bufferMsgKey,
-                metaBuilder::setSendBufferStartSeq, itr, writer);
+                metaBuilder::setSendBufferStartSeq, reader, writer);
         }
     }
 
@@ -973,23 +978,29 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                long commitSeq,
                                BiFunction<ByteString, Long, ByteString> keyGenerator,
                                Function<Long, InboxMetadata.Builder> metadataSetter,
-                               IKVIterator itr,
+                               IKVReader reader,
                                IKVWriter writer) throws InvalidProtocolBufferException {
         if (startSeq <= commitSeq && commitSeq < nextSeq) {
-            itr.seekForPrev(keyGenerator.apply(scopedInboxId, commitSeq));
-            long beginSeq = parseSeq(scopedInboxId, itr.key());
-            List<InboxMessage> msgList = InboxMessageList.parseFrom(itr.value()).getMessageList();
-            int startIdx = (int) (commitSeq - beginSeq + 1);
-            if (startIdx < msgList.size()) {
-                msgList = msgList.subList(startIdx, msgList.size());
-                writer.insert(keyGenerator.apply(scopedInboxId, commitSeq + 1),
-                    InboxMessageList.newBuilder().addAllMessage(msgList).build().toByteString());
+            while (startSeq <= commitSeq) {
+                ByteString msgKey = keyGenerator.apply(scopedInboxId, startSeq);
+                Optional<ByteString> msgListData = reader.get(msgKey);
+                if (msgListData.isEmpty()) {
+                    break;
+                }
+                List<InboxMessage> msgList = InboxMessageList.parseFrom(msgListData.get()).getMessageList();
+                long lastSeq = msgList.get(msgList.size() - 1).getSeq();
+                if (lastSeq <= commitSeq) {
+                    writer.delete(msgKey);
+                    startSeq = lastSeq + 1;
+                } else {
+                    writer.delete(msgKey);
+                    msgList = msgList.subList((int) (commitSeq - startSeq + 1), msgList.size());
+                    writer.insert(keyGenerator.apply(scopedInboxId, commitSeq + 1),
+                        InboxMessageList.newBuilder().addAllMessage(msgList).build().toByteString());
+                    startSeq = commitSeq + 1;
+                    break;
+                }
             }
-            writer.clear(Boundary.newBuilder()
-                .setStartKey(keyGenerator.apply(scopedInboxId, startSeq))
-                .setEndKey(keyGenerator.apply(scopedInboxId, commitSeq + 1))
-                .build());
-            startSeq = commitSeq + 1;
             metadataSetter.apply(startSeq);
         }
     }

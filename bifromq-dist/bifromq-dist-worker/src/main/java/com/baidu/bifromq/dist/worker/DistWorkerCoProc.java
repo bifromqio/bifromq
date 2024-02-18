@@ -392,6 +392,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private CompletableFuture<CollectMetricsReply> collect(long reqId, IKVReader reader) {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(reqId);
         try {
+            reader.refresh();
             IKVIterator itr = reader.iterator();
             for (itr.seekToFirst(); itr.isValid(); ) {
                 String tenantId = parseTenantId(itr.key());

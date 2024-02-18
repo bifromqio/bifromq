@@ -607,8 +607,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                     IKVRangeWriter<?> rangeWriter = kvRange.toWriter(loadRecorder);
                     IKVReader borrowedReader = kvRange.borrowDataReader();
                     IKVReader recordableReader = new LoadRecordableKVReader(borrowedReader, loadRecorder);
-                    // count the cost of refresh()
-                    recordableReader.refresh();
                     applyCommand(entry.getTerm(), entry.getIndex(), command, recordableReader, rangeWriter)
                         .whenComplete((callback, e) -> {
                             if (onDone.isCancelled()) {

@@ -65,19 +65,13 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     // Execute a ROCommand
     @Override
     public CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized) {
-        return submit(ver, rangeReader -> {
-            rangeReader.refresh();
-            return completedFuture(rangeReader.exist(key));
-        }, linearized);
+        return submit(ver, rangeReader -> completedFuture(rangeReader.exist(key)), linearized);
     }
 
 
     @Override
     public CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized) {
-        return submit(ver, rangeReader -> {
-            rangeReader.refresh();
-            return completedFuture(rangeReader.get(key));
-        }, linearized);
+        return submit(ver, rangeReader -> completedFuture(rangeReader.get(key)), linearized);
     }
 
     @Override
@@ -85,8 +79,6 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
         return submit(ver, rangeReader -> {
             IKVLoadRecorder loadRecorder = new KVLoadRecorder();
             IKVReader loadRecordableReader = new LoadRecordableKVReader(rangeReader, loadRecorder);
-            // the cost of refresh() needs to be recorded
-            loadRecordableReader.refresh();
             return coProc.query(query, loadRecordableReader)
                 .whenComplete((v, e) -> {
                     try {

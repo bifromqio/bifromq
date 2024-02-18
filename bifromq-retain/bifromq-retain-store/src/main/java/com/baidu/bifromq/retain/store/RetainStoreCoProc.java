@@ -160,6 +160,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             .setStartKey(tenantNS)
             .setEndKey(upperBound(tenantNS))
             .build();
+        reader.refresh();
         IKVIterator itr = reader.iterator();
         itr.seek(range.getStartKey());
         if (!itr.isValid()) {
@@ -354,6 +355,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Boundary range = Boundary.newBuilder().setStartKey(tenantNS).setEndKey(upperBound(tenantNS)).build();
+        reader.refresh();
         IKVIterator itr = reader.iterator();
         itr.seek(range.getStartKey());
         itr.next();
@@ -381,6 +383,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     private GCReply gc(GCRequest request, IKVReader reader, IKVWriter writer) {
         long now = clock.millis();
         try {
+            reader.refresh();
             IKVIterator itr = reader.iterator();
             itr.seekToFirst();
             while (itr.isValid()) {
@@ -407,6 +410,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     private CollectMetricsReply collectMetrics(CollectMetricsRequest request, IKVReader reader) {
         CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
+        reader.refresh();
         IKVIterator itr = reader.iterator();
         for (itr.seekToFirst(); itr.isValid(); ) {
             ByteString startKey = itr.key();
