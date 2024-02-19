@@ -54,14 +54,18 @@ message Failed{
     Error = 4;
   }
   Code code = 1;
-  optional string reason = 2; // optional description
-  commontype.UserProperties userProps = 3; // user properties return back via mqtt5 connack
+  optional string tenantId = 2; // optional if tenant can be determined
+  optional string userId = 3; // optional if user can be determined
+  optional string reason = 4; // optional description
+  commontype.UserProperties userProps = 5; // user properties return back via mqtt5 connack
 }
 
 message Continue{
   bytes authData = 1;
-  optional string reason = 2;
-  commontype.UserProperties userProps = 3;
+  optional string tenantId = 2; // optional if tenant can be determined
+  optional string userId = 3; // optional if user can be determined
+  optional string reason = 4;
+  commontype.UserProperties userProps = 5;
 }
 
 message MQTT5AuthResult {

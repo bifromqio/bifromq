@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
@@ -32,13 +33,13 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
-import com.baidu.bifromq.util.UTF8Util;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
@@ -58,9 +59,9 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.util.TopicUtil;
+import com.baidu.bifromq.util.UTF8Util;
 import com.google.common.base.Strings;
 import com.google.protobuf.UnsafeByteOperations;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -148,20 +149,31 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                     }
                     case REJECT -> {
                         Reject reject = authResult.getReject();
+                        if (reject.hasTenantId()) {
+                            ITenantMeter.get(reject.getTenantId()).recordCount(MqttAuthFailureCount);
+                        }
                         switch (reject.getCode()) {
                             case NotAuthorized -> {
                                 return goAway(MqttMessageBuilders
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
                                         .build(),
-                                    getLocal(NotAuthorizedClient.class).peerAddress(clientAddress));
+                                    getLocal(NotAuthorizedClient.class)
+                                        .tenantId(reject.getTenantId())
+                                        .userId(reject.getUserId())
+                                        .clientId(authData.getClientId())
+                                        .peerAddress(clientAddress));
                             }
                             case BadPass -> {
                                 return goAway(MqttMessageBuilders
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD)
                                         .build(),
-                                    getLocal(UnauthenticatedClient.class).peerAddress(clientAddress));
+                                    getLocal(UnauthenticatedClient.class)
+                                        .tenantId(reject.getTenantId())
+                                        .userId(reject.getUserId())
+                                        .clientId(authData.getClientId())
+                                        .peerAddress(clientAddress));
                             }
                             // fallthrough
                             default -> {
@@ -293,14 +305,14 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected final MQTTSessionHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
-                                                                 TenantSettings settings,
-                                                                 String userSessionId,
-                                                                 int keepAliveSeconds,
-                                                                 int sessionExpiryInterval,
-                                                                 @Nullable ExistingSession existingSession,
-                                                                 @Nullable LWT willMessage,
-                                                                 ClientInfo clientInfo,
-                                                                 ChannelHandlerContext ctx) {
+                                                                     TenantSettings settings,
+                                                                     String userSessionId,
+                                                                     int keepAliveSeconds,
+                                                                     int sessionExpiryInterval,
+                                                                     @Nullable ExistingSession existingSession,
+                                                                     @Nullable LWT willMessage,
+                                                                     ClientInfo clientInfo,
+                                                                     ChannelHandlerContext ctx) {
         return MQTT3PersistentSessionHandler.builder()
             .settings(settings)
             .userSessionId(userSessionId)

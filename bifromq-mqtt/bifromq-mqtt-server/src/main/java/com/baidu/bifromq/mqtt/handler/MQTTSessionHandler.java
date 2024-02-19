@@ -13,21 +13,17 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.metrics.TenantMetric.MqttChannelLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttDisconnectCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0DistBytes;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0EgressBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0IngressBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1DeliverBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1DistBytes;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1EgressBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1ExternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1IngressBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DeliverBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DistBytes;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2EgressBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2ExternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2IngressBytes;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.packetId;
@@ -101,7 +97,6 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.UTF8Util;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -295,7 +290,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.executor()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
-        tenantMeter.recordCount(MqttConnectCount);
+        onInitialized.whenComplete((v, e) -> tenantMeter.recordCount(MqttConnectCount));
     }
 
     @Override
@@ -385,7 +380,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         int packetId = mqttMessage.variableHeader().packetId();
         long reqId = packetId > 0 ? packetId : System.nanoTime();
         String topic = helper().getTopic(mqttMessage);
-        int ingressMsgBytes = sizer.sizeOf(mqttMessage).encodedBytes();
+        int ingressMsgBytes = mqttMessage.fixedHeader().remainingLength() + 1;
         (switch (mqttMessage.fixedHeader().qosLevel()) {
             case AT_MOST_ONCE -> handleQoS0Pub(reqId, topic, mqttMessage, ingressMsgBytes);
             case AT_LEAST_ONCE -> handleQoS1Pub(reqId, topic, mqttMessage, ingressMsgBytes);
@@ -732,7 +727,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             //  If the Message Expiry Interval has passed and the Server has not managed to start onward delivery to a matching subscriber, then it MUST delete the copy of the message for that subscriber [MQTT-3.3.2-5]
             return;
         }
-        Timer.Sample start = Timer.start();
         int msgSize = sizer.sizeOf(pubMsg).encodedBytes();
         if (!ctx.channel().isWritable()) {
             if (pubMsg.fixedHeader().qosLevel() == MqttQoS.AT_MOST_ONCE) {
@@ -750,22 +744,17 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
         ctx.write(pubMsg).addListener(f -> {
             if (f.isSuccess()) {
-                switch (pubMsg.fixedHeader().qosLevel()) {
-                    case AT_MOST_ONCE -> {
-                        if (settings.debugMode) {
-                            eventCollector.report(getLocal(QoS0Pushed.class)
-                                .reqId(pubMsg.variableHeader().packetId())
-                                .isRetain(msg.isRetain())
-                                .sender(publisher)
-                                .matchedFilter(topicFilter)
-                                .topic(msg.topic)
-                                .size(msgSize)
-                                .clientInfo(clientInfo));
-                        }
-                        tenantMeter.recordSummary(MqttQoS0EgressBytes, msgSize);
-                    }
-                    case AT_LEAST_ONCE -> {
-                        eventCollector.report(getLocal(QoS1Pushed.class)
+                if (settings.debugMode) {
+                    switch (pubMsg.fixedHeader().qosLevel()) {
+                        case AT_MOST_ONCE -> eventCollector.report(getLocal(QoS0Pushed.class)
+                            .reqId(pubMsg.variableHeader().packetId())
+                            .isRetain(msg.isRetain())
+                            .sender(publisher)
+                            .matchedFilter(topicFilter)
+                            .topic(msg.topic)
+                            .size(msgSize)
+                            .clientInfo(clientInfo));
+                        case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1Pushed.class)
                             .reqId(pubMsg.variableHeader().packetId())
                             .messageId(pubMsg.variableHeader().packetId())
                             .dup(false)
@@ -775,10 +764,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                             .topic(pubMsg.variableHeader().topicName())
                             .size(msgSize)
                             .clientInfo(clientInfo));
-                        tenantMeter.recordSummary(MqttQoS1EgressBytes, msgSize);
-                    }
-                    case EXACTLY_ONCE -> {
-                        eventCollector.report(getLocal(QoS2Pushed.class)
+                        case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2Pushed.class)
                             .reqId(pubMsg.variableHeader().packetId())
                             .messageId(pubMsg.variableHeader().packetId())
                             .dup(false)
@@ -788,10 +774,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                             .topic(pubMsg.variableHeader().topicName())
                             .size(msgSize)
                             .clientInfo(clientInfo));
-                        tenantMeter.recordSummary(MqttQoS2EgressBytes, msgSize);
                     }
                 }
-                start.stop(tenantMeter.timer(MqttChannelLatency));
             }
         });
     }

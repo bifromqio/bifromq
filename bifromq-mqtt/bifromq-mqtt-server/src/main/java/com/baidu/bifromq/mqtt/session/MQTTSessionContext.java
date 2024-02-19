@@ -13,9 +13,13 @@
 
 package com.baidu.bifromq.mqtt.session;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubUsedSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubsGauge;
+
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
@@ -28,12 +32,16 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.base.Ticker;
 import io.netty.channel.ChannelHandlerContext;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.LongAdder;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -52,6 +60,9 @@ public final class MQTTSessionContext {
     public final int defaultKeepAliveTimeSeconds;
     private final Ticker ticker;
     private final FutureTracker futureTracker = new FutureTracker();
+    // key: tenantId
+    private final LoadingCache<String, LongAdder> transientSubCountByTenant;
+    private final LoadingCache<String, LongAdder> transientSubSpaceByTenant;
 
     @Builder
     MQTTSessionContext(String serverId,
@@ -78,6 +89,31 @@ public final class MQTTSessionContext {
         this.sessionDictClient = sessionDictClient;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
+        this.transientSubCountByTenant = Caffeine.newBuilder()
+            .expireAfterAccess(Duration.ofSeconds(300))
+            .evictionListener((RemovalListener<String, LongAdder>) (key, value, cause) -> {
+                if (key != null) {
+                    ITenantMeter.stopGauging(key, MqttTransientSubsGauge);
+                }
+            })
+            .build(k -> {
+                LongAdder counter = new LongAdder();
+                ITenantMeter.gauging(k, MqttTransientSubsGauge, counter::longValue);
+                return counter;
+            });
+        this.transientSubSpaceByTenant = Caffeine.newBuilder()
+            .expireAfterAccess(Duration.ofSeconds(300))
+            .evictionListener((RemovalListener<String, LongAdder>) (key, value, cause) -> {
+                if (key != null) {
+                    ITenantMeter.stopGauging(key, MqttTransientSubUsedSpaceGauge);
+                }
+            })
+            .build(k -> {
+                LongAdder space = new LongAdder();
+                ITenantMeter.gauging(k, MqttTransientSubUsedSpaceGauge, space::longValue);
+                return space;
+            });
+
     }
 
     public long nanoTime() {
@@ -164,6 +200,15 @@ public final class MQTTSessionContext {
             }
         };
     }
+
+    public void countTransientSub(String tenantId, int num) {
+        transientSubCountByTenant.get(tenantId).add(num);
+    }
+
+    public void sizeTransientSub(String tenantId, int size) {
+        transientSubSpaceByTenant.get(tenantId).add(size);
+    }
+
 
     public <T> CompletableFuture<T> trackBgTask(CompletableFuture<T> task) {
         return futureTracker.track(task);

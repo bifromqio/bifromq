@@ -31,7 +31,9 @@ message Reject{
     Error = 2;
   }
   Code code = 1;
-  optional string reason = 2; // optional description
+  optional string tenantId = 2; // optional if tenant can be determined
+  optional string userId = 3; // optional if user can be determined
+  optional string reason = 4; // optional description
 }
 
 message MQTT3AuthResult {

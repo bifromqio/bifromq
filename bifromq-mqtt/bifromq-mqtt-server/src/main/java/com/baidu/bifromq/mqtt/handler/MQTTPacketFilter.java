@@ -13,7 +13,11 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttChannelLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttEgressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0EgressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1EgressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2EgressBytes;
 import static com.baidu.bifromq.mqtt.utils.MQTTMessageTrimmer.trim;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
@@ -24,10 +28,15 @@ import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.OversizePacketDropped;
 import com.baidu.bifromq.type.ClientInfo;
+import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.mqtt.MqttMessage;
+import io.netty.handler.codec.mqtt.MqttMessageType;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -61,7 +70,7 @@ public class MQTTPacketFilter extends ChannelOutboundHandlerAdapter {
         IMQTTMessageSizer.MqttMessageSize messageSize = sizer.sizeOf(mqttMessage);
         AtomicInteger encodedBytes = new AtomicInteger(messageSize.encodedBytes());
         if (encodedBytes.get() <= maxPacketSize) {
-            promise.addListener(future -> tenantMeter.recordSummary(MqttEgressBytes, encodedBytes.get()));
+            promise.addListener(logMetric(mqttMessage, encodedBytes.get()));
             super.write(ctx, msg, promise);
             return;
         }
@@ -69,14 +78,14 @@ public class MQTTPacketFilter extends ChannelOutboundHandlerAdapter {
             encodedBytes.set(messageSize.encodedBytes(true, false));
             if (encodedBytes.get() <= maxPacketSize) {
                 // trim reason string
-                promise.addListener(future -> tenantMeter.recordSummary(MqttEgressBytes, encodedBytes.get()));
+                promise.addListener(logMetric(mqttMessage, encodedBytes.get()));
                 super.write(ctx, trim(mqttMessage, true, false), promise);
                 return;
             }
             encodedBytes.set(messageSize.encodedBytes(false, false));
             if (encodedBytes.get() <= maxPacketSize) {
                 // trim reason string and user properties
-                promise.addListener(future -> tenantMeter.recordSummary(MqttEgressBytes, encodedBytes.get()));
+                promise.addListener(logMetric(mqttMessage, encodedBytes.get()));
                 super.write(ctx, trim(mqttMessage, true, true), promise);
                 return;
             }
@@ -85,6 +94,23 @@ public class MQTTPacketFilter extends ChannelOutboundHandlerAdapter {
             getLocal(OversizePacketDropped.class)
                 .mqttPacketType(mqttMessage.fixedHeader().messageType().value())
                 .clientInfo(clientInfo));
+    }
+
+    private GenericFutureListener<? extends Future<? super Void>> logMetric(MqttMessage message, int size) {
+        Timer.Sample start = Timer.start();
+        return future -> {
+            if (future.isSuccess()) {
+                if (Objects.requireNonNull(message.fixedHeader().messageType()) == MqttMessageType.PUBLISH) {
+                    switch (message.fixedHeader().qosLevel()) {
+                        case AT_MOST_ONCE -> tenantMeter.recordSummary(MqttQoS0EgressBytes, size);
+                        case AT_LEAST_ONCE -> tenantMeter.recordSummary(MqttQoS1EgressBytes, size);
+                        case EXACTLY_ONCE -> tenantMeter.recordSummary(MqttQoS2EgressBytes, size);
+                    }
+                }
+                tenantMeter.recordSummary(MqttEgressBytes, size);
+                start.stop(tenantMeter.timer(MqttChannelLatency));
+            }
+        };
     }
 
     private boolean isTrimable(MqttMessage message) {

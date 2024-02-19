@@ -18,6 +18,10 @@ import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSC
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubCount;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientUnsubCount;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientUnsubLatency;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXISTS;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.OK;
@@ -45,6 +49,7 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
+import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.Iterator;
@@ -89,9 +94,12 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
         if (!topicFilters.isEmpty()) {
-            topicFilters.forEach((topicFilter, option) ->
-                addBgTask(sessionCtx.localDistService.unmatch(System.nanoTime(), topicFilter, this)));
+            topicFilters.forEach((topicFilter, option) -> {
+                sessionCtx.sizeTransientSub(clientInfo.getTenantId(), -topicFilter.length());
+                addBgTask(sessionCtx.localDistService.unmatch(System.nanoTime(), topicFilter, this));
+            });
         }
+        sessionCtx.countTransientSub(clientInfo.getTenantId(), -topicFilters.size());
         ctx.fireChannelInactive();
     }
 
@@ -115,6 +123,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     @Override
     protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId, String topicFilter,
                                                                                     TopicFilterOption option) {
+        tenantMeter.recordCount(MqttTransientSubCount);
+        Timer.Sample start = Timer.start();
         int maxTopicFiltersPerInbox = settings.maxTopicFiltersPerSub;
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
@@ -124,8 +134,13 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 switch (subResult) {
                     case OK -> {
                         TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
-                        return CompletableFuture.completedFuture(
-                            prevOption == null ? OK : EXISTS);
+                        if (prevOption == null) {
+                            sessionCtx.countTransientSub(clientInfo.getTenantId(), 1);
+                            sessionCtx.sizeTransientSub(clientInfo.getTenantId(), topicFilter.length());
+                            return CompletableFuture.completedFuture(OK);
+                        } else {
+                            return CompletableFuture.completedFuture(EXISTS);
+                        }
                     }
                     case EXCEED_LIMIT -> {
                         return CompletableFuture.completedFuture(EXCEED_LIMIT);
@@ -138,10 +153,12 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             .thenComposeAsync(subResult -> {
                 switch (subResult) {
                     case OK, EXISTS -> {
+                        start.stop(tenantMeter.timer(MqttTransientSubLatency));
                         if (!isSharedSubscription(topicFilter) && settings.retainEnabled &&
                             (option.getRetainHandling() == SEND_AT_SUBSCRIBE ||
                                 (subResult == IMQTTProtocolHelper.SubResult.OK &&
                                     option.getRetainHandling() == SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
+                            // TODO: add throttling behavior
                             return addFgTask(sessionCtx.retainClient.match(MatchRequest.newBuilder()
                                 .setReqId(reqId)
                                 .setMatchInfo(MatchInfo.newBuilder()
@@ -175,6 +192,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
 
     @Override
     protected CompletableFuture<IMQTTProtocolHelper.UnsubResult> unsubTopicFilter(long reqId, String topicFilter) {
+        tenantMeter.recordCount(MqttTransientUnsubCount);
+        Timer.Sample start = Timer.start();
         if (topicFilters.remove(topicFilter) == null) {
             return CompletableFuture.completedFuture(IMQTTProtocolHelper.UnsubResult.NO_SUB);
         }
@@ -183,6 +202,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 if (e != null || v == UnmatchResult.ERROR) {
                     return IMQTTProtocolHelper.UnsubResult.ERROR;
                 } else {
+                    sessionCtx.countTransientSub(clientInfo.getTenantId(), -1);
+                    sessionCtx.sizeTransientSub(clientInfo.getTenantId(), -topicFilter.length());
+                    start.stop(tenantMeter.timer(MqttTransientUnsubLatency));
                     return IMQTTProtocolHelper.UnsubResult.OK;
                 }
             }, ctx.executor());

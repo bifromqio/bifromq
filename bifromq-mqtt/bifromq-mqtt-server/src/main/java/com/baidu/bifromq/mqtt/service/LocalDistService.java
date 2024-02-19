@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientFanOutBytes;
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.MQTT_DELIVERERS_PER_SERVER;
 import static java.util.Collections.singletonList;
@@ -20,12 +21,14 @@ import static java.util.Collections.singletonList;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.TopicUtil;
 import java.util.HashSet;
@@ -80,9 +83,7 @@ public class LocalDistService implements ILocalDistService {
     }
 
     @Override
-    public CompletableFuture<MatchResult> match(long reqId,
-                                                String topicFilter,
-                                                IMQTTTransientSession session) {
+    public CompletableFuture<MatchResult> match(long reqId, String topicFilter, IMQTTTransientSession session) {
         sessionMap.put(session.channelId(), session);
         if (TopicUtil.isSharedSubscription(topicFilter)) {
             return distClient.match(reqId,
@@ -220,6 +221,9 @@ public class LocalDistService implements ILocalDistService {
         Set<MatchInfo> noSub = new HashSet<>();
         for (WritePack writePack : request.getPackList()) {
             TopicMessagePack topicMsgPack = writePack.getMessagePack();
+            int msgPackSize = estSizeOf(topicMsgPack);
+            int fanout = 1;
+            assert !writePack.getMatchInfoList().isEmpty();
             for (MatchInfo matchInfo : writePack.getMatchInfoList()) {
                 if (!noSub.contains(matchInfo) && !skip.contains(matchInfo)) {
                     if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
@@ -255,6 +259,7 @@ public class LocalDistService implements ILocalDistService {
                                 continue;
                             }
                             boolean published = false;
+                            fanout *= localRoutes.routeList.size();
                             for (IMQTTTransientSession session : localRoutes.routeList.values()) {
                                 // at least one session should publish the message
                                 if (session.publish(matchInfo, singletonList(topicMsgPack))) {
@@ -272,6 +277,9 @@ public class LocalDistService implements ILocalDistService {
                     }
                 }
             }
+
+            ITenantMeter.get(writePack.getMatchInfoList().get(0).getTenantId())
+                .recordSummary(MqttTransientFanOutBytes, msgPackSize * Math.max(fanout, 1));
         }
         ok.forEach(matchInfo -> replyBuilder.addResult(WriteResult.newBuilder()
             .setMatchInfo(matchInfo)
@@ -286,6 +294,18 @@ public class LocalDistService implements ILocalDistService {
             .setResult(WriteResult.Result.NO_INBOX)
             .build()));
         return CompletableFuture.completedFuture(replyBuilder.build());
+    }
+
+    private int estSizeOf(TopicMessagePack topicMsgPack) {
+        int size = 0;
+        int topicLength = topicMsgPack.getTopic().length();
+        for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
+            for (Message message : publisherPack.getMessageList()) {
+                size += topicLength;
+                size += message.getPayload().size();
+            }
+        }
+        return size;
     }
 
     private int topicFilterBucketId(String key) {

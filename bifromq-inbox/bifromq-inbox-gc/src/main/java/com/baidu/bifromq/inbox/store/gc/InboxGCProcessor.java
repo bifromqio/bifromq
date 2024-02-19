@@ -91,8 +91,8 @@ public class InboxGCProcessor implements IInboxGCProcessor {
                                 .build())
                             .thenAccept(v -> {
                                 if (v.getCode() != DetachReply.Code.OK && v.getCode() != DetachReply.Code.NO_INBOX) {
-                                    log.error("Failed to detach inbox: reqId={}, inboxId={}", reqId,
-                                        inbox.getInboxId());
+                                    log.warn("[InboxGC] Failed to detach inbox: reqId={}, inboxId={}, reason={}", reqId,
+                                        inbox.getInboxId(), v.getCode());
                                 } else {
                                     log.debug("[InboxGC] detach success: reqId={}, inboxId={}", reqId,
                                         inbox.getInboxId());

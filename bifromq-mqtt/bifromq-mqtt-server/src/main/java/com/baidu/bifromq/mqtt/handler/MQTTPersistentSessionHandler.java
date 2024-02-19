@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCount;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubLatency;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentUnsubCount;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentUnsubLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
@@ -47,6 +51,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
+import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import java.time.Duration;
@@ -212,7 +217,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId, String topicFilter,
                                                                                     TopicFilterOption option) {
+        tenantMeter.recordCount(MqttPersistentSubCount);
         rescheduleTouch();
+        Timer.Sample start = Timer.start();
         return inboxClient.sub(SubRequest.newBuilder()
                 .setReqId(reqId)
                 .setTenantId(clientInfo.getTenantId())
@@ -225,9 +232,11 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .thenApplyAsync(v -> {
                 switch (v.getCode()) {
                     case OK -> {
+                        start.stop(tenantMeter.timer(MqttPersistentSubLatency));
                         return IMQTTProtocolHelper.SubResult.OK;
                     }
                     case EXISTS -> {
+                        start.stop(tenantMeter.timer(MqttPersistentSubLatency));
                         return IMQTTProtocolHelper.SubResult.EXISTS;
                     }
                     case EXCEED_LIMIT -> {
@@ -245,6 +254,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     protected final CompletableFuture<IMQTTProtocolHelper.UnsubResult> unsubTopicFilter(long reqId,
                                                                                         String topicFilter) {
+        tenantMeter.recordCount(MqttPersistentUnsubCount);
+        Timer.Sample start = Timer.start();
         rescheduleTouch();
         return inboxClient.unsub(UnsubRequest.newBuilder()
                 .setReqId(reqId)
@@ -258,9 +269,11 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .thenApplyAsync(v -> {
                 switch (v.getCode()) {
                     case OK -> {
+                        start.stop(tenantMeter.timer(MqttPersistentUnsubLatency));
                         return IMQTTProtocolHelper.UnsubResult.OK;
                     }
                     case NO_SUB -> {
+                        start.stop(tenantMeter.timer(MqttPersistentUnsubLatency));
                         return IMQTTProtocolHelper.UnsubResult.NO_SUB;
                     }
                     case NO_INBOX, CONFLICT -> {

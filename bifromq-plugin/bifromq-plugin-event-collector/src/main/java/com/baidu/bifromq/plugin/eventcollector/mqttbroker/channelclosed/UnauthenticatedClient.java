@@ -14,12 +14,30 @@
 package com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed;
 
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.Accessors;
 
+@Getter
+@Setter
+@Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
 public final class UnauthenticatedClient extends ChannelClosedEvent<UnauthenticatedClient> {
+    private String tenantId;
+    private String userId;
+    private String clientId;
+
     @Override
     public EventType type() {
         return EventType.UNAUTHENTICATED_CLIENT;
+    }
+
+    @Override
+    public void clone(UnauthenticatedClient orig) {
+        super.clone(orig);
+        this.tenantId = orig.tenantId;
+        this.userId = orig.userId;
+        this.clientId = orig.clientId;
     }
 }

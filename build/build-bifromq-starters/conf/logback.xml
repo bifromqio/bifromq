@@ -64,7 +64,6 @@
         </sift>
     </appender>
 
-
     <appender name="raftLogFile" class="ch.qos.logback.classic.sift.SiftingAppender">
         <discriminator>
             <key>sift_key</key>
@@ -182,6 +181,8 @@
             <onMismatch>DENY</onMismatch>
         </filter>
     </appender>
+
+    <logger name="org.reflections" level="WARN" additivity="false"/>
 
     <logger name="com.baidu.bifromq" level="INFO" additivity="false">
         <appender-ref ref="traceLogFile"/>

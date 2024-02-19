@@ -16,13 +16,21 @@ package com.baidu.bifromq.metrics;
 import io.micrometer.core.instrument.Meter;
 
 public enum TenantMetric {
+    // connection and session related metrics
     MqttConnectionGauge("mqtt.connection.num.gauge", Meter.Type.GAUGE),
+    MqttAuthFailureCount("mqtt.auth.failure.count", Meter.Type.COUNTER),
     MqttConnectCount("mqtt.connect.count", Meter.Type.COUNTER),
     MqttDisconnectCount("mqtt.disconnect.count", Meter.Type.COUNTER),
     MqttLivePersistentSessionGauge("mqtt.psession.live.num.gauge", Meter.Type.GAUGE),
     MqttPersistentSessionGauge("mqtt.psession.num.gauge", Meter.Type.GAUGE),
+    MqttPersistentSessionUsedSpaceGauge("mqtt.psession.used.space.gauge", Meter.Type.GAUGE),
+
+    // network throughput related metrics
     MqttIngressBytes("mqtt.ingress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttEgressBytes("mqtt.egress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttChannelLatency("mqtt.channel.latency", Meter.Type.TIMER),
+
+    // publish related metrics
     MqttQoS0IngressBytes("mqtt.ingress.qos0.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttQoS0DistBytes("mqtt.dist.qos0.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttQoS1IngressBytes("mqtt.ingress.qos1.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
@@ -39,9 +47,24 @@ public enum TenantMetric {
     MqttQoS1ExternalLatency("mqtt.ex.qos1.latency", Meter.Type.TIMER),
     MqttQoS2InternalLatency("mqtt.in.qos2.latency", Meter.Type.TIMER),
     MqttQoS2ExternalLatency("mqtt.ex.qos2.latency", Meter.Type.TIMER),
-    MqttChannelLatency("mqtt.channel.latency", Meter.Type.TIMER),
+    MqttTransientFanOutBytes("mqtt.tfanout.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttPersistentFanOutBytes("mqtt.pfanout.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+
+    // subscription related metrics
     DistUsedSpaceGauge("dist.used.space.gauge", Meter.Type.GAUGE),
-    InboxUsedSpaceGauge("inbox.used.space.gauge", Meter.Type.GAUGE),
+    MqttTransientSubCount("mqtt.tsub.count", Meter.Type.COUNTER),
+    MqttTransientSubLatency("mqtt.tsub.latency", Meter.Type.TIMER),
+    MqttPersistentSubCount("mqtt.psub.count", Meter.Type.COUNTER),
+    MqttPersistentSubLatency("mqtt.psub.latency", Meter.Type.TIMER),
+    MqttTransientUnsubCount("mqtt.tunsub.count", Meter.Type.COUNTER),
+    MqttTransientUnsubLatency("mqtt.tunsub.latency", Meter.Type.TIMER),
+    MqttPersistentUnsubCount("mqtt.punsub.count", Meter.Type.COUNTER),
+    MqttPersistentUnsubLatency("mqtt.punsub.latency", Meter.Type.TIMER),
+    MqttTransientSubsGauge("mqtt.tsub.num.gauge", Meter.Type.GAUGE),
+    MqttTransientSubUsedSpaceGauge("mqtt.tsub.used.space.gauge", Meter.Type.GAUGE),
+    MqttPersistentSubsGauge("mqtt.psub.num.gauge", Meter.Type.GAUGE),
+    MqttPersistentSubUsedSpaceGauge("mqtt.psub.used.space.gauge", Meter.Type.GAUGE),
+    // retain related
     RetainUsedSpaceGauge("retain.used.space.gauge", Meter.Type.GAUGE);
 
     public final String metricName;

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
@@ -52,6 +53,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL;
 
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
@@ -63,6 +65,7 @@ import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.Continue;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
@@ -81,7 +84,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.UTF8Util;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -192,7 +194,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         this.requestProblemInfo = requestProblemInformation(message.variableHeader().properties());
         Optional<String> authMethodOpt = authMethod(message.variableHeader().properties());
         if (authMethodOpt.isEmpty()) {
-            return authProvider.auth(AuthUtil.buildMQTT5AuthData(ctx.channel(), message))
+            MQTT5AuthData authData = AuthUtil.buildMQTT5AuthData(ctx.channel(), message);
+            return authProvider.auth(authData)
                 .thenApply(authResult -> {
                     final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                     switch (authResult.getTypeCase()) {
@@ -201,20 +204,31 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                         }
                         case FAILED -> {
                             Failed failed = authResult.getFailed();
+                            if (failed.hasTenantId()) {
+                                ITenantMeter.get(failed.getTenantId()).recordCount(MqttAuthFailureCount);
+                            }
                             switch (failed.getCode()) {
                                 case NotAuthorized -> {
                                     return goAway(MqttMessageBuilders
                                             .connAck()
                                             .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED_5)
                                             .build(),
-                                        getLocal(NotAuthorizedClient.class).peerAddress(clientAddress));
+                                        getLocal(NotAuthorizedClient.class)
+                                            .tenantId(failed.getTenantId())
+                                            .userId(failed.getUserId())
+                                            .clientId(authData.getClientId())
+                                            .peerAddress(clientAddress));
                                 }
                                 case BadPass -> {
                                     return goAway(MqttMessageBuilders
                                             .connAck()
                                             .returnCode(CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD)
                                             .build(),
-                                        getLocal(UnauthenticatedClient.class).peerAddress(clientAddress));
+                                        getLocal(UnauthenticatedClient.class)
+                                            .tenantId(failed.getTenantId())
+                                            .userId(failed.getUserId())
+                                            .clientId(authData.getClientId())
+                                            .peerAddress(clientAddress));
                                 }
                                 case Banned -> {
                                     return goAway(MqttMessageBuilders
@@ -288,17 +302,29 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                                     .connAck()
                                     .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED_5)
                                     .build(),
-                                getLocal(NotAuthorizedClient.class).peerAddress(clientAddress)));
+                                getLocal(NotAuthorizedClient.class)
+                                    .tenantId(failed.getTenantId())
+                                    .userId(failed.getUserId())
+                                    .clientId(connMsg.payload().clientIdentifier())
+                                    .peerAddress(clientAddress)));
                             case BadPass -> extendedAuthFuture.complete(goAway(MqttMessageBuilders
                                     .connAck()
                                     .returnCode(CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD)
                                     .build(),
-                                getLocal(UnauthenticatedClient.class).peerAddress(clientAddress)));
+                                getLocal(UnauthenticatedClient.class)
+                                    .tenantId(failed.getTenantId())
+                                    .userId(failed.getUserId())
+                                    .clientId(connMsg.payload().clientIdentifier())
+                                    .peerAddress(clientAddress)));
                             case Banned -> extendedAuthFuture.complete(goAway(MqttMessageBuilders
                                     .connAck()
                                     .returnCode(CONNECTION_REFUSED_BANNED)
                                     .build(),
-                                getLocal(UnauthenticatedClient.class).peerAddress(clientAddress)));
+                                getLocal(UnauthenticatedClient.class)
+                                    .tenantId(failed.getTenantId())
+                                    .userId(failed.getUserId())
+                                    .clientId(connMsg.payload().clientIdentifier())
+                                    .peerAddress(clientAddress)));
                             // fallthrough
                             default -> {
                                 log.error("Unexpected error from auth provider:{}", failed.getReason());
@@ -532,12 +558,12 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
-                                                          TenantSettings settings,
-                                                          String userSessionId,
-                                                          int keepAliveSeconds,
-                                                          @Nullable LWT willMessage,
-                                                          ClientInfo clientInfo,
-                                                          ChannelHandlerContext ctx) {
+                                                              TenantSettings settings,
+                                                              String userSessionId,
+                                                              int keepAliveSeconds,
+                                                              @Nullable LWT willMessage,
+                                                              ClientInfo clientInfo,
+                                                              ChannelHandlerContext ctx) {
         return MQTT5TransientSessionHandler.builder()
             .connMsg(connMsg)
             .settings(settings)

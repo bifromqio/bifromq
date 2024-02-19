@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.metrics.TenantMetric.InboxUsedSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionUsedSpaceGauge;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -71,7 +71,7 @@ public class StatsTest extends InboxStoreTest {
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(InboxUsedSpaceGauge.metricName)) {
+                    meter.getId().getName().equals(MqttPersistentSessionUsedSpaceGauge.metricName)) {
                     return true;
                 }
             }
