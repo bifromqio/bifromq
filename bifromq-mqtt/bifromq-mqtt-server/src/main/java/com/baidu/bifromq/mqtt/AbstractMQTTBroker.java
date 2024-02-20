@@ -144,7 +144,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         sessionContext.localSessionRegistry.disconnectAll(builder.disconnectRate).join();
         log.debug("All mqtt connection closed");
 
-        sessionContext.awaitBgTasksFinish();
+        sessionContext.awaitBgTasksFinish().join();
         log.debug("All background tasks done");
 
         bossGroup.shutdownGracefully().syncUninterruptibly();

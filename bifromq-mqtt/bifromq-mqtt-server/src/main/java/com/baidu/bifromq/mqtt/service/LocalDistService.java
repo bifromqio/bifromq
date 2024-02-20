@@ -30,8 +30,8 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.type.MatchInfo;
-import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.SizeUtil;
 import com.baidu.bifromq.util.TopicUtil;
 import java.util.HashSet;
 import java.util.Map;
@@ -227,7 +227,7 @@ public class LocalDistService implements ILocalDistService {
             ITenantMeter tenantMeter = ITenantMeter.get(tenantId);
             for (DeliveryPack writePack : entry.getValue().getPackList()) {
                 TopicMessagePack topicMsgPack = writePack.getMessagePack();
-                int msgPackSize = estSizeOf(topicMsgPack);
+                int msgPackSize = SizeUtil.estSizeOf(topicMsgPack);
                 int fanout = 1;
                 for (MatchInfo matchInfo : writePack.getMatchInfoList()) {
                     if (!noSub.contains(matchInfo) && !skip.contains(matchInfo)) {
@@ -299,18 +299,6 @@ public class LocalDistService implements ILocalDistService {
             replyBuilder.putResult(tenantId, resultsBuilder.build());
         }
         return CompletableFuture.completedFuture(replyBuilder.build());
-    }
-
-    private int estSizeOf(TopicMessagePack topicMsgPack) {
-        int size = 0;
-        int topicLength = topicMsgPack.getTopic().length();
-        for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
-            for (Message message : publisherPack.getMessageList()) {
-                size += topicLength;
-                size += message.getPayload().size();
-            }
-        }
-        return size;
     }
 
     private int topicFilterBucketId(String key) {

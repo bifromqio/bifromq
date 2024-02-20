@@ -23,6 +23,7 @@ public class KeyUtil {
     public static final ByteString SCHEMA_VER = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString QOS0INBOX_SIGN = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString SEND_BUFFER_SIGN = ByteString.copyFrom(new byte[] {0x01});
+    private static final ByteString UPPER_BOUND = ByteString.copyFrom(new byte[] {(byte) 0xFF});
 
     private static int tenantIdLength(ByteString key) {
         return toInt(key.substring(SCHEMA_VER.size(), SCHEMA_VER.size() + Integer.BYTES));
@@ -64,6 +65,10 @@ public class KeyUtil {
     private static int inboxKeyPrefixLength(ByteString key) {
         // inboxKeyPrefix: <INBOX_PREFIX><incarnation>
         return inboxPrefixLength(key) + Long.BYTES;
+    }
+
+    public static ByteString inboxKeyUpperBound(ByteString metadataKey) {
+        return metadataKey.concat(UPPER_BOUND);
     }
 
     public static boolean isInboxKey(ByteString key) {

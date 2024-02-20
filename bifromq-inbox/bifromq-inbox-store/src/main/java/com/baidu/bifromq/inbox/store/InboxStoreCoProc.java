@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.bufferMsgKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
+import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyUpperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxPrefix;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isBufferMessageKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isMetadataKey;
@@ -102,6 +103,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -117,16 +119,22 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final Cache<ByteString, Optional<InboxMetadata>> inboxMetadataCache;
+    private final Supplier<IKVReader> rangeReaderProvider;
+    private final Map<String, Long> tenantSubCounts = new ConcurrentHashMap<>();
+    private final Map<String, Long> tenantSubUsedSpace = new ConcurrentHashMap<>();
 
     InboxStoreCoProc(ISettingProvider settingProvider,
                      IEventCollector eventCollector,
-                     Duration purgeDelay) {
+                     Duration purgeDelay,
+                     Supplier<IKVReader> rangeReaderProvider) {
         initTime = HLC.INST.getPhysical();
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
+        this.rangeReaderProvider = rangeReaderProvider;
         inboxMetadataCache = Caffeine.newBuilder()
             .expireAfterAccess(purgeDelay)
             .build();
+        collectTenantSubCounts();
     }
 
     @Override
@@ -209,6 +217,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             afterMutate.get().run();
             return output;
         };
+    }
+
+    @Override
+    public void reset(Boundary boundary) {
+        collectTenantSubCounts();
     }
 
     @Override
@@ -476,6 +489,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Set<ByteString> toBeRemoved = new HashSet<>();
+        Map<String, Integer> subCountAdjustment = new HashMap<>();
+        Map<String, Integer> subUsedSpaceAdjustment = new HashMap<>();
         reader.refresh();
         IKVIterator itr = reader.iterator();
         for (BatchDeleteRequest.Params params : request.getParamsList()) {
@@ -500,6 +515,14 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 .clearLwt()
                 .build();
             writer.put(metadataKey, metadata.toByteString());
+            if (metadata.getTopicFiltersCount() > 0) {
+                subCountAdjustment.compute(params.getTenantId(),
+                    (k, v) -> v == null ? -metadata.getTopicFiltersCount() : v - metadata.getTopicFiltersCount());
+                for (String topicFilter : metadata.getTopicFiltersMap().keySet()) {
+                    subUsedSpaceAdjustment.compute(params.getTenantId(),
+                        (k, v) -> v == null ? -topicFilter.length() : v - topicFilter.length());
+                }
+            }
             clearInbox(metadataKey, metadata, itr, writer);
             toBeRemoved.add(metadataKey);
             replyBuilder.addResult(BatchDeleteReply.Result
@@ -508,7 +531,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 .addAllTopicFilters(metadata.getTopicFiltersMap().keySet())
                 .build());
         }
-        return () -> toBeRemoved.forEach(inboxMetadataCache::invalidate);
+        return () -> {
+            subCountAdjustment.forEach(this::logTenantSubCount);
+            subUsedSpaceAdjustment.forEach(this::logTenantSubUsedSpace);
+            toBeRemoved.forEach(inboxMetadataCache::invalidate);
+        };
     }
 
     private Runnable batchSub(BatchSubRequest request,
@@ -516,6 +543,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                               IKVReader reader,
                               IKVWriter writer) {
         Map<ByteString, InboxMetadata> toBeCached = new HashMap<>();
+        Map<String, Integer> subCountAdjustment = new HashMap<>();
+        Map<String, Integer> subUsedSpaceAdjustment = new HashMap<>();
+
         for (BatchSubRequest.Params params : request.getParamsList()) {
             ByteString metadataKey = inboxKeyPrefix(params.getTenantId(), params.getInboxId(), params.getIncarnation());
             Optional<InboxMetadata> metadataOpt = getInboxMetadata(metadataKey, reader);
@@ -536,6 +566,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     replyBuilder.addCode(BatchSubReply.Code.EXISTS);
                 } else {
                     metadataBuilder.putTopicFilters(params.getTopicFilter(), params.getOption());
+                    subCountAdjustment.compute(params.getTenantId(), (k, v) -> v == null ? 1 : v + 1);
+                    subUsedSpaceAdjustment.compute(params.getTenantId(),
+                        (k, v) -> v == null ? params.getTopicFilter().length() : v + params.getTopicFilter().length());
                     replyBuilder.addCode(BatchSubReply.Code.OK);
                 }
             } else {
@@ -547,8 +580,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             writer.put(metadataKey, metadata.toByteString());
             toBeCached.put(metadataKey, metadata);
         }
-        return () -> toBeCached.forEach((scopedInboxId, inboxMetadata) ->
-            inboxMetadataCache.put(scopedInboxId, Optional.of(inboxMetadata)));
+        return () -> {
+            subCountAdjustment.forEach(this::logTenantSubCount);
+            subUsedSpaceAdjustment.forEach(this::logTenantSubUsedSpace);
+            toBeCached.forEach((scopedInboxId, inboxMetadata) ->
+                inboxMetadataCache.put(scopedInboxId, Optional.of(inboxMetadata)));
+        };
     }
 
     private Runnable batchUnsub(BatchUnsubRequest request,
@@ -556,6 +593,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                 IKVReader reader,
                                 IKVWriter write) {
         Map<ByteString, InboxMetadata> toBeCached = new HashMap<>();
+        Map<String, Integer> subCountAdjustment = new HashMap<>();
+        Map<String, Integer> subUsedSpaceAdjustMent = new HashMap<>();
         for (BatchUnsubRequest.Params params : request.getParamsList()) {
             ByteString metadataKey = inboxKeyPrefix(params.getTenantId(), params.getInboxId(), params.getIncarnation());
             Optional<InboxMetadata> metadataOpt = getInboxMetadata(metadataKey, reader);
@@ -571,6 +610,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
             if (metadataBuilder.containsTopicFilters(params.getTopicFilter())) {
                 metadataBuilder.removeTopicFilters(params.getTopicFilter());
+                subCountAdjustment.compute(params.getTenantId(), (k, v) -> v == null ? -1 : v - 1);
+                subUsedSpaceAdjustMent.compute(params.getTenantId(),
+                    (k, v) -> v == null ? -params.getTopicFilter().length() : v - params.getTopicFilter().length());
                 replyBuilder.addCode(BatchUnsubReply.Code.OK);
             } else {
                 replyBuilder.addCode(BatchUnsubReply.Code.NO_SUB);
@@ -582,8 +624,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             toBeCached.put(metadataKey, metadata);
         }
 
-        return () -> toBeCached.forEach((scopedInboxId, inboxMetadata) ->
-            inboxMetadataCache.put(scopedInboxId, Optional.of(inboxMetadata)));
+        return () -> {
+            subCountAdjustment.forEach(this::logTenantSubCount);
+            subUsedSpaceAdjustMent.forEach(this::logTenantSubUsedSpace);
+            toBeCached.forEach((scopedInboxId, inboxMetadata) ->
+                inboxMetadataCache.put(scopedInboxId, Optional.of(inboxMetadata)));
+        };
     }
 
     private void clearInbox(ByteString inboxKeyPrefix, InboxMetadata metadata, IKVIterator itr,
@@ -665,6 +711,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     .setStartKey(startKey)
                     .setEndKey(endKey)
                     .build())));
+                builder.putAllSubCounts(tenantSubCounts);
+                builder.putAllSubUsedSpaces(tenantSubUsedSpace);
                 itr.seek(endKey);
             }
         } catch (Exception e) {
@@ -998,6 +1046,51 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             metadataSetter.apply(startSeq);
         }
     }
+
+    private void collectTenantSubCounts() {
+        IKVReader reader = rangeReaderProvider.get();
+        IKVIterator itr = reader.iterator();
+        for (itr.seekToFirst(); itr.isValid(); ) {
+            if (isMetadataKey(itr.key())) {
+                String tenantId = parseTenantId(itr.key());
+                try {
+                    InboxMetadata metadata = InboxMetadata.parseFrom(itr.value());
+                    logTenantSubCount(tenantId, metadata.getTopicFiltersCount());
+                    metadata.getTopicFiltersMap()
+                        .forEach((topicFilter, option) -> logTenantSubUsedSpace(tenantId, topicFilter.length()));
+                } catch (InvalidProtocolBufferException e) {
+                    log.error("Unexpected error", e);
+                } finally {
+                    itr.seek(inboxKeyUpperBound(itr.key()));
+                }
+            }
+        }
+    }
+
+    private void logTenantSubCount(String tenantId, int count) {
+        tenantSubCounts.compute(tenantId, (k, v) -> {
+            if (v == null) {
+                if (count == 0) {
+                    return null;
+                }
+                return (long) count;
+            }
+            return v + count;
+        });
+    }
+
+    private void logTenantSubUsedSpace(String tenantId, int size) {
+        tenantSubUsedSpace.compute(tenantId, (k, v) -> {
+            if (v == null) {
+                if (size == 0) {
+                    return null;
+                }
+                return (long) size;
+            }
+            return v + size;
+        });
+    }
+
 
     private boolean hasExpired(InboxMetadata metadata, long nowTS) {
         return hasExpired(metadata, metadata.getExpirySeconds(), nowTS);

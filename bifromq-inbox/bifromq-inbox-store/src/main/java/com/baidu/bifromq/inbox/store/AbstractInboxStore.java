@@ -17,7 +17,9 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildCollectMetricsRequest;
 import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
 import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionUsedSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
@@ -33,6 +35,7 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
 import com.baidu.bifromq.inbox.store.gc.IInboxGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxGCProcessor;
+import com.baidu.bifromq.metrics.TenantMetric;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -48,6 +51,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -68,6 +72,8 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     private final Duration statsInterval;
     private final Duration gcInterval;
     private final Map<String, Long> tenantInboxSpaceSize = new ConcurrentHashMap<>();
+    private final Map<String, Long> tenantSubCounts = new ConcurrentHashMap<>();
+    private final Map<String, Long> tenantSubUsedSpaces = new ConcurrentHashMap<>();
     private volatile CompletableFuture<Void> gcJob;
     private volatile CompletableFuture<Void> statsJob;
     protected final InboxStoreCoProcFactory coProcFactory;
@@ -188,42 +194,57 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 statsFutures.add(collectRangeMetrics(leaderReplica));
             }
             statsJob = CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
-                .whenComplete((v, e) -> {
-                    if (e == null) {
-                        Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
-                            .reduce(new HashMap<>(), (result, item) -> {
-                                item.forEach((tenantId, usedSpace) -> result.compute(tenantId, (k, read) -> {
-                                    if (read == null) {
-                                        read = 0L;
-                                    }
-                                    read += usedSpace;
-                                    return read;
-                                }));
-                                return result;
-                            });
-                        record(usedSpaceMap);
-                    }
-                    scheduleStats();
-                });
+                .thenApply(v -> statsFutures.stream().map(CompletableFuture::join).toList())
+                .thenAccept(v -> {
+                    recordInboxUsedSpace(reduceMap(v.stream().map(CollectMetricsReply::getUsedSpacesMap)));
+                    recordSubCounts(reduceMap(v.stream().map(CollectMetricsReply::getSubCountsMap)));
+                    recordSubUsedSpaces(reduceMap(v.stream().map(CollectMetricsReply::getSubUsedSpacesMap)));
+                })
+                .whenComplete((v, e) -> scheduleStats());
         });
     }
 
-    private void record(Map<String, Long> sizeMap) {
-        for (String tenantId : sizeMap.keySet()) {
-            boolean newGauging = !tenantInboxSpaceSize.containsKey(tenantId);
-            tenantInboxSpaceSize.put(tenantId, sizeMap.get(tenantId));
+    private Map<String, Long> reduceMap(Stream<Map<String, Long>> mapStream) {
+        return mapStream.reduce(new HashMap<>(), (result, item) -> {
+            item.forEach((tenantId, value) -> result.compute(tenantId, (k, read) -> {
+                if (read == null) {
+                    read = 0L;
+                }
+                read += value;
+                return read;
+            }));
+            return result;
+        });
+    }
+
+    private void recordInboxUsedSpace(Map<String, Long> sizeMap) {
+        recordTenantMetricGauge(sizeMap, tenantInboxSpaceSize, MqttPersistentSessionSpaceGauge);
+    }
+
+    private void recordSubCounts(Map<String, Long> subCounts) {
+        recordTenantMetricGauge(subCounts, tenantSubCounts, MqttPersistentSubCountGauge);
+    }
+
+    private void recordSubUsedSpaces(Map<String, Long> subUsedSpaces) {
+        recordTenantMetricGauge(subUsedSpaces, tenantSubUsedSpaces, MqttPersistentSubSpaceGauge);
+    }
+
+    private void recordTenantMetricGauge(Map<String, Long> metrics, Map<String, Long> gaugeMap, TenantMetric metric) {
+        for (String tenantId : metrics.keySet()) {
+            boolean newGauging = !gaugeMap.containsKey(tenantId);
+            gaugeMap.put(tenantId, metrics.get(tenantId));
             if (newGauging) {
-                gauging(tenantId,
-                    MqttPersistentSessionUsedSpaceGauge, () -> tenantInboxSpaceSize.getOrDefault(tenantId, 0L));
+                gauging(tenantId, metric, () -> gaugeMap.getOrDefault(tenantId, 0L));
             }
         }
-        for (String tenantId : tenantInboxSpaceSize.keySet()) {
-            if (!sizeMap.containsKey(tenantId)) {
-                stopGauging(tenantId, MqttPersistentSessionUsedSpaceGauge);
-                tenantInboxSpaceSize.remove(tenantId);
+        for (String tenantId : gaugeMap.keySet()) {
+            if (!metrics.containsKey(tenantId)) {
+                stopGauging(tenantId, metric);
+                gaugeMap.remove(tenantId);
             }
         }
     }
+
 
     private CompletableFuture<CollectMetricsReply> collectRangeMetrics(KVRangeSetting leaderReplica) {
         long reqId = System.currentTimeMillis();

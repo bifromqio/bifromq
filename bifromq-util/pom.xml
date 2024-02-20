@@ -13,6 +13,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-common-type</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
         </dependency>

@@ -94,12 +94,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
         if (!topicFilters.isEmpty()) {
-            topicFilters.forEach((topicFilter, option) -> {
-                sessionCtx.sizeTransientSub(clientInfo.getTenantId(), -topicFilter.length());
-                addBgTask(sessionCtx.localDistService.unmatch(System.nanoTime(), topicFilter, this));
-            });
+            topicFilters.forEach((topicFilter, option) -> addBgTask(unsubTopicFilter(System.nanoTime(), topicFilter)));
         }
-        sessionCtx.countTransientSub(clientInfo.getTenantId(), -topicFilters.size());
         ctx.fireChannelInactive();
     }
 
@@ -135,8 +131,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                     case OK -> {
                         TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
                         if (prevOption == null) {
-                            sessionCtx.countTransientSub(clientInfo.getTenantId(), 1);
-                            sessionCtx.sizeTransientSub(clientInfo.getTenantId(), topicFilter.length());
+                            sessionCtx.logTransientSubCount(clientInfo.getTenantId(), 1);
+                            sessionCtx.logTransientSubUsedSpace(clientInfo.getTenantId(), topicFilter.length());
                             return CompletableFuture.completedFuture(OK);
                         } else {
                             return CompletableFuture.completedFuture(EXISTS);
@@ -202,8 +198,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 if (e != null || v == UnmatchResult.ERROR) {
                     return IMQTTProtocolHelper.UnsubResult.ERROR;
                 } else {
-                    sessionCtx.countTransientSub(clientInfo.getTenantId(), -1);
-                    sessionCtx.sizeTransientSub(clientInfo.getTenantId(), -topicFilter.length());
+                    sessionCtx.logTransientSubCount(clientInfo.getTenantId(), -1);
+                    sessionCtx.logTransientSubUsedSpace(clientInfo.getTenantId(), -topicFilter.length());
                     start.stop(tenantMeter.timer(MqttTransientUnsubLatency));
                     return IMQTTProtocolHelper.UnsubResult.OK;
                 }

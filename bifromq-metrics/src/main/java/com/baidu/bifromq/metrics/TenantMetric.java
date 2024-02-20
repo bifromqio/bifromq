@@ -23,7 +23,7 @@ public enum TenantMetric {
     MqttDisconnectCount("mqtt.disconnect.count", Meter.Type.COUNTER),
     MqttLivePersistentSessionGauge("mqtt.psession.live.num.gauge", Meter.Type.GAUGE),
     MqttPersistentSessionGauge("mqtt.psession.num.gauge", Meter.Type.GAUGE),
-    MqttPersistentSessionUsedSpaceGauge("mqtt.psession.used.space.gauge", Meter.Type.GAUGE),
+    MqttPersistentSessionSpaceGauge("mqtt.psession.space.gauge", Meter.Type.GAUGE),
 
     // network throughput related metrics
     MqttIngressBytes("mqtt.ingress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
@@ -51,7 +51,7 @@ public enum TenantMetric {
     MqttPersistentFanOutBytes("mqtt.pfanout.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
 
     // subscription related metrics
-    DistUsedSpaceGauge("dist.used.space.gauge", Meter.Type.GAUGE),
+    MqttTrieSpaceGauge("mqtt.trie.space.gauge", Meter.Type.GAUGE),
     MqttTransientSubCount("mqtt.tsub.count", Meter.Type.COUNTER),
     MqttTransientSubLatency("mqtt.tsub.latency", Meter.Type.TIMER),
     MqttPersistentSubCount("mqtt.psub.count", Meter.Type.COUNTER),
@@ -60,12 +60,12 @@ public enum TenantMetric {
     MqttTransientUnsubLatency("mqtt.tunsub.latency", Meter.Type.TIMER),
     MqttPersistentUnsubCount("mqtt.punsub.count", Meter.Type.COUNTER),
     MqttPersistentUnsubLatency("mqtt.punsub.latency", Meter.Type.TIMER),
-    MqttTransientSubsGauge("mqtt.tsub.num.gauge", Meter.Type.GAUGE),
-    MqttTransientSubUsedSpaceGauge("mqtt.tsub.used.space.gauge", Meter.Type.GAUGE),
-    MqttPersistentSubsGauge("mqtt.psub.num.gauge", Meter.Type.GAUGE),
-    MqttPersistentSubUsedSpaceGauge("mqtt.psub.used.space.gauge", Meter.Type.GAUGE),
+    MqttTransientSubCountGauge("mqtt.tsub.num.gauge", Meter.Type.GAUGE),
+    MqttTransientSubSpaceGauge("mqtt.tsub.space.gauge", Meter.Type.GAUGE),
+    MqttPersistentSubCountGauge("mqtt.psub.num.gauge", Meter.Type.GAUGE),
+    MqttPersistentSubSpaceGauge("mqtt.psub.space.gauge", Meter.Type.GAUGE),
     // retain related
-    RetainUsedSpaceGauge("retain.used.space.gauge", Meter.Type.GAUGE);
+    RetainUsedSpaceGauge("retain.space.gauge", Meter.Type.GAUGE);
 
     public final String metricName;
     public final Meter.Type meterType;

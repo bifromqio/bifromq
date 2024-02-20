@@ -308,7 +308,9 @@ message CollectMetricsRequest{
 
 message CollectMetricsReply{
   uint64 reqId = 1;
-  map<string, uint64> usedSpaces = 2;
+  map<string, uint64> subCounts = 2; // sub count by tenant
+  map<string, uint64> subUsedSpaces = 3; // sub used space by tenant
+  map<string, uint64> usedSpaces = 4; // total used space by tenant
 }
 
 message InboxServiceRWCoProcInput{

@@ -13,48 +13,54 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
-import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
+import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.type.ClientInfo;
-import java.util.concurrent.CompletableFuture;
-import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 
-public class LoadExistingTest extends InboxStoreTest {
+public class LoadSubStatsTest extends InboxStoreTest {
     @Test(groups = "integration")
-    public void gcJobAfterRestart() {
-        long now = System.currentTimeMillis();
+    public void collectAfterRestart() {
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
+        String topicFilter = "/a/b/c";
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
         requestCreate(BatchCreateRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setKeepAliveSeconds(5)
-            .setExpirySeconds(10)
+            .setExpirySeconds(5)
             .setClient(client)
             .setNow(now)
             .build());
+
+        BatchSubRequest.Params subParams = BatchSubRequest.Params.newBuilder()
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setTopicFilter(topicFilter)
+            .setNow(now)
+            .build();
+        requestSub(subParams);
+
         restartStoreServer();
+
+        long reqId = System.nanoTime();
         storeClient.join();
-        when(inboxClient.detach(any()))
-            .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().build()));
-        ArgumentCaptor<DetachRequest> detachCaptor = ArgumentCaptor.forClass(DetachRequest.class);
-        verify(inboxClient, timeout(10000)).detach(detachCaptor.capture());
-        DetachRequest request = detachCaptor.getValue();
-        assertEquals(request.getInboxId(), inboxId);
-        assertEquals(request.getClient(), client);
-        assertEquals(request.getIncarnation(), incarnation);
-        assertFalse(request.getDiscardLWT());
-        assertEquals(request.getExpirySeconds(), 10);
+        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
+            .setReqId(reqId)
+            .build());
+        assertEquals(reply.getReqId(), reqId);
+        assertEquals(reply.getSubCountsMap().get(tenantId), 1);
+        assertTrue(reply.getSubUsedSpacesMap().get(tenantId) > 0);
     }
 }

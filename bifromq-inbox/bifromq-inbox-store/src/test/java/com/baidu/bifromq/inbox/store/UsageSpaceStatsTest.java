@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionUsedSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class StatsTest extends InboxStoreTest {
+public class UsageSpaceStatsTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void collectMetrics() {
         long now = HLC.INST.getPhysical();
@@ -51,8 +51,8 @@ public class StatsTest extends InboxStoreTest {
             .build());
         assertEquals(reply.getReqId(), reqId);
         assertTrue(reply.getUsedSpacesOrDefault(tenantId, 0) > 0);
+        assertEquals(reply.getSubCountsCount(), 0);
     }
-
 
     @Test(groups = "integration")
     public void collectJob() {
@@ -72,7 +72,7 @@ public class StatsTest extends InboxStoreTest {
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(MqttPersistentSessionUsedSpaceGauge.metricName)) {
+                    meter.getId().getName().equals(MqttPersistentSessionSpaceGauge.metricName)) {
                     return true;
                 }
             }

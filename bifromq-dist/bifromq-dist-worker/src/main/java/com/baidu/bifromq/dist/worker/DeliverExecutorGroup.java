@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static com.google.common.hash.Hashing.murmur3_128;
 
@@ -22,9 +23,11 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.entity.NormalMatching;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.SizeUtil;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -36,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.LongAdder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -85,11 +89,29 @@ class DeliverExecutorGroup {
     }
 
     public void submit(List<Matching> matchedRoutes, TopicMessagePack msgPack) {
+        int msgPackSize = SizeUtil.estSizeOf(msgPack);
         if (matchedRoutes.size() == 1) {
-            prepareSend(matchedRoutes.get(0), msgPack);
-        } else {
-            matchedRoutes.parallelStream().forEach(matching -> prepareSend(matching, msgPack));
+            Matching matching = matchedRoutes.get(0);
+            prepareSend(matching, msgPack);
+            if (isSendToInbox(matching)) {
+                ITenantMeter.get(matching.tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
+            }
+        } else if (matchedRoutes.size() > 1) {
+            String tenantId = matchedRoutes.get(0).tenantId;
+            LongAdder pFanoutBytes = new LongAdder();
+            matchedRoutes.parallelStream().forEach(matching -> {
+                // deliver to inbox
+                if (isSendToInbox(matching)) {
+                    pFanoutBytes.add(msgPackSize);
+                }
+                prepareSend(matching, msgPack);
+            });
+            ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, pFanoutBytes.longValue());
         }
+    }
+
+    private boolean isSendToInbox(Matching matching) {
+        return matching.type() == Matching.Type.Normal && ((NormalMatching) matching).subBrokerId == 1;
     }
 
     public void invalidate(ScopedTopic scopedTopic) {
