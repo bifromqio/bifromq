@@ -33,10 +33,11 @@ message RetainReply {
 
 message MatchRequest {
   uint64 reqId = 1;
+  string tenantId = 2;
   commontype.MatchInfo matchInfo = 3;
-  string delivererKey = 5;
-  uint32 brokerId = 6;
-  uint32 limit = 7;
+  string delivererKey = 4;
+  uint32 brokerId = 5;
+  uint32 limit = 6;
 }
 
 message MatchReply {

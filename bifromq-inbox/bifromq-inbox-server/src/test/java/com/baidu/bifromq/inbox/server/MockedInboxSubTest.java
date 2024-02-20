@@ -123,7 +123,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .build(), streamObserver);
 
         verify(retainClient).match(argThat(r -> r.getReqId() == reqId
-            && r.getMatchInfo().getTenantId().equals(tenantId)
+            && r.getTenantId().equals(tenantId)
             && r.getMatchInfo().getReceiverId().equals(distInboxId(inboxId, incarnation))
             && r.getMatchInfo().getTopicFilter().equals(topicFilter)
             && r.getDelivererKey().equals(getDelivererKey(inboxId))

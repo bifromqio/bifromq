@@ -13,19 +13,20 @@
 
 package com.baidu.bifromq.deliverer;
 
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
@@ -35,6 +36,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class DeliverySchedulerTest {
+    private final String tenantId = "tenant";
     @Mock
     private ISubBrokerManager subBrokerManager;
     @Mock
@@ -62,37 +64,76 @@ public class DeliverySchedulerTest {
     @Test
     public void writeSucceed() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
-        when(groupWriter.deliver(anyList())).thenReturn(
-            CompletableFuture.completedFuture(Collections.singletonMap(matchInfo, DeliveryResult.OK)));
-        DeliveryResult result = testDeliverer.schedule(request).join();
-        assertEquals(result, DeliveryResult.OK);
+        DeliveryCall request =
+            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+
+        when(groupWriter.deliver(any())).thenReturn(
+            CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                .putResult(tenantId, DeliveryResults.newBuilder()
+                    .addResult(DeliveryResult.newBuilder()
+                        .setMatchInfo(matchInfo)
+                        .setCode(DeliveryResult.Code.OK)
+                        .build())
+                    .build())
+                .build()));
+        DeliveryResult.Code result = testDeliverer.schedule(request).join();
+        assertEquals(result, DeliveryResult.Code.OK);
     }
 
     @Test
     public void writeIncompleteResult() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
-        when(groupWriter.deliver(anyList())).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
-        DeliveryResult result = testDeliverer.schedule(request).join();
-        assertEquals(result, DeliveryResult.OK);
+        DeliveryCall request =
+            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        when(groupWriter.deliver(any())).thenReturn(
+            CompletableFuture.completedFuture(DeliveryReply.newBuilder().build()));
+        DeliveryResult.Code result = testDeliverer.schedule(request).join();
+        assertEquals(result, DeliveryResult.Code.OK);
     }
 
     @Test
-    public void writeNoInbox() {
+    public void writeNoSub() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
-        when(groupWriter.deliver(anyList())).thenReturn(
-            CompletableFuture.completedFuture(Collections.singletonMap(matchInfo, DeliveryResult.NO_INBOX)));
-        DeliveryResult result = testDeliverer.schedule(request).join();
-        assertEquals(result, DeliveryResult.NO_INBOX);
+        DeliveryCall request =
+            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        when(groupWriter.deliver(any())).thenReturn(
+            CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                .putResult(tenantId, DeliveryResults.newBuilder()
+                    .addResult(DeliveryResult.newBuilder()
+                        .setMatchInfo(matchInfo)
+                        .setCode(DeliveryResult.Code.NO_SUB)
+                        .build())
+                    .build())
+                .build()));
+        DeliveryResult.Code result = testDeliverer.schedule(request).join();
+        assertEquals(result, DeliveryResult.Code.NO_SUB);
     }
+
+    @Test
+    public void writeNoReceiver() {
+        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        DeliveryCall request =
+            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        when(groupWriter.deliver(any())).thenReturn(
+            CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                .putResult(tenantId, DeliveryResults.newBuilder()
+                    .addResult(DeliveryResult.newBuilder()
+                        .setMatchInfo(matchInfo)
+                        .setCode(DeliveryResult.Code.NO_RECEIVER)
+                        .build())
+                    .build())
+                .build()));
+        DeliveryResult.Code result = testDeliverer.schedule(request).join();
+        assertEquals(result, DeliveryResult.Code.NO_RECEIVER);
+    }
+
 
     @Test(expectedExceptions = RuntimeException.class)
     public void writeFail() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
-        DeliveryRequest request = new DeliveryRequest(matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
-        when(groupWriter.deliver(anyList())).thenReturn(
+        DeliveryCall request =
+            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+        when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("Mock Exception")));
         testDeliverer.schedule(request).join();
         fail();

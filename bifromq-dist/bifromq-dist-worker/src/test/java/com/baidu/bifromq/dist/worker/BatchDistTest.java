@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
+import static com.baidu.bifromq.plugin.subbroker.TypeUtil.to;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
@@ -26,6 +27,10 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
@@ -33,17 +38,18 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.stubbing.Answer;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class BatchDistTest extends DistWorkerTest {
+
     @Test(groups = "integration")
     public void batchDistWithNoSub() {
         String topic = "/a/b/c";
@@ -71,18 +77,8 @@ public class BatchDistTest extends DistWorkerTest {
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
         when(inboxBroker.open("batch2")).thenReturn(writer2);
-        when(writer1.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
-                Map<TopicMessagePack, List<MatchInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
-            });
-        when(writer2.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
-                Map<TopicMessagePack, List<MatchInfo>> msgPack = invocation.getArgument(0);
-                return CompletableFuture.completedFuture(msgPack.values().stream().flatMap(l -> l.stream())
-                    .collect(Collectors.toMap(s -> s, s -> DeliveryResult.OK)));
-            });
+        when(writer1.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
+        when(writer2.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
 
         match(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
         match(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");

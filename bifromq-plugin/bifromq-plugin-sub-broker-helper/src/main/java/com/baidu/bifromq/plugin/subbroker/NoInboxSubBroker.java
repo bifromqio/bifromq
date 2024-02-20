@@ -24,8 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 class NoInboxSubBroker implements ISubBroker {
-    private static final CompletableFuture<CheckResult> NO_INBOX =
-        CompletableFuture.completedFuture(CheckResult.NO_INBOX);
     public static final ISubBroker INSTANCE = new NoInboxSubBroker();
 
     @Override
@@ -37,12 +35,24 @@ class NoInboxSubBroker implements ISubBroker {
     public IDeliverer open(String delivererKey) {
         return new IDeliverer() {
             @Override
-            public CompletableFuture<Map<MatchInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
-                Map<MatchInfo, DeliveryResult> deliveryResults = new HashMap<>();
-                for (DeliveryPack pack : packs) {
-                    pack.matchInfos.forEach(subInfo -> deliveryResults.put(subInfo, DeliveryResult.NO_INBOX));
+            public CompletableFuture<DeliveryReply> deliver(DeliveryRequest request) {
+                DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+                for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
+                    Map<MatchInfo, DeliveryResult.Code> results = new HashMap<>();
+                    for (DeliveryPack pack : entry.getValue().getPackList()) {
+                        for (MatchInfo matchInfo : pack.getMatchInfoList()) {
+                            results.put(matchInfo, DeliveryResult.Code.NO_SUB);
+                        }
+                    }
+                    DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
+                    results.forEach((matchInfo, code) ->
+                        resultsBuilder.addResult(DeliveryResult.newBuilder()
+                            .setMatchInfo(matchInfo)
+                            .setCode(code)
+                            .build()));
+                    replyBuilder.putResult(entry.getKey(), resultsBuilder.build());
                 }
-                return CompletableFuture.completedFuture(deliveryResults);
+                return CompletableFuture.completedFuture(replyBuilder.build());
             }
 
             @Override

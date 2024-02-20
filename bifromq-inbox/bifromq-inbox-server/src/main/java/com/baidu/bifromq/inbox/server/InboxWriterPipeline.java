@@ -18,6 +18,7 @@ import com.baidu.bifromq.baserpc.ResponsePipeline;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
@@ -49,11 +50,13 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
     protected CompletableFuture<SendReply> handleRequest(String ignore, SendRequest request) {
         log.trace("Received inbox write request: deliverer={}, \n{}", delivererKey, request);
         return handler.handle(request).thenApply(v -> {
-            for (SendReply.Result result : v.getResultList()) {
-                if (result.getCode() == SendReply.Code.OK) {
-                    writeCallback.afterWrite(ScopedInbox.from(result.getMatchInfo()), delivererKey);
-                }
-            }
+            v.getReply().getResultMap().forEach((tenantId, deliveryResults) -> {
+                deliveryResults.getResultList().forEach(result -> {
+                    if (result.getCode() == DeliveryResult.Code.OK) {
+                        writeCallback.afterWrite(ScopedInbox.from(tenantId, result.getMatchInfo()), delivererKey);
+                    }
+                });
+            });
             return v;
         });
     }

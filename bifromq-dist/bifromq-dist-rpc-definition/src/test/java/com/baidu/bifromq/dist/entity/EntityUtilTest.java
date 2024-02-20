@@ -51,7 +51,6 @@ public class EntityUtilTest {
         assertEquals(((NormalMatching) matching).scopedInboxId, scopedInboxId);
 
         MatchInfo matchInfo = ((NormalMatching) matching).matchInfo;
-        assertEquals(matchInfo.getTenantId(), "tenantId");
         assertEquals(matchInfo.getReceiverId(), "inbox1");
         assertEquals(matchInfo.getTopicFilter(), "/a/b/c");
 

@@ -32,6 +32,7 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
     @Override
     protected CompletableFuture<WriteReply> handleRequest(String tenantId, WriteRequest request) {
         log.trace("Handle inbox write request: \n{}", request);
-        return localDistService.dist(request);
+        return localDistService.dist(request.getRequest())
+            .thenApply(reply -> WriteReply.newBuilder().setReqId(request.getReqId()).setReply(reply).build());
     }
 }

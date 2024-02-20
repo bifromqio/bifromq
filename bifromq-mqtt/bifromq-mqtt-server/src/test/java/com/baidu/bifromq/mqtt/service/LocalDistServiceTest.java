@@ -37,11 +37,12 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.mqtt.MockableTest;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import java.util.ArrayList;
@@ -188,19 +189,19 @@ public class LocalDistServiceTest extends MockableTest {
             eq(0));
         List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
             .map(receiverId -> MatchInfo.newBuilder()
-                .setTenantId(tenantId)
                 .setReceiverId(receiverId)
                 .setTopicFilter(topicFilter).build())
             .toList();
-        WriteReply reply = localDistService.dist(WriteRequest.newBuilder()
-            .setReqId(System.nanoTime())
-            .addPack(WritePack.newBuilder()
-                .addAllMatchInfo(matchInfos)
+        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
+            .putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .addAllMatchInfo(matchInfos)
+                    .build())
                 .build())
             .build()).join();
         assertEquals(matchInfos.size(), reply.getResultCount());
-        assertTrue(
-            reply.getResultList().stream().allMatch(result -> result.getResult() == WriteResult.Result.NO_INBOX));
+        assertTrue(reply.getResultMap().get(tenantId).getResultList().stream()
+            .allMatch(result -> result.getCode() == DeliveryResult.Code.NO_SUB));
         for (IMQTTTransientSession session : sessions) {
             verify(session, never()).publish(any(), anyList());
         }
@@ -265,19 +266,19 @@ public class LocalDistServiceTest extends MockableTest {
             eq(0));
         List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
             .map(receiverId -> MatchInfo.newBuilder()
-                .setTenantId(tenantId)
                 .setReceiverId(receiverId)
                 .setTopicFilter(topicFilter).build())
             .toList();
-        WriteReply reply = localDistService.dist(WriteRequest.newBuilder()
-            .setReqId(System.nanoTime())
-            .addPack(WritePack.newBuilder()
-                .addAllMatchInfo(matchInfos)
+        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
+            .putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .addAllMatchInfo(matchInfos)
+                    .build())
                 .build())
             .build()).join();
         assertEquals(matchInfos.size(), reply.getResultCount());
-        assertTrue(
-            reply.getResultList().stream().allMatch(result -> result.getResult() == WriteResult.Result.OK));
+        assertTrue(reply.getResultMap().get(tenantId).getResultList().stream()
+            .allMatch(result -> result.getCode() == DeliveryResult.Code.OK));
         for (IMQTTTransientSession session : sessions) {
             verify(session, times(1)).publish(any(), anyList());
         }
@@ -311,15 +312,15 @@ public class LocalDistServiceTest extends MockableTest {
 
         List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
             .map(receiverId -> MatchInfo.newBuilder()
-                .setTenantId(tenantId)
                 .setReceiverId(receiverId)
                 .setTopicFilter(topicFilter).build())
             .toList();
 
-        WriteReply reply = localDistService.dist(WriteRequest.newBuilder()
-            .setReqId(System.nanoTime())
-            .addPack(WritePack.newBuilder()
-                .addAllMatchInfo(matchInfos)
+        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
+            .putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .addAllMatchInfo(matchInfos)
+                    .build())
                 .build())
             .build()).join();
         assertEquals(matchInfos.size(), 1);
@@ -364,24 +365,23 @@ public class LocalDistServiceTest extends MockableTest {
 
         List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
             .map(receiverId -> MatchInfo.newBuilder()
-                .setTenantId(tenantId)
                 .setReceiverId(receiverId)
                 .setTopicFilter(topicFilter).build())
             .toList();
-
 
         when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.ERROR));
         CompletableFuture<UnmatchResult> result = localDistService.unmatch(System.nanoTime(), topicFilter, session);
         assertEquals(result.join(), UnmatchResult.ERROR);
 
-        WriteReply reply = localDistService.dist(WriteRequest.newBuilder()
-            .setReqId(System.nanoTime())
-            .addPack(WritePack.newBuilder()
-                .addAllMatchInfo(matchInfos)
+        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
+            .putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .addAllMatchInfo(matchInfos)
+                    .build())
                 .build())
             .build()).join();
-        assertEquals(reply.getResult(0).getResult(), WriteResult.Result.NO_INBOX);
+        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.NO_SUB);
 
         verify(session, never()).publish(any(), anyList());
     }
@@ -412,7 +412,6 @@ public class LocalDistServiceTest extends MockableTest {
 
         List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
             .map(receiverId -> MatchInfo.newBuilder()
-                .setTenantId(tenantId)
                 .setReceiverId(receiverId)
                 .setTopicFilter(topicFilter).build())
             .toList();
@@ -423,13 +422,14 @@ public class LocalDistServiceTest extends MockableTest {
         CompletableFuture<UnmatchResult> result = localDistService.unmatch(System.nanoTime(), topicFilter, session);
         assertEquals(result.join(), UnmatchResult.ERROR);
 
-        WriteReply reply = localDistService.dist(WriteRequest.newBuilder()
-            .setReqId(System.nanoTime())
-            .addPack(WritePack.newBuilder()
-                .addAllMatchInfo(matchInfos)
+        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
+            .putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .addAllMatchInfo(matchInfos)
+                    .build())
                 .build())
             .build()).join();
-        assertEquals(reply.getResult(0).getResult(), WriteResult.Result.NO_INBOX);
+        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.NO_SUB);
         verify(session, never()).publish(any(), anyList());
     }
 
@@ -459,7 +459,6 @@ public class LocalDistServiceTest extends MockableTest {
 
         List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
             .map(receiverId -> MatchInfo.newBuilder()
-                .setTenantId(tenantId)
                 .setReceiverId(receiverId)
                 .setTopicFilter(topicFilter).build())
             .toList();
@@ -470,13 +469,14 @@ public class LocalDistServiceTest extends MockableTest {
         CompletableFuture<UnmatchResult> result = localDistService.unmatch(System.nanoTime(), topicFilter, session);
         assertEquals(result.join(), UnmatchResult.OK);
 
-        WriteReply reply = localDistService.dist(WriteRequest.newBuilder()
-            .setReqId(System.nanoTime())
-            .addPack(WritePack.newBuilder()
-                .addAllMatchInfo(matchInfos)
+        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
+            .putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .addAllMatchInfo(matchInfos)
+                    .build())
                 .build())
             .build()).join();
-        assertEquals(reply.getResult(0).getResult(), WriteResult.Result.NO_INBOX);
+        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.NO_SUB);
         verify(session, never()).publish(any(), anyList());
     }
 }

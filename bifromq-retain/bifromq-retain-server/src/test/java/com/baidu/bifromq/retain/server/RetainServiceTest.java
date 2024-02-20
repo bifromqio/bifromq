@@ -23,7 +23,7 @@ import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.metrics.RPCMeters;
-import com.baidu.bifromq.deliverer.DeliveryRequest;
+import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -125,11 +125,11 @@ public class RetainServiceTest {
             .build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
             new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
-        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.OK));
+        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.Code.OK));
         MatchRequest matchRequest = MatchRequest.newBuilder()
             .setReqId(1)
+            .setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTenantId("tenant")
                 .setTopicFilter("#")
                 .setReceiverId("inbox")
                 .build())
@@ -139,11 +139,11 @@ public class RetainServiceTest {
         service.match(matchRequest, matchResponseObserver);
         verify(matchResponseObserver)
             .onNext(argThat(r -> r.getReqId() == matchRequest.getReqId() && r.getResult() == MatchReply.Result.OK));
-        ArgumentCaptor<DeliveryRequest> reqCaptor = ArgumentCaptor.forClass(DeliveryRequest.class);
+        ArgumentCaptor<DeliveryCall> reqCaptor = ArgumentCaptor.forClass(DeliveryCall.class);
         verify(messageDeliverer, times(2)).schedule(reqCaptor.capture());
-        List<DeliveryRequest> requestList = reqCaptor.getAllValues();
-        DeliveryRequest req1 = requestList.get(0);
-        assertEquals(req1.matchInfo.getTenantId(), matchRequest.getMatchInfo().getTenantId());
+        List<DeliveryCall> requestList = reqCaptor.getAllValues();
+        DeliveryCall req1 = requestList.get(0);
+        assertEquals(req1.tenantId, matchRequest.getTenantId());
         assertEquals(req1.matchInfo.getReceiverId(), matchRequest.getMatchInfo().getReceiverId());
         assertEquals(req1.matchInfo.getTopicFilter(), matchRequest.getMatchInfo().getTopicFilter());
 
@@ -168,11 +168,12 @@ public class RetainServiceTest {
             .build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
             new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
-        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.NO_INBOX));
+        when(messageDeliverer.schedule(any())).thenReturn(
+            CompletableFuture.completedFuture(DeliveryResult.Code.NO_SUB));
         MatchRequest matchRequest = MatchRequest.newBuilder()
             .setReqId(1)
+            .setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTenantId("tenant")
                 .setTopicFilter("#")
                 .setReceiverId("inbox")
                 .build())
@@ -199,11 +200,11 @@ public class RetainServiceTest {
             .build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
             new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
-        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.FAILED));
+        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.Code.ERROR));
         MatchRequest matchRequest = MatchRequest.newBuilder()
             .setReqId(1)
+            .setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTenantId("tenant")
                 .setTopicFilter("#")
                 .setReceiverId("inbox")
                 .build())

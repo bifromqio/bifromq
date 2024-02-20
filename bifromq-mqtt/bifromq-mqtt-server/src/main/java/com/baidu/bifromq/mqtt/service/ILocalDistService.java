@@ -18,6 +18,8 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import java.util.concurrent.CompletableFuture;
 
 public interface ILocalDistService {
@@ -41,5 +43,5 @@ public interface ILocalDistService {
 
     CompletableFuture<UnmatchResult> unmatch(long reqId, String topicFilter, IMQTTTransientSession session);
 
-    CompletableFuture<WriteReply> dist(WriteRequest request);
+    CompletableFuture<DeliveryReply> dist(DeliveryRequest request);
 }

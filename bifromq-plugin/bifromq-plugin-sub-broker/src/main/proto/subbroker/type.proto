@@ -1,0 +1,41 @@
+syntax = "proto3";
+import "commontype/QoS.proto";
+import "commontype/MatchInfo.proto";
+import "commontype/TopicMessage.proto";
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.plugin.subbroker";;
+option java_outer_classname = "SubBrokerProtos";
+
+package subbroker;
+
+message DeliveryPack{
+  commontype.TopicMessagePack messagePack = 2;
+  repeated commontype.MatchInfo matchInfo = 3;
+}
+
+message DeliveryPackage{
+  repeated DeliveryPack pack = 1;
+}
+
+message DeliveryRequest{
+  map<string, DeliveryPackage> package = 3;
+}
+
+message DeliveryResult{
+  enum Code{
+    OK = 0;
+    NO_SUB = 1;
+    NO_RECEIVER = 2;
+    ERROR = 3;
+  }
+  commontype.MatchInfo matchInfo = 1;
+  Code code = 2;
+}
+
+message DeliveryResults{
+  repeated DeliveryResult result = 1;
+}
+
+message DeliveryReply{
+  map<string, DeliveryResults> result = 2;
+}

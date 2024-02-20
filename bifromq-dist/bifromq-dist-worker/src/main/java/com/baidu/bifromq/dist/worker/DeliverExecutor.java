@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.deliverer.DeliveryRequest;
+import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.NormalMatching;
@@ -88,7 +88,7 @@ public class DeliverExecutor {
         int subBrokerId = matched.subBrokerId;
         String delivererKey = matched.delivererKey;
         MatchInfo sub = matched.matchInfo;
-        DeliveryRequest request = new DeliveryRequest(sub, subBrokerId, delivererKey, msgPack);
+        DeliveryCall request = new DeliveryCall(matched.tenantId, sub, subBrokerId, delivererKey, msgPack);
         deliverer.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
                 log.debug("Failed to deliver", e);
@@ -104,13 +104,13 @@ public class DeliverExecutor {
                         .delivererKey(delivererKey)
                         .subInfo(sub)
                         .messages(msgPack));
-                    case NO_INBOX -> {
+                    case NO_SUB, NO_RECEIVER -> {
                         // unsub as side effect
-                        MatchInfo subInfo = matched.matchInfo;
+                        MatchInfo matchInfo = matched.matchInfo;
                         distClient.unmatch(System.nanoTime(),
-                            subInfo.getTenantId(),
-                            subInfo.getTopicFilter(),
-                            subInfo.getReceiverId(),
+                            matched.tenantId,
+                            matchInfo.getTopicFilter(),
+                            matchInfo.getReceiverId(),
                             delivererKey,
                             subBrokerId);
                         eventCollector.report(getLocal(DeliverNoInbox.class)
@@ -119,7 +119,7 @@ public class DeliverExecutor {
                             .subInfo(sub)
                             .messages(msgPack));
                     }
-                    case FAILED -> eventCollector.report(getLocal(DeliverError.class)
+                    case ERROR -> eventCollector.report(getLocal(DeliverError.class)
                         .brokerId(subBrokerId)
                         .delivererKey(delivererKey)
                         .subInfo(sub)

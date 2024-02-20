@@ -15,7 +15,7 @@ package com.baidu.bifromq.retain.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 
-import com.baidu.bifromq.deliverer.DeliveryRequest;
+import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -65,12 +65,12 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
     public void match(MatchRequest request, StreamObserver<MatchReply> responseObserver) {
         log.trace("Handling match request:\n{}", request);
         response((tenantId, metadata) -> matchCallScheduler
-            .schedule(new MatchCall(request.getMatchInfo().getTenantId(), request.getMatchInfo().getTopicFilter(),
+            .schedule(new MatchCall(request.getTenantId(), request.getMatchInfo().getTopicFilter(),
                 request.getLimit()))
             .thenCompose(matchCallResult -> {
                 if (matchCallResult.result() == MatchReply.Result.OK) {
                     MatchInfo matchInfo = request.getMatchInfo();
-                    List<CompletableFuture<DeliveryResult>> deliveryResults = matchCallResult.retainMessages()
+                    List<CompletableFuture<DeliveryResult.Code>> deliveryResults = matchCallResult.retainMessages()
                         .stream()
                         .map(retainedMsg -> {
                             TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder()
@@ -80,13 +80,13 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                                     .setPublisher(retainedMsg.getPublisher())
                                     .build())
                                 .build();
-                            return messageDeliverer.schedule(new DeliveryRequest(matchInfo,
+                            return messageDeliverer.schedule(new DeliveryCall(request.getTenantId(), matchInfo,
                                 request.getBrokerId(), request.getDelivererKey(), topicMessagePack));
                         }).toList();
                     return CompletableFuture.allOf(deliveryResults.toArray(CompletableFuture[]::new))
                         .thenApply(v -> deliveryResults.stream().map(CompletableFuture::join))
                         .thenApply(resultList -> {
-                            if (resultList.allMatch(r -> r == DeliveryResult.OK)) {
+                            if (resultList.allMatch(r -> r == DeliveryResult.Code.OK)) {
                                 return MatchReply.newBuilder()
                                     .setReqId(request.getReqId())
                                     .setResult(MatchReply.Result.OK)

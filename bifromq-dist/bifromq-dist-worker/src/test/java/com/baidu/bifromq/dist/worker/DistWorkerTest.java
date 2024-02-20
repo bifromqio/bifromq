@@ -15,6 +15,7 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
+import static com.baidu.bifromq.plugin.subbroker.TypeUtil.to;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
@@ -60,10 +61,16 @@ import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -79,8 +86,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -91,6 +101,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -368,4 +379,23 @@ public abstract class DistWorkerTest {
                 .build())
             .build()), orderKey);
     }
+
+    protected Answer<CompletableFuture<DeliveryReply>> answer(DeliveryResult.Code code) {
+        return invocation -> {
+            DeliveryRequest request = invocation.getArgument(0);
+            DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+            for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
+                String tenantId = entry.getKey();
+                Map<MatchInfo, DeliveryResult.Code> resultMap = new HashMap<>();
+                for (DeliveryPack pack : entry.getValue().getPackList()) {
+                    for (MatchInfo subInfo : pack.getMatchInfoList()) {
+                        resultMap.put(subInfo, code);
+                    }
+                }
+                replyBuilder.putResult(tenantId, to(resultMap));
+            }
+            return CompletableFuture.completedFuture(replyBuilder.build());
+        };
+    }
+
 }

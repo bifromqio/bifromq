@@ -14,7 +14,6 @@
 package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
-import static java.util.Collections.singletonList;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -27,6 +26,9 @@ import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.ClientInfo;
@@ -34,9 +36,6 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -68,6 +67,7 @@ public class InboxInsertTest extends InboxServiceTest {
         assertEquals(createReply.getCode(), CreateReply.Code.OK);
 
         IDeliverer writer = inboxClient.open(delivererKey);
+        DeliveryRequest.Builder reqBuilder = DeliveryRequest.newBuilder();
         Message msg = Message.newBuilder()
             .setPubQoS(QoS.AT_LEAST_ONCE)
             .build();
@@ -79,13 +79,16 @@ public class InboxInsertTest extends InboxServiceTest {
             .setTopic("topic")
             .addMessage(publisherPack)
             .build();
-        MatchInfo subInfo = MatchInfo.newBuilder()
-            .setTenantId(tenantId)
+        MatchInfo matchInfo = MatchInfo.newBuilder()
             .setReceiverId(distInboxId(inboxId, incarnation))
             .setTopicFilter("topic")
             .build();
-        List<DeliveryPack> msgPack = new LinkedList<>();
-        msgPack.add(new DeliveryPack(pack, singletonList(subInfo)));
+        reqBuilder.putPackage(tenantId, DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(pack)
+                .addMatchInfo(matchInfo)
+                .build())
+            .build());
 
         SubReply reply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -98,8 +101,11 @@ public class InboxInsertTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        Map<MatchInfo, DeliveryResult> result = writer.deliver(msgPack).join();
-        assertEquals(result.get(subInfo), DeliveryResult.OK);
+        DeliveryReply reply = writer.deliver(reqBuilder.build()).join();
+        assertTrue(reply.getResultMap().containsKey(tenantId) && reply.getResultMap().size() == 1);
+        assertEquals(reply.getResultMap().get(tenantId).getResultCount(), 1);
+        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getMatchInfo(), matchInfo);
+        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.OK);
 
         IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId, incarnation);
         CountDownLatch latch = new CountDownLatch(1);
@@ -158,15 +164,24 @@ public class InboxInsertTest extends InboxServiceTest {
             .setTopic("topic")
             .addMessage(publisherPack)
             .build();
-        MatchInfo subInfo = MatchInfo.newBuilder()
-            .setTenantId(tenantId)
+        MatchInfo matchInfo = MatchInfo.newBuilder()
             .setReceiverId(distInboxId(inboxId, incarnation))
             .setTopicFilter("topic")
             .build();
-        List<DeliveryPack> msgPack1 = new LinkedList<>();
-        msgPack1.add(new DeliveryPack(pack1, singletonList(subInfo)));
-        List<DeliveryPack> msgPack2 = new LinkedList<>();
-        msgPack2.add(new DeliveryPack(pack2, singletonList(subInfo)));
+        DeliveryRequest req1 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .setMessagePack(pack1)
+                    .addMatchInfo(matchInfo)
+                    .build())
+                .build())
+            .build();
+        DeliveryRequest req2 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .setMessagePack(pack2)
+                    .addMatchInfo(matchInfo)
+                    .build())
+                .build())
+            .build();
 
         inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -179,16 +194,19 @@ public class InboxInsertTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        CompletableFuture<Map<MatchInfo, DeliveryResult>> writeFuture1 = writer.deliver(msgPack1);
-        CompletableFuture<Map<MatchInfo, DeliveryResult>> writeFuture2 = writer.deliver(msgPack2);
-        CompletableFuture<Map<MatchInfo, DeliveryResult>> writeFuture3 = writer.deliver(msgPack2);
+        CompletableFuture<DeliveryReply> writeFuture1 = writer.deliver(req1);
+        CompletableFuture<DeliveryReply> writeFuture2 = writer.deliver(req2);
+        CompletableFuture<DeliveryReply> writeFuture3 = writer.deliver(req2);
 
-        Map<MatchInfo, DeliveryResult> result1 = writeFuture1.join();
-        assertEquals(result1.get(subInfo), DeliveryResult.OK);
-        Map<MatchInfo, DeliveryResult> result2 = writeFuture2.join();
-        assertEquals(result2.get(subInfo), DeliveryResult.OK);
-        Map<MatchInfo, DeliveryResult> result3 = writeFuture3.join();
-        assertEquals(result3.get(subInfo), DeliveryResult.OK);
+        DeliveryReply result1 = writeFuture1.join();
+        assertEquals(result1.getResultMap().get(tenantId).getResult(0).getMatchInfo(), matchInfo);
+        assertEquals(result1.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.OK);
+        DeliveryReply result2 = writeFuture2.join();
+        assertEquals(result2.getResultMap().get(tenantId).getResult(0).getMatchInfo(), matchInfo);
+        assertEquals(result2.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.OK);
+        DeliveryReply result3 = writeFuture3.join();
+        assertEquals(result3.getResultMap().get(tenantId).getResult(0).getMatchInfo(), matchInfo);
+        assertEquals(result3.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.OK);
 
         IInboxClient.IInboxReader reader = inboxClient.openInboxReader(tenantId, inboxId, incarnation);
         CountDownLatch latch = new CountDownLatch(1);

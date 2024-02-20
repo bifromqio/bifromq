@@ -26,49 +26,35 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class DistQoS0Test extends DistWorkerTest {
-    Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>> answer = invocation -> {
-        Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-        Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
-        for (DeliveryPack inboxWrite : inboxPacks) {
-            log.info("deliver topic: {}", inboxWrite.messagePack.getTopic());
-            for (MatchInfo subInfo : inboxWrite.matchInfos) {
-                resultMap.put(subInfo, DeliveryResult.OK);
-            }
-        }
-        return CompletableFuture.completedFuture(resultMap);
-    };
-
 
     @BeforeMethod(groups = "integration")
     public void mock() {
         when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
 
-        when(writer1.deliver(any())).thenAnswer(answer);
-        when(writer2.deliver(any())).thenAnswer(answer);
-        when(writer3.deliver(any())).thenAnswer(answer);
+        when(writer1.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
+        when(writer2.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
+        when(writer3.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
     }
 
     @AfterMethod(groups = "integration")
@@ -117,32 +103,42 @@ public class DistQoS0Test extends DistWorkerTest {
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/你好/hello/😄", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/你好/hello/😄").intValue(), 3);
 
-        ArgumentCaptor<Iterable<DeliveryPack>> msgCap = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<DeliveryRequest> msgCap = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer1, after(1000).atMost(2)).deliver(msgCap.capture());
         int msgCount = 0;
-        for (Iterable<DeliveryPack> packs : msgCap.getAllValues()) {
-            for (DeliveryPack pack : packs) {
-                TopicMessagePack msgPack = pack.messagePack;
-                Set<MatchInfo> subInfos = Sets.newHashSet(pack.matchInfos);
-                assertEquals(msgPack.getTopic(), "/你好/hello/😄");
-                for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
-                    for (Message msg : publisherPack.getMessageList()) {
-                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
-                        msgCount += subInfos.size();
+        for (DeliveryRequest request : msgCap.getAllValues()) {
+            for (String tenantId : request.getPackageMap().keySet()) {
+                DeliveryPackage deliveryPackage = request.getPackageMap().get(tenantId);
+                assertEquals(tenantId, tenantA);
+                for (DeliveryPack pack : deliveryPackage.getPackList()) {
+                    TopicMessagePack msgPack = pack.getMessagePack();
+                    Set<MatchInfo> subInfos = Sets.newHashSet(pack.getMatchInfoList());
+                    assertEquals(msgPack.getTopic(), "/你好/hello/😄");
+                    for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
+                        for (Message msg : publisherPack.getMessageList()) {
+                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                            msgCount += subInfos.size();
+                        }
                     }
                 }
             }
         }
         assertEquals(msgCount, 2);
 
-        msgCap = ArgumentCaptor.forClass(Iterable.class);
+        msgCap = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer2, timeout(1000).times(1)).deliver(msgCap.capture());
-        for (DeliveryPack pack : msgCap.getValue()) {
-            TopicMessagePack msgs = pack.messagePack;
-            assertEquals(msgs.getTopic(), "/你好/hello/😄");
-            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                for (Message msg : publisherPack.getMessageList()) {
-                    assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        for (DeliveryRequest request : msgCap.getAllValues()) {
+            for (String tenantId : request.getPackageMap().keySet()) {
+                DeliveryPackage deliveryPackage = request.getPackageMap().get(tenantId);
+                assertEquals(tenantId, tenantA);
+                for (DeliveryPack pack : deliveryPackage.getPackList()) {
+                    TopicMessagePack msgs = pack.getMessagePack();
+                    assertEquals(msgs.getTopic(), "/你好/hello/😄");
+                    for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                        for (Message msg : publisherPack.getMessageList()) {
+                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                        }
+                    }
                 }
             }
         }
@@ -164,25 +160,27 @@ public class DistQoS0Test extends DistWorkerTest {
         match(tenantA, "/a/b/c", MqttBroker, "inbox2", "batch1");
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 2);
-        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<DeliveryRequest> list1 = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer1, after(1000).atMost(2)).deliver(list1.capture());
         log.info("Case3: verify writer1, list size is {}", list1.getAllValues().size());
         int msgCount = 0;
-        Set<MatchInfo> subInfos = new HashSet<>();
-        for (Iterable<DeliveryPack> packs : list1.getAllValues()) {
-            for (DeliveryPack pack : packs) {
-                TopicMessagePack msgs = pack.messagePack;
-                pack.matchInfos.forEach(subInfos::add);
-                assertEquals(msgs.getTopic(), "/a/b/c");
-                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                    for (Message msg : publisherPack.getMessageList()) {
-                        msgCount++;
-                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        Set<MatchInfo> matchInfos = new HashSet<>();
+        for (DeliveryRequest request : list1.getAllValues()) {
+            for (String tenantId : request.getPackageMap().keySet()) {
+                for (DeliveryPack pack : request.getPackageMap().get(tenantId).getPackList()) {
+                    TopicMessagePack msgs = pack.getMessagePack();
+                    matchInfos.addAll(pack.getMatchInfoList());
+                    assertEquals(msgs.getTopic(), "/a/b/c");
+                    for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                        for (Message msg : publisherPack.getMessageList()) {
+                            msgCount++;
+                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                        }
                     }
                 }
             }
         }
-        assertEquals(subInfos.size(), 2);
+        assertEquals(matchInfos.size(), 2);
         assertEquals(msgCount, 2);
 
         unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
@@ -205,27 +203,35 @@ public class DistQoS0Test extends DistWorkerTest {
             assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c"), 1);
         }
 
-        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<DeliveryRequest> list1 = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer1, after(1000).atMost(10)).deliver(list1.capture());
-        for (DeliveryPack pack : list1.getValue()) {
-            TopicMessagePack msgs = pack.messagePack;
-            assertEquals(msgs.getTopic(), "/a/b/c");
-            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                for (Message msg : publisherPack.getMessageList()) {
-                    assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        for (DeliveryRequest request : list1.getAllValues()) {
+            for (String tenantId : request.getPackageMap().keySet()) {
+                for (DeliveryPack pack : request.getPackageMap().get(tenantId).getPackList()) {
+                    TopicMessagePack msgs = pack.getMessagePack();
+                    assertEquals(msgs.getTopic(), "/a/b/c");
+                    for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                        for (Message msg : publisherPack.getMessageList()) {
+                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                        }
+                    }
                 }
             }
         }
 
-        ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<DeliveryRequest> list2 = ArgumentCaptor.forClass(DeliveryRequest.class);
 
         verify(writer2, after(200).atMost(10)).deliver(list2.capture());
-        for (DeliveryPack pack : list2.getValue()) {
-            TopicMessagePack msgs = pack.messagePack;
-            assertEquals(msgs.getTopic(), "/a/b/c");
-            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                for (Message msg : publisherPack.getMessageList()) {
-                    assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        for (DeliveryRequest request : list2.getAllValues()) {
+            for (String tenantId : request.getPackageMap().keySet()) {
+                for (DeliveryPack pack : request.getPackageMap().get(tenantId).getPackList()) {
+                    TopicMessagePack msgs = pack.getMessagePack();
+                    assertEquals(msgs.getTopic(), "/a/b/c");
+                    for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                        for (Message msg : publisherPack.getMessageList()) {
+                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                        }
+                    }
                 }
             }
         }
@@ -236,7 +242,7 @@ public class DistQoS0Test extends DistWorkerTest {
     }
 
     @Test(groups = "integration")
-    public void testDistCase5() throws InterruptedException {
+    public void testDistCase5() {
         // pub: qos0
         // topic: "/a/b/c"
         // sub: inbox1 -> [($oshare/group//a/b/c, qos0)], inbox2 -> [($oshare/group//a/b/c, qos1)]
@@ -253,22 +259,24 @@ public class DistQoS0Test extends DistWorkerTest {
             assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
         }
 
-        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<DeliveryRequest> list1 = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer1, after(200).atMost(10)).deliver(list1.capture());
 
-        ArgumentCaptor<Iterable<DeliveryPack>> list2 = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<DeliveryRequest> list2 = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer2, after(200).atMost(10)).deliver(list2.capture());
 
-        List<Iterable<DeliveryPack>> captured = list1.getAllValues().isEmpty() ?
+        List<DeliveryRequest> captured = list1.getAllValues().isEmpty() ?
             list2.getAllValues() : list1.getAllValues();
 
-        for (Iterable<DeliveryPack> packs : captured) {
-            for (DeliveryPack pack : packs) {
-                TopicMessagePack msgs = pack.messagePack;
-                assertEquals(msgs.getTopic(), "/a/b/c");
-                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                    for (Message msg : publisherPack.getMessageList()) {
-                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        for (DeliveryRequest request : captured) {
+            for (String tenantId : request.getPackageMap().keySet()) {
+                for (DeliveryPack pack : request.getPackageMap().get(tenantId).getPackList()) {
+                    TopicMessagePack msgs = pack.getMessagePack();
+                    assertEquals(msgs.getTopic(), "/a/b/c");
+                    for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                        for (Message msg : publisherPack.getMessageList()) {
+                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                        }
                     }
                 }
             }
@@ -321,17 +329,19 @@ public class DistQoS0Test extends DistWorkerTest {
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
 
-        ArgumentCaptor<Iterable<DeliveryPack>> list1 = ArgumentCaptor.forClass(Iterable.class);
+        ArgumentCaptor<DeliveryRequest> list1 = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer1, timeout(1000).times(1)).deliver(list1.capture());
         int msgCount = 0;
-        for (Iterable<DeliveryPack> packs : list1.getAllValues()) {
-            for (DeliveryPack pack : packs) {
-                TopicMessagePack msgs = pack.messagePack;
-                assertEquals(msgs.getTopic(), "/a/b/c");
-                for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                    for (Message msg : publisherPack.getMessageList()) {
-                        msgCount++;
-                        assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        for (DeliveryRequest request : list1.getAllValues()) {
+            for (String tenantId : request.getPackageMap().keySet()) {
+                for (DeliveryPack pack : request.getPackageMap().get(tenantId).getPackList()) {
+                    TopicMessagePack msgs = pack.getMessagePack();
+                    assertEquals(msgs.getTopic(), "/a/b/c");
+                    for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                        for (Message msg : publisherPack.getMessageList()) {
+                            msgCount++;
+                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                        }
                     }
                 }
             }

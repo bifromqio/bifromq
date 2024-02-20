@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.dist.server;
 
+import static com.baidu.bifromq.plugin.subbroker.TypeUtil.to;
+import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toResult;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -22,6 +24,9 @@ import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
@@ -57,17 +62,7 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration", dependsOnMethods = "distWithFanOutSub")
     public void distWithNoSub() {
-        Mockito.lenient().when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
-                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
-                for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
-                        resultMap.put(matchInfo, DeliveryResult.OK);
-                    }
-                }
-                return CompletableFuture.completedFuture(resultMap);
-            });
+        Mockito.lenient().when(inboxDeliverer.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
         long reqId = System.nanoTime();
         ByteString payload = ByteString.EMPTY;
         ClientInfo clientInfo;
@@ -101,17 +96,7 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithSub() {
-        Mockito.lenient().when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
-                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
-                for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
-                        resultMap.put(matchInfo, DeliveryResult.OK);
-                    }
-                }
-                return CompletableFuture.completedFuture(resultMap);
-            });
+        Mockito.lenient().when(inboxDeliverer.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
         long reqId = System.nanoTime();
         ByteString payload = ByteString.EMPTY;
         ClientInfo clientInfo;
@@ -147,17 +132,7 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithSharedSub() {
-        Mockito.lenient().when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
-                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
-                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
-                for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
-                        resultMap.put(matchInfo, DeliveryResult.OK);
-                    }
-                }
-                return CompletableFuture.completedFuture(resultMap);
-            });
+        Mockito.lenient().when(inboxDeliverer.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
         long reqId = System.nanoTime();
         ByteString payload = ByteString.EMPTY;
         ClientInfo clientInfo;
@@ -195,19 +170,24 @@ public class DistTest extends DistServiceTest {
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithFanOutSub() {
-        List<Iterable<DeliveryPack>> capturedArguments = new CopyOnWriteArrayList<>();
+        List<DeliveryRequest> capturedArguments = new CopyOnWriteArrayList<>();
         when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<Map<MatchInfo, DeliveryResult>>>) invocation -> {
-                Iterable<DeliveryPack> inboxPacks = invocation.getArgument(0);
+            .thenAnswer((Answer<CompletableFuture<DeliveryReply>>) invocation -> {
+                DeliveryRequest request = invocation.getArgument(0);
                 // the argument object will be reused, so make a clone
-                capturedArguments.add(inboxPacks);
-                Map<MatchInfo, DeliveryResult> resultMap = new HashMap<>();
-                for (DeliveryPack inboxWrite : inboxPacks) {
-                    for (MatchInfo matchInfo : inboxWrite.matchInfos) {
-                        resultMap.put(matchInfo, DeliveryResult.OK);
+                capturedArguments.add(request);
+                Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap = new HashMap<>();
+                for (String tenantId : request.getPackageMap().keySet()) {
+                    Map<MatchInfo, DeliveryResult.Code> r = resultMap.computeIfAbsent(tenantId, k -> new HashMap<>());
+                    for (DeliveryPack inboxWrite : request.getPackageMap().get(tenantId).getPackList()) {
+                        for (MatchInfo matchInfo : inboxWrite.getMatchInfoList()) {
+                            r.put(matchInfo, DeliveryResult.Code.OK);
+                        }
                     }
                 }
-                return CompletableFuture.completedFuture(resultMap);
+                return CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                    .putAllResult(toResult(resultMap))
+                    .build());
             });
 
         long reqId = System.nanoTime();
@@ -236,15 +216,36 @@ public class DistTest extends DistServiceTest {
 
         Set<MatchInfo> matchInfos = new HashSet<>();
         int msgCount = 0;
-        for (Iterable<DeliveryPack> writeReq : capturedArguments) {
-            for (DeliveryPack pack : writeReq) {
-                TopicMessagePack msgs = pack.messagePack;
-                Set<MatchInfo> inboxes = Sets.newHashSet(pack.matchInfos);
-                matchInfos.addAll(inboxes);
-                msgCount += msgs.getMessageCount() * inboxes.size();
+        for (DeliveryRequest writeReq : capturedArguments) {
+            for (String tenantId : writeReq.getPackageMap().keySet()) {
+                for (DeliveryPack pack : writeReq.getPackageMap().get(tenantId).getPackList()) {
+                    TopicMessagePack msgs = pack.getMessagePack();
+                    Set<MatchInfo> inboxes = Sets.newHashSet(pack.getMatchInfoList());
+                    matchInfos.addAll(inboxes);
+                    msgCount += msgs.getMessageCount() * inboxes.size();
+                }
             }
         }
         assertEquals(matchInfos.size(), totalInbox);
         assertEquals(msgCount, totalInbox * totalPub);
     }
+
+    private Answer<CompletableFuture<DeliveryReply>> answer(DeliveryResult.Code code) {
+        return invocation -> {
+            DeliveryRequest request = invocation.getArgument(0);
+            DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+            for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
+                String tenantId = entry.getKey();
+                Map<MatchInfo, DeliveryResult.Code> resultMap = new HashMap<>();
+                for (DeliveryPack pack : entry.getValue().getPackList()) {
+                    for (MatchInfo subInfo : pack.getMatchInfoList()) {
+                        resultMap.put(subInfo, code);
+                    }
+                }
+                replyBuilder.putResult(tenantId, to(resultMap));
+            }
+            return CompletableFuture.completedFuture(replyBuilder.build());
+        };
+    }
+
 }

@@ -372,8 +372,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                         tfOption.getRetainHandling() == SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
                                 return retainClient.match(MatchRequest.newBuilder()
                                         .setReqId(request.getReqId())
+                                        .setTenantId(request.getTenantId())
                                         .setMatchInfo(MatchInfo.newBuilder()
-                                            .setTenantId(request.getTenantId())
                                             .setTopicFilter(request.getTopicFilter())
                                             .setReceiverId(distInboxId(request.getInboxId(), request.getIncarnation()))
                                             .build())

@@ -22,11 +22,13 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.metrics.ITenantMeter;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -214,85 +216,88 @@ public class LocalDistService implements ILocalDistService {
     }
 
     @Override
-    public CompletableFuture<WriteReply> dist(WriteRequest request) {
-        WriteReply.Builder replyBuilder = WriteReply.newBuilder().setReqId(request.getReqId());
+    public CompletableFuture<DeliveryReply> dist(DeliveryRequest request) {
+        DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
         Set<MatchInfo> ok = new HashSet<>();
         Set<MatchInfo> skip = new HashSet<>();
         Set<MatchInfo> noSub = new HashSet<>();
-        for (WritePack writePack : request.getPackList()) {
-            TopicMessagePack topicMsgPack = writePack.getMessagePack();
-            int msgPackSize = estSizeOf(topicMsgPack);
-            int fanout = 1;
-            assert !writePack.getMatchInfoList().isEmpty();
-            for (MatchInfo matchInfo : writePack.getMatchInfoList()) {
-                if (!noSub.contains(matchInfo) && !skip.contains(matchInfo)) {
-                    if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
-                        IMQTTTransientSession session =
-                            sessionMap.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
-                        if (session != null) {
-                            boolean success = session.publish(matchInfo, singletonList(topicMsgPack));
-                            if (success) {
-                                ok.add(matchInfo);
+        DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
+        for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
+            String tenantId = entry.getKey();
+            ITenantMeter tenantMeter = ITenantMeter.get(tenantId);
+            for (DeliveryPack writePack : entry.getValue().getPackList()) {
+                TopicMessagePack topicMsgPack = writePack.getMessagePack();
+                int msgPackSize = estSizeOf(topicMsgPack);
+                int fanout = 1;
+                for (MatchInfo matchInfo : writePack.getMatchInfoList()) {
+                    if (!noSub.contains(matchInfo) && !skip.contains(matchInfo)) {
+                        if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
+                            IMQTTTransientSession session =
+                                sessionMap.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
+                            if (session != null) {
+                                boolean success = session.publish(matchInfo, singletonList(topicMsgPack));
+                                if (success) {
+                                    ok.add(matchInfo);
+                                } else {
+                                    noSub.add(matchInfo);
+                                }
                             } else {
+                                // no session found for shared subscription
                                 noSub.add(matchInfo);
                             }
                         } else {
-                            // no session found for shared subscription
-                            noSub.add(matchInfo);
-                        }
-                    } else {
-                        int bucketId = LocalRoutes.parseBucketId(matchInfo.getReceiverId());
-                        CompletableFuture<LocalRoutes> routesFuture =
-                            routeMap.get(new TopicFilter(matchInfo.getTenantId(), matchInfo.getTopicFilter(),
-                                bucketId));
-                        if (routesFuture == null) {
-                            noSub.add(matchInfo);
-                            continue;
-                        }
-                        if (!routesFuture.isDone() || routesFuture.isCompletedExceptionally()) {
-                            skip.add(matchInfo);
-                        }
-                        try {
-                            LocalRoutes localRoutes = routesFuture.join();
-                            if (!localRoutes.localizedReceiverId().equals(matchInfo.getReceiverId())) {
+                            int bucketId = LocalRoutes.parseBucketId(matchInfo.getReceiverId());
+                            CompletableFuture<LocalRoutes> routesFuture =
+                                routeMap.get(new TopicFilter(tenantId, matchInfo.getTopicFilter(),
+                                    bucketId));
+                            if (routesFuture == null) {
                                 noSub.add(matchInfo);
                                 continue;
                             }
-                            boolean published = false;
-                            fanout *= localRoutes.routeList.size();
-                            for (IMQTTTransientSession session : localRoutes.routeList.values()) {
-                                // at least one session should publish the message
-                                if (session.publish(matchInfo, singletonList(topicMsgPack))) {
-                                    published = true;
+                            if (!routesFuture.isDone() || routesFuture.isCompletedExceptionally()) {
+                                skip.add(matchInfo);
+                            }
+                            try {
+                                LocalRoutes localRoutes = routesFuture.join();
+                                if (!localRoutes.localizedReceiverId().equals(matchInfo.getReceiverId())) {
+                                    noSub.add(matchInfo);
+                                    continue;
                                 }
+                                boolean published = false;
+                                fanout *= localRoutes.routeList.size();
+                                for (IMQTTTransientSession session : localRoutes.routeList.values()) {
+                                    // at least one session should publish the message
+                                    if (session.publish(matchInfo, singletonList(topicMsgPack))) {
+                                        published = true;
+                                    }
+                                }
+                                if (published) {
+                                    ok.add(matchInfo);
+                                } else {
+                                    noSub.add(matchInfo);
+                                }
+                            } catch (Throwable e) {
+                                skip.add(matchInfo);
                             }
-                            if (published) {
-                                ok.add(matchInfo);
-                            } else {
-                                noSub.add(matchInfo);
-                            }
-                        } catch (Throwable e) {
-                            skip.add(matchInfo);
                         }
                     }
                 }
+                tenantMeter.recordSummary(MqttTransientFanOutBytes, msgPackSize * Math.max(fanout, 1));
             }
-
-            ITenantMeter.get(writePack.getMatchInfoList().get(0).getTenantId())
-                .recordSummary(MqttTransientFanOutBytes, msgPackSize * Math.max(fanout, 1));
+            ok.forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
+                .setMatchInfo(matchInfo)
+                .setCode(DeliveryResult.Code.OK)
+                .build()));
+            skip.forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
+                .setMatchInfo(matchInfo)
+                .setCode(DeliveryResult.Code.OK)
+                .build()));
+            noSub.forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
+                .setMatchInfo(matchInfo)
+                .setCode(DeliveryResult.Code.NO_SUB)
+                .build()));
+            replyBuilder.putResult(tenantId, resultsBuilder.build());
         }
-        ok.forEach(matchInfo -> replyBuilder.addResult(WriteResult.newBuilder()
-            .setMatchInfo(matchInfo)
-            .setResult(WriteResult.Result.OK)
-            .build()));
-        skip.forEach(matchInfo -> replyBuilder.addResult(WriteResult.newBuilder()
-            .setMatchInfo(matchInfo)
-            .setResult(WriteResult.Result.OK)
-            .build()));
-        noSub.forEach(matchInfo -> replyBuilder.addResult(WriteResult.newBuilder()
-            .setMatchInfo(matchInfo)
-            .setResult(WriteResult.Result.NO_INBOX)
-            .build()));
         return CompletableFuture.completedFuture(replyBuilder.build());
     }
 

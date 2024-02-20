@@ -161,8 +161,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                             // TODO: add throttling behavior
                             return addFgTask(sessionCtx.retainClient.match(MatchRequest.newBuilder()
                                 .setReqId(reqId)
+                                .setTenantId(clientInfo.getTenantId())
                                 .setMatchInfo(MatchInfo.newBuilder()
-                                    .setTenantId(clientInfo.getTenantId())
                                     .setTopicFilter(topicFilter)
                                     .setReceiverId(globalize(channelId()))
                                     .build())

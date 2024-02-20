@@ -7,7 +7,6 @@ option java_package = "com.baidu.bifromq.type";
 option java_outer_classname = "SubInfoProtos";
 
 message MatchInfo {
-  string tenantId = 1;
-  string topicFilter = 2;
-  string receiverId = 3;
+  string topicFilter = 1;
+  string receiverId = 2;
 }

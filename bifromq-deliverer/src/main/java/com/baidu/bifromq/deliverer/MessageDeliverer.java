@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.deliverer;
 
+import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toMap;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
@@ -21,24 +22,27 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.MatchInfo;
+import com.google.common.collect.Maps;
 import java.time.Duration;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class MessageDeliverer extends BatchCallScheduler<DeliveryRequest, DeliveryResult, DelivererKey>
+public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryResult.Code, DelivererKey>
     implements IMessageDeliverer {
     private final ISubBrokerManager subBrokerManager;
 
@@ -49,24 +53,25 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryRequest, Delive
     }
 
     @Override
-    protected Batcher<DeliveryRequest, DeliveryResult, DelivererKey> newBatcher(String name,
-                                                                                long tolerableLatencyNanos,
-                                                                                long burstLatencyNanos,
-                                                                                DelivererKey delivererKey) {
+    protected Batcher<DeliveryCall, DeliveryResult.Code, DelivererKey> newBatcher(String name,
+                                                                                  long tolerableLatencyNanos,
+                                                                                  long burstLatencyNanos,
+                                                                                  DelivererKey delivererKey) {
         return new DeliveryCallBatcher(delivererKey, name, tolerableLatencyNanos, burstLatencyNanos);
     }
 
     @Override
-    protected Optional<DelivererKey> find(DeliveryRequest request) {
+    protected Optional<DelivererKey> find(DeliveryCall request) {
         return Optional.of(request.writerKey);
     }
 
-    private class DeliveryCallBatcher extends Batcher<DeliveryRequest, DeliveryResult, DelivererKey> {
+    private class DeliveryCallBatcher extends Batcher<DeliveryCall, DeliveryResult.Code, DelivererKey> {
         private final IDeliverer deliverer;
 
-        private class DeliveryBatchCall implements IBatchCall<DeliveryRequest, DeliveryResult, DelivererKey> {
-            private final Queue<CallTask<DeliveryRequest, DeliveryResult, DelivererKey>> tasks = new ArrayDeque<>(128);
-            private Map<MessagePackWrapper, Set<MatchInfo>> batch = new HashMap<>(128);
+        private class DeliveryBatchCall implements IBatchCall<DeliveryCall, DeliveryResult.Code, DelivererKey> {
+            private final Queue<CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey>> tasks =
+                new ArrayDeque<>(128);
+            private Map<String, Map<MessagePackWrapper, Set<MatchInfo>>> batch = new HashMap<>(128);
 
             @Override
             public void reset() {
@@ -74,32 +79,44 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryRequest, Delive
             }
 
             @Override
-            public void add(CallTask<DeliveryRequest, DeliveryResult, DelivererKey> callTask) {
-                batch.computeIfAbsent(callTask.call.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
+            public void add(CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> callTask) {
+                batch.computeIfAbsent(callTask.call.tenantId, k -> new HashMap<>(128))
+                    .computeIfAbsent(callTask.call.msgPackWrapper, k -> new HashSet<>())
                     .add(callTask.call.matchInfo);
                 tasks.add(callTask);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
-                return deliverer.deliver(batch.entrySet().stream()
-                        .map(e -> new DeliveryPack(e.getKey().messagePack, e.getValue()))
-                        .collect(Collectors.toList()))
+                return deliverer.deliver(DeliveryRequest.newBuilder()
+                        .putAllPackage(Maps.transformValues(batch, pack -> {
+                            DeliveryPackage.Builder packageBuilder = DeliveryPackage.newBuilder();
+                            pack.forEach((msgPackWrapper, matchInfos) ->
+                                packageBuilder.addPack(DeliveryPack.newBuilder()
+                                    .setMessagePack(msgPackWrapper.messagePack)
+                                    .addAllMatchInfo(matchInfos)
+                                    .build()));
+                            return packageBuilder.build();
+                        }))
+                        .build())
                     .handle((reply, e) -> {
                         if (e != null) {
-                            CallTask<DeliveryRequest, DeliveryResult, DelivererKey> task;
+                            CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
                             while ((task = tasks.poll()) != null) {
                                 task.callResult.completeExceptionally(e);
                             }
                         } else {
-                            CallTask<DeliveryRequest, DeliveryResult, DelivererKey> task;
+                            CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
+                            Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap = toMap(reply.getResultMap());
                             while ((task = tasks.poll()) != null) {
-                                DeliveryResult result = reply.get(task.call.matchInfo);
+                                DeliveryResult.Code result = resultMap
+                                    .getOrDefault(task.call.tenantId, Collections.emptyMap())
+                                    .get(task.call.matchInfo);
                                 if (result != null) {
                                     task.callResult.complete(result);
                                 } else {
                                     log.warn("No write result for sub: {}", task.call.matchInfo);
-                                    task.callResult.complete(DeliveryResult.OK);
+                                    task.callResult.complete(DeliveryResult.Code.OK);
                                 }
                             }
                         }
@@ -118,7 +135,7 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryRequest, Delive
         }
 
         @Override
-        protected IBatchCall<DeliveryRequest, DeliveryResult, DelivererKey> newBatch() {
+        protected IBatchCall<DeliveryCall, DeliveryResult.Code, DelivererKey> newBatch() {
             return new DeliveryBatchCall();
         }
 

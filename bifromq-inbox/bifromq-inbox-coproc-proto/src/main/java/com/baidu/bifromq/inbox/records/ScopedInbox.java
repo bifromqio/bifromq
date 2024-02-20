@@ -26,16 +26,15 @@ public record ScopedInbox(String tenantId, String inboxId, long incarnation) imp
         return inboxId + SEPARATOR + incarnation;
     }
 
-    public static ScopedInbox from(MatchInfo subInfo) {
+    public static ScopedInbox from(String tenantId, MatchInfo subInfo) {
         int splitAt = subInfo.getReceiverId().lastIndexOf(SEPARATOR);
-        return new ScopedInbox(subInfo.getTenantId(),
+        return new ScopedInbox(tenantId,
             subInfo.getReceiverId().substring(0, splitAt),
             Long.parseUnsignedLong(subInfo.getReceiverId().substring(splitAt + 1)));
     }
 
     public MatchInfo convertTo(String topicFilter) {
         return MatchInfo.newBuilder()
-            .setTenantId(tenantId)
             .setReceiverId(inboxId + SEPARATOR + incarnation)
             .setTopicFilter(topicFilter)
             .build();

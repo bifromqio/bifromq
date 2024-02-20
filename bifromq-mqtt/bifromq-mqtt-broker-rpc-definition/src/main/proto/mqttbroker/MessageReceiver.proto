@@ -1,7 +1,6 @@
 syntax = "proto3";
 import "commontype/QoS.proto";
-import "commontype/MatchInfo.proto";
-import "commontype/TopicMessage.proto";
+import "subbroker/type.proto";
 
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.mqtt.inbox.rpc.proto";;
@@ -15,29 +14,14 @@ service OnlineInboxBroker {
   rpc unsub(UnsubRequest) returns (UnsubReply);
 }
 
-message WritePack{
-  commontype.TopicMessagePack messagePack = 1;
-  repeated commontype.MatchInfo matchInfo = 2;
-}
-
 message WriteRequest {
   uint64 reqId = 1;
-  repeated WritePack pack = 2;
-}
-
-message WriteResult{
-  enum Result {
-    OK = 0;
-    NO_INBOX = 1;
-    ERROR = 2;
-  }
-  commontype.MatchInfo matchInfo = 1;
-  Result result = 2;
+  subbroker.DeliveryRequest request = 2;
 }
 
 message WriteReply {
   uint64 reqId = 1;
-  repeated WriteResult result = 2;
+  subbroker.DeliveryReply reply = 2;
 }
 
 message SubRequest {

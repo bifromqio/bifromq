@@ -1,7 +1,6 @@
 syntax = "proto3";
 import "commontype/ClientInfo.proto";
-import "commontype/MatchInfo.proto";
-import "commontype/TopicMessage.proto";
+import "subbroker/type.proto";
 import "inboxservice/InboxFetched.proto";
 import "inboxservice/LWT.proto";
 import "inboxservice/TopicFilterOption.proto";
@@ -201,26 +200,13 @@ message UnsubReply {
 }
 
 message SendRequest {
-  message Params{
-    commontype.TopicMessagePack messages = 1;
-    repeated commontype.MatchInfo matchInfo = 2;
-  }
   uint64 reqId = 1;
-  repeated Params params = 2;
+  subbroker.DeliveryRequest request = 2;
 }
 
 message SendReply {
-  enum Code {
-    OK = 0;
-    NO_INBOX = 1;
-    ERROR = 2;
-  }
-  message Result{
-    commontype.MatchInfo matchInfo = 1;
-    Code code = 2;
-  }
   uint64 reqId = 1;
-  repeated Result result = 2;
+  subbroker.DeliveryReply reply = 2;
 }
 
 message InboxFetchHint {

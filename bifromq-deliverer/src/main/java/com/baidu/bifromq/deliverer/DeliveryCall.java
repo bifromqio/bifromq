@@ -16,12 +16,18 @@ package com.baidu.bifromq.deliverer;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 
-public class DeliveryRequest {
+public class DeliveryCall {
+    public final String tenantId;
     public final MatchInfo matchInfo;
     public final MessagePackWrapper msgPackWrapper;
     public final DelivererKey writerKey;
 
-    public DeliveryRequest(MatchInfo matchInfo, int brokerId, String delivererKey, TopicMessagePack msgPack) {
+    public DeliveryCall(String tenantId,
+                        MatchInfo matchInfo,
+                        int brokerId,
+                        String delivererKey,
+                        TopicMessagePack msgPack) {
+        this.tenantId = tenantId;
         this.matchInfo = matchInfo;
         this.msgPackWrapper = MessagePackWrapper.wrap(msgPack);
         writerKey = new DelivererKey(brokerId, delivererKey);

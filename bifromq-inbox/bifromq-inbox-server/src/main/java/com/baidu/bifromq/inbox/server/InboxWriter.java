@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toResult;
+
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
@@ -20,6 +22,9 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.SubMessagePack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.HashMap;
@@ -40,13 +45,16 @@ public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
 
     @Override
     public CompletableFuture<SendReply> handle(SendRequest request) {
+        // scopedInbox -> topicFilter -> messagePack
         Map<ScopedInbox, Map<String, List<TopicMessagePack>>> msgsByInbox = new HashMap<>();
         // group messages by inboxId
-        for (SendRequest.Params params : request.getParamsList()) {
-            for (MatchInfo subInfo : params.getMatchInfoList()) {
-                msgsByInbox.computeIfAbsent(ScopedInbox.from(subInfo), k -> new HashMap<>())
-                    .computeIfAbsent(subInfo.getTopicFilter(), k -> new LinkedList<>())
-                    .add(params.getMessages());
+        for (String tenantId : request.getRequest().getPackageMap().keySet()) {
+            for (DeliveryPack pack : request.getRequest().getPackageMap().get(tenantId).getPackList()) {
+                for (MatchInfo matchInfo : pack.getMatchInfoList()) {
+                    msgsByInbox.computeIfAbsent(ScopedInbox.from(tenantId, matchInfo), k -> new HashMap<>())
+                        .computeIfAbsent(matchInfo.getTopicFilter(), k -> new LinkedList<>())
+                        .add(pack.getMessagePack());
+                }
             }
         }
         List<CompletableFuture<BatchInsertReply.Result>> replyFutures = msgsByInbox.entrySet()
@@ -75,40 +83,40 @@ public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                 assert results.size() == msgsByInbox.size();
                 int i = 0;
                 SendReply.Builder replyBuilder = SendReply.newBuilder().setReqId(request.getReqId());
-                Map<MatchInfo, SendReply.Code> subInfoMap = new HashMap<>();
+                Map<String, Map<MatchInfo, DeliveryResult.Code>> tenantMatchResultMap = new HashMap<>();
                 for (ScopedInbox scopedInbox : msgsByInbox.keySet()) {
                     BatchInsertReply.Result result = results.get(i++);
+                    Map<MatchInfo, DeliveryResult.Code> matchResultMap =
+                        tenantMatchResultMap.computeIfAbsent(scopedInbox.tenantId(), k -> new HashMap<>());
                     switch (result.getCode()) {
                         case OK -> {
                             for (BatchInsertReply.InsertionResult insertionResult : result.getInsertionResultList()) {
-                                subInfoMap.putIfAbsent(scopedInbox.convertTo(insertionResult.getTopicFilter()),
-                                    insertionResult.getRejected() ? SendReply.Code.NO_INBOX :
-                                        SendReply.Code.OK);
+                                matchResultMap.putIfAbsent(scopedInbox.convertTo(insertionResult.getTopicFilter()),
+                                    insertionResult.getRejected() ? DeliveryResult.Code.NO_SUB :
+                                        DeliveryResult.Code.OK);
                             }
                         }
                         case NO_INBOX -> {
                             for (String topicFilter : msgsByInbox.get(scopedInbox)
                                 .keySet()) {
-                                subInfoMap.putIfAbsent(
-                                    scopedInbox.convertTo(topicFilter),
-                                    SendReply.Code.NO_INBOX);
+                                matchResultMap.putIfAbsent(scopedInbox.convertTo(topicFilter),
+                                    DeliveryResult.Code.NO_RECEIVER);
                             }
                         }
                         case ERROR -> {
                             for (String topicFilter : msgsByInbox.get(scopedInbox)
                                 .keySet()) {
-                                subInfoMap.putIfAbsent(
-                                    scopedInbox.convertTo(topicFilter),
-                                    SendReply.Code.ERROR);
+                                matchResultMap.putIfAbsent(scopedInbox.convertTo(topicFilter),
+                                    DeliveryResult.Code.ERROR);
                             }
                         }
                     }
                 }
-                return replyBuilder.addAllResult(subInfoMap.entrySet().stream()
-                        .map(e -> SendReply.Result.newBuilder()
-                            .setMatchInfo(e.getKey())
-                            .setCode(e.getValue())
-                            .build()).toList())
+                return replyBuilder
+                    .setReqId(request.getReqId())
+                    .setReply(DeliveryReply.newBuilder()
+                        .putAllResult(toResult(tenantMatchResultMap))
+                        .build())
                     .build();
             });
     }

@@ -18,6 +18,7 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
 import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
@@ -30,7 +31,7 @@ import org.testng.annotations.Test;
 public class StatsTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void collectMetrics() {
-        long now = 0;
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId";
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();

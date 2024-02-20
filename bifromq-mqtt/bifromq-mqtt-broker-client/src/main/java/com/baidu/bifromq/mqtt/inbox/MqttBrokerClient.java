@@ -22,23 +22,17 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WritePack;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
-import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteResult;
 import com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil;
-import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
-import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
-import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterables;
 import io.reactivex.rxjava3.core.Observable;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -126,23 +120,14 @@ final class MqttBrokerClient implements IMqttBrokerClient {
         }
 
         @Override
-        public CompletableFuture<Map<MatchInfo, DeliveryResult>> deliver(Iterable<DeliveryPack> packs) {
+        public CompletableFuture<DeliveryReply> deliver(DeliveryRequest request) {
             Preconditions.checkState(!hasStopped.get());
             long reqId = System.nanoTime();
             return ppln.invoke(WriteRequest.newBuilder()
                     .setReqId(reqId)
-                    .addAllPack(Iterables.transform(packs, e -> WritePack.newBuilder()
-                        .setMessagePack(e.messagePack)
-                        .addAllMatchInfo(e.matchInfos)
-                        .build()))
+                    .setRequest(request)
                     .build())
-                .thenApply(writeReply -> writeReply.getResultList().stream()
-                    .collect(Collectors.toMap(WriteResult::getMatchInfo, entry ->
-                        switch (entry.getResult()) {
-                            case OK -> DeliveryResult.OK;
-                            case NO_INBOX -> DeliveryResult.NO_INBOX;
-                            default -> DeliveryResult.FAILED;
-                        })));
+                .thenApply(WriteReply::getReply);
         }
 
         @Override

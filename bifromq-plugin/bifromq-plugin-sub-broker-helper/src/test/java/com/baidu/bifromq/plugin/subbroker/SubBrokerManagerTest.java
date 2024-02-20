@@ -22,7 +22,6 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.List;
-import java.util.Map;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.pf4j.PluginManager;
@@ -72,14 +71,23 @@ public class SubBrokerManagerTest {
         when(subBroker1.id()).thenReturn(0);
         when(subBroker1.open(anyString())).thenReturn(deliverer1);
         when(plugin.getExtensions(ISubBroker.class)).thenReturn(List.of(subBroker1));
+        String tenantId = "tenant";
         SubBrokerManager subBrokerManager = new SubBrokerManager(plugin);
         ISubBroker subBroker = subBrokerManager.get(1);
         IDeliverer deliverer = subBroker.open("Deliverer1");
         TopicMessagePack msgPack = TopicMessagePack.newBuilder().build();
-        MatchInfo subInfo = MatchInfo.newBuilder().build();
-        Iterable<DeliveryPack> pack = List.of(new DeliveryPack(msgPack, List.of(subInfo)));
-        Map<MatchInfo, DeliveryResult> resultMap = deliverer.deliver(pack).join();
-        assertEquals(resultMap.get(subInfo), DeliveryResult.NO_INBOX);
+        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        DeliveryRequest request = DeliveryRequest.newBuilder()
+            .putPackage(tenantId, DeliveryPackage.newBuilder()
+                .addPack(DeliveryPack.newBuilder()
+                    .setMessagePack(msgPack)
+                    .addMatchInfo(matchInfo)
+                    .build())
+                .build())
+            .build();
+        DeliveryReply reply = deliverer.deliver(request).join();
+        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.NO_SUB);
+        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getMatchInfo(), matchInfo);
     }
 
     @Test
