@@ -26,6 +26,10 @@
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-scheduler</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-kv-store-client</artifactId>
         </dependency>
         <dependency>
@@ -34,11 +38,15 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-scheduler</artifactId>
+            <artifactId>bifromq-metrics</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-deliverer</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-retain-gc</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

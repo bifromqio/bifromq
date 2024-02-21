@@ -13,9 +13,16 @@
 
 package com.baidu.bifromq.retain.client;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressRetainBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainMatchCount;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainedBytes;
+
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.retain.RPCBluePrint;
+import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
+import com.baidu.bifromq.retain.rpc.proto.ExpireAllRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
@@ -62,7 +69,8 @@ final class RetainClient implements IRetainClient {
 
     @Override
     public CompletableFuture<MatchReply> match(MatchRequest request) {
-        log.trace("Handling match request: {}", request);
+        ITenantMeter tenantMeter = ITenantMeter.get(request.getTenantId());
+        tenantMeter.recordCount(MqttRetainMatchCount);
         return rpcClient.invoke(request.getTenantId(), null, request, RetainServiceGrpc.getMatchMethod())
             .exceptionally(e -> {
                 log.debug("Failed to match", e);
@@ -76,17 +84,47 @@ final class RetainClient implements IRetainClient {
     @Override
     public CompletableFuture<RetainReply> retain(long reqId, String topic, QoS qos, ByteString payload,
                                                  int expirySeconds, ClientInfo publisher) {
+        ITenantMeter tenantMeter = ITenantMeter.get(publisher.getTenantId());
+        if (!payload.isEmpty()) {
+            tenantMeter.recordSummary(MqttIngressRetainBytes, payload.size());
+        }
+        // TODO: add throttler
         return rpcClient.invoke(publisher.getTenantId(), null, RetainRequest.newBuilder()
-            .setReqId(reqId)
-            .setTopic(topic)
-            .setMessage(Message.newBuilder()
-                .setMessageId(reqId)
-                .setPubQoS(qos)
-                .setPayload(payload)
-                .setTimestamp(HLC.INST.getPhysical())
-                .setExpiryInterval(expirySeconds)
-                .build())
-            .setPublisher(publisher)
-            .build(), RetainServiceGrpc.getRetainMethod());
+                .setReqId(reqId)
+                .setTopic(topic)
+                .setMessage(Message.newBuilder()
+                    .setMessageId(reqId)
+                    .setPubQoS(qos)
+                    .setPayload(payload)
+                    .setTimestamp(HLC.INST.getPhysical())
+                    .setExpiryInterval(expirySeconds)
+                    .build())
+                .setPublisher(publisher)
+                .build(), RetainServiceGrpc.getRetainMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to retain", e);
+                return RetainReply.newBuilder()
+                    .setReqId(reqId)
+                    .setResult(RetainReply.Result.ERROR)
+                    .build();
+            })
+            .thenApply(retainReply -> {
+                if (retainReply.getResult() == RetainReply.Result.RETAINED) {
+                    tenantMeter.recordSummary(MqttRetainedBytes, payload.size());
+                }
+                return retainReply;
+            });
+    }
+
+    @Override
+    public CompletableFuture<ExpireAllReply> expireAll(ExpireAllRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, RetainServiceGrpc.getExpireAllMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to retain", e);
+                return ExpireAllReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(ExpireAllReply.Result.ERROR)
+                    .build();
+            });
     }
 }

@@ -24,11 +24,9 @@ import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
-import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.google.protobuf.ByteString;
 
 public class MessageUtil {
     public static InboxServiceRWCoProcInput buildAttachRequest(long reqId, BatchAttachRequest request) {
@@ -105,30 +103,17 @@ public class MessageUtil {
     public static InboxServiceROCoProcInput buildGCRequest(long reqId,
                                                            String tenantId,
                                                            Integer expirySeconds,
-                                                           ByteString cursor,
-                                                           long now,
-                                                           int limit) {
-        GCRequest.Builder reqBuilder = GCRequest.newBuilder().setLimit(limit).setNow(now);
+                                                           long now) {
+        GCRequest.Builder reqBuilder = GCRequest.newBuilder().setNow(now);
         if (tenantId != null) {
             reqBuilder.setTenantId(tenantId);
         }
         if (expirySeconds != null) {
             reqBuilder.setExpirySeconds(expirySeconds);
         }
-        if (cursor != null) {
-            reqBuilder.setCursor(cursor);
-        }
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
             .setGc(reqBuilder.build())
-            .build();
-    }
-
-
-    public static InboxServiceROCoProcInput buildCollectMetricsRequest(long reqId) {
-        return InboxServiceROCoProcInput.newBuilder()
-            .setReqId(reqId)
-            .setCollectMetrics(CollectMetricsRequest.newBuilder().setReqId(reqId).build())
             .build();
     }
 

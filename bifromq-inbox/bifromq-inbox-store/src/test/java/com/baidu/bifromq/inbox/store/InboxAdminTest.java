@@ -40,7 +40,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void get() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId1 = "inboxId1-" + System.nanoTime();
         String inboxId2 = "inboxId2-" + System.nanoTime();
         BatchGetRequest.Params getParams1 = BatchGetRequest.Params.newBuilder()
@@ -61,7 +61,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void getAfterExpired() {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -95,7 +95,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void createWithLWT() {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
@@ -133,7 +133,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void createWithoutLWT() {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -169,7 +169,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void createOverExisting() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -190,7 +190,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void attachNoInbox() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -210,7 +210,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void attachConflict() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -240,7 +240,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void attachWithoutLWT() {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
@@ -290,7 +290,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void attachWithLWT() {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
@@ -340,7 +340,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void detachNoInbox() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
@@ -358,7 +358,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void detachConflict() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -387,7 +387,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void detach() {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -437,7 +437,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void detachAndDiscardLWT() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -471,7 +471,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void touchNoInbox() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
@@ -488,7 +488,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void touchConflict() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -516,7 +516,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void touch() {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -563,7 +563,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void deleteNoInbox() {
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         BatchDeleteRequest.Params deleteParams = BatchDeleteRequest.Params.newBuilder()
@@ -579,7 +579,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void deleteConflict() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
@@ -606,7 +606,7 @@ public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void delete() {
         long now = 0;
-        String tenantId = "tenantId";
+        String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();

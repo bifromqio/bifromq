@@ -21,5 +21,6 @@ public class RPCBluePrint {
         .serviceDescriptor(RetainServiceGrpc.getServiceDescriptor())
         .methodSemantic(RetainServiceGrpc.getRetainMethod(), BluePrint.WRUnaryMethod.getInstance())
         .methodSemantic(RetainServiceGrpc.getMatchMethod(), BluePrint.WRUnaryMethod.getInstance())
+        .methodSemantic(RetainServiceGrpc.getExpireAllMethod(), BluePrint.WRUnaryMethod.getInstance())
         .build();
 }

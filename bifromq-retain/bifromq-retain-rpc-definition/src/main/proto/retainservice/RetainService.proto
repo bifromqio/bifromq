@@ -12,6 +12,7 @@ package retainservice;
 service RetainService {
   rpc retain (RetainRequest) returns (RetainReply);
   rpc match (MatchRequest) returns (MatchReply);
+  rpc expireAll (ExpireAllRequest) returns (ExpireAllReply);
 }
 
 message RetainRequest {
@@ -25,7 +26,8 @@ message RetainReply {
   enum Result {
     RETAINED = 0;
     CLEARED = 1;
-    ERROR = 2;
+    EXCEED_LIMIT = 2;
+    ERROR = 3;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -41,6 +43,22 @@ message MatchRequest {
 }
 
 message MatchReply {
+  enum Result {
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message ExpireAllRequest{
+  uint64 reqId = 1;
+  string tenantId = 2;
+  optional uint32 expirySeconds = 3;
+  uint64 now = 4;
+}
+
+message ExpireAllReply{
   enum Result {
     OK = 0;
     ERROR = 1;

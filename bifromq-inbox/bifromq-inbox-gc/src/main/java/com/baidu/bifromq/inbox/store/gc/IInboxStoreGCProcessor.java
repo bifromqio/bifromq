@@ -13,19 +13,13 @@
 
 package com.baidu.bifromq.inbox.store.gc;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nullable;
 
-public interface IInboxGCProcessor {
+public interface IInboxStoreGCProcessor {
     enum Result {
         OK, ERROR;
     }
 
-    CompletableFuture<Result> gcRange(long reqId,
-                                      KVRangeId rangeId,
-                                      @Nullable String tenantId,
-                                      @Nullable Integer expirySeconds,
-                                      long now,
-                                      int limit);
+    CompletableFuture<Result> gc(long reqId, @Nullable String tenantId, @Nullable Integer expirySeconds, long now);
 }

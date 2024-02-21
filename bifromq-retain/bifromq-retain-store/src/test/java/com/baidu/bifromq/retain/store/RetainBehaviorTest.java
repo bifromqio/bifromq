@@ -13,42 +13,41 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.type.TopicMessage;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class RetainBehaviorTest extends RetainStoreTest {
+    private String tenantId;
+
+    @BeforeMethod(alwaysRun = true)
+    private void reset() {
+        tenantId = "tenantA-" + System.nanoTime();
+    }
 
     @Test(groups = "integration")
     public void retainFirstMessage() {
-        String tenantId = "tenantId";
         String topic = "/a/b/c";
         TopicMessage message = message(topic, "hello");
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
 
-        RetainResult reply = requestRetain(tenantId, message);
-        assertEquals(reply, RetainResult.RETAINED);
+        RetainResult.Code reply = requestRetain(tenantId, message, 10);
+        assertEquals(reply, RetainResult.Code.RETAINED);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 1);
         assertEquals(matchReply.getOk().getMessages(0), message);
-
-        clearMessage(tenantId, topic);
     }
 
     @Test(groups = "integration")
     public void retainFirstMessageWithZeroMaxRetainedTopics() {
-        String tenantId = "tenantId";
         String topic = "/a/b/c";
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(0);
-        RetainResult reply = requestRetain(tenantId, message(topic, "hello"));
+        RetainResult.Code reply = requestRetain(tenantId, message(topic, "hello"), 0);
 
-        assertEquals(reply, RetainResult.ERROR);
+        assertEquals(reply, RetainResult.Code.EXCEED_LIMIT);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 0);
@@ -56,14 +55,10 @@ public class RetainBehaviorTest extends RetainStoreTest {
 
     @Test(groups = "integration")
     public void retainNewExceedLimit() {
-        String tenantId = "tenantId";
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
-        assertEquals(requestRetain(tenantId, message("/a", "hello")), RetainResult.RETAINED);
-        assertEquals(requestRetain(tenantId, message("/b", "hello")), RetainResult.ERROR);
+        assertEquals(requestRetain(tenantId, message("/a", "hello"), 1), RetainResult.Code.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/b", "hello"), 1), RetainResult.Code.EXCEED_LIMIT);
 
         MatchResult matchReply = requestMatch(tenantId, "/b", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 0);
-
-        clearMessage(tenantId, "/a");
     }
 }

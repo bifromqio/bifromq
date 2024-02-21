@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.metrics.TenantMetric.MqttTrieSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRouteSpaceGauge;
 import static org.awaitility.Awaitility.await;
 
 import io.micrometer.core.instrument.Meter;
@@ -33,7 +33,7 @@ public class StatsTest extends DistWorkerTest {
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(MqttTrieSpaceGauge.metricName)) {
+                    meter.getId().getName().equals(MqttRouteSpaceGauge.metricName)) {
                     return true;
                 }
             }

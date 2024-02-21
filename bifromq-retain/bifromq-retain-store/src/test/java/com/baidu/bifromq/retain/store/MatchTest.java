@@ -14,35 +14,59 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.google.common.collect.Sets.newHashSet;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.type.TopicMessage;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class MatchTest extends RetainStoreTest {
+    private String tenantId;
+
+    @BeforeMethod(alwaysRun = true)
+    private void reset() {
+        tenantId = "tenantA-" + System.nanoTime();
+    }
 
     @Test(groups = "integration")
     public void wildcardTopicFilter() {
-        String tenantId = "tenantA";
         TopicMessage message1 = message("/a/b/c", "hello");
         TopicMessage message2 = message("/a/b/", "hello");
         TopicMessage message3 = message("/c/", "hello");
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
+        TopicMessage message4 = message("a", "hello");
 
-        requestRetain(tenantId, message1);
-        requestRetain(tenantId, message2);
-        requestRetain(tenantId, message3);
+        requestRetain(tenantId, message1, 10);
+        requestRetain(tenantId, message2, 10);
+        requestRetain(tenantId, message3, 10);
+        requestRetain(tenantId, message4, 10);
 
         MatchResult matchReply = requestMatch(tenantId, "#", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 4);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()),
+            newHashSet(message1, message2, message3, message4));
+
+        matchReply = requestMatch(tenantId, "+", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message4));
+
+        matchReply = requestMatch(tenantId, "+/#", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 4);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()),
+            newHashSet(message1, message2, message3, message4));
+
+        matchReply = requestMatch(tenantId, "+/+/#", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 3);
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2, message3));
 
+        matchReply = requestMatch(tenantId, "+/+/+", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message3));
+
         matchReply = requestMatch(tenantId, "/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 3);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2, message3));
+        assertEquals(matchReply.getOk().getMessagesCount(), 4);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()),
+            newHashSet(message1, message2, message3, message4));
 
         matchReply = requestMatch(tenantId, "/c/#", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 1);
@@ -51,7 +75,15 @@ public class MatchTest extends RetainStoreTest {
         matchReply = requestMatch(tenantId, "/a/+", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 0);
 
+        matchReply = requestMatch(tenantId, "/a/#", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+
         matchReply = requestMatch(tenantId, "/a/+/+", 10);
+        assertEquals(matchReply.getOk().getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+
+        matchReply = requestMatch(tenantId, "/a/+/#", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 2);
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
 
@@ -70,28 +102,18 @@ public class MatchTest extends RetainStoreTest {
         matchReply = requestMatch(tenantId, "/a/b/#", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 2);
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
-
-        clearMessage(tenantId, "/a/b/c");
-        clearMessage(tenantId, "/a/b/");
-        clearMessage(tenantId, "/c/");
     }
 
     @Test(groups = "integration")
     public void matchLimit() {
-        String tenantId = "tenantId";
         TopicMessage message1 = message("/a/b/c", "hello");
         TopicMessage message2 = message("/a/b/", "hello");
         TopicMessage message3 = message("/c/", "hello");
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
-        requestRetain(tenantId, message1);
-        requestRetain(tenantId, message2);
-        requestRetain(tenantId, message3);
+        requestRetain(tenantId, message1, 10);
+        requestRetain(tenantId, message2, 10);
+        requestRetain(tenantId, message3, 10);
 
         assertEquals(requestMatch(tenantId, "#", 0).getOk().getMessagesCount(), 0);
         assertEquals(requestMatch(tenantId, "#", 1).getOk().getMessagesCount(), 1);
-
-        clearMessage(tenantId, "/a/b/c");
-        clearMessage(tenantId, "/a/b/");
-        clearMessage(tenantId, "/c/");
     }
 }

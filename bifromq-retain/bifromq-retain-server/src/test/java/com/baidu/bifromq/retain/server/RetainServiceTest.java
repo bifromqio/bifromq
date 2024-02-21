@@ -33,6 +33,7 @@ import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.baidu.bifromq.retain.server.scheduler.IMatchCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.IRetainCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.MatchCallResult;
+import com.baidu.bifromq.retain.store.gc.IRetainStoreGCProcessor;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
@@ -56,6 +57,8 @@ public class RetainServiceTest {
     private String serviceName = "retainService";
     private String methodName = "testMethod";
     private String tenantId = "testTenantId";
+    @Mock
+    IRetainStoreGCProcessor gcProcessor;
     @Mock
     private IMessageDeliverer messageDeliverer;
     @Mock
@@ -81,7 +84,7 @@ public class RetainServiceTest {
             .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .attach();
         closeable = MockitoAnnotations.openMocks(this);
-        service = new RetainService(messageDeliverer, matchCallScheduler, retainCallScheduler);
+        service = new RetainService(gcProcessor, messageDeliverer, matchCallScheduler, retainCallScheduler);
     }
 
     @AfterMethod

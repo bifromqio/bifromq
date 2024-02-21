@@ -14,10 +14,15 @@
 package com.baidu.bifromq.retain.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainMatchedBytes;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
+import com.baidu.bifromq.retain.rpc.proto.ExpireAllRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
@@ -26,22 +31,27 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceGrpc;
 import com.baidu.bifromq.retain.server.scheduler.IMatchCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.IRetainCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.MatchCall;
+import com.baidu.bifromq.retain.store.gc.IRetainStoreGCProcessor;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
+    private final IRetainStoreGCProcessor gcProcessor;
     private final IMessageDeliverer messageDeliverer;
     private final IMatchCallScheduler matchCallScheduler;
     private final IRetainCallScheduler retainCallScheduler;
 
-    RetainService(IMessageDeliverer messageDeliverer,
+    RetainService(IRetainStoreGCProcessor gcProcessor,
+                  IMessageDeliverer messageDeliverer,
                   IMatchCallScheduler matchCallScheduler,
                   IRetainCallScheduler retainCallScheduler) {
+        this.gcProcessor = gcProcessor;
         this.messageDeliverer = messageDeliverer;
         this.matchCallScheduler = matchCallScheduler;
         this.retainCallScheduler = retainCallScheduler;
@@ -70,9 +80,12 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
             .thenCompose(matchCallResult -> {
                 if (matchCallResult.result() == MatchReply.Result.OK) {
                     MatchInfo matchInfo = request.getMatchInfo();
+                    AtomicInteger matchedBytes = new AtomicInteger();
                     List<CompletableFuture<DeliveryResult.Code>> deliveryResults = matchCallResult.retainMessages()
                         .stream()
                         .map(retainedMsg -> {
+                            matchedBytes.addAndGet(
+                                retainedMsg.getTopic().length() + retainedMsg.getMessage().getPayload().size());
                             TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder()
                                 .setTopic(retainedMsg.getTopic())
                                 .addMessage(TopicMessagePack.PublisherPack.newBuilder()
@@ -83,6 +96,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                             return messageDeliverer.schedule(new DeliveryCall(request.getTenantId(), matchInfo,
                                 request.getBrokerId(), request.getDelivererKey(), topicMessagePack));
                         }).toList();
+                    ITenantMeter.get(request.getTenantId()).recordSummary(MqttRetainMatchedBytes, matchedBytes.get());
                     return CompletableFuture.allOf(deliveryResults.toArray(CompletableFuture[]::new))
                         .thenApply(v -> deliveryResults.stream().map(CompletableFuture::join))
                         .thenApply(resultList -> {
@@ -110,6 +124,26 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                     .setReqId(request.getReqId())
                     .setResult(MatchReply.Result.ERROR)
                     .build();
+            }), responseObserver);
+    }
+
+    @Override
+    public void expireAll(ExpireAllRequest request, StreamObserver<ExpireAllReply> responseObserver) {
+        response(tenantId -> gcProcessor.gc(request.getReqId(), request.getTenantId(),
+                request.hasExpirySeconds() ? request.getExpirySeconds() : null,
+                HLC.INST.getPhysical())
+            .thenApply(result -> {
+                if (result == IRetainStoreGCProcessor.Result.OK) {
+                    return ExpireAllReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(ExpireAllReply.Result.OK)
+                        .build();
+                } else {
+                    return ExpireAllReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(ExpireAllReply.Result.ERROR)
+                        .build();
+                }
             }), responseObserver);
     }
 }

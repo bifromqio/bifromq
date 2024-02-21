@@ -13,15 +13,14 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import static org.awaitility.Awaitility.await;
+import static org.testng.Assert.assertNotSame;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
-import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.type.ClientInfo;
+import io.micrometer.core.instrument.Gauge;
 import org.testng.annotations.Test;
 
 public class LoadSubStatsTest extends InboxStoreTest {
@@ -51,16 +50,24 @@ public class LoadSubStatsTest extends InboxStoreTest {
             .setNow(now)
             .build();
         requestSub(subParams);
+        Gauge subCountGauge = getSubCountGauge(tenantId);
+        Gauge pSessionGauge = getPSessionGauge(tenantId);
+        Gauge pSessionSpaceGauge = getPSessionSpaceGauge(tenantId);
+        await().until(() -> subCountGauge.value() == 1);
+        await().until(() -> pSessionGauge.value() == 1);
+        await().until(() -> pSessionSpaceGauge.value() > 0);
 
         restartStoreServer();
 
-        long reqId = System.nanoTime();
         storeClient.join();
-        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
-            .setReqId(reqId)
-            .build());
-        assertEquals(reply.getReqId(), reqId);
-        assertEquals(reply.getSubCountsMap().get(tenantId), 1);
-        assertTrue(reply.getSubUsedSpacesMap().get(tenantId) > 0);
+        Gauge newSubCountGauge = getSubCountGauge(tenantId);
+        Gauge newPSessionGauge = getPSessionGauge(tenantId);
+        Gauge newPSessionSpaceGauge = getPSessionSpaceGauge(tenantId);
+        assertNotSame(subCountGauge, newSubCountGauge);
+        assertNotSame(pSessionGauge, newPSessionGauge);
+        assertNotSame(pSessionSpaceGauge, newPSessionSpaceGauge);
+        await().until(() -> newSubCountGauge.value() == 1);
+        await().until(() -> newPSessionGauge.value() == 1);
+        await().until(() -> newPSessionSpaceGauge.value() > 0);
     }
 }

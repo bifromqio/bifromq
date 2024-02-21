@@ -13,34 +13,38 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static com.baidu.bifromq.metrics.TenantMetric.RetainUsedSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainSpaceGauge;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.type.TopicMessage;
 import io.micrometer.core.instrument.Meter;
 import lombok.SneakyThrows;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class StatsTest extends RetainStoreTest {
+    private String tenantId;
+
+    @BeforeMethod(alwaysRun = true)
+    private void reset() {
+        tenantId = "tenantA-" + System.nanoTime();
+    }
+
     @SneakyThrows
     @Test(groups = "integration")
-    public void reportRangeMetrics() {
-        String tenantId = "tenantId";
+    public void reportTenantMetrics() {
         String topic = "/a/b/c";
         TopicMessage message = message(topic, "hello");
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
 
-        RetainResult reply = requestRetain(tenantId, message);
-        assertEquals(reply, RetainResult.RETAINED);
+        RetainResult.Code reply = requestRetain(tenantId, message, 10);
+        assertEquals(reply, RetainResult.Code.RETAINED);
 
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(RetainUsedSpaceGauge.metricName)) {
+                    meter.getId().getName().equals(MqttRetainSpaceGauge.metricName)) {
                     return true;
                 }
             }

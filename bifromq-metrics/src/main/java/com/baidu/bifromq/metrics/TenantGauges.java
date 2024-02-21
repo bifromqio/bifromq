@@ -25,26 +25,32 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 
-public class TenantGauges {
-    private static final ConcurrentMap<String, Map<TenantMetric, Gauge>> TENANT_GAUGES = new ConcurrentHashMap<>();
+class TenantGauges {
+    private record TenantMetricKey(TenantMetric gaugeMetric, Tags tags) {
+    }
 
-    static void gauging(String tenantId, TenantMetric gaugeMetric, Supplier<Number> supplier) {
+    private static final ConcurrentMap<String, Map<TenantMetricKey, Gauge>> TENANT_GAUGES = new ConcurrentHashMap<>();
+
+    static void gauging(String tenantId, TenantMetric gaugeMetric, Supplier<Number> supplier, String... tagValuePair) {
         assert gaugeMetric.meterType == Meter.Type.GAUGE;
         TENANT_GAUGES.compute(tenantId, (k, v) -> {
             if (v == null) {
                 v = new HashMap<>();
             }
-            v.put(gaugeMetric, Gauge.builder(gaugeMetric.metricName, supplier)
-                .tags(Tags.of(TAG_TENANT_ID, tenantId))
-                .register(Metrics.globalRegistry));
+            Tags tags = Tags.of(tagValuePair);
+            v.computeIfAbsent(new TenantMetricKey(gaugeMetric, tags),
+                tenantMetricKey -> Gauge.builder(gaugeMetric.metricName, supplier)
+                    .tags(tags.and(TAG_TENANT_ID, tenantId))
+                    .register(Metrics.globalRegistry));
             return v;
         });
     }
 
-    static void stopGauging(String tenantId, TenantMetric gaugeMetric) {
+    static void stopGauging(String tenantId, TenantMetric gaugeMetric, String... tagValuePair) {
         assert gaugeMetric.meterType == Meter.Type.GAUGE;
         TENANT_GAUGES.computeIfPresent(tenantId, (k, gaugeMap) -> {
-            Gauge gauge = gaugeMap.remove(gaugeMetric);
+            Tags tags = Tags.of(tagValuePair);
+            Gauge gauge = gaugeMap.remove(new TenantMetricKey(gaugeMetric, tags));
             if (gauge != null) {
                 Metrics.globalRegistry.remove(gauge);
             }

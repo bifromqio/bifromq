@@ -278,11 +278,9 @@ message BatchCommitReply{
 }
 
 message GCRequest {
-  optional string tenantId = 2;
-  optional bytes cursor = 3;
-  optional uint32 expirySeconds = 4;
-  uint32 limit = 5;
-  uint64 now = 6;
+  optional string tenantId = 1;
+  optional uint32 expirySeconds = 2;
+  uint64 now = 3;
 }
 
 message GCReply {
@@ -299,7 +297,6 @@ message GCReply {
   }
   Code code = 1;
   repeated GCCandidate candidate = 2;
-  optional bytes cursor = 3;
 }
 
 message CollectMetricsRequest{
@@ -348,8 +345,7 @@ message InboxServiceROCoProcInput{
   oneof input{
     BatchGetRequest batchGet = 2;
     BatchFetchRequest batchFetch = 3;
-    CollectMetricsRequest collectMetrics = 4;
-    GCRequest gc = 5;
+    GCRequest gc = 4;
   }
 }
 
@@ -358,7 +354,6 @@ message InboxServiceROCoProcOutput{
   oneof output{
     BatchGetReply batchGet = 2;
     BatchFetchReply batchFetch = 3;
-    CollectMetricsReply collectedMetrics = 4;
-    GCReply gc = 5;
+    GCReply gc = 4;
   }
 }

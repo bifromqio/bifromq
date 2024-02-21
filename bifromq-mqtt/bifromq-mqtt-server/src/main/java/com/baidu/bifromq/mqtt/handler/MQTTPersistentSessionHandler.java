@@ -104,6 +104,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         this.sessionExpirySeconds = sessionExpirySeconds;
     }
 
+    private int estBaseMemSize() {
+        return 72; // base size from JOL
+    }
+
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
@@ -155,6 +159,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     }
                 }, ctx.executor()));
         }
+        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), estBaseMemSize());
     }
 
     @Override
@@ -164,6 +169,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         if (inboxReader != null) {
             inboxReader.close();
         }
+        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -estBaseMemSize());
         ctx.fireChannelInactive();
     }
 

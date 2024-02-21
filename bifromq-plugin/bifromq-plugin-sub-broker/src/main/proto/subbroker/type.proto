@@ -1,5 +1,4 @@
 syntax = "proto3";
-import "commontype/QoS.proto";
 import "commontype/MatchInfo.proto";
 import "commontype/TopicMessage.proto";
 option java_multiple_files = true;

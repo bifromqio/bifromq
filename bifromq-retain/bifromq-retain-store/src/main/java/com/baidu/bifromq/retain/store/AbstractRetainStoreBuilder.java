@@ -15,16 +15,10 @@ package com.baidu.bifromq.retain.store;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -33,31 +27,14 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
     boolean bootstrap;
     IAgentHost agentHost;
     ICRDTService crdtService;
-    ISettingProvider settingProvider;
     IBaseKVStoreClient storeClient;
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     Executor queryExecutor;
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
-    Duration statsInterval = Duration.ofSeconds(30);
+    Duration loadEstimateWindow = Duration.ofSeconds(5);
     Duration gcInterval = Duration.ofMinutes(60);
-    Clock clock = new Clock() {
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return Instant.ofEpochMilli(HLC.INST.getPhysical());
-        }
-    };
 
     @SuppressWarnings("unchecked")
     private T thisT() {
@@ -82,11 +59,6 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
 
     public T crdtService(ICRDTService crdtService) {
         this.crdtService = crdtService;
-        return thisT();
-    }
-
-    public T settingProvider(ISettingProvider settingProvider) {
-        this.settingProvider = settingProvider;
         return thisT();
     }
 
@@ -120,18 +92,13 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
         return thisT();
     }
 
-    public T statsInterval(Duration statsInterval) {
-        this.statsInterval = statsInterval;
+    public T loadEstimateWindow(Duration window) {
+        this.loadEstimateWindow = window;
         return thisT();
     }
 
     public T gcInterval(Duration gcInterval) {
         this.gcInterval = gcInterval;
-        return thisT();
-    }
-
-    public T clock(Clock clock) {
-        this.clock = clock;
         return thisT();
     }
 }

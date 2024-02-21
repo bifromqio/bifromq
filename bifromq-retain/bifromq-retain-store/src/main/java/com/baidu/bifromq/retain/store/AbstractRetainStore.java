@@ -13,36 +13,20 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
-import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.RetainUsedSpaceGauge;
-import static com.baidu.bifromq.retain.utils.MessageUtil.buildCollectMetricsRequest;
-
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.IConnectable;
-import com.baidu.bifromq.retain.rpc.proto.CollectMetricsReply;
-import com.baidu.bifromq.retain.utils.MessageUtil;
+import com.baidu.bifromq.retain.store.gc.IRetainStoreGCProcessor;
+import com.baidu.bifromq.retain.store.gc.RetainStoreGCProcessor;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -62,19 +46,16 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     private final AsyncRunner jobRunner;
     private final ScheduledExecutorService jobScheduler;
     private final boolean jobExecutorOwner;
-    private final Duration statsInterval;
     private final Duration gcInterval;
-    private final Map<String, Long> tenantRetainSpaceSize = new ConcurrentHashMap<>();
     private volatile CompletableFuture<Void> gcJob;
-    private volatile CompletableFuture<Void> statsJob;
     protected final RetainStoreCoProcFactory coProcFactory;
+    private IRetainStoreGCProcessor gcProcessor;
 
     public AbstractRetainStore(T builder) {
         this.clusterId = builder.clusterId;
         this.storeClient = builder.storeClient;
         this.gcInterval = builder.gcInterval;
-        this.statsInterval = builder.statsInterval;
-        coProcFactory = new RetainStoreCoProcFactory(builder.settingProvider, builder.clock);
+        coProcFactory = new RetainStoreCoProcFactory(builder.loadEstimateWindow);
         rangeBalanceController =
             new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
@@ -100,16 +81,14 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             log.info("Starting retain store");
             storeServer().start();
             rangeBalanceController.start(id());
+            gcProcessor = new RetainStoreGCProcessor(storeClient, id());
             status.compareAndSet(Status.STARTING, Status.STARTED);
             storeClient
                 .connState()
                 // observe the first READY state
                 .filter(connState -> connState == IConnectable.ConnState.READY)
                 .takeUntil(connState -> connState == IConnectable.ConnState.READY)
-                .doOnComplete(() -> {
-                    scheduleGC();
-                    scheduleStats();
-                })
+                .doOnComplete(this::scheduleGC)
                 .subscribe();
             log.info("Retain store started");
         }
@@ -121,9 +100,6 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             jobRunner.awaitDone();
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.join();
-            }
-            if (statsJob != null && !statsJob.isDone()) {
-                statsJob.join();
             }
             rangeBalanceController.stop();
             storeServer().stop();
@@ -145,107 +121,12 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             if (status.get() != Status.STARTED) {
                 return;
             }
-            Iterator<KVRangeSetting> itr = storeClient.findByBoundary(FULL_BOUNDARY)
-                .stream().filter(k -> k.leader.equals(id())).iterator();
-            List<CompletableFuture<?>> gcFutures = new ArrayList<>();
-            while (itr.hasNext()) {
-                KVRangeSetting leaderReplica = itr.next();
-                gcFutures.add(gcRange(leaderReplica));
-            }
-            gcJob = CompletableFuture.allOf(gcFutures.toArray(new CompletableFuture[0]))
+            long reqId = HLC.INST.getPhysical();
+            gcJob = gcProcessor.gc(reqId, null, null, HLC.INST.getPhysical())
+                .thenAccept(v -> {
+                    log.debug("Retain Store GC succeed: id={}", id());
+                })
                 .whenComplete((v, e) -> scheduleGC());
         });
-    }
-
-    private CompletableFuture<Void> gcRange(KVRangeSetting leaderReplica) {
-        long reqId = System.currentTimeMillis();
-        return storeClient.execute(leaderReplica.leader, KVRangeRWRequest.newBuilder()
-                .setReqId(reqId)
-                .setKvRangeId(leaderReplica.id)
-                .setVer(leaderReplica.ver)
-                .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(MessageUtil.buildGCRequest(reqId)).build())
-                .build())
-            .thenAccept(reply -> log.debug("Range gc succeed: serverId={}, rangeId={}, ver={}",
-                leaderReplica.leader, leaderReplica.id, leaderReplica.ver))
-            .exceptionally(e -> {
-                log.error("Range gc failed: serverId={}, rangeId={}, ver={}",
-                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-                return null;
-            });
-    }
-
-    private void scheduleStats() {
-        jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
-    }
-
-    private void collectMetrics() {
-        jobRunner.add(() -> {
-            if (status.get() != Status.STARTED) {
-                return;
-            }
-            List<KVRangeSetting> settings = storeClient.findByBoundary(FULL_BOUNDARY);
-            Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
-            List<CompletableFuture<CollectMetricsReply>> statsFutures = new ArrayList<>();
-            while (itr.hasNext()) {
-                KVRangeSetting leaderReplica = itr.next();
-                statsFutures.add(collectRangeMetrics(leaderReplica));
-            }
-            statsJob = CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
-                .whenComplete((v, e) -> {
-                    if (e == null) {
-                        Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
-                            .reduce(new HashMap<>(), (result, item) -> {
-                                item.forEach((tenantId, usedSpace) -> result.compute(tenantId, (k, read) -> {
-                                    if (read == null) {
-                                        read = 0L;
-                                    }
-                                    read += usedSpace;
-                                    return read;
-                                }));
-                                return result;
-                            });
-                        record(usedSpaceMap);
-                    }
-                    scheduleStats();
-                });
-        });
-    }
-
-    private void record(Map<String, Long> sizeMap) {
-        for (String tenantId : sizeMap.keySet()) {
-            boolean newGauging = !tenantRetainSpaceSize.containsKey(tenantId);
-            tenantRetainSpaceSize.put(tenantId, sizeMap.get(tenantId));
-            if (newGauging) {
-                gauging(tenantId, RetainUsedSpaceGauge, () -> tenantRetainSpaceSize.getOrDefault(tenantId, 0L));
-            }
-        }
-        for (String tenantId : tenantRetainSpaceSize.keySet()) {
-            if (!sizeMap.containsKey(tenantId)) {
-                stopGauging(tenantId, RetainUsedSpaceGauge);
-                tenantRetainSpaceSize.remove(tenantId);
-            }
-        }
-    }
-
-    private CompletableFuture<CollectMetricsReply> collectRangeMetrics(KVRangeSetting leaderReplica) {
-        long reqId = System.currentTimeMillis();
-        return storeClient.query(leaderReplica.leader, KVRangeRORequest.newBuilder()
-                .setReqId(reqId)
-                .setKvRangeId(leaderReplica.id)
-                .setVer(leaderReplica.ver)
-                .setRoCoProc(ROCoProcInput.newBuilder()
-                    .setRetainService(buildCollectMetricsRequest(reqId))
-                    .build())
-                .build())
-            .thenApply(reply -> {
-                log.debug("Range metrics collected: serverId={}, rangeId={}, ver={}",
-                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-                return reply.getRoCoProcResult().getRetainService().getCollectMetrics();
-            })
-            .exceptionally(e -> {
-                log.error("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",
-                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-                return CollectMetricsReply.newBuilder().setReqId(reqId).build();
-            });
     }
 }

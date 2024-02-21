@@ -40,9 +40,7 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
     Duration loadEstimateWindow = Duration.ofSeconds(5);
-    Duration statsInterval = Duration.ofSeconds(30);
     Duration gcInterval = Duration.ofMinutes(5);
-    Duration purgeDelay = Duration.ofMinutes(30);
 
     @SuppressWarnings("unchecked")
     private T thisT() {
@@ -119,18 +117,8 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
         return thisT();
     }
 
-    public T statsInterval(Duration statsInterval) {
-        this.statsInterval = statsInterval;
-        return thisT();
-    }
-
     public T gcInterval(Duration gcInterval) {
         this.gcInterval = gcInterval;
-        return thisT();
-    }
-
-    public T purgeDelay(Duration purgeDelay) {
-        this.purgeDelay = purgeDelay;
         return thisT();
     }
 }

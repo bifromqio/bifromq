@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.retain.rpc.util;
+package com.baidu.bifromq.retain.utils;
 
 import static com.baidu.bifromq.retain.utils.TopicUtil.match;
 import static com.baidu.bifromq.retain.utils.TopicUtil.parse;

@@ -68,7 +68,12 @@ public enum BifroMQSysProp {
     INBOX_STORE_RECOVERY_TIMEOUT_MILLIS("inbox_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
     MQTT_DELIVERERS_PER_SERVER("mqtt_deliverers_per_server",
         EnvProvider.INSTANCE.availableProcessors(), IntegerParser.POSITIVE),
+    RETAIN_STORE_RANGE_SPLIT_MAX_CPU_USAGE("retain_store_range_split_max_cpu_usage", 0.8,
+        DoubleParser.from(0.0, 1.0, true)),
+    RETAIN_STORE_RANGE_SPLIT_IO_NANOS_LIMIT("retain_store_range_split_io_nanos_limit", 30_000L, LongParser.POSITIVE),
+    RETAIN_STORE_RANGE_SPLIT_MAX_IO_DENSITY("retain_store_range_split_max_io_density", 100, IntegerParser.POSITIVE),
     RETAIN_STORE_RANGE_VOTER_COUNT("retain_store_range_voter_count", 3, IntegerParser.POSITIVE),
+    RETAIN_STORE_LOAD_EST_WINDOW_SECONDS("retain_store_load_estimation_window_seconds", 5L, LongParser.POSITIVE),
     RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS("retain_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE);
 
     public final String propKey;

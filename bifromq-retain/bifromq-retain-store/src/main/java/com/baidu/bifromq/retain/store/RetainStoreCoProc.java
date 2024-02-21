@@ -14,10 +14,11 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainedTopicLimit;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainNumGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainSpaceGauge;
 import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantId;
+import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantNS;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.retain.utils.TopicUtil.isWildcardTopicFilter;
 import static java.util.Collections.emptyList;
@@ -33,21 +34,20 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
-import com.baidu.bifromq.retain.rpc.proto.CollectMetricsReply;
-import com.baidu.bifromq.retain.rpc.proto.CollectMetricsRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchError;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.MatchResultPack;
 import com.baidu.bifromq.retain.rpc.proto.Matched;
+import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
-import com.baidu.bifromq.retain.rpc.proto.RetainResultPack;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
@@ -55,16 +55,19 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcOutput;
 import com.baidu.bifromq.retain.rpc.proto.RetainSetMetadata;
 import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.retain.utils.TopicUtil;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
-import java.time.Clock;
+import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -72,16 +75,16 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class RetainStoreCoProc implements IKVRangeCoProc {
     private final Supplier<IKVReader> rangeReaderProvider;
-    private final ISettingProvider settingProvider;
-    private final Clock clock;
+    private final Map<String, RetainSetMetadata> metadataMap = new ConcurrentHashMap<>();
+    private final String[] tags;
 
-    RetainStoreCoProc(KVRangeId id,
-                      Supplier<IKVReader> rangeReaderProvider,
-                      ISettingProvider settingProvider,
-                      Clock clock) {
+    RetainStoreCoProc(String clusterId,
+                      String storeId,
+                      KVRangeId id,
+                      Supplier<IKVReader> rangeReaderProvider) {
+        this.tags = new String[] {"clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)};
         this.rangeReaderProvider = rangeReaderProvider;
-        this.settingProvider = settingProvider;
-        this.clock = clock;
+        loadMetadata();
     }
 
     @Override
@@ -92,12 +95,6 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 .thenApply(v -> ROCoProcOutput.newBuilder()
                     .setRetainService(RetainServiceROCoProcOutput.newBuilder()
                         .setBatchMatch(v).build()).build());
-            case COLLECTMETRICS -> CompletableFuture.completedFuture(
-                ROCoProcOutput.newBuilder()
-                    .setRetainService(RetainServiceROCoProcOutput.newBuilder()
-                        .setCollectMetrics(collectMetrics(coProcInput.getCollectMetrics(), reader))
-                        .build())
-                    .build());
             default -> {
                 log.error("Unknown co proc type {}", coProcInput.getTypeCase());
                 yield CompletableFuture.failedFuture(
@@ -110,23 +107,39 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     @Override
     public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
         RetainServiceRWCoProcInput coProcInput = input.getRetainService();
-        final RWCoProcOutput output = switch (coProcInput.getTypeCase()) {
-            case BATCHRETAIN -> RWCoProcOutput.newBuilder().setRetainService(RetainServiceRWCoProcOutput.newBuilder()
-                    .setBatchRetain(batchRetain(coProcInput.getBatchRetain(), reader, writer)).build())
-                .build();
-            case GC -> RWCoProcOutput.newBuilder().setRetainService(RetainServiceRWCoProcOutput.newBuilder()
-                .setGc(gc(coProcInput.getGc(), reader, writer)).build()).build();
-            default -> {
-                log.error("Unknown co proc type {}", coProcInput.getTypeCase());
-                throw new IllegalStateException("Unknown co proc type " + coProcInput.getTypeCase());
+        RetainServiceRWCoProcOutput.Builder outputBuilder = RetainServiceRWCoProcOutput.newBuilder();
+        AtomicReference<Runnable> afterMutate = new AtomicReference<>();
+        switch (coProcInput.getTypeCase()) {
+            case BATCHRETAIN -> {
+                BatchRetainReply.Builder replyBuilder = BatchRetainReply.newBuilder();
+                afterMutate.set(batchRetain(coProcInput.getBatchRetain(), replyBuilder, reader, writer));
+                outputBuilder.setBatchRetain(replyBuilder);
             }
+            case GC -> {
+                GCReply.Builder replyBuilder = GCReply.newBuilder();
+                afterMutate.set(gc(coProcInput.getGc(), replyBuilder, reader, writer));
+                outputBuilder.setGc(replyBuilder);
+            }
+        }
+        RWCoProcOutput output = RWCoProcOutput.newBuilder().setRetainService(outputBuilder.build()).build();
+        return () -> {
+            afterMutate.get().run();
+            return output;
         };
-        return () -> output;
+    }
+
+    @Override
+    public void reset(Boundary boundary) {
+        clearMetrics();
+        loadMetadata();
     }
 
     @Override
     public void close() {
-
+        metadataMap.keySet().forEach(tenantId -> {
+            ITenantMeter.stopGauging(tenantId, MqttRetainNumGauge, tags);
+            ITenantMeter.stopGauging(tenantId, MqttRetainSpaceGauge, tags);
+        });
     }
 
     private CompletableFuture<BatchMatchReply> batchMatch(BatchMatchRequest request, IKVReader reader) {
@@ -137,7 +150,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 MatchResult.Builder resultBuilder = MatchResult.newBuilder();
                 try {
                     resultBuilder.setOk(Matched.newBuilder()
-                        .addAllMessages(match(tenantNS(tenantId), topicFilter, limit, reader)));
+                        .addAllMessages(match(tenantNS(tenantId), topicFilter, limit, matchParams.getNow(), reader)));
                 } catch (Throwable e) {
                     resultBuilder.setError(MatchError.getDefaultInstance());
                 }
@@ -151,6 +164,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     private List<TopicMessage> match(ByteString tenantNS,
                                      String topicFilter,
                                      int limit,
+                                     long now,
                                      IKVReader reader) throws Exception {
         if (limit == 0) {
             // TODO: report event: nothing to match
@@ -170,7 +184,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             Optional<ByteString> val = reader.get(KeyUtil.retainKey(tenantNS, topicFilter));
             if (val.isPresent()) {
                 TopicMessage message = TopicMessage.parseFrom(val.get());
-                if (expireAt(message.getMessage()) > clock.millis()) {
+                if (expireAt(message.getMessage()) > now) {
                     return singletonList(message);
                 }
             }
@@ -180,248 +194,342 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         List<String> matchLevels = TopicUtil.parse(topicFilter, false);
         List<TopicMessage> messages = new LinkedList<>();
         itr.seek(KeyUtil.retainKeyPrefix(tenantNS, matchLevels));
+        out:
         while (itr.isValid() && compare(itr.key(), range.getEndKey()) < 0 && messages.size() < limit) {
             List<String> topicLevels = KeyUtil.parseTopic(itr.key());
-            if (TopicUtil.match(topicLevels, matchLevels)) {
-                TopicMessage message = TopicMessage.parseFrom(itr.value());
-                if (expireAt(message.getMessage()) > clock.millis()) {
-                    messages.add(message);
+            switch (RetainMatcher.match(topicLevels, matchLevels)) {
+                case MATCHED_AND_CONTINUE -> {
+                    TopicMessage message = TopicMessage.parseFrom(itr.value());
+                    if (expireAt(message.getMessage()) > now) {
+                        messages.add(message);
+                    }
+                    itr.next();
+                }
+                case MATCHED_AND_STOP -> {
+                    TopicMessage message = TopicMessage.parseFrom(itr.value());
+                    if (expireAt(message.getMessage()) > now) {
+                        messages.add(message);
+                    }
+                    break out;
+                }
+                case MISMATCH_AND_CONTINUE -> itr.next();
+                case MISMATCH_AND_STOP -> {
+                    break out;
                 }
             }
-            itr.next();
+//            // TODO: optimize single level wildcard match to stop early
+//            if (TopicUtil.match(topicLevels, matchLevels)) {
+//                TopicMessage message = TopicMessage.parseFrom(itr.value());
+//                if (expireAt(message.getMessage()) > now) {
+//                    messages.add(message);
+//                }
+//            }
+//            itr.next();
         }
         return messages;
     }
 
-    private BatchRetainReply batchRetain(BatchRetainRequest request, IKVReader reader, IKVWriter writer) {
-        BatchRetainReply.Builder replyBuilder =
-            BatchRetainReply.newBuilder().setReqId(request.getReqId());
-        request.getRetainMessagePackMap().forEach((tenantId, retainMsgPack) -> {
-            int maxRetainTopics = settingProvider.provide(RetainedTopicLimit, tenantId);
-            RetainResultPack.Builder resultBuilder = RetainResultPack.newBuilder();
-            retainMsgPack.getTopicMessagesMap().forEach((topic, retainMsg) -> {
-                resultBuilder.putResults(topic, retain(tenantId, topic, retainMsg.getMessage(),
-                    retainMsg.getPublisher(), maxRetainTopics, reader, writer));
-            });
-            replyBuilder.putResults(tenantId, resultBuilder.build());
+    private Runnable batchRetain(BatchRetainRequest request,
+                                 BatchRetainReply.Builder replyBuilder,
+                                 IKVReader reader,
+                                 IKVWriter writer) {
+        replyBuilder.setReqId(request.getReqId());
+        Map<String, RetainSetMetadata> toBeCached = new HashMap<>();
+        request.getParamsMap().forEach((tenantId, retainParam) -> {
+            RetainSetMetadata.Builder metadataBuilder = getMetadata(tenantId)
+                .map(RetainSetMetadata::toBuilder)
+                .orElse(RetainSetMetadata.newBuilder().setEstExpire(Long.MAX_VALUE));
+            Map<String, RetainResult.Code> results = retain(tenantId,
+                retainParam.getTopicMessagesMap(),
+                retainParam.getMaxRetainTopicCount(),
+                retainParam.getNow(),
+                metadataBuilder,
+                reader, writer);
+            replyBuilder.putResults(tenantId, RetainResult.newBuilder()
+                .putAllResults(results)
+                .build());
+            if (metadataBuilder.getCount() > 0) {
+                writer.put(tenantNS(tenantId), metadataBuilder.build().toByteString());
+            } else {
+                writer.delete(tenantNS(tenantId));
+            }
+            toBeCached.put(tenantId, metadataBuilder.build());
         });
-        return replyBuilder.build();
+        return () -> {
+            toBeCached.forEach(this::cacheMetadata);
+        };
     }
 
-    private RetainResult retain(String tenantId,
-                                String topic,
-                                Message message,
-                                ClientInfo publisher,
-                                int maxRetainTopics,
-                                IKVReader reader,
-                                IKVWriter writer) {
+    private Map<String, RetainResult.Code> retain(String tenantId,
+                                                  Map<String, RetainMessage> retainMessages,
+                                                  int maxRetainTopics,
+                                                  long now,
+                                                  RetainSetMetadata.Builder metadataBuilder,
+                                                  IKVReader reader,
+                                                  IKVWriter writer) {
+        Map<String, RetainResult.Code> results = new HashMap<>();
+        for (Map.Entry<String, RetainMessage> entry : retainMessages.entrySet()) {
+            String topic = entry.getKey();
+            RetainMessage retainMessage = entry.getValue();
+            RetainResult.Code result =
+                doRetain(tenantId, topic, retainMessage, maxRetainTopics, now, metadataBuilder, reader, writer);
+            results.put(topic, result);
+        }
+        return results;
+    }
+
+    private RetainResult.Code doRetain(String tenantId,
+                                       String topic,
+                                       RetainMessage retainMessage,
+                                       int maxRetainTopics,
+                                       long now,
+                                       RetainSetMetadata.Builder metadataBuilder,
+                                       IKVReader reader,
+                                       IKVWriter writer) {
         try {
-            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
-            Optional<ByteString> metaBytes = reader.get(tenantNS);
             TopicMessage topicMessage = TopicMessage.newBuilder()
                 .setTopic(topic)
-                .setMessage(message)
-                .setPublisher(publisher)
+                .setMessage(retainMessage.getMessage())
+                .setPublisher(retainMessage.getPublisher())
                 .build();
+            ByteString tenantNS = KeyUtil.tenantNS(tenantId);
             ByteString retainKey = KeyUtil.retainKey(tenantNS, topicMessage.getTopic());
-            long now = clock.millis();
             if (expireAt(topicMessage.getMessage()) <= now) {
                 // already expired
-                return RetainResult.ERROR;
+                return RetainResult.Code.ERROR;
             }
-            if (metaBytes.isEmpty()) {
-                if (maxRetainTopics > 0 && !topicMessage.getMessage().getPayload().isEmpty()) {
-                    // this is the first message to be retained
-                    RetainSetMetadata metadata = RetainSetMetadata.newBuilder()
-                        .setCount(1)
-                        .setEstExpire(expireAt(topicMessage.getMessage()))
-                        .build();
-                    writer.put(tenantNS, metadata.toByteString());
-                    writer.put(retainKey, topicMessage.toByteString());
-                    return RetainResult.RETAINED;
-                } else {
-                    if (topicMessage.getMessage().getPayload().isEmpty()) {
-                        return RetainResult.CLEARED;
-                    } else {
-                        return RetainResult.ERROR;
-                    }
-                }
-            } else {
-                RetainSetMetadata metadata = RetainSetMetadata.parseFrom(metaBytes.get());
-                Optional<ByteString> val = reader.get(retainKey);
-                if (topicMessage.getMessage().getPayload().isEmpty()) {
-                    // delete existing retained
-                    if (val.isPresent()) {
-                        TopicMessage existing = TopicMessage.parseFrom(val.get());
-                        if (expireAt(existing.getMessage()) <= now) {
-                            // the existing has already expired
-                            metadata = gc(now, tenantNS, metadata, reader, writer);
-                            if (metadata.getCount() > 0) {
-                                writer.put(tenantNS, metadata.toByteString());
-                            }
-                        } else {
-                            writer.delete(retainKey);
-                            metadata = metadata.toBuilder().setCount(metadata.getCount() - 1).build();
-                            if (metadata.getCount() > 0) {
-                                writer.put(tenantNS, metadata.toByteString());
-                            } else {
-                                // last retained message has been removed, no metadata needed
-                                writer.delete(tenantNS);
-                            }
-                        }
-
-                    }
-                    return RetainResult.CLEARED;
-                }
-                if (val.isEmpty()) {
-                    // retain new message
-                    if (metadata.getCount() >= maxRetainTopics) {
-                        if (metadata.getEstExpire() <= now) {
-                            // try to make some room via gc
-                            metadata = gc(now, tenantNS, metadata, reader, writer);
-                            if (metadata.getCount() < maxRetainTopics) {
-                                metadata = metadata.toBuilder()
-                                    .setEstExpire(
-                                        Math.min(expireAt(topicMessage.getMessage()), metadata.getEstExpire()))
-                                    .setCount(metadata.getCount() + 1).build();
-                                writer.put(retainKey, topicMessage.toByteString());
-                                writer.put(tenantNS, metadata.toByteString());
-                                return RetainResult.RETAINED;
-                            } else {
-                                // still no enough room
-                                writer.put(tenantNS, metadata.toByteString());
-                                return RetainResult.ERROR;
-                            }
-                        } else {
-                            // no enough room
-                            // TODO: report event: exceed limit
-                            return RetainResult.ERROR;
-                        }
-                    } else {
-                        metadata = metadata.toBuilder()
-                            .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadata.getEstExpire()))
-                            .setCount(metadata.getCount() + 1).build();
-                        writer.put(retainKey, topicMessage.toByteString());
-                        writer.put(tenantNS, metadata.toByteString());
-                        return RetainResult.RETAINED;
-                    }
-                } else {
-                    // replace existing
+            Optional<ByteString> val = reader.get(retainKey);
+            if (topicMessage.getMessage().getPayload().isEmpty()) {
+                // delete existing retained
+                if (val.isPresent()) {
                     TopicMessage existing = TopicMessage.parseFrom(val.get());
-                    if (expireAt(existing.getMessage()) <= now &&
-                        metadata.getCount() >= maxRetainTopics) {
-                        metadata = gc(now, tenantNS, metadata, reader, writer);
-                        if (metadata.getCount() < maxRetainTopics) {
-                            metadata = metadata.toBuilder()
-                                .setEstExpire(Math.min(expireAt(topicMessage.getMessage()),
-                                    metadata.getEstExpire()))
-                                .setCount(metadata.getCount() + 1)
-                                .build();
-                            writer.put(retainKey, topicMessage.toByteString());
-                            writer.put(tenantNS, metadata.toByteString());
-                            return RetainResult.RETAINED;
-                        } else {
-                            if (metadata.getCount() > 0) {
-                                writer.put(tenantNS, metadata.toByteString());
-                            }
-                            // no enough room
-                            // TODO: report event: exceed limit
-                            return RetainResult.ERROR;
-                        }
+                    if (expireAt(existing.getMessage()) <= now) {
+                        // the existing has already expired
+                        doGC(now, tenantId, metadataBuilder, reader, writer);
+                    } else {
+                        writer.delete(retainKey);
+                        metadataBuilder
+                            .setCount(metadataBuilder.getCount() - 1)
+                            .setUsedSpace(metadataBuilder.getUsedSpace() - sizeOf(existing));
                     }
-                    if (metadata.getCount() <= maxRetainTopics) {
-                        metadata = metadata.toBuilder()
-                            .setEstExpire(Math.min(expireAt(topicMessage.getMessage()),
-                                metadata.getEstExpire()))
-                            .build();
-                        writer.put(retainKey, topicMessage.toByteString());
-                        writer.put(tenantNS, metadata.toByteString());
-                        return RetainResult.RETAINED;
+                }
+                return RetainResult.Code.CLEARED;
+            }
+            if (val.isEmpty()) {
+                // retain new message
+                if (metadataBuilder.getCount() >= maxRetainTopics) {
+                    if (metadataBuilder.getEstExpire() <= now) {
+                        // try to make some room via gc
+                        doGC(now, tenantId, metadataBuilder, reader, writer);
+                        if (metadataBuilder.getCount() < maxRetainTopics) {
+                            metadataBuilder
+                                .setEstExpire(
+                                    Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
+                                .setCount(metadataBuilder.getCount() + 1);
+                            writer.put(retainKey, topicMessage.toByteString());
+                            metadataBuilder.setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage));
+                            return RetainResult.Code.RETAINED;
+                        } else {
+                            // still no enough room
+                            return RetainResult.Code.ERROR;
+                        }
                     } else {
                         // no enough room
-                        // TODO: report event: exceed limit
-                        return RetainResult.ERROR;
+                        return RetainResult.Code.EXCEED_LIMIT;
                     }
+                } else {
+                    writer.put(retainKey, topicMessage.toByteString());
+                    metadataBuilder
+                        .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
+                        .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage))
+                        .setCount(metadataBuilder.getCount() + 1).build();
+                    return RetainResult.Code.RETAINED;
+                }
+            } else {
+                // replace existing
+                TopicMessage existing = TopicMessage.parseFrom(val.get());
+                if (expireAt(existing.getMessage()) <= now && metadataBuilder.getCount() >= maxRetainTopics) {
+                    doGC(now, tenantId, metadataBuilder, reader, writer);
+                    if (metadataBuilder.getCount() < maxRetainTopics) {
+                        writer.put(retainKey, topicMessage.toByteString());
+                        metadataBuilder
+                            .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
+                            .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage))
+                            .setCount(metadataBuilder.getCount() + 1);
+                        return RetainResult.Code.RETAINED;
+                    } else {
+                        // no enough room
+                        return RetainResult.Code.EXCEED_LIMIT;
+                    }
+                }
+                if (metadataBuilder.getCount() <= maxRetainTopics) {
+                    writer.put(retainKey, topicMessage.toByteString());
+                    metadataBuilder
+                        .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
+                        .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage));
+                    return RetainResult.Code.RETAINED;
+                } else {
+                    // no enough room
+                    return RetainResult.Code.EXCEED_LIMIT;
                 }
             }
         } catch (Throwable e) {
             log.error("Retain failed", e);
-            return RetainResult.ERROR;
+            return RetainResult.Code.ERROR;
         }
     }
 
+    private void doGC(long now,
+                      String tenantId,
+                      RetainSetMetadata.Builder metadataBuilder,
+                      IKVReader reader,
+                      IKVWriter writer) {
+        doGC(now, null, tenantId, metadataBuilder, reader, writer);
+    }
+
     @SneakyThrows
-    private RetainSetMetadata gc(long now, ByteString tenantNS, RetainSetMetadata metadata,
-                                 IKVReader reader,
-                                 IKVWriter writer) {
-        Boundary range = Boundary.newBuilder().setStartKey(tenantNS).setEndKey(upperBound(tenantNS)).build();
+    private void doGC(long now,
+                      Integer expirySeconds,
+                      String tenantId,
+                      RetainSetMetadata.Builder metadataBuilder,
+                      IKVReader reader,
+                      IKVWriter writer) {
+        Boundary range = Boundary.newBuilder()
+            .setStartKey(tenantNS(tenantId))
+            .setEndKey(upperBound(tenantNS(tenantId))).build();
         reader.refresh();
         IKVIterator itr = reader.iterator();
         itr.seek(range.getStartKey());
         itr.next();
         int expires = 0;
+        int freedSpace = 0;
         long earliestExp = Long.MAX_VALUE;
         for (; itr.isValid() && compare(itr.key(), range.getEndKey()) < 0; itr.next()) {
-            long expireTime = expireAt(TopicMessage.parseFrom(itr.value()).getMessage());
+            TopicMessage retainedMsg = TopicMessage.parseFrom(itr.value());
+            long expireTime = expireAt(retainedMsg.getMessage().getTimestamp(),
+                expirySeconds != null ? expirySeconds : retainedMsg.getMessage().getExpiryInterval());
             if (expireTime <= now) {
                 writer.delete(itr.key());
+                freedSpace += sizeOf(retainedMsg);
                 expires++;
             } else {
                 earliestExp = Math.min(expireTime, earliestExp);
             }
         }
-        metadata = metadata.toBuilder()
-            .setCount(metadata.getCount() - expires)
-            .setEstExpire(earliestExp == Long.MAX_VALUE ? now : earliestExp)
-            .build();
-        if (metadata.getCount() == 0) {
-            writer.delete(tenantNS);
-        }
-        return metadata;
+        metadataBuilder
+            .setCount(metadataBuilder.getCount() - expires)
+            .setUsedSpace(metadataBuilder.getUsedSpace() - freedSpace)
+            .setEstExpire(earliestExp == Long.MAX_VALUE ? now : earliestExp);
     }
 
-    private GCReply gc(GCRequest request, IKVReader reader, IKVWriter writer) {
-        long now = clock.millis();
-        try {
-            reader.refresh();
-            IKVIterator itr = reader.iterator();
-            itr.seekToFirst();
-            while (itr.isValid()) {
-                ByteString tenantNS = KeyUtil.parseTenantNS(itr.key());
-                if (KeyUtil.isTenantNS(itr.key())) {
-                    RetainSetMetadata metadata = RetainSetMetadata.parseFrom(itr.value());
-                    RetainSetMetadata updated = gc(now, tenantNS, metadata, reader, writer);
-                    if (!updated.equals(metadata) && updated.getCount() > 0) {
-                        writer.put(tenantNS, updated.toByteString());
-                    }
+    private Runnable gc(GCRequest request, GCReply.Builder replyBuilder, IKVReader reader, IKVWriter writer) {
+        replyBuilder.setReqId(request.getReqId());
+        long now = request.getNow();
+        Map<String, RetainSetMetadata> toBeCached = new HashMap<>();
+        if (request.hasTenantId()) {
+            String tenantId = request.getTenantId();
+            Optional<RetainSetMetadata> metadata = getMetadata(tenantId);
+            if (metadata.isPresent()) {
+                RetainSetMetadata.Builder metadataBuilder = metadata.get().toBuilder();
+                if (request.hasExpirySeconds()) {
+                    doGC(now, request.getExpirySeconds(), tenantId, metadataBuilder, reader, writer);
+                } else {
+                    doGC(now, tenantId, metadataBuilder, reader, writer);
                 }
+                if (!metadataBuilder.build().equals(metadata.get())) {
+                    if (metadataBuilder.getCount() > 0) {
+                        writer.put(tenantNS(tenantId), metadataBuilder.build().toByteString());
+                    } else {
+                        writer.delete(tenantNS(tenantId));
+                    }
+                    toBeCached.put(tenantId, metadataBuilder.build());
+                }
+            }
+        } else {
+            for (Map.Entry<String, RetainSetMetadata> entry : metadataMap.entrySet()) {
+                String tenantId = entry.getKey();
+                RetainSetMetadata metadata = entry.getValue();
+                RetainSetMetadata.Builder metadataBuilder = metadata.toBuilder();
+                if (request.hasExpirySeconds()) {
+                    doGC(now, request.getExpirySeconds(), tenantId, metadataBuilder, reader, writer);
+                } else {
+                    doGC(now, tenantId, metadataBuilder, reader, writer);
+                }
+                if (!metadataBuilder.build().equals(metadata)) {
+                    if (metadataBuilder.getCount() > 0) {
+                        writer.put(tenantNS(tenantId), metadataBuilder.build().toByteString());
+                    } else {
+                        writer.delete(tenantNS(tenantId));
+                    }
+                    toBeCached.put(tenantId, metadataBuilder.build());
+                }
+            }
+        }
+        return () -> {
+            toBeCached.forEach(this::cacheMetadata);
+        };
+    }
+
+    private void loadMetadata() {
+        IKVReader reader = rangeReaderProvider.get();
+        IKVIterator itr = reader.iterator();
+        for (itr.seekToFirst(); itr.isValid(); ) {
+            ByteString tenantNS = parseTenantNS(itr.key());
+            String tenantId = parseTenantId(tenantNS);
+            try {
+                RetainSetMetadata metadata = RetainSetMetadata.parseFrom(itr.value());
+                cacheMetadata(tenantId, metadata);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Unable to parse RetainSetMetadata", e);
+            } finally {
                 itr.seek(upperBound(tenantNS));
             }
-            return GCReply.newBuilder().setReqId(request.getReqId()).build();
-        } catch (Throwable e) {
-            log.error("Unable to parse metadata");
-            return GCReply.newBuilder().setReqId(request.getReqId()).build();
         }
     }
 
     private long expireAt(Message message) {
-        return Duration.ofMillis(message.getTimestamp()).plusSeconds(message.getExpiryInterval()).toMillis();
+        return expireAt(message.getTimestamp(), message.getExpiryInterval());
     }
 
-    private CollectMetricsReply collectMetrics(CollectMetricsRequest request, IKVReader reader) {
-        CollectMetricsReply.Builder builder = CollectMetricsReply.newBuilder().setReqId(request.getReqId());
-        reader.refresh();
-        IKVIterator itr = reader.iterator();
-        for (itr.seekToFirst(); itr.isValid(); ) {
-            ByteString startKey = itr.key();
-            ByteString endKey = upperBound(itr.key());
-            builder.putUsedSpaces(parseTenantId(startKey),
-                reader.size(intersect(reader.boundary(), Boundary.newBuilder()
-                    .setStartKey(startKey)
-                    .setEndKey(endKey)
-                    .build())));
-            itr.seek(endKey);
-        }
-        return builder.build();
+    private long expireAt(long timestamp, int expirySeconds) {
+        return Duration.ofMillis(timestamp).plusSeconds(expirySeconds).toMillis();
+    }
+
+    private int sizeOf(TopicMessage retained) {
+        return retained.getTopic().length() + retained.getMessage().getPayload().size();
+    }
+
+    private Optional<RetainSetMetadata> getMetadata(String tenantId) {
+        return Optional.ofNullable(metadataMap.get(tenantId));
+    }
+
+    private void clearMetrics() {
+        metadataMap.keySet().forEach(tenantId -> {
+            ITenantMeter.stopGauging(tenantId, MqttRetainNumGauge, tags);
+            ITenantMeter.stopGauging(tenantId, MqttRetainSpaceGauge, tags);
+        });
+    }
+
+    private void cacheMetadata(String tenantId, RetainSetMetadata metadata) {
+        metadataMap.compute(tenantId, (k, v) -> {
+            if (v == null) {
+                if (metadata.getCount() > 0) {
+                    ITenantMeter.gauging(tenantId, MqttRetainNumGauge,
+                        () -> metadataMap.getOrDefault(k, RetainSetMetadata.getDefaultInstance()).getCount(), tags);
+
+                    ITenantMeter.gauging(tenantId, MqttRetainSpaceGauge,
+                        () -> metadataMap.getOrDefault(k, RetainSetMetadata.getDefaultInstance()).getUsedSpace(), tags);
+                    return metadata;
+                }
+                return null;
+            } else {
+                if (metadata.getCount() == 0) {
+                    ITenantMeter.stopGauging(tenantId, MqttRetainNumGauge, tags);
+                    ITenantMeter.stopGauging(tenantId, MqttRetainSpaceGauge, tags);
+                    return null;
+                }
+                return metadata;
+            }
+        });
     }
 }

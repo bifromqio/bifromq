@@ -13,10 +13,8 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import org.testng.annotations.Test;
@@ -26,32 +24,29 @@ public class DeleteBehaviorTest extends RetainStoreTest {
     public void deleteFromEmptyRetainSet() {
         String tenantId = "tenantA";
         String topic = "/a/b/c";
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
         // empty payload signal deletion
-        RetainResult reply = requestRetain(tenantId, message(topic, ""));
-        assertEquals(reply, RetainResult.CLEARED);
+        RetainResult.Code reply = requestRetain(tenantId, message(topic, ""), 10);
+        assertEquals(reply, RetainResult.Code.CLEARED);
     }
 
     @Test(groups = "integration")
     public void deleteNonExisting() {
         String tenantId = "tenantA";
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
         // empty payload signal deletion
-        assertEquals(requestRetain(tenantId, message("/a/b/c", "hello")), RetainResult.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/a/b/c", "hello"), 10), RetainResult.Code.RETAINED);
 
-        assertEquals(requestRetain(tenantId, message("/a", "")), RetainResult.CLEARED);
+        assertEquals(requestRetain(tenantId, message("/a", ""), 10), RetainResult.Code.CLEARED);
     }
 
     @Test(groups = "integration")
     public void deleteNonExpired() {
         String tenantId = "tenantA";
         String topic = "/a/b/c";
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(10);
 
         // empty payload signal deletion
-        assertEquals(requestRetain(tenantId, message(topic, "hello")), RetainResult.RETAINED);
+        assertEquals(requestRetain(tenantId, message(topic, "hello"), 10), RetainResult.Code.RETAINED);
 
-        assertEquals(requestRetain(tenantId, message(topic, "")), RetainResult.CLEARED);
+        assertEquals(requestRetain(tenantId, message(topic, ""), 10), RetainResult.Code.CLEARED);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 0);

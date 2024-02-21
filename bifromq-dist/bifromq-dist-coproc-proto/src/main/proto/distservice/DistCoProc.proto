@@ -57,15 +57,6 @@ message BatchDistReply {
   map<string, TopicFanout> result = 2;
 }
 
-message CollectMetricsRequest{
-  uint64 reqId = 1;
-}
-
-message CollectMetricsReply{
-  uint64 reqId = 1;
-  map<string, uint64> usedSpaces = 2;
-}
-
 message DistServiceRWCoProcInput{
   oneof type{
     BatchMatchRequest batchMatch = 1;
@@ -83,14 +74,12 @@ message DistServiceRWCoProcOutput{
 message DistServiceROCoProcInput{
   oneof Input{
     BatchDistRequest batchDist = 1;
-    CollectMetricsRequest collectMetrics = 2;
   }
 }
 
 message DistServiceROCoProcOutput{
   oneof Output{
     BatchDistReply batchDist = 1;
-    CollectMetricsReply collectMetrics = 2;
   }
 }
 

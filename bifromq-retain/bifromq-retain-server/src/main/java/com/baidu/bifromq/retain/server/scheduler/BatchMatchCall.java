@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
@@ -45,6 +46,7 @@ public class BatchMatchCall extends BatchQueryCall<MatchCall, MatchCallResult> {
         Map<String, MatchParam.Builder> matchParamBuilders = new HashMap<>(128);
         matchRequestIterator.forEachRemaining(request ->
             matchParamBuilders.computeIfAbsent(request.tenantId(), k -> MatchParam.newBuilder())
+                .setNow(HLC.INST.getPhysical())
                 .putTopicFilters(request.topicFilter(), request.limit()));
         long reqId = System.nanoTime();
         BatchMatchRequest.Builder reqBuilder = BatchMatchRequest

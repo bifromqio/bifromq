@@ -43,7 +43,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     Duration loadEstimateWindow = Duration.ofSeconds(5);
-    Duration statsInterval = Duration.ofSeconds(30);
 
     AbstractDistWorkerBuilder() {
     }
@@ -125,11 +124,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
 
     public T loadEstimateWindow(Duration window) {
         this.loadEstimateWindow = window;
-        return thisT();
-    }
-
-    public T statsInterval(Duration statsInterval) {
-        this.statsInterval = statsInterval;
         return thisT();
     }
 }

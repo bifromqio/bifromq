@@ -15,6 +15,7 @@ package com.baidu.bifromq.starter;
 
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_LOAD_EST_WINDOW_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST_WINDOW_SECONDS;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_LOAD_EST_WINDOW_SECONDS;
 
 import com.baidu.bifromq.apiserver.APIServer;
 import com.baidu.bifromq.apiserver.IAPIServer;
@@ -253,11 +254,11 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .settingProvider(settingProviderMgr)
             .storeClient(retainStoreClient)
             .queryExecutor(queryExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
+            .loadEstimateWindow(Duration.ofSeconds(RETAIN_STORE_LOAD_EST_WINDOW_SECONDS.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getRetainStoreConfig().getGcIntervalSeconds()))
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig())
@@ -305,7 +306,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
-            .purgeDelay(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getPurgeDelaySeconds()))
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
             )
@@ -366,6 +366,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         retainServer = IRetainServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .retainStoreClient(retainStoreClient)
+            .settingProvider(settingProviderMgr)
             .subBrokerManager(subBrokerManager)
             .build();
         distWorker = IDistWorker.nonStandaloneBuilder()

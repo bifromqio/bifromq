@@ -34,7 +34,6 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -151,11 +150,6 @@ public abstract class DistWorkerTest {
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
 
-    private static boolean runOnMac() {
-        String osName = System.getProperty("os.name");
-        return osName != null && osName.startsWith("Mac");
-    }
-
     private AutoCloseable closeable;
 
     @BeforeClass(alwaysRun = true)
@@ -200,17 +194,12 @@ public abstract class DistWorkerTest {
 
         String uuid = UUID.randomUUID().toString();
         KVRangeStoreOptions options = new KVRangeStoreOptions();
-        if (!runOnMac()) {
-            options.setDataEngineConfigurator(new InMemKVEngineConfigurator());
-            options.setWalEngineConfigurator(new InMemKVEngineConfigurator());
-        } else {
-            ((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator())
-                .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
-                    .toString())
-                .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
-            ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator())
-                .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
-        }
+        ((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator())
+            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
+                .toString())
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
+        ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator())
+            .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
 
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
 
@@ -237,7 +226,6 @@ public abstract class DistWorkerTest {
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(balanceControllerOptions)
-            .statsInterval(Duration.ofSeconds(1))
             .storeOptions(options)
             .subBrokerManager(receiverManager)
             .build();
@@ -247,7 +235,7 @@ public abstract class DistWorkerTest {
     }
 
     @AfterClass(alwaysRun = true)
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
         new Thread(() -> {
             storeClient.stop();

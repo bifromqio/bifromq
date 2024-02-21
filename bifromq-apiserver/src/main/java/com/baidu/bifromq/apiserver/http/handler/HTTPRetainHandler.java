@@ -121,6 +121,10 @@ public final class HTTPRetainHandler implements IHTTPRequestHandler {
                             return new DefaultFullHttpResponse(req.protocolVersion(), OK,
                                 Unpooled.wrappedBuffer(retainReply.getResult().name().getBytes()));
                         }
+                        case EXCEED_LIMIT -> {
+                            return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                                Unpooled.wrappedBuffer(retainReply.getResult().name().getBytes()));
+                        }
                         default -> {
                             return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
                                 Unpooled.EMPTY_BUFFER);

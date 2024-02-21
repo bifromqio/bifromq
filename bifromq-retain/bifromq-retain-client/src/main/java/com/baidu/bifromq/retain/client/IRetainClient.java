@@ -14,6 +14,8 @@
 package com.baidu.bifromq.retain.client;
 
 import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
+import com.baidu.bifromq.retain.rpc.proto.ExpireAllRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
@@ -35,6 +37,8 @@ public interface IRetainClient extends IConnectable {
                                           ByteString payload,
                                           int expirySeconds,
                                           ClientInfo publisher);
+
+    CompletableFuture<ExpireAllReply> expireAll(ExpireAllRequest request);
 
     void stop();
 }

@@ -27,6 +27,10 @@
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-metrics</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-retain-rpc-definition</artifactId>
         </dependency>
         <dependency>

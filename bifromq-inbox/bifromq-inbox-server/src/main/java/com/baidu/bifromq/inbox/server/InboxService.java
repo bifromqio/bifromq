@@ -13,23 +13,16 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
 import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE;
 import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
-import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
-import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
-import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionGauge;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.UnmatchResult;
@@ -75,8 +68,8 @@ import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.inbox.store.gc.IInboxGCProcessor;
-import com.baidu.bifromq.inbox.store.gc.InboxGCProcessor;
+import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
+import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
@@ -84,14 +77,10 @@ import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.util.TopicUtil;
-import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 import lombok.Builder;
@@ -125,8 +114,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxDeleteScheduler deleteScheduler;
     private final IInboxSubScheduler subScheduler;
     private final IInboxUnsubScheduler unsubScheduler;
-    private final IInboxGCProcessor inboxGCProc;
-    private final Map<String, Set<ScopedInbox>> sessionMap = new ConcurrentHashMap<>();
+    private final IInboxStoreGCProcessor inboxGCProc;
     private final DelayTaskRunner<ScopedInbox, ExpireSessionTask> delayTaskRunner;
 
     @Builder
@@ -162,7 +150,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.subScheduler = subScheduler;
         this.unsubScheduler = unsubScheduler;
         this.touchScheduler = touchScheduler;
-        this.inboxGCProc = new InboxGCProcessor(inboxClient, inboxStoreClient);
+        this.inboxGCProc = new InboxStoreGCProcessor(inboxClient, inboxStoreClient);
         this.delayTaskRunner = new DelayTaskRunner<>(ScopedInbox::compareTo, HLC.INST::getPhysical);
     }
 
@@ -200,7 +188,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         request.getInboxId(),
                         request.getIncarnation());
                     LWT lwt = request.hasLwt() ? request.getLwt() : null;
-                    addToSessionMap(scopedInbox);
                     if (lwt != null) {
                         delayTaskRunner.reg(scopedInbox,
                             idleTimeout(request.getKeepAliveSeconds()).plusSeconds(lwt.getDelaySeconds()),
@@ -240,7 +227,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         request.getInboxId(),
                         request.getIncarnation());
                     LWT lwt = request.hasLwt() ? request.getLwt() : null;
-                    addToSessionMap(scopedInbox);
                     if (lwt != null) {
                         delayTaskRunner.reg(scopedInbox,
                             idleTimeout(request.getKeepAliveSeconds()).plusSeconds(lwt.getDelaySeconds()),
@@ -288,18 +274,15 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     request.getClient().getTenantId(),
                     request.getInboxId(),
                     request.getIncarnation());
-                removeFromSessionMap(scopedInbox);
                 delayTaskRunner.unreg(scopedInbox);
                 LWT lwt = reply.hasLwt() ? reply.getLwt() : null;
                 if (lwt != null) {
                     assert lwt.getDelaySeconds() > 0;
-                    addToSessionMap(scopedInbox);
                     delayTaskRunner.reg(scopedInbox,
                         Duration.ofSeconds(Math.min(lwt.getDelaySeconds(), request.getExpirySeconds())),
                         new ExpireSessionTask(scopedInbox, request.getVersion() + 1, request.getExpirySeconds(),
                             request.getClient(), lwt));
                 } else {
-                    addToSessionMap(scopedInbox);
                     delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(request.getExpirySeconds()),
                         new ExpireSessionTask(scopedInbox, request.getVersion() + 1, request.getExpirySeconds(),
                             request.getClient(), null));
@@ -537,24 +520,11 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     @Override
     public void expireAll(ExpireAllRequest request, StreamObserver<ExpireAllReply> responseObserver) {
         log.trace("Handling expireAll {}", request);
-        response(tenantId -> {
-            ByteString tenantPrefix = tenantPrefix(request.getTenantId());
-            List<KVRangeSetting> settings = inboxStoreClient.findByBoundary(Boundary.newBuilder()
-                .setStartKey(tenantPrefix).setEndKey(upperBound(tenantPrefix)).build());
-            if (settings.isEmpty()) {
-                return CompletableFuture.completedFuture(ExpireAllReply.newBuilder()
+        response(tenantId ->
+            inboxGCProc.gc(request.getReqId(), request.getTenantId(), request.getExpirySeconds(), request.getNow())
+                .thenApply(result -> ExpireAllReply.newBuilder()
                     .setReqId(request.getReqId())
-                    .setCode(ExpireAllReply.Code.OK)
-                    .build());
-            }
-            List<CompletableFuture<IInboxGCProcessor.Result>> gcResults = settings.stream().map(
-                setting -> inboxGCProc.gcRange(request.getReqId(), setting.id, request.getTenantId(),
-                    request.getExpirySeconds(), request.getNow(), 100)).toList();
-            return CompletableFuture.allOf(gcResults.toArray(new CompletableFuture[0]))
-                .thenApply(v -> gcResults.stream().map(CompletableFuture::join).toList())
-                .thenApply(results -> ExpireAllReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(results.stream().allMatch(r -> r == IInboxGCProcessor.Result.OK) ?
+                    .setCode(result == IInboxStoreGCProcessor.Result.OK ?
                         ExpireAllReply.Code.OK : ExpireAllReply.Code.ERROR)
                     .build())
                 .exceptionally(e -> {
@@ -563,8 +533,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setReqId(request.getReqId())
                         .setCode(ExpireAllReply.Code.ERROR)
                         .build();
-                });
-        }, responseObserver);
+                }), responseObserver);
     }
 
     @Override
@@ -629,26 +598,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         }
     }
 
-    private void addToSessionMap(ScopedInbox scopedInbox) {
-        sessionMap.computeIfAbsent(scopedInbox.tenantId(), t -> {
-                Set<ScopedInbox> set = ConcurrentHashMap.newKeySet();
-                gauging(t, MqttPersistentSessionGauge, set::size);
-                return set;
-            })
-            .add(scopedInbox);
-    }
-
-    private void removeFromSessionMap(ScopedInbox scopedInbox) {
-        sessionMap.computeIfPresent(scopedInbox.tenantId(), (t, counter) -> {
-            counter.remove(scopedInbox);
-            if (counter.isEmpty()) {
-                stopGauging(t, MqttPersistentSessionGauge);
-                return null;
-            }
-            return counter;
-        });
-    }
-
     private class ExpireSessionTask implements Runnable {
         private final ScopedInbox scopedInbox;
         private final int expireSeconds;
@@ -692,23 +641,19 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             || retainLWTFuture.join().getResult() == RetainReply.Result.ERROR) {
                             log.warn("Handle LWT error", e);
                             // Delay some time and retry
-                            addToSessionMap(scopedInbox);
                             delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(lwt.getDelaySeconds()),
                                 new ExpireSessionTask(scopedInbox, version, expireSeconds, client, lwt));
                             return;
                         }
                         if (lwt.getDelaySeconds() >= expireSeconds) {
-                            addToSessionMap(scopedInbox);
                             delayTaskRunner.reg(scopedInbox, Duration.ZERO,
                                 new ExpireSessionTask(scopedInbox, version, 0, client, null));
                         } else {
-                            addToSessionMap(scopedInbox);
                             delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
                                 new ExpireSessionTask(scopedInbox, version, 0, client, null));
                         }
                     });
             } else {
-                removeFromSessionMap(scopedInbox);
                 deleteScheduler.schedule(BatchDeleteRequest.Params.newBuilder()
                         .setTenantId(scopedInbox.tenantId())
                         .setInboxId(scopedInbox.inboxId())

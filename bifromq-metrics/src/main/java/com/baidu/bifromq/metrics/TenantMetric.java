@@ -21,9 +21,10 @@ public enum TenantMetric {
     MqttAuthFailureCount("mqtt.auth.failure.count", Meter.Type.COUNTER),
     MqttConnectCount("mqtt.connect.count", Meter.Type.COUNTER),
     MqttDisconnectCount("mqtt.disconnect.count", Meter.Type.COUNTER),
-    MqttLivePersistentSessionGauge("mqtt.psession.live.num.gauge", Meter.Type.GAUGE),
-    MqttPersistentSessionGauge("mqtt.psession.num.gauge", Meter.Type.GAUGE),
+    MqttSessionWorkingMemoryGauge("mqtt.session.mem.gauge", Meter.Type.GAUGE),
     MqttPersistentSessionSpaceGauge("mqtt.psession.space.gauge", Meter.Type.GAUGE),
+    MqttLivePersistentSessionGauge("mqtt.psession.live.num.gauge", Meter.Type.GAUGE),
+    MqttPersistentSessionNumGauge("mqtt.psession.num.gauge", Meter.Type.GAUGE),
 
     // network throughput related metrics
     MqttIngressBytes("mqtt.ingress.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
@@ -51,7 +52,8 @@ public enum TenantMetric {
     MqttPersistentFanOutBytes("mqtt.pfanout.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
 
     // subscription related metrics
-    MqttTrieSpaceGauge("mqtt.trie.space.gauge", Meter.Type.GAUGE),
+    MqttRouteSpaceGauge("mqtt.route.space.gauge", Meter.Type.GAUGE),
+    MqttSharedSubNumGauge("mqtt.shared.sub.num.gauge", Meter.Type.GAUGE),
     MqttTransientSubCount("mqtt.tsub.count", Meter.Type.COUNTER),
     MqttTransientSubLatency("mqtt.tsub.latency", Meter.Type.TIMER),
     MqttPersistentSubCount("mqtt.psub.count", Meter.Type.COUNTER),
@@ -61,11 +63,15 @@ public enum TenantMetric {
     MqttPersistentUnsubCount("mqtt.punsub.count", Meter.Type.COUNTER),
     MqttPersistentUnsubLatency("mqtt.punsub.latency", Meter.Type.TIMER),
     MqttTransientSubCountGauge("mqtt.tsub.num.gauge", Meter.Type.GAUGE),
-    MqttTransientSubSpaceGauge("mqtt.tsub.space.gauge", Meter.Type.GAUGE),
     MqttPersistentSubCountGauge("mqtt.psub.num.gauge", Meter.Type.GAUGE),
-    MqttPersistentSubSpaceGauge("mqtt.psub.space.gauge", Meter.Type.GAUGE),
+
     // retain related
-    RetainUsedSpaceGauge("retain.space.gauge", Meter.Type.GAUGE);
+    MqttIngressRetainBytes("mqtt.ingress.retain.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttRetainedBytes("mqtt.retained.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttRetainNumGauge("mqtt.retained.num.gauge", Meter.Type.GAUGE),
+    MqttRetainMatchCount("mqtt.retain.match.count", Meter.Type.COUNTER),
+    MqttRetainMatchedBytes("mqtt.retain.matched.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttRetainSpaceGauge("mqtt.retain.space.gauge", Meter.Type.GAUGE);
 
     public final String metricName;
     public final Meter.Type meterType;

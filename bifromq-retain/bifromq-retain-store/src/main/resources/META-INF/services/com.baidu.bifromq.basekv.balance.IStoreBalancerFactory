@@ -11,5 +11,8 @@
 # See the License for the specific language governing permissions and limitations under the License.
 #
 
-com.baidu.bifromq.retain.store.balance.RecoveryBalancerFactory
+# DO NOT enable recovery balancer if range split balancer is enabled
+# com.baidu.bifromq.retain.store.balance.RecoveryBalancerFactory
 com.baidu.bifromq.retain.store.balance.ReplicaCntBalancerFactory
+com.baidu.bifromq.retain.store.balance.RangeLeaderBalancerFactory
+com.baidu.bifromq.retain.store.balance.RangeSplitBalancerFactory

@@ -274,6 +274,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     @Override
     public void close() {
         state.set(State.Closed);
+        // stop signal
+        signal.onComplete();
         // stop react to lb changes
         disposables.dispose();
         log.debug("ReqPipeline@{} of {} closing, abort remaining tasks",
@@ -323,7 +325,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         log.debug("ReqPipeline@{} of {} schedule targeting in {} ms",
             this.hashCode(), methodDescriptor.getBareMethodName(), delay);
         disposables.add(Observable.timer(delay, timeUnit).subscribe(t -> {
-            if (!isClosed()) {
+            if (!isClosed() && !signal.hasComplete()) {
                 signal.onNext(System.nanoTime());
             }
         }));

@@ -124,17 +124,34 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTSessionHandler extends MQTTMessageHandler implements IMQTTSession {
     protected static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
 
-    public record SubMessage(String topic,
-                             Message message,
-                             ClientInfo publisher,
-                             String topicFilter,
-                             TopicFilterOption option) {
+    @Accessors(fluent = true)
+    @Getter
+    public static class SubMessage {
+        private final String topic;
+        private final Message message;
+        private final ClientInfo publisher;
+        private final String topicFilter;
+        private final TopicFilterOption option;
+        private final int bytesSize;
+
+        public SubMessage(String topic, Message message, ClientInfo publisher, String topicFilter,
+                          TopicFilterOption option) {
+            this.topic = topic;
+            this.message = message;
+            this.publisher = publisher;
+            this.topicFilter = topicFilter;
+            this.option = option;
+            this.bytesSize = topic.length() + topicFilter.length() + message.getPayload().size();
+        }
+
         public boolean isRetain() {
             return message.getIsRetained() ||
                 option.getRetainAsPublished() && message.getIsRetain();
@@ -144,6 +161,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             return QoS.forNumber(Math.min(message.getPubQoS().getNumber(), option.getQos().getNumber()));
         }
 
+        public int estBytes() {
+            return bytesSize;
+        }
     }
 
     private static class ConfirmingMessage {
@@ -192,7 +212,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private final LinkedHashMap<Integer, ConfirmingMessage> unconfirmedPacketIds = new LinkedHashMap<>();
     private final TreeSet<ConfirmingMessage> resendQueue;
     private final CompletableFuture<Void> onInitialized = new CompletableFuture<>();
-    ;
     private ScheduledFuture<?> resendTask;
     private int receivingCount = 0;
 
@@ -217,6 +236,16 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         sessionCtx = ChannelAttrs.mqttSessionContext(ctx);
         authProvider = sessionCtx.authProvider(ctx);
         eventCollector = sessionCtx.eventCollector;
+    }
+
+    private int estMemSize() {
+        int s = 144; // base size from JOL
+        s += userSessionId.length();
+        s += clientInfo.getSerializedSize();
+        if (willMessage != null) {
+            s += willMessage.getSerializedSize();
+        }
+        return s;
     }
 
     protected abstract IMQTTProtocolHelper helper();
@@ -291,6 +320,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         idleTimeoutTask = ctx.executor()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
         onInitialized.whenComplete((v, e) -> tenantMeter.recordCount(MqttConnectCount));
+        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), estMemSize());
     }
 
     @Override
@@ -308,6 +338,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         sessionCtx.localSessionRegistry.remove(channelId(), this);
         sessionRegister.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
+        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -estMemSize());
+        int unconfirmedMsgBytes =
+            unconfirmedPacketIds.values().stream().reduce(0, (acc, msg) -> acc + msg.message.estBytes(), Integer::sum);
+        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -unconfirmedMsgBytes);
     }
 
     @Override
@@ -629,12 +663,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             confirmingMsg.setAcked();
             resendQueue.remove(confirmingMsg);
             Iterator<Integer> packetIdItr = unconfirmedPacketIds.keySet().iterator();
+            int confirmedMsgBytes = 0;
             while (packetIdItr.hasNext()) {
                 packetId = packetIdItr.next();
                 confirmingMsg = unconfirmedPacketIds.get(packetId);
                 if (confirmingMsg.acked) {
                     packetIdItr.remove();
                     SubMessage confirmed = confirmingMsg.message;
+                    confirmedMsgBytes += confirmed.estBytes();
                     onConfirm(confirmingMsg.seq);
                     switch (confirmed.qos()) {
                         case AT_LEAST_ONCE -> {
@@ -658,6 +694,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     }
                 }
             }
+            sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -confirmedMsgBytes);
             if (resendTask != null && !resendTask.isDone()) {
                 resendTask.cancel(true);
             }
@@ -686,6 +723,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             if (resendTask == null || resendTask.isDone()) {
                 scheduleResend();
             }
+            sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), msg.estBytes());
             sendMqttPubMessage(seq, msg, msg.topicFilter(), msg.publisher(), false);
         } else {
             log.warn("Bad state: sequence duplicate seq={}", seq);
@@ -1100,7 +1138,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 reqId, message.getPubQoS(), topic, message.getPayload().size());
         }
         return addFgTask(
-            // TODO: refactoring needed
             sessionCtx.retainClient.retain(
                     reqId,
                     topic,

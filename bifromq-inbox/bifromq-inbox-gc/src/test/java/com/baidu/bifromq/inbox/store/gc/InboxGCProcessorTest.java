@@ -13,41 +13,37 @@
 
 package com.baidu.bifromq.inbox.store.gc;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
-import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.type.ClientInfo;
-import com.google.protobuf.ByteString;
-import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -59,137 +55,187 @@ public class InboxGCProcessorTest {
     private IInboxClient inboxClient;
     @Mock
     private IBaseKVStoreClient storeClient;
-    private InboxGCProcessor inboxGCProc;
-    private final KVRangeId rangeId = KVRangeIdUtil.generate();
+    private InboxStoreGCProcessor inboxGCProc;
+    private final String localStoreId = "testLocalStoreId";
+    private final KVRangeSetting localRangeSetting = new KVRangeSetting("cluster", localStoreId,
+        KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).build());
+
+    private final String remoteStoreId = "testRemoteStoreId";
+    private final KVRangeSetting remoteRangeSetting = new KVRangeSetting("cluster", remoteStoreId,
+        KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).build());
     private final String tenantId = "testTenantId";
-    private final ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
     private AutoCloseable closeable;
 
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        inboxGCProc = new InboxGCProcessor(inboxClient, storeClient);
-        when(storeClient.findById(rangeId)).thenReturn(Optional.of(
-            new KVRangeSetting("cluster", "leader", KVRangeDescriptor.newBuilder().build())
-        ));
     }
 
     @AfterMethod
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         closeable.close();
     }
 
-
-    @SneakyThrows
     @Test
-    public void testScanFailed() {
-        when(storeClient.query(anyString(), any(KVRangeRORequest.class)))
+    public void testNoRangeForTenant() {
+        inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
+        when(storeClient.findByBoundary(any())).thenReturn(Collections.emptyList());
+        IInboxStoreGCProcessor.Result result =
+            inboxGCProc.gc(System.nanoTime(), tenantId, 10, HLC.INST.getPhysical()).join();
+        assertEquals(result, IInboxStoreGCProcessor.Result.OK);
+        verify(storeClient).findByBoundary(argThat(boundary ->
+            boundary.getStartKey().equals(tenantPrefix(tenantId))
+                && boundary.getEndKey().equals(upperBound(tenantPrefix(tenantId)))));
+    }
+
+    @Test
+    public void testNoLocalRange() {
+        inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient, localStoreId);
+        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(remoteRangeSetting));
+        IInboxStoreGCProcessor.Result result =
+            inboxGCProc.gc(System.nanoTime(), tenantId, 10, HLC.INST.getPhysical()).join();
+        assertEquals(result, IInboxStoreGCProcessor.Result.OK);
+        verify(storeClient).findByBoundary(argThat(boundary ->
+            boundary.getStartKey().equals(tenantPrefix(tenantId))
+                && boundary.getEndKey().equals(upperBound(tenantPrefix(tenantId)))));
+    }
+
+    @Test
+    public void testStoreQueryException() {
+        inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
+        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(remoteRangeSetting));
+
+        when(storeClient.query(anyString(), any()))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
-        IInboxGCProcessor.Result result =
-            inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, HLC.INST.getPhysical(), 100).join();
-        assertEquals(result, IInboxGCProcessor.Result.ERROR);
-        Duration d = Duration.ofMillis(Integer.MAX_VALUE);
-        System.out.println(d.toSeconds());
+        IInboxStoreGCProcessor.Result result =
+            inboxGCProc.gc(System.nanoTime(), null, 10, HLC.INST.getPhysical()).join();
+        assertEquals(result, IInboxStoreGCProcessor.Result.ERROR);
     }
 
     @Test
-    public void testScanNoRange() {
-        when(storeClient.findById(rangeId)).thenReturn(Optional.empty());
-        IInboxGCProcessor.Result result =
-            inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, HLC.INST.getPhysical(), 100).join();
-        assertEquals(result, IInboxGCProcessor.Result.ERROR);
+    public void testStoreQueryFailed() {
+        inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
+        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(remoteRangeSetting));
+
+        when(storeClient.query(anyString(), any()))
+            .thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
+                .setCode(ReplyCode.InternalError)
+                .build()));
+        IInboxStoreGCProcessor.Result result =
+            inboxGCProc.gc(System.nanoTime(), null, 10, HLC.INST.getPhysical()).join();
+        assertEquals(result, IInboxStoreGCProcessor.Result.ERROR);
     }
 
     @Test
-    public void testScanHasNext() {
-        long now = HLC.INST.getPhysical();
-        ByteString cursor = ByteString.copyFromUtf8("Cursor");
-        KVRangeROReply reply1 = KVRangeROReply.newBuilder()
-            .setCode(ReplyCode.Ok)
-            .setRoCoProcResult(ROCoProcOutput.newBuilder()
-                .setInboxService(InboxServiceROCoProcOutput.newBuilder()
-                    .setGc(GCReply.newBuilder()
-                        .setCode(GCReply.Code.OK)
-                        .addCandidate(GCReply.GCCandidate.newBuilder()
-                            .setInboxId("inbox1")
-                            .setClient(clientInfo)
+    public void testGCScanFailed() {
+        inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
+        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(remoteRangeSetting));
+        when(storeClient.query(anyString(), any()))
+            .thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
+                .setCode(ReplyCode.Ok)
+                .setRoCoProcResult(ROCoProcOutput.newBuilder()
+                    .setInboxService(InboxServiceROCoProcOutput.newBuilder()
+                        .setGc(GCReply.newBuilder()
+                            .setCode(GCReply.Code.ERROR)
                             .build())
-                        .addCandidate(GCReply.GCCandidate.newBuilder()
-                            .setInboxId("inbox2")
-                            .setClient(clientInfo)
-                            .build())
-                        .addCandidate(GCReply.GCCandidate.newBuilder()
-                            .setInboxId("inbox3")
-                            .setClient(clientInfo)
-                            .build())
-                        .setCursor(cursor)
                         .build())
                     .build())
-                .build())
-            .build();
-        KVRangeROReply reply2 = KVRangeROReply.newBuilder()
-            .setCode(ReplyCode.Ok)
-            .setRoCoProcResult(ROCoProcOutput.newBuilder()
-                .setInboxService(InboxServiceROCoProcOutput.newBuilder()
-                    .setGc(GCReply.newBuilder().setCode(GCReply.Code.OK).build())
-                    .build())
-                .build())
-            .build();
-        when(storeClient.query(anyString(), any(KVRangeRORequest.class)))
-            .thenReturn(CompletableFuture.completedFuture(reply1), CompletableFuture.completedFuture(reply2));
-        when(inboxClient.detach(any())).thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder()
-            .setCode(DetachReply.Code.OK)
-            .build()));
-        IInboxGCProcessor.Result result =
-            inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, now, 2).join();
-        assertEquals(result, IInboxGCProcessor.Result.OK);
-        ArgumentCaptor<KVRangeRORequest> queryCap = ArgumentCaptor.forClass(KVRangeRORequest.class);
-        verify(storeClient, times(2)).query(anyString(), queryCap.capture());
-        List<KVRangeRORequest> queryRequests = queryCap.getAllValues();
-        Assert.assertFalse(queryRequests.get(0).getRoCoProc().getInboxService().getGc().hasCursor());
-        assertEquals(queryRequests.get(1).getRoCoProc().getInboxService().getGc().getCursor(), cursor);
-
-        ArgumentCaptor<DetachRequest> detachCap = ArgumentCaptor.forClass(DetachRequest.class);
-        verify(inboxClient, times(3)).detach(detachCap.capture());
-        List<DetachRequest> detachRequests = detachCap.getAllValues();
-        for (DetachRequest detachRequest : detachRequests) {
-            assertEquals(detachRequest.getExpirySeconds(), 0);
-            assertEquals(detachRequest.getNow(), now);
-            assertEquals(detachRequest.getClient(), clientInfo);
-        }
+                .build()));
+        IInboxStoreGCProcessor.Result result =
+            inboxGCProc.gc(System.nanoTime(), null, 10, HLC.INST.getPhysical()).join();
+        assertEquals(result, IInboxStoreGCProcessor.Result.ERROR);
     }
 
     @Test
-    public void testScanHasNext2() {
-        KVRangeROReply reply1 = KVRangeROReply.newBuilder()
-            .setCode(ReplyCode.Ok)
-            .setRoCoProcResult(ROCoProcOutput.newBuilder()
-                .setInboxService(InboxServiceROCoProcOutput.newBuilder()
-                    .setGc(GCReply.newBuilder()
-                        .setCode(GCReply.Code.OK)
-                        .setCursor(inboxKeyPrefix(tenantId, "inbox1", 0)).build())
-                    .build())
-                .build()
-            )
+    public void detachAfterScan() {
+        GCReply.GCCandidate gcCandidate1 = GCReply.GCCandidate.newBuilder()
+            .setInboxId("inboxId1")
+            .setIncarnation(1)
+            .setVersion(2)
+            .setExpirySeconds(3)
+            .setClient(ClientInfo.newBuilder().build())
             .build();
-        KVRangeROReply reply2 = KVRangeROReply.newBuilder()
-            .setCode(ReplyCode.Ok)
-            .setRoCoProcResult(ROCoProcOutput.newBuilder()
-                .setInboxService(InboxServiceROCoProcOutput.newBuilder()
-                    .setGc(GCReply.newBuilder().setCode(GCReply.Code.OK).build())
-                    .build())
-                .build()
-            )
+        GCReply.GCCandidate gcCandidate2 = GCReply.GCCandidate.newBuilder()
+            .setInboxId("inboxId2")
+            .setIncarnation(1)
+            .setVersion(2)
+            .setExpirySeconds(3)
+            .setClient(ClientInfo.newBuilder().build())
             .build();
-        when(storeClient.query(anyString(), any(KVRangeRORequest.class)))
-            .thenReturn(CompletableFuture.completedFuture(reply1), CompletableFuture.completedFuture(reply2));
-        when(inboxClient.detach(any())).thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder()
-            .setCode(DetachReply.Code.OK)
-            .build()));
+        inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
+        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(remoteRangeSetting));
+        when(storeClient.query(anyString(), any()))
+            .thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
+                .setCode(ReplyCode.Ok)
+                .setRoCoProcResult(ROCoProcOutput.newBuilder()
+                    .setInboxService(InboxServiceROCoProcOutput.newBuilder()
+                        .setGc(GCReply.newBuilder()
+                            .setCode(GCReply.Code.OK)
+                            .addCandidate(gcCandidate1)
+                            .addCandidate(gcCandidate2)
+                            .build())
+                        .build())
+                    .build())
+                .build()));
+        when(inboxClient.detach(any())).thenReturn(new CompletableFuture<>());
+        inboxGCProc.gc(System.nanoTime(), null, null, HLC.INST.getPhysical());
+        ArgumentCaptor<DetachRequest> detachRequestCaptor = ArgumentCaptor.forClass(DetachRequest.class);
+        verify(inboxClient, times(2)).detach(detachRequestCaptor.capture());
+        List<DetachRequest> detachRequestList = detachRequestCaptor.getAllValues();
 
-        inboxGCProc.gcRange(System.nanoTime(), rangeId, tenantId, 10, HLC.INST.getPhysical(), 2);
-        verify(storeClient, times(2)).query(anyString(), any());
-        verify(inboxClient, times(0)).detach(any());
+        assertEquals(detachRequestList.size(), 2);
+        assertEquals(detachRequestList.get(0).getInboxId(), gcCandidate1.getInboxId());
+        assertEquals(detachRequestList.get(0).getIncarnation(), gcCandidate1.getIncarnation());
+        assertEquals(detachRequestList.get(0).getVersion(), gcCandidate1.getVersion());
+        assertEquals(detachRequestList.get(0).getExpirySeconds(), gcCandidate1.getExpirySeconds());
+        assertEquals(detachRequestList.get(0).getClient(), gcCandidate1.getClient());
+        assertFalse(detachRequestList.get(0).getDiscardLWT());
+
+        // verify the second detach request
+        assertEquals(detachRequestList.get(1).getInboxId(), gcCandidate2.getInboxId());
+        assertEquals(detachRequestList.get(1).getIncarnation(), gcCandidate2.getIncarnation());
+        assertEquals(detachRequestList.get(1).getVersion(), gcCandidate2.getVersion());
+        assertEquals(detachRequestList.get(1).getExpirySeconds(), gcCandidate2.getExpirySeconds());
+        assertEquals(detachRequestList.get(1).getClient(), gcCandidate2.getClient());
+        assertFalse(detachRequestList.get(1).getDiscardLWT());
+    }
+
+    @Test
+    public void expirySecondsOverride() {
+        GCReply.GCCandidate gcCandidate1 = GCReply.GCCandidate.newBuilder()
+            .setInboxId("inboxId1")
+            .setIncarnation(1)
+            .setVersion(2)
+            .setExpirySeconds(3)
+            .setClient(ClientInfo.newBuilder().build())
+            .build();
+        inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
+        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(remoteRangeSetting));
+        when(storeClient.query(anyString(), any()))
+            .thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
+                .setCode(ReplyCode.Ok)
+                .setRoCoProcResult(ROCoProcOutput.newBuilder()
+                    .setInboxService(InboxServiceROCoProcOutput.newBuilder()
+                        .setGc(GCReply.newBuilder()
+                            .setCode(GCReply.Code.OK)
+                            .addCandidate(gcCandidate1)
+                            .build())
+                        .build())
+                    .build())
+                .build()));
+        when(inboxClient.detach(any())).thenReturn(new CompletableFuture<>());
+        inboxGCProc.gc(System.nanoTime(), null, 3, HLC.INST.getPhysical());
+        ArgumentCaptor<DetachRequest> detachRequestCaptor = ArgumentCaptor.forClass(DetachRequest.class);
+        verify(inboxClient).detach(detachRequestCaptor.capture());
+        List<DetachRequest> detachRequestList = detachRequestCaptor.getAllValues();
+
+        assertEquals(detachRequestList.size(), 1);
+        assertEquals(detachRequestList.get(0).getInboxId(), gcCandidate1.getInboxId());
+        assertEquals(detachRequestList.get(0).getIncarnation(), gcCandidate1.getIncarnation());
+        assertEquals(detachRequestList.get(0).getVersion(), gcCandidate1.getVersion());
+        assertEquals(detachRequestList.get(0).getExpirySeconds(), 0);
+        assertEquals(detachRequestList.get(0).getClient(), gcCandidate1.getClient());
+        assertFalse(detachRequestList.get(0).getDiscardLWT());
     }
 }
 

@@ -34,13 +34,13 @@ import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class HTTPExpireInboxHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKickHandler> {
+public class HTTPExpireSessionHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPExpireSessionHandler> {
     @Mock
     private IInboxClient inboxClient;
 
     @Override
-    protected Class<HTTPKickHandler> handlerClass() {
-        return HTTPKickHandler.class;
+    protected Class<HTTPExpireSessionHandler> handlerClass() {
+        return HTTPExpireSessionHandler.class;
     }
 
     @Test

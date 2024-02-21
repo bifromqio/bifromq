@@ -15,7 +15,7 @@ package com.baidu.bifromq.mqtt.session;
 
 import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
 import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttSessionWorkingMemoryGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubCountGauge;
 
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
@@ -61,7 +61,7 @@ public final class MQTTSessionContext {
     private final Ticker ticker;
     private final FutureTracker futureTracker = new FutureTracker();
     private final Map<String, AtomicInteger> transientSubCountByTenant;
-    private final Map<String, AtomicInteger> transientSubSpaceByTenant;
+    private final Map<String, AtomicInteger> transientSessionSpaceByTenant;
 
     @Builder
     MQTTSessionContext(String serverId,
@@ -89,7 +89,7 @@ public final class MQTTSessionContext {
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
         this.transientSubCountByTenant = new ConcurrentHashMap<>();
-        this.transientSubSpaceByTenant = new ConcurrentHashMap<>();
+        this.transientSessionSpaceByTenant = new ConcurrentHashMap<>();
 
     }
 
@@ -182,8 +182,8 @@ public final class MQTTSessionContext {
         logTenantMetricGauge(tenantId, value, MqttTransientSubCountGauge, transientSubCountByTenant);
     }
 
-    public void logTransientSubUsedSpace(String tenantId, int value) {
-        logTenantMetricGauge(tenantId, value, MqttTransientSubSpaceGauge, transientSubSpaceByTenant);
+    public void logSessionUsedSpace(String tenantId, int value) {
+        logTenantMetricGauge(tenantId, value, MqttSessionWorkingMemoryGauge, transientSessionSpaceByTenant);
     }
 
     private void logTenantMetricGauge(String tenantId,

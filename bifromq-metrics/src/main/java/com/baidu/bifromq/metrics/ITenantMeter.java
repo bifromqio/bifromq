@@ -23,12 +23,12 @@ public interface ITenantMeter {
         return TenantMeterCache.get(tenantId);
     }
 
-    static void gauging(String tenantId, TenantMetric gaugeMetric, Supplier<Number> supplier) {
-        TenantGauges.gauging(tenantId, gaugeMetric, supplier);
+    static void gauging(String tenantId, TenantMetric gaugeMetric, Supplier<Number> supplier, String... tagValuePair) {
+        TenantGauges.gauging(tenantId, gaugeMetric, supplier, tagValuePair);
     }
 
-    static void stopGauging(String tenantId, TenantMetric gaugeMetric) {
-        TenantGauges.stopGauging(tenantId, gaugeMetric);
+    static void stopGauging(String tenantId, TenantMetric gaugeMetric, String... tagValuePair) {
+        TenantGauges.stopGauging(tenantId, gaugeMetric, tagValuePair);
     }
 
     void recordCount(TenantMetric metric);

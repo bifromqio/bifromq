@@ -47,6 +47,8 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttDecoder;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageType;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -210,7 +212,16 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                         handleGoAway(onGetSessionFailed(clientInfo));
                                     } else if (reply.getCode() == GetReply.Code.EXIST) {
                                         // reuse existing inbox with the highest incarnation, the old ones will be cleaned up eventually
-                                        InboxVersion inbox = reply.getInbox(reply.getInboxCount() - 1);
+                                        List<InboxVersion> inboxes = reply.getInboxList();
+                                        InboxVersion inbox;
+                                        if (inboxes.size() == 1) {
+                                            inbox = inboxes.get(0);
+                                        } else {
+                                            inboxes = new ArrayList<>(inboxes);
+                                            inboxes.sort(
+                                                (o1, o2) -> Long.compare(o2.getIncarnation(), o1.getIncarnation()));
+                                            inbox = reply.getInbox(0);
+                                        }
                                         int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
                                         setupPersistentSessionHandler(connMsg,
                                             settings,

@@ -1,0 +1,108 @@
+/*
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
+package com.baidu.bifromq.dist.worker;
+
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.dist.entity.EntityUtil.tenantPrefix;
+import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
+
+import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.store.api.IKVReader;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+class TenantsState {
+    private final Map<String, TenantRouteState> tenantRouteStates = new ConcurrentHashMap<>();
+    private final IKVReader reader;
+    private final String[] tags;
+
+    TenantsState(IKVReader reader, String... tags) {
+        this.reader = reader;
+        this.tags = tags;
+    }
+
+    void incNormalRoutes(String tenantId) {
+        incNormalRoutes(tenantId, 1);
+    }
+
+    void incNormalRoutes(String tenantId, int count) {
+        assert count > 0;
+        tenantRouteStates.computeIfAbsent(tenantId,
+            k -> new TenantRouteState(tenantId, getSpaceUsageProvider(tenantId), tags)).addNormalRoutes(count);
+    }
+
+    void decNormalRoutes(String tenantId) {
+        decSharedRoutes(tenantId, 1);
+    }
+
+    void decNormalRoutes(String tenantId, int count) {
+        assert count > 0;
+        tenantRouteStates.computeIfPresent(tenantId, (k, v) -> {
+            v.addNormalRoutes(-count);
+            if (v.isNoRoutes()) {
+                v.destroy();
+                return null;
+            }
+            return v;
+        });
+    }
+
+    void incSharedRoutes(String tenantId) {
+        incSharedRoutes(tenantId, 1);
+    }
+
+    void incSharedRoutes(String tenantId, int count) {
+        assert count > 0;
+        tenantRouteStates.computeIfAbsent(tenantId,
+            k -> new TenantRouteState(tenantId, getSpaceUsageProvider(tenantId), tags)).addSharedRoutes(count);
+    }
+
+    void decSharedRoutes(String tenantId) {
+        decSharedRoutes(tenantId, 1);
+    }
+
+    void decSharedRoutes(String tenantId, int count) {
+        assert count > 0;
+        tenantRouteStates.computeIfPresent(tenantId, (k, v) -> {
+            v.addSharedRoutes(-count);
+            if (v.isNoRoutes()) {
+                v.destroy();
+                return null;
+            }
+            return v;
+        });
+    }
+
+    void reset() {
+        tenantRouteStates.values().forEach(TenantRouteState::destroy);
+        tenantRouteStates.clear();
+    }
+
+    private Supplier<Number> getSpaceUsageProvider(String tenantId) {
+        return () -> {
+            try {
+                return reader.size(intersect(reader.boundary(), Boundary.newBuilder()
+                    .setStartKey(tenantPrefix(tenantId))
+                    .setEndKey(tenantUpperBound(tenantId))
+                    .build()));
+            } catch (Exception e) {
+                log.error("Unexpected error", e);
+                return 0;
+            }
+        };
+    }
+}

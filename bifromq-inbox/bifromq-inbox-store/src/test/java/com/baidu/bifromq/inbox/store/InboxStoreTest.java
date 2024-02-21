@@ -15,6 +15,10 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxPrefix;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -61,8 +65,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
-import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
-import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
@@ -72,6 +74,7 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.inbox.util.MessageUtil;
+import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -80,6 +83,8 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.File;
@@ -91,6 +96,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
@@ -99,6 +105,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -196,14 +203,12 @@ abstract class InboxStoreTest {
             .storeClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
-            .purgeDelay(Duration.ZERO)
             .storeOptions(options)
             .balanceControllerOptions(controllerOptions)
             .queryExecutor(queryExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(1))
-            .statsInterval(Duration.ofSeconds(1))
             .build();
     }
 
@@ -214,10 +219,12 @@ abstract class InboxStoreTest {
     }
 
     @AfterClass(groups = "integration")
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
         new Thread(() -> {
             testStore.stop();
+            storeClient.stop();
+            inboxClient.close();
             clientCrdtService.stop();
             serverCrdtService.stop();
             agentHost.shutdown();
@@ -290,20 +297,6 @@ abstract class InboxStoreTest {
         assertTrue(output.hasGc());
         assertEquals(output.getReqId(), reqId);
         return output.getGc();
-    }
-
-    protected CollectMetricsReply requestCollectMetrics(CollectMetricsRequest request) {
-        long reqId = ThreadLocalRandom.current().nextInt();
-        InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
-            .setReqId(reqId)
-            .setCollectMetrics(request)
-            .build();
-        List<KVRangeSetting> rangeSettings = storeClient.findByBoundary(FULL_BOUNDARY);
-        assert !rangeSettings.isEmpty();
-        InboxServiceROCoProcOutput output = query(rangeSettings.get(0), input);
-        assertTrue(output.hasCollectedMetrics());
-        assertEquals(output.getReqId(), reqId);
-        return output.getCollectedMetrics();
     }
 
     protected List<BatchGetReply.Result> requestGet(BatchGetRequest.Params... params) {
@@ -451,6 +444,48 @@ abstract class InboxStoreTest {
         assertEquals(output.getReqId(), reqId);
         assertEquals(params.length, output.getBatchCommit().getCodeCount());
         return output.getBatchCommit().getCodeList();
+    }
+
+    protected Gauge getPSessionGauge(String tenantId) {
+        return getGauge(tenantId, MqttPersistentSessionNumGauge);
+    }
+
+    protected Gauge getPSessionSpaceGauge(String tenantId) {
+        return getGauge(tenantId, MqttPersistentSessionSpaceGauge);
+    }
+
+    protected Gauge getSubCountGauge(String tenantId) {
+        return getGauge(tenantId, MqttPersistentSubCountGauge);
+    }
+
+    protected void assertNoGauge(String tenantId, TenantMetric gaugeMetric) {
+        await().until(() -> {
+            boolean found = false;
+            for (Meter meter : meterRegistry.getMeters()) {
+                if (meter.getId().getType() == Meter.Type.GAUGE
+                    && meter.getId().getName().equals(gaugeMetric.metricName)
+                    && Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
+                    found = true;
+                }
+            }
+            return !found;
+        });
+    }
+
+    protected Gauge getGauge(String tenantId, TenantMetric gaugeMetric) {
+        AtomicReference<Gauge> holder = new AtomicReference<>();
+        await().until(() -> {
+            for (Meter meter : meterRegistry.getMeters()) {
+                if (meter.getId().getType() == Meter.Type.GAUGE
+                    && meter.getId().getName().equals(gaugeMetric.metricName)
+                    && Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
+                    holder.set((Gauge) meter);
+                    break;
+                }
+            }
+            return holder.get() != null;
+        });
+        return holder.get();
     }
 
     protected TopicMessagePack.PublisherPack message(QoS qos, String payload) {

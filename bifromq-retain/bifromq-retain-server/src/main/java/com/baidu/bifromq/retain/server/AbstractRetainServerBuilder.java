@@ -14,10 +14,11 @@
 package com.baidu.bifromq.retain.server;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.deliverer.IMessageDeliverer;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 
 abstract class AbstractRetainServerBuilder<T extends AbstractRetainServerBuilder<T>> implements IRetainServerBuilder {
+    ISettingProvider settingProvider;
     ISubBrokerManager subBrokerManager;
     IBaseKVStoreClient retainStoreClient;
 
@@ -28,6 +29,11 @@ abstract class AbstractRetainServerBuilder<T extends AbstractRetainServerBuilder
 
     public T retainStoreClient(IBaseKVStoreClient retainStoreClient) {
         this.retainStoreClient = retainStoreClient;
+        return thisT();
+    }
+
+    public T settingProvider(ISettingProvider settingProvider) {
+        this.settingProvider = settingProvider;
         return thisT();
     }
 

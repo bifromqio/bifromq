@@ -92,8 +92,8 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     @Override
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
                                        Supplier<IKVReader> rangeReaderProvider) {
-        return new DistWorkerCoProc(id, rangeReaderProvider, eventCollector, settingProvider, distClient,
-            subBrokerManager, deliverer, matchExecutor);
+        return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector, settingProvider,
+            distClient, subBrokerManager, deliverer, matchExecutor);
     }
 
     public void close() {

@@ -86,6 +86,15 @@ public class EntityUtil {
         return rawKeyUtf8.substring(0, firstSplit);
     }
 
+    public static Matching.Type getType(ByteString matchRecordKey) {
+        String matchRecordKeyStr = matchRecordKey.toStringUtf8();
+        int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
+        char flag = matchRecordKeyStr.charAt(lastSplit + 1);
+        return switch (flag) {
+            case '0' -> Matching.Type.Normal;
+            default -> Matching.Type.Group;
+        };
+    }
     public static Matching parseMatchRecord(ByteString matchRecordKey, ByteString matchRecordValue) {
         // <tenantId><NUL><1><ESCAPED_TOPIC_FILTER><NUL><FLAG><SCOPED_INBOX|SHARE_GROUP>
         String matchRecordKeyStr = matchRecordKey.toStringUtf8();

@@ -35,6 +35,7 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
         register(new HTTPGetSessionInfoHandler(sessionDictClient));
         register(new HTTPKickHandler(sessionDictClient));
         register(new HTTPRetainHandler(retainClient, settingProvider));
+        register(new HTTPExpireRetainHandler(retainClient));
         register(new HTTPPubHandler(distClient, settingProvider));
         register(new HTTPSubHandler(sessionDictClient));
         register(new HTTPUnsubHandler(sessionDictClient));

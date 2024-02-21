@@ -73,7 +73,6 @@ public class StateStoreConfig {
         private int queryPipelinePerStore = 100;
         private int compactWALThreshold = 2500;
         private int gcIntervalSeconds = 600;
-        private int purgeDelaySeconds = 180;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
         @JsonSetter(nulls = Nulls.SKIP)

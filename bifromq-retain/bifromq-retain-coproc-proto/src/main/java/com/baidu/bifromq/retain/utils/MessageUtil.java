@@ -15,15 +15,24 @@ package com.baidu.bifromq.retain.utils;
 
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
-import com.baidu.bifromq.retain.rpc.proto.CollectMetricsRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 
 public class MessageUtil {
-    public static RetainServiceRWCoProcInput buildGCRequest(long reqId) {
+    public static RetainServiceRWCoProcInput buildGCRequest(long reqId,
+                                                            long now,
+                                                            String tenantId,
+                                                            Integer expirySeconds) {
+        GCRequest.Builder reqBuilder = GCRequest.newBuilder().setReqId(reqId).setNow(now);
+        if (tenantId != null) {
+            reqBuilder.setTenantId(tenantId);
+        }
+        if (expirySeconds != null) {
+            reqBuilder.setExpirySeconds(expirySeconds);
+        }
         return RetainServiceRWCoProcInput.newBuilder()
-            .setGc(GCRequest.newBuilder().setReqId(reqId).build())
+            .setGc(reqBuilder.build())
             .build();
     }
 
@@ -36,12 +45,6 @@ public class MessageUtil {
     public static RetainServiceROCoProcInput buildMatchRequest(BatchMatchRequest request) {
         return RetainServiceROCoProcInput.newBuilder()
             .setBatchMatch(request)
-            .build();
-    }
-
-    public static RetainServiceROCoProcInput buildCollectMetricsRequest(long reqId) {
-        return RetainServiceROCoProcInput.newBuilder()
-            .setCollectMetrics(CollectMetricsRequest.newBuilder().setReqId(reqId).build())
             .build();
     }
 }

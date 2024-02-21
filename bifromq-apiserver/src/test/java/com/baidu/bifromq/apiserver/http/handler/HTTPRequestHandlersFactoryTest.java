@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_USER_ID;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.apiserver.MockableTest;
@@ -24,8 +22,6 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpMethod;
 import java.util.Collection;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
@@ -47,6 +43,6 @@ public class HTTPRequestHandlersFactoryTest extends MockableTest {
         HTTPRequestHandlersFactory handlersFactory = new HTTPRequestHandlersFactory(sessionDictClient,
             distClient, inboxClient, retainClient, settingProvider);
         Collection<IHTTPRequestHandler> handlers = handlersFactory.build();
-        assertEquals(handlers.size(), 7);
+        assertEquals(handlers.size(), 8);
     }
 }

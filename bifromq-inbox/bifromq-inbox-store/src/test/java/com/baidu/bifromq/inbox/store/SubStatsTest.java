@@ -13,17 +13,16 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import static org.awaitility.Awaitility.await;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
-import com.baidu.bifromq.inbox.storage.proto.CollectMetricsReply;
-import com.baidu.bifromq.inbox.storage.proto.CollectMetricsRequest;
+import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.type.ClientInfo;
+import io.micrometer.core.instrument.Gauge;
 import org.testng.annotations.Test;
 
 public class SubStatsTest extends InboxStoreTest {
@@ -43,7 +42,6 @@ public class SubStatsTest extends InboxStoreTest {
             .setClient(client)
             .setNow(now)
             .build());
-
         BatchSubRequest.Params subParams = BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
@@ -54,13 +52,10 @@ public class SubStatsTest extends InboxStoreTest {
             .build();
         requestSub(subParams);
 
-        long reqId = System.nanoTime();
-        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
-            .setReqId(reqId)
-            .build());
-        assertEquals(reply.getReqId(), reqId);
-        assertEquals(reply.getSubCountsMap().get(tenantId), 1);
-        assertTrue(reply.getSubUsedSpacesMap().get(tenantId) > 0);
+        Gauge subCountGauge = getSubCountGauge(tenantId);
+        Gauge pSessionGauge = getPSessionGauge(tenantId);
+        await().until(() -> subCountGauge.value() == 1);
+        await().until(() -> pSessionGauge.value() == 1);
     }
 
     @Test(groups = "integration")
@@ -91,13 +86,10 @@ public class SubStatsTest extends InboxStoreTest {
         requestSub(subParams);
         requestSub(subParams);
 
-        long reqId = System.nanoTime();
-        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
-            .setReqId(reqId)
-            .build());
-        assertEquals(reply.getReqId(), reqId);
-        assertEquals(reply.getSubCountsMap().get(tenantId), 1);
-        assertTrue(reply.getSubUsedSpacesMap().get(tenantId) > 0);
+        Gauge subCountGauge = getSubCountGauge(tenantId);
+        Gauge pSessionGauge = getPSessionGauge(tenantId);
+        await().until(() -> subCountGauge.value() == 1);
+        await().until(() -> pSessionGauge.value() == 1);
     }
 
     @Test(groups = "integration")
@@ -137,13 +129,10 @@ public class SubStatsTest extends InboxStoreTest {
             .build();
         requestUnsub(unsubParams);
 
-        long reqId = System.nanoTime();
-        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
-            .setReqId(reqId)
-            .build());
-        assertEquals(reply.getReqId(), reqId);
-        assertEquals(reply.getSubCountsMap().get(tenantId), 0);
-        assertEquals((long) reply.getSubUsedSpacesMap().get(tenantId), 0);
+        Gauge subCountGauge = getSubCountGauge(tenantId);
+        Gauge pSessionGauge = getPSessionGauge(tenantId);
+        await().until(() -> subCountGauge.value() == 0);
+        await().until(() -> pSessionGauge.value() == 1);
     }
 
     @Test(groups = "integration")
@@ -185,13 +174,10 @@ public class SubStatsTest extends InboxStoreTest {
         // unsub again
         requestUnsub(unsubParams);
 
-        long reqId = System.nanoTime();
-        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
-            .setReqId(reqId)
-            .build());
-        assertEquals(reply.getReqId(), reqId);
-        assertEquals(reply.getSubCountsMap().get(tenantId), 0);
-        assertEquals((long) reply.getSubUsedSpacesMap().get(tenantId), 0);
+        Gauge subCountGauge = getSubCountGauge(tenantId);
+        Gauge pSessionGauge = getPSessionGauge(tenantId);
+        await().until(() -> subCountGauge.value() == 0);
+        await().until(() -> pSessionGauge.value() == 1);
     }
 
     @Test(groups = "integration")
@@ -199,21 +185,11 @@ public class SubStatsTest extends InboxStoreTest {
         long now = 0;
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
-        String inboxId1 = "inboxId1-" + System.nanoTime();
         String topicFilter = "/a/b/c";
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
         BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        requestCreate(createParams);
-        createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId1)
             .setIncarnation(incarnation)
             .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
@@ -239,12 +215,9 @@ public class SubStatsTest extends InboxStoreTest {
             .setVersion(0)
             .build();
         requestDelete(deleteParams);
-        long reqId = System.nanoTime();
-        CollectMetricsReply reply = requestCollectMetrics(CollectMetricsRequest.newBuilder()
-            .setReqId(reqId)
-            .build());
-        assertEquals(reply.getReqId(), reqId);
-        assertEquals(reply.getSubCountsMap().get(tenantId), 0);
-        assertEquals((long) reply.getSubUsedSpacesMap().get(tenantId), 0);
+
+        assertNoGauge(tenantId, TenantMetric.MqttPersistentSessionSpaceGauge);
+        assertNoGauge(tenantId, TenantMetric.MqttPersistentSessionNumGauge);
+        assertNoGauge(tenantId, TenantMetric.MqttPersistentSubCountGauge);
     }
 }

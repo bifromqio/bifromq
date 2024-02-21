@@ -13,151 +13,118 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static org.mockito.Mockito.when;
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.Matched;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.type.TopicMessage;
-import java.time.Clock;
-import org.mockito.Mock;
+import io.micrometer.core.instrument.Gauge;
+import java.time.Duration;
+import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+@Slf4j
 public class GCTest extends RetainStoreTest {
-    @Mock
-    private Clock clock;
+    private String tenantId;
 
     @BeforeMethod(alwaysRun = true)
     public void reset() {
-        when(clock.millis()).thenReturn(0L);
-    }
-
-    @Override
-    protected Clock getClock() {
-        return clock;
+        tenantId = "tenantA-" + System.nanoTime();
     }
 
 
     @Test(groups = "integration")
     public void retainAlreadyExpired() {
-        String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message = message(topic, "hello", 0, 1);
         // make it expired
-        when(clock.millis()).thenReturn(1100L);
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
-
-        assertEquals(requestRetain(tenantId, message), RetainResult.ERROR);
+        assertEquals(requestRetain(tenantId, 1100L, message, 1), RetainResult.Code.ERROR);
     }
 
     @Test(groups = "integration")
     public void inlineGCDuringRetain() {
-        String tenantId = "tenantA";
         String topic1 = "/a";
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 1);
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
 
-        requestRetain(tenantId, message1);
-        MatchResult matchReply = requestMatch(tenantId, topic1, 10);
+        requestRetain(tenantId, 0, message1, 1);
+        MatchResult matchReply = requestMatch(tenantId, 0, topic1, 10);
         Matched matched = matchReply.getOk();
         assertEquals(matched.getMessagesCount(), 1);
         assertEquals(matched.getMessages(0), message1);
 
-        when(clock.millis()).thenReturn(1100L);
-
         // message1 has expired
-        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, 1100L, topic1, 10).getOk().getMessagesCount(), 0);
 
         TopicMessage message2 = message(topic2, "world", 1000, 1);
 
-        assertEquals(requestRetain(tenantId, message2), RetainResult.RETAINED);
+        assertEquals(requestRetain(tenantId, 1100L, message2, 1), RetainResult.Code.RETAINED);
 
-        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, 1100L, topic1, 10).getOk().getMessagesCount(), 0);
 
-        matchReply = requestMatch(tenantId, topic2, 10);
+        matchReply = requestMatch(tenantId, 1100L, topic2, 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 1);
         assertEquals(matchReply.getOk().getMessages(0), message2);
 
-        clearMessage(tenantId, topic2);
     }
 
     @Test(groups = "integration")
     public void inlineGCDuringDelete() {
-        String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message1 = message(topic, "hello", 0, 1);
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
 
-        requestRetain(tenantId, message1);
+        requestRetain(tenantId, message1, 1);
 
-        when(clock.millis()).thenReturn(1100L);
-
-        assertEquals(requestRetain(tenantId, message(topic, "")), RetainResult.CLEARED);
-        assertEquals(requestMatch(tenantId, topic, 10).getOk().getMessagesCount(), 0);
+        assertEquals(requestRetain(tenantId, 1100L, message(topic, ""), 1), RetainResult.Code.CLEARED);
+        assertEquals(requestMatch(tenantId, 1100L, topic, 10).getOk().getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
     public void inlineGCDuringReplace() {
-        String tenantId = "tenantA";
         String topic1 = "/a";
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 1);
         TopicMessage message2 = message(topic2, "world", 0, 1);
         TopicMessage message3 = message(topic2, "world", 1000, 1);
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(2);
 
-        requestRetain(tenantId, message1);
-        requestRetain(tenantId, message2);
+        requestRetain(tenantId, 0, message1, 2);
+        requestRetain(tenantId, 0, message2, 2);
 
-        when(clock.millis()).thenReturn(1100L);
+        assertEquals(requestRetain(tenantId, 1100L, message3, 2), RetainResult.Code.RETAINED);
 
-
-        assertEquals(requestRetain(tenantId, message3), RetainResult.RETAINED);
-
-        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 0);
-        assertEquals(requestMatch(tenantId, topic2, 10).getOk().getMessagesCount(), 1);
-        assertEquals(requestMatch(tenantId, topic2, 10).getOk().getMessages(0), message3);
+        assertEquals(requestMatch(tenantId, 1100L, topic1, 10).getOk().getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, 1100L, topic2, 10).getOk().getMessagesCount(), 1);
+        assertEquals(requestMatch(tenantId, 1100L, topic2, 10).getOk().getMessages(0), message3);
 
         // message1 will be removed as well, so retain set size should be 1
-        assertEquals(requestRetain(tenantId, message("/c", "abc")), RetainResult.RETAINED);
+        assertEquals(requestRetain(tenantId, 1100L, message("/c", "abc"), 2), RetainResult.Code.RETAINED);
         // no room
-        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
-
-        clearMessage(tenantId, topic2);
-        clearMessage(tenantId, "/c");
+        assertEquals(requestRetain(tenantId, 1100L, message("/d", "abc"), 2), RetainResult.Code.ERROR);
     }
 
     @Test(groups = "integration")
     public void estExpiryTimeUpdateByRetainNew() {
-        String tenantId = "tenantA";
         String topic1 = "/a";
         String topic2 = "/b";
         TopicMessage message1 = message(topic1, "hello", 0, 2);
         TopicMessage message2 = message(topic2, "world", 0, 1);
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(2);
 
 
-        requestRetain(tenantId, message1);
-        requestRetain(tenantId, message2);
+        requestRetain(tenantId, 0, message1, 2);
+        requestRetain(tenantId, 0, message2, 2);
 
-        when(clock.millis()).thenReturn(1100L);
         // message2 expired
-        assertEquals(requestMatch(tenantId, topic1, 10).getOk().getMessagesCount(), 1);
-        assertEquals(requestMatch(tenantId, topic2, 10).getOk().getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, 1100L, topic1, 10).getOk().getMessagesCount(), 1);
+        assertEquals(requestMatch(tenantId, 1100L, topic2, 10).getOk().getMessagesCount(), 0);
 
-        assertEquals(requestRetain(tenantId, message("/c", "abc")), RetainResult.RETAINED);
-        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
+        assertEquals(requestRetain(tenantId, 1100L, message("/c", "abc"), 2), RetainResult.Code.RETAINED);
+        assertEquals(requestRetain(tenantId, 1100L, message("/d", "abc"), 2), RetainResult.Code.EXCEED_LIMIT);
 
-        when(clock.millis()).thenReturn(2100L);
-        // now message1 expired
-        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.RETAINED);
-
-        clearMessage(tenantId, "/c");
-        clearMessage(tenantId, "/d");
+        assertEquals(requestRetain(tenantId, 2100L, message("/d", "abc"), 2), RetainResult.Code.RETAINED);
     }
 
     @Test(groups = "integration")
@@ -166,38 +133,54 @@ public class GCTest extends RetainStoreTest {
         String topic = "/a";
         TopicMessage message1 = message(topic, "hello", 0, 2);
         TopicMessage message2 = message(topic, "world", 0, 1);
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
 
-
-        requestRetain(tenantId, message1);
-        requestRetain(tenantId, message2);
+        requestRetain(tenantId, 0, message1, 1);
+        requestRetain(tenantId, 0, message2, 1);
 
         // no room for new message
-        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
-        when(clock.millis()).thenReturn(1100L);
-        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.RETAINED);
-        assertEquals(requestMatch(tenantId, topic, 10).getOk().getMessagesCount(), 0);
-
-        clearMessage(tenantId, "/d");
+        assertEquals(requestRetain(tenantId, 0, message("/d", "abc"), 1), RetainResult.Code.EXCEED_LIMIT);
+        assertEquals(requestRetain(tenantId, 1100L, message("/d", "abc"), 1), RetainResult.Code.RETAINED);
+        assertEquals(requestMatch(tenantId, 1100L, topic, 10).getOk().getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")
     public void gc() {
-        String tenantId = "tenantA";
         String topic = "/a";
         TopicMessage message = message(topic, "hello", 0, 1);
-        when(settingProvider.provide(Setting.RetainedTopicLimit, tenantId)).thenReturn(1);
 
-        requestRetain(tenantId, message);
+        requestRetain(tenantId, 0, message, 1);
 
-        requestGC(tenantId);
-        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.ERROR);
+        requestGC(0, null, null);
+        assertEquals(requestRetain(tenantId, 0L, message("/d", "abc"), 1), RetainResult.Code.EXCEED_LIMIT);
 
-        when(clock.millis()).thenReturn(1100L);
-        requestGC(tenantId);
+        requestGC(1100L, null, null);
 
-        assertEquals(requestRetain(tenantId, message("/d", "abc")), RetainResult.RETAINED);
+        assertEquals(requestRetain(tenantId, 1100L, message("/d", "abc"), 1), RetainResult.Code.RETAINED);
+    }
 
-        clearMessage(tenantId, "/d");
+    @Test(groups = "integration")
+    public void gcTenant() {
+        String tenantId1 = "tenantB-" + System.nanoTime();
+        String topic = "/a";
+        requestRetain(tenantId, 0, message(topic, "hello", 0, 1), 1);
+        requestRetain(tenantId1, 0, message(topic, "hello", 0, 1), 1);
+
+        requestGC(1100L, tenantId, null);
+
+        assertNoGauge(tenantId, TenantMetric.MqttRetainNumGauge);
+        assertNoGauge(tenantId, TenantMetric.MqttRetainSpaceGauge);
+
+        getRetainCountGauge(tenantId1);
+        getSpaceUsageGauge(tenantId1);
+    }
+
+    @Test(groups = "integration")
+    public void gcTenantWithExpirySeconds() {
+        requestRetain(tenantId, 0, message("/a", "hello", 0, 2), 2);
+        requestRetain(tenantId, 0, message("/b", "hello", Duration.ofSeconds(1).toMillis(), 3), 2);
+        Gauge retainCountGauge = getRetainCountGauge(tenantId);
+        await().until(() -> retainCountGauge.value() == 2);
+        requestGC(1100L, tenantId, 1);
+        await().until(() -> retainCountGauge.value() == 1);
     }
 }

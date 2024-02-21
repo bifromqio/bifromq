@@ -13,26 +13,48 @@
 
 package com.baidu.bifromq.retain.store;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantNS;
+
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
+import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import java.time.Clock;
+import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 public class RetainStoreCoProcFactory implements IKVRangeCoProcFactory {
-    private final ISettingProvider settingProvider;
-    private final Clock clock;
+    private final Duration loadEstWindow;
+    private final Map<String, Long> tenantRetainSpaceMap = new ConcurrentHashMap<>();
+    private final Map<String, Long> tenantRetainCountMap = new ConcurrentHashMap<>();
 
-    public RetainStoreCoProcFactory(ISettingProvider settingProvider, Clock clock) {
-        this.settingProvider = settingProvider;
-        this.clock = clock;
+    public RetainStoreCoProcFactory(Duration loadEstimateWindow) {
+        this.loadEstWindow = loadEstimateWindow;
     }
 
     @Override
-    public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
+    public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
+                                                   Supplier<IKVReader> rangeReaderProvider) {
+        return Collections.singletonList(
+            new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
+                // make sure retain message from one tenant do no cross range
+                return Optional.of(upperBound(parseTenantNS(key)));
+            }, "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)));
+    }
+
+    @Override
+    public IKVRangeCoProc createCoProc(String clusterId,
+                                       String storeId,
+                                       KVRangeId id,
                                        Supplier<IKVReader> rangeReaderProvider) {
-        return new RetainStoreCoProc(id, rangeReaderProvider, settingProvider, clock);
+        return new RetainStoreCoProc(clusterId, storeId, id, rangeReaderProvider);
     }
 }

@@ -209,7 +209,6 @@ public abstract class MQTTTest {
             .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .settingProvider(settingProvider)
             .storeClient(retainStoreKVStoreClient)
             .queryExecutor(queryExecutor)
             .tickTaskExecutor(tickTaskExecutor)
@@ -231,6 +230,7 @@ public abstract class MQTTTest {
             .rpcServerBuilder(rpcServerBuilder)
             .subBrokerManager(inboxBrokerMgr)
             .retainStoreClient(retainStoreKVStoreClient)
+            .settingProvider(settingProvider)
             .build();
         KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
         distWorker = IDistWorker.nonStandaloneBuilder()

@@ -13,32 +13,13 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.dist.util.MessageUtil.buildCollectMetricsRequest;
-import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
-import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttTrieSpaceGauge;
-
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
-import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
-import com.baidu.bifromq.dist.rpc.proto.CollectMetricsReply;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -53,20 +34,14 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
 
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
-    private final IBaseKVStoreClient storeClient;
     private final KVRangeBalanceController rangeBalanceController;
     private final ScheduledExecutorService jobScheduler;
     private final AsyncRunner jobRunner;
     private final boolean jobExecutorOwner;
-    private final Duration statsInterval;
-    private volatile CompletableFuture<Void> statsJob;
-    private final Map<String, Long> tenantSubInfoSize = new ConcurrentHashMap<>();
     protected final DistWorkerCoProcFactory coProcFactory;
 
     public AbstractDistWorker(T builder) {
         this.clusterId = builder.clusterId;
-        this.storeClient = builder.storeClient;
-        this.statsInterval = builder.statsInterval;
         coProcFactory = new DistWorkerCoProcFactory(
             builder.distClient,
             builder.settingProvider,
@@ -74,7 +49,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             builder.subBrokerManager,
             builder.loadEstimateWindow);
         rangeBalanceController =
-            new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
+            new KVRangeBalanceController(builder.storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
             String threadName = String.format("dist-worker[%s]-job-executor", builder.clusterId);
@@ -99,7 +74,6 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             storeServer().start();
             rangeBalanceController.start(storeServer().storeId(clusterId));
             status.compareAndSet(Status.STARTING, Status.STARTED);
-            scheduleStats();
             log.info("Dist worker started");
         }
     }
@@ -108,9 +82,6 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping dist worker");
             jobRunner.awaitDone();
-            if (statsJob != null && !statsJob.isDone()) {
-                statsJob.join();
-            }
             rangeBalanceController.stop();
             storeServer().stop();
             log.debug("Stopping CoProcFactory");
@@ -122,83 +93,5 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             log.info("Dist worker stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
-    }
-
-    private void scheduleStats() {
-        if (status.get() != Status.STARTED) {
-            return;
-        }
-        jobScheduler.schedule(this::collectMetrics, statsInterval.toMillis(), TimeUnit.MILLISECONDS);
-    }
-
-    private void collectMetrics() {
-        jobRunner.add(() -> {
-            if (status.get() != Status.STARTED) {
-                return;
-            }
-            List<KVRangeSetting> settings = storeClient.findByBoundary(FULL_BOUNDARY);
-            Iterator<KVRangeSetting> itr = settings.stream().filter(k -> k.leader.equals(id())).iterator();
-            List<CompletableFuture<CollectMetricsReply>> statsFutures = new ArrayList<>();
-            while (itr.hasNext()) {
-                KVRangeSetting leaderReplica = itr.next();
-                statsFutures.add(collectRangeMetrics(leaderReplica));
-            }
-            statsJob = CompletableFuture.allOf(statsFutures.toArray(new CompletableFuture[0]))
-                .whenComplete((v, e) -> {
-                    if (e == null) {
-                        Map<String, Long> usedSpaceMap = statsFutures.stream().map(f -> f.join().getUsedSpacesMap())
-                            .reduce(new HashMap<>(), (result, item) -> {
-                                item.forEach((tenantId, usedSpace) -> result.compute(tenantId, (k, read) -> {
-                                    if (read == null) {
-                                        read = 0L;
-                                    }
-                                    read += usedSpace;
-                                    return read;
-                                }));
-                                return result;
-                            });
-                        record(usedSpaceMap);
-                    }
-                    scheduleStats();
-                });
-        });
-    }
-
-    private void record(Map<String, Long> sizeMap) {
-        for (String tenantId : sizeMap.keySet()) {
-            boolean newGauging = !tenantSubInfoSize.containsKey(tenantId);
-            tenantSubInfoSize.put(tenantId, sizeMap.get(tenantId));
-            if (newGauging) {
-                gauging(tenantId, MqttTrieSpaceGauge, () -> tenantSubInfoSize.getOrDefault(tenantId, 0L));
-            }
-        }
-        for (String tenantId : tenantSubInfoSize.keySet()) {
-            if (!sizeMap.containsKey(tenantId)) {
-                stopGauging(tenantId, MqttTrieSpaceGauge);
-                tenantSubInfoSize.remove(tenantId);
-            }
-        }
-    }
-
-    private CompletableFuture<CollectMetricsReply> collectRangeMetrics(KVRangeSetting leaderReplica) {
-        long reqId = System.currentTimeMillis();
-        return storeClient.query(leaderReplica.leader, KVRangeRORequest.newBuilder()
-                .setReqId(reqId)
-                .setKvRangeId(leaderReplica.id)
-                .setVer(leaderReplica.ver)
-                .setRoCoProc(ROCoProcInput.newBuilder().setDistService(buildCollectMetricsRequest(reqId)).build())
-                .build())
-            .thenApply(reply -> {
-                log.debug("Range metrics collected: serverId={}, rangeId={}, ver={}",
-                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-
-                return reply.getRoCoProcResult().getDistService()
-                    .getCollectMetrics();
-            })
-            .exceptionally(e -> {
-                log.error("Failed to collect range metrics: serverId={}, rangeId={}, ver={}",
-                    leaderReplica.leader, leaderReplica.id, leaderReplica.ver);
-                return CollectMetricsReply.newBuilder().setReqId(reqId).build();
-            });
     }
 }

@@ -13,11 +13,14 @@
 
 package com.baidu.bifromq.inbox.store.gc;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildGCRequest;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
@@ -27,57 +30,71 @@ import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.google.protobuf.ByteString;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxGCProcessor implements IInboxGCProcessor {
+public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
     private final IInboxClient inboxClient;
 
     protected final IBaseKVStoreClient storeClient;
+    private final String localServerId;
 
-    public InboxGCProcessor(IInboxClient inboxClient, IBaseKVStoreClient storeClient) {
+    public InboxStoreGCProcessor(IInboxClient inboxClient, IBaseKVStoreClient storeClient) {
+        this(inboxClient, storeClient, null);
+    }
+
+    public InboxStoreGCProcessor(IInboxClient inboxClient, IBaseKVStoreClient storeClient, String localStoreId) {
         this.inboxClient = inboxClient;
         this.storeClient = storeClient;
+        this.localServerId = localStoreId;
     }
 
     @Override
-    public final CompletableFuture<Result> gcRange(long reqId,
-                                                   KVRangeId rangeId,
-                                                   @Nullable String tenantId,
-                                                   @Nullable Integer expirySeconds,
-                                                   long now,
-                                                   int limit) {
-        CompletableFuture<Result> onDone = new CompletableFuture<>();
-        AtomicInteger count = new AtomicInteger();
-        doGC(reqId, rangeId, tenantId, expirySeconds, null, now, limit, onDone, count);
-        onDone.whenComplete((v, e) -> log.debug("[InboxGC] gc {} inboxes from range[{}]: reqId={}",
-            reqId, count.get(), KVRangeIdUtil.toString(rangeId)));
-        return onDone;
+    public final CompletableFuture<Result> gc(long reqId,
+                                              @Nullable String tenantId,
+                                              @Nullable Integer expirySeconds,
+                                              long now) {
+        List<KVRangeSetting> rangeSettingList;
+        if (tenantId != null) {
+            ByteString tenantPrefix = tenantPrefix(tenantId);
+            rangeSettingList = storeClient.findByBoundary(Boundary.newBuilder()
+                .setStartKey(tenantPrefix).setEndKey(upperBound(tenantPrefix)).build());
+        } else {
+            rangeSettingList = storeClient.findByBoundary(FULL_BOUNDARY);
+            if (localServerId != null) {
+                rangeSettingList.removeIf(rangeSetting -> !rangeSetting.leader.equals(localServerId));
+            }
+        }
+        if (rangeSettingList.isEmpty()) {
+            return CompletableFuture.completedFuture(Result.OK);
+        }
+        CompletableFuture<?>[] gcResults = rangeSettingList.stream().map(
+            setting -> doGC(reqId, setting, tenantId, expirySeconds, now)).toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(gcResults)
+            .thenApply(v -> Arrays.stream(gcResults).map(CompletableFuture::join).toList())
+            .thenApply(gcReplies -> {
+                log.debug("All range gc succeed");
+                return gcReplies.stream().anyMatch(r -> r != Result.OK) ? Result.ERROR : Result.OK;
+            });
     }
 
-    private void doGC(long reqId,
-                      KVRangeId rangeId,
-                      @Nullable String tenantId,
-                      @Nullable Integer expirySeconds,
-                      @Nullable ByteString cursor,
-                      long now,
-                      int limit,
-                      CompletableFuture<Result> onDone,
-                      AtomicInteger count) {
-        scan(rangeId, tenantId, expirySeconds, cursor, now, limit)
+    private CompletableFuture<GCReply> doGC(long reqId,
+                                            KVRangeSetting rangeSetting,
+                                            @Nullable String tenantId,
+                                            @Nullable Integer expirySeconds,
+                                            long now) {
+        return scan(rangeSetting, tenantId, expirySeconds, now)
             .thenCompose(gcReply -> {
                 if (gcReply.getCode() == GCReply.Code.ERROR) {
                     return CompletableFuture.completedFuture(gcReply);
                 }
                 List<GCReply.GCCandidate> inboxList = gcReply.getCandidateList();
-                count.addAndGet(inboxList.size());
                 log.debug("[InboxGC] scan success: reqId={}, rangeId={}, size={}",
-                    reqId, KVRangeIdUtil.toString(rangeId), inboxList.size());
+                    reqId, KVRangeIdUtil.toString(rangeSetting.id), inboxList.size());
                 return CompletableFuture.allOf(inboxList.stream()
                         .map(inbox -> inboxClient.detach(DetachRequest.newBuilder()
                                 .setReqId(System.nanoTime())
@@ -90,7 +107,7 @@ public class InboxGCProcessor implements IInboxGCProcessor {
                                 .setNow(now)
                                 .build())
                             .thenAccept(v -> {
-                                if (v.getCode() != DetachReply.Code.OK && v.getCode() != DetachReply.Code.NO_INBOX) {
+                                if (v.getCode() == DetachReply.Code.ERROR) {
                                     log.warn("[InboxGC] Failed to detach inbox: reqId={}, inboxId={}, reason={}", reqId,
                                         inbox.getInboxId(), v.getCode());
                                 } else {
@@ -101,50 +118,34 @@ public class InboxGCProcessor implements IInboxGCProcessor {
                         .toArray(CompletableFuture[]::new))
                     .thenApply(v -> gcReply);
             })
-            .whenComplete((gcReply, e) -> {
-                if (e != null || gcReply.getCode() == GCReply.Code.ERROR) {
-                    log.debug("Failed to gc inboxes: reqId={}", reqId);
-                    onDone.complete(Result.ERROR);
-                } else {
-                    if (gcReply.hasCursor()) {
-                        doGC(reqId, rangeId, tenantId, expirySeconds, gcReply.getCursor(), now, limit, onDone, count);
-                    } else {
-                        onDone.complete(Result.OK);
-                    }
-                }
+            .exceptionally(e -> {
+                log.debug("Failed to gc inboxes: reqId={}", reqId, e);
+                return GCReply.newBuilder().setCode(GCReply.Code.ERROR).build();
             });
     }
 
-    private CompletableFuture<GCReply> scan(KVRangeId rangeId,
+    private CompletableFuture<GCReply> scan(KVRangeSetting rangeSetting,
                                             @Nullable String tenantId,
                                             @Nullable Integer expirySeconds,
-                                            @Nullable ByteString cursor,
-                                            long now,
-                                            int limit) {
-        Optional<KVRangeSetting> settingOptional = storeClient.findById(rangeId);
-        if (settingOptional.isEmpty()) {
-            return CompletableFuture.completedFuture(GCReply.newBuilder().setCode(GCReply.Code.ERROR).build());
-        }
-        KVRangeSetting replica = settingOptional.get();
+                                            long now) {
         long reqId = System.nanoTime();
-        return storeClient.query(replica.leader, KVRangeRORequest.newBuilder()
+        return storeClient.query(rangeSetting.leader, KVRangeRORequest.newBuilder()
                 .setReqId(reqId)
-                .setKvRangeId(replica.id)
-                .setVer(replica.ver)
+                .setKvRangeId(rangeSetting.id)
+                .setVer(rangeSetting.ver)
                 .setRoCoProc(ROCoProcInput.newBuilder()
-                    .setInboxService(buildGCRequest(reqId, tenantId, expirySeconds, cursor, now, limit))
+                    .setInboxService(buildGCRequest(reqId, tenantId, expirySeconds, now))
                     .build())
                 .build())
             .thenApply(v -> {
                 if (v.getCode() == ReplyCode.Ok) {
                     return v.getRoCoProcResult().getInboxService().getGc();
                 }
-
                 throw new RuntimeException("BaseKV Query failed:" + v.getCode().name());
             })
             .exceptionally(e -> {
-                log.error("[InboxGC] scan failed: tenantId={}, rangeId={}", tenantId, KVRangeIdUtil.toString(rangeId),
-                    e);
+                log.error("[InboxGC] scan failed: tenantId={}, rangeId={}",
+                    tenantId, KVRangeIdUtil.toString(rangeSetting.id), e);
                 return GCReply.newBuilder().setCode(GCReply.Code.ERROR).build();
             });
     }

@@ -119,7 +119,6 @@ public abstract class DistServiceTest {
             .eventCollector(eventCollector)
             .distClient(distClient)
             .storeClient(workerClient)
-            .statsInterval(Duration.ofSeconds(5))
             .queryExecutor(queryExecutor)
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)

@@ -19,7 +19,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
@@ -53,7 +52,6 @@ public class GCTest extends InboxStoreTest {
 
         GCReply reply = requestGCScan(GCRequest.newBuilder()
             .setTenantId(tenantId)
-            .setLimit(10)
             .setNow(now)
             .build());
         assertEquals(reply.getCandidateCount(), 0);
@@ -84,11 +82,9 @@ public class GCTest extends InboxStoreTest {
 
         GCReply reply = requestGCScan(GCRequest.newBuilder()
             .setTenantId(tenantId)
-            .setLimit(10)
             .setExpirySeconds(1)
             .setNow(Duration.ofSeconds(11).toMillis())
             .build());
-        assertFalse(reply.hasCursor());
         assertEquals(reply.getCandidateCount(), 1);
         GCReply.GCCandidate candidate = reply.getCandidate(0);
         assertEquals(candidate.getInboxId(), inboxId);
@@ -121,10 +117,8 @@ public class GCTest extends InboxStoreTest {
             .build());
 
         GCReply reply = requestGCScan(GCRequest.newBuilder()
-            .setLimit(10)
             .setNow(Duration.ofSeconds(13).toMillis())
             .build());
-        assertFalse(reply.hasCursor());
         assertEquals(reply.getCandidateCount(), 1);
         GCReply.GCCandidate candidate = reply.getCandidate(0);
         assertEquals(candidate.getInboxId(), inboxId);
@@ -169,10 +163,8 @@ public class GCTest extends InboxStoreTest {
 
         GCReply reply = requestGCScan(GCRequest.newBuilder()
             .setTenantId(tenant1)
-            .setLimit(10)
             .setNow(Duration.ofSeconds(13).toMillis())
             .build());
-        assertFalse(reply.hasCursor());
         assertEquals(reply.getCandidateCount(), 1);
         GCReply.GCCandidate candidate = reply.getCandidate(0);
         assertEquals(candidate.getInboxId(), inboxId1);
@@ -182,10 +174,8 @@ public class GCTest extends InboxStoreTest {
 
         reply = requestGCScan(GCRequest.newBuilder()
             .setTenantId(tenant2)
-            .setLimit(10)
             .setNow(Duration.ofSeconds(13).toMillis())
             .build());
-        assertFalse(reply.hasCursor());
         assertEquals(reply.getCandidateCount(), 1);
         candidate = reply.getCandidate(0);
         assertEquals(candidate.getInboxId(), inboxId2);
@@ -205,113 +195,6 @@ public class GCTest extends InboxStoreTest {
             .setIncarnation(incarnation)
             .setVersion(0)
             .build());
-    }
-
-    @Test(groups = "integration")
-    public void scanWithLimit() {
-        long now = 0;
-        String tenant = "tenantId-" + System.nanoTime();
-        String inboxId1 = "inboxId1-" + System.nanoTime();
-        String inboxId2 = "inboxId2-" + System.nanoTime();
-        String inboxId3 = "inboxId2-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenant).build();
-        requestCreate(
-            BatchCreateRequest.Params.newBuilder()
-                .setInboxId(inboxId1)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(5)
-                .setExpirySeconds(5)
-                .setClient(client)
-                .setNow(now)
-                .build(),
-            BatchCreateRequest.Params.newBuilder()
-                .setInboxId(inboxId2)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(5)
-                .setExpirySeconds(5)
-                .setClient(client)
-                .setNow(now)
-                .build(),
-            BatchCreateRequest.Params.newBuilder()
-                .setInboxId(inboxId3)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(5)
-                .setExpirySeconds(5)
-                .setClient(client)
-                .setNow(now)
-                .build());
-        GCReply reply = requestGCScan(GCRequest.newBuilder()
-            .setTenantId(tenant)
-            .setLimit(2)
-            .setNow(Duration.ofSeconds(13).toMillis())
-            .build());
-        assertTrue(reply.hasCursor());
-        assertEquals(reply.getCandidateCount(), 2);
-    }
-
-    @Test(groups = "integration")
-    public void scanWithCursor() {
-        long now = 0;
-        String tenant = "tenantId-" + System.nanoTime();
-        String inboxId1 = "inboxId1-" + System.nanoTime();
-        String inboxId2 = "inboxId2-" + System.nanoTime();
-        String inboxId3 = "inboxId2-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenant).build();
-        requestCreate(
-            BatchCreateRequest.Params.newBuilder()
-                .setInboxId(inboxId1)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(5)
-                .setExpirySeconds(5)
-                .setClient(client)
-                .setNow(now)
-                .build(),
-            BatchCreateRequest.Params.newBuilder()
-                .setInboxId(inboxId2)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(5)
-                .setExpirySeconds(5)
-                .setClient(client)
-                .setNow(now)
-                .build(),
-            BatchCreateRequest.Params.newBuilder()
-                .setInboxId(inboxId3)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(5)
-                .setExpirySeconds(5)
-                .setClient(client)
-                .setNow(now)
-                .build());
-        GCReply reply = requestGCScan(GCRequest.newBuilder()
-            .setTenantId(tenant)
-            .setLimit(1)
-            .setNow(Duration.ofSeconds(13).toMillis())
-            .build());
-        assertTrue(reply.hasCursor());
-        assertEquals(reply.getCandidateCount(), 1);
-        assertEquals(reply.getCandidate(0).getInboxId(), inboxId1);
-
-        reply = requestGCScan(GCRequest.newBuilder()
-            .setTenantId(tenant)
-            .setLimit(1)
-            .setCursor(reply.getCursor())
-            .setNow(Duration.ofSeconds(13).toMillis())
-            .build());
-        assertTrue(reply.hasCursor());
-        assertEquals(reply.getCandidateCount(), 1);
-        assertEquals(reply.getCandidate(0).getInboxId(), inboxId2);
-
-        reply = requestGCScan(GCRequest.newBuilder()
-            .setTenantId(tenant)
-            .setLimit(1)
-            .setCursor(reply.getCursor())
-            .setNow(Duration.ofSeconds(13).toMillis())
-            .build());
-        assertFalse(reply.hasCursor());
-        assertEquals(reply.getCandidateCount(), 1);
-        assertEquals(reply.getCandidate(0).getInboxId(), inboxId3);
     }
 
     @Test(groups = "integration")
@@ -341,5 +224,4 @@ public class GCTest extends InboxStoreTest {
         assertFalse(request.getDiscardLWT());
         assertEquals(request.getExpirySeconds(), 1);
     }
-
 }

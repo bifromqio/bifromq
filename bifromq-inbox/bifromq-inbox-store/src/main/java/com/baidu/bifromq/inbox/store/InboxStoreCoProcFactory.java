@@ -36,17 +36,14 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final Duration loadEstWindow;
-    private final Duration purgeDelay;
 
 
     public InboxStoreCoProcFactory(ISettingProvider settingProvider,
                                    IEventCollector eventCollector,
-                                   Duration loadEstimateWindow,
-                                   Duration purgeDelay) {
+                                   Duration loadEstimateWindow) {
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.loadEstWindow = loadEstimateWindow;
-        this.purgeDelay = purgeDelay;
     }
 
     @Override
@@ -65,7 +62,8 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
                                        String storeId,
                                        KVRangeId id,
                                        Supplier<IKVReader> rangeReaderProvider) {
-        return new InboxStoreCoProc(settingProvider, eventCollector, purgeDelay, rangeReaderProvider);
+        return new InboxStoreCoProc(clusterId, storeId, id,
+            settingProvider, eventCollector, rangeReaderProvider);
     }
 
     public void close() {
