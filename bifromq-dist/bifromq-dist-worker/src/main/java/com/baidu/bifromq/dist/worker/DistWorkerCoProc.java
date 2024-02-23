@@ -63,7 +63,6 @@ import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.common.collect.Maps;
@@ -92,7 +91,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final KVRangeId id;
     private final Supplier<IKVReader> readerProvider;
     private final IDistClient distClient;
-    private final ISettingProvider settingProvider;
     private final ISubBrokerManager subBrokerManager;
     private final IMessageDeliverer deliverer;
     private final SubscriptionCache routeCache;
@@ -104,7 +102,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             KVRangeId id,
                             Supplier<IKVReader> readerProvider,
                             IEventCollector eventCollector,
-                            ISettingProvider settingProvider,
                             IDistClient distClient,
                             ISubBrokerManager subBrokerManager,
                             IMessageDeliverer deliverer,
@@ -112,7 +109,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         this.id = id;
         this.readerProvider = readerProvider;
         this.distClient = distClient;
-        this.settingProvider = settingProvider;
         this.subBrokerManager = subBrokerManager;
         this.deliverer = deliverer;
         this.routeCache = new SubscriptionCache(id, readerProvider, matchExecutor);
@@ -250,8 +246,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     return GroupMatchRecord.newBuilder();
                 });
             boolean updated = false;
-            // FIXME: move this undetermined value to request
-            int maxMembers = settingProvider.provide(Setting.MaxSharedGroupMembers, tenantId);
+            int maxMembers = request.getOptionsMap().get(tenantId).getMaxReceiversPerSharedSubGroup();
             for (String newQInboxId : newGroupMembers) {
                 if (!matchGroup.getQReceiverIdList().contains(newQInboxId)) {
                     if (matchGroup.getQReceiverIdCount() < maxMembers) {

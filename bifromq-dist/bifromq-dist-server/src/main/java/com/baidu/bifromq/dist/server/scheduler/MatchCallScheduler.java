@@ -26,6 +26,7 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
@@ -34,11 +35,14 @@ import lombok.extern.slf4j.Slf4j;
 public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, MatchReply>
     implements IMatchCallScheduler {
 
-    public MatchCallScheduler(IBaseKVStoreClient distWorkerClient) {
+    private final ISettingProvider settingProvider;
+
+    public MatchCallScheduler(IBaseKVStoreClient distWorkerClient, ISettingProvider settingProvider) {
         super("dist_server_sub_batcher",
             distWorkerClient,
             Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
+        this.settingProvider = settingProvider;
     }
 
     @Override
@@ -46,7 +50,8 @@ public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, Matc
                                                                                    long tolerableLatencyNanos,
                                                                                    long burstLatencyNanos,
                                                                                    MutationCallBatcherKey batcherKey) {
-        return new MatchCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
+        return new MatchCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos,
+            batcherKey, storeClient, settingProvider);
     }
 
     protected ByteString rangeKey(MatchRequest call) {
@@ -55,17 +60,21 @@ public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, Matc
     }
 
     private static class MatchCallBatcher extends MutationCallBatcher<MatchRequest, MatchReply> {
+        private final ISettingProvider settingProvider;
+
         private MatchCallBatcher(String name,
                                  long tolerableLatencyNanos,
                                  long burstLatencyNanos,
                                  MutationCallBatcherKey batcherKey,
-                                 IBaseKVStoreClient distWorkerClient) {
+                                 IBaseKVStoreClient distWorkerClient,
+                                 ISettingProvider settingProvider) {
             super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, distWorkerClient);
+            this.settingProvider = settingProvider;
         }
 
         @Override
         protected IBatchCall<MatchRequest, MatchReply, MutationCallBatcherKey> newBatch() {
-            return new BatchMatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchMatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5), settingProvider);
         }
     }
 }

@@ -20,7 +20,6 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import java.time.Duration;
 import java.util.concurrent.Executor;
@@ -38,7 +37,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     IEventCollector eventCollector;
     IDistClient distClient;
     IBaseKVStoreClient storeClient;
-    ISettingProvider settingProvider;
     ISubBrokerManager subBrokerManager;
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
@@ -99,11 +97,6 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
 
     public T storeClient(IBaseKVStoreClient storeClient) {
         this.storeClient = storeClient;
-        return thisT();
-    }
-
-    public T settingProvider(ISettingProvider settingProvider) {
-        this.settingProvider = settingProvider;
         return thisT();
     }
 

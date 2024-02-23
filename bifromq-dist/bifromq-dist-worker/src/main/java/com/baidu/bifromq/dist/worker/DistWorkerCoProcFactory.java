@@ -45,7 +45,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final IDistClient distClient;
-    private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final ISubBrokerManager subBrokerManager;
     private final IMessageDeliverer deliverer;
@@ -54,12 +53,10 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final int fanoutSplitThreshold = DIST_WORKER_FANOUT_SPLIT_THRESHOLD.get();
 
     public DistWorkerCoProcFactory(IDistClient distClient,
-                                   ISettingProvider settingProvider,
                                    IEventCollector eventCollector,
                                    ISubBrokerManager subBrokerManager,
                                    Duration loadEstimateWindow) {
         this.distClient = distClient;
-        this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.subBrokerManager = subBrokerManager;
         this.loadEstWindow = loadEstimateWindow;
@@ -92,7 +89,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     @Override
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
                                        Supplier<IKVReader> rangeReaderProvider) {
-        return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector, settingProvider,
+        return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector,
             distClient, subBrokerManager, deliverer, matchExecutor);
     }
 

@@ -56,10 +56,9 @@ import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
+import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
@@ -122,8 +121,6 @@ public abstract class DistWorkerTest {
     @Mock
     protected IEventCollector eventCollector;
     @Mock
-    protected ISettingProvider settingProvider;
-    @Mock
     protected IDistClient distClient;
     @Mock
     protected ISubBrokerManager receiverManager;
@@ -161,10 +158,6 @@ public abstract class DistWorkerTest {
             dbRootDir = Files.createTempDirectory("");
         } catch (IOException e) {
         }
-        lenient().when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantA)).thenReturn(200);
-        lenient().when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantB)).thenReturn(200);
-        lenient().when(settingProvider.provide(Setting.MaxSharedGroupMembers, tenantA)).thenReturn(200);
-        lenient().when(settingProvider.provide(Setting.MaxSharedGroupMembers, tenantB)).thenReturn(200);
         lenient().when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         lenient().when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
 
@@ -219,7 +212,6 @@ public abstract class DistWorkerTest {
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollector)
-            .settingProvider(settingProvider)
             .distClient(distClient)
             .storeClient(storeClient)
             .queryExecutor(queryExecutor)
@@ -270,7 +262,17 @@ public abstract class DistWorkerTest {
     }
 
     protected BatchMatchReply.Result match(String tenantId, String topicFilter,
-                                           int subBroker, String inboxId, String delivererKey) {
+                                           int subBroker, String inboxId,
+                                           String delivererKey) {
+        return match(tenantId, topicFilter, subBroker, inboxId, delivererKey, 100);
+    }
+
+    protected BatchMatchReply.Result match(String tenantId,
+                                           String topicFilter,
+                                           int subBroker,
+                                           String inboxId,
+                                           String delivererKey,
+                                           int maxMembersPerSharedSubGroup) {
         long reqId = ThreadLocalRandom.current().nextInt();
         String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
         KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
@@ -279,6 +281,8 @@ public abstract class DistWorkerTest {
             .setBatchMatch(BatchMatchRequest.newBuilder()
                 .setReqId(reqId)
                 .addScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter))
+                .putOptions(tenantId,
+                    TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(maxMembersPerSharedSubGroup).build())
                 .build())
             .build();
         KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()

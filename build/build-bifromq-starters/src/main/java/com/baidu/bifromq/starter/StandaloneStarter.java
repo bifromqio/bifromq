@@ -374,7 +374,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
             .distClient(distClient)
             .storeClient(distWorkerClient)

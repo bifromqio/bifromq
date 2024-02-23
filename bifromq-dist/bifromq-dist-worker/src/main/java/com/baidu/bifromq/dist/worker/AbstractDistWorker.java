@@ -44,7 +44,6 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
         this.clusterId = builder.clusterId;
         coProcFactory = new DistWorkerCoProcFactory(
             builder.distClient,
-            builder.settingProvider,
             builder.eventCollector,
             builder.subBrokerManager,
             builder.loadEstimateWindow);

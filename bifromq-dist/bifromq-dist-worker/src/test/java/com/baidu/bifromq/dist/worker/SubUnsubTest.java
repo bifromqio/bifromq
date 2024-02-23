@@ -13,12 +13,10 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
@@ -74,14 +72,13 @@ public class SubUnsubTest extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void sharedSubExceedLimit() {
-        when(settingProvider.provide(Setting.MaxSharedGroupMembers, tenantA)).thenReturn(2);
         BatchMatchReply.Result result =
-            match(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox1", "server1");
+            match(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox1", "server1", 2);
         assertEquals(result, BatchMatchReply.Result.OK);
-        result = match(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox2", "server1");
+        result = match(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox2", "server1", 2);
         assertEquals(result, BatchMatchReply.Result.OK);
 
-        result = match(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox3", "server1");
+        result = match(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox3", "server1", 2);
         assertEquals(result, BatchMatchReply.Result.EXCEED_LIMIT);
 
         unmatch(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox2", "server1");

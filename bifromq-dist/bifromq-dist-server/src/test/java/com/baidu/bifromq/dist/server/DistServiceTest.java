@@ -115,7 +115,6 @@ public abstract class DistServiceTest {
             .host("127.0.0.1")
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .distClient(distClient)
             .storeClient(workerClient)

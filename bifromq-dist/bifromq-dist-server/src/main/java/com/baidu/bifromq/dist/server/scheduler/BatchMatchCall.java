@@ -28,20 +28,28 @@ import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
+import com.baidu.bifromq.dist.rpc.proto.TenantOption;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Queue;
 
 public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
-    BatchMatchCall(KVRangeId rangeId,
-                   IBaseKVStoreClient distWorkerClient,
-                   Duration pipelineExpiryTime) {
+    private final ISettingProvider settingProvider;
+
+    BatchMatchCall(KVRangeId rangeId, IBaseKVStoreClient distWorkerClient, Duration pipelineExpiryTime,
+                   ISettingProvider settingProvider) {
         super(rangeId, distWorkerClient, pipelineExpiryTime);
+        this.settingProvider = settingProvider;
     }
 
     @Override
     protected RWCoProcInput makeBatch(Iterator<MatchRequest> reqIterator) {
         BatchMatchRequest.Builder reqBuilder = BatchMatchRequest.newBuilder();
+        Map<String, TenantOption> tenantOptionMap = new HashMap<>();
         while (reqIterator.hasNext()) {
             MatchRequest subCall = reqIterator.next();
             String qInboxId =
@@ -49,7 +57,12 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
             String scopedTopicFilter =
                 toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
             reqBuilder.addScopedTopicFilter(scopedTopicFilter);
+            tenantOptionMap.computeIfAbsent(subCall.getTenantId(), k -> TenantOption.newBuilder()
+                .setMaxReceiversPerSharedSubGroup(
+                    settingProvider.provide(Setting.MaxSharedGroupMembers, subCall.getTenantId()))
+                .build());
         }
+        reqBuilder.putAllOptions(tenantOptionMap);
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setDistService(DistServiceRWCoProcInput.newBuilder()

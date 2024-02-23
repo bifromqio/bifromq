@@ -12,9 +12,13 @@ message GroupMatchRecord {
   repeated string qReceiverId = 1; // qualified inboxId
 }
 
+message TenantOption{
+  uint32 maxReceiversPerSharedSubGroup = 1;
+}
 message BatchMatchRequest {
   uint64 reqId = 1;
   repeated string scopedTopicFilter = 2;// tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+  map<string, TenantOption> options = 3; // key: tenantId
 }
 
 message BatchMatchReply {

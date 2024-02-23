@@ -238,7 +238,6 @@ public abstract class MQTTTest {
             .bootstrap(true)
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
-            .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .distClient(distClient)
             .storeClient(distWorkerStoreClient)
