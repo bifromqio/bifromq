@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,19 @@
 
 package com.baidu.bifromq.baserpc.metrics;
 
-public class MetricTag {
-    public static final String SERVICE = "service";
+import io.grpc.MethodDescriptor;
+import io.micrometer.core.instrument.Timer;
 
-    public static final String METHOD = "method";
+public interface IRPCMeter {
+    interface IRPCMethodMeter {
+        void recordCount(RPCMetric metric);
+
+        void recordCount(RPCMetric metric, double inc);
+
+        Timer timer(RPCMetric metric);
+
+        void recordSummary(RPCMetric metric, int depth);
+    }
+
+    IRPCMethodMeter get(MethodDescriptor<?, ?> methodDescriptor);
 }

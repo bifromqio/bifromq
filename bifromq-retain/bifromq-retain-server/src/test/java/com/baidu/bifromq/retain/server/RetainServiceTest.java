@@ -22,7 +22,8 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.baserpc.RPCContext;
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
+import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
@@ -40,6 +41,8 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import io.grpc.Context;
 import io.grpc.stub.StreamObserver;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
@@ -76,11 +79,27 @@ public class RetainServiceTest {
     public void setup(Method method) {
         log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
         Context.current()
-            .withValue(RPCContext.METER_KEY_CTX_KEY, RPCMeters.MeterKey.builder()
-                .service(serviceName)
-                .method(methodName)
-                .tenantId(tenantId)
-                .build())
+            .withValue(RPCContext.METER_KEY_CTX_KEY, new IRPCMeter.IRPCMethodMeter() {
+                @Override
+                public void recordCount(RPCMetric metric) {
+
+                }
+
+                @Override
+                public void recordCount(RPCMetric metric, double inc) {
+
+                }
+
+                @Override
+                public Timer timer(RPCMetric metric) {
+                    return Timer.builder("dummy").register(new SimpleMeterRegistry());
+                }
+
+                @Override
+                public void recordSummary(RPCMetric metric, int depth) {
+
+                }
+            })
             .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .attach();
         closeable = MockitoAnnotations.openMocks(this);
@@ -88,7 +107,7 @@ public class RetainServiceTest {
     }
 
     @AfterMethod
-    public void teardown(Method method) throws Exception {
+    public void tearDown(Method method) throws Exception {
         log.info("Test case[{}.{}] finished", method.getDeclaringClass().getName(), method.getName());
         closeable.close();
     }

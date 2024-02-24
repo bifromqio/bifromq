@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.baserpc;
 
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
+import com.baidu.bifromq.baserpc.metrics.RPCMeter;
 import io.grpc.Context;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +31,7 @@ public class RPCContext {
     }
 
     public static final Context.Key<String> TENANT_ID_CTX_KEY = Context.key("TenantId");
-    public static final Context.Key<RPCMeters.MeterKey> METER_KEY_CTX_KEY = Context.key("MeterKey");
+    public static final Context.Key<IRPCMeter.IRPCMethodMeter> METER_KEY_CTX_KEY = Context.key("MeterKey");
     public static final Context.Key<String> DESIRED_SERVER_ID_CTX_KEY = Context.key("DesiredServerId");
     public static final Context.Key<ServerSelection> SELECTED_SERVER_ID_CTX_KEY = Context.key("SelectedServerId");
     public static final Context.Key<String> WCH_HASH_KEY_CTX_KEY = Context.key("WeightConsistentHashKey");

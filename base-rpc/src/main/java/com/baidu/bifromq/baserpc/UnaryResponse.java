@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.baserpc;
 
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
@@ -30,21 +30,21 @@ public final class UnaryResponse {
 
     public static <Resp> void response(BiFunction<String, Map<String, String>, CompletionStage<Resp>> reqHandler,
                                        StreamObserver<Resp> observer) {
-        RPCMeters.MeterKey meterKey = RPCContext.METER_KEY_CTX_KEY.get();
+        IRPCMeter.IRPCMethodMeter meter = RPCContext.METER_KEY_CTX_KEY.get();
         String tenantId = RPCContext.TENANT_ID_CTX_KEY.get();
         Map<String, String> metadata = RPCContext.CUSTOM_METADATA_CTX_KEY.get();
         Timer.Sample sample = Timer.start();
-        RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqReceivedCount);
+        meter.recordCount(RPCMetric.UnaryReqReceivedCount);
         reqHandler.apply(tenantId, metadata)
             .whenComplete((v, e) -> {
-                sample.stop(RPCMeters.timer(meterKey, RPCMetric.UnaryReqProcessLatency));
+                sample.stop(meter.timer(RPCMetric.UnaryReqProcessLatency));
                 if (e != null) {
                     observer.onError(e);
-                    RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqFailCount);
+                    meter.recordCount(RPCMetric.UnaryReqFailCount);
                 } else {
                     observer.onNext(v);
                     observer.onCompleted();
-                    RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqFulfillCount);
+                    meter.recordCount(RPCMetric.UnaryReqFulfillCount);
                 }
             });
     }

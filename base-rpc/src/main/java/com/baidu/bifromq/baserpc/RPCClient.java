@@ -22,10 +22,8 @@ import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 
 import com.baidu.bifromq.baserpc.loadbalancer.Constants;
 import com.baidu.bifromq.baserpc.loadbalancer.IUpdateListener;
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.RPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Maps;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -33,7 +31,6 @@ import io.grpc.Context;
 import io.grpc.MethodDescriptor;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.core.Observable;
-import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -50,8 +47,8 @@ final class RPCClient implements IRPCClient {
     private final BluePrint bluePrint;
     private final ChannelHolder channelHolder;
     private final CallOptions defaultCallOptions;
+    private final RPCMeter meter;
     private final Map<String, AtomicInteger> unaryInflightCounts = Maps.newHashMap();
-    private final Map<String, LoadingCache<String, RPCMeters.MeterKey>> unaryMeterKeys = Maps.newHashMap();
 
     RPCClient(@NonNull String serviceUniqueName,
               @NonNull BluePrint bluePrint,
@@ -59,18 +56,11 @@ final class RPCClient implements IRPCClient {
         this.serviceUniqueName = serviceUniqueName;
         this.channelHolder = channelHolder;
         this.bluePrint = bluePrint;
+        this.meter = new RPCMeter(bluePrint.serviceDescriptor());
         this.defaultCallOptions = CallOptions.DEFAULT;
         for (String fullMethodName : bluePrint.allMethods()) {
             if (bluePrint.semantic(fullMethodName) instanceof BluePrint.Unary) {
-                MethodDescriptor<?, ?> methodDesc = bluePrint.methodDesc(fullMethodName);
                 unaryInflightCounts.put(fullMethodName, new AtomicInteger());
-                unaryMeterKeys.put(fullMethodName, Caffeine.newBuilder()
-                    .expireAfterAccess(Duration.ofSeconds(30))
-                    .build(tenantId -> RPCMeters.MeterKey.builder()
-                        .service(serviceUniqueName)
-                        .method(methodDesc.getBareMethodName())
-                        .tenantId(tenantId)
-                        .build()));
             }
         }
     }
@@ -105,24 +95,23 @@ final class RPCClient implements IRPCClient {
             assert wchKey != null;
             ctx = ctx.withValue(WCH_HASH_KEY_CTX_KEY, wchKey);
         }
-        RPCMeters.MeterKey meterKey = unaryMeterKeys.get(methodDesc.getFullMethodName()).get(tenantId);
         AtomicInteger counter = unaryInflightCounts.get(methodDesc.getFullMethodName());
         ctx = ctx.attach();
         try {
             long startNano = System.nanoTime();
             CompletableFuture<Resp> future = new CompletableFuture<>();
             int currentCount = counter.incrementAndGet();
-            RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqSendCount);
-            RPCMeters.recordSummary(meterKey, RPCMetric.UnaryReqDepth, currentCount);
+            meter.get(methodDesc).recordCount(RPCMetric.UnaryReqSendCount);
+            meter.get(methodDesc).recordSummary(RPCMetric.UnaryReqDepth, currentCount);
             MethodDescriptor<Req, Resp> md = bluePrint.methodDesc(methodDesc.getFullMethodName());
             asyncUnaryCall(this.channelHolder.channel().newCall(md, defaultCallOptions), req,
                 new StreamObserver<>() {
                     @Override
                     public void onNext(Resp resp) {
                         long l = System.nanoTime() - startNano;
-                        RPCMeters.timer(meterKey, RPCMetric.UnaryReqLatency).record(l, TimeUnit.NANOSECONDS);
+                        meter.get(methodDesc).timer(RPCMetric.UnaryReqLatency).record(l, TimeUnit.NANOSECONDS);
                         future.complete(resp);
-                        RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqCompleteCount);
+                        meter.get(methodDesc).recordCount(RPCMetric.UnaryReqCompleteCount);
                     }
 
                     @Override
@@ -130,14 +119,14 @@ final class RPCClient implements IRPCClient {
                         log.debug("Unary call of method {} failure:",
                             methodDesc.getFullMethodName(), throwable);
                         future.completeExceptionally(Constants.toConcreteException(throwable));
-                        RPCMeters.recordCount(meterKey, RPCMetric.UnaryReqAbortCount);
+                        meter.get(methodDesc).recordCount(RPCMetric.UnaryReqAbortCount);
                     }
 
                     @Override
                     public void onCompleted() {
                         counter.decrementAndGet();
                         // do nothing
-                        RPCMeters.recordSummary(meterKey, RPCMetric.UnaryReqDepth, counter.get());
+                        meter.get(methodDesc).recordSummary(RPCMetric.UnaryReqDepth, counter.get());
                     }
                 });
             return future;
@@ -157,11 +146,11 @@ final class RPCClient implements IRPCClient {
             wchKey,
             desiredServerId,
             metadataSupplier,
-            serviceUniqueName,
             channelHolder,
             defaultCallOptions,
             methodDesc,
-            bluePrint);
+            bluePrint,
+            meter.get(methodDesc));
     }
 
     @Override
@@ -177,11 +166,11 @@ final class RPCClient implements IRPCClient {
             wchKey,
             desiredServerId,
             metadataSupplier,
-            serviceUniqueName,
             channelHolder,
             defaultCallOptions.withExecutor(executor),
             methodDesc,
-            bluePrint);
+            bluePrint,
+            meter.get(methodDesc));
     }
 
     @Override
@@ -195,11 +184,11 @@ final class RPCClient implements IRPCClient {
             wchKey,
             desiredServerId,
             metadataSupplier,
-            serviceUniqueName,
             channelHolder,
             defaultCallOptions,
             methodDesc,
-            bluePrint);
+            bluePrint,
+            meter.get(methodDesc));
     }
 
     private Context prepareContext(String tenantId, @Nullable String desiredServerId, Map<String, String> metadata) {
@@ -212,7 +201,6 @@ final class RPCClient implements IRPCClient {
                 SELECTED_SERVER_ID_CTX_KEY, null,
                 CUSTOM_METADATA_CTX_KEY, metadata);
     }
-
 
     interface ChannelHolder {
 

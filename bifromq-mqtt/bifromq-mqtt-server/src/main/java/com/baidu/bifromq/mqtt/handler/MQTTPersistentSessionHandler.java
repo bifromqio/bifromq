@@ -159,7 +159,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     }
                 }, ctx.executor()));
         }
-        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), estBaseMemSize());
+        memUsage.addAndGet(estBaseMemSize());
     }
 
     @Override
@@ -169,7 +169,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         if (inboxReader != null) {
             inboxReader.close();
         }
-        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -estBaseMemSize());
+        memUsage.addAndGet(-estBaseMemSize());
         ctx.fireChannelInactive();
     }
 

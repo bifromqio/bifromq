@@ -40,8 +40,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -60,8 +60,8 @@ public final class MQTTSessionContext {
     public final int defaultKeepAliveTimeSeconds;
     private final Ticker ticker;
     private final FutureTracker futureTracker = new FutureTracker();
-    private final Map<String, AtomicInteger> transientSubCountByTenant;
-    private final Map<String, AtomicInteger> transientSessionSpaceByTenant;
+    private final TenantGauge tenantTransientSubNumGauge;
+    private final TenantGauge tenantMemGauge;
 
     @Builder
     MQTTSessionContext(String serverId,
@@ -88,9 +88,8 @@ public final class MQTTSessionContext {
         this.sessionDictClient = sessionDictClient;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
-        this.transientSubCountByTenant = new ConcurrentHashMap<>();
-        this.transientSessionSpaceByTenant = new ConcurrentHashMap<>();
-
+        this.tenantTransientSubNumGauge = new TenantGauge(MqttTransientSubCountGauge);
+        this.tenantMemGauge = new TenantGauge(MqttSessionWorkingMemoryGauge);
     }
 
     public long nanoTime() {
@@ -178,12 +177,12 @@ public final class MQTTSessionContext {
         };
     }
 
-    public void logTransientSubCount(String tenantId, int value) {
-        logTenantMetricGauge(tenantId, value, MqttTransientSubCountGauge, transientSubCountByTenant);
+    public AtomicLong getTransientSubNumGauge(String tenantId) {
+        return tenantTransientSubNumGauge.get(tenantId);
     }
 
-    public void logSessionUsedSpace(String tenantId, int value) {
-        logTenantMetricGauge(tenantId, value, MqttSessionWorkingMemoryGauge, transientSessionSpaceByTenant);
+    public AtomicLong getSessionMemGauge(String tenantId) {
+        return tenantMemGauge.get(tenantId);
     }
 
     private void logTenantMetricGauge(String tenantId,

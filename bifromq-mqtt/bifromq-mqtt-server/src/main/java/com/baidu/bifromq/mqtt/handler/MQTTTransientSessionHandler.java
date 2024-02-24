@@ -63,6 +63,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
@@ -74,6 +75,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     private final NavigableMap<Long, SubMessage> inbox = new TreeMap<>();
     private long nextSendSeq = 0;
     private long msgSeqNo = 0;
+    private AtomicLong subNumGauge;
 
     protected MQTTTransientSessionHandler(TenantSettings settings,
                                           String userSessionId,
@@ -87,6 +89,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
+        subNumGauge = sessionCtx.getTransientSubNumGauge(clientInfo.getTenantId());
         onInitialized();
         resumeChannelRead();
     }
@@ -98,7 +101,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             topicFilters.forEach((topicFilter, option) -> addBgTask(unsubTopicFilter(System.nanoTime(), topicFilter)));
         }
         int remainInboxSize = inbox.values().stream().reduce(0, (acc, msg) -> acc + msg.estBytes(), Integer::sum);
-        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -remainInboxSize);
+        memUsage.addAndGet(-remainInboxSize);
         ctx.fireChannelInactive();
     }
 
@@ -119,7 +122,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         SubMessage msg = inbox.remove(seq);
         if (msg != null) {
             int msgSize = msg.estBytes();
-            sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -msgSize);
+            memUsage.addAndGet(-msgSize);
         }
     }
 
@@ -138,8 +141,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                     case OK -> {
                         TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
                         if (prevOption == null) {
-                            sessionCtx.logTransientSubCount(clientInfo.getTenantId(), 1);
-                            sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), topicFilter.length());
+                            subNumGauge.addAndGet(1);
+                            memUsage.addAndGet(topicFilter.length());
                             return CompletableFuture.completedFuture(OK);
                         } else {
                             return CompletableFuture.completedFuture(EXISTS);
@@ -205,8 +208,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 if (e != null || v == UnmatchResult.ERROR) {
                     return IMQTTProtocolHelper.UnsubResult.ERROR;
                 } else {
-                    sessionCtx.logTransientSubCount(clientInfo.getTenantId(), -1);
-                    sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -topicFilter.length());
+                    subNumGauge.addAndGet(-1);
+                    memUsage.addAndGet(-topicFilter.length());
                     start.stop(tenantMeter.timer(MqttTransientUnsubLatency));
                     return IMQTTProtocolHelper.UnsubResult.OK;
                 }
@@ -254,8 +257,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                             totalMsgBytesSize.addAndGet(subMsg.estBytes());
                         }
                     });
-                    sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), totalMsgBytesSize.get());
-                    drainInbox();
+                    memUsage.addAndGet(totalMsgBytesSize.get());
+                    send();
                     flush(true);
                 } else {
                     forEach(topicFilter, option, topicMsgPacks,
@@ -266,22 +269,19 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             }, ctx.executor()));
     }
 
-    private void drainInbox() {
+    private void send() {
         SortedMap<Long, SubMessage> toBeSent = inbox.tailMap(nextSendSeq);
         if (toBeSent.isEmpty()) {
             return;
         }
         Iterator<Map.Entry<Long, SubMessage>> itr = toBeSent.entrySet().iterator();
-        int totalMsgSize = 0;
         while (clientReceiveQuota() > 0 && itr.hasNext()) {
             Map.Entry<Long, SubMessage> entry = itr.next();
             long seq = entry.getKey();
             SubMessage msg = entry.getValue();
-            totalMsgSize += msg.estBytes();
             sendConfirmableMessage(seq, msg);
             nextSendSeq = seq + 1;
         }
-        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -totalMsgSize);
     }
 
     private void logInternalLatency(SubMessage message) {

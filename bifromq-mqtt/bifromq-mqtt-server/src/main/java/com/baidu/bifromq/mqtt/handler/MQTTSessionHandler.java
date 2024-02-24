@@ -122,6 +122,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import lombok.Getter;
@@ -192,6 +193,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final String userSessionId;
     protected final int keepAliveTimeSeconds;
     protected final ClientInfo clientInfo;
+    protected final AtomicLong memUsage;
     protected final ITenantMeter tenantMeter;
     private final long idleTimeoutNanos;
     private final MPSThrottler throttler;
@@ -234,6 +236,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         this.idleTimeoutNanos = Duration.ofMillis(keepAliveTimeSeconds * 1500L).toNanos(); // x1.5
         resendQueue = new TreeSet<>(Comparator.comparingLong(this::ackTimeoutNanos));
         sessionCtx = ChannelAttrs.mqttSessionContext(ctx);
+        // strong reference to avoid gc
+        memUsage = sessionCtx.getSessionMemGauge(clientInfo.getTenantId());
         authProvider = sessionCtx.authProvider(ctx);
         eventCollector = sessionCtx.eventCollector;
     }
@@ -320,7 +324,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         idleTimeoutTask = ctx.executor()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
         onInitialized.whenComplete((v, e) -> tenantMeter.recordCount(MqttConnectCount));
-        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), estMemSize());
+        memUsage.addAndGet(estMemSize());
     }
 
     @Override
@@ -338,10 +342,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         sessionCtx.localSessionRegistry.remove(channelId(), this);
         sessionRegister.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
-        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -estMemSize());
-        int unconfirmedMsgBytes =
-            unconfirmedPacketIds.values().stream().reduce(0, (acc, msg) -> acc + msg.message.estBytes(), Integer::sum);
-        sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -unconfirmedMsgBytes);
+        memUsage.addAndGet(-estMemSize());
+//        int unconfirmedMsgBytes =
+//            unconfirmedPacketIds.values().stream().reduce(0, (acc, msg) -> acc + msg.message.estBytes(), Integer::sum);
+//        memUsage.addAndGet(-unconfirmedMsgBytes);
     }
 
     @Override
@@ -694,7 +698,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     }
                 }
             }
-            sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), -confirmedMsgBytes);
+//            memUsage.addAndGet(-confirmedMsgBytes);
             if (resendTask != null && !resendTask.isDone()) {
                 resendTask.cancel(true);
             }
@@ -723,7 +727,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             if (resendTask == null || resendTask.isDone()) {
                 scheduleResend();
             }
-            sessionCtx.logSessionUsedSpace(clientInfo.getTenantId(), msg.estBytes());
+//            memUsage.addAndGet(msg.estBytes());
             sendMqttPubMessage(seq, msg, msg.topicFilter(), msg.publisher(), false);
         } else {
             log.warn("Bad state: sequence duplicate seq={}", seq);
@@ -780,7 +784,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             // qos1 and qos2 will be resent by the server
             return;
         }
+        memUsage.addAndGet(msgSize);
         ctx.write(pubMsg).addListener(f -> {
+            memUsage.addAndGet(-msgSize);
             if (f.isSuccess()) {
                 if (settings.debugMode) {
                     switch (pubMsg.fixedHeader().qosLevel()) {

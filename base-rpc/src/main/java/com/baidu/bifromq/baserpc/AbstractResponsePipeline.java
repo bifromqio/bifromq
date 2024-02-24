@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.baserpc;
 
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import io.grpc.Status;
@@ -83,21 +82,21 @@ abstract class AbstractResponsePipeline<RequestT, ResponseT>
     // this method is meant to be used in subclass
     final CompletableFuture<ResponseT> startHandlingRequest(RequestT request) {
         log.trace("Start handling request in pipeline@{}: request={}", hashCode(), request);
-        RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqReceivedCount);
+        meter.recordCount(RPCMetric.PipelineReqReceivedCount);
         Timer.Sample sample = Timer.start();
         CompletableFuture<ResponseT> respFuture = futureTracker.track(handleRequest(tenantId, request));
         // track current response future until it's completed normally or exceptionally
         respFuture.whenComplete((resp, e) -> {
-            sample.stop(RPCMeters.timer(meterKey, RPCMetric.PipelineReqProcessTime));
+            sample.stop(meter.timer(RPCMetric.PipelineReqProcessTime));
             // untrack current response future
             if (e != null) {
                 log.error("Request handling with error in pipeline@{}", this.hashCode(), e);
-                RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqFailCount);
+                meter.recordCount(RPCMetric.PipelineReqFailCount);
                 // any handling exception will cause pipeline close
                 fail(e);
             } else {
                 log.trace("Request handling in pipeline@{}: request={}", hashCode(), request);
-                RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqFulfillCount);
+                meter.recordCount(RPCMetric.PipelineReqFulfillCount);
             }
         });
         return respFuture;

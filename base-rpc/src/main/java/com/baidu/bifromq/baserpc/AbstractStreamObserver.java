@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.baserpc;
 
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import java.util.Map;
@@ -24,12 +24,12 @@ public abstract class AbstractStreamObserver<InT, OutT> implements StreamObserve
     protected final String tenantId;
     protected final Map<String, String> metadata;
     protected final ServerCallStreamObserver<OutT> responseObserver;
-    protected final RPCMeters.MeterKey meterKey;
+    protected final IRPCMeter.IRPCMethodMeter meter;
 
     protected AbstractStreamObserver(StreamObserver<OutT> responseObserver) {
         tenantId = RPCContext.TENANT_ID_CTX_KEY.get();
         metadata = RPCContext.CUSTOM_METADATA_CTX_KEY.get();
-        meterKey = RPCContext.METER_KEY_CTX_KEY.get();
+        meter = RPCContext.METER_KEY_CTX_KEY.get();
         this.responseObserver = (ServerCallStreamObserver<OutT>) responseObserver;
         log.trace("Pipeline@{} created: tenantId={}", hashCode(), tenantId);
     }

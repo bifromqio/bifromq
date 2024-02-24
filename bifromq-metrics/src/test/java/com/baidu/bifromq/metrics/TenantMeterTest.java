@@ -18,6 +18,10 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 
 import io.micrometer.core.instrument.Metrics;
+import java.lang.ref.Cleaner;
+import java.lang.ref.WeakReference;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
@@ -40,5 +44,7 @@ public class TenantMeterTest {
             return Metrics.globalRegistry.getMeters().stream()
                 .noneMatch(m -> tenantId.equals(m.getId().getTag(TAG_TENANT_ID)));
         });
+        TenantMeterCache.cleanUp();
+        log.info("get: success");
     }
 }

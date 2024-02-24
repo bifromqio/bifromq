@@ -22,7 +22,7 @@ import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.baserpc.exception.ServiceUnavailableException;
 import com.baidu.bifromq.baserpc.exception.TransientFailureException;
 import com.baidu.bifromq.baserpc.loadbalancer.Constants;
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.baserpc.utils.Backoff;
 import io.grpc.CallOptions;
@@ -57,7 +57,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     private final AtomicReference<State> state = new AtomicReference<>(State.Normal);
     private final ConcurrentLinkedDeque<RequestTask<ReqT, RespT>> preflightTaskQueue;
     private final ConcurrentLinkedDeque<RequestTask<ReqT, RespT>> inflightTaskQueue;
-    private final RPCMeters.MeterKey meterKey;
+    private final IRPCMeter.IRPCMethodMeter meter;
     private final String tenantId;
     private final String wchKey;
     private final Supplier<Map<String, String>> metadataSupplier;
@@ -80,11 +80,11 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         @Nullable String wchKey,
         @Nullable String targetServerId,
         Supplier<Map<String, String>> metadataSupplier,
-        String serviceUniqueName,
         RPCClient.ChannelHolder channelHolder,
         CallOptions callOptions,
         MethodDescriptor<ReqT, RespT> methodDescriptor,
-        BluePrint bluePrint) {
+        BluePrint bluePrint,
+        IRPCMeter.IRPCMethodMeter meter) {
         assert methodDescriptor.getType() == MethodDescriptor.MethodType.BIDI_STREAMING;
         this.bluePrint = bluePrint;
         semantic = bluePrint.semantic(methodDescriptor.getFullMethodName());
@@ -98,11 +98,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         this.tenantId = tenantId;
         this.wchKey = wchKey;
         this.metadataSupplier = metadataSupplier;
-        this.meterKey = RPCMeters.MeterKey.builder()
-            .service(serviceUniqueName)
-            .method(methodDescriptor.getBareMethodName())
-            .tenantId(tenantId)
-            .build();
+        this.meter = meter;
         preflightTaskQueue = new ConcurrentLinkedDeque<>();
         inflightTaskQueue = new ConcurrentLinkedDeque<>();
         this.methodDescriptor = methodDescriptor;
@@ -229,7 +225,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                 }
             }));
-        RPCMeters.recordCount(meterKey, RPCMetric.ReqPipelineCreateCount);
+        meter.recordCount(RPCMetric.ReqPipelineCreateCount);
     }
 
     @Override
@@ -247,8 +243,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     this.hashCode(), methodDescriptor.getBareMethodName(), currentCount, req);
                 preflightTaskQueue.offer(newRequest);
                 sendUntilStreamNotReadyOrNoTask();
-                RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqAcceptCount);
-                RPCMeters.recordSummary(meterKey, RPCMetric.ReqPipelineDepth, currentCount);
+                meter.recordCount(RPCMetric.PipelineReqAcceptCount);
+                meter.recordSummary(RPCMetric.ReqPipelineDepth, currentCount);
             }
             case ServiceUnavailable -> {
                 int currentCount = taskCount.get();
@@ -347,10 +343,10 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     Optional<RequestTask<ReqT, RespT>> requestTask = prepareForFly();
                     if (requestTask.isPresent() && !requestTask.get().future.isCancelled()) {
                         // only send non-canceled requests
-                        RPCMeters.timer(meterKey, RPCMetric.PipelineReqQueueTime)
+                        meter.timer(RPCMetric.PipelineReqQueueTime)
                             .record(System.nanoTime() - requestTask.get().enqueueTS, TimeUnit.NANOSECONDS);
                         requestStream.onNext(requestTask.get().request);
-                        RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqSendCount);
+                        meter.recordCount(RPCMetric.PipelineReqSendCount);
                     } else {
                         break;
                     }
@@ -418,21 +414,21 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             }
             if (throwable instanceof RequestRejectedException ||
                 throwable instanceof RequestThrottledException) {
-                RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqDropCount);
+                meter.recordCount(RPCMetric.PipelineReqDropCount);
             } else if (throwable instanceof RequestAbortException) {
-                RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqAbortCount);
+                meter.recordCount(RPCMetric.PipelineReqAbortCount);
             }
         }
 
         public void finish(Resp resp) {
             long finishTime = System.nanoTime() - enqueueTS;
-            RPCMeters.timer(meterKey, RPCMetric.PipelineReqLatency).record(finishTime, TimeUnit.NANOSECONDS);
+            meter.timer(RPCMetric.PipelineReqLatency).record(finishTime, TimeUnit.NANOSECONDS);
             if (future.complete(resp)) {
                 trace("ReqPipeline@{} of {} request finished: req={}, resp={}, flights={}",
                     ManagedRequestPipeline.this.hashCode(),
                     methodDescriptor.getBareMethodName(), request, resp, taskCount.get());
             }
-            RPCMeters.recordCount(meterKey, RPCMetric.PipelineReqCompleteCount);
+            meter.recordCount(RPCMetric.PipelineReqCompleteCount);
         }
     }
 
@@ -487,7 +483,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 ManagedRequestPipeline.this.hashCode(),
                 methodDescriptor.getBareMethodName(),
                 requestStream.hashCode(), state.get(), throwable);
-            RPCMeters.recordCount(meterKey, RPCMetric.ReqPipelineErrorCount);
+            meter.recordCount(RPCMetric.ReqPipelineErrorCount);
             synchronized (ManagedRequestPipeline.this) {
                 abortFlightRequests(Constants.toConcreteException(throwable));
                 if (requestStream != null && requester.compareAndSet(requestStream, null)) {
@@ -541,7 +537,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 ManagedRequestPipeline.this.hashCode(),
                 methodDescriptor.getBareMethodName(),
                 requestStream.hashCode());
-            RPCMeters.recordCount(meterKey, RPCMetric.ReqPipelineCompleteCount);
+            meter.recordCount(RPCMetric.ReqPipelineCompleteCount);
             synchronized (ManagedRequestPipeline.this) {
                 abortFlightRequests(new TransientFailureException("Abort inflight requests"));
                 requester.set(null);

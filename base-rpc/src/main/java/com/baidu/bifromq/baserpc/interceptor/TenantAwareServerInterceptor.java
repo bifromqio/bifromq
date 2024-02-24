@@ -15,46 +15,29 @@ package com.baidu.bifromq.baserpc.interceptor;
 
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.loadbalancer.Constants;
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.RPCMeter;
 import com.baidu.bifromq.baserpc.proto.PipelineMetadata;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.Context;
 import io.grpc.Contexts;
 import io.grpc.ForwardingServerCallListener;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
-import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TenantAwareServerInterceptor implements ServerInterceptor {
     private static final ServerCall.Listener NOOP_LISTENER = new ServerCall.Listener<>() {
     };
-    // top key: methodFullName
-    // nest key: tenantId
-    private final Map<String, LoadingCache<String, RPCMeters.MeterKey>> meterKeys = new HashMap<>();
+
+    private final RPCMeter meter;
 
     public TenantAwareServerInterceptor(ServerServiceDefinition serviceDefinition) {
-        ServiceDescriptor serviceDescriptor = serviceDefinition.getServiceDescriptor();
-        for (MethodDescriptor<?, ?> methodDesc : serviceDescriptor.getMethods()) {
-            meterKeys.put(methodDesc.getFullMethodName(), Caffeine.newBuilder()
-                .expireAfterAccess(Duration.ofSeconds(30))
-                .build(tenantId -> RPCMeters.MeterKey.builder()
-                    .service(serviceDescriptor.getName())
-                    .method(methodDesc.getBareMethodName())
-                    .tenantId(tenantId)
-                    .build()));
-        }
+        meter = new RPCMeter(serviceDefinition.getServiceDescriptor());
     }
 
     @Override
@@ -76,8 +59,7 @@ public class TenantAwareServerInterceptor implements ServerInterceptor {
             } else {
                 ctx = ctx.withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, Collections.emptyMap());
             }
-            ctx = ctx.withValue(RPCContext.METER_KEY_CTX_KEY,
-                meterKeys.get(call.getMethodDescriptor().getFullMethodName()).get(tenantId));
+            ctx = ctx.withValue(RPCContext.METER_KEY_CTX_KEY, meter.get(call.getMethodDescriptor()));
 
             ServerCall.Listener<ReqT> listener = Contexts.interceptCall(ctx, call, headers, next);
             return new ForwardingServerCallListener.SimpleForwardingServerCallListener<>(listener) {

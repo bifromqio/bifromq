@@ -26,12 +26,14 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.baserpc.RPCContext;
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
+import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.type.ClientInfo;
 import io.grpc.Context;
 import io.grpc.stub.ServerCallStreamObserver;
+import io.micrometer.core.instrument.Timer;
 import java.util.Collections;
 import java.util.UUID;
 import lombok.SneakyThrows;
@@ -226,8 +228,27 @@ public class SessionRegisterTest {
         Context ctx = Context.ROOT
             .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, Collections.emptyMap())
-            .withValue(RPCContext.METER_KEY_CTX_KEY,
-                RPCMeters.MeterKey.builder().service("SessionDict").method("dict").tenantId(tenantId).build());
+            .withValue(RPCContext.METER_KEY_CTX_KEY, new IRPCMeter.IRPCMethodMeter() {
+                @Override
+                public void recordCount(RPCMetric metric) {
+
+                }
+
+                @Override
+                public void recordCount(RPCMetric metric, double inc) {
+
+                }
+
+                @Override
+                public Timer timer(RPCMetric metric) {
+                    return null;
+                }
+
+                @Override
+                public void recordSummary(RPCMetric metric, int depth) {
+
+                }
+            });
         ctx.run(runnable);
     }
 }

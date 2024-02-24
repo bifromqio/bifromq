@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.baserpc;
 
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.core.Observable;
@@ -34,7 +33,7 @@ public abstract class AckStream<AckT, MsgT> extends AbstractStreamObserver<AckT,
 
     public void send(MsgT message) {
         responseObserver.onNext(message);
-        RPCMeters.recordCount(meterKey, RPCMetric.StreamMsgSendCount);
+        meter.recordCount(RPCMetric.StreamMsgSendCount);
     }
 
     public void close() {
@@ -48,7 +47,7 @@ public abstract class AckStream<AckT, MsgT> extends AbstractStreamObserver<AckT,
 
     @Override
     public final void onNext(AckT value) {
-        RPCMeters.recordCount(meterKey, RPCMetric.StreamAckReceiveCount);
+        meter.recordCount(RPCMetric.StreamAckReceiveCount);
         ackSubject.onNext(value);
     }
 

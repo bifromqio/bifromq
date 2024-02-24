@@ -19,7 +19,8 @@ import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.RPCContext;
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
+import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxAttachScheduler;
@@ -38,6 +39,8 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import io.grpc.Context;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import org.mockito.Mock;
@@ -96,11 +99,27 @@ public abstract class MockedInboxService {
         Map<String, String> metaData = new HashMap<>();
         metaData.put(PipelineUtil.PIPELINE_ATTR_KEY_ID, "id");
         Context.current()
-            .withValue(RPCContext.METER_KEY_CTX_KEY, RPCMeters.MeterKey.builder()
-                .service(serviceName)
-                .method(methodName)
-                .tenantId(tenantId)
-                .build())
+            .withValue(RPCContext.METER_KEY_CTX_KEY, new IRPCMeter.IRPCMethodMeter() {
+                @Override
+                public void recordCount(RPCMetric metric) {
+
+                }
+
+                @Override
+                public void recordCount(RPCMetric metric, double inc) {
+
+                }
+
+                @Override
+                public Timer timer(RPCMetric metric) {
+                    return Timer.builder("dummy").register(new SimpleMeterRegistry());
+                }
+
+                @Override
+                public void recordSummary(RPCMetric metric, int depth) {
+
+                }
+            })
             .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metaData)
             .attach();

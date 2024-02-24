@@ -17,7 +17,7 @@ import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 
 import com.baidu.bifromq.baserpc.exception.RequestRejectedException;
 import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
-import com.baidu.bifromq.baserpc.metrics.RPCMeters;
+import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.baserpc.utils.Backoff;
 import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
@@ -53,7 +53,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
 
     private final AtomicReference<State> state = new AtomicReference<>(State.Normal);
     private final ConcurrentLinkedQueue<AckT> ackSendingBuffers;
-    private final RPCMeters.MeterKey meterKey;
+    private final IRPCMeter.IRPCMethodMeter meter;
     private final String tenantId;
     private final String wchKey;
     private final Supplier<Map<String, String>> metadataSupplier;
@@ -78,11 +78,11 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
         @Nullable String wchKey,
         @Nullable String targetServerId,
         Supplier<Map<String, String>> metadataSupplier,
-        String serviceUniqueName,
         RPCClient.ChannelHolder channelHolder,
         CallOptions callOptions,
         MethodDescriptor<AckT, MsgT> methodDescriptor,
-        BluePrint bluePrint) {
+        BluePrint bluePrint,
+        IRPCMeter.IRPCMethodMeter meter) {
         assert methodDescriptor.getType() == MethodDescriptor.MethodType.BIDI_STREAMING;
         this.bluePrint = bluePrint;
         semantic = bluePrint.semantic(methodDescriptor.getFullMethodName());
@@ -96,11 +96,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
         this.tenantId = tenantId;
         this.wchKey = wchKey;
         this.metadataSupplier = metadataSupplier;
-        this.meterKey = RPCMeters.MeterKey.builder()
-            .service(serviceUniqueName)
-            .method(methodDescriptor.getBareMethodName())
-            .tenantId(tenantId)
-            .build();
+        this.meter = meter;
         ackSendingBuffers = new ConcurrentLinkedQueue<>();
         this.methodDescriptor = methodDescriptor;
         this.channelHolder = channelHolder;
@@ -200,7 +196,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                     }
                 }
             }));
-        RPCMeters.recordCount(meterKey, RPCMetric.MsgStreamCreateCount);
+        meter.recordCount(RPCMetric.MsgStreamCreateCount);
     }
 
     @Override
@@ -215,7 +211,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                 ackSendingBuffers.offer(ack);
                 // check if pipeline is still open
                 sendUntilStreamNotReadyOrNoTask();
-                RPCMeters.recordCount(meterKey, RPCMetric.StreamAckAcceptCount);
+                meter.recordCount(RPCMetric.StreamAckAcceptCount);
             }
             case ServerNotFound -> throw new ServerNotFoundException("Server not found");
             case Closed ->
@@ -294,7 +290,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                 while (requestStream.isReady() && !ackSendingBuffers.isEmpty()) {
                     AckT ack = ackSendingBuffers.poll();
                     requestStream.onNext(ack);
-                    RPCMeters.recordCount(meterKey, RPCMetric.StreamAckSendCount);
+                    meter.recordCount(RPCMetric.StreamAckSendCount);
                 }
                 sending.set(false);
                 if (requestStream.isReady() && !ackSendingBuffers.isEmpty()) {
@@ -323,7 +319,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
             ClientCallStreamObserver<AckT> currentRequestStream = requester.get();
             if (currentRequestStream == null || currentRequestStream == requestStream) {
                 msgSubject.onNext(resp);
-                RPCMeters.recordCount(meterKey, RPCMetric.StreamMsgReceiveCount);
+                meter.recordCount(RPCMetric.StreamMsgReceiveCount);
             } else {
                 log.debug("Drop response from orphan stream");
                 throw new IllegalStateException();
@@ -338,7 +334,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
             }
             log.trace("MsgStream@{} internal stream@{} error: state={}",
                 ManagedMessageStream.this.hashCode(), requestStream.hashCode(), state.get(), throwable);
-            RPCMeters.recordCount(meterKey, RPCMetric.MsgStreamErrorCount);
+            meter.recordCount(RPCMetric.MsgStreamErrorCount);
             this.onCompleted();
         }
 
