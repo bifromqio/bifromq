@@ -78,7 +78,8 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
             .thenApply(v -> Arrays.stream(gcResults).map(CompletableFuture::join).toList())
             .thenApply(gcReplies -> {
                 log.debug("All range gc succeed");
-                return gcReplies.stream().anyMatch(r -> r != Result.OK) ? Result.ERROR : Result.OK;
+                return gcReplies.stream()
+                    .anyMatch(r -> ((GCReply) r).getCode() != GCReply.Code.OK) ? Result.ERROR : Result.OK;
             });
     }
 
