@@ -86,6 +86,7 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
             switch (result) {
                 case RETAINED -> replyBuilder.setResult(RetainReply.Result.RETAINED);
                 case CLEARED -> replyBuilder.setResult(RetainReply.Result.CLEARED);
+                case EXCEED_LIMIT -> replyBuilder.setResult(RetainReply.Result.EXCEED_LIMIT);
                 case ERROR -> replyBuilder.setResult(RetainReply.Result.ERROR);
             }
             task.callResult.complete(replyBuilder.build());
