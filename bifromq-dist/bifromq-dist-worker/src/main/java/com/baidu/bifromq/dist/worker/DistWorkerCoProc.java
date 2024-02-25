@@ -187,6 +187,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     public void reset(Boundary boundary) {
         tenantsState.reset();
         routeCache.touchAll();
+        load();
     }
 
     public void close() {
