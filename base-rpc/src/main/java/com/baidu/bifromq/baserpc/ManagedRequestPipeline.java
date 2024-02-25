@@ -61,7 +61,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     private final String tenantId;
     private final String wchKey;
     private final Supplier<Map<String, String>> metadataSupplier;
-    private final BluePrint.MethodSemantic<ReqT> semantic;
+    private final BluePrint.MethodSemantic semantic;
     private final MethodDescriptor<ReqT, RespT> methodDescriptor;
     private final BluePrint bluePrint;
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -89,11 +89,14 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         this.bluePrint = bluePrint;
         semantic = bluePrint.semantic(methodDescriptor.getFullMethodName());
         assert semantic instanceof BluePrint.PipelineUnary;
-        if (semantic instanceof BluePrint.DDBalanced) {
-            assert targetServerId != null;
-            this.desiredServerId.set(targetServerId);
-        } else if (semantic instanceof BluePrint.WCHBalanced) {
-            assert wchKey != null;
+        switch (semantic.mode()) {
+            case DDBalanced -> {
+                assert targetServerId != null;
+                this.desiredServerId.set(targetServerId);
+            }
+            case WCHBalanced -> {
+                assert wchKey != null;
+            }
         }
         this.tenantId = tenantId;
         this.wchKey = wchKey;
@@ -114,112 +117,117 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     if (state.get() == State.Closed) {
                         return;
                     }
-                    if (semantic instanceof BluePrint.DDBalanced) {
-                        boolean available = selector.direct(tenantId, desiredServerId.get(),
-                            methodDescriptor);
-                        if (available) {
-                            state.set(State.Normal);
-                            if (selectedServerId.get() == null) {
-                                log.debug("ReqPipeline@{} of {} targeting to server[{}]",
-                                    this.hashCode(),
-                                    methodDescriptor.getBareMethodName(),
-                                    desiredServerId.get());
-                                target();
-                            } else {
-                                assert desiredServerId.get().equals(selectedServerId.get());
-                            }
-                        } else {
-                            state.set(State.ServiceUnavailable);
-                            if (selectedServerId.get() != null) {
-                                log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
-                                    this.hashCode(),
-                                    methodDescriptor.getBareMethodName(),
-                                    selectedServerId.get());
-                                requester.getAndSet(null).onCompleted();
-                                selectedServerId.set(null);
-                            } else {
-                                // abort all pending requests
-                                abortFlightRequests(new ServerNotFoundException("Server "
-                                    + desiredServerId.get() + " not found"));
-                            }
-                        }
-                    } else if (semantic instanceof BluePrint.WCHBalanced) {
-                        Optional<String> newServer = selector.hashing(tenantId, wchKey, methodDescriptor);
-                        if (newServer.isEmpty()) {
-                            state.set(State.ServiceUnavailable);
-                            if (selectedServerId.get() != null) {
-                                log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
-                                    this.hashCode(),
-                                    methodDescriptor.getBareMethodName(),
-                                    selectedServerId.get());
-                                desiredServerId.set(null);
-                                if (selectedServerId.get() != null) {
-                                    requester.getAndSet(null).onCompleted();
-                                    selectedServerId.set(null);
+                    switch (semantic.mode()) {
+                        case DDBalanced -> {
+                            boolean available = selector.direct(tenantId, desiredServerId.get(),
+                                methodDescriptor);
+                            if (available) {
+                                state.set(State.Normal);
+                                if (selectedServerId.get() == null) {
+                                    log.debug("ReqPipeline@{} of {} targeting to server[{}]",
+                                        this.hashCode(),
+                                        methodDescriptor.getBareMethodName(),
+                                        desiredServerId.get());
+                                    target();
+                                } else {
+                                    assert desiredServerId.get().equals(selectedServerId.get());
                                 }
                             } else {
-                                // abort all pending requests
-                                abortFlightRequests(new ServiceUnavailableException(
-                                    "Service unavailable for tenant " + tenantId));
-                            }
-                        } else {
-                            state.set(State.Normal);
-                            if (!newServer.get().equals(desiredServerId.get())) {
-                                log.debug("ReqPipeline@{} of {} retargeting to server[{}] from server[{}]",
-                                    this.hashCode(),
-                                    methodDescriptor.getBareMethodName(),
-                                    newServer.get(), selectedServerId.get());
-                                desiredServerId.set(newServer.get());
+                                state.set(State.ServiceUnavailable);
                                 if (selectedServerId.get() != null) {
+                                    log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
+                                        this.hashCode(),
+                                        methodDescriptor.getBareMethodName(),
+                                        selectedServerId.get());
                                     requester.getAndSet(null).onCompleted();
                                     selectedServerId.set(null);
                                 } else {
+                                    // abort all pending requests
+                                    abortFlightRequests(new ServerNotFoundException("Server "
+                                        + desiredServerId.get() + " not found"));
+                                }
+                            }
+                        }
+                        case WCHBalanced -> {
+                            Optional<String> newServer = selector.hashing(tenantId, wchKey, methodDescriptor);
+                            if (newServer.isEmpty()) {
+                                state.set(State.ServiceUnavailable);
+                                if (selectedServerId.get() != null) {
+                                    log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
+                                        this.hashCode(),
+                                        methodDescriptor.getBareMethodName(),
+                                        selectedServerId.get());
+                                    desiredServerId.set(null);
+                                    if (selectedServerId.get() != null) {
+                                        requester.getAndSet(null).onCompleted();
+                                        selectedServerId.set(null);
+                                    }
+                                } else {
+                                    // abort all pending requests
+                                    abortFlightRequests(new ServiceUnavailableException(
+                                        "Service unavailable for tenant " + tenantId));
+                                }
+                            } else {
+                                state.set(State.Normal);
+                                if (!newServer.get().equals(desiredServerId.get())) {
+                                    log.debug("ReqPipeline@{} of {} retargeting to server[{}] from server[{}]",
+                                        this.hashCode(),
+                                        methodDescriptor.getBareMethodName(),
+                                        newServer.get(), selectedServerId.get());
+                                    desiredServerId.set(newServer.get());
+                                    if (selectedServerId.get() != null) {
+                                        requester.getAndSet(null).onCompleted();
+                                        selectedServerId.set(null);
+                                    } else {
+                                        target();
+                                    }
+                                } else if (!desiredServerId.get().equals(selectedServerId.get())) {
                                     target();
                                 }
-                            } else if (!desiredServerId.get().equals(selectedServerId.get())) {
-                                target();
                             }
                         }
-                    } else if (semantic instanceof BluePrint.WRBalanced) {
-                        Optional<String> newServer = selector.random(tenantId, methodDescriptor);
-                        if (newServer.isEmpty()) {
-                            state.set(State.ServiceUnavailable);
-                            if (selectedServerId.get() != null) {
-                                log.debug("ReqPipeline@{} stop targeting to server[{}]",
-                                    this.hashCode(), selectedServerId.get());
-                                requester.getAndSet(null).onCompleted();
-                                selectedServerId.set(null);
+                        case WRBalanced -> {
+                            Optional<String> newServer = selector.random(tenantId, methodDescriptor);
+                            if (newServer.isEmpty()) {
+                                state.set(State.ServiceUnavailable);
+                                if (selectedServerId.get() != null) {
+                                    log.debug("ReqPipeline@{} stop targeting to server[{}]",
+                                        this.hashCode(), selectedServerId.get());
+                                    requester.getAndSet(null).onCompleted();
+                                    selectedServerId.set(null);
+                                } else {
+                                    // abort all pending requests
+                                    abortFlightRequests(new ServiceUnavailableException(
+                                        "Service unavailable for tenant " + tenantId));
+                                }
                             } else {
-                                // abort all pending requests
-                                abortFlightRequests(new ServiceUnavailableException(
-                                    "Service unavailable for tenant " + tenantId));
-                            }
-                        } else {
-                            state.set(State.Normal);
-                            if (selectedServerId.get() == null) {
-                                target();
+                                state.set(State.Normal);
+                                if (selectedServerId.get() == null) {
+                                    target();
+                                }
                             }
                         }
-                    } else if (semantic instanceof BluePrint.WRRBalanced) {
-                        Optional<String> newServer = selector.roundRobin(tenantId, methodDescriptor);
-                        if (newServer.isEmpty()) {
-                            state.set(State.ServiceUnavailable);
-                            if (selectedServerId.get() != null) {
-                                log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
-                                    this.hashCode(),
-                                    methodDescriptor.getBareMethodName(),
-                                    selectedServerId.get());
-                                requester.getAndSet(null).onCompleted();
-                                selectedServerId.set(null);
+                        case WRRBalanced -> {
+                            Optional<String> newServer = selector.roundRobin(tenantId, methodDescriptor);
+                            if (newServer.isEmpty()) {
+                                state.set(State.ServiceUnavailable);
+                                if (selectedServerId.get() != null) {
+                                    log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
+                                        this.hashCode(),
+                                        methodDescriptor.getBareMethodName(),
+                                        selectedServerId.get());
+                                    requester.getAndSet(null).onCompleted();
+                                    selectedServerId.set(null);
+                                } else {
+                                    // abort all pending requests
+                                    abortFlightRequests(new ServiceUnavailableException(
+                                        "Service unavailable for tenant " + tenantId));
+                                }
                             } else {
-                                // abort all pending requests
-                                abortFlightRequests(new ServiceUnavailableException(
-                                    "Service unavailable for tenant " + tenantId));
-                            }
-                        } else {
-                            state.set(State.Normal);
-                            if (selectedServerId.get() == null) {
-                                target();
+                                state.set(State.Normal);
+                                if (selectedServerId.get() == null) {
+                                    target();
+                                }
                             }
                         }
                     }
@@ -251,7 +259,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 trace("ReqPipeline@{} of {} queue request: queueSize={},req={}",
                     this.hashCode(), methodDescriptor.getBareMethodName(), currentCount, req);
                 preflightTaskQueue.offer(newRequest);
-                if (semantic instanceof BluePrint.DDBalanced) {
+                if (semantic.mode() == BluePrint.BalanceMode.DDBalanced) {
                     abortFlightRequests(new ServerNotFoundException("Server not found: " + desiredServerId.get()));
                 } else {
                     abortFlightRequests(new ServiceUnavailableException("Service unavailable now"));
@@ -290,10 +298,9 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .withValue(RPCContext.SELECTED_SERVER_ID_CTX_KEY, new RPCContext.ServerSelection())
             .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metadataSupplier.get());
-        if (semantic instanceof BluePrint.DDBalanced) {
-            ctx = ctx.withValue(RPCContext.DESIRED_SERVER_ID_CTX_KEY, desiredServerId.get());
-        } else if (semantic instanceof BluePrint.WCHBalanced) {
-            ctx = ctx.withValue(RPCContext.WCH_HASH_KEY_CTX_KEY, wchKey);
+        switch (semantic.mode()) {
+            case DDBalanced -> ctx = ctx.withValue(RPCContext.DESIRED_SERVER_ID_CTX_KEY, desiredServerId.get());
+            case WCHBalanced -> ctx = ctx.withValue(RPCContext.WCH_HASH_KEY_CTX_KEY, wchKey);
         }
         ctx.run(() -> {
             trace("ReqPipeline@{} creating request stream", hashCode());
@@ -493,7 +500,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 if (state.get() == State.Closed) {
                     return;
                 }
-                if (semantic instanceof BluePrint.DDBalanced) {
+                if (semantic.mode() == BluePrint.BalanceMode.DDBalanced) {
                     if (selectedServerId.get() != null) {
                         log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
                             ManagedRequestPipeline.this.hashCode(),
@@ -502,7 +509,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                         selectedServerId.set(null);
                         scheduleSignal();
                     }
-                } else if (semantic instanceof BluePrint.WCHBalanced) {
+                } else if (semantic.mode() == BluePrint.BalanceMode.WCHBalanced) {
                     if (desiredServerId.get() != null) {
                         log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
                             ManagedRequestPipeline.this.hashCode(),
@@ -511,7 +518,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                         selectedServerId.set(null);
                         scheduleSignal();
                     }
-                } else if (semantic instanceof BluePrint.WRBalanced) {
+                } else if (semantic.mode() == BluePrint.BalanceMode.WRBalanced) {
                     if (selectedServerId.get() != null) {
                         log.trace("ReqPipeline@{} of {} schedule targeting to random server",
                             ManagedRequestPipeline.this.hashCode(),
@@ -519,7 +526,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                         selectedServerId.set(null);
                         scheduleSignal();
                     }
-                } else if (semantic instanceof BluePrint.WRRBalanced) {
+                } else if (semantic.mode() == BluePrint.BalanceMode.WRRBalanced) {
                     if (selectedServerId.get() != null) {
                         log.trace("ReqPipeline@{} of {} schedule targeting to next server",
                             ManagedRequestPipeline.this.hashCode(), methodDescriptor.getBareMethodName());
@@ -544,39 +551,45 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 if (state.get() == State.Closed) {
                     return;
                 }
-                if (semantic instanceof BluePrint.DDBalanced) {
-                    if (selectedServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
-                            ManagedRequestPipeline.this.hashCode(),
-                            methodDescriptor.getBareMethodName(),
-                            selectedServerId.get());
-                        selectedServerId.set(null);
-                        scheduleSignal();
+                switch (semantic.mode()) {
+
+                    case DDBalanced -> {
+                        if (selectedServerId.get() != null) {
+                            log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
+                                ManagedRequestPipeline.this.hashCode(),
+                                methodDescriptor.getBareMethodName(),
+                                selectedServerId.get());
+                            selectedServerId.set(null);
+                            scheduleSignal();
+                        }
                     }
-                } else if (semantic instanceof BluePrint.WCHBalanced) {
-                    if (desiredServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
-                            ManagedRequestPipeline.this.hashCode(),
-                            methodDescriptor.getBareMethodName(),
-                            desiredServerId.get());
-                        selectedServerId.set(null);
-                        scheduleSignal();
+                    case WCHBalanced -> {
+                        if (desiredServerId.get() != null) {
+                            log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
+                                ManagedRequestPipeline.this.hashCode(),
+                                methodDescriptor.getBareMethodName(),
+                                desiredServerId.get());
+                            selectedServerId.set(null);
+                            scheduleSignal();
+                        }
                     }
-                } else if (semantic instanceof BluePrint.WRBalanced) {
-                    if (selectedServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to random server",
-                            ManagedRequestPipeline.this.hashCode(),
-                            methodDescriptor.getBareMethodName());
-                        selectedServerId.set(null);
-                        scheduleSignal();
+                    case WRBalanced -> {
+                        if (selectedServerId.get() != null) {
+                            log.trace("ReqPipeline@{} of {} schedule targeting to random server",
+                                ManagedRequestPipeline.this.hashCode(),
+                                methodDescriptor.getBareMethodName());
+                            selectedServerId.set(null);
+                            scheduleSignal();
+                        }
                     }
-                } else if (semantic instanceof BluePrint.WRRBalanced) {
-                    if (selectedServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to next server",
-                            ManagedRequestPipeline.this.hashCode(),
-                            methodDescriptor.getBareMethodName());
-                        selectedServerId.set(null);
-                        scheduleSignal();
+                    case WRRBalanced -> {
+                        if (selectedServerId.get() != null) {
+                            log.trace("ReqPipeline@{} of {} schedule targeting to next server",
+                                ManagedRequestPipeline.this.hashCode(),
+                                methodDescriptor.getBareMethodName());
+                            selectedServerId.set(null);
+                            scheduleSignal();
+                        }
                     }
                 }
             }

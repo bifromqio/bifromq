@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.baserpc.interceptor;
 
+import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.loadbalancer.Constants;
 import com.baidu.bifromq.baserpc.metrics.RPCMeter;
@@ -36,8 +37,8 @@ public class TenantAwareServerInterceptor implements ServerInterceptor {
 
     private final RPCMeter meter;
 
-    public TenantAwareServerInterceptor(ServerServiceDefinition serviceDefinition) {
-        meter = new RPCMeter(serviceDefinition.getServiceDescriptor());
+    public TenantAwareServerInterceptor(ServerServiceDefinition serviceDefinition, BluePrint bluePrint) {
+        meter = new RPCMeter(serviceDefinition.getServiceDescriptor(), bluePrint);
     }
 
     @Override

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.baserpc.metrics;
 
+import com.baidu.bifromq.baserpc.BluePrint;
 import io.grpc.MethodDescriptor;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -25,9 +26,12 @@ import java.util.EnumMap;
 public class RPCMethodMeter implements IRPCMeter.IRPCMethodMeter {
     private final EnumMap<RPCMetric, Meter> meters;
 
-    public RPCMethodMeter(String serviceName, MethodDescriptor<?, ?> methodDesc) {
+    public RPCMethodMeter(String serviceName, MethodDescriptor<?, ?> methodDesc, BluePrint.MethodSemantic semantic) {
         meters = new EnumMap<>(RPCMetric.class);
         for (RPCMetric metric : RPCMetric.values()) {
+            if (metric.methodType != semantic.type()) {
+                continue;
+            }
             Tags tags = Tags.of(MetricTag.SERVICE, serviceName)
                 .and(MetricTag.METHOD, methodDesc.getBareMethodName() == null ?
                     methodDesc.getFullMethodName() : methodDesc.getBareMethodName());

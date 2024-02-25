@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.baserpc.metrics;
 
+import com.baidu.bifromq.baserpc.BluePrint;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServiceDescriptor;
 import java.util.HashMap;
@@ -21,10 +22,13 @@ import java.util.Map;
 public class RPCMeter implements IRPCMeter {
     private final Map<String, IRPCMethodMeter> meterMap = new HashMap<>();
 
-    public RPCMeter(ServiceDescriptor serviceDescriptor) {
+    public RPCMeter(ServiceDescriptor serviceDescriptor, BluePrint bluePrint) {
         for (MethodDescriptor<?, ?> methodDesc : serviceDescriptor.getMethods()) {
             String serviceName = serviceDescriptor.getName();
-            meterMap.put(methodDesc.getFullMethodName(), new RPCMethodMeter(serviceName, methodDesc));
+            BluePrint.MethodSemantic semantic = bluePrint.semantic(methodDesc.getFullMethodName());
+            if (semantic != null) {
+                meterMap.put(methodDesc.getFullMethodName(), new RPCMethodMeter(serviceName, methodDesc, semantic));
+            }
         }
     }
 

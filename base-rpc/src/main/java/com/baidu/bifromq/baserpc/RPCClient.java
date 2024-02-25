@@ -56,7 +56,7 @@ final class RPCClient implements IRPCClient {
         this.serviceUniqueName = serviceUniqueName;
         this.channelHolder = channelHolder;
         this.bluePrint = bluePrint;
-        this.meter = new RPCMeter(bluePrint.serviceDescriptor());
+        this.meter = new RPCMeter(bluePrint.serviceDescriptor(), bluePrint);
         this.defaultCallOptions = CallOptions.DEFAULT;
         for (String fullMethodName : bluePrint.allMethods()) {
             if (bluePrint.semantic(fullMethodName) instanceof BluePrint.Unary) {
@@ -85,9 +85,9 @@ final class RPCClient implements IRPCClient {
                                                       @NonNull Map<String, String> metadata,
                                                       MethodDescriptor<Req, Resp> methodDesc) {
         assert methodDesc.getType() == MethodDescriptor.MethodType.UNARY;
-        BluePrint.MethodSemantic<?> semantic = bluePrint.semantic(methodDesc.getFullMethodName());
+        BluePrint.MethodSemantic semantic = bluePrint.semantic(methodDesc.getFullMethodName());
         assert semantic instanceof BluePrint.Unary;
-        assert !(semantic instanceof BluePrint.DDBalanced) || desiredServerId != null;
+        assert !(semantic.mode() == BluePrint.BalanceMode.DDBalanced) || desiredServerId != null;
         Context ctx = prepareContext(tenantId, desiredServerId, metadata);
         if (semantic instanceof BluePrint.WCHBalancedReq) {
             @SuppressWarnings("unchecked")

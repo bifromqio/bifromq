@@ -256,11 +256,12 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
         } else {
             WeightedServerSelector selector = matcher.match(tenantId);
             Optional<Map.Entry<String, Integer>> selection;
-            if (bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WCHBalanced) {
+            if (bluePrint.semantic(methodDescriptor.getFullMethodName()).mode() == BluePrint.BalanceMode.WCHBalanced) {
                 // weighted-consistent-hashing mode
                 String hashKey = pickSubchannelArgs.getHeaders().get(Constants.WCH_KEY_META_KEY);
                 selection = selector.hashing(hashKey);
-            } else if (bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WRBalanced) {
+            } else if (bluePrint.semantic(methodDescriptor.getFullMethodName()).mode() ==
+                BluePrint.BalanceMode.WRBalanced) {
                 selection = selector.random();
             } else {
                 // weighted-round-robin mode
@@ -281,14 +282,14 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
 
     @Override
     public boolean direct(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor) {
-        assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.DDBalanced;
+        assert bluePrint.semantic(methodDescriptor.getFullMethodName()).mode() == BluePrint.BalanceMode.DDBalanced;
         WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         return selector.contains(serverId);
     }
 
     @Override
     public Optional<String> hashing(String tenantId, String key, MethodDescriptor<?, ?> methodDescriptor) {
-        assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WCHBalanced;
+        assert bluePrint.semantic(methodDescriptor.getFullMethodName()).mode() == BluePrint.BalanceMode.WCHBalanced;
         // weighted-consistent-hashing mode
         WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         Optional<Map.Entry<String, Integer>> selection = selector.hashing(key);
@@ -297,7 +298,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
 
     @Override
     public Optional<String> roundRobin(String tenantId, MethodDescriptor<?, ?> methodDescriptor) {
-        assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WRRBalanced;
+        assert bluePrint.semantic(methodDescriptor.getFullMethodName()).mode() == BluePrint.BalanceMode.WRRBalanced;
         // weighted-round-robin mode
         WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         Optional<Map.Entry<String, Integer>> selection = selector.roundRobin();
@@ -306,7 +307,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
 
     @Override
     public Optional<String> random(String tenantId, MethodDescriptor<?, ?> methodDescriptor) {
-        assert bluePrint.semantic(methodDescriptor.getFullMethodName()) instanceof BluePrint.WRBalanced;
+        assert bluePrint.semantic(methodDescriptor.getFullMethodName()).mode() == BluePrint.BalanceMode.WRBalanced;
         // weighted-random mode
         WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         Optional<Map.Entry<String, Integer>> selection = selector.random();

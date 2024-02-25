@@ -159,7 +159,8 @@ class RPCServer implements IRPCServer {
                 }
             }
             ServerServiceDefinition serviceDef = serverDefBuilder.build();
-            builder.addService(ServerInterceptors.intercept(serviceDef, new TenantAwareServerInterceptor(serviceDef)));
+            builder.addService(
+                ServerInterceptors.intercept(serviceDef, new TenantAwareServerInterceptor(serviceDef, bluePrint)));
         });
     }
 

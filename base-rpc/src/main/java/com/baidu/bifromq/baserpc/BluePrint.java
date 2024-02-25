@@ -35,140 +35,202 @@ import lombok.NoArgsConstructor;
 public final class BluePrint {
     private static final int PIGGYBACK_FIELD_ID = Short.MAX_VALUE;
 
-    public interface Unary {
-        // a marker interface
+    public enum MethodType {
+        UNARY,
+        PIPELINE_UNARY,
+        STREAMING,
     }
 
-    public interface PipelineUnary {
-        // a marker interface
+    public enum BalanceMode {
+        DDBalanced,
+        WRRBalanced,
+        WRBalanced,
+        WCHBalanced,
     }
 
-    public interface Streaming {
-        // a marker interface
+    public interface MethodSemantic {
+        MethodType type();
+
+        BalanceMode mode();
     }
 
-    public interface DDBalanced {
-        // direct designated
-        // a marker interface
+    public interface Unary extends MethodSemantic {
+        default MethodType type() {
+            return MethodType.UNARY;
+        }
     }
 
-    public interface WRRBalanced {
-        // a marker interface
+    public interface PipelineUnary extends MethodSemantic {
+        default MethodType type() {
+            return MethodType.PIPELINE_UNARY;
+        }
     }
 
-    public interface WRBalanced {
-        // a marker interface
+    public interface Streaming extends MethodSemantic {
+        default MethodType type() {
+            return MethodType.STREAMING;
+        }
     }
 
-    public interface WCHBalanced {
-    }
-
-    public interface WCHBalancedReq<ReqT> extends WCHBalanced {
+    public interface WCHBalancedReq<ReqT> {
         // marker interface
         String hashKey(ReqT req);
     }
 
-    public abstract static class MethodSemantic<ReqT> {
-    }
-
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class DDUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, DDBalanced {
-        public static <ReqT> DDUnaryMethod<ReqT> getInstance() {
-            return new DDUnaryMethod<>();
+    public static final class DDUnaryMethod implements Unary {
+        public static DDUnaryMethod getInstance() {
+            return new DDUnaryMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.DDBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRRUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, WRRBalanced {
-        public static <ReqT> WRRUnaryMethod<ReqT> getInstance() {
-            return new WRRUnaryMethod<>();
+    public static final class WRRUnaryMethod implements Unary {
+        public static WRRUnaryMethod getInstance() {
+            return new WRRUnaryMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WRRBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, WRBalanced {
-        public static <ReqT> WRUnaryMethod<ReqT> getInstance() {
-            return new WRUnaryMethod<>();
+    public static final class WRUnaryMethod implements Unary {
+        public static WRUnaryMethod getInstance() {
+            return new WRUnaryMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WRBalanced;
         }
     }
 
     @Builder
-    public static final class WCHUnaryMethod<ReqT> extends MethodSemantic<ReqT> implements Unary, WCHBalancedReq<ReqT> {
+    public static final class WCHUnaryMethod<ReqT> implements Unary, WCHBalancedReq<ReqT> {
         private final Function<ReqT, String> keyHashFunc;
 
         public String hashKey(ReqT req) {
             return keyHashFunc.apply(req);
         }
-    }
 
-    @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class DDPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
-        implements PipelineUnary, DDBalanced {
-        public static <ReqT> DDPipelineUnaryMethod<ReqT> getInstance() {
-            return new DDPipelineUnaryMethod<>();
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WCHBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRRPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
-        implements PipelineUnary, WRRBalanced {
-        public static <ReqT> WRRPipelineUnaryMethod<ReqT> getInstance() {
-            return new WRRPipelineUnaryMethod<>();
+    public static final class DDPipelineUnaryMethod implements PipelineUnary {
+        public static DDPipelineUnaryMethod getInstance() {
+            return new DDPipelineUnaryMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.DDBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
-        implements PipelineUnary, WRBalanced {
-        public static <ReqT> WRPipelineUnaryMethod<ReqT> getInstance() {
-            return new WRPipelineUnaryMethod<>();
+    public static final class WRRPipelineUnaryMethod implements PipelineUnary {
+        public static WRRPipelineUnaryMethod getInstance() {
+            return new WRRPipelineUnaryMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WRRBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WCHPipelineUnaryMethod<ReqT> extends MethodSemantic<ReqT>
-        implements PipelineUnary, WCHBalanced {
-        public static <ReqT> WCHPipelineUnaryMethod<ReqT> getInstance() {
-            return new WCHPipelineUnaryMethod<>();
+    public static final class WRPipelineUnaryMethod implements PipelineUnary {
+        public static WRPipelineUnaryMethod getInstance() {
+            return new WRPipelineUnaryMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WRBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class DDStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, DDBalanced {
-        public static <ReqT> DDStreamingMethod<ReqT> getInstance() {
-            return new DDStreamingMethod<>();
+    public static final class WCHPipelineUnaryMethod implements PipelineUnary {
+        public static WCHPipelineUnaryMethod getInstance() {
+            return new WCHPipelineUnaryMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WCHBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRRStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, WRRBalanced {
-        public static <ReqT> WRRStreamingMethod<ReqT> getInstance() {
-            return new WRRStreamingMethod<>();
+    public static final class DDStreamingMethod implements Streaming {
+        public static DDStreamingMethod getInstance() {
+            return new DDStreamingMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.DDBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WRStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, WRBalanced {
-        public static <ReqT> WRStreamingMethod<ReqT> getInstance() {
-            return new WRStreamingMethod<>();
+    public static final class WRRStreamingMethod implements Streaming {
+        public static WRRStreamingMethod getInstance() {
+            return new WRRStreamingMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WRRBalanced;
         }
     }
 
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    public static final class WCHStreamingMethod<ReqT> extends MethodSemantic<ReqT> implements Streaming, WCHBalanced {
-        public static <ReqT> WCHStreamingMethod<ReqT> getInstance() {
-            return new WCHStreamingMethod<>();
+    public static final class WRStreamingMethod implements Streaming {
+        public static WRStreamingMethod getInstance() {
+            return new WRStreamingMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WRBalanced;
+        }
+    }
+
+    @NoArgsConstructor(access = AccessLevel.PRIVATE)
+    public static final class WCHStreamingMethod implements Streaming {
+        public static WCHStreamingMethod getInstance() {
+            return new WCHStreamingMethod();
+        }
+
+        @Override
+        public BalanceMode mode() {
+            return BalanceMode.WCHBalanced;
         }
     }
 
     private final ServiceDescriptor serviceDescriptor;
-    private final Map<String, MethodSemantic<?>> methodSemantics;
+    private final Map<String, MethodSemantic> methodSemantics;
     private final Map<String, MethodDescriptor<?, ?>> methods;
     private final Map<String, MethodDescriptor<?, ?>> wrappedMethods;
 
     private BluePrint(
         ServiceDescriptor serviceDescriptor,
-        Map<String, MethodSemantic<?>> methodSemantics,
+        Map<String, MethodSemantic> methodSemantics,
         Map<String, MethodDescriptor<?, ?>> methods,
         Map<String, MethodDescriptor<?, ?>> wrappedMethods) {
         this.serviceDescriptor = serviceDescriptor;
@@ -180,7 +242,7 @@ public final class BluePrint {
         }
         for (String methodName : methodSemantics.keySet()) {
             MethodDescriptor<?, ?> methodDesc = wrappedMethods.get(methodName);
-            MethodSemantic<?> semantic = methodSemantics.get(methodName);
+            MethodSemantic semantic = methodSemantics.get(methodName);
             switch (methodDesc.getType()) {
                 case UNARY:
                     if (!(semantic instanceof Unary)) {
@@ -209,9 +271,8 @@ public final class BluePrint {
         return wrappedMethods.keySet();
     }
 
-    @SuppressWarnings("unchecked")
-    public <ReqT> MethodSemantic<ReqT> semantic(String fullMethodName) {
-        return (MethodSemantic<ReqT>) methodSemantics.get(fullMethodName);
+    public MethodSemantic semantic(String fullMethodName) {
+        return methodSemantics.get(fullMethodName);
     }
 
     @SuppressWarnings("unchecked")
@@ -227,7 +288,7 @@ public final class BluePrint {
         private ServiceDescriptor serviceDescriptor;
         private ArrayList<MethodDescriptor<?, ?>> methods;
         private ArrayList<MethodDescriptor<?, ?>> wrappedMethods;
-        private ArrayList<MethodSemantic<?>> methodSemantics;
+        private ArrayList<MethodSemantic> methodSemantics;
 
         BluePrintBuilder() {
         }
@@ -238,7 +299,7 @@ public final class BluePrint {
         }
 
         public <ReqT, RespT> BluePrintBuilder methodSemantic(
-            MethodDescriptor<ReqT, RespT> methodSemanticKey, MethodSemantic<ReqT> methodSemanticValue) {
+            MethodDescriptor<ReqT, RespT> methodSemanticKey, MethodSemantic methodSemanticValue) {
             if (this.methods == null) {
                 this.methods = new ArrayList<>();
                 this.wrappedMethods = new ArrayList<>();
@@ -258,7 +319,7 @@ public final class BluePrint {
         public BluePrint build() {
             Map<String, MethodDescriptor<?, ?>> methodsMap;
             Map<String, MethodDescriptor<?, ?>> wrappedMethods;
-            Map<String, MethodSemantic<?>> methodSemanticMap;
+            Map<String, MethodSemantic> methodSemanticMap;
             switch (this.wrappedMethods == null ? 0 : this.wrappedMethods.size()) {
                 case 0:
                     methodSemanticMap = emptyMap();

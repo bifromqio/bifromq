@@ -13,54 +13,55 @@
 
 package com.baidu.bifromq.baserpc.metrics;
 
+import com.baidu.bifromq.baserpc.BluePrint;
 import io.micrometer.core.instrument.Meter;
 
 public enum RPCMetric {
-    UnaryReqDepth("unary.depth.summary", Meter.Type.DISTRIBUTION_SUMMARY),
-    UnaryReqSendCount("unary.req.send.count", Meter.Type.COUNTER),
-    UnaryReqCompleteCount("unary.req.complete.count", Meter.Type.COUNTER),
-    UnaryReqAbortCount("unary.req.abort.count", Meter.Type.COUNTER),
-    UnaryReqDropCount("unary.req.drop.count", Meter.Type.COUNTER),
-    UnaryReqLatency("unary.req.finish.time", Meter.Type.TIMER),
+    UnaryReqDepth("unary.depth.summary", Meter.Type.DISTRIBUTION_SUMMARY, BluePrint.MethodType.UNARY),
+    UnaryReqSendCount("unary.req.send.count", Meter.Type.COUNTER, BluePrint.MethodType.UNARY),
+    UnaryReqCompleteCount("unary.req.complete.count", Meter.Type.COUNTER, BluePrint.MethodType.UNARY),
+    UnaryReqAbortCount("unary.req.abort.count", Meter.Type.COUNTER, BluePrint.MethodType.UNARY),
+    UnaryReqDropCount("unary.req.drop.count", Meter.Type.COUNTER, BluePrint.MethodType.UNARY),
+    UnaryReqLatency("unary.req.finish.time", Meter.Type.TIMER, BluePrint.MethodType.UNARY),
 
-    UnaryReqReceivedCount("unary.req.recv.count", Meter.Type.COUNTER),
-    UnaryReqFulfillCount("unary.req.fulfil.count", Meter.Type.COUNTER),
-    UnaryReqFailCount("unary.req.fail.count", Meter.Type.COUNTER),
-    UnaryReqProcessLatency("unary.req.process.time", Meter.Type.TIMER),
+    UnaryReqReceivedCount("unary.req.recv.count", Meter.Type.COUNTER, BluePrint.MethodType.UNARY),
+    UnaryReqFulfillCount("unary.req.fulfil.count", Meter.Type.COUNTER, BluePrint.MethodType.UNARY),
+    UnaryReqFailCount("unary.req.fail.count", Meter.Type.COUNTER, BluePrint.MethodType.UNARY),
+    UnaryReqProcessLatency("unary.req.process.time", Meter.Type.TIMER, BluePrint.MethodType.UNARY),
 
-    ReqPipelineCreateCount("ppln.create.count", Meter.Type.COUNTER),
-    ReqPipelineErrorCount("ppln.error.count", Meter.Type.COUNTER),
-    ReqPipelineCompleteCount("ppln.complete.count", Meter.Type.COUNTER),
-    ReqPipelineDepth("ppln.depth.summary", Meter.Type.DISTRIBUTION_SUMMARY),
+    ReqPipelineCreateCount("ppln.create.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    ReqPipelineErrorCount("ppln.error.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    ReqPipelineCompleteCount("ppln.complete.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    ReqPipelineDepth("ppln.depth.summary", Meter.Type.DISTRIBUTION_SUMMARY, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqAcceptCount("ppln.req.enqueue.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqSendCount("ppln.req.send.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqCompleteCount("ppln.req.complete.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqAbortCount("ppln.req.abort.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqDropCount("ppln.req.drop.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqQueueTime("ppln.req.queue.time", Meter.Type.TIMER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqLatency("ppln.req.finish.time", Meter.Type.TIMER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqReceivedCount("ppln.req.recv.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqFulfillCount("ppln.req.fulfil.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqFailCount("ppln.req.fail.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+    PipelineReqProcessTime("ppln.req.process.time", Meter.Type.TIMER, BluePrint.MethodType.PIPELINE_UNARY),
 
-    PipelineReqAcceptCount("ppln.req.enqueue.count", Meter.Type.COUNTER),
-    PipelineReqSendCount("ppln.req.send.count", Meter.Type.COUNTER),
-    PipelineReqCompleteCount("ppln.req.complete.count", Meter.Type.COUNTER),
-    PipelineReqAbortCount("ppln.req.abort.count", Meter.Type.COUNTER),
-    PipelineReqDropCount("ppln.req.drop.count", Meter.Type.COUNTER),
-    PipelineReqQueueTime("ppln.req.queue.time", Meter.Type.TIMER),
-    PipelineReqLatency("ppln.req.finish.time", Meter.Type.TIMER),
+    MsgStreamCreateCount("stream.create.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    MsgStreamErrorCount("stream.error.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
 
-    PipelineReqReceivedCount("ppln.req.recv.count", Meter.Type.COUNTER),
-    PipelineReqFulfillCount("ppln.req.fulfil.count", Meter.Type.COUNTER),
-    PipelineReqFailCount("ppln.req.fail.count", Meter.Type.COUNTER),
-    PipelineReqProcessTime("ppln.req.process.time", Meter.Type.TIMER),
+    StreamAckAcceptCount("stream.ack.enqueue.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    StreamAckSendCount("stream.ack.send.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    StreamMsgReceiveCount("stream.msg.recv.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
 
-    MsgStreamCreateCount("stream.create.count", Meter.Type.COUNTER),
-    MsgStreamErrorCount("stream.error.count", Meter.Type.COUNTER),
-
-    StreamAckAcceptCount("stream.ack.enqueue.count", Meter.Type.COUNTER),
-    StreamAckSendCount("stream.ack.send.count", Meter.Type.COUNTER),
-    StreamMsgReceiveCount("stream.msg.recv.count", Meter.Type.COUNTER),
-
-    StreamMsgSendCount("stream.msg.send.count", Meter.Type.COUNTER),
-    StreamAckReceiveCount("stream.ack.recv.count", Meter.Type.COUNTER);
+    StreamMsgSendCount("stream.msg.send.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    StreamAckReceiveCount("stream.ack.recv.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING);
 
     public final String metricName;
     public final Meter.Type meterType;
+    public final BluePrint.MethodType methodType;
 
-    RPCMetric(String metricName, Meter.Type meterType) {
+    RPCMetric(String metricName, Meter.Type meterType, BluePrint.MethodType methodType) {
         this.metricName = metricName;
         this.meterType = meterType;
+        this.methodType = methodType;
     }
 }
