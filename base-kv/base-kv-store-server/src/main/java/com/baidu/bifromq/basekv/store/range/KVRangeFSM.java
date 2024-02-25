@@ -1380,6 +1380,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 } else {
                     log.debug("Restored from snapshot: rangeId={} \n{}", KVRangeIdUtil.toString(id), snapshot);
                     linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
+                    // reset the co-proc
+                    coProc.reset(snapshot.getBoundary());
                     // finish all pending tasks
                     cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
                         new KVRangeException.TryLater("Snapshot installed, try again")));

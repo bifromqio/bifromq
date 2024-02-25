@@ -42,7 +42,7 @@ public interface IKVRangeCoProc {
     Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer);
 
     /**
-     * This method will be called whenever the boundary of the owner KVRange has changed
+     * This method will be called whenever owner range is restored from a snapshot or boundary changed via split/merge.
      *
      * @param boundary the boundary of the owner KVRange
      */
