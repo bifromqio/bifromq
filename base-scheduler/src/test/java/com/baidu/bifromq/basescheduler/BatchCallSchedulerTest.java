@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basescheduler;
 
-import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,7 +85,7 @@ public class BatchCallSchedulerTest {
             log.info("Waiting for  {}", respFutures.size());
             CompletableFuture.allOf(respFutures.toArray(CompletableFuture[]::new)).join();
         } catch (Throwable e) {
-            Assert.assertEquals(ExceedLimitException.class, e.getCause().getClass());
+            Assert.assertEquals(BackPressureException.class, e.getCause().getClass());
         }
     }
 }

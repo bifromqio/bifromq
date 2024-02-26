@@ -35,6 +35,7 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.util.PipelineUtil;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
@@ -51,6 +52,8 @@ import org.testng.annotations.BeforeMethod;
 public abstract class MockedInboxService {
     @Mock
     protected ISettingProvider settingProvider;
+    @Mock
+    protected IEventCollector eventCollector;
     @Mock
     protected IInboxClient inboxClient;
     @Mock
@@ -125,6 +128,7 @@ public abstract class MockedInboxService {
             .attach();
         inboxService = InboxService.builder()
             .settingProvider(settingProvider)
+            .eventCollector(eventCollector)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)

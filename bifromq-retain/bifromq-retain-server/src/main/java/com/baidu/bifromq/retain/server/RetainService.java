@@ -17,6 +17,7 @@ import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainMatchedBytes;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.metrics.ITenantMeter;
@@ -63,6 +64,12 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
         response((tenantId, metadata) -> retainCallScheduler.schedule(request)
             .exceptionally(e -> {
                 log.error("Retain failed", e);
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return RetainReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(RetainReply.Result.BACK_PRESSURE_REJECTED)
+                        .build();
+                }
                 return RetainReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(RetainReply.Result.ERROR)
@@ -120,6 +127,12 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
             })
             .exceptionally(e -> {
                 log.error("Match failed", e);
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return MatchReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(MatchReply.Result.BACK_PRESSURE_REJECTED)
+                        .build();
+                }
                 return MatchReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(MatchReply.Result.ERROR)

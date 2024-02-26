@@ -199,7 +199,7 @@ public class LocalDistServiceTest extends MockableTest {
                     .build())
                 .build())
             .build()).join();
-        assertEquals(matchInfos.size(), reply.getResultCount());
+        assertEquals(matchInfos.size(), reply.getResultMap().get(tenantId).getResultCount());
         assertTrue(reply.getResultMap().get(tenantId).getResultList().stream()
             .allMatch(result -> result.getCode() == DeliveryResult.Code.NO_SUB));
         for (IMQTTTransientSession session : sessions) {
@@ -276,7 +276,7 @@ public class LocalDistServiceTest extends MockableTest {
                     .build())
                 .build())
             .build()).join();
-        assertEquals(matchInfos.size(), reply.getResultCount());
+        assertEquals(matchInfos.size(), reply.getResultMap().get(tenantId).getResultCount());
         assertTrue(reply.getResultMap().get(tenantId).getResultList().stream()
             .allMatch(result -> result.getCode() == DeliveryResult.Code.OK));
         for (IMQTTTransientSession session : sessions) {

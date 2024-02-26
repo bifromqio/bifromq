@@ -19,7 +19,7 @@ import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.Dist
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_CALL_QUEUES;
 
 import com.baidu.bifromq.baserpc.ResponsePipeline;
-import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
@@ -59,11 +59,11 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
             .handle((v, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
-                    if (e.getCause().getClass() == ExceedLimitException.class) {
+                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                         for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
                             DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
                             for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
-                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.EXCEED_LIMIT);
+                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.BACK_PRESSURE_REJECTED);
                             }
                             replyBuilder.addResults(resultBuilder.build());
                         }

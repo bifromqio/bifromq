@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basescheduler;
 
-import com.baidu.bifromq.basescheduler.exception.ExceedLimitException;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -112,7 +112,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
             return callTask.callResult;
         } else {
             dropCounter.increment();
-            return CompletableFuture.failedFuture(new ExceedLimitException("Too high average latency"));
+            return CompletableFuture.failedFuture(new BackPressureException("Too high average latency"));
         }
     }
 

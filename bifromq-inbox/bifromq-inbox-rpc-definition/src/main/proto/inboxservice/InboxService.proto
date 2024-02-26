@@ -171,7 +171,8 @@ message SubReply {
     NO_INBOX = 2;
     EXCEED_LIMIT = 3;
     CONFLICT = 4;
-    ERROR = 5;
+    BACK_PRESSURE_REJECTED = 5;
+    ERROR = 6;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -193,7 +194,8 @@ message UnsubReply {
     NO_INBOX = 1;
     NO_SUB = 2;
     CONFLICT = 3;
-    ERROR = 4;
+    BACK_PRESSURE_REJECTED = 4;
+    ERROR = 5;
   }
   uint64 reqId = 1;
   Code code = 2;

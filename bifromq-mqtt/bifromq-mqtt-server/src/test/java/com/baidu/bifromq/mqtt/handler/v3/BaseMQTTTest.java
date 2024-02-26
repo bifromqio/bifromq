@@ -354,9 +354,9 @@ public abstract class BaseMQTTTest {
             .thenReturn(CompletableFuture.completedFuture(success ? DistResult.OK : DistResult.ERROR));
     }
 
-    protected void mockDistDrop() {
+    protected void mockDistBackPressure() {
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(DistResult.EXCEED_LIMIT));
+            .thenReturn(CompletableFuture.completedFuture(DistResult.BACK_PRESSURE_REJECTED));
     }
 
     protected void mockSessionReg() {

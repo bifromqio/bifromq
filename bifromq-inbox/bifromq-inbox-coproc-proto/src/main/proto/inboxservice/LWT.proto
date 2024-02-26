@@ -11,5 +11,4 @@ message LWT{
   string topic = 1;
   commontype.Message message = 2;
   uint32 delaySeconds = 3;
-  bool retain = 4;
 }

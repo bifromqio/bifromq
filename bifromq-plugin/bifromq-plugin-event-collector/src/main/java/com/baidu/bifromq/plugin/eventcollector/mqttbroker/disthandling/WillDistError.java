@@ -26,6 +26,7 @@ import lombok.experimental.Accessors;
 @ToString(callSuper = true)
 public final class WillDistError extends DistEvent<WillDistError> {
     private QoS qos;
+    private String reason;
 
     @Override
     public EventType type() {
@@ -35,5 +36,7 @@ public final class WillDistError extends DistEvent<WillDistError> {
     @Override
     public void clone(WillDistError orig) {
         super.clone(orig);
+        this.qos = orig.qos;
+        this.reason = orig.reason;
     }
 }

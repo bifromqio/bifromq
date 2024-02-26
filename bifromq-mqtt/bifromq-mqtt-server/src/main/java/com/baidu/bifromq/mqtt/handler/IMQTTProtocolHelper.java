@@ -17,6 +17,7 @@ import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.UserProperties;
@@ -34,6 +35,9 @@ public interface IMQTTProtocolHelper {
     record SubTask(String topicFilter, TopicFilterOption option, UserProperties userProperties) {
     }
 
+    record PubResult(DistResult distResult, RetainReply.Result retainResult) {
+    }
+
     enum SubResult {
         OK,
         EXISTS,
@@ -44,6 +48,7 @@ public interface IMQTTProtocolHelper {
         WILDCARD_NOT_SUPPORTED,
         SHARED_SUBSCRIPTION_NOT_SUPPORTED,
         SUBSCRIPTION_IDENTIFIER_NOT_SUPPORTED,
+        BACK_PRESSURE_REJECTED,
 
         ERROR;
     }
@@ -54,6 +59,7 @@ public interface IMQTTProtocolHelper {
         NO_INBOX,
         NOT_AUTHORIZED,
         TOPIC_FILTER_INVALID,
+        BACK_PRESSURE_REJECTED,
         ERROR;
     }
 
@@ -83,7 +89,9 @@ public interface IMQTTProtocolHelper {
 
     List<SubTask> getSubTask(MqttSubscribeMessage message);
 
-    MqttSubAckMessage buildSubAckMessage(MqttSubscribeMessage subMessage, List<SubResult> results);
+    ProtocolResponse onSubBackPressured(MqttSubscribeMessage subMessage);
+
+    ProtocolResponse buildSubAckMessage(MqttSubscribeMessage subMessage, List<SubResult> results);
 
     MqttSubAckMessage respondPacketIdInUse(MqttSubscribeMessage message);
 
@@ -91,7 +99,9 @@ public interface IMQTTProtocolHelper {
 
     MqttUnsubAckMessage respondPacketIdInUse(MqttUnsubscribeMessage message);
 
-    MqttUnsubAckMessage buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results);
+    ProtocolResponse onUnsubBackPressured(MqttUnsubscribeMessage unsubMessage);
+
+    ProtocolResponse buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results);
 
     MqttMessage onPubRelReceived(MqttMessage message, boolean packetIdFound);
 
@@ -117,15 +127,17 @@ public interface IMQTTProtocolHelper {
 
     ProtocolResponse onQoS0DistDenied(String topic, Message distMessage, CheckResult result);
 
+    ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps);
+
     ProtocolResponse onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
 
-    MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps);
+    ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps);
 
     ProtocolResponse respondQoS2PacketInUse(MqttPublishMessage message);
 
     ProtocolResponse onQoS2DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
 
-    MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps);
+    ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps);
 
     ProtocolResponse onIdleTimeout(int keepAliveTimeSeconds);
 }

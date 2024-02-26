@@ -22,6 +22,7 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientUnsubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientUnsubLatency;
+import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXISTS;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.OK;
@@ -92,6 +93,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         subNumGauge = sessionCtx.getTransientSubNumGauge(clientInfo.getTenantId());
         onInitialized();
         resumeChannelRead();
+        memUsage.addAndGet(estBaseMemSize());
     }
 
     @Override
@@ -101,8 +103,14 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             topicFilters.forEach((topicFilter, option) -> addBgTask(unsubTopicFilter(System.nanoTime(), topicFilter)));
         }
         int remainInboxSize = inbox.values().stream().reduce(0, (acc, msg) -> acc + msg.estBytes(), Integer::sum);
+        memUsage.addAndGet(-estBaseMemSize());
         memUsage.addAndGet(-remainInboxSize);
         ctx.fireChannelInactive();
+    }
+
+    private int estBaseMemSize() {
+        // estimate bytes from JOL
+        return 28;
     }
 
     @Override
@@ -121,13 +129,13 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     protected final void onConfirm(long seq) {
         SubMessage msg = inbox.remove(seq);
         if (msg != null) {
-            int msgSize = msg.estBytes();
-            memUsage.addAndGet(-msgSize);
+            memUsage.addAndGet(-msg.estBytes());
         }
     }
 
     @Override
-    protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId, String topicFilter,
+    protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId,
+                                                                                    String topicFilter,
                                                                                     TopicFilterOption option) {
         tenantMeter.recordCount(MqttTransientSubCount);
         Timer.Sample start = Timer.start();
@@ -150,6 +158,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                     }
                     case EXCEED_LIMIT -> {
                         return CompletableFuture.completedFuture(EXCEED_LIMIT);
+                    }
+                    case BACK_PRESSURE_REJECTED -> {
+                        return CompletableFuture.completedFuture(BACK_PRESSURE_REJECTED);
                     }
                     default -> {
                         return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.ERROR);
@@ -204,14 +215,24 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             return CompletableFuture.completedFuture(IMQTTProtocolHelper.UnsubResult.NO_SUB);
         }
         return removeMatchRecord(reqId, topicFilter)
-            .handleAsync((v, e) -> {
-                if (e != null || v == UnmatchResult.ERROR) {
+            .handleAsync((result, e) -> {
+                subNumGauge.addAndGet(-1);
+                memUsage.addAndGet(-topicFilter.length());
+                if (e != null) {
                     return IMQTTProtocolHelper.UnsubResult.ERROR;
                 } else {
-                    subNumGauge.addAndGet(-1);
-                    memUsage.addAndGet(-topicFilter.length());
-                    start.stop(tenantMeter.timer(MqttTransientUnsubLatency));
-                    return IMQTTProtocolHelper.UnsubResult.OK;
+                    switch (result) {
+                        case OK -> {
+                            start.stop(tenantMeter.timer(MqttTransientUnsubLatency));
+                            return IMQTTProtocolHelper.UnsubResult.OK;
+                        }
+                        case BACK_PRESSURE_REJECTED -> {
+                            return IMQTTProtocolHelper.UnsubResult.BACK_PRESSURE_REJECTED;
+                        }
+                        default -> {
+                            return IMQTTProtocolHelper.UnsubResult.ERROR;
+                        }
+                    }
                 }
             }, ctx.executor());
     }

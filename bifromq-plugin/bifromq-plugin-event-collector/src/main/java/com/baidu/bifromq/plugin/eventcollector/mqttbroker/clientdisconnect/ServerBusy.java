@@ -11,14 +11,29 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basescheduler.exception;
+package com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect;
 
-public class ExceedLimitException extends DropException {
-    public ExceedLimitException(String message) {
-        super(message);
+import com.baidu.bifromq.plugin.eventcollector.EventType;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.experimental.Accessors;
+
+@Getter
+@Setter
+@Accessors(fluent = true, chain = true)
+@ToString(callSuper = true)
+public final class ServerBusy extends ClientDisconnectEvent<ServerBusy> {
+    private String reason;
+
+    @Override
+    public EventType type() {
+        return EventType.SERVER_BUSY;
     }
 
-    public ExceedLimitException(String message, Throwable cause) {
-        super(message, cause);
+    @Override
+    public void clone(ServerBusy orig) {
+        super.clone(orig);
+        this.reason = orig.reason;
     }
 }

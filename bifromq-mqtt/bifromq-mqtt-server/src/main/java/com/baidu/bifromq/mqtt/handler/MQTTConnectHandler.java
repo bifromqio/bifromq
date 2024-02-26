@@ -349,7 +349,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                     .sessionPresent(sessionExists)
                     .lastWill(willMessage != null ? new ClientConnected.WillInfo()
                         .topic(willMessage.getTopic())
-                        .isRetain(willMessage.getRetain())
+                        .isRetain(willMessage.getMessage().getIsRetain())
                         .qos(willMessage.getMessage().getPubQoS())
                         .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
             }, ctx.executor());
@@ -398,7 +398,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                     .sessionPresent(existingSession != null)
                     .lastWill(willMessage != null ? new ClientConnected.WillInfo()
                         .topic(willMessage.getTopic())
-                        .isRetain(willMessage.getRetain())
+                        .isRetain(willMessage.getMessage().getIsRetain())
                         .qos(willMessage.getMessage().getPubQoS())
                         .payload(willMessage.getMessage().getPayload().asReadOnlyByteBuffer()) : null));
             }, ctx.executor());

@@ -11,8 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.client;
+package com.baidu.bifromq.basescheduler.exception;
 
-public enum UnmatchResult {
-    OK, BACK_PRESSURE_REJECTED, ERROR;
+public class BackPressureException extends DropException {
+    public BackPressureException(String message) {
+        super(message);
+    }
+
+    public BackPressureException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

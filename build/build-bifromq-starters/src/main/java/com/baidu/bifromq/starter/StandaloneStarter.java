@@ -329,6 +329,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .settingProvider(settingProviderMgr)
+            .eventCollector(eventCollectorMgr)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)

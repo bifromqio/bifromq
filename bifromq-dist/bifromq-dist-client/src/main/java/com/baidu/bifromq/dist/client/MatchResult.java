@@ -14,5 +14,5 @@
 package com.baidu.bifromq.dist.client;
 
 public enum MatchResult {
-    OK, EXCEED_LIMIT, ERROR
+    OK, EXCEED_LIMIT, BACK_PRESSURE_REJECTED, ERROR
 }

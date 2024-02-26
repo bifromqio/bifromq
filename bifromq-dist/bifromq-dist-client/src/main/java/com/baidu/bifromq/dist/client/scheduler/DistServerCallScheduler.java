@@ -116,7 +116,8 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
                             switch (resultMap.get(publisher).get(topic)) {
                                 case OK -> task.callResult.complete(DistResult.OK);
                                 case NO_MATCH -> task.callResult.complete(DistResult.NO_MATCH);
-                                case EXCEED_LIMIT -> task.callResult.complete(DistResult.EXCEED_LIMIT);
+                                case BACK_PRESSURE_REJECTED ->
+                                    task.callResult.complete(DistResult.BACK_PRESSURE_REJECTED);
                                 case ERROR -> task.callResult.complete(DistResult.ERROR);
                             }
                         }

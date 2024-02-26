@@ -89,7 +89,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         dist(DistResult.OK, HttpResponseStatus.OK);
         dist(DistResult.NO_MATCH, HttpResponseStatus.OK);
         dist(DistResult.ERROR, HttpResponseStatus.INTERNAL_SERVER_ERROR);
-        dist(DistResult.EXCEED_LIMIT, HttpResponseStatus.BAD_REQUEST);
+        dist(DistResult.BACK_PRESSURE_REJECTED, HttpResponseStatus.BAD_REQUEST);
     }
 
     @Test

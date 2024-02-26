@@ -119,7 +119,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                             return new DefaultFullHttpResponse(req.protocolVersion(), OK,
                                 Unpooled.wrappedBuffer(distResult.name().getBytes()));
                         }
-                        case EXCEED_LIMIT -> {
+                        case BACK_PRESSURE_REJECTED -> {
                             return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
                                 Unpooled.wrappedBuffer(distResult.name().getBytes()));
                         }

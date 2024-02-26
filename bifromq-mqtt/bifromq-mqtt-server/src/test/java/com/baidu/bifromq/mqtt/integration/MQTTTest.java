@@ -193,6 +193,7 @@ public abstract class MQTTTest {
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .settingProvider(settingProvider)
+            .eventCollector(eventCollector)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)

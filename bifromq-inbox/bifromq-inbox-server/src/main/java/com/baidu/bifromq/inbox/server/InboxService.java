@@ -18,6 +18,7 @@ import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
 import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE;
 import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
 
@@ -70,6 +71,12 @@ import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDistError;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDisted;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetained;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetainedError;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
@@ -98,6 +105,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final ISettingProvider settingProvider;
+    private final IEventCollector eventCollector;
     private final IInboxClient inboxClient;
     private final IDistClient distClient;
     private final IRetainClient retainClient;
@@ -119,6 +127,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
     @Builder
     InboxService(ISettingProvider settingProvider,
+                 IEventCollector eventCollector,
                  IInboxClient inboxClient,
                  IDistClient distClient,
                  IRetainClient retainClient,
@@ -135,6 +144,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IInboxUnsubScheduler unsubScheduler,
                  IInboxTouchScheduler touchScheduler) {
         this.settingProvider = settingProvider;
+        this.eventCollector = eventCollector;
         this.inboxClient = inboxClient;
         this.distClient = distClient;
         this.retainClient = retainClient;
@@ -627,30 +637,77 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setTimestamp(HLC.INST.getPhysical()) // refresh the timestamp
                         .build(),
                     client);
-                CompletableFuture<RetainReply> retainLWTFuture = lwt.getRetain() ?
-                    retainClient.retain(reqId, lwt.getTopic(),
-                        lwt.getMessage().getPubQoS(),
-                        lwt.getMessage().getPayload(),
-                        lwt.getMessage().getExpiryInterval(),
-                        client) : CompletableFuture.completedFuture(
-                    RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build());
+                CompletableFuture<RetainReply> retainLWTFuture;
+                boolean willRetain = lwt.getMessage().getIsRetain();
+                boolean retainEnabled = settingProvider.provide(RetainEnabled, client.getTenantId());
+                if (willRetain) {
+                    if (!retainEnabled) {
+                        eventCollector.report(getLocal(MsgRetainedError.class)
+                            .reqId(reqId)
+                            .topic(lwt.getTopic())
+                            .qos(lwt.getMessage().getPubQoS())
+                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                            .size(lwt.getMessage().getPayload().size())
+                            .reason("Retain Disabled")
+                            .clientInfo(client));
+                        retainLWTFuture = CompletableFuture.completedFuture(RetainReply.newBuilder()
+                            .setReqId(reqId)
+                            .setResult(RetainReply.Result.ERROR).build());
+                    } else {
+                        retainLWTFuture = retain(reqId, lwt, client);
+                    }
+                } else {
+                    retainLWTFuture = CompletableFuture.completedFuture(null);
+                }
                 CompletableFuture.allOf(distLWTFuture, retainLWTFuture)
-                    .whenComplete((v, e) -> {
-                        if (e != null
-                            || distLWTFuture.join() == DistResult.ERROR
-                            || retainLWTFuture.join().getResult() == RetainReply.Result.ERROR) {
-                            log.warn("Handle LWT error", e);
+                    .thenAccept(v -> {
+                        DistResult distResult = distLWTFuture.join();
+                        boolean retry = distResult == DistResult.ERROR;
+                        if (!retry) {
+                            if (willRetain && retainEnabled) {
+                                retry = retainLWTFuture.join().getResult() == RetainReply.Result.ERROR;
+                            }
+                        }
+                        if (retry) {
                             // Delay some time and retry
                             delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(lwt.getDelaySeconds()),
                                 new ExpireSessionTask(scopedInbox, version, expireSeconds, client, lwt));
-                            return;
-                        }
-                        if (lwt.getDelaySeconds() >= expireSeconds) {
-                            delayTaskRunner.reg(scopedInbox, Duration.ZERO,
-                                new ExpireSessionTask(scopedInbox, version, 0, client, null));
                         } else {
-                            delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
-                                new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                            switch (distLWTFuture.join()) {
+                                case OK, NO_MATCH -> {
+                                    eventCollector.report(getLocal(WillDisted.class)
+                                        .reqId(reqId)
+                                        .topic(lwt.getTopic())
+                                        .qos(lwt.getMessage().getPubQoS())
+                                        .size(lwt.getMessage().getPayload().size())
+                                        .clientInfo(client));
+                                    if (lwt.getDelaySeconds() >= expireSeconds) {
+                                        delayTaskRunner.reg(scopedInbox, Duration.ZERO,
+                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                    } else {
+                                        delayTaskRunner.reg(scopedInbox,
+                                            Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
+                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                    }
+                                }
+                                case BACK_PRESSURE_REJECTED -> {
+                                    eventCollector.report(getLocal(WillDistError.class)
+                                        .reqId(reqId)
+                                        .topic(lwt.getTopic())
+                                        .qos(lwt.getMessage().getPubQoS())
+                                        .size(lwt.getMessage().getPayload().size())
+                                        .reason("Server Busy")
+                                        .clientInfo(client));
+                                    if (lwt.getDelaySeconds() >= expireSeconds) {
+                                        delayTaskRunner.reg(scopedInbox, Duration.ZERO,
+                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                    } else {
+                                        delayTaskRunner.reg(scopedInbox,
+                                            Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
+                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                    }
+                                }
+                            }
                         }
                     });
             } else {
@@ -671,6 +728,53 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         return CompletableFuture.completedFuture(null);
                     });
             }
+        }
+
+        private CompletableFuture<RetainReply> retain(long reqId, LWT lwt, ClientInfo publisher) {
+            return retainClient.retain(reqId, lwt.getTopic(),
+                    lwt.getMessage().getPubQoS(),
+                    lwt.getMessage().getPayload(),
+                    lwt.getMessage().getExpiryInterval(),
+                    publisher)
+                .thenApply(v -> {
+                    switch (v.getResult()) {
+                        case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
+                            .topic(lwt.getTopic())
+                            .qos(lwt.getMessage().getPubQoS())
+                            .isLastWill(true)
+                            .size(lwt.getMessage().getPayload().size())
+                            .clientInfo(publisher));
+                        case CLEARED -> eventCollector.report(getLocal(RetainMsgCleared.class)
+                            .topic(lwt.getTopic())
+                            .isLastWill(true)
+                            .clientInfo(publisher));
+                        case BACK_PRESSURE_REJECTED -> eventCollector.report(getLocal(MsgRetainedError.class)
+                            .topic(lwt.getTopic())
+                            .qos(lwt.getMessage().getPubQoS())
+                            .isLastWill(true)
+                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                            .size(lwt.getMessage().getPayload().size())
+                            .reason("Server Busy")
+                            .clientInfo(publisher));
+                        case EXCEED_LIMIT -> eventCollector.report(getLocal(MsgRetainedError.class)
+                            .topic(lwt.getTopic())
+                            .qos(lwt.getMessage().getPubQoS())
+                            .isLastWill(true)
+                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                            .size(lwt.getMessage().getPayload().size())
+                            .reason("Exceed limit")
+                            .clientInfo(publisher));
+                        case ERROR -> eventCollector.report(getLocal(MsgRetainedError.class)
+                            .topic(lwt.getTopic())
+                            .qos(lwt.getMessage().getPubQoS())
+                            .isLastWill(true)
+                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                            .size(lwt.getMessage().getPayload().size())
+                            .reason("Internal Error")
+                            .clientInfo(publisher));
+                    }
+                    return v;
+                });
         }
     }
 }

@@ -128,7 +128,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
     public void willDistDrop() {
         setupTransientSessionWithLWT(false);
         mockAuthCheck(true);
-        mockDistDrop();
+        mockDistBackPressure();
         channel.advanceTimeBy(50, TimeUnit.SECONDS);
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
@@ -147,7 +147,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED);
+        verifyEvent(CLIENT_CONNECTED, IDLE, MSG_RETAINED, WILL_DISTED);
     }
 
 
@@ -161,7 +161,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DISTED, RETAIN_MSG_CLEARED);
+        verifyEvent(CLIENT_CONNECTED, IDLE, RETAIN_MSG_CLEARED, WILL_DISTED);
     }
 
     @Test
@@ -174,7 +174,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, IDLE, WILL_DISTED, MSG_RETAINED_ERROR);
+        verifyEvent(CLIENT_CONNECTED, IDLE, MSG_RETAINED_ERROR, WILL_DISTED);
     }
 
     protected void setupTransientSessionWithLWT(boolean willRetain) {

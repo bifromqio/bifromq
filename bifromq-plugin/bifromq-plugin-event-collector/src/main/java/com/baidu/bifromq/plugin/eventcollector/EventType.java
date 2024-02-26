@@ -36,6 +36,7 @@ public enum EventType {
     BAD_PACKET,
     BY_CLIENT,
     BY_SERVER,
+    SERVER_BUSY,
     CLIENT_CHANNEL_ERROR,
     IDLE,
     INBOX_TRANSIENT_ERROR,
@@ -52,6 +53,7 @@ public enum EventType {
     TOO_LARGE_SUBSCRIPTION,
     TOO_LARGE_UNSUBSCRIPTION,
     OVERSIZE_PACKET_DROPPED,
+
     PING_REQ,
     DISCARD,
     WILL_DISTED,
@@ -101,5 +103,7 @@ public enum EventType {
     UNSUBSCRIBED_ERROR,
 
     // inbox service
-    OVERFLOWED
+    OVERFLOWED,
+
+    // retain service
 }

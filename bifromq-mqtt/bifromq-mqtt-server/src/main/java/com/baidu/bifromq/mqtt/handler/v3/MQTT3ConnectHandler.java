@@ -248,10 +248,10 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     protected LWT getWillMessage(MqttConnectMessage message) {
         return LWT.newBuilder()
             .setTopic(message.payload().willTopic())
-            .setRetain(message.variableHeader().isWillRetain())
             .setMessage(Message.newBuilder()
                 .setPubQoS(QoS.forNumber(message.variableHeader().willQos()))
                 .setPayload(UnsafeByteOperations.unsafeWrap(message.payload().willMessageInBytes()))
+                .setIsRetain(message.variableHeader().isWillRetain())
                 .setExpiryInterval(Integer.MAX_VALUE)
                 .setIsRetain(message.variableHeader().isWillRetain())
                 .build())

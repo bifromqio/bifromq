@@ -95,7 +95,7 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
                 .thenApply(reply -> switch (reply.getResult()) {
                     case OK, EXISTS -> new DefaultFullHttpResponse(req.protocolVersion(), OK,
                         Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
-                    case EXCEED_LIMIT, TOPIC_FILTER_INVALID ->
+                    case EXCEED_LIMIT, TOPIC_FILTER_INVALID, BACK_PRESSURE_REJECTED ->
                         new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
                             Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
                     case NOT_AUTHORIZED ->

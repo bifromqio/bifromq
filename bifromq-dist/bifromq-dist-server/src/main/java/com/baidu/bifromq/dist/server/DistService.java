@@ -19,6 +19,7 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
@@ -84,11 +85,16 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                         .receiverId(request.getReceiverId())
                         .subBrokerId(request.getBrokerId())
                         .delivererKey(request.getDelivererKey()));
+                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                        return MatchReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(MatchReply.Result.BACK_PRESSURE_REJECTED)
+                            .build();
+                    }
                     return MatchReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(MatchReply.Result.ERROR)
                         .build();
-
                 }
                 eventCollector.report(getLocal(Matched.class)
                     .reqId(request.getReqId())
@@ -113,6 +119,12 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                         .receiverId(request.getReceiverId())
                         .subBrokerId(request.getBrokerId())
                         .delivererKey(request.getDelivererKey()));
+                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                        return UnmatchReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(UnmatchReply.Result.BACK_PRESSURE_REJECTED)
+                            .build();
+                    }
                     return UnmatchReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(UnmatchReply.Result.ERROR)

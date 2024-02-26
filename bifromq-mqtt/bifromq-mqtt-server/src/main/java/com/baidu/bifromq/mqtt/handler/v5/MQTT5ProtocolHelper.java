@@ -45,6 +45,7 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5PubRelReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedPubRate;
@@ -56,8 +57,12 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Malfo
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ServerBusy;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeUnsubscription;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1PubAcked;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubReced;
+import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -286,7 +291,19 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttSubAckMessage buildSubAckMessage(MqttSubscribeMessage subMessage, List<SubResult> results) {
+    public ProtocolResponse onSubBackPressured(MqttSubscribeMessage subMessage) {
+        return farewell(
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
+                .reasonString("Too many subscribe")
+                .build(),
+            getLocal(ServerBusy.class)
+                .reason("Too many subscribe")
+                .clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse buildSubAckMessage(MqttSubscribeMessage subMessage, List<SubResult> results) {
         MQTT5SubAckReasonCode[] reasonCodes = new MQTT5SubAckReasonCode[results.size()];
         assert subMessage.payload().topicSubscriptions().size() == results.size();
         for (int i = 0; i < results.size(); i++) {
@@ -302,10 +319,10 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 default -> MQTT5SubAckReasonCode.UnspecifiedError;
             };
         }
-        return MQTT5MessageBuilders.subAck()
+        return response(MQTT5MessageBuilders.subAck()
             .packetId(subMessage.variableHeader().messageId())
             .reasonCodes(reasonCodes)
-            .build();
+            .build());
     }
 
     @Override
@@ -371,7 +388,19 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttUnsubAckMessage buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results) {
+    public ProtocolResponse onUnsubBackPressured(MqttUnsubscribeMessage unsubMessage) {
+        return farewell(
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
+                .reasonString("Too many unsubscribe")
+                .build(),
+            getLocal(ServerBusy.class)
+                .reason("Too many unsubscribe")
+                .clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results) {
         MQTT5UnsubAckReasonCode[] reasonCodes = results.stream().map(result -> switch (result) {
                 case OK -> MQTT5UnsubAckReasonCode.Success;
                 case NO_SUB -> MQTT5UnsubAckReasonCode.NoSubscriptionExisted;
@@ -381,10 +410,10 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             })
             .toArray(MQTT5UnsubAckReasonCode[]::new);
 
-        return MQTT5MessageBuilders.unsubAck()
+        return response(MQTT5MessageBuilders.unsubAck()
             .packetId(unsubMessage.variableHeader().messageId())
             .addReasonCodes(reasonCodes)
-            .build();
+            .build());
     }
 
     @Override
@@ -710,6 +739,23 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
+    public ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
+        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
+            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            return farewell(MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
+                    .reasonString("Too many QoS0 publish")
+                    .userProps(userProps)
+                    .build(),
+                getLocal(ServerBusy.class)
+                    .reason("Too many QoS0 publish")
+                    .clientInfo(clientInfo));
+        } else {
+            return ProtocolResponse.responseNothing();
+        }
+    }
+
+    @Override
     public ProtocolResponse onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
         assert !result.hasGranted();
         return switch (result.getTypeCase()) {
@@ -733,30 +779,45 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
+    public ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
+        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
+            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            return farewell(MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
+                    .reasonString("Too many QoS1 publish")
+                    .build(),
+                getLocal(ServerBusy.class)
+                    .reason("Too many QoS1 publish")
+                    .clientInfo(clientInfo));
+        }
         int packetId = message.variableHeader().packetId();
-        return switch (result) {
-            case OK -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
+        Event<?>[] debugEvents;
+        if (settings.debugMode) {
+            debugEvents = new Event<?>[] {getLocal(QoS1PubAcked.class)
+                .reqId(packetId)
+                .isDup(message.fixedHeader().isDup())
+                .topic(message.variableHeader().topicName())
+                .size(message.payload().readableBytes())
+                .clientInfo(clientInfo)};
+        } else {
+            debugEvents = new Event[0];
+        }
+        return switch (result.distResult()) {
+            case OK -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.Success)
                 .userProps(userProps)
-                .build();
-            case NO_MATCH -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
+                .build(), debugEvents);
+            case NO_MATCH -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.NoMatchingSubscribers)
                 .userProps(userProps)
-                .build();
-            case EXCEED_LIMIT -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
-                .packetId(packetId)
-                .reasonCode(MQTT5PubAckReasonCode.QuotaExceeded)
-                // TODO: specify which quota in reason string
-                .userProps(userProps)
-                .build();
-            case ERROR -> MQTT5MessageBuilders.pubAck(requestProblemInfo)
+                .build(), debugEvents);
+            default -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
                 .userProps(userProps)
-                .build();
+                .build(), debugEvents);
         };
     }
 
@@ -792,30 +853,45 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
+    public ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
+        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
+            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            return farewell(MQTT5MessageBuilders.disconnect()
+                    .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
+                    .reasonString("Too many QoS2 publish")
+                    .build(),
+                getLocal(ServerBusy.class)
+                    .reason("Too many QoS2 publish")
+                    .clientInfo(clientInfo));
+        }
         int packetId = message.variableHeader().packetId();
-        return switch (result) {
-            case OK -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
+        Event<?>[] debugEvents;
+        if (settings.debugMode) {
+            debugEvents = new Event<?>[] {getLocal(QoS2PubReced.class)
+                .reqId(packetId)
+                .isDup(message.fixedHeader().isDup())
+                .topic(message.variableHeader().topicName())
+                .size(message.payload().readableBytes())
+                .clientInfo(clientInfo)};
+        } else {
+            debugEvents = new Event[0];
+        }
+        return switch (result.distResult()) {
+            case OK -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.Success)
                 .userProps(userProps)
-                .build();
-            case NO_MATCH -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
+                .build(), debugEvents);
+            case NO_MATCH -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.NoMatchingSubscribers)
                 .userProps(userProps)
-                .build();
-            case EXCEED_LIMIT -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
-                .packetId(packetId)
-                .reasonCode(MQTT5PubRecReasonCode.QuotaExceeded)
-                // TODO: specify which quota in reason string
-                .userProps(userProps)
-                .build();
-            case ERROR -> MQTT5MessageBuilders.pubRec(requestProblemInfo)
+                .build(), debugEvents);
+            default -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
                 .userProps(userProps)
-                .build();
+                .build(), debugEvents);
         };
     }
 

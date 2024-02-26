@@ -80,7 +80,8 @@ message SubReply {
     EXCEED_LIMIT = 3;
     NOT_AUTHORIZED = 4;
     TOPIC_FILTER_INVALID = 5;
-    ERROR = 6;
+    BACK_PRESSURE_REJECTED = 6;
+    ERROR = 7;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -101,7 +102,8 @@ message UnsubReply {
     NO_SESSION = 2;
     NOT_AUTHORIZED = 3;
     TOPIC_FILTER_INVALID = 4;
-    ERROR = 5;
+    BACK_PRESSURE_REJECTED = 5;
+    ERROR = 6;
   }
   uint64 reqId = 1;
   Result result = 2;

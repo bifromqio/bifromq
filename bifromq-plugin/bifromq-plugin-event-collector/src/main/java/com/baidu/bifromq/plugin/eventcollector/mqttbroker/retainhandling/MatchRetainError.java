@@ -25,6 +25,7 @@ import lombok.experimental.Accessors;
 @ToString(callSuper = true)
 public final class MatchRetainError extends RetainEvent<MatchRetainError> {
     private String topicFilter;
+    private String reason;
 
     @Override
     public EventType type() {
@@ -35,5 +36,6 @@ public final class MatchRetainError extends RetainEvent<MatchRetainError> {
     public void clone(MatchRetainError orig) {
         super.clone(orig);
         this.topicFilter = orig.topicFilter;
+        this.reason = reason;
     }
 }

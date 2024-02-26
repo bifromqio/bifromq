@@ -26,7 +26,8 @@ message MatchReply {
   enum Result {
     OK = 0;
     EXCEED_LIMIT = 1;
-    ERROR = 2;
+    BACK_PRESSURE_REJECTED = 2;
+    ERROR = 3;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -44,7 +45,8 @@ message UnmatchRequest {
 message UnmatchReply {
   enum Result {
     OK = 0;
-    ERROR = 1;
+    BACK_PRESSURE_REJECTED = 1;
+    ERROR = 2;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -59,7 +61,7 @@ message DistReply {
   enum Code{
     OK = 0;
     NO_MATCH = 1;
-    EXCEED_LIMIT = 2;
+    BACK_PRESSURE_REJECTED = 2;
     ERROR = 3;
   }
   message Result{

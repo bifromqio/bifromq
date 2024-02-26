@@ -24,6 +24,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.MatchResult;
@@ -33,24 +34,28 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.plugin.eventcollector.Event;
+import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
 import java.util.concurrent.CompletableFuture;
+import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
 
 public class InboxExpiryTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void lwtPub() {
-        clearInvocations(distClient);
+        clearInvocations(distClient, eventCollector);
         long now = System.nanoTime();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill")
+        LWT lwt = LWT.newBuilder()
+            .setTopic("LastWill")
             .setDelaySeconds(1)
             .setMessage(Message.newBuilder()
                 .setPubQoS(QoS.AT_LEAST_ONCE)
@@ -58,8 +63,8 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .build())
             .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
-            CompletableFuture.completedFuture(DistResult.OK));
+        when(distClient.pub(anyLong(), anyString(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
@@ -77,7 +82,7 @@ public class InboxExpiryTest extends InboxServiceTest {
                 argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
                     m.getPayload().equals(lwt.getMessage().getPayload())),
                 any());
-
+        verify(eventCollector, timeout(5000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
                 .setReqId(reqId)
@@ -91,13 +96,17 @@ public class InboxExpiryTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void lwtRetained() {
-        clearInvocations(retainClient);
+        clearInvocations(retainClient, eventCollector);
         long now = System.nanoTime();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill").setRetain(true).setDelaySeconds(1).build();
+        LWT lwt = LWT.newBuilder().setTopic("LastWill").setMessage(Message.newBuilder()
+                .setIsRetain(true)
+                .setPayload(ByteString.copyFromUtf8("last will"))
+                .build())
+            .setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
             CompletableFuture.completedFuture(DistResult.OK));
@@ -116,6 +125,10 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
         verify(retainClient, timeout(5000).times(1)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
+        ArgumentCaptor<Event<?>> eventCaptor = ArgumentCaptor.forClass(Event.class);
+        verify(eventCollector, timeout(5000).times(2)).report(eventCaptor.capture());
+        assertEquals(eventCaptor.getAllValues().get(0).type(), EventType.MSG_RETAINED);
+        assertEquals(eventCaptor.getAllValues().get(1).type(), EventType.WILL_DISTED);
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
                 .setReqId(reqId)
@@ -129,13 +142,14 @@ public class InboxExpiryTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void lwtRetryOnError() {
-        clearInvocations(retainClient);
+        clearInvocations(distClient, retainClient, eventCollector);
         long now = System.nanoTime();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill").setRetain(true).setDelaySeconds(1).build();
+        LWT lwt = LWT.newBuilder().setTopic("LastWill").setMessage(Message.newBuilder().setIsRetain(true).build())
+            .setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
@@ -170,7 +184,7 @@ public class InboxExpiryTest extends InboxServiceTest {
         });
     }
 
-    @Test
+    @Test(groups = "integration")
     public void lwtAfterDetach() {
         clearInvocations(distClient);
         long now = System.currentTimeMillis();
@@ -214,11 +228,12 @@ public class InboxExpiryTest extends InboxServiceTest {
                 argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
                     m.getPayload().equals(lwt.getMessage().getPayload())),
                 any());
+        verify(eventCollector, timeout(2000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
     }
 
     @Test(groups = "integration")
     public void matchCleanupWhenInboxExpired() {
-        clearInvocations(distClient);
+        clearInvocations(distClient, retainClient, eventCollector);
         long now = System.nanoTime();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();

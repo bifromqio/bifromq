@@ -31,7 +31,7 @@ public abstract class MockableTest {
     }
 
     @SneakyThrows
-    @AfterMethod
+    @AfterMethod(alwaysRun = true)
     public void tearDown(Method method) {
         log.info("Test case[{}.{}] finished", method.getDeclaringClass().getName(), method.getName());
         closeable.close();

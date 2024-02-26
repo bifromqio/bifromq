@@ -58,10 +58,8 @@ public abstract class InboxServiceTest {
     private IAgentHost agentHost;
     private ICRDTService clientCrdtService;
     private ICRDTService serverCrdtService;
-    private IEventCollector eventCollector = event -> {
-
-    };
-
+    @Mock
+    protected IEventCollector eventCollector;
     @Mock
     protected ISettingProvider settingProvider;
     @Mock
@@ -132,6 +130,7 @@ public abstract class InboxServiceTest {
             .distClient(distClient)
             .retainClient(retainClient)
             .settingProvider(settingProvider)
+            .eventCollector(eventCollector)
             .inboxStoreClient(inboxStoreClient)
             .build();
         inboxStore.start();
@@ -143,7 +142,7 @@ public abstract class InboxServiceTest {
 
     @SneakyThrows
     @AfterClass(alwaysRun = true)
-    public void teardown() {
+    public void tearDown() {
         log.info("Finish testing, and tearing down");
         inboxServer.shutdown();
         inboxStore.stop();

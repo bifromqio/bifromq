@@ -170,6 +170,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             inboxReader.close();
         }
         memUsage.addAndGet(-estBaseMemSize());
+        int remainInboxSize =
+            stagingBuffer.values().stream().reduce(0, (acc, msg) -> acc + msg.estBytes(), Integer::sum);
+        memUsage.addAndGet(-remainInboxSize);
         ctx.fireChannelInactive();
     }
 
@@ -248,6 +251,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     case EXCEED_LIMIT -> {
                         return IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
                     }
+                    case BACK_PRESSURE_REJECTED -> {
+                        return IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
+                    }
                     case ERROR -> {
                         return IMQTTProtocolHelper.SubResult.ERROR;
                     }
@@ -285,6 +291,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     case NO_INBOX, CONFLICT -> {
                         handleProtocolResponse(helper().onInboxTransientError());
                         return IMQTTProtocolHelper.UnsubResult.ERROR;
+                    }
+                    case BACK_PRESSURE_REJECTED -> {
+                        return IMQTTProtocolHelper.UnsubResult.BACK_PRESSURE_REJECTED;
                     }
                     default -> {
                         return IMQTTProtocolHelper.UnsubResult.ERROR;
@@ -344,7 +353,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     protected final void onConfirm(long seq) {
         inboxConfirmedUpToSeq = seq;
-        stagingBuffer.remove(seq);
+        SubMessage confirmed = stagingBuffer.remove(seq);
+        if (confirmed != null) {
+            memUsage.addAndGet(-confirmed.estBytes());
+        }
         confirmSendBuffer();
         ctx.executor().execute(this::drainStaging);
     }
@@ -507,6 +519,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         return;
                     }
                     SubMessage prev = stagingBuffer.put(inboxMsg.getSeq(), msg);
+                    memUsage.addAndGet(msg.estBytes());
                     assert prev == null;
                 } else {
                     switch (msg.qos()) {

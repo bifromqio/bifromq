@@ -38,9 +38,13 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Malfo
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ServerBusy;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeUnsubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.Discard;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1PubAcked;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubReced;
+import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -157,7 +161,14 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttSubAckMessage buildSubAckMessage(MqttSubscribeMessage subMessage, List<SubResult> results) {
+    public ProtocolResponse onSubBackPressured(MqttSubscribeMessage subMessage) {
+        return goAway((getLocal(ServerBusy.class)
+            .reason("Too many subscribe")
+            .clientInfo(clientInfo)));
+    }
+
+    @Override
+    public ProtocolResponse buildSubAckMessage(MqttSubscribeMessage subMessage, List<SubResult> results) {
         assert subMessage.payload().topicSubscriptions().size() == results.size();
         List<MqttQoS> grantedQoSList = new ArrayList<>(results.size());
         for (int i = 0; i < results.size(); i++) {
@@ -167,10 +178,10 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
                 default -> grantedQoSList.add(MqttQoS.FAILURE);
             }
         }
-        return MqttMessageBuilders.subAck()
+        return response(MqttMessageBuilders.subAck()
             .packetId(subMessage.variableHeader().messageId())
             .addGrantedQoses(grantedQoSList.toArray(MqttQoS[]::new))
-            .build();
+            .build());
     }
 
     @Override
@@ -207,8 +218,15 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttUnsubAckMessage buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results) {
-        return MqttMessageBuilders.unsubAck().packetId(unsubMessage.variableHeader().messageId()).build();
+    public ProtocolResponse onUnsubBackPressured(MqttUnsubscribeMessage unsubMessage) {
+        return goAway((getLocal(ServerBusy.class)
+            .reason("Too many unsubscribe")
+            .clientInfo(clientInfo)));
+    }
+
+    @Override
+    public ProtocolResponse buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results) {
+        return response(MqttMessageBuilders.unsubAck().packetId(unsubMessage.variableHeader().messageId()).build());
     }
 
     @Override
@@ -328,6 +346,18 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
+    public ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
+        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
+            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            return goAway(getLocal(ServerBusy.class)
+                .reason("Too many qos0 publish")
+                .clientInfo(clientInfo));
+        } else {
+            return responseNothing();
+        }
+    }
+
+    @Override
     public ProtocolResponse onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result) {
         return goAway(getLocal(NoPubPermission.class)
             .qos(AT_LEAST_ONCE)
@@ -337,10 +367,29 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttMessage onQoS1Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
-        return MqttMessageBuilders.pubAck()
-            .packetId(message.variableHeader().packetId())
-            .build();
+    public ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
+        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED ||
+            result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            return goAway(getLocal(ServerBusy.class)
+                .reason("Too many qos1 publish")
+                .clientInfo(clientInfo));
+        } else {
+            if (settings.debugMode) {
+                return response(MqttMessageBuilders.pubAck()
+                        .packetId(message.variableHeader().packetId())
+                        .build(),
+                    getLocal(QoS1PubAcked.class)
+                        .reqId(message.variableHeader().packetId())
+                        .isDup(message.fixedHeader().isDup())
+                        .topic(message.variableHeader().topicName())
+                        .size(message.payload().readableBytes())
+                        .clientInfo(clientInfo));
+            } else {
+                return response(MqttMessageBuilders.pubAck()
+                    .packetId(message.variableHeader().packetId())
+                    .build());
+            }
+        }
     }
 
     @Override
@@ -358,10 +407,29 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public MqttMessage onQoS2Disted(DistResult result, MqttPublishMessage message, UserProperties userProps) {
-        return MQTT3MessageBuilders.pubRec()
-            .packetId(message.variableHeader().packetId())
-            .build();
+    public ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
+        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
+            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            return goAway(getLocal(ServerBusy.class)
+                .reason("Too many qos2 publish")
+                .clientInfo(clientInfo));
+        } else {
+            if (settings.debugMode) {
+                return response(MQTT3MessageBuilders.pubRec()
+                        .packetId(message.variableHeader().packetId())
+                        .build(),
+                    getLocal(QoS2PubReced.class)
+                        .reqId(message.variableHeader().packetId())
+                        .isDup(message.fixedHeader().isDup())
+                        .topic(message.variableHeader().topicName())
+                        .size(message.payload().readableBytes())
+                        .clientInfo(clientInfo));
+            } else {
+                return response(MQTT3MessageBuilders.pubRec()
+                    .packetId(message.variableHeader().packetId())
+                    .build());
+            }
+        }
     }
 
     @Override

@@ -26,8 +26,9 @@ message RetainReply {
   enum Result {
     RETAINED = 0;
     CLEARED = 1;
-    EXCEED_LIMIT = 2;
-    ERROR = 3;
+    EXCEED_LIMIT = 2; // exceed max retained topic quota
+    BACK_PRESSURE_REJECTED = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -45,7 +46,8 @@ message MatchRequest {
 message MatchReply {
   enum Result {
     OK = 0;
-    ERROR = 1;
+    BACK_PRESSURE_REJECTED = 1;
+    ERROR = 2;
   }
   uint64 reqId = 1;
   Result result = 2;

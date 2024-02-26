@@ -87,8 +87,9 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
                 .thenApply(reply -> switch (reply.getResult()) {
                     case OK, NO_SUB -> new DefaultFullHttpResponse(req.protocolVersion(), OK,
                         Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
-                    case TOPIC_FILTER_INVALID -> new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
-                        Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
+                    case TOPIC_FILTER_INVALID, BACK_PRESSURE_REJECTED ->
+                        new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                            Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
                     case NO_SESSION ->
                         new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER);
                     case NOT_AUTHORIZED ->

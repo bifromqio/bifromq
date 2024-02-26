@@ -34,6 +34,8 @@ public final class MsgRetainedError extends RetainEvent<MsgRetainedError> {
 
     private int size;
 
+    private String reason;
+
     @Override
     public EventType type() {
         return EventType.MSG_RETAINED_ERROR;
@@ -47,5 +49,6 @@ public final class MsgRetainedError extends RetainEvent<MsgRetainedError> {
         this.qos = orig.qos;
         this.payload = orig.payload;
         this.size = orig.size;
+        this.reason = orig.reason;
     }
 }

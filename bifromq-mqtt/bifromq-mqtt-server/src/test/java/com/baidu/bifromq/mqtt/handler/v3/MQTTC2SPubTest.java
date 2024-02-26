@@ -16,7 +16,6 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.EXCEED_PUB_RATE;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.NO_PUB_PERMISSION;
@@ -29,6 +28,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_REC_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.SERVER_BUSY;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -90,13 +90,13 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qos0PubDistDrop() {
+    public void qos0PubDistBackPressure() {
         setupTransientSession();
         mockAuthCheck(true);
-        mockDistDrop();
+        mockDistBackPressure();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS0_DIST_ERROR);
+        verifyEvent(CLIENT_CONNECTED, QOS0_DIST_ERROR, SERVER_BUSY);
     }
 
     @Test
@@ -135,13 +135,13 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qos1PubDistDrop() {
+    public void qos1PubDistBackPressure() {
         setupTransientSession();
         mockAuthCheck(true);
-        mockDistDrop();
+        mockDistBackPressure();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR, PUB_ACKED);
+        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR, SERVER_BUSY);
     }
 
 
@@ -207,13 +207,13 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     }
 
     @Test
-    public void qoS2PubDistDrop() {
+    public void qoS2PubDistBackPressure() {
         setupTransientSession();
         mockAuthCheck(true);
-        mockDistDrop();
+        mockDistBackPressure();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR, PUB_RECED);
+        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR, SERVER_BUSY);
 //        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
     }
 

@@ -60,7 +60,8 @@ message UnsubReply {
     NO_INBOX = 2;
     NOT_AUTHORIZED = 3;
     TOPIC_FILTER_INVALID = 4;
-    ERROR = 5;
+    BACK_PRESSURE_REJECTED = 5;
+    ERROR = 6;
   }
   uint64 reqId = 1;
   Result result = 2;

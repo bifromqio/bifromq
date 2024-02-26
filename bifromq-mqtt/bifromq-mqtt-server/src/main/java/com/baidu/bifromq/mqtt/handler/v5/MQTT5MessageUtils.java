@@ -274,7 +274,6 @@ public class MQTT5MessageUtils {
     static LWT toWillMessage(MqttConnectMessage connMsg) {
         LWT.Builder lwtBuilder = LWT.newBuilder()
             .setTopic(connMsg.payload().willTopic())
-            .setRetain(connMsg.variableHeader().isWillRetain())
             .setDelaySeconds(integerMqttProperty(connMsg.payload().willProperties(),
                 MqttProperties.MqttPropertyType.WILL_DELAY_INTERVAL).orElse(0));
         Message willMsg = toMessage(0,
