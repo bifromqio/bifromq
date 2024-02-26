@@ -38,7 +38,7 @@ public class StatsTest extends RetainStoreTest {
         String topic = "/a/b/c";
         TopicMessage message = message(topic, "hello");
 
-        RetainResult.Code reply = requestRetain(tenantId, message, 10);
+        RetainResult.Code reply = requestRetain(tenantId, message);
         assertEquals(reply, RetainResult.Code.RETAINED);
 
         await().until(() -> {

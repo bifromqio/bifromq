@@ -20,9 +20,7 @@ message RetainMessage{
 }
 
 message RetainParam{
-  uint32 maxRetainTopicCount = 1;
-  map<string, RetainMessage> topicMessages = 2; // key: topic
-  uint64 now = 3;
+  map<string, RetainMessage> topicMessages = 1; // key: topic
 }
 
 message BatchRetainRequest{
@@ -34,8 +32,7 @@ message RetainResult{
   enum Code {
     RETAINED = 0;
     CLEARED = 1;
-    EXCEED_LIMIT = 2;
-    ERROR = 3;
+    ERROR = 2;
   }
   map<string, Code> results = 1; // key: topic
 }

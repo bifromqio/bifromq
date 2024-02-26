@@ -57,7 +57,6 @@ public enum EventType {
     PING_REQ,
     DISCARD,
     WILL_DISTED,
-
     WILL_DIST_ERROR,
     QOS0_DIST_ERROR,
     QOS1_DIST_ERROR,

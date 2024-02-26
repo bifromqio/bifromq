@@ -34,31 +34,11 @@ public class RetainBehaviorTest extends RetainStoreTest {
         String topic = "/a/b/c";
         TopicMessage message = message(topic, "hello");
 
-        RetainResult.Code reply = requestRetain(tenantId, message, 10);
+        RetainResult.Code reply = requestRetain(tenantId, message);
         assertEquals(reply, RetainResult.Code.RETAINED);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 1);
         assertEquals(matchReply.getOk().getMessages(0), message);
-    }
-
-    @Test(groups = "integration")
-    public void retainFirstMessageWithZeroMaxRetainedTopics() {
-        String topic = "/a/b/c";
-        RetainResult.Code reply = requestRetain(tenantId, message(topic, "hello"), 0);
-
-        assertEquals(reply, RetainResult.Code.EXCEED_LIMIT);
-
-        MatchResult matchReply = requestMatch(tenantId, topic, 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 0);
-    }
-
-    @Test(groups = "integration")
-    public void retainNewExceedLimit() {
-        assertEquals(requestRetain(tenantId, message("/a", "hello"), 1), RetainResult.Code.RETAINED);
-        assertEquals(requestRetain(tenantId, message("/b", "hello"), 1), RetainResult.Code.EXCEED_LIMIT);
-
-        MatchResult matchReply = requestMatch(tenantId, "/b", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 0);
     }
 }

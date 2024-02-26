@@ -762,7 +762,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             .isLastWill(true)
                             .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
                             .size(lwt.getMessage().getPayload().size())
-                            .reason("Exceed limit")
+                            .reason("Exceed Limit")
                             .clientInfo(publisher));
                         case ERROR -> eventCollector.report(getLocal(MsgRetainedError.class)
                             .topic(lwt.getTopic())

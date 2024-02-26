@@ -200,14 +200,8 @@ public class RetainStoreTest {
         closeable.close();
     }
 
-    protected RetainResult.Code requestRetain(String tenantId, TopicMessage topicMsg, int maxRetainTopicCount) {
-        return requestRetain(tenantId, HLC.INST.getPhysical(), topicMsg, maxRetainTopicCount);
-    }
 
-    protected RetainResult.Code requestRetain(String tenantId,
-                                              long now,
-                                              TopicMessage topicMsg,
-                                              int maxRetainTopicCount) {
+    protected RetainResult.Code requestRetain(String tenantId, TopicMessage topicMsg) {
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString tenantNS = KeyUtil.tenantNS(tenantId);
         KVRangeSetting s = storeClient.findByKey(tenantNS).get();
@@ -216,8 +210,6 @@ public class RetainStoreTest {
         BatchRetainRequest request = BatchRetainRequest.newBuilder()
             .setReqId(message.getMessageId())
             .putParams(tenantId, RetainParam.newBuilder()
-                .setMaxRetainTopicCount(maxRetainTopicCount)
-                .setNow(now)
                 .putTopicMessages(topic, RetainMessage.newBuilder()
                     .setMessage(message)
                     .setPublisher(topicMsg.getPublisher())

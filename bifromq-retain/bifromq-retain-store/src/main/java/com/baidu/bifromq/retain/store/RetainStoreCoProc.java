@@ -239,12 +239,8 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             RetainSetMetadata.Builder metadataBuilder = getMetadata(tenantId)
                 .map(RetainSetMetadata::toBuilder)
                 .orElse(RetainSetMetadata.newBuilder().setEstExpire(Long.MAX_VALUE));
-            Map<String, RetainResult.Code> results = retain(tenantId,
-                retainParam.getTopicMessagesMap(),
-                retainParam.getMaxRetainTopicCount(),
-                retainParam.getNow(),
-                metadataBuilder,
-                reader, writer);
+            Map<String, RetainResult.Code> results =
+                retain(tenantId, retainParam.getTopicMessagesMap(), metadataBuilder, reader, writer);
             replyBuilder.putResults(tenantId, RetainResult.newBuilder()
                 .putAllResults(results)
                 .build());
@@ -262,8 +258,6 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     private Map<String, RetainResult.Code> retain(String tenantId,
                                                   Map<String, RetainMessage> retainMessages,
-                                                  int maxRetainTopics,
-                                                  long now,
                                                   RetainSetMetadata.Builder metadataBuilder,
                                                   IKVReader reader,
                                                   IKVWriter writer) {
@@ -271,8 +265,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         for (Map.Entry<String, RetainMessage> entry : retainMessages.entrySet()) {
             String topic = entry.getKey();
             RetainMessage retainMessage = entry.getValue();
-            RetainResult.Code result =
-                doRetain(tenantId, topic, retainMessage, maxRetainTopics, now, metadataBuilder, reader, writer);
+            RetainResult.Code result = doRetain(tenantId, topic, retainMessage, metadataBuilder, reader, writer);
             results.put(topic, result);
         }
         return results;
@@ -281,8 +274,6 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     private RetainResult.Code doRetain(String tenantId,
                                        String topic,
                                        RetainMessage retainMessage,
-                                       int maxRetainTopics,
-                                       long now,
                                        RetainSetMetadata.Builder metadataBuilder,
                                        IKVReader reader,
                                        IKVWriter writer) {
@@ -294,85 +285,34 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 .build();
             ByteString tenantNS = KeyUtil.tenantNS(tenantId);
             ByteString retainKey = KeyUtil.retainKey(tenantNS, topicMessage.getTopic());
-            if (expireAt(topicMessage.getMessage()) <= now) {
-                // already expired
-                return RetainResult.Code.ERROR;
-            }
             Optional<ByteString> val = reader.get(retainKey);
             if (topicMessage.getMessage().getPayload().isEmpty()) {
                 // delete existing retained
                 if (val.isPresent()) {
                     TopicMessage existing = TopicMessage.parseFrom(val.get());
-                    if (expireAt(existing.getMessage()) <= now) {
-                        // the existing has already expired
-                        doGC(now, tenantId, metadataBuilder, reader, writer);
-                    } else {
-                        writer.delete(retainKey);
-                        metadataBuilder
-                            .setCount(metadataBuilder.getCount() - 1)
-                            .setUsedSpace(metadataBuilder.getUsedSpace() - sizeOf(existing));
-                    }
+                    writer.delete(retainKey);
+                    metadataBuilder
+                        .setCount(metadataBuilder.getCount() - 1)
+                        .setUsedSpace(metadataBuilder.getUsedSpace() - sizeOf(existing));
                 }
                 return RetainResult.Code.CLEARED;
             }
             if (val.isEmpty()) {
                 // retain new message
-                if (metadataBuilder.getCount() >= maxRetainTopics) {
-                    if (metadataBuilder.getEstExpire() <= now) {
-                        // try to make some room via gc
-                        doGC(now, tenantId, metadataBuilder, reader, writer);
-                        if (metadataBuilder.getCount() < maxRetainTopics) {
-                            metadataBuilder
-                                .setEstExpire(
-                                    Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
-                                .setCount(metadataBuilder.getCount() + 1);
-                            writer.put(retainKey, topicMessage.toByteString());
-                            metadataBuilder.setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage));
-                            return RetainResult.Code.RETAINED;
-                        } else {
-                            // still no enough room
-                            return RetainResult.Code.ERROR;
-                        }
-                    } else {
-                        // no enough room
-                        return RetainResult.Code.EXCEED_LIMIT;
-                    }
-                } else {
-                    writer.put(retainKey, topicMessage.toByteString());
-                    metadataBuilder
-                        .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
-                        .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage))
-                        .setCount(metadataBuilder.getCount() + 1).build();
-                    return RetainResult.Code.RETAINED;
-                }
+                writer.put(retainKey, topicMessage.toByteString());
+                metadataBuilder
+                    .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
+                    .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage))
+                    .setCount(metadataBuilder.getCount() + 1).build();
             } else {
                 // replace existing
                 TopicMessage existing = TopicMessage.parseFrom(val.get());
-                if (expireAt(existing.getMessage()) <= now && metadataBuilder.getCount() >= maxRetainTopics) {
-                    doGC(now, tenantId, metadataBuilder, reader, writer);
-                    if (metadataBuilder.getCount() < maxRetainTopics) {
-                        writer.put(retainKey, topicMessage.toByteString());
-                        metadataBuilder
-                            .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
-                            .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage))
-                            .setCount(metadataBuilder.getCount() + 1);
-                        return RetainResult.Code.RETAINED;
-                    } else {
-                        // no enough room
-                        return RetainResult.Code.EXCEED_LIMIT;
-                    }
-                }
-                if (metadataBuilder.getCount() <= maxRetainTopics) {
-                    writer.put(retainKey, topicMessage.toByteString());
-                    metadataBuilder
-                        .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
-                        .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage));
-                    return RetainResult.Code.RETAINED;
-                } else {
-                    // no enough room
-                    return RetainResult.Code.EXCEED_LIMIT;
-                }
+                writer.put(retainKey, topicMessage.toByteString());
+                metadataBuilder
+                    .setEstExpire(Math.min(expireAt(topicMessage.getMessage()), metadataBuilder.getEstExpire()))
+                    .setUsedSpace(metadataBuilder.getUsedSpace() + sizeOf(topicMessage) - sizeOf(existing));
             }
+            return RetainResult.Code.RETAINED;
         } catch (Throwable e) {
             log.error("Retain failed", e);
             return RetainResult.Code.ERROR;

@@ -25,6 +25,7 @@ import lombok.experimental.Accessors;
 @ToString(callSuper = true)
 public final class QoS2DistError extends DistEvent<QoS2DistError> {
     private boolean isDup;
+    private String reason;
 
     @Override
     public EventType type() {
@@ -35,5 +36,6 @@ public final class QoS2DistError extends DistEvent<QoS2DistError> {
     public void clone(QoS2DistError orig) {
         super.clone(orig);
         this.isDup = orig.isDup;
+        this.reason = orig.reason;
     }
 }

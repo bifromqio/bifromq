@@ -65,8 +65,6 @@ public enum Setting {
 
     QoS0DropOldest(Boolean.class, val -> true, false),
 
-    RetainedTopicLimit(Integer.class, val -> (int) val >= 0, 10),
-
     RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10),
 
     DistReservedUnitInterval(Long.class, val -> (long) val > 0 && (long) val <= 0xFFFFFFFFL, 0xFFFFFFFFL),
@@ -96,6 +94,7 @@ public enum Setting {
      * @param tenantId the id of the calling tenant
      * @return The effective value of the setting for the client
      */
+    @SuppressWarnings("unchecked")
     public <R> R current(String tenantId) {
         return (R) currentVals.asMap().getOrDefault(tenantId, initial);
     }

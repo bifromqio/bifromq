@@ -30,8 +30,8 @@ public class LoadMetadataTest extends RetainStoreTest {
 
     @Test(groups = "integration")
     public void testLoadMetadata() {
-        requestRetain(tenantId, message("/a", "hello"), 10);
-        requestRetain(tenantId, message("/b", "hello"), 10);
+        requestRetain(tenantId, message("/a", "hello"));
+        requestRetain(tenantId, message("/b", "hello"));
         Gauge spaceUsageGauge = getSpaceUsageGauge(tenantId);
         Gauge retainCountGauge = getRetainCountGauge(tenantId);
         await().until(() -> spaceUsageGauge.value() > 0);

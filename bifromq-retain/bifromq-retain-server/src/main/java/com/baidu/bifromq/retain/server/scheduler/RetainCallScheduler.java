@@ -23,7 +23,6 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.google.protobuf.ByteString;
@@ -33,15 +32,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RetainCallScheduler extends MutationCallScheduler<RetainRequest, RetainReply>
     implements IRetainCallScheduler {
-    private final ISettingProvider settingProvider;
     private final IBaseKVStoreClient retainStoreClient;
 
-    public RetainCallScheduler(ISettingProvider settingProvider,
-                               IBaseKVStoreClient retainStoreClient) {
+    public RetainCallScheduler(IBaseKVStoreClient retainStoreClient) {
         super("retain_server_retain_batcher", retainStoreClient,
             Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
-        this.settingProvider = settingProvider;
         this.retainStoreClient = retainStoreClient;
     }
 
@@ -50,8 +46,7 @@ public class RetainCallScheduler extends MutationCallScheduler<RetainRequest, Re
                                                                                      long tolerableLatencyNanos,
                                                                                      long burstLatencyNanos,
                                                                                      MutationCallBatcherKey batchKey) {
-        return new RetainCallBatcher(batchKey, name, tolerableLatencyNanos,
-            burstLatencyNanos, settingProvider, retainStoreClient);
+        return new RetainCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, retainStoreClient);
     }
 
     @Override
@@ -60,21 +55,18 @@ public class RetainCallScheduler extends MutationCallScheduler<RetainRequest, Re
     }
 
     private static class RetainCallBatcher extends MutationCallBatcher<RetainRequest, RetainReply> {
-        private final ISettingProvider settingProvider;
 
         protected RetainCallBatcher(MutationCallBatcherKey batchKey,
                                     String name,
                                     long tolerableLatencyNanos,
                                     long burstLatencyNanos,
-                                    ISettingProvider settingProvider,
                                     IBaseKVStoreClient retainStoreClient) {
             super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, retainStoreClient);
-            this.settingProvider = settingProvider;
         }
 
         @Override
         protected IBatchCall<RetainRequest, RetainReply, MutationCallBatcherKey> newBatch() {
-            return new BatchRetainCall(batcherKey.id, settingProvider, storeClient, Duration.ofMinutes(5));
+            return new BatchRetainCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
         }
     }
 }

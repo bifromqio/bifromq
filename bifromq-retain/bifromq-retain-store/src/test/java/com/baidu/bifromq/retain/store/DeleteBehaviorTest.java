@@ -25,7 +25,7 @@ public class DeleteBehaviorTest extends RetainStoreTest {
         String tenantId = "tenantA";
         String topic = "/a/b/c";
         // empty payload signal deletion
-        RetainResult.Code reply = requestRetain(tenantId, message(topic, ""), 10);
+        RetainResult.Code reply = requestRetain(tenantId, message(topic, ""));
         assertEquals(reply, RetainResult.Code.CLEARED);
     }
 
@@ -33,9 +33,9 @@ public class DeleteBehaviorTest extends RetainStoreTest {
     public void deleteNonExisting() {
         String tenantId = "tenantA";
         // empty payload signal deletion
-        assertEquals(requestRetain(tenantId, message("/a/b/c", "hello"), 10), RetainResult.Code.RETAINED);
+        assertEquals(requestRetain(tenantId, message("/a/b/c", "hello")), RetainResult.Code.RETAINED);
 
-        assertEquals(requestRetain(tenantId, message("/a", ""), 10), RetainResult.Code.CLEARED);
+        assertEquals(requestRetain(tenantId, message("/a", "")), RetainResult.Code.CLEARED);
     }
 
     @Test(groups = "integration")
@@ -44,9 +44,9 @@ public class DeleteBehaviorTest extends RetainStoreTest {
         String topic = "/a/b/c";
 
         // empty payload signal deletion
-        assertEquals(requestRetain(tenantId, message(topic, "hello"), 10), RetainResult.Code.RETAINED);
+        assertEquals(requestRetain(tenantId, message(topic, "hello")), RetainResult.Code.RETAINED);
 
-        assertEquals(requestRetain(tenantId, message(topic, ""), 10), RetainResult.Code.CLEARED);
+        assertEquals(requestRetain(tenantId, message(topic, "")), RetainResult.Code.CLEARED);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 0);

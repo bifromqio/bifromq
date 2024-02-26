@@ -36,10 +36,10 @@ public class MatchTest extends RetainStoreTest {
         TopicMessage message3 = message("/c/", "hello");
         TopicMessage message4 = message("a", "hello");
 
-        requestRetain(tenantId, message1, 10);
-        requestRetain(tenantId, message2, 10);
-        requestRetain(tenantId, message3, 10);
-        requestRetain(tenantId, message4, 10);
+        requestRetain(tenantId, message1);
+        requestRetain(tenantId, message2);
+        requestRetain(tenantId, message3);
+        requestRetain(tenantId, message4);
 
         MatchResult matchReply = requestMatch(tenantId, "#", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 4);
@@ -109,9 +109,9 @@ public class MatchTest extends RetainStoreTest {
         TopicMessage message1 = message("/a/b/c", "hello");
         TopicMessage message2 = message("/a/b/", "hello");
         TopicMessage message3 = message("/c/", "hello");
-        requestRetain(tenantId, message1, 10);
-        requestRetain(tenantId, message2, 10);
-        requestRetain(tenantId, message3, 10);
+        requestRetain(tenantId, message1);
+        requestRetain(tenantId, message2);
+        requestRetain(tenantId, message3);
 
         assertEquals(requestMatch(tenantId, "#", 0).getOk().getMessagesCount(), 0);
         assertEquals(requestMatch(tenantId, "#", 1).getOk().getMessagesCount(), 1);

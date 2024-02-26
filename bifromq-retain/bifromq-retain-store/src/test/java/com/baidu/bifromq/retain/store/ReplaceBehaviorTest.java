@@ -30,31 +30,16 @@ public class ReplaceBehaviorTest extends RetainStoreTest {
     }
 
     @Test(groups = "integration")
-    public void replaceWithinLimit() {
+    public void replace() {
         String topic = "/a";
         TopicMessage message = message(topic, "hello");
         TopicMessage message1 = message(topic, "world");
 
-        assertEquals(requestRetain(tenantId, message, 1), RetainResult.Code.RETAINED);
-        assertEquals(requestRetain(tenantId, message1, 1), RetainResult.Code.RETAINED);
+        assertEquals(requestRetain(tenantId, message), RetainResult.Code.RETAINED);
+        assertEquals(requestRetain(tenantId, message1), RetainResult.Code.RETAINED);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 1);
         assertEquals(matchReply.getOk().getMessages(0), message1);
-    }
-
-    @Test(groups = "integration")
-    public void replaceButExceedLimit() {
-        assertEquals(requestRetain(tenantId, message("/a", "hello"), 2), RetainResult.Code.RETAINED);
-
-        TopicMessage message = message("/b", "world");
-        assertEquals(requestRetain(tenantId, message, 2), RetainResult.Code.RETAINED);
-
-        // limit now shrink to 1
-        assertEquals(requestRetain(tenantId, message("/b", "!!!"), 1), RetainResult.Code.EXCEED_LIMIT);
-
-        MatchResult matchReply = requestMatch(tenantId, "/b", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 1);
-        assertEquals(matchReply.getOk().getMessages(0), message);
     }
 }

@@ -1109,7 +1109,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                                    Message message,
                                                                    boolean isDup,
                                                                    int ingressMsgSize) {
-        return doPub(reqId, topic, message, false)
+        return doPub(reqId, topic, message, false, false)
             .thenApplyAsync(v -> {
                 switch (v.distResult()) {
                     case OK, NO_MATCH -> {
@@ -1155,7 +1155,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             .build();
         long reqId = System.nanoTime();
         int size = message.getPayload().size() + willMessage.getTopic().length();
-        return doPub(reqId, willMessage.getTopic(), message, true)
+        return doPub(reqId, willMessage.getTopic(), message, true, true)
             .handleAsync((v, e) -> {
                 if (e != null) {
                     eventCollector.report(getLocal(WillDistError.class)
@@ -1194,6 +1194,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private CompletableFuture<IMQTTProtocolHelper.PubResult> doPub(long reqId,
                                                                    String topic,
                                                                    Message message,
+                                                                   boolean isLWT,
                                                                    boolean background) {
         if (log.isTraceEnabled()) {
             log.trace("Disting msg: req={}, topic={}, qos={}, size={}",
@@ -1206,13 +1207,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             return distTask.thenApply(v -> new IMQTTProtocolHelper.PubResult(v, RetainReply.Result.RETAINED));
         } else {
             CompletableFuture<RetainReply.Result> retainTask =
-                trackTask(retainMessage(reqId, topic, message), background);
+                trackTask(retainMessage(reqId, topic, message, isLWT), background);
             return allOf(retainTask, distTask).thenApply(
                 v -> new IMQTTProtocolHelper.PubResult(distTask.join(), retainTask.join()));
         }
     }
 
-    private CompletableFuture<RetainReply.Result> retainMessage(long reqId, String topic, Message message) {
+    private CompletableFuture<RetainReply.Result> retainMessage(long reqId, String topic, Message message,
+                                                                boolean isLWT) {
         if (!settings.retainEnabled) {
             eventCollector.report(getLocal(MsgRetainedError.class)
                 .reqId(reqId)
@@ -1243,7 +1245,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
                         .reqId(v.getReqId())
                         .topic(topic)
-                        .isLastWill(false)
+                        .isLastWill(isLWT)
                         .qos(message.getPubQoS())
                         .size(message.getPayload().size())
                         .clientInfo(clientInfo));
@@ -1252,14 +1254,33 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .isLastWill(false)
                         .clientInfo(clientInfo)
                         .topic(topic));
+                    case EXCEED_LIMIT -> eventCollector.report(getLocal(MsgRetainedError.class)
+                        .reqId(v.getReqId())
+                        .clientInfo(clientInfo)
+                        .topic(topic)
+                        .isLastWill(isLWT)
+                        .qos(message.getPubQoS())
+                        .payload(message.getPayload().asReadOnlyByteBuffer())
+                        .size(message.getPayload().size())
+                        .reason("Exceed Limit"));
+                    case BACK_PRESSURE_REJECTED -> eventCollector.report(getLocal(MsgRetainedError.class)
+                        .reqId(v.getReqId())
+                        .clientInfo(clientInfo)
+                        .topic(topic)
+                        .isLastWill(isLWT)
+                        .qos(message.getPubQoS())
+                        .payload(message.getPayload().asReadOnlyByteBuffer())
+                        .size(message.getPayload().size())
+                        .reason("Server Busy"));
                     default -> eventCollector.report(getLocal(MsgRetainedError.class)
                         .reqId(v.getReqId())
                         .clientInfo(clientInfo)
                         .topic(topic)
-                        .isLastWill(false)
+                        .isLastWill(isLWT)
                         .qos(message.getPubQoS())
                         .payload(message.getPayload().asReadOnlyByteBuffer())
-                        .size(message.getPayload().size()));
+                        .size(message.getPayload().size())
+                        .reason("Internal Error"));
                 }
                 return v.getResult();
             }, ctx.executor());

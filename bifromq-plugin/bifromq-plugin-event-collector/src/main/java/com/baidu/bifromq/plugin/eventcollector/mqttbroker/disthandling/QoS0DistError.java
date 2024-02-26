@@ -14,12 +14,26 @@
 package com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling;
 
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.Accessors;
 
+@Getter
+@Setter
+@Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
 public final class QoS0DistError extends DistEvent<QoS0DistError> {
+    private String reason;
+
     @Override
     public EventType type() {
         return EventType.QOS0_DIST_ERROR;
+    }
+
+    @Override
+    public void clone(QoS0DistError orig) {
+        super.clone(orig);
+        this.reason = orig.reason;
     }
 }
