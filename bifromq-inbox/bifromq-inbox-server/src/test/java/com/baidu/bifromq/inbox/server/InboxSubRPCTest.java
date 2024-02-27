@@ -130,8 +130,6 @@ public class InboxSubRPCTest extends InboxServiceTest {
 
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
-            .setResult(MatchReply.Result.OK).build()));
         String topicFilter = "/a/b/c";
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -188,8 +186,6 @@ public class InboxSubRPCTest extends InboxServiceTest {
 
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
-            .setResult(MatchReply.Result.OK).build()));
         subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -233,8 +229,6 @@ public class InboxSubRPCTest extends InboxServiceTest {
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
-            .setResult(MatchReply.Result.OK).build()));
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)

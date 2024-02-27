@@ -59,7 +59,7 @@ public abstract class DistServiceTest {
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private ISettingProvider settingProvider = Setting::current;
-    private IResourceThrottler resourceThrottler = (tenantId, type) -> false;
+    private IResourceThrottler resourceThrottler = (tenantId, type) -> true;
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
         public void report(Event<?> event) {

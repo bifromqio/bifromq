@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -117,8 +118,17 @@ class DeliverExecutorGroup {
                 });
                 ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, pFanoutBytes.longValue());
             } else {
-                // only send to one inbox when throttled
-                prepareSend(matchedRoutes.get(0), msgPack);
+                AtomicBoolean inboxDelivered = new AtomicBoolean(false);
+                matchedRoutes.parallelStream().forEach(matching -> {
+                    // deliver to inbox
+                    if (isSendToInbox(matching)) {
+                        if (!inboxDelivered.compareAndSet(false, true)) {
+                            prepareSend(matching, msgPack);
+                        }
+                    } else {
+                        prepareSend(matching, msgPack);
+                    }
+                });
                 ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
                 for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
                     eventCollector.report(getLocal(ResourceThrottled.class)

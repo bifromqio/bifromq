@@ -13,22 +13,25 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
-
 import com.baidu.bifromq.mqtt.utils.MemInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class SlowDownOnMemPressureHandler extends ChannelInboundHandlerAdapter {
-    public static final String NAME = "SlowDownOnMemPressureHandler";
-    private static final double MAX_DIRECT_MEMORY_USAGE = INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE.get();
+public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
+    public static final String NAME = "SlowDownHandler";
+    private final Supplier<Boolean> slowDownCondition;
     private ChannelHandlerContext ctx;
     private ScheduledFuture<?> resumeTask;
+
+    public ConditionalSlowDownHandler(Supplier<Boolean> slowDownCondition) {
+        this.slowDownCondition = slowDownCondition;
+    }
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
@@ -46,7 +49,7 @@ public class SlowDownOnMemPressureHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (MemInfo.directMemoryUsage() > MAX_DIRECT_MEMORY_USAGE) {
+        if (slowDownCondition.get()) {
             log.debug("Stop read: directMemoryUsage={}, remote={}", MemInfo.directMemoryUsage(),
                 ctx.channel().remoteAddress());
             ctx.channel().config().setAutoRead(false);
@@ -57,7 +60,7 @@ public class SlowDownOnMemPressureHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
-        if (MemInfo.directMemoryUsage() < MAX_DIRECT_MEMORY_USAGE) {
+        if (!slowDownCondition.get()) {
             ctx.channel().config().setAutoRead(true);
             ctx.read();
         }
@@ -71,8 +74,8 @@ public class SlowDownOnMemPressureHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    public void resumeRead() {
-        if (MemInfo.directMemoryUsage() < MAX_DIRECT_MEMORY_USAGE) {
+    private void resumeRead() {
+        if (!slowDownCondition.get()) {
             if (!ctx.channel().config().isAutoRead()) {
                 ctx.channel().config().setAutoRead(true);
                 log.debug("Resume read: directMemoryUsage={}, remote={}", MemInfo.directMemoryUsage(),

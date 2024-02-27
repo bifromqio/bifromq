@@ -347,6 +347,9 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             .build();
         ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
+        ctx.pipeline().replace(ctx.pipeline().get(ConditionalSlowDownHandler.NAME),
+            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(
+                new InboundResourceCondition(resourceThrottler, eventCollector, clientInfo)));
 
         MQTTSessionHandler sessionHandler = buildTransientSessionHandler(
             connMsg,
