@@ -70,11 +70,15 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-setting-provider</artifactId>
+            <artifactId>bifromq-plugin-event-collector</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-event-collector</artifactId>
+            <artifactId>bifromq-plugin-resource-throttler</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-setting-provider</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

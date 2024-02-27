@@ -18,6 +18,9 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_P_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_T_VALUE;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConnectPerSecond;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConnections;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSessionMemoryBytes;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
@@ -39,6 +42,8 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.Client
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -80,6 +85,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     private MQTTSessionContext sessionCtx;
     private IInboxClient inboxClient;
     private IEventCollector eventCollector;
+    private IResourceThrottler resourceThrottler;
     private ISettingProvider settingProvider;
     private boolean isGoAway;
 
@@ -90,6 +96,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         sessionCtx = ChannelAttrs.mqttSessionContext(ctx);
         inboxClient = sessionCtx.inboxClient;
         eventCollector = sessionCtx.eventCollector;
+        resourceThrottler = sessionCtx.resourceThrottler;
         settingProvider = sessionCtx.settingProvider;
     }
 
@@ -116,8 +123,22 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                         handleGoAway(okOrGoAway.goAway);
                         return CompletableFuture.completedFuture(null);
                     } else {
+                        // check tenant resource
                         ClientInfo clientInfo = okOrGoAway.clientInfo;
-                        TenantSettings settings = new TenantSettings(clientInfo.getTenantId(), settingProvider);
+                        String tenantId = clientInfo.getTenantId();
+                        if (!resourceThrottler.hasResource(tenantId, TotalConnections)) {
+                            handleGoAway(onNoEnoughResources(connMsg, TotalConnections, okOrGoAway.clientInfo));
+                            return CompletableFuture.completedFuture(null);
+                        }
+                        if (!resourceThrottler.hasResource(tenantId, TotalSessionMemoryBytes)) {
+                            handleGoAway(onNoEnoughResources(connMsg, TotalSessionMemoryBytes, okOrGoAway.clientInfo));
+                            return CompletableFuture.completedFuture(null);
+                        }
+                        if (!resourceThrottler.hasResource(tenantId, TotalConnectPerSecond)) {
+                            handleGoAway(onNoEnoughResources(connMsg, TotalConnectPerSecond, okOrGoAway.clientInfo));
+                            return CompletableFuture.completedFuture(null);
+                        }
+                        TenantSettings settings = new TenantSettings(tenantId, settingProvider);
                         GoAway isInvalid = validate(connMsg, settings, clientInfo);
                         if (isInvalid != null) {
                             handleGoAway(isInvalid);
@@ -278,6 +299,9 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     protected abstract CompletableFuture<AuthResult> authenticate(MqttConnectMessage message);
 
     protected abstract void handleMqttMessage(MqttMessage message);
+
+    protected abstract GoAway onNoEnoughResources(MqttConnectMessage message, TenantResourceType resourceType,
+                                                  ClientInfo clientInfo);
 
     protected abstract GoAway validate(MqttConnectMessage message, TenantSettings settings, ClientInfo clientInfo);
 

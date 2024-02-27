@@ -62,9 +62,9 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
@@ -102,6 +102,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             KVRangeId id,
                             Supplier<IKVReader> readerProvider,
                             IEventCollector eventCollector,
+                            IResourceThrottler resourceThrottler,
                             IDistClient distClient,
                             ISubBrokerManager subBrokerManager,
                             IMessageDeliverer deliverer,
@@ -114,8 +115,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         this.routeCache = new SubscriptionCache(id, readerProvider, matchExecutor);
         this.tenantsState = new TenantsState(readerProvider.get(),
             "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
-        fanoutExecutorGroup =
-            new DeliverExecutorGroup(deliverer, eventCollector, distClient, DIST_FAN_OUT_PARALLELISM.get());
+        fanoutExecutorGroup = new DeliverExecutorGroup(deliverer,
+            eventCollector, resourceThrottler, distClient, DIST_FAN_OUT_PARALLELISM.get());
         load();
     }
 

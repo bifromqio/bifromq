@@ -45,6 +45,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
         coProcFactory = new DistWorkerCoProcFactory(
             builder.distClient,
             builder.eventCollector,
+            builder.resourceThrottler,
             builder.subBrokerManager,
             builder.loadEstimateWindow);
         rangeBalanceController =

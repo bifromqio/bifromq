@@ -13,24 +13,23 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE;
-import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubCount;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientUnsubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientUnsubLatency;
-import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXISTS;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.OK;
+import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.UnsubResult.ERROR;
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
 import static com.baidu.bifromq.mqtt.service.ILocalDistService.globalize;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.util.TopicUtil.isSharedSubscription;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientSubscribePerSecond;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientSubscriptions;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientUnsubscribePerSecond;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.MatchResult;
@@ -40,10 +39,12 @@ import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Dropped;
+import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
@@ -137,78 +138,74 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId,
                                                                                     String topicFilter,
                                                                                     TopicFilterOption option) {
+        // check resources
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientSubscriptions)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalTransientSubscriptions.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(EXCEED_LIMIT);
+        }
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientSubscribePerSecond)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalTransientSubscribePerSecond.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(EXCEED_LIMIT);
+        }
         tenantMeter.recordCount(MqttTransientSubCount);
-        Timer.Sample start = Timer.start();
         int maxTopicFiltersPerInbox = settings.maxTopicFiltersPerSub;
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         return addMatchRecord(reqId, topicFilter)
-            .thenComposeAsync(subResult -> {
-                switch (subResult) {
+            .thenApplyAsync(matchResult -> {
+                switch (matchResult) {
                     case OK -> {
                         TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
                         if (prevOption == null) {
                             subNumGauge.addAndGet(1);
                             memUsage.addAndGet(topicFilter.length());
-                            return CompletableFuture.completedFuture(OK);
+                            return OK;
                         } else {
-                            return CompletableFuture.completedFuture(EXISTS);
+                            return EXISTS;
                         }
                     }
                     case EXCEED_LIMIT -> {
-                        return CompletableFuture.completedFuture(EXCEED_LIMIT);
+                        return IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
                     }
                     case BACK_PRESSURE_REJECTED -> {
-                        return CompletableFuture.completedFuture(BACK_PRESSURE_REJECTED);
+                        return IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
                     }
                     default -> {
-                        return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.ERROR);
-                    }
-                }
-            }, ctx.executor())
-            .thenComposeAsync(subResult -> {
-                switch (subResult) {
-                    case OK, EXISTS -> {
-                        start.stop(tenantMeter.timer(MqttTransientSubLatency));
-                        if (!isSharedSubscription(topicFilter) && settings.retainEnabled &&
-                            (option.getRetainHandling() == SEND_AT_SUBSCRIBE ||
-                                (subResult == IMQTTProtocolHelper.SubResult.OK &&
-                                    option.getRetainHandling() == SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
-                            // TODO: add throttling behavior
-                            return addFgTask(sessionCtx.retainClient.match(MatchRequest.newBuilder()
-                                .setReqId(reqId)
-                                .setTenantId(clientInfo.getTenantId())
-                                .setMatchInfo(MatchInfo.newBuilder()
-                                    .setTopicFilter(topicFilter)
-                                    .setReceiverId(globalize(channelId()))
-                                    .build())
-                                .setDelivererKey(toDelivererKey(globalize(channelId()), sessionCtx.serverId))
-                                .setBrokerId(0)
-                                .setLimit(settings.retainMatchLimit)
-                                .build()))
-                                .handle((v, e) -> {
-                                    if (e != null) {
-                                        return IMQTTProtocolHelper.SubResult.ERROR;
-                                    } else {
-                                        return subResult;
-                                    }
-                                });
-                        }
-                        return CompletableFuture.completedFuture(subResult);
-                    }
-                    case EXCEED_LIMIT -> {
-                        return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.EXCEED_LIMIT);
-                    }
-                    default -> {
-                        return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.ERROR);
+                        return IMQTTProtocolHelper.SubResult.ERROR;
                     }
                 }
             }, ctx.executor());
     }
 
     @Override
+    protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter) {
+        return sessionCtx.retainClient.match(MatchRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(clientInfo.getTenantId())
+            .setMatchInfo(MatchInfo.newBuilder()
+                .setTopicFilter(topicFilter)
+                .setReceiverId(globalize(channelId()))
+                .build())
+            .setDelivererKey(toDelivererKey(globalize(channelId()), sessionCtx.serverId))
+            .setBrokerId(0)
+            .setLimit(settings.retainMatchLimit)
+            .build());
+    }
+
+    @Override
     protected CompletableFuture<IMQTTProtocolHelper.UnsubResult> unsubTopicFilter(long reqId, String topicFilter) {
+        // check unsub rate
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientUnsubscribePerSecond)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalTransientUnsubscribePerSecond.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(ERROR);
+        }
         tenantMeter.recordCount(MqttTransientUnsubCount);
         Timer.Sample start = Timer.start();
         if (topicFilters.remove(topicFilter) == null) {
@@ -219,7 +216,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 subNumGauge.addAndGet(-1);
                 memUsage.addAndGet(-topicFilter.length());
                 if (e != null) {
-                    return IMQTTProtocolHelper.UnsubResult.ERROR;
+                    return ERROR;
                 } else {
                     switch (result) {
                         case OK -> {
@@ -230,7 +227,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                             return IMQTTProtocolHelper.UnsubResult.BACK_PRESSURE_REJECTED;
                         }
                         default -> {
-                            return IMQTTProtocolHelper.UnsubResult.ERROR;
+                            return ERROR;
                         }
                     }
                 }

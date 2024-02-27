@@ -44,6 +44,7 @@ import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
+import com.baidu.bifromq.plugin.resourcethrottler.ResourceThrottlerManager;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -95,6 +96,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AuthProviderManager authProviderMgr;
+    private ResourceThrottlerManager resourceThrottlerMgr;
     private EventCollectorManager eventCollectorMgr;
     private SettingProviderManager settingProviderMgr;
     private IAgentHost agentHost;
@@ -158,6 +160,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 EnvProvider.INSTANCE.newThreadFactory("bg-task-executor")), "bg-task-executor");
 
         eventCollectorMgr = new EventCollectorManager(pluginMgr);
+        resourceThrottlerMgr = new ResourceThrottlerManager(config.getResourceThrottlerFQN(), pluginMgr);
 
         settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
 
@@ -328,8 +331,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(sharedIORPCServerBuilder)
-            .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
+            .resourceThrottler(resourceThrottlerMgr)
+            .settingProvider(settingProviderMgr)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
@@ -376,6 +380,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollectorMgr)
+            .resourceThrottler(resourceThrottlerMgr)
             .distClient(distClient)
             .storeClient(distWorkerClient)
             .queryExecutor(queryExecutor)
@@ -417,6 +422,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .mqttWorkerELGThreads(mqttServerConfig.getWorkerELGThreads())
             .authProvider(authProviderMgr)
             .eventCollector(eventCollectorMgr)
+            .resourceThrottler(resourceThrottlerMgr)
             .settingProvider(settingProviderMgr)
             .distClient(distClient)
             .inboxClient(inboxClient)

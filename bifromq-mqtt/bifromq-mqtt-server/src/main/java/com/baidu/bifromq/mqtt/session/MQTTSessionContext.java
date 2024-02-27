@@ -34,6 +34,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.base.Ticker;
 import io.netty.channel.ChannelHandlerContext;
 import java.util.Iterator;
@@ -51,6 +52,7 @@ public final class MQTTSessionContext {
     public final ILocalSessionRegistry localSessionRegistry;
     public final ILocalDistService localDistService;
     public final IEventCollector eventCollector;
+    public final IResourceThrottler resourceThrottler;
     public final ISettingProvider settingProvider;
     public final IDistClient distClient;
     public final IInboxClient inboxClient;
@@ -74,6 +76,7 @@ public final class MQTTSessionContext {
                        ISessionDictClient sessionDictClient,
                        int defaultKeepAliveTimeSeconds,
                        IEventCollector eventCollector,
+                       IResourceThrottler resourceThrottler,
                        ISettingProvider settingProvider,
                        Ticker ticker) {
         this.serverId = serverId;
@@ -81,6 +84,7 @@ public final class MQTTSessionContext {
         this.localDistService = localDistService;
         this.authProvider = authProvider;
         this.eventCollector = eventCollector;
+        this.resourceThrottler = resourceThrottler;
         this.settingProvider = settingProvider;
         this.distClient = distClient;
         this.inboxClient = inboxClient;

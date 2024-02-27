@@ -17,6 +17,7 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelClosedEvent;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ClientDisconnectEvent;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import org.pf4j.Extension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,9 @@ public final class EventLogger implements IEventCollector {
                 default -> {
                     if (event instanceof ChannelClosedEvent || event instanceof ClientDisconnectEvent) {
                         LOG.debug("Channel closed due to {}", event.type());
+                    }
+                    if (event instanceof ResourceThrottled) {
+                        LOG.warn("Tenant resource throttled: {}", event.type());
                     }
                 }
             }

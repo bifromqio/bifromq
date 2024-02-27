@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt.handler;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
@@ -26,6 +27,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
@@ -49,6 +51,9 @@ public class MQTTConnectHandlerTest extends MockableTest {
     @Mock
     private IEventCollector eventCollector;
 
+    @Mock
+    private IResourceThrottler resourceThrottler;
+
     private ISettingProvider settingProvider = Setting::current;
     private final String serverId = "serverId";
     private final int keepAlive = 2;
@@ -64,6 +69,7 @@ public class MQTTConnectHandlerTest extends MockableTest {
             .defaultKeepAliveTimeSeconds(keepAlive)
             .inboxClient(inboxClient)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .settingProvider(settingProvider)
             .build();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
@@ -113,6 +119,7 @@ public class MQTTConnectHandlerTest extends MockableTest {
             .protocolVersion(MqttVersion.MQTT_3_1_1)
             .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("tenantId").build();
+        when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));

@@ -85,6 +85,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 .localSessionRegistry(builder.sessionRegistry)
                 .localDistService(builder.distService)
                 .authProvider(builder.authProvider)
+                .resourceThrottler(builder.resourceThrottler)
                 .eventCollector(builder.eventCollector)
                 .settingProvider(builder.settingProvider)
                 .distClient(builder.distClient)

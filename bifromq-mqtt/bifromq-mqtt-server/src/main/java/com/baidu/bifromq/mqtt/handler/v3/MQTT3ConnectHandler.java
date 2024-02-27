@@ -54,12 +54,14 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Unauthen
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.UTF8Util;
+import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import com.google.common.base.Strings;
 import com.google.protobuf.UnsafeByteOperations;
 import io.netty.channel.ChannelHandlerContext;
@@ -200,6 +202,18 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     @Override
     protected void handleMqttMessage(MqttMessage message) {
         // never happen in MQTT3
+    }
+
+    @Override
+    protected GoAway onNoEnoughResources(MqttConnectMessage message, TenantResourceType resourceType,
+                                         ClientInfo clientInfo) {
+        return new GoAway(MqttMessageBuilders
+            .connAck()
+            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+            .build(),
+            getLocal(ResourceThrottled.class)
+                .type(resourceType.name())
+                .clientInfo(clientInfo));
     }
 
     @Override

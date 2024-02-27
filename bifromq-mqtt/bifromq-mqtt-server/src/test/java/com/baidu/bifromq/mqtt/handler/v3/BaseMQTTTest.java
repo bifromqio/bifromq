@@ -85,6 +85,7 @@ import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import io.netty.channel.ChannelInitializer;
@@ -117,6 +118,8 @@ public abstract class BaseMQTTTest {
     protected IAuthProvider authProvider;
     @Mock
     protected IEventCollector eventCollector;
+    @Mock
+    protected IResourceThrottler resourceThrottler;
     @Mock
     protected ISettingProvider settingProvider;
     @Mock
@@ -156,10 +159,11 @@ public abstract class BaseMQTTTest {
         closeable = MockitoAnnotations.openMocks(this);
         testTicker = new TestTicker();
         sessionRegistry = new LocalSessionRegistry();
-        distService = new LocalDistService(serverId, distClient);
+        distService = new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
         sessionContext = MQTTSessionContext.builder()
             .authProvider(authProvider)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .settingProvider(settingProvider)
             .distClient(distClient)
             .inboxClient(inboxClient)
@@ -200,6 +204,7 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockSettings() {
+        Mockito.lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         Mockito.lenient().when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         Mockito.lenient().when(settingProvider.provide(eq(InBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
@@ -265,6 +270,7 @@ public abstract class BaseMQTTTest {
                 .addAllInbox(List.of(inboxVersions))
                 .build()));
     }
+
     protected void mockInboxGetError() {
         when(inboxClient.get(any()))
             .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()

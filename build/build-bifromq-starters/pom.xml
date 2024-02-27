@@ -104,11 +104,15 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-setting-provider-helper</artifactId>
+            <artifactId>bifromq-plugin-event-collector-helper</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-event-collector-helper</artifactId>
+            <artifactId>bifromq-plugin-resource-throttler-helper</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-setting-provider-helper</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

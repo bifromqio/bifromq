@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE;
+import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttDisconnectCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressBytes;
@@ -26,6 +28,8 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DeliverBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DistBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2ExternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubLatency;
+import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.packetId;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.messageExpiryInterval;
@@ -41,6 +45,13 @@ import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static com.baidu.bifromq.util.TopicUtil.isSharedSubscription;
 import static com.baidu.bifromq.util.TopicUtil.isValidTopicFilter;
 import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMatchBytesPerSecond;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMatchPerSeconds;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMessageSpaceBytes;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainTopics;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainedBytesPerSecond;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainedMessagesPerSeconds;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSharedSubscriptions;
 import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basehlc.HLC;
@@ -66,6 +77,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.UnsubAction
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ClientChannelError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS0DistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1DistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1PubAckDropped;
@@ -86,6 +98,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgReta
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.SubAcked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.UnsubAcked;
+import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
@@ -95,6 +108,8 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.UTF8Util;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -202,6 +217,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final MQTTSessionContext sessionCtx;
     protected final IAuthProvider authProvider;
     protected final IEventCollector eventCollector;
+    protected final IResourceThrottler resourceThrottler;
     private final IMQTTMessageSizer sizer;
     private LWT willMessage;
     private boolean isGoAway;
@@ -237,6 +253,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         memUsage = sessionCtx.getSessionMemGauge(clientInfo.getTenantId());
         authProvider = sessionCtx.authProvider(ctx);
         eventCollector = sessionCtx.eventCollector;
+        resourceThrottler = sessionCtx.resourceThrottler;
     }
 
     private int estMemSize() {
@@ -461,13 +478,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             .map(subTask -> checkAndSubscribe(reqId, subTask.topicFilter(), subTask.option(), subTask.userProperties()))
             .toList();
         return CompletableFuture.allOf(resultFutures.toArray(CompletableFuture[]::new))
-            .thenApply(v -> resultFutures.stream().map(CompletableFuture::join).toList())
-            .thenApply(subResults -> {
+            .thenApplyAsync(v -> {
+                List<IMQTTProtocolHelper.SubResult> subResults =
+                    resultFutures.stream().map(CompletableFuture::join).toList();
                 if (subResults.stream().anyMatch(r -> r == IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED)) {
                     return helper().onSubBackPressured(message);
                 }
                 return helper().buildSubAckMessage(message, subResults);
-            });
+            }, ctx.executor());
     }
 
     protected final CompletableFuture<IMQTTProtocolHelper.SubResult> checkAndSubscribe(long reqId,
@@ -501,7 +519,58 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             authProvider.checkPermission(clientInfo, buildSubAction(topicFilter, option.getQos(), userProps))
                 .thenComposeAsync(checkResult -> {
                     if (checkResult.hasGranted()) {
-                        return addFgTask(subTopicFilter(reqId, topicFilter, option));
+                        if (isSharedSubscription(topicFilter)
+                            && !resourceThrottler.hasResource(clientInfo.getTenantId(), TotalSharedSubscriptions)) {
+                            eventCollector.report(getLocal(ResourceThrottled.class)
+                                .type(TotalSharedSubscriptions.name())
+                                .clientInfo(clientInfo));
+                            return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.EXCEED_LIMIT);
+                        }
+                        Timer.Sample start = Timer.start();
+                        return addFgTask(subTopicFilter(reqId, topicFilter, option))
+                            .thenComposeAsync(subResult -> {
+                                switch (subResult) {
+                                    case OK, EXISTS -> {
+                                        start.stop(tenantMeter.timer(MqttTransientSubLatency));
+                                        if (!isSharedSubscription(topicFilter) && settings.retainEnabled &&
+                                            (option.getRetainHandling() == SEND_AT_SUBSCRIBE ||
+                                                (subResult == IMQTTProtocolHelper.SubResult.OK
+                                                    && option.getRetainHandling() ==
+                                                    SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
+                                            if (!resourceThrottler.hasResource(clientInfo.getTenantId(),
+                                                TotalRetainMatchPerSeconds)) {
+                                                eventCollector.report(getLocal(ResourceThrottled.class)
+                                                    .type(TotalRetainMatchPerSeconds.name())
+                                                    .clientInfo(clientInfo));
+                                                return CompletableFuture.completedFuture(EXCEED_LIMIT);
+                                            }
+                                            if (!resourceThrottler.hasResource(clientInfo.getTenantId(),
+                                                TotalRetainMatchBytesPerSecond)) {
+                                                eventCollector.report(getLocal(ResourceThrottled.class)
+                                                    .type(TotalRetainMatchBytesPerSecond.name())
+                                                    .clientInfo(clientInfo));
+                                                return CompletableFuture.completedFuture(EXCEED_LIMIT);
+                                            }
+                                            return addFgTask(matchRetainedMessage(reqId, topicFilter))
+                                                .handle((v, e) -> {
+                                                    if (e != null || v.getResult() == MatchReply.Result.ERROR) {
+                                                        return IMQTTProtocolHelper.SubResult.ERROR;
+                                                    } else {
+                                                        return subResult;
+                                                    }
+                                                });
+                                        }
+                                        return CompletableFuture.completedFuture(subResult);
+                                    }
+                                    case EXCEED_LIMIT -> {
+                                        return CompletableFuture.completedFuture(
+                                            IMQTTProtocolHelper.SubResult.EXCEED_LIMIT);
+                                    }
+                                    default -> {
+                                        return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.ERROR);
+                                    }
+                                }
+                            }, ctx.executor());
                     } else {
                         eventCollector.report(getLocal(SubActionDisallow.class)
                             .topicFilter(topicFilter)
@@ -515,6 +584,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected abstract CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId,
                                                                                        String topicFilter,
                                                                                        TopicFilterOption option);
+
+    protected abstract CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter);
 
     private void handleUnsubMsg(MqttUnsubscribeMessage message) {
         ProtocolResponse goAwayOnInvalid = helper().validateUnsubMessage(message);
@@ -1229,6 +1300,30 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (log.isTraceEnabled()) {
             log.trace("Retaining message: reqId={}, qos={}, topic={}, size={}",
                 reqId, message.getPubQoS(), topic, message.getPayload().size());
+        }
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainMessageSpaceBytes)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalRetainMessageSpaceBytes.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
+        }
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainTopics)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalRetainTopics.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
+        }
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainedMessagesPerSeconds)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalRetainedMessagesPerSeconds.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
+        }
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainedBytesPerSecond)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalRetainedBytesPerSecond.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }
         return sessionCtx.retainClient.retain(
                 reqId,

@@ -38,6 +38,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Malfo
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ServerBusy;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeUnsubscription;
@@ -52,6 +53,7 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.UTF8Util;
+import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
@@ -113,6 +115,13 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public ProtocolResponse onDisconnect() {
         return goAwayNow((getLocal(ByServer.class).clientInfo(clientInfo)));
+    }
+
+    @Override
+    public ProtocolResponse onResourceExhaustedDisconnect(TenantResourceType resourceType) {
+        return goAwayNow((getLocal(ResourceThrottled.class)
+            .type(resourceType.name())
+            .clientInfo(clientInfo)));
     }
 
     @Override
@@ -347,11 +356,13 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
-        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
-            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED ||
+            result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos0 publish")
                 .clientInfo(clientInfo));
+        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return goAway();
         } else {
             return responseNothing();
         }
@@ -373,6 +384,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos1 publish")
                 .clientInfo(clientInfo));
+        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return goAway();
         } else {
             if (settings.debugMode) {
                 return response(MqttMessageBuilders.pubAck()
@@ -413,6 +426,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos2 publish")
                 .clientInfo(clientInfo));
+        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return goAway();
         } else {
             if (settings.debugMode) {
                 return response(MQTT3MessageBuilders.pubRec()

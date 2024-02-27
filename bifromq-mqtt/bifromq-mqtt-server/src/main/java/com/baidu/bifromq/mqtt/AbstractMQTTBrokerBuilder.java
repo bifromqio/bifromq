@@ -24,6 +24,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -39,6 +40,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     int mqttBossELGThreads;
     int mqttWorkerELGThreads;
     IAuthProvider authProvider;
+    IResourceThrottler resourceThrottler;
     IEventCollector eventCollector;
     ISettingProvider settingProvider;
     IDistClient distClient;
@@ -131,6 +133,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
         this.maxResendTimes = maxResendTimes;
         return thisT();
     }
+
     public T mqttBossELGThreads(int mqttWorkerELGThreads) {
         this.mqttBossELGThreads = mqttWorkerELGThreads;
         return thisT();
@@ -143,6 +146,11 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
 
     public T authProvider(IAuthProvider authProvider) {
         this.authProvider = authProvider;
+        return thisT();
+    }
+
+    public T resourceThrottler(IResourceThrottler resourceThrottler) {
+        this.resourceThrottler = resourceThrottler;
         return thisT();
     }
 
@@ -159,7 +167,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     public T distClient(IDistClient distClient) {
         this.distClient = distClient;
         sessionRegistry = new LocalSessionRegistry();
-        distService = new LocalDistService(brokerId(), distClient);
+        distService = new LocalDistService(brokerId(), distClient, resourceThrottler, eventCollector);
         return thisT();
     }
 

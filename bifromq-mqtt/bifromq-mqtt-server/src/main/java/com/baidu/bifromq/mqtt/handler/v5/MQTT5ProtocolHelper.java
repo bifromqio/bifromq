@@ -57,6 +57,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Malfo
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ServerBusy;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeUnsubscription;
@@ -69,6 +70,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.UTF8Util;
+import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -151,6 +153,18 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .reasonCode(MQTT5DisconnectReasonCode.ServerShuttingDown)
                 .build(),
             getLocal(ByServer.class).clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse onResourceExhaustedDisconnect(TenantResourceType resourceType) {
+        return farewellNow(
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
+                .reasonString(resourceType.name())
+                .build(),
+            getLocal(ResourceThrottled.class)
+                .type(resourceType.name())
+                .clientInfo(clientInfo));
     }
 
     @Override
@@ -750,6 +764,12 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 getLocal(ServerBusy.class)
                     .reason("Too many QoS0 publish")
                     .clientInfo(clientInfo));
+        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return farewell(MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
+                .reasonString("Retain resource throttled")
+                .userProps(userProps)
+                .build());
         } else {
             return ProtocolResponse.responseNothing();
         }
@@ -789,6 +809,12 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 getLocal(ServerBusy.class)
                     .reason("Too many QoS1 publish")
                     .clientInfo(clientInfo));
+        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return farewell(MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
+                .reasonString("Retain resource throttled")
+                .userProps(userProps)
+                .build());
         }
         int packetId = message.variableHeader().packetId();
         Event<?>[] debugEvents;
@@ -863,6 +889,12 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 getLocal(ServerBusy.class)
                     .reason("Too many QoS2 publish")
                     .clientInfo(clientInfo));
+        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return farewell(MQTT5MessageBuilders.disconnect()
+                .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
+                .reasonString("Retain resource throttled")
+                .userProps(userProps)
+                .build());
         }
         int packetId = message.variableHeader().packetId();
         Event<?>[] debugEvents;

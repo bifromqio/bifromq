@@ -30,6 +30,7 @@ import lombok.Setter;
 public class StandaloneConfig implements StarterConfig {
     private boolean bootstrap = false;
     private String authProviderFQN = null;
+    private String resourceThrottlerFQN = null;
     private String settingProviderFQN = null;
 
     @JsonSetter(nulls = Nulls.SKIP)

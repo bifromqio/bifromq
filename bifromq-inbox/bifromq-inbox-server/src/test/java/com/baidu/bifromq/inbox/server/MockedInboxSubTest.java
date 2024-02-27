@@ -121,14 +121,6 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build(), streamObserver);
-
-        verify(retainClient).match(argThat(r -> r.getReqId() == reqId
-            && r.getTenantId().equals(tenantId)
-            && r.getMatchInfo().getReceiverId().equals(distInboxId(inboxId, incarnation))
-            && r.getMatchInfo().getTopicFilter().equals(topicFilter)
-            && r.getDelivererKey().equals(getDelivererKey(inboxId))
-            && r.getBrokerId() == inboxClient.id()
-            && r.getLimit() == (int) settingProvider.provide(RetainMessageMatchLimit, tenantId)));
     }
 
     @Test
@@ -167,11 +159,6 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build(), streamObserver);
-        if (exists) {
-            verify(retainClient, never()).match(any());
-        } else {
-            verify(retainClient).match(any());
-        }
     }
 
     @Test

@@ -55,6 +55,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-resource-throttler</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-setting-provider</artifactId>
         </dependency>
         <dependency>

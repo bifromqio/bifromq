@@ -35,6 +35,7 @@ import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -58,7 +59,7 @@ public abstract class DistServiceTest {
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private ISettingProvider settingProvider = Setting::current;
-
+    private IResourceThrottler resourceThrottler = (tenantId, type) -> false;
     private IEventCollector eventCollector = new IEventCollector() {
         @Override
         public void report(Event<?> event) {
@@ -116,6 +117,7 @@ public abstract class DistServiceTest {
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .distClient(distClient)
             .storeClient(workerClient)
             .queryExecutor(queryExecutor)

@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentUnsubCount;
@@ -20,9 +22,16 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentUnsubLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
+import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
+import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.UnsubResult.ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentSessionSpaceBytes;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentSessions;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentSubscribePerSecond;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentSubscriptions;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentUnsubscribePerSecond;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
@@ -43,11 +52,15 @@ import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTPersistentSession;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Dropped;
+import com.baidu.bifromq.retain.rpc.proto.MatchReply;
+import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
@@ -136,6 +149,15 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     }
                 }, ctx.executor()));
         } else {
+            // check resource
+            if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSessions)) {
+                handleProtocolResponse(helper().onResourceExhaustedDisconnect(TotalPersistentSessions));
+                return;
+            }
+            if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSessionSpaceBytes)) {
+                handleProtocolResponse(helper().onResourceExhaustedDisconnect(TotalPersistentSessionSpaceBytes));
+                return;
+            }
             CreateRequest.Builder reqBuilder = CreateRequest.newBuilder()
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
@@ -226,6 +248,18 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId, String topicFilter,
                                                                                     TopicFilterOption option) {
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSubscriptions)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalPersistentSubscriptions.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(EXCEED_LIMIT);
+        }
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSubscribePerSecond)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalPersistentSubscribePerSecond.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(EXCEED_LIMIT);
+        }
         tenantMeter.recordCount(MqttPersistentSubCount);
         rescheduleTouch();
         Timer.Sample start = Timer.start();
@@ -264,8 +298,31 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     @Override
+    protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter) {
+        return sessionCtx.retainClient.match(MatchRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(clientInfo.getTenantId())
+            .setMatchInfo(MatchInfo.newBuilder()
+                .setTopicFilter(topicFilter)
+                .setReceiverId(distInboxId(userSessionId, incarnation))
+                .build())
+            .setDelivererKey(getDelivererKey(userSessionId))
+            .setBrokerId(inboxClient.id())
+            .setLimit(settings.retainMatchLimit)
+            .build());
+    }
+
+    @Override
     protected final CompletableFuture<IMQTTProtocolHelper.UnsubResult> unsubTopicFilter(long reqId,
                                                                                         String topicFilter) {
+        // check unsub rate
+        if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentUnsubscribePerSecond)) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type(TotalPersistentUnsubscribePerSecond.name())
+                .clientInfo(clientInfo));
+            return CompletableFuture.completedFuture(ERROR);
+        }
+
         tenantMeter.recordCount(MqttPersistentUnsubCount);
         Timer.Sample start = Timer.start();
         rescheduleTouch();

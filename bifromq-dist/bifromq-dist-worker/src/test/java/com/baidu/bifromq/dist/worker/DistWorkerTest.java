@@ -22,6 +22,8 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -72,6 +74,7 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Metrics;
@@ -121,6 +124,8 @@ public abstract class DistWorkerTest {
     @Mock
     protected IEventCollector eventCollector;
     @Mock
+    protected IResourceThrottler resourceThrottler;
+    @Mock
     protected IDistClient distClient;
     @Mock
     protected ISubBrokerManager receiverManager;
@@ -160,6 +165,7 @@ public abstract class DistWorkerTest {
         }
         lenient().when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         lenient().when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
+        lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
 
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -212,6 +218,7 @@ public abstract class DistWorkerTest {
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .distClient(distClient)
             .storeClient(storeClient)
             .queryExecutor(queryExecutor)

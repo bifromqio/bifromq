@@ -15,7 +15,9 @@ package com.baidu.bifromq.mqtt.service;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientFanOutBytes;
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.MQTT_DELIVERERS_PER_SERVER;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -23,6 +25,8 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
@@ -33,6 +37,7 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.SizeUtil;
 import com.baidu.bifromq.util.TopicUtil;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -65,15 +70,22 @@ public class LocalDistService implements ILocalDistService {
     }
 
     private final IDistClient distClient;
+    private final IResourceThrottler resourceThrottler;
+    private final IEventCollector eventCollector;
     private final String serverId;
 
     private final ConcurrentMap<String, IMQTTTransientSession> sessionMap = new ConcurrentHashMap<>();
 
     private final ConcurrentMap<TopicFilter, CompletableFuture<LocalRoutes>> routeMap = new ConcurrentHashMap<>();
 
-    public LocalDistService(String serverId, IDistClient distClient) {
+    public LocalDistService(String serverId,
+                            IDistClient distClient,
+                            IResourceThrottler resourceThrottler,
+                            IEventCollector eventCollector) {
         this.serverId = serverId;
         this.distClient = distClient;
+        this.resourceThrottler = resourceThrottler;
+        this.eventCollector = eventCollector;
     }
 
     private static class AddRouteException extends RuntimeException {
@@ -264,11 +276,28 @@ public class LocalDistService implements ILocalDistService {
                                     continue;
                                 }
                                 boolean published = false;
-                                fanout *= localRoutes.routeList.size();
-                                for (IMQTTTransientSession session : localRoutes.routeList.values()) {
-                                    // at least one session should publish the message
-                                    if (session.publish(matchInfo, singletonList(topicMsgPack))) {
-                                        published = true;
+                                if (resourceThrottler.hasResource(tenantId, TotalTransientFanOutBytesPerSeconds)) {
+                                    fanout *= localRoutes.routeList.size();
+                                    for (IMQTTTransientSession session : localRoutes.routeList.values()) {
+                                        // at least one session should publish the message
+                                        if (session.publish(matchInfo, singletonList(topicMsgPack))) {
+                                            published = true;
+                                        }
+                                    }
+                                } else {
+                                    // send to one subscriber to make sure matchinfo not lost
+                                    for (IMQTTTransientSession session : localRoutes.routeList.values()) {
+                                        // at least one session should publish the message
+                                        if (session.publish(matchInfo, singletonList(topicMsgPack))) {
+                                            published = true;
+                                            break;
+                                        }
+                                    }
+                                    for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
+                                        eventCollector.report(getLocal(ResourceThrottled.class)
+                                            .type(TotalTransientFanOutBytesPerSeconds.name())
+                                            .clientInfo(publisherPack.getPublisher())
+                                        );
                                     }
                                 }
                                 if (published) {

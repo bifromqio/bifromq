@@ -21,6 +21,7 @@ import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.UserProperties;
+import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
@@ -75,6 +76,7 @@ public interface IMQTTProtocolHelper {
 
     ProtocolResponse onDisconnect();
 
+    ProtocolResponse onResourceExhaustedDisconnect(TenantResourceType resourceType);
     ProtocolResponse respondDisconnectProtocolError();
 
     boolean isNormalDisconnect(MqttMessage message);

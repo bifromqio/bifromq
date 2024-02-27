@@ -15,12 +15,11 @@ package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
-import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE;
-import static com.baidu.bifromq.inbox.storage.proto.RetainHandling.SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMessageSpaceBytes;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainTopics;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -68,10 +67,10 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDisted;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetained;
@@ -79,11 +78,9 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgReta
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
-import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MatchInfo;
-import com.baidu.bifromq.util.TopicUtil;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.util.List;
@@ -106,6 +103,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
+    private final IResourceThrottler resourceThrottler;
     private final IInboxClient inboxClient;
     private final IDistClient distClient;
     private final IRetainClient retainClient;
@@ -126,8 +124,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final DelayTaskRunner<ScopedInbox, ExpireSessionTask> delayTaskRunner;
 
     @Builder
-    InboxService(ISettingProvider settingProvider,
-                 IEventCollector eventCollector,
+    InboxService(IEventCollector eventCollector,
+                 IResourceThrottler resourceThrottler,
+                 ISettingProvider settingProvider,
                  IInboxClient inboxClient,
                  IDistClient distClient,
                  IRetainClient retainClient,
@@ -143,8 +142,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IInboxSubScheduler subScheduler,
                  IInboxUnsubScheduler unsubScheduler,
                  IInboxTouchScheduler touchScheduler) {
-        this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
+        this.resourceThrottler = resourceThrottler;
+        this.settingProvider = settingProvider;
         this.inboxClient = inboxClient;
         this.distClient = distClient;
         this.retainClient = retainClient;
@@ -326,7 +326,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     @Override
     public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
         log.trace("Handling sub {}", request);
-        TopicFilterOption tfOption = request.getOption();
         response(tenantId -> subScheduler.schedule(request)
                 .thenCompose(subReply -> {
                     if (subReply.getCode() == SubReply.Code.OK || subReply.getCode() == SubReply.Code.EXISTS) {
@@ -354,43 +353,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             });
                     }
                     return CompletableFuture.completedFuture(subReply);
-                })
-                .thenCompose(subReply -> {
-                    switch (subReply.getCode()) {
-                        case OK, EXISTS -> {
-                            if (!TopicUtil.isSharedSubscription(request.getTopicFilter()) &&
-                                (boolean) settingProvider.provide(RetainEnabled, request.getTenantId()) &&
-                                (tfOption.getRetainHandling() == SEND_AT_SUBSCRIBE ||
-                                    (subReply.getCode() == SubReply.Code.OK &&
-                                        tfOption.getRetainHandling() == SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
-                                return retainClient.match(MatchRequest.newBuilder()
-                                        .setReqId(request.getReqId())
-                                        .setTenantId(request.getTenantId())
-                                        .setMatchInfo(MatchInfo.newBuilder()
-                                            .setTopicFilter(request.getTopicFilter())
-                                            .setReceiverId(distInboxId(request.getInboxId(), request.getIncarnation()))
-                                            .build())
-                                        .setDelivererKey(getDelivererKey(request.getInboxId()))
-                                        .setBrokerId(inboxClient.id())
-                                        .setLimit(settingProvider.provide(RetainMessageMatchLimit, request.getTenantId()))
-                                        .build())
-                                    .handle((v, e) -> {
-                                        if (e != null) {
-                                            log.debug("Failed to match retain", e);
-                                            return SubReply.newBuilder()
-                                                .setReqId(request.getReqId())
-                                                .setCode(SubReply.Code.ERROR).build();
-                                        } else {
-                                            return subReply;
-                                        }
-                                    });
-                            }
-                            return CompletableFuture.completedFuture(subReply);
-                        }
-                        default -> {
-                            return CompletableFuture.completedFuture(subReply);
-                        }
-                    }
                 })
                 .exceptionally(e -> {
                     log.debug("Failed to subscribe", e);
@@ -637,7 +599,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setTimestamp(HLC.INST.getPhysical()) // refresh the timestamp
                         .build(),
                     client);
-                CompletableFuture<RetainReply> retainLWTFuture;
+                CompletableFuture<RetainReply.Result> retainLWTFuture;
                 boolean willRetain = lwt.getMessage().getIsRetain();
                 boolean retainEnabled = settingProvider.provide(RetainEnabled, client.getTenantId());
                 if (willRetain) {
@@ -650,11 +612,49 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             .size(lwt.getMessage().getPayload().size())
                             .reason("Retain Disabled")
                             .clientInfo(client));
-                        retainLWTFuture = CompletableFuture.completedFuture(RetainReply.newBuilder()
-                            .setReqId(reqId)
-                            .setResult(RetainReply.Result.ERROR).build());
+                        retainLWTFuture = CompletableFuture.completedFuture(RetainReply.Result.ERROR);
                     } else {
-                        retainLWTFuture = retain(reqId, lwt, client);
+                        retainLWTFuture = retain(reqId, lwt, client)
+                            .thenApply(v -> {
+                                switch (v) {
+                                    case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
+                                        .topic(lwt.getTopic())
+                                        .qos(lwt.getMessage().getPubQoS())
+                                        .isLastWill(true)
+                                        .size(lwt.getMessage().getPayload().size())
+                                        .clientInfo(client));
+                                    case CLEARED -> eventCollector.report(getLocal(RetainMsgCleared.class)
+                                        .topic(lwt.getTopic())
+                                        .isLastWill(true)
+                                        .clientInfo(client));
+                                    case BACK_PRESSURE_REJECTED ->
+                                        eventCollector.report(getLocal(MsgRetainedError.class)
+                                            .topic(lwt.getTopic())
+                                            .qos(lwt.getMessage().getPubQoS())
+                                            .isLastWill(true)
+                                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                                            .size(lwt.getMessage().getPayload().size())
+                                            .reason("Server Busy")
+                                            .clientInfo(client));
+                                    case EXCEED_LIMIT -> eventCollector.report(getLocal(MsgRetainedError.class)
+                                        .topic(lwt.getTopic())
+                                        .qos(lwt.getMessage().getPubQoS())
+                                        .isLastWill(true)
+                                        .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                                        .size(lwt.getMessage().getPayload().size())
+                                        .reason("Exceed Limit")
+                                        .clientInfo(client));
+                                    case ERROR -> eventCollector.report(getLocal(MsgRetainedError.class)
+                                        .topic(lwt.getTopic())
+                                        .qos(lwt.getMessage().getPubQoS())
+                                        .isLastWill(true)
+                                        .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                                        .size(lwt.getMessage().getPayload().size())
+                                        .reason("Internal Error")
+                                        .clientInfo(client));
+                                }
+                                return v;
+                            });
                     }
                 } else {
                     retainLWTFuture = CompletableFuture.completedFuture(null);
@@ -665,7 +665,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         boolean retry = distResult == DistResult.ERROR;
                         if (!retry) {
                             if (willRetain && retainEnabled) {
-                                retry = retainLWTFuture.join().getResult() == RetainReply.Result.ERROR;
+                                retry = retainLWTFuture.join() == RetainReply.Result.ERROR;
                             }
                         }
                         if (retry) {
@@ -730,51 +730,25 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             }
         }
 
-        private CompletableFuture<RetainReply> retain(long reqId, LWT lwt, ClientInfo publisher) {
+        private CompletableFuture<RetainReply.Result> retain(long reqId, LWT lwt, ClientInfo publisher) {
+            if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainTopics)) {
+                eventCollector.report(getLocal(ResourceThrottled.class)
+                    .type(TotalRetainTopics.name())
+                    .clientInfo(publisher));
+                return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
+            }
+            if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainMessageSpaceBytes)) {
+                eventCollector.report(getLocal(ResourceThrottled.class)
+                    .type(TotalRetainMessageSpaceBytes.name())
+                    .clientInfo(publisher));
+                return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
+            }
+
             return retainClient.retain(reqId, lwt.getTopic(),
-                    lwt.getMessage().getPubQoS(),
-                    lwt.getMessage().getPayload(),
-                    lwt.getMessage().getExpiryInterval(),
-                    publisher)
-                .thenApply(v -> {
-                    switch (v.getResult()) {
-                        case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
-                            .topic(lwt.getTopic())
-                            .qos(lwt.getMessage().getPubQoS())
-                            .isLastWill(true)
-                            .size(lwt.getMessage().getPayload().size())
-                            .clientInfo(publisher));
-                        case CLEARED -> eventCollector.report(getLocal(RetainMsgCleared.class)
-                            .topic(lwt.getTopic())
-                            .isLastWill(true)
-                            .clientInfo(publisher));
-                        case BACK_PRESSURE_REJECTED -> eventCollector.report(getLocal(MsgRetainedError.class)
-                            .topic(lwt.getTopic())
-                            .qos(lwt.getMessage().getPubQoS())
-                            .isLastWill(true)
-                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                            .size(lwt.getMessage().getPayload().size())
-                            .reason("Server Busy")
-                            .clientInfo(publisher));
-                        case EXCEED_LIMIT -> eventCollector.report(getLocal(MsgRetainedError.class)
-                            .topic(lwt.getTopic())
-                            .qos(lwt.getMessage().getPubQoS())
-                            .isLastWill(true)
-                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                            .size(lwt.getMessage().getPayload().size())
-                            .reason("Exceed Limit")
-                            .clientInfo(publisher));
-                        case ERROR -> eventCollector.report(getLocal(MsgRetainedError.class)
-                            .topic(lwt.getTopic())
-                            .qos(lwt.getMessage().getPubQoS())
-                            .isLastWill(true)
-                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                            .size(lwt.getMessage().getPayload().size())
-                            .reason("Internal Error")
-                            .clientInfo(publisher));
-                    }
-                    return v;
-                });
+                lwt.getMessage().getPubQoS(),
+                lwt.getMessage().getPayload(),
+                lwt.getMessage().getExpiryInterval(),
+                publisher).thenApply(RetainReply::getResult);
         }
     }
 }

@@ -21,6 +21,7 @@ import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.time.Duration;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -35,6 +36,7 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     ScheduledExecutorService tickTaskExecutor;
     ScheduledExecutorService bgTaskExecutor;
     IEventCollector eventCollector;
+    IResourceThrottler resourceThrottler;
     IDistClient distClient;
     IBaseKVStoreClient storeClient;
     ISubBrokerManager subBrokerManager;
@@ -87,6 +89,11 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
 
     public T eventCollector(IEventCollector eventCollector) {
         this.eventCollector = eventCollector;
+        return thisT();
+    }
+
+    public T resourceThrottler(IResourceThrottler resourceThrottler) {
+        this.resourceThrottler = resourceThrottler;
         return thisT();
     }
 

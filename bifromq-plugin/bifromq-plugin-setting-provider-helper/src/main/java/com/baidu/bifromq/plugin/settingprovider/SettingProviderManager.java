@@ -38,11 +38,11 @@ public class SettingProviderManager implements ISettingProvider {
             provider = new DevOnlySettingProvider();
         } else {
             if (settingProviderFQN == null) {
-                log.warn("Auth provider plugin type are not specified, use DEV ONLY one instead");
+                log.warn("Setting provider plugin type are not specified, use DEV ONLY one instead");
                 provider = new DevOnlySettingProvider();
             } else {
                 Preconditions.checkArgument(availSettingProviders.containsKey(settingProviderFQN),
-                    String.format("Setting Provider Plugin '%s' not found", settingProviderFQN));
+                    String.format("Setting provider Plugin '%s' not found", settingProviderFQN));
                 log.info("Setting provider plugin type: {}", settingProviderFQN);
                 provider = availSettingProviders.get(settingProviderFQN);
             }
@@ -79,7 +79,8 @@ public class SettingProviderManager implements ISettingProvider {
         return current;
     }
 
-    public ISettingProvider get() {
+    // for testing
+    ISettingProvider get() {
         return provider;
     }
 

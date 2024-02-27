@@ -37,6 +37,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -61,6 +62,8 @@ public abstract class InboxServiceTest {
     @Mock
     protected IEventCollector eventCollector;
     @Mock
+    protected IResourceThrottler resourceThrottler;
+    @Mock
     protected ISettingProvider settingProvider;
     @Mock
     protected IDistClient distClient;
@@ -77,6 +80,7 @@ public abstract class InboxServiceTest {
     @BeforeClass(alwaysRun = true)
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(settingProvider.provide(any(), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
@@ -129,8 +133,9 @@ public abstract class InboxServiceTest {
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
-            .settingProvider(settingProvider)
+            .resourceThrottler(resourceThrottler)
             .eventCollector(eventCollector)
+            .settingProvider(settingProvider)
             .inboxStoreClient(inboxStoreClient)
             .build();
         inboxStore.start();

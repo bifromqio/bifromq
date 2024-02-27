@@ -30,6 +30,8 @@
         <module>bifromq-plugin-auth-provider-helper</module>
         <module>bifromq-plugin-event-collector</module>
         <module>bifromq-plugin-event-collector-helper</module>
+        <module>bifromq-plugin-resource-throttler</module>
+        <module>bifromq-plugin-resource-throttler-helper</module>
         <module>bifromq-plugin-setting-provider</module>
         <module>bifromq-plugin-setting-provider-helper</module>
         <module>bifromq-plugin-sub-broker</module>

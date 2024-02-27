@@ -15,7 +15,6 @@ package com.baidu.bifromq.mqtt.integration;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 
 import com.baidu.bifromq.basecluster.AgentHostOptions;
@@ -51,6 +50,7 @@ import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.type.ClientInfo;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
@@ -79,6 +79,8 @@ public abstract class MQTTTest {
     protected IAuthProvider authProvider;
     @Mock
     protected IEventCollector eventCollector;
+    @Mock
+    protected IResourceThrottler resourceThrottler;
     @Mock
     protected ISettingProvider settingProvider;
     private IAgentHost agentHost;
@@ -192,8 +194,9 @@ public abstract class MQTTTest {
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
-            .settingProvider(settingProvider)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
+            .settingProvider(settingProvider)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
@@ -240,6 +243,7 @@ public abstract class MQTTTest {
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .distClient(distClient)
             .storeClient(distWorkerStoreClient)
             .queryExecutor(queryExecutor)
@@ -265,6 +269,7 @@ public abstract class MQTTTest {
             .mqttBossELGThreads(1)
             .mqttWorkerELGThreads(4)
             .authProvider(authProvider)
+            .resourceThrottler(resourceThrottler)
             .eventCollector(eventCollector)
             .settingProvider(settingProvider)
             .distClient(distClient)
@@ -392,6 +397,7 @@ public abstract class MQTTTest {
             event.clone(event.getClass().getConstructor().newInstance());
             return null;
         }).when(eventCollector).report(any(Event.class));
+        lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         doSetup(method);
     }
 

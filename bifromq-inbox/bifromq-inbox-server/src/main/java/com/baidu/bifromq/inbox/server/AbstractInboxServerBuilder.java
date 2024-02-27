@@ -19,11 +19,13 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.util.concurrent.ScheduledExecutorService;
 
 abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T>> implements IInboxServerBuilder {
-    ISettingProvider settingProvider;
     IEventCollector eventCollector;
+    IResourceThrottler resourceThrottler;
+    ISettingProvider settingProvider;
     IInboxClient inboxClient;
     IDistClient distClient;
     IRetainClient retainClient;
@@ -55,6 +57,11 @@ abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T
 
     public T eventCollector(IEventCollector eventCollector) {
         this.eventCollector = eventCollector;
+        return thisT();
+    }
+
+    public T resourceThrottler(IResourceThrottler resourceThrottler) {
+        this.resourceThrottler = resourceThrottler;
         return thisT();
     }
 

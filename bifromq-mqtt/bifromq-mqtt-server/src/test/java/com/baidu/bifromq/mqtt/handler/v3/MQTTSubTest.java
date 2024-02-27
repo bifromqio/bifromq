@@ -35,6 +35,7 @@ import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
@@ -58,6 +59,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         shouldCleanSubs = false;
     }
 
+    @SneakyThrows
     @Test
     public void transientQoS0Sub() {
         setupTransientSession();

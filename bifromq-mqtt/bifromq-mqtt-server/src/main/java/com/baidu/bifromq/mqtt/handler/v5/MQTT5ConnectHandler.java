@@ -79,11 +79,13 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Unauthen
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.UTF8Util;
+import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -397,6 +399,20 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))));
             }
         }
+    }
+
+    @Override
+    protected GoAway onNoEnoughResources(MqttConnectMessage message, TenantResourceType resourceType,
+                                         ClientInfo clientInfo) {
+        return new GoAway(MqttMessageBuilders.connAck()
+            .returnCode(CONNECTION_REFUSED_QUOTA_EXCEEDED)
+            .properties(MQTT5MessageBuilders.connAckProperties()
+                .reasonString(resourceType.name())
+                .build())
+            .build(),
+            getLocal(ResourceThrottled.class)
+                .type(resourceType.name())
+                .clientInfo(clientInfo));
     }
 
     @Override

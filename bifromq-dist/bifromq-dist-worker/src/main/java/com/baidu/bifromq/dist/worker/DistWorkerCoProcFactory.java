@@ -28,8 +28,8 @@ import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
@@ -46,6 +46,7 @@ import lombok.extern.slf4j.Slf4j;
 public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final IDistClient distClient;
     private final IEventCollector eventCollector;
+    private final IResourceThrottler resourceThrottler;
     private final ISubBrokerManager subBrokerManager;
     private final IMessageDeliverer deliverer;
     private final ExecutorService matchExecutor;
@@ -54,10 +55,12 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
 
     public DistWorkerCoProcFactory(IDistClient distClient,
                                    IEventCollector eventCollector,
+                                   IResourceThrottler resourceThrottler,
                                    ISubBrokerManager subBrokerManager,
                                    Duration loadEstimateWindow) {
         this.distClient = distClient;
         this.eventCollector = eventCollector;
+        this.resourceThrottler = resourceThrottler;
         this.subBrokerManager = subBrokerManager;
         this.loadEstWindow = loadEstimateWindow;
         deliverer = new MessageDeliverer(subBrokerManager);
@@ -89,7 +92,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     @Override
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
                                        Supplier<IKVReader> rangeReaderProvider) {
-        return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector,
+        return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector, resourceThrottler,
             distClient, subBrokerManager, deliverer, matchExecutor);
     }
 

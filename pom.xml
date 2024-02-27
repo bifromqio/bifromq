@@ -283,7 +283,16 @@
                 <artifactId>bifromq-plugin-event-collector-helper</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- plugin helper -->
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-plugin-resource-throttler</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-plugin-resource-throttler-helper</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-plugin-setting-provider</artifactId>

@@ -15,7 +15,9 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentFanOutBytesPerSeconds;
 import static com.google.common.hash.Hashing.murmur3_128;
 
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
@@ -25,9 +27,12 @@ import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.SizeUtil;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -51,16 +56,19 @@ class DeliverExecutorGroup {
     // InnerCacheKey: ClientInfo(<tenantId>, <type>, <metadata>)
     private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
     private final IEventCollector eventCollector;
+    private final IResourceThrottler resourceThrottler;
     private final IDistClient distClient;
     private final IMessageDeliverer deliverer;
     private final DeliverExecutor[] fanoutExecutors;
 
     DeliverExecutorGroup(IMessageDeliverer deliverer,
                          IEventCollector eventCollector,
+                         IResourceThrottler resourceThrottler,
                          IDistClient distClient,
                          int groupSize) {
         int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
         this.eventCollector = eventCollector;
+        this.resourceThrottler = resourceThrottler;
         this.distClient = distClient;
         this.deliverer = deliverer;
         orderedSharedMatching = Caffeine.newBuilder()
@@ -98,15 +106,27 @@ class DeliverExecutorGroup {
             }
         } else if (matchedRoutes.size() > 1) {
             String tenantId = matchedRoutes.get(0).tenantId;
-            LongAdder pFanoutBytes = new LongAdder();
-            matchedRoutes.parallelStream().forEach(matching -> {
-                // deliver to inbox
-                if (isSendToInbox(matching)) {
-                    pFanoutBytes.add(msgPackSize);
+            if (resourceThrottler.hasResource(tenantId, TenantResourceType.TotalPersistentFanOutBytesPerSeconds)) {
+                LongAdder pFanoutBytes = new LongAdder();
+                matchedRoutes.parallelStream().forEach(matching -> {
+                    // deliver to inbox
+                    if (isSendToInbox(matching)) {
+                        pFanoutBytes.add(msgPackSize);
+                    }
+                    prepareSend(matching, msgPack);
+                });
+                ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, pFanoutBytes.longValue());
+            } else {
+                // only send to one inbox when throttled
+                prepareSend(matchedRoutes.get(0), msgPack);
+                ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
+                for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
+                    eventCollector.report(getLocal(ResourceThrottled.class)
+                        .type(TotalPersistentFanOutBytesPerSeconds.name())
+                        .clientInfo(publisherPack.getPublisher())
+                    );
                 }
-                prepareSend(matching, msgPack);
-            });
-            ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, pFanoutBytes.longValue());
+            }
         }
     }
 

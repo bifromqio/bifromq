@@ -38,6 +38,7 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
@@ -45,12 +46,15 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -58,11 +62,22 @@ public class LocalDistServiceTest extends MockableTest {
     private final String serverId = "serverId";
     @Mock
     private IDistClient distClient;
+    @Mock
+    IResourceThrottler resourceThrottler;
+    @Mock
+    IEventCollector eventCollector;
+
+    @BeforeMethod(alwaysRun = true)
+    public void setup(Method method) {
+        super.setup(method);
+        when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
+    }
 
     @Test
     public void matchSharedSubTopicFilter() {
         String topicFilter = "$share/group/topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
         for (int i = 0; i < 100; i++) {
             IMQTTTransientSession session = mock(IMQTTTransientSession.class);
             String tenantId = "tenantId" + i;
@@ -82,7 +97,8 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void unmatchSharedSubTopicFilter() {
         String topicFilter = "$share/group/topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
         for (int i = 0; i < 100; i++) {
             IMQTTTransientSession session = mock(IMQTTTransientSession.class);
             String tenantId = "tenantId" + i;
@@ -102,7 +118,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void matchSameNonSharedTopicFilter() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(new CompletableFuture<>());
         String tenantId = "tenantId";
@@ -127,7 +145,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void unmatchSameNonSharedTopicFilter() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String tenantId = "tenantId";
@@ -158,7 +178,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void distClientMatchError() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(matchFuture);
@@ -210,7 +232,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void distClientMatchException() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(matchFuture);
@@ -234,7 +258,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void distClientMatchOK() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(matchFuture);
@@ -287,7 +313,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void matchSameTopicFilterTwice() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String tenantId = "tenantId";
@@ -331,7 +359,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void unmatchNotExist() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         IMQTTTransientSession session = mock(IMQTTTransientSession.class);
         when(session.channelId()).thenReturn("channelId");
         when(session.clientInfo()).thenReturn(ClientInfo.newBuilder().setTenantId("tenantId").build());
@@ -342,7 +372,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void unmatchError() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String tenantId = "tenantId";
@@ -389,7 +421,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void unmatchException() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String tenantId = "tenantId";
@@ -436,7 +470,9 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void unmatchOK() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService = new LocalDistService(serverId, distClient);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String tenantId = "tenantId";
