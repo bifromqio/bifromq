@@ -172,8 +172,8 @@ public class RetainServiceTest {
         assertEquals(req1.msgPackWrapper.messagePack.getTopic(), retainMsg1.getTopic());
         assertEquals(req1.msgPackWrapper.messagePack.getMessage(0).getPublisher(), retainMsg1.getPublisher());
 
-        assertEquals(req1.writerKey.delivererKey(), matchRequest.getDelivererKey());
-        assertEquals(req1.writerKey.subBrokerId(), matchRequest.getBrokerId());
+        assertEquals(req1.delivererKey.delivererKey(), matchRequest.getDelivererKey());
+        assertEquals(req1.delivererKey.subBrokerId(), matchRequest.getBrokerId());
     }
 
     @Test

@@ -361,8 +361,6 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos0 publish")
                 .clientInfo(clientInfo));
-        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
-            return goAway();
         } else {
             return responseNothing();
         }
@@ -384,8 +382,6 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos1 publish")
                 .clientInfo(clientInfo));
-        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
-            return goAway();
         } else {
             if (settings.debugMode) {
                 return response(MqttMessageBuilders.pubAck()
@@ -426,8 +422,6 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos2 publish")
                 .clientInfo(clientInfo));
-        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
-            return goAway();
         } else {
             if (settings.debugMode) {
                 return response(MQTT3MessageBuilders.pubRec()

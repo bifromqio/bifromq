@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConnectPerSecond;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConnections;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSessionMemoryBytes;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -106,6 +109,66 @@ public class MQTTConnectHandlerTest extends MockableTest {
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.goAway(null)));
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        assertFalse(channel.isOpen());
+    }
+
+    @Test
+    public void noTotalConnectionResource() {
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_3_1_1)
+            .build();
+        String tenantId = "tenantId";
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
+        when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
+        when(connectHandler.authenticate(connMsg)).thenReturn(
+            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.onNoEnoughResources(connMsg, TotalConnections, clientInfo)).thenReturn(new GoAway());
+        when(resourceThrottler.hasResource(tenantId, TotalConnections)).thenReturn(false);
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        assertFalse(channel.isOpen());
+    }
+
+    @Test
+    public void noTotalSessionMemoryBytesResource() {
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_3_1_1)
+            .build();
+        String tenantId = "tenantId";
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
+        when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
+        when(connectHandler.authenticate(connMsg)).thenReturn(
+            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.onNoEnoughResources(connMsg, TotalSessionMemoryBytes, clientInfo)).thenReturn(new GoAway());
+        when(resourceThrottler.hasResource(tenantId, TotalSessionMemoryBytes)).thenReturn(false);
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        assertFalse(channel.isOpen());
+    }
+
+    @Test
+    public void noTotalConnectPerSecondResource() {
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_3_1_1)
+            .build();
+        String tenantId = "tenantId";
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
+        when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
+        when(connectHandler.authenticate(connMsg)).thenReturn(
+            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.onNoEnoughResources(connMsg, TotalConnectPerSecond, clientInfo)).thenReturn(new GoAway());
+        when(resourceThrottler.hasResource(tenantId, TotalConnectPerSecond)).thenReturn(false);
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();

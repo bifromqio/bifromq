@@ -13,12 +13,5 @@
 
 package com.baidu.bifromq.dist.client.scheduler;
 
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-
-@AllArgsConstructor
-@EqualsAndHashCode
-public class BatcherKey {
-    final String tenantId;
-    final long threadId;
+public record BatcherKey(String tenantId, long threadId) {
 }

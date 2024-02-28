@@ -72,7 +72,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         this.maxPipelineDepth = new AtomicLong(pipelineDepth);
         avgLatencyNanos = new MovingAverage(100, Duration.ofSeconds(1));
         this.batchPool = new ArrayDeque<>(pipelineDepth);
-        Tags tags = Tags.of("name", name);
+        Tags tags = Tags.of("name", name, "key", Integer.toUnsignedString(System.identityHashCode(this)));
         dropCounter = Counter.builder("batcher.call.drop.count")
             .tags(tags)
             .register(Metrics.globalRegistry);
@@ -121,6 +121,13 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         while ((batchCall = batchPool.poll()) != null) {
             batchCall.destroy();
         }
+        Metrics.globalRegistry.remove(dropCounter);
+        Metrics.globalRegistry.remove(batchSaturationGauge);
+        Metrics.globalRegistry.remove(batchCallTimer);
+        Metrics.globalRegistry.remove(batchExecTimer);
+        Metrics.globalRegistry.remove(batchBuildTimeSummary);
+        Metrics.globalRegistry.remove(batchSizeSummary);
+        Metrics.globalRegistry.remove(queueingTimeSummary);
     }
 
     protected abstract IBatchCall<Call, CallResult, BatcherKey> newBatch();
@@ -164,6 +171,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
             .whenComplete((v, e) -> {
                 long execEnd = System.nanoTime();
                 if (e != null) {
+                    log.error("Unexpected exception during handling batchcall result", e);
                     // reset max batch size
                     maxBatchSize = 1;
                 } else {

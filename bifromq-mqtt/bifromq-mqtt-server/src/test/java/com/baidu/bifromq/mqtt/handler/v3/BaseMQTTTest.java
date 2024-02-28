@@ -56,8 +56,10 @@ import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
+import com.baidu.bifromq.mqtt.handler.ConditionalSlowDownHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
+import com.baidu.bifromq.mqtt.handler.MemPressureCondition;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.LocalDistService;
@@ -198,6 +200,8 @@ public abstract class BaseMQTTTest {
                 pipeline.addLast("trafficShaper", new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(256 * 1024)); //256kb
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                pipeline.addLast(ConditionalSlowDownHandler.NAME,
+                    new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(2));
             }
         };

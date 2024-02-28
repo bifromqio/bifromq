@@ -54,7 +54,7 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
                                                                          long burstLatencyNanos,
                                                                          BatcherKey batcherKey) {
         return new DistServerCallBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
-            rpcClient.createRequestPipeline(batcherKey.tenantId, null, null, emptyMap(),
+            rpcClient.createRequestPipeline(batcherKey.tenantId(), null, null, emptyMap(),
                 DistServiceGrpc.getDistMethod()));
     }
 

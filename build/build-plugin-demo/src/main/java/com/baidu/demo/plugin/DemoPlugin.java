@@ -68,8 +68,7 @@ public class DemoPlugin extends Plugin {
         });
         Metrics.addRegistry(registry);
         try {
-            prometheusExportServer = HttpServer.create(
-                new InetSocketAddress(port()), 0);
+            prometheusExportServer = HttpServer.create(new InetSocketAddress(port()), 0);
             prometheusExportServer.createContext(context(), httpExchange -> {
                 String response = registry.scrape();
                 httpExchange.sendResponseHeaders(200, response.getBytes().length);

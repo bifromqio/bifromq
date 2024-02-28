@@ -6,6 +6,8 @@
 # if the node is responsible for cluster bootstrap. NOTE: there must be EXACTLY ONE bootstrap node in cluster deployment
 bootstrap: true
 
+resourceThrottlerFQN: "com.baidu.demo.plugin.DemoResourceThrottler"
+
 mqttServerConfig:
   tcpListener:
     port: 1883

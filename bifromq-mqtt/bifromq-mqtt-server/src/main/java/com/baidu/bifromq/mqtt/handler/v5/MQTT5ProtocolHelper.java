@@ -764,12 +764,6 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 getLocal(ServerBusy.class)
                     .reason("Too many QoS0 publish")
                     .clientInfo(clientInfo));
-        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
-            return farewell(MQTT5MessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
-                .reasonString("Retain resource throttled")
-                .userProps(userProps)
-                .build());
         } else {
             return ProtocolResponse.responseNothing();
         }
@@ -809,12 +803,6 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 getLocal(ServerBusy.class)
                     .reason("Too many QoS1 publish")
                     .clientInfo(clientInfo));
-        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
-            return farewell(MQTT5MessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
-                .reasonString("Retain resource throttled")
-                .userProps(userProps)
-                .build());
         }
         int packetId = message.variableHeader().packetId();
         Event<?>[] debugEvents;
@@ -827,6 +815,14 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .clientInfo(clientInfo)};
         } else {
             debugEvents = new Event[0];
+        }
+        if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
+                .packetId(packetId)
+                .reasonCode(MQTT5PubAckReasonCode.QuotaExceeded)
+                .reasonString("Retain resource throttled")
+                .userProps(userProps)
+                .build(), debugEvents);
         }
         return switch (result.distResult()) {
             case OK -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
@@ -889,12 +885,6 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 getLocal(ServerBusy.class)
                     .reason("Too many QoS2 publish")
                     .clientInfo(clientInfo));
-        } else if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
-            return farewell(MQTT5MessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
-                .reasonString("Retain resource throttled")
-                .userProps(userProps)
-                .build());
         }
         int packetId = message.variableHeader().packetId();
         Event<?>[] debugEvents;
@@ -907,6 +897,14 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .clientInfo(clientInfo)};
         } else {
             debugEvents = new Event[0];
+        }
+        if (result.retainResult() == RetainReply.Result.EXCEED_LIMIT) {
+            return response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
+                .packetId(packetId)
+                .reasonCode(MQTT5PubRecReasonCode.QuotaExceeded)
+                .reasonString("Retain resource throttled")
+                .userProps(userProps)
+                .build(), debugEvents);
         }
         return switch (result.distResult()) {
             case OK -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)

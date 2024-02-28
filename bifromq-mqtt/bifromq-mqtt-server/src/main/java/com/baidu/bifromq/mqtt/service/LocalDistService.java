@@ -15,7 +15,6 @@ package com.baidu.bifromq.mqtt.service;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientFanOutBytes;
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
-import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.MQTT_DELIVERERS_PER_SERVER;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static java.util.Collections.singletonList;
@@ -26,7 +25,6 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
@@ -38,6 +36,7 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.SizeUtil;
 import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.collect.Sets;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -230,13 +229,15 @@ public class LocalDistService implements ILocalDistService {
     @Override
     public CompletableFuture<DeliveryReply> dist(DeliveryRequest request) {
         DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
-        Set<MatchInfo> ok = new HashSet<>();
-        Set<MatchInfo> skip = new HashSet<>();
-        Set<MatchInfo> noSub = new HashSet<>();
         DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
         for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
             String tenantId = entry.getKey();
             ITenantMeter tenantMeter = ITenantMeter.get(tenantId);
+            boolean isFanOutThrottled = !resourceThrottler.hasResource(tenantId, TotalTransientFanOutBytesPerSeconds);
+            boolean hasFanOutDone = false;
+            Set<MatchInfo> ok = new HashSet<>();
+            Set<MatchInfo> skip = new HashSet<>();
+            Set<MatchInfo> noSub = new HashSet<>();
             for (DeliveryPack writePack : entry.getValue().getPackList()) {
                 TopicMessagePack topicMsgPack = writePack.getMessagePack();
                 int msgPackSize = SizeUtil.estSizeOf(topicMsgPack);
@@ -258,6 +259,9 @@ public class LocalDistService implements ILocalDistService {
                                 noSub.add(matchInfo);
                             }
                         } else {
+                            if (isFanOutThrottled && hasFanOutDone) {
+                                continue;
+                            }
                             int bucketId = LocalRoutes.parseBucketId(matchInfo.getReceiverId());
                             CompletableFuture<LocalRoutes> routesFuture =
                                 routeMap.get(new TopicFilter(tenantId, matchInfo.getTopicFilter(),
@@ -276,7 +280,7 @@ public class LocalDistService implements ILocalDistService {
                                     continue;
                                 }
                                 boolean published = false;
-                                if (resourceThrottler.hasResource(tenantId, TotalTransientFanOutBytesPerSeconds)) {
+                                if (!isFanOutThrottled) {
                                     fanout *= localRoutes.routeList.size();
                                     for (IMQTTTransientSession session : localRoutes.routeList.values()) {
                                         // at least one session should publish the message
@@ -290,14 +294,9 @@ public class LocalDistService implements ILocalDistService {
                                         // at least one session should publish the message
                                         if (session.publish(matchInfo, singletonList(topicMsgPack))) {
                                             published = true;
+                                            hasFanOutDone = true;
                                             break;
                                         }
-                                    }
-                                    for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
-                                        eventCollector.report(getLocal(ResourceThrottled.class)
-                                            .type(TotalTransientFanOutBytesPerSeconds.name())
-                                            .clientInfo(publisherPack.getPublisher())
-                                        );
                                     }
                                 }
                                 if (published) {
@@ -313,11 +312,7 @@ public class LocalDistService implements ILocalDistService {
                 }
                 tenantMeter.recordSummary(MqttTransientFanOutBytes, msgPackSize * Math.max(fanout, 1));
             }
-            ok.forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
-                .setMatchInfo(matchInfo)
-                .setCode(DeliveryResult.Code.OK)
-                .build()));
-            skip.forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
+            Sets.union(ok, skip).forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
                 .setMatchInfo(matchInfo)
                 .setCode(DeliveryResult.Code.OK)
                 .build()));

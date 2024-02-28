@@ -20,7 +20,7 @@ public class DeliveryCall {
     public final String tenantId;
     public final MatchInfo matchInfo;
     public final MessagePackWrapper msgPackWrapper;
-    public final DelivererKey writerKey;
+    public final DelivererKey delivererKey;
 
     public DeliveryCall(String tenantId,
                         MatchInfo matchInfo,
@@ -30,6 +30,6 @@ public class DeliveryCall {
         this.tenantId = tenantId;
         this.matchInfo = matchInfo;
         this.msgPackWrapper = MessagePackWrapper.wrap(msgPack);
-        writerKey = new DelivererKey(brokerId, delivererKey);
+        this.delivererKey = new DelivererKey(brokerId, delivererKey);
     }
 }

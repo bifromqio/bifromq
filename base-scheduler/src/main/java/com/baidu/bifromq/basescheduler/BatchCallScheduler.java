@@ -114,9 +114,9 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
                 try {
                     Optional<BatcherKey> batcherKey = find(req);
                     if (batcherKey.isPresent()) {
-                        Batcher<Call, CallResult, BatcherKey> builder = batchers.get(batcherKey.get());
+                        Batcher<Call, CallResult, BatcherKey> batcher = batchers.get(batcherKey.get());
                         callSubmitCounter.increment();
-                        return builder.submit(batcherKey.get(), req);
+                        return batcher.submit(batcherKey.get(), req);
                     } else {
                         return CompletableFuture.failedFuture(new BatcherUnavailableException("Batcher not found"));
                     }

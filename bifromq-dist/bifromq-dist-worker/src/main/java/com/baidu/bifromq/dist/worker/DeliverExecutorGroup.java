@@ -44,8 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.LongAdder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -107,36 +105,46 @@ class DeliverExecutorGroup {
             }
         } else if (matchedRoutes.size() > 1) {
             String tenantId = matchedRoutes.get(0).tenantId;
-            if (resourceThrottler.hasResource(tenantId, TenantResourceType.TotalPersistentFanOutBytesPerSeconds)) {
-                LongAdder pFanoutBytes = new LongAdder();
-                matchedRoutes.parallelStream().forEach(matching -> {
-                    // deliver to inbox
-                    if (isSendToInbox(matching)) {
-                        pFanoutBytes.add(msgPackSize);
-                    }
-                    prepareSend(matching, msgPack);
-                });
-                ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, pFanoutBytes.longValue());
-            } else {
-                AtomicBoolean inboxDelivered = new AtomicBoolean(false);
-                matchedRoutes.parallelStream().forEach(matching -> {
-                    // deliver to inbox
-                    if (isSendToInbox(matching)) {
-                        if (!inboxDelivered.compareAndSet(false, true)) {
-                            prepareSend(matching, msgPack);
-                        }
-                    } else {
+            boolean hasTFanOutBandwidth =
+                resourceThrottler.hasResource(tenantId, TenantResourceType.TotalTransientFanOutBytesPerSeconds);
+            boolean hasTFannedOutUnderThrottled = false;
+            boolean hasPFanOutBandwidth =
+                resourceThrottler.hasResource(tenantId, TenantResourceType.TotalPersistentFanOutBytesPerSeconds);
+            boolean hasPFannedOutUnderThrottled = false;
+            // we meter persistent fanout bytes here, since for transient fanout is actually happened in the broker
+            long pFanoutBytes = 0;
+            for (Matching matching : matchedRoutes) {
+                if (isSendToInbox(matching)) {
+                    if (hasPFanOutBandwidth || !hasPFannedOutUnderThrottled) {
+                        pFanoutBytes += msgPackSize;
                         prepareSend(matching, msgPack);
+                        if (!hasPFanOutBandwidth) {
+                            hasPFannedOutUnderThrottled = true;
+                            for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
+                                eventCollector.report(getLocal(ResourceThrottled.class)
+                                    .type(TotalPersistentFanOutBytesPerSeconds.name())
+                                    .clientInfo(publisherPack.getPublisher())
+                                );
+                            }
+                        }
                     }
-                });
-                ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
-                for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
-                    eventCollector.report(getLocal(ResourceThrottled.class)
-                        .type(TotalPersistentFanOutBytesPerSeconds.name())
-                        .clientInfo(publisherPack.getPublisher())
-                    );
+                } else if (hasTFanOutBandwidth || !hasTFannedOutUnderThrottled) {
+                    prepareSend(matching, msgPack);
+                    if (!hasTFanOutBandwidth) {
+                        hasTFannedOutUnderThrottled = true;
+                        for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
+                            eventCollector.report(getLocal(ResourceThrottled.class)
+                                .type(TenantResourceType.TotalTransientFanOutBytesPerSeconds.name())
+                                .clientInfo(publisherPack.getPublisher())
+                            );
+                        }
+                    }
+                }
+                if (hasPFannedOutUnderThrottled && hasTFannedOutUnderThrottled) {
+                    break;
                 }
             }
+            ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, pFanoutBytes);
         }
     }
 

@@ -33,12 +33,12 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -62,7 +62,7 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
 
     @Override
     protected Optional<DelivererKey> find(DeliveryCall request) {
-        return Optional.of(request.writerKey);
+        return Optional.of(request.delivererKey);
     }
 
     private class DeliveryCallBatcher extends Batcher<DeliveryCall, DeliveryResult.Code, DelivererKey> {
@@ -80,25 +80,26 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
 
             @Override
             public void add(CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> callTask) {
-                batch.computeIfAbsent(callTask.call.tenantId, k -> new HashMap<>(128))
-                    .computeIfAbsent(callTask.call.msgPackWrapper, k -> new HashSet<>())
+                batch.computeIfAbsent(callTask.call.tenantId, k -> new ConcurrentHashMap<>(128))
+                    .computeIfAbsent(callTask.call.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
                     .add(callTask.call.matchInfo);
                 tasks.add(callTask);
             }
 
             @Override
             public CompletableFuture<Void> execute() {
-                return deliverer.deliver(DeliveryRequest.newBuilder()
-                        .putAllPackage(Maps.transformValues(batch, pack -> {
-                            DeliveryPackage.Builder packageBuilder = DeliveryPackage.newBuilder();
-                            pack.forEach((msgPackWrapper, matchInfos) ->
-                                packageBuilder.addPack(DeliveryPack.newBuilder()
-                                    .setMessagePack(msgPackWrapper.messagePack)
-                                    .addAllMatchInfo(matchInfos)
-                                    .build()));
-                            return packageBuilder.build();
-                        }))
-                        .build())
+                DeliveryRequest request = DeliveryRequest.newBuilder()
+                    .putAllPackage(Maps.transformValues(batch, pack -> {
+                        DeliveryPackage.Builder packageBuilder = DeliveryPackage.newBuilder();
+                        pack.forEach((msgPackWrapper, matchInfos) ->
+                            packageBuilder.addPack(DeliveryPack.newBuilder()
+                                .setMessagePack(msgPackWrapper.messagePack)
+                                .addAllMatchInfo(matchInfos)
+                                .build()));
+                        return packageBuilder.build();
+                    }))
+                    .build();
+                return deliverer.deliver(request)
                     .handle((reply, e) -> {
                         if (e != null) {
                             CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
@@ -107,7 +108,8 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
                             }
                         } else {
                             CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
-                            Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap = toMap(reply.getResultMap());
+                            Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap =
+                                toMap(reply.getResultMap());
                             while ((task = tasks.poll()) != null) {
                                 DeliveryResult.Code result = resultMap
                                     .getOrDefault(task.call.tenantId, Collections.emptyMap())
@@ -115,7 +117,9 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
                                 if (result != null) {
                                     task.callResult.complete(result);
                                 } else {
-                                    log.warn("No write result for sub: {}", task.call.matchInfo);
+                                    log.warn("[{}]No deliver result: tenantId={}, route={}, batcherKey={}",
+                                        this.hashCode(), task.call.tenantId, task.call.matchInfo,
+                                        task.call.delivererKey);
                                     task.callResult.complete(DeliveryResult.Code.OK);
                                 }
                             }

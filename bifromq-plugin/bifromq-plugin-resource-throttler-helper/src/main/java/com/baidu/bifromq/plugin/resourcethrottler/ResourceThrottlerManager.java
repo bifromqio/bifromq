@@ -46,7 +46,7 @@ public class ResourceThrottlerManager implements IResourceThrottler {
             } else {
                 Preconditions.checkArgument(availResourceThrottlers.containsKey(resourceThrottlerFQN),
                     String.format("Resource throttler plugin '%s' not found", resourceThrottlerFQN));
-                log.info("Setting provider plugin type: {}", resourceThrottlerFQN);
+                log.info("Resource throttler plugin type: {}", resourceThrottlerFQN);
                 delegate = availResourceThrottlers.get(resourceThrottlerFQN);
             }
         }
