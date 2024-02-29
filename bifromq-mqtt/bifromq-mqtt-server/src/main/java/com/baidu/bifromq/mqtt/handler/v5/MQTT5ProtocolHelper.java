@@ -163,7 +163,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .reasonString(resourceType.name())
                 .build(),
             getLocal(ResourceThrottled.class)
-                .type(resourceType.name())
+                .reason(resourceType.name())
                 .clientInfo(clientInfo));
     }
 

@@ -16,16 +16,11 @@ package com.baidu.demo.plugin;
 
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
-import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
+import lombok.extern.slf4j.Slf4j;
 import org.pf4j.Extension;
 
+@Slf4j
 @Extension
 public class DemoResourceThrottler implements IResourceThrottler {
     private static final String PLUGIN_RESOURCE_THROTTLER_URL = "plugin.resourcethrottler.url";
@@ -35,11 +30,13 @@ public class DemoResourceThrottler implements IResourceThrottler {
         IResourceThrottler delegate1;
         String webhookUrl = System.getProperty(PLUGIN_RESOURCE_THROTTLER_URL);
         if (webhookUrl == null) {
+            log.info("No webhook url specified, fallback to no resource will be throttled.");
             delegate1 = (tenantId, type) -> true;
         } else {
             try {
                 URI webhookURI = URI.create(webhookUrl);
                 delegate1 = new WebHookBasedResourceThrottler(webhookURI);
+                log.info("Resource will be throttled at runtime by consulting: {}", webhookUrl);
             } catch (Throwable e) {
                 delegate1 = (tenantId, type) -> true;
             }

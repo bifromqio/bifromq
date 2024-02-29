@@ -25,9 +25,8 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
 public final class ResourceThrottled extends ClientDisconnectEvent<ResourceThrottled> {
-    private String type;
+    private String reason;
 
-    @Override
     public EventType type() {
         return EventType.RESOURCE_THROTTLED;
     }
@@ -35,6 +34,6 @@ public final class ResourceThrottled extends ClientDisconnectEvent<ResourceThrot
     @Override
     public void clone(ResourceThrottled orig) {
         super.clone(orig);
-        this.type = orig.type;
+        this.reason = orig.reason;
     }
 }

@@ -411,7 +411,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .build())
             .build(),
             getLocal(ResourceThrottled.class)
-                .type(resourceType.name())
+                .reason(resourceType.name())
                 .clientInfo(clientInfo));
     }
 

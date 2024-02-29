@@ -38,13 +38,13 @@ public class InboundResourceCondition extends MemPressureCondition {
     public Boolean get() {
         if (super.get()) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type("High DirectMemory Usage")
+                .reason("DirectMemoryUsage")
                 .clientInfo(clientInfo));
             return true;
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalInboundBytesPerSecond)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalInboundBytesPerSecond.name())
+                .reason(TotalInboundBytesPerSecond.name())
                 .clientInfo(clientInfo));
             return true;
         }

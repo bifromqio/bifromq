@@ -250,13 +250,13 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                                                                     TopicFilterOption option) {
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSubscriptions)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalPersistentSubscriptions.name())
+                .reason(TotalPersistentSubscriptions.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSubscribePerSecond)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalPersistentSubscribePerSecond.name())
+                .reason(TotalPersistentSubscribePerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
@@ -318,7 +318,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         // check unsub rate
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentUnsubscribePerSecond)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalPersistentUnsubscribePerSecond.name())
+                .reason(TotalPersistentUnsubscribePerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(ERROR);
         }

@@ -141,13 +141,13 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         // check resources
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientSubscriptions)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalTransientSubscriptions.name())
+                .reason(TotalTransientSubscriptions.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientSubscribePerSecond)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalTransientSubscribePerSecond.name())
+                .reason(TotalTransientSubscribePerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
@@ -202,7 +202,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         // check unsub rate
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientUnsubscribePerSecond)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalTransientUnsubscribePerSecond.name())
+                .reason(TotalTransientUnsubscribePerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(ERROR);
         }

@@ -122,7 +122,7 @@ class DeliverExecutorGroup {
                             hasPFannedOutUnderThrottled = true;
                             for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
                                 eventCollector.report(getLocal(ResourceThrottled.class)
-                                    .type(TotalPersistentFanOutBytesPerSeconds.name())
+                                    .reason(TotalPersistentFanOutBytesPerSeconds.name())
                                     .clientInfo(publisherPack.getPublisher())
                                 );
                             }
@@ -134,7 +134,7 @@ class DeliverExecutorGroup {
                         hasTFannedOutUnderThrottled = true;
                         for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
                             eventCollector.report(getLocal(ResourceThrottled.class)
-                                .type(TenantResourceType.TotalTransientFanOutBytesPerSeconds.name())
+                                .reason(TenantResourceType.TotalTransientFanOutBytesPerSeconds.name())
                                 .clientInfo(publisherPack.getPublisher())
                             );
                         }

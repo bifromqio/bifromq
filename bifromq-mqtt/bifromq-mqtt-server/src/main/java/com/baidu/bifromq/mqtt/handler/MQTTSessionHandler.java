@@ -522,7 +522,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         if (isSharedSubscription(topicFilter)
                             && !resourceThrottler.hasResource(clientInfo.getTenantId(), TotalSharedSubscriptions)) {
                             eventCollector.report(getLocal(ResourceThrottled.class)
-                                .type(TotalSharedSubscriptions.name())
+                                .reason(TotalSharedSubscriptions.name())
                                 .clientInfo(clientInfo));
                             return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.EXCEED_LIMIT);
                         }
@@ -540,14 +540,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                             if (!resourceThrottler.hasResource(clientInfo.getTenantId(),
                                                 TotalRetainMatchPerSeconds)) {
                                                 eventCollector.report(getLocal(ResourceThrottled.class)
-                                                    .type(TotalRetainMatchPerSeconds.name())
+                                                    .reason(TotalRetainMatchPerSeconds.name())
                                                     .clientInfo(clientInfo));
                                                 return CompletableFuture.completedFuture(EXCEED_LIMIT);
                                             }
                                             if (!resourceThrottler.hasResource(clientInfo.getTenantId(),
                                                 TotalRetainMatchBytesPerSecond)) {
                                                 eventCollector.report(getLocal(ResourceThrottled.class)
-                                                    .type(TotalRetainMatchBytesPerSecond.name())
+                                                    .reason(TotalRetainMatchBytesPerSecond.name())
                                                     .clientInfo(clientInfo));
                                                 return CompletableFuture.completedFuture(EXCEED_LIMIT);
                                             }
@@ -1303,25 +1303,25 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainMessageSpaceBytes)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalRetainMessageSpaceBytes.name())
+                .reason(TotalRetainMessageSpaceBytes.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainTopics)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalRetainTopics.name())
+                .reason(TotalRetainTopics.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainedMessagesPerSeconds)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalRetainedMessagesPerSeconds.name())
+                .reason(TotalRetainedMessagesPerSeconds.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainedBytesPerSecond)) {
             eventCollector.report(getLocal(ResourceThrottled.class)
-                .type(TotalRetainedBytesPerSecond.name())
+                .reason(TotalRetainedBytesPerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }

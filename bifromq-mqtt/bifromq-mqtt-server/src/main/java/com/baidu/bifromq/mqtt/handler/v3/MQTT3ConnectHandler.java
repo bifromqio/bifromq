@@ -212,7 +212,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
             getLocal(ResourceThrottled.class)
-                .type(resourceType.name())
+                .reason(resourceType.name())
                 .clientInfo(clientInfo));
     }
 

@@ -46,10 +46,11 @@ public final class EventLogger implements IEventCollector {
                     if (event instanceof ChannelClosedEvent || event instanceof ClientDisconnectEvent) {
                         LOG.debug("Channel closed due to {}", event.type());
                     }
-                    if (event instanceof ResourceThrottled) {
-                        LOG.warn("Tenant resource throttled: {}", event.type());
-                    }
                 }
+            }
+        } else if (LOG.isWarnEnabled()) {
+            if (event instanceof ResourceThrottled throttled) {
+                LOG.warn("Exceeding resource limit: {}", throttled.reason());
             }
         }
     }

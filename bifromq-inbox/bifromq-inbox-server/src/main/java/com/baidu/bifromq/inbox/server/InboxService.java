@@ -733,13 +733,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         private CompletableFuture<RetainReply.Result> retain(long reqId, LWT lwt, ClientInfo publisher) {
             if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainTopics)) {
                 eventCollector.report(getLocal(ResourceThrottled.class)
-                    .type(TotalRetainTopics.name())
+                    .reason(TotalRetainTopics.name())
                     .clientInfo(publisher));
                 return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
             }
             if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainMessageSpaceBytes)) {
                 eventCollector.report(getLocal(ResourceThrottled.class)
-                    .type(TotalRetainMessageSpaceBytes.name())
+                    .reason(TotalRetainMessageSpaceBytes.name())
                     .clientInfo(publisher));
                 return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
             }

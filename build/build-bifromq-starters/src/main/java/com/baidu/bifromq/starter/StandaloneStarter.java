@@ -136,6 +136,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         pluginMgr = new BifroMQPluginManager();
         pluginMgr.loadPlugins();
         pluginMgr.startPlugins();
+        pluginMgr.getPlugins().forEach(
+            plugin -> log.info("Loaded plugin: {}@{}",
+                plugin.getDescriptor().getPluginId(), plugin.getDescriptor().getVersion()));
 
         ioClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(config.getRpcClientConfig().getWorkerThreads(),

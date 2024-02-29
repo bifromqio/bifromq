@@ -120,7 +120,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public ProtocolResponse onResourceExhaustedDisconnect(TenantResourceType resourceType) {
         return goAwayNow((getLocal(ResourceThrottled.class)
-            .type(resourceType.name())
+            .reason(resourceType.name())
             .clientInfo(clientInfo)));
     }
 

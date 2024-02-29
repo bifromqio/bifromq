@@ -41,12 +41,12 @@ public class ResourceThrottlerManager implements IResourceThrottler {
             delegate = new DevOnlyResourceThrottler();
         } else {
             if (resourceThrottlerFQN == null) {
-                log.warn("Resource throttler plugin type are not specified, use DEV ONLY one instead");
+                log.warn("Resource throttler type class are not specified, use DEV ONLY one instead");
                 delegate = new DevOnlyResourceThrottler();
             } else {
                 Preconditions.checkArgument(availResourceThrottlers.containsKey(resourceThrottlerFQN),
-                    String.format("Resource throttler plugin '%s' not found", resourceThrottlerFQN));
-                log.info("Resource throttler plugin type: {}", resourceThrottlerFQN);
+                    String.format("Resource throttler class '%s' not found", resourceThrottlerFQN));
+                log.info("Resource throttler loaded: {}", resourceThrottlerFQN);
                 delegate = availResourceThrottlers.get(resourceThrottlerFQN);
             }
         }
