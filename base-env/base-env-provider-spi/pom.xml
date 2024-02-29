@@ -19,7 +19,7 @@
     <parent>
         <groupId>com.baidu.bifromq</groupId>
         <artifactId>base-env</artifactId>
-        <version>3.0.0-beta-SNAPSHOT</version>
+        <version>3.0.0-beta</version>
     </parent>
 
     <artifactId>base-env-provider-spi</artifactId>

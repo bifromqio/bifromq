@@ -14,7 +14,7 @@ jobs:
         id: check
         run: |
           REF=${{ github.ref }}
-          if [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+ ]]; then
+          if [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+.* ]]; then
             IS_VALID_TAG=true
           else
               echo "Expected refs of the form 'refs/tags/v-<major-version>.<minor-version>.<patch-version>' but got '$REF'"

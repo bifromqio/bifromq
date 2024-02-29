@@ -2,7 +2,7 @@ name: Build docker image
 on:
   push:
     tags:
-      - v[0-9].[0-9].[0-9]**
+      - v[0-9]+.[0-9]+.[0-9]+.*
   workflow_dispatch:
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
           if [[ "${{github.event.created}}" == "false" ]]; then
               NEED_BUILD_DOCKER=false
           else
-            if [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+ ]]; then
+            if [[ "$REF" =~ refs/tags/v[0-9]+.[0-9]+.[0-9]+.* ]]; then
                 NEED_BUILD_DOCKER=true
                 MARK_LATEST=false
                 TAG=${REF:10}
