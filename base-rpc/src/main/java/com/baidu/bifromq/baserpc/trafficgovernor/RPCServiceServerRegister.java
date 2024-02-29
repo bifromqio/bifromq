@@ -76,8 +76,8 @@ final class RPCServiceServerRegister extends RPCServiceAnnouncer implements IRPC
         assert started.get();
         if (stopped.compareAndSet(false, true)) {
             // stop the announcement
-            revoke(localServer.getId()).join();
             disposable.dispose();
+            revoke(localServer.getId()).join();
             super.destroy();
         }
     }
