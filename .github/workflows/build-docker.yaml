@@ -27,6 +27,7 @@ jobs:
                 TAG=${REF:10}
                 VERSION=${REF:11}
             else
+              MARK_LATEST=false
               echo "Expected refs of the form 'refs/tags/v<major-version>.<minor-version>.<patch-version>' but got '$REF'"
               NEED_BUILD_DOCKER=false
             fi
