@@ -11,13 +11,13 @@ BifroMQ 是一个高性能的分布式 MQTT Broker 消息中间件实现，无�
 
 ## 特性
 
-* 完全支持 MQTT 3.1/3.1.1的特性，包括 TCP, TLS, WS, WSS，即将支持 MQTT 5
+* 完整支持 MQTT 3.1/3.1.1/5的所有特性，包括可通过TCP, TLS, WS, WSS的方式访问
 * 原生支持多租户资源共享和工作负载隔离
 * 内置存储引擎，针对关键负载定向优化，无第三方中间件依赖。
 * 扩展机制支持：
     * 认证/授权 (Authentication/Authorization)
-    * 运行时设置 (Runtime Setting)
-    * 桥接 (Bridging)
+  * 租户级运行时设置 (Runtime Setting)
+  * 租户级资源限制 (Throttling)
     * 事件 (Event)
     * 系统/租户级别的监控 (System/Tenant-level Monitoring)
 

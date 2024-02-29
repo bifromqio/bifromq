@@ -621,7 +621,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         log.info("Settings, which can be modified at runtime, allowing for dynamic adjustment of BifroMQ's " +
             "service behavior per tenant. See https://bifromq.io/docs/plugin/setting_provider/");
-        log.info("Following is the initial value of each setting: ");
+        log.info("The initial value of each setting could be overridden by JVM arguments like: '-DMQTT5Enabled=false'");
         for (Setting setting : Setting.values()) {
             log.info("Setting: {}={}", setting.name(), setting.current(""));
         }
@@ -631,7 +631,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             log.info("BifroMQSysProp: {}={}", prop.propKey, prop.get());
         }
 
-        log.info("Consolidated Config: \n{}", ConfigUtil.serialize(config));
+        log.info("Consolidated Config(YAML): \n{}", ConfigUtil.serialize(config));
     }
 
     public static void main(String[] args) {

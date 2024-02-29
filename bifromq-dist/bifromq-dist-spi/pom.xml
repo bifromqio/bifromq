@@ -19,7 +19,7 @@
     <parent>
         <groupId>com.baidu.bifromq</groupId>
         <artifactId>bifromq-dist</artifactId>
-        <version>2.1.2-SNAPSHOT</version>
+        <version>3.0.0-beta-SNAPSHOT</version>
     </parent>
 
     <artifactId>bifromq-dist-spi</artifactId>

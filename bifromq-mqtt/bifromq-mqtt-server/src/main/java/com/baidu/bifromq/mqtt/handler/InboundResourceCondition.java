@@ -37,6 +37,9 @@ public class InboundResourceCondition extends MemPressureCondition {
     @Override
     public Boolean get() {
         if (super.get()) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .type("High DirectMemory Usage")
+                .clientInfo(clientInfo));
             return true;
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalInboundBytesPerSecond)) {
