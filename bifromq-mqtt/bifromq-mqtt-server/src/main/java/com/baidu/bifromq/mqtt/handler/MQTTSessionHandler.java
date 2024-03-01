@@ -316,7 +316,13 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         assert ctx.executor().inEventLoop();
         if (!taskFuture.isDone()) {
             fgTasks.add(taskFuture);
-            taskFuture.whenComplete((v, e) -> fgTasks.remove(taskFuture));
+            taskFuture.whenComplete((v, e) -> {
+                if (ctx.executor().inEventLoop()) {
+                    fgTasks.remove(taskFuture);
+                } else {
+                    ctx.executor().execute(() -> fgTasks.remove(taskFuture));
+                }
+            });
         }
         return taskFuture;
     }

@@ -187,7 +187,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     public final void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
-        touchTimeout.cancel(true);
+        if (touchTimeout != null) {
+            touchTimeout.cancel(true);
+        }
         if (inboxReader != null) {
             inboxReader.close();
         }
