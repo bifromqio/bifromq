@@ -19,7 +19,7 @@
     <parent>
         <groupId>com.baidu.bifromq</groupId>
         <artifactId>base-kv</artifactId>
-        <version>3.0.0-beta</version>
+        <version>3.0.0-beta.1-SNAPSHOT</version>
     </parent>
 
     <artifactId>base-kv-store-server</artifactId>
