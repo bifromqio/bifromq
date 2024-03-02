@@ -670,12 +670,12 @@ public class KVRangeFSM implements IKVRangeFSM {
             case ConfigChanging -> {
                 // reset back to normal
                 String taskId = state.getTaskId();
-                rangeWriter.state(State.newBuilder()
-                    .setType(Normal)
-                    .setTaskId(taskId)
-                    .build());
                 rangeWriter.bumpVer(false);
                 if (taskId.equals(config.getCorrelateId())) {
+                    rangeWriter.state(State.newBuilder()
+                        .setType(Normal)
+                        .setTaskId(taskId)
+                        .build());
                     // if the config entry is resulted from user request, and removed from replica set,
                     // put it to the state of Removed
                     boolean remove = !members.contains(hostStoreId);
@@ -779,6 +779,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                         ),
                         singleton(hostStoreId)
                     );
+                newHostingStoreIds.forEach(storeId ->
+                    log.debug("Send request to ensure range hosted: rangeId={}, storeId={}, newHostingStoreId={}",
+                        KVRangeIdUtil.toString(id), hostStoreId, storeId));
                 List<CompletableFuture<?>> onceFutures = newHostingStoreIds.stream()
                     .map(storeId -> messenger.once(m -> {
                         if (m.hasEnsureRangeReply()) {
@@ -791,8 +794,13 @@ public class KVRangeFSM implements IKVRangeFSM {
                     .orTimeout(5, TimeUnit.SECONDS)
                     .whenCompleteAsync((_v, _e) -> {
                         if (_e != null) {
+                            log.debug("Ensure range hosted failed: rangeId={}, storeId={}, newHostingStoreIds={}",
+                                KVRangeIdUtil.toString(id), hostStoreId, newHostingStoreIds);
                             onceFutures.forEach(f -> f.cancel(true));
                         }
+                        log.debug("Changing Config: rangeId={}, storeId={}, nextVoters={}, nextLearners={}",
+                            KVRangeIdUtil.toString(id), hostStoreId, request.getVotersList(),
+                            request.getLearnersList());
                         wal.changeClusterConfig(taskId,
                                 newHashSet(request.getVotersList()),
                                 newHashSet(request.getLearnersList()))
@@ -825,7 +833,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 rangeWriter.bumpVer(false);
                                 onDone.complete(NOOP);
                             }, fsmExecutor);
-                    });
+                    }, fsmExecutor);
                 newHostingStoreIds.forEach(storeId -> {
                     log.debug("Send range ensure request to store[{}]: rangeId={}",
                         storeId, KVRangeIdUtil.toString(id));
