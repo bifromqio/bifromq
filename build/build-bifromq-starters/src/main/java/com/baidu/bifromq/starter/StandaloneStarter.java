@@ -510,8 +510,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         }
         Observable.combineLatest(
                 distWorkerClient.connState(),
-                inboxClient.connState(),
-                inboxClient.connState(),
+                inboxStoreClient.connState(),
                 retainStoreClient.connState(),
                 mqttBrokerClient.connState(),
                 inboxClient.connState(),

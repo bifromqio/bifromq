@@ -241,7 +241,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            raftStateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         follower.transferLeadership("v1", onDone);
         assertTrue(onDone.isCompletedExceptionally());
@@ -253,7 +253,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateFollower follower = new RaftNodeStateFollower(1, 0, leader, defaultRaftConfig,
-            raftStateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         follower.changeClusterConfig("cId", Collections.singleton("v3"), Collections.singleton("l4"), onDone);
         assertTrue(onDone.isCompletedExceptionally());

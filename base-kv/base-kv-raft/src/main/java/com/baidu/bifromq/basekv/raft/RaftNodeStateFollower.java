@@ -180,20 +180,23 @@ class RaftNodeStateFollower extends RaftNodeState {
         if (electionElapsedTick >= randomElectionTimeoutTick) {
             electionElapsedTick = 0;
             abortPendingRequests();
-            log.debug("Transit to candidate due to election timeout[{}]", randomElectionTimeoutTick);
-            return new RaftNodeStateCandidate(
-                currentTerm(),
-                commitIndex,
-                config,
-                stateStorage,
-                log,
-                uncommittedProposals,
-                sender,
-                listener,
-                snapshotInstaller,
-                onSnapshotInstalled,
-                tags)
-                .campaign(config.isPreVote(), false);
+            // transit to candidate only if no snapshot installation is in progress
+            if (currentISSRequest == null) {
+                log.debug("Transit to candidate due to election timeout[{}]", randomElectionTimeoutTick);
+                return new RaftNodeStateCandidate(
+                    currentTerm(),
+                    commitIndex,
+                    config,
+                    stateStorage,
+                    log,
+                    uncommittedProposals,
+                    sender,
+                    listener,
+                    snapshotInstaller,
+                    onSnapshotInstalled,
+                    tags)
+                    .campaign(config.isPreVote(), false);
+            }
         }
         return this;
     }
@@ -298,6 +301,10 @@ class RaftNodeStateFollower extends RaftNodeState {
 
     @Override
     RaftNodeState receive(String fromPeer, RaftMessage message) {
+        if (isTerminated) {
+            log.trace("Ignore message[{}] from {} since node is terminated", message, fromPeer);
+            return this;
+        }
         log.trace("Receive[{}] from {}", message, fromPeer);
         RaftNodeState nextState = this;
         if (message.getTerm() > currentTerm()) {
