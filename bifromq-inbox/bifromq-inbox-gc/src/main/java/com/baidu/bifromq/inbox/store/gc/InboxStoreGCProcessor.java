@@ -109,7 +109,8 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
                                 .build())
                             .thenAccept(v -> {
                                 if (v.getCode() == DetachReply.Code.ERROR) {
-                                    log.warn("[InboxGC] Failed to detach inbox: reqId={}, inboxId={}, reason={}", reqId,
+                                    log.debug("[InboxGC] Failed to detach inbox: reqId={}, inboxId={}, reason={}",
+                                        reqId,
                                         inbox.getInboxId(), v.getCode());
                                 } else {
                                     log.debug("[InboxGC] detach success: reqId={}, inboxId={}", reqId,
@@ -145,7 +146,7 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
                 throw new RuntimeException("BaseKV Query failed:" + v.getCode().name());
             })
             .exceptionally(e -> {
-                log.error("[InboxGC] scan failed: tenantId={}, rangeId={}",
+                log.debug("[InboxGC] scan failed: tenantId={}, rangeId={}",
                     tenantId, KVRangeIdUtil.toString(rangeSetting.id), e);
                 return GCReply.newBuilder().setCode(GCReply.Code.ERROR).build();
             });

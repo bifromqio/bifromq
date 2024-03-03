@@ -131,6 +131,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -209,7 +210,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final ITenantMeter tenantMeter;
     private final long idleTimeoutNanos;
     private final MPSThrottler throttler;
-    private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
+    private final Set<CompletableFuture<?>> fgTasks = ConcurrentHashMap.newKeySet();
     private final FutureTracker bgTasks = new FutureTracker();
     private final Set<Integer> inUsePacketIds = new HashSet<>();
 
