@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.integration.v3;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -233,6 +235,130 @@ public class MQTTPubSubTest extends MQTTTest {
         receiveOfflineMessage(2, 1);
         receiveOfflineMessage(1, 2);
         receiveOfflineMessage(2, 2);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_0_0_true() {
+        pubSubInOrder(0, 0, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_0_1_true() {
+        pubSubInOrder(0, 1, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_0_2_true() {
+        pubSubInOrder(0, 2, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_1_0_true() {
+        pubSubInOrder(1, 0, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_1_1_true() {
+        pubSubInOrder(1, 1, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_1_2_true() {
+        pubSubInOrder(1, 2, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_2_0_true() {
+        pubSubInOrder(2, 0, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_2_1_true() {
+        pubSubInOrder(2, 1, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_2_2_true() {
+        pubSubInOrder(2, 2, true);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_0_0_false() {
+        pubSubInOrder(0, 0, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_0_1_false() {
+        pubSubInOrder(0, 1, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_0_2_false() {
+        pubSubInOrder(0, 2, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_1_0_false() {
+        pubSubInOrder(1, 0, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_1_1_false() {
+        pubSubInOrder(1, 1, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_1_2_false() {
+        pubSubInOrder(1, 2, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_2_0_false() {
+        pubSubInOrder(2, 0, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_2_1_false() {
+        pubSubInOrder(2, 1, false);
+    }
+
+    @Test(groups = "integration")
+    public void pubSubInOrder_2_2_false() {
+        pubSubInOrder(2, 2, false);
+    }
+
+
+    @SneakyThrows
+    private void pubSubInOrder(int pubQoS, int subQoS, boolean cleanSession) {
+        String topic = "a/b";
+        MqttConnectOptions connOpts = new MqttConnectOptions();
+        connOpts.setCleanSession(cleanSession);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
+
+        MqttTestClient pubClient = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
+        pubClient.connect(connOpts);
+
+        MqttTestClient subClient = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
+        subClient.connect(connOpts);
+        Observable<MqttMsg> topicSub = subClient.subscribe(topic, subQoS);
+
+        List<ByteString> pubMsgList = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            ByteString msg = ByteString.copyFromUtf8(Integer.toUnsignedString(i));
+            pubMsgList.add(msg);
+            pubClient.publish(topic, pubQoS, msg, false);
+        }
+        TestObserver<MqttMsg> observer = new TestObserver<>();
+        topicSub.subscribe(observer);
+        await().until(() -> {
+            List<ByteString> mqttMsgs = observer.values().stream().map(msg -> msg.payload).toList();
+            return mqttMsgs.equals(pubMsgList);
+        });
+        pubClient.disconnect();
+        pubClient.close();
+        subClient.unsubscribe(topic);
+        subClient.disconnect();
+        subClient.close();
     }
 
     private void receiveOfflineMessage(int pubQoS, int subQoS) {

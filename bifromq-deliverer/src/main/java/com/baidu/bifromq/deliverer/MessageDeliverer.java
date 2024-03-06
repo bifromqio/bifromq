@@ -33,12 +33,13 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -80,8 +81,8 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
 
             @Override
             public void add(CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> callTask) {
-                batch.computeIfAbsent(callTask.call.tenantId, k -> new ConcurrentHashMap<>(128))
-                    .computeIfAbsent(callTask.call.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
+                batch.computeIfAbsent(callTask.call.tenantId, k -> new LinkedHashMap<>(128))
+                    .computeIfAbsent(callTask.call.msgPackWrapper, k -> new HashSet<>())
                     .add(callTask.call.matchInfo);
                 tasks.add(callTask);
             }
@@ -99,6 +100,7 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
                         return packageBuilder.build();
                     }))
                     .build();
+
                 return deliverer.deliver(request)
                     .handle((reply, e) -> {
                         if (e != null) {
