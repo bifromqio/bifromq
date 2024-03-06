@@ -27,13 +27,13 @@ import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.SubInfo;
 import java.time.Duration;
 import java.util.ArrayDeque;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -66,16 +66,16 @@ public class DeliveryScheduler extends BatchCallScheduler<DeliveryRequest, Deliv
 
         private class DeliveryBatchCall implements IBatchCall<DeliveryRequest, DeliveryResult, DelivererKey> {
             private final Queue<CallTask<DeliveryRequest, DeliveryResult, DelivererKey>> tasks = new ArrayDeque<>(128);
-            private Map<MessagePackWrapper, Set<SubInfo>> batch = new HashMap<>(128);
+            private Map<MessagePackWrapper, Set<SubInfo>> batch = new LinkedHashMap<>(128);
 
             @Override
             public void reset() {
-                batch = new HashMap<>(128);
+                batch = new LinkedHashMap<>(128);
             }
 
             @Override
             public void add(CallTask<DeliveryRequest, DeliveryResult, DelivererKey> callTask) {
-                batch.computeIfAbsent(callTask.call.msgPackWrapper, k -> ConcurrentHashMap.newKeySet())
+                batch.computeIfAbsent(callTask.call.msgPackWrapper, k -> new LinkedHashSet<>())
                     .add(callTask.call.subInfo);
                 tasks.add(callTask);
             }

@@ -13,15 +13,15 @@
 
 package com.baidu.bifromq.mqtt;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.mqtt.client.MqttMsg;
 import com.baidu.bifromq.mqtt.client.MqttResponse;
@@ -35,13 +35,14 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.observers.TestObserver;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
-import io.reactivex.rxjava3.disposables.Disposable;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -256,6 +257,15 @@ public class MQTTPubSubTest {
         receiveOfflineMessage(2, 2);
     }
 
+    @SneakyThrows
+    @Test(groups = "integration")
+    public void messageOrder() {
+        pubSubOrder("t1", "t1", 100, 0, true);
+        pubSubOrder("t1", "t1", 100, 0, true);
+        pubSubOrder("t1", "t1", 100, 1, false);
+        pubSubOrder("t1", "t1", 100, 1, false);
+    }
+
     private void receiveOfflineMessage(int pubQoS, int subQoS) {
         String topic = "topic/" + pubQoS + "/" + subQoS;
         MqttConnectOptions subClientOpts = new MqttConnectOptions();
@@ -393,6 +403,34 @@ public class MQTTPubSubTest {
             client.disconnect();
             client.close();
         }
+    }
+
+    private void pubSubOrder(String topic, String topicFilter, int messageCount, int qos, boolean cleanSession) {
+        MqttConnectOptions connOpts = new MqttConnectOptions();
+        connOpts.setCleanSession(cleanSession);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
+
+        MqttTestClient client = new MqttTestClient(MQTTTest.brokerURI, MqttClient.generateClientId());
+        client.connect(connOpts);
+        Observable<MqttMsg> topicSub = client.subscribe(topicFilter, qos);
+
+        for (int i = 0; i < messageCount; i++) {
+            client.publish(topic, qos, ByteString.copyFromUtf8(Integer.toUnsignedString(i)), false);
+        }
+        TestObserver<MqttMsg> observer = new TestObserver<>();
+        topicSub.subscribe(observer);
+        try {
+            observer.await(3, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        List<MqttMsg> mqttMsgs = observer.values();
+        assertEquals(mqttMsgs.size(), messageCount);
+        for (int i = 0; i < messageCount; i++) {
+            assertEquals(Integer.toUnsignedString(i), mqttMsgs.get(i).payload.toStringUtf8());
+        }
+        client.disconnect();
+        client.close();
     }
 
     private boolean checkMsgIdConsecutive(List<MqttMsg> msgList,
