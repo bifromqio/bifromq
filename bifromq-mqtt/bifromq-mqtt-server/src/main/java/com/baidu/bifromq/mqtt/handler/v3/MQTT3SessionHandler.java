@@ -160,7 +160,7 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     private final long idleTimeoutNanos;
     private final boolean cleanSession;
     private final boolean sessionPresent;
-    private final WillMessage willMessage;
+    private WillMessage willMessage;
     private final LinkedMap<Integer, UnconfirmedQoS1Message> unconfirmedQoS1Messages = new LinkedMap<>();
     // key: id used in qos2 protocol interaction, value: message's original messageId
     private final LinkedMap<Integer, QoS2MessageKey> unconfirmedQoS2Indexes = new LinkedMap<>();
@@ -232,6 +232,16 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
+        if (idleTimeoutTask != null) {
+            idleTimeoutTask.cancel(true);
+        }
+        if (resendUnconfirmedTask != null) {
+            resendUnconfirmedTask.cancel(true);
+        }
+        if (willMessage != null) {
+            submitBgTask(() -> distWillMessage(willMessage));
+        }
+
         sessionCtx.localSessionRegistry.remove(channelId(), this);
         sessionRegister.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
@@ -292,18 +302,12 @@ abstract class MQTT3SessionHandler extends MQTTMessageHandler implements IMQTT3S
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
         if (evt instanceof ConnectionWillClose) {
-            if (idleTimeoutTask != null) {
-                idleTimeoutTask.cancel(true);
-            }
-            if (resendUnconfirmedTask != null) {
-                resendUnconfirmedTask.cancel(true);
-            }
             log.debug("Session closed: lwt={}, reason={}", willMessage, ((ConnectionWillClose) evt).reason);
             // don't send last will if disconnect by client, MQTT Spec 3.1.2.5 or kicked
-            if (willMessage != null && !(((ConnectionWillClose) evt).reason instanceof ByClient)
-                && (!(((ConnectionWillClose) evt).reason instanceof Kicked)
-                || !isSelfKick((Kicked) ((ConnectionWillClose) evt).reason))) {
-                submitBgTask(() -> distWillMessage(willMessage));
+            if (((ConnectionWillClose) evt).reason instanceof ByClient
+                || (((ConnectionWillClose) evt).reason instanceof Kicked
+                && isSelfKick((Kicked) ((ConnectionWillClose) evt).reason))) {
+                willMessage = null;
             }
         }
         ctx.fireUserEventTriggered(evt);
