@@ -50,6 +50,48 @@ public class MQTTLastWillTest {
     }
 
     @Test(groups = "integration")
+    public void lastWillByCloseClientForcibly() {
+        String deviceKey = "testDevice";
+        String userName = tenantId + "/" + deviceKey;
+        String willTopic = "willTopic";
+        ByteString willPayload = ByteString.copyFromUtf8("bye");
+        when(mqttTest.authProvider.auth(any(MQTT3AuthData.class)))
+                .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                        .setOk(Ok.newBuilder()
+                                .setTenantId(tenantId)
+                                .setUserId(deviceKey)
+                                .build())
+                        .build()));
+        when(mqttTest.authProvider.check(any(ClientInfo.class), any(MQTTAction.class)))
+                .thenReturn(CompletableFuture.completedFuture(true));
+
+
+        MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
+        lwtPubConnOpts.setCleanSession(true);
+        lwtPubConnOpts.setWill(willTopic, willPayload.toByteArray(), 0, false);
+        lwtPubConnOpts.setUserName(userName);
+        MqttTestClient lwtPubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtPubclient");
+        lwtPubClient.connect(lwtPubConnOpts);
+
+        MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
+        lwtSubConnOpts.setCleanSession(true);
+        lwtSubConnOpts.setUserName(userName);
+
+        MqttTestClient lwtSubClient = new MqttTestClient(MQTTTest.brokerURI, "lwtSubClient");
+        lwtSubClient.connect(lwtSubConnOpts);
+        Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 0);
+
+        log.info("Close client forcibly");
+        lwtPubClient.closeForcibly();
+
+        MqttMsg msg = topicSub.blockingFirst();
+        assertEquals(msg.topic, willTopic);
+        assertEquals(msg.qos, 0);
+        assertEquals(msg.payload, willPayload);
+        assertFalse(msg.isRetain);
+    }
+
+    @Test(groups = "integration")
     public void lastWillQoS1() {
         String deviceKey = "testDevice";
         String userName = tenantId + "/" + deviceKey;
