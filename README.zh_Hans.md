@@ -13,11 +13,11 @@ BifroMQ 是一个高性能且支持分布式的 MQTT Broker 实现，它原生�
 * 原生支持多租户资源共享和工作负载隔离
 * 内置存储引擎，针对关键负载定向优化，无第三方中间件依赖。
 * 扩展机制支持：
-    * 认证/授权 (Authentication/Authorization)
+  * 认证/授权 (Authentication/Authorization)
   * 租户级运行时设置 (Runtime Setting)
   * 租户级资源限制 (Throttling)
-    * 事件 (Event)
-    * 系统/租户级别的监控 (System/Tenant-level Monitoring)
+  * 事件 (Event)
+  * 系统/租户级别的监控 (System/Tenant-level Monitoring)
 
 ## 文档
 

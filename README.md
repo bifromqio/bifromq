@@ -19,7 +19,7 @@ cloud service.
 * Native support for multi-tenancy resource sharing and workload isolation
 * Built-in distributed storage engine optimized for MQTT workloads, with no third-party middleware dependencies.
 * Extension mechanism for supporting:
-    * Authentication/Authorization
+  * Authentication/Authorization
   * Tenant-level Runtime Setting
   * Tenant-level Resource Throttling
   * Event
