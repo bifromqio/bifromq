@@ -22,8 +22,8 @@ cloud service.
     * Authentication/Authorization
   * Tenant-level Runtime Setting
   * Tenant-level Resource Throttling
-      * Event
-      * System/Tenant-level Monitoring
+  * Event
+  * System/Tenant-level Monitoring
 
 ## Documentation
 
