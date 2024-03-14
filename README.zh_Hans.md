@@ -4,10 +4,8 @@
 
 ---
 
-
-BifroMQ 是一个高性能的分布式 MQTT Broker 消息中间件实现，无缝集成了原生的多租户支持。它旨在支持构建大规模的物联网设备连接和消息系统。
-
-它来源与百度物联网团队多年技术积累，并作为百度智能云[物联网核心套件 IoT Core](https://cloud.baidu.com/product/iot.html)的基础技术，这是一个公有云的 Serverless MQTT 服务。
+BifroMQ 是一个高性能且支持分布式的 MQTT Broker 实现，它原生支持多租户，专为构建大规模 IoT
+设备连接与消息系统而设计。目前，它已成为百度 [IoTCore](https://cloud.baidu.com/product/iot.html)云服务的核心技术。
 
 ## 特性
 
@@ -23,20 +21,20 @@ BifroMQ 是一个高性能的分布式 MQTT Broker 消息中间件实现，无�
 
 ## 文档
 
-你可以在官网 [查看文档](https://bifromq.io/zh-Hans/docs/Readme/) 。
-
-并可以在文档的 GitHub repository [bifromq-docs](https://github.com/baidu/bifromq-docs) 贡献文档。
+您可以在官方[网站](https://bifromq.io/zh-Hans/)上查看[文档](https://bifromq.io/zh-Hans/docs/get_started/intro/)。
+此外，欢迎您在GitHub[仓库](https://github.com/bifromqio/bifromq-docs)中贡献文档。
 
 ## 开始使用
 
 ### Docker
+
 ```
 docker run -d -m <MEM_LIMIT> -e MEM_LIMIT='<MEM_LIMIT_IN_BYTES>' --name bifromq -p 1883:1883 bifromq/bifromq:latest
 ```
 
 将`<MEM_LIMIT>`和`<MEM_LIMIT_IN_BYTES>`替换为 Docker 进程的实际内存分配，例如，使用`2G`替换`<MEM_LIMIT>`，使用 `2147483648`
 替换`<MEM_LIMIT_IN_BYTES>`。如果未指定这些值，BifroMQ 默认使用宿主服务器的物理内存来确定JVM参数。这可能导致 Docker
-进程被宿主机的OOM Killer终止，更多供信息[参考](https://bifromq.io/docs/deploy/deploy_with_docker/)。
+进程被宿主机的OOM Killer终止，更多供信息[参考](https://bifromq.io/zh-Hans/docs/installation/docker/)。
 
 ### 从源码构建
 
@@ -76,53 +74,48 @@ mvn wrapper:wrapper
 mvn test
 ```
 
-#### 部署
+### 快速开始
 
-BifroMQ
-有三种部署模式：`单机模式(Standalone)`，`标准集群(Standard Cluster)`，`独立工作负载集群(Independent-Workload Cluster)`
-
-##### 单机模式
-
-单机部署模式非常适合开发阶段，或不需要即时恢复的生产环境。
-
-要启动一个单机的 bifromq 服务器，将 bifromq-xxx-standalone.tar.gz 解压到一个目录。目录结构如下：
+要快速启动一个 BifroMQ 单机服务器，请先将 `bifromq-xxx-standalone.tar.gz` 文件解压到某个目录中。解压后的目录结构如下所示：
 
 ```
-|-bin
-|-conf
-|-lib
-|-plugins
+|- bin
+|- conf
+|- lib
+|- plugins
 ```
 
-在bin目录下执行以下命令：
+然后，在 `bin` 目录下执行以下命令：
 
-启动服务器：
+- **启动服务器**：
 
-```
-./standalone.sh start // 服务进程会在后台运行
-```
+  ```
+  ./standalone.sh start // 这将会在后台启动服务进程
+  ```
 
-停止服务器：
+- **停止服务器**：
 
-```
-./standalone.sh stop
-```
+  ```
+  ./standalone.sh stop
+  ```
 
-配置文件 'standalone.yml' 位于 conf 目录中。
+配置文件 `standalone.yml` 位于 `conf`
+目录下。大多数配置项的名称都是自解释的，容易理解其功能。默认情况下，单机服务器会将持久化数据保存在 `data` 目录中。
 
-大部分设置可以通过名称理解其含义。默认情况下，单机服务器将在`data`目录中保存持久数据。
+### 集群部署
 
-##### 标准集群
+BifroMQ支持两种集群部署模式：`标准集群(Standard Cluster)`，`独立工作负载集群(Independent-Workload Cluster)`
 
-标准集群部署模式适用于需要可靠性和可扩展性的小型到中型生产环境。
+#### 标准集群
 
-它由几个完全功能的Standalone节点组成，共同作为一个逻辑 MQTT Broker 实例，确保高可用性。
+标准集群部署模式适用于需要可靠性和可扩展性的小型到中型生产环境。 它由几个完全功能的Standalone节点组成，共同作为一个逻辑
+MQTT Broker 实例，确保高可用性。 你也可以通过添加更多的节点来扩大并发 MQTT 连接的工作负载，而在这种模式下，某些类型的消息相关的工作负载并不是水平可扩展的。
 
-你也可以通过添加更多的节点来扩大并发 MQTT 连接的工作负载，而在这种模式下，某些类型的消息相关的工作负载并不是水平可扩展的。
+#### 独立工作负载集群
 
-##### 独立工作负载集群
-
-独立工作负载集群部署模式旨在构建大规模的，多租户的 Serverless 集群。在这种模式下，集群由几个专门的子集群组成，每个子集群都专注于一个特定的'独立类型'的工作负载。这些子集群共同协作形成一个逻辑的 MQTT Broker 实例。这是最复杂的部署模式，需要额外的非开源协作组件。如需商业支持，请随时与我们联系。
+独立工作负载集群部署模式旨在构建大规模的，多租户的 Serverless
+集群。在这种模式下，集群由几个专门的子集群组成，每个子集群都专注于一个特定的'独立类型'的工作负载。这些子集群共同协作形成一个逻辑的
+MQTT Broker 实例。这是最复杂的部署模式，需要额外的非开源协作组件。如需商业支持，请随时与我们联系。
 
 ## 讨论
 
@@ -130,7 +123,8 @@ BifroMQ
 
 如果你对我们的项目感兴趣，你可以加入我们的微信群。
 
-<img src="https://bifromq.io/img/qrcode.png" width="30%" />
+[通过电子邮件](mailto:hello@bifromq.io) 向我们联系，告知您的WeChat ID，以及"为什么您对 BifroMQ 感兴趣"
+的更多信息（我们很乐意听到），我们将尽快邀请您加入我们的群组。
 
 ### Discord
 
