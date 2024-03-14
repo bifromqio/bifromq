@@ -34,7 +34,6 @@ public class ConfigUtil {
 
     public static String serialize(Object obj) {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory().disable(YAMLGenerator.Feature.USE_NATIVE_TYPE_ID));
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         try {
             return mapper.writeValueAsString(obj);
         } catch (IOException e) {

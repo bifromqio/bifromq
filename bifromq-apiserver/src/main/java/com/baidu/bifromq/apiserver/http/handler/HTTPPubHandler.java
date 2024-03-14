@@ -70,10 +70,10 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
         @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
         @Parameter(name = "topic", in = ParameterIn.HEADER, required = true, description = "the message topic"),
-        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the client type"),
         @Parameter(name = "qos", in = ParameterIn.HEADER, required = true, description = "QoS of the message to be published"),
         @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, description = "the message expiry seconds"),
-        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about publisher, must be started with client_meta_"),
+        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the caller client type"),
+        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about caller client, must be started with client_meta_"),
     })
     @RequestBody(required = true, description = "Message payload will be treated as binary", content = @Content(mediaType = "application/octet-stream"))
     @ApiResponses(value = {

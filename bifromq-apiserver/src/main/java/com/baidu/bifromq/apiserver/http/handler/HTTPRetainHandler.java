@@ -64,15 +64,15 @@ public final class HTTPRetainHandler implements IHTTPRequestHandler {
     }
 
     @POST
-    @Operation(summary = "Publish a message to given topic")
+    @Operation(summary = "Retain a message to given topic")
     @Parameters({
-        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional, caller provided request id", schema = @Schema(implementation = Long.class)),
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
         @Parameter(name = "topic", in = ParameterIn.HEADER, required = true, description = "the message topic"),
-        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the client type"),
         @Parameter(name = "qos", in = ParameterIn.HEADER, required = true, description = "QoS of the message to be retained"),
         @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, description = "the message expiry seconds"),
-        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about publisher, must be started with client_meta_"),
+        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the caller client type"),
+        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about caller client, must be started with client_meta_"),
     })
     @RequestBody(required = true, description = "Message payload will be treated as binary", content = @Content(mediaType = "application/octet-stream"))
     @ApiResponses(value = {
@@ -89,7 +89,7 @@ public final class HTTPRetainHandler implements IHTTPRequestHandler {
             int expirySeconds = Optional.ofNullable(getHeader(HEADER_EXPIRY_SECONDS, req, false)).map(Integer::parseInt)
                 .orElse(Integer.MAX_VALUE);
             Map<String, String> clientMeta = getClientMeta(req);
-            log.trace("Handling http pub request: reqId={}, tenantId={}, topic={}, clientType={}, clientMeta={}",
+            log.trace("Handling http retain request: reqId={}, tenantId={}, topic={}, clientType={}, clientMeta={}",
                 reqId, tenantId, topic, clientType, clientMeta);
             boolean retainEnabled = settingProvider.provide(Setting.RetainEnabled, tenantId);
             if (!retainEnabled) {

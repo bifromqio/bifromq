@@ -58,8 +58,9 @@ public final class HTTPKickHandler implements IHTTPRequestHandler {
         @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
         @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true, description = "the user id of the MQTT client connection to be disconnected"),
-        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the client type"),
-        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about the kicker client, must be started with client_meta_"),
+        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true, description = "the client id of the mqtt session"),
+        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the caller client type"),
+        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about the caller client, must be started with client_meta_"),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
@@ -85,7 +86,7 @@ public final class HTTPKickHandler implements IHTTPRequestHandler {
                     .putAllMetadata(clientMeta)
                     .build())
                 .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(), v.getResult() == KillReply.Result.OK
-                        ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
+                    ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);
         }

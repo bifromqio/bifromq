@@ -65,11 +65,7 @@ public enum Setting {
 
     QoS0DropOldest(Boolean.class, val -> true, false),
 
-    RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10),
-
-    DistReservedUnitInterval(Long.class, val -> (long) val > 0 && (long) val <= 0xFFFFFFFFL, 0xFFFFFFFFL),
-
-    DistLimitUnitInterval(Long.class, val -> (long) val >= 0 && (long) val <= 0xFFFFFFFFL, 0L);
+    RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10);
 
     public final Class<?> valueType;
     final Predicate<Object> validator;

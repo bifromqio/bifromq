@@ -16,6 +16,7 @@ package com.baidu.bifromq.starter.config.standalone;
 import com.baidu.bifromq.starter.config.standalone.model.ClusterConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RPCServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
+import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
 import com.google.common.base.Strings;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
@@ -33,6 +34,7 @@ public class StandaloneConfigConsolidator {
         consolidateClusterConfig(config);
         consolidateMQTTServerConfig(config);
         consolidateRPCServerConfig(config);
+        consolidateAPIServerConfig(config);
     }
 
     private static void consolidateClusterConfig(StandaloneConfig config) {
@@ -105,6 +107,13 @@ public class StandaloneConfigConsolidator {
         baseKVRpcServerConfig.setWorkerThreads(null);
         baseKVRpcServerConfig.setSslConfig(null);
         config.setBaseKVRpcServerConfig(baseKVRpcServerConfig);
+    }
+
+    private static void consolidateAPIServerConfig(StandaloneConfig config) {
+        APIServerConfig apiServerConfig = config.getApiServerConfig();
+        if (apiServerConfig.getHost() == null) {
+            apiServerConfig.setHost(resolveHost(config));
+        }
     }
 
     @SneakyThrows
