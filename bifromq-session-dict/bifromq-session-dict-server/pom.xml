@@ -19,7 +19,7 @@
     <parent>
         <groupId>com.baidu.bifromq</groupId>
         <artifactId>bifromq-session-dict</artifactId>
-        <version>3.0.0-beta.1-SNAPSHOT</version>
+        <version>3.0.0-beta.1</version>
     </parent>
 
     <artifactId>bifromq-session-dict-server</artifactId>
