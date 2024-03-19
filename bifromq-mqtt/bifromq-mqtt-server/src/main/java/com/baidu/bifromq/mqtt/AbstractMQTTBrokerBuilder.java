@@ -36,7 +36,6 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     long writeLimit = 512 * 1024;
     long readLimit = 512 * 1024;
     int maxBytesInMessage = 256 * 1024;
-    private int maxResendTimes = 5;
     int mqttBossELGThreads;
     int mqttWorkerELGThreads;
     IAuthProvider authProvider;
@@ -129,13 +128,8 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
         return thisT();
     }
 
-    public T maxResendTimes(int maxResendTimes) {
-        this.maxResendTimes = maxResendTimes;
-        return thisT();
-    }
-
-    public T mqttBossELGThreads(int mqttWorkerELGThreads) {
-        this.mqttBossELGThreads = mqttWorkerELGThreads;
+    public T mqttBossELGThreads(int mqttBossELGThreads) {
+        this.mqttBossELGThreads = mqttBossELGThreads;
         return thisT();
     }
 

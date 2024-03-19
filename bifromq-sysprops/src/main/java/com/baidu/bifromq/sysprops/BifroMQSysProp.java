@@ -19,7 +19,6 @@ import com.baidu.bifromq.sysprops.parser.DoubleParser;
 import com.baidu.bifromq.sysprops.parser.IntegerParser;
 import com.baidu.bifromq.sysprops.parser.LongParser;
 import com.baidu.bifromq.sysprops.parser.PropParser;
-import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
