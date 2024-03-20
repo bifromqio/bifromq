@@ -29,7 +29,8 @@ public class TestTicker extends Ticker {
 
     @Override
     public long read() {
-        return nanos;
+        // read different timestamp
+        return ++nanos;
     }
 
     public void advanceTimeBy(long duration, TimeUnit unit) {
