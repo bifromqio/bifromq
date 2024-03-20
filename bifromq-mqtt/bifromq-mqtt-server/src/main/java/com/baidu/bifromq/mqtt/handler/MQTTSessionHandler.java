@@ -109,6 +109,7 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.UTF8Util;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.collect.Sets;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -210,7 +211,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final ITenantMeter tenantMeter;
     private final long idleTimeoutNanos;
     private final MPSThrottler throttler;
-    private final Set<CompletableFuture<?>> fgTasks = ConcurrentHashMap.newKeySet();
+    private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
     private final FutureTracker bgTasks = new FutureTracker();
     private final Set<Integer> inUsePacketIds = new HashSet<>();
 
@@ -359,7 +360,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (willMessage != null) {
             addBgTask(pubWillMessage(willMessage));
         }
-        fgTasks.forEach(t -> t.cancel(true));
+        Sets.newHashSet(fgTasks).forEach(t -> t.cancel(true));
         sessionCtx.localSessionRegistry.remove(channelId(), this);
         sessionRegister.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
@@ -869,7 +870,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             return;
         }
         memUsage.addAndGet(msgSize);
-        ctx.write(pubMsg).addListener(f -> {
+        writeAndFlush(pubMsg).addListener(f -> {
             memUsage.addAndGet(-msgSize);
             if (f.isSuccess()) {
                 if (settings.debugMode) {

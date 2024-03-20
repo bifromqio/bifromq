@@ -28,7 +28,6 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.MatchInfo;
-import com.google.common.collect.Maps;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -89,19 +88,18 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
 
             @Override
             public CompletableFuture<Void> execute() {
-                DeliveryRequest request = DeliveryRequest.newBuilder()
-                    .putAllPackage(Maps.transformValues(batch, pack -> {
-                        DeliveryPackage.Builder packageBuilder = DeliveryPackage.newBuilder();
-                        pack.forEach((msgPackWrapper, matchInfos) ->
-                            packageBuilder.addPack(DeliveryPack.newBuilder()
-                                .setMessagePack(msgPackWrapper.messagePack)
-                                .addAllMatchInfo(matchInfos)
-                                .build()));
-                        return packageBuilder.build();
-                    }))
-                    .build();
+                DeliveryRequest.Builder requestBuilder = DeliveryRequest.newBuilder();
+                batch.forEach((tenantId, pack) -> {
+                    DeliveryPackage.Builder packageBuilder = DeliveryPackage.newBuilder();
+                    pack.forEach((msgPackWrapper, matchInfos) ->
+                        packageBuilder.addPack(DeliveryPack.newBuilder()
+                            .setMessagePack(msgPackWrapper.messagePack)
+                            .addAllMatchInfo(matchInfos)
+                            .build()));
+                    requestBuilder.putPackage(tenantId, packageBuilder.build());
+                });
 
-                return deliverer.deliver(request)
+                return deliverer.deliver(requestBuilder.build())
                     .handle((reply, e) -> {
                         if (e != null) {
                             CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;

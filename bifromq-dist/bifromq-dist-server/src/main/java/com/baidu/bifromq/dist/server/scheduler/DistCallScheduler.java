@@ -136,9 +136,20 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
 
             @Override
             public CompletableFuture<Void> execute() {
-                Map<String, DistPack> distPackMap = buildDistPack();
                 Map<KVRangeReplica, List<DistPack>> distPacksByRangeReplica = new HashMap<>();
-                distPackMap.forEach((tenantId, distPack) -> {
+                batch.forEach((tenantId, topicMap) -> {
+                    DistPack.Builder distPackBuilder = DistPack.newBuilder().setTenantId(tenantId);
+                    topicMap.forEach((topic, senderMap) -> {
+                        TopicMessagePack.Builder topicMsgPackBuilder = TopicMessagePack.newBuilder().setTopic(topic);
+                        senderMap.forEach((sender, msgs) ->
+                            topicMsgPackBuilder.addMessage(TopicMessagePack.PublisherPack
+                                .newBuilder()
+                                .setPublisher(sender)
+                                .addAllMessage(msgs)
+                                .build()));
+                        distPackBuilder.addMsgPack(topicMsgPackBuilder.build());
+                    });
+                    DistPack distPack = distPackBuilder.build();
                     int fanoutScale = tenantFanoutGetter.apply(tenantId);
                     List<KVRangeSetting> ranges = distWorkerClient.findByBoundary(Boundary.newBuilder()
                         .setStartKey(matchRecordKeyPrefix(tenantId))
@@ -224,25 +235,6 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                         }
                         return null;
                     });
-            }
-
-            private Map<String, DistPack> buildDistPack() {
-                Map<String, DistPack> distPackMap = new HashMap<>();
-                batch.forEach((tenantId, topicMap) -> {
-                    DistPack.Builder distPackBuilder = DistPack.newBuilder().setTenantId(tenantId);
-                    topicMap.forEach((topic, senderMap) -> {
-                        TopicMessagePack.Builder topicMsgPackBuilder = TopicMessagePack.newBuilder().setTopic(topic);
-                        senderMap.forEach((sender, msgs) ->
-                            topicMsgPackBuilder.addMessage(TopicMessagePack.PublisherPack
-                                .newBuilder()
-                                .setPublisher(sender)
-                                .addAllMessage(msgs)
-                                .build()));
-                        distPackBuilder.addMsgPack(topicMsgPackBuilder.build());
-                    });
-                    distPackMap.put(tenantId, distPackBuilder.build());
-                });
-                return distPackMap;
             }
         }
 

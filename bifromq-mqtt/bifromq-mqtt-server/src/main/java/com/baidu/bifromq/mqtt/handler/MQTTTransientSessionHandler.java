@@ -280,7 +280,6 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                     });
                     memUsage.addAndGet(totalMsgBytesSize.get());
                     send();
-                    flush(true);
                 } else {
                     forEach(topicFilter, option, topicMsgPacks,
                         bufferMsg -> reportDropEvent(bufferMsg, DropReason.NoSubPermission));

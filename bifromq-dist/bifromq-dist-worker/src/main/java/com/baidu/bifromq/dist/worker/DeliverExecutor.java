@@ -30,11 +30,11 @@ import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
-import org.jctools.queues.MpscBlockingConsumerArrayQueue;
 
 @Slf4j
 public class DeliverExecutor {
@@ -54,7 +54,7 @@ public class DeliverExecutor {
         this.deliverer = deliverer;
         executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new MpscBlockingConsumerArrayQueue<>(2),
+                new LinkedTransferQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("deliver-executor-" + id)), "deliver-executor-" + id);
     }
 
