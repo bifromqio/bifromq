@@ -130,7 +130,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     protected CompletableFuture<AuthResult> authenticate(MqttConnectMessage message) {
         MQTT3AuthData authData = AuthUtil.buildMQTT3AuthData(ctx.channel(), message);
         return authProvider.auth(authData)
-            .thenApply(authResult -> {
+            .thenApplyAsync(authResult -> {
                 final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                 switch (authResult.getTypeCase()) {
                     case OK -> {
@@ -196,7 +196,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                             getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result"));
                     }
                 }
-            });
+            }, ctx.executor());
     }
 
     @Override

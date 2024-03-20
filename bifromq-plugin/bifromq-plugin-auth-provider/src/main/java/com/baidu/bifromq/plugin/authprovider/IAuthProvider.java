@@ -39,6 +39,13 @@ public interface IAuthProvider extends ExtensionPoint {
      */
     CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData);
 
+    /**
+     * Implement this method to hook authentication logic of mqtt5 client into BifroMQ. The default implementation will
+     * delegate to the auth method of mqtt3.
+     *
+     * @param authData the authentication data
+     * @return the authentication result
+     */
     default CompletableFuture<MQTT5AuthResult> auth(MQTT5AuthData authData) {
         MQTT3AuthData.Builder mqtt3AuthDataBuilder = MQTT3AuthData.newBuilder();
         if (authData.hasCert()) {
@@ -83,6 +90,12 @@ public interface IAuthProvider extends ExtensionPoint {
         });
     }
 
+    /**
+     * Implement this method to hook extended authentication logic of mqtt5 client into BifroMQ.
+     *
+     * @param authData the extended authentication data
+     * @return the authentication result
+     */
     default CompletableFuture<MQTT5ExtendedAuthResult> extendedAuth(MQTT5ExtendedAuthData authData) {
         return CompletableFuture.completedFuture(MQTT5ExtendedAuthResult.newBuilder()
             .setFailed(Failed.newBuilder()
@@ -97,9 +110,18 @@ public interface IAuthProvider extends ExtensionPoint {
      *
      * @param client the client to check permission
      * @param action the action
+     * @return true if the client is allowed to perform the action, false otherwise
      */
+    @Deprecated(since = "3.0")
     CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action);
 
+    /**
+     * Implement this method to hook action permission check logic.
+     *
+     * @param client the client to check permission
+     * @param action the action
+     * @return CheckResult
+     */
     default CompletableFuture<CheckResult> checkPermission(ClientInfo client, MQTTAction action) {
         return check(client, action)
             .handle((granted, e) -> {

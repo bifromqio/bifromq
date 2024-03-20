@@ -314,16 +314,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     protected final <T> CompletableFuture<T> addFgTask(CompletableFuture<T> taskFuture) {
-        assert ctx.executor().inEventLoop();
         if (!taskFuture.isDone()) {
             fgTasks.add(taskFuture);
-            taskFuture.whenComplete((v, e) -> {
-                if (ctx.executor().inEventLoop()) {
-                    fgTasks.remove(taskFuture);
-                } else {
-                    ctx.executor().execute(() -> fgTasks.remove(taskFuture));
-                }
-            });
+            taskFuture.whenComplete((v, e) -> fgTasks.remove(taskFuture));
         }
         return taskFuture;
     }
@@ -524,7 +517,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
         return addFgTask(
             authProvider.checkPermission(clientInfo, buildSubAction(topicFilter, option.getQos(), userProps))
-                .thenComposeAsync(checkResult -> {
+                .thenCompose(checkResult -> {
+                    assert ctx.executor().inEventLoop();
                     if (checkResult.hasGranted()) {
                         if (isSharedSubscription(topicFilter)
                             && !resourceThrottler.hasResource(clientInfo.getTenantId(), TotalSharedSubscriptions)) {
@@ -585,7 +579,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                             .clientInfo(clientInfo));
                         return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.NOT_AUTHORIZED);
                     }
-                }, ctx.executor()));
+                }));
     }
 
     protected abstract CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId,
@@ -648,7 +642,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             return CompletableFuture.completedFuture(IMQTTProtocolHelper.UnsubResult.TOPIC_FILTER_INVALID);
         }
         return addFgTask(authProvider.checkPermission(clientInfo, buildUnsubAction(topicFilter, userProps)))
-            .thenComposeAsync(checkResult -> {
+            .thenCompose(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 if (checkResult.hasGranted()) {
                     return addFgTask(unsubTopicFilter(reqId, topicFilter));
                 } else {
@@ -658,7 +653,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     // always reply unsub ack
                     return CompletableFuture.completedFuture(IMQTTProtocolHelper.UnsubResult.NOT_AUTHORIZED);
                 }
-            }, ctx.executor());
+            });
     }
 
     protected abstract CompletableFuture<IMQTTProtocolHelper.UnsubResult> unsubTopicFilter(long reqId,
@@ -935,6 +930,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                   String topic,
                                                   MqttPublishMessage message,
                                                   int ingressMsgBytes) {
+        assert ctx.executor().inEventLoop();
         if (log.isTraceEnabled()) {
             log.trace("Checking authorization of pub qos0 action: reqId={}, sessionId={}, topic={}", reqId,
                 userSessionId(clientInfo), topic);
@@ -942,7 +938,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         Message distMessage = helper().buildDistMessage(message);
         UserProperties userProps = helper().getUserProps(message);
         return addFgTask(checkPubPermission(topic, distMessage, userProps))
-            .thenComposeAsync(checkResult -> {
+            .thenCompose(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 if (log.isTraceEnabled()) {
                     log.trace("Checked authorization of pub qos0 action: reqId={}, sessionId={}, topic={}:{}",
                         reqId, userSessionId(clientInfo), topic, checkResult.getTypeCase());
@@ -950,14 +947,15 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 if (checkResult.getTypeCase() == CheckResult.TypeCase.GRANTED) {
                     tenantMeter.recordSummary(MqttQoS0IngressBytes, ingressMsgBytes);
                     return doPub(reqId, topic, distMessage, false, ingressMsgBytes)
-                        .thenAcceptAsync(pubResult -> {
+                        .thenAccept(pubResult -> {
+                            assert ctx.executor().inEventLoop();
                             if (log.isTraceEnabled()) {
                                 log.trace("Disted qos0 msg: reqId={}, sessionId={}, topic={}",
                                     reqId, userSessionId(clientInfo), topic);
                             }
                             handleProtocolResponse(helper().onQoS0PubHandled(pubResult, message,
                                 checkResult.getGranted().getUserProps()));
-                        }, ctx.executor());
+                        });
                 }
                 if (log.isTraceEnabled()) {
                     log.trace("Unauthorized qos0 topic: reqId={}, sessionId={}, topic={}",
@@ -971,7 +969,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     .clientInfo(clientInfo));
                 handleProtocolResponse(helper().onQoS0DistDenied(topic, distMessage, checkResult));
                 return CompletableFuture.completedFuture(null);
-            }, ctx.executor());
+            });
     }
 
     private CompletableFuture<Void> handleQoS1Pub(long reqId,
@@ -991,11 +989,13 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         Message distMessage = helper().buildDistMessage(message);
         UserProperties userProps = helper().getUserProps(message);
         return addFgTask(checkPubPermission(topic, distMessage, userProps))
-            .thenComposeAsync(checkResult -> {
+            .thenCompose(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 if (checkResult.getTypeCase() == CheckResult.TypeCase.GRANTED) {
                     tenantMeter.recordSummary(MqttQoS1IngressBytes, ingressMsgBytes);
                     return doPub(reqId, topic, distMessage, message.fixedHeader().isDup(), ingressMsgBytes)
-                        .thenAcceptAsync(pubResult -> {
+                        .thenAccept(pubResult -> {
+                            assert ctx.executor().inEventLoop();
                             if (log.isTraceEnabled()) {
                                 log.trace("Disted qos1 msg: reqId={}, sessionId={}, topic={}",
                                     reqId, userSessionId(clientInfo), topic);
@@ -1013,7 +1013,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                     .size(message.payload().readableBytes())
                                     .clientInfo(clientInfo));
                             }
-                        }, ctx.executor());
+                        });
                 }
                 decReceivingCount();
                 inUsePacketIds.remove(packetId);
@@ -1030,13 +1030,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 handleProtocolResponse(
                     helper().onQoS1DistDenied(topic, packetId, distMessage, checkResult));
                 return CompletableFuture.completedFuture(null);
-            }, ctx.executor());
+            });
     }
 
     private CompletableFuture<Void> handleQoS2Pub(long reqId,
                                                   String topic,
                                                   MqttPublishMessage message,
                                                   int ingressMsgBytes) {
+        assert ctx.executor().inEventLoop();
         int packetId = message.variableHeader().packetId();
         if (inUsePacketIds.contains(packetId)) {
             handleProtocolResponse(helper().respondQoS2PacketInUse(message));
@@ -1048,11 +1049,13 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         Message distMessage = helper().buildDistMessage(message);
         UserProperties userProps = helper().getUserProps(message);
         return addFgTask(checkPubPermission(topic, distMessage, userProps))
-            .thenComposeAsync(checkResult -> {
+            .thenCompose(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 if (checkResult.getTypeCase() == CheckResult.TypeCase.GRANTED) {
                     tenantMeter.recordSummary(MqttQoS2IngressBytes, ingressMsgBytes);
                     return doPub(reqId, topic, distMessage, message.fixedHeader().isDup(), ingressMsgBytes)
-                        .thenAcceptAsync(pubResult -> {
+                        .thenAccept(pubResult -> {
+                            assert ctx.executor().inEventLoop();
                             if (log.isTraceEnabled()) {
                                 log.trace("Published qos2 msg: reqId={}, sessionId={}, topic={}",
                                     reqId, userSessionId(clientInfo), topic);
@@ -1078,7 +1081,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                         .clientInfo(clientInfo));
                                 }
                             }
-                        }, ctx.executor());
+                        });
                 }
                 decReceivingCount();
                 inUsePacketIds.remove(packetId);
@@ -1095,15 +1098,16 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 handleProtocolResponse(
                     helper().onQoS2DistDenied(topic, packetId, distMessage, checkResult));
                 return CompletableFuture.completedFuture(null);
-            }, ctx.executor());
+            });
     }
 
     private CompletableFuture<Void> pubWillMessage(LWT willMessage) {
-        return sessionCtx.authProvider(ctx).checkPermission(clientInfo(), buildPubAction(willMessage.getTopic(),
+        return authProvider.checkPermission(clientInfo(), buildPubAction(willMessage.getTopic(),
                 willMessage.getMessage()
                     .getPubQoS(),
                 willMessage.getMessage().getIsRetain()))
-            .thenComposeAsync(checkResult -> {
+            .thenCompose(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 if (checkResult.hasGranted()) {
                     return doPubLastWill(willMessage);
                 } else {
@@ -1115,7 +1119,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .clientInfo(clientInfo));
                     return CompletableFuture.completedFuture(null);
                 }
-            }, ctx.executor());
+            });
     }
 
     private void checkIdle() {
@@ -1188,7 +1192,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                                    boolean isDup,
                                                                    int ingressMsgSize) {
         return doPub(reqId, topic, message, false, false)
-            .thenApplyAsync(v -> {
+            .thenApply(v -> {
+                assert ctx.executor().inEventLoop();
                 switch (v.distResult()) {
                     case OK, NO_MATCH -> {
                         if (log.isTraceEnabled()) {
@@ -1224,7 +1229,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     }
                 }
                 return v;
-            }, ctx.executor());
+            });
     }
 
     private CompletableFuture<Void> doPubLastWill(LWT willMessage) {
@@ -1234,7 +1239,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         long reqId = System.nanoTime();
         int size = message.getPayload().size() + willMessage.getTopic().length();
         return doPub(reqId, willMessage.getTopic(), message, true, true)
-            .handleAsync((v, e) -> {
+            .handle((v, e) -> {
+                assert ctx.executor().inEventLoop();
                 if (e != null) {
                     eventCollector.report(getLocal(WillDistError.class)
                         .clientInfo(clientInfo)
@@ -1266,7 +1272,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     }
                 }
                 return null;
-            }, ctx.executor());
+            });
     }
 
     private CompletableFuture<IMQTTProtocolHelper.PubResult> doPub(long reqId,
@@ -1282,12 +1288,13 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         CompletableFuture<DistResult> distTask =
             trackTask(sessionCtx.distClient.pub(reqId, topic, message, clientInfo), background);
         if (!message.getIsRetain()) {
-            return distTask.thenApply(v -> new IMQTTProtocolHelper.PubResult(v, RetainReply.Result.RETAINED));
+            return distTask
+                .thenApplyAsync(v -> new IMQTTProtocolHelper.PubResult(v, RetainReply.Result.RETAINED), ctx.executor());
         } else {
             CompletableFuture<RetainReply.Result> retainTask =
                 trackTask(retainMessage(reqId, topic, message, isLWT), background);
-            return allOf(retainTask, distTask).thenApply(
-                v -> new IMQTTProtocolHelper.PubResult(distTask.join(), retainTask.join()));
+            return allOf(retainTask, distTask).thenApplyAsync(
+                v -> new IMQTTProtocolHelper.PubResult(distTask.join(), retainTask.join()), ctx.executor());
         }
     }
 

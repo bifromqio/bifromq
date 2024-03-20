@@ -18,9 +18,14 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckEr
 
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Error;
+import com.baidu.bifromq.plugin.authprovider.type.Failed;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -28,12 +33,9 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessContr
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.base.Preconditions;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -79,11 +81,12 @@ public class AuthProviderManager implements IAuthProvider {
     @Override
     public CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData) {
         assert !stopped.get();
-        long start = System.nanoTime();
+        Timer.Sample start = Timer.start();
         try {
             return delegate.auth(authData)
                 .handle((v, e) -> {
                     if (e != null) {
+                        metricMgr.authCallErrorCounter.increment();
                         return MQTT3AuthResult.newBuilder()
                             .setReject(Reject.newBuilder()
                                 .setCode(Reject.Code.Error)
@@ -91,7 +94,7 @@ public class AuthProviderManager implements IAuthProvider {
                                 .build())
                             .build();
                     } else {
-                        metricMgr.authCallTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+                        start.stop(metricMgr.authCallTimer);
                         return v;
                     }
                 });
@@ -112,34 +115,96 @@ public class AuthProviderManager implements IAuthProvider {
     }
 
     @Override
-    public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
+    public CompletableFuture<MQTT5AuthResult> auth(MQTT5AuthData authData) {
         assert !stopped.get();
-        long start = System.nanoTime();
+        Timer.Sample start = Timer.start();
         try {
-            return delegate.check(client, action)
-                .exceptionally(e -> {
-                    eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
-                    return settingProvider.provide(ByPassPermCheckError, client.getTenantId());
-                })
-                .thenApply(v -> {
-                    metricMgr.checkCallTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-                    return v;
+            return delegate.auth(authData)
+                .handle((v, e) -> {
+                    if (e != null) {
+                        metricMgr.authCallErrorCounter.increment();
+                        return MQTT5AuthResult.newBuilder()
+                            .setFailed(Failed.newBuilder()
+                                .setCode(Failed.Code.Error)
+                                .setReason(e.getMessage() != null ? e.getMessage() : e.toString())
+                                .build())
+                            .build();
+                    } else {
+                        start.stop(metricMgr.authCallTimer);
+                        return v;
+                    }
                 });
         } catch (Throwable e) {
-            metricMgr.checkCallErrorCounter.increment();
-            eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
-            return CompletableFuture.completedFuture(
-                settingProvider.provide(ByPassPermCheckError, client.getTenantId()));
+            metricMgr.authCallErrorCounter.increment();
+            log.warn("Unexpected error", e);
+            Failed.Builder rb = Failed.newBuilder().setCode(Failed.Code.Error);
+            if (e.getMessage() != null) {
+                rb.setReason(e.getMessage());
+            }
+            return CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
+                .setFailed(Failed.newBuilder()
+                    .setCode(Failed.Code.Error)
+                    .setReason(e.getMessage() != null ? e.getMessage() : e.toString())
+                    .build())
+                .build());
         }
+    }
+
+    @Override
+    public CompletableFuture<MQTT5ExtendedAuthResult> extendedAuth(MQTT5ExtendedAuthData authData) {
+        assert !stopped.get();
+        Timer.Sample start = Timer.start();
+        try {
+            return delegate.extendedAuth(authData)
+                .handle((v, e) -> {
+                    if (e != null) {
+                        metricMgr.extAuthCallErrorCounter.increment();
+                        return MQTT5ExtendedAuthResult.newBuilder()
+                            .setFailed(Failed.newBuilder()
+                                .setCode(Failed.Code.Error)
+                                .setReason(e.getMessage() != null ? e.getMessage() : e.toString())
+                                .build())
+                            .build();
+                    } else {
+                        start.stop(metricMgr.extAuthCallTimer);
+                        return v;
+                    }
+                });
+        } catch (Throwable e) {
+            metricMgr.extAuthCallErrorCounter.increment();
+            log.warn("Unexpected error", e);
+            Failed.Builder rb = Failed.newBuilder().setCode(Failed.Code.Error);
+            if (e.getMessage() != null) {
+                rb.setReason(e.getMessage());
+            }
+            return CompletableFuture.completedFuture(MQTT5ExtendedAuthResult.newBuilder()
+                .setFailed(Failed.newBuilder()
+                    .setCode(Failed.Code.Error)
+                    .setReason(e.getMessage() != null ? e.getMessage() : e.toString())
+                    .build())
+                .build());
+        }
+    }
+
+    @Override
+    public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
+        log.warn(
+            "IAuthProvider/check method has been deprecated and will be removed in later release, please implement checkPermission instead");
+        return delegate.check(client, action);
     }
 
     @Override
     public CompletableFuture<CheckResult> checkPermission(ClientInfo client, MQTTAction action) {
         assert !stopped.get();
-        long start = System.nanoTime();
+        Timer.Sample start = Timer.start();
         try {
             return delegate.checkPermission(client, action)
+                .thenApply(v -> {
+                    start.stop(metricMgr.checkCallTimer);
+                    return v;
+                })
                 .exceptionally(e -> {
+                    metricMgr.checkCallErrorCounter.increment();
                     eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
                     boolean byPass = settingProvider.provide(ByPassPermCheckError, client.getTenantId());
                     if (byPass) {
@@ -154,10 +219,6 @@ public class AuthProviderManager implements IAuthProvider {
                                 .build())
                             .build();
                     }
-                })
-                .thenApply(v -> {
-                    metricMgr.checkCallTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-                    return v;
                 });
         } catch (Throwable e) {
             metricMgr.checkCallErrorCounter.increment();
@@ -182,43 +243,6 @@ public class AuthProviderManager implements IAuthProvider {
             delegate.close();
             metricMgr.close();
             log.info("Auth provider manager stopped");
-        }
-    }
-
-    private static class MetricManager {
-        private final Timer authCallTimer;
-        private final Counter authCallErrorCounter;
-        private final Timer checkCallTimer;
-        private final Counter checkCallErrorCounter;
-
-        MetricManager(String id) {
-            authCallTimer = Timer.builder("call.exec.timer")
-                .tag("method", "AuthProvider/auth")
-                .tag("type", id)
-                .register(Metrics.globalRegistry);
-
-            authCallErrorCounter = Counter.builder("call.exec.fail.count")
-                .tag("method", "AuthProvider/auth")
-                .tag("type", id)
-                .register(Metrics.globalRegistry);
-
-            checkCallTimer = Timer.builder("call.exec.timer")
-                .tag("method", "AuthProvider/check")
-                .tag("type", id)
-                .register(Metrics.globalRegistry);
-
-            checkCallErrorCounter = Counter.builder("call.exec.fail.count")
-                .tag("method", "AuthProvider/check")
-                .tag("type", id)
-                .register(Metrics.globalRegistry);
-        }
-
-        void close() {
-            Metrics.globalRegistry.remove(authCallTimer);
-            Metrics.globalRegistry.remove(authCallErrorCounter);
-
-            Metrics.globalRegistry.remove(checkCallTimer);
-            Metrics.globalRegistry.remove(checkCallErrorCounter);
         }
     }
 }

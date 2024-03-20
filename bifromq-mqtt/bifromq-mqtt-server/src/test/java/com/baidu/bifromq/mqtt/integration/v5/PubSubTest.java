@@ -42,13 +42,6 @@ public class PubSubTest extends MQTTTest {
     private final String userId = "userId";
 
     protected void doSetup(Method method) {
-        when(authProvider.auth(any(MQTT3AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
-                .setOk(Ok.newBuilder()
-                    .setTenantId(tenantId)
-                    .setUserId(userId)
-                    .build())
-                .build()));
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
                 .setSuccess(Success.newBuilder()

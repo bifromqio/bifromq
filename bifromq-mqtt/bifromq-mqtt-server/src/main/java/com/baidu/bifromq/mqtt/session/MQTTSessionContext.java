@@ -13,35 +13,23 @@
 
 package com.baidu.bifromq.mqtt.session;
 
-import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
-import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttSessionWorkingMemoryGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubCountGauge;
 
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
-import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
-import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
-import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
-import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.base.Ticker;
 import io.netty.channel.ChannelHandlerContext;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
@@ -102,83 +90,7 @@ public final class MQTTSessionContext {
 
     public IAuthProvider authProvider(ChannelHandlerContext ctx) {
         // a wrapper to ensure async fifo semantic for check call
-        return new IAuthProvider() {
-            private final LinkedHashMap<CompletableFuture<CheckResult>, CompletableFuture<CheckResult>>
-                checkPermissionTaskQueue =
-                new LinkedHashMap<>();
-
-            private final LinkedHashMap<CompletableFuture<Boolean>, CompletableFuture<Boolean>>
-                checkTaskQueue = new LinkedHashMap<>();
-
-            @Override
-            public CompletableFuture<MQTT3AuthResult> auth(MQTT3AuthData authData) {
-                return authProvider.auth(authData);
-            }
-
-            @Override
-            public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
-                CompletableFuture<Boolean> task = authProvider.check(client, action);
-                if (task.isDone()) {
-                    return task;
-                } else {
-                    // queue it for fifo semantic
-                    CompletableFuture<Boolean> onDone = new CompletableFuture<>();
-                    // in case authProvider returns same future object;
-                    task = task.thenApply(v -> v);
-                    checkTaskQueue.put(task, onDone);
-                    task.whenCompleteAsync((_v, _e) -> {
-                        Iterator<CompletableFuture<Boolean>> itr = checkTaskQueue.keySet().iterator();
-                        while (itr.hasNext()) {
-                            CompletableFuture<Boolean> k = itr.next();
-                            if (k.isDone()) {
-                                CompletableFuture<Boolean> r = checkTaskQueue.get(k);
-                                try {
-                                    r.complete(k.join());
-                                } catch (Throwable e) {
-                                    r.completeExceptionally(e);
-                                }
-                                itr.remove();
-                            } else {
-                                break;
-                            }
-                        }
-                    }, ctx.channel().eventLoop());
-                    return onDone;
-                }
-            }
-
-            @Override
-            public CompletableFuture<CheckResult> checkPermission(ClientInfo client, MQTTAction action) {
-                CompletableFuture<CheckResult> task = authProvider.checkPermission(client, action);
-                if (task.isDone()) {
-                    return task;
-                } else {
-                    // queue it for fifo semantic
-                    CompletableFuture<CheckResult> onDone = new CompletableFuture<>();
-                    // in case authProvider returns same future object;
-                    task = task.thenApply(v -> v);
-                    checkPermissionTaskQueue.put(task, onDone);
-                    task.whenCompleteAsync((_v, _e) -> {
-                        Iterator<CompletableFuture<CheckResult>> itr = checkPermissionTaskQueue.keySet().iterator();
-                        while (itr.hasNext()) {
-                            CompletableFuture<CheckResult> k = itr.next();
-                            if (k.isDone()) {
-                                CompletableFuture<CheckResult> r = checkPermissionTaskQueue.get(k);
-                                try {
-                                    r.complete(k.join());
-                                } catch (Throwable e) {
-                                    r.completeExceptionally(e);
-                                }
-                                itr.remove();
-                            } else {
-                                break;
-                            }
-                        }
-                    }, ctx.executor());
-                    return onDone;
-                }
-            }
-        };
+        return new MQTTSessionAuthProvider(authProvider, ctx);
     }
 
     public AtomicLong getTransientSubNumGauge(String tenantId) {
@@ -187,28 +99,6 @@ public final class MQTTSessionContext {
 
     public AtomicLong getSessionMemGauge(String tenantId) {
         return tenantMemGauge.get(tenantId);
-    }
-
-    private void logTenantMetricGauge(String tenantId,
-                                      int value,
-                                      TenantMetric gauge,
-                                      Map<String, AtomicInteger> gauges) {
-        gauges.compute(tenantId, (k, v) -> {
-            if (v == null) {
-                if (value == 0) {
-                    return null;
-                }
-                v = new AtomicInteger(value);
-                gauging(k, gauge, v::get);
-                return v;
-            } else {
-                if (v.addAndGet(value) == 0) {
-                    stopGauging(k, gauge);
-                    return null;
-                }
-                return v;
-            }
-        });
     }
 
     public <T> CompletableFuture<T> trackBgTask(CompletableFuture<T> task) {

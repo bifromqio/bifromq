@@ -502,7 +502,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         ClientInfo publihser = topicMsg.getPublisher();
         return addFgTask(
             authProvider.checkPermission(clientInfo(), AuthUtil.buildSubAction(topicFilter, QoS.AT_MOST_ONCE)))
-            .thenAcceptAsync(checkResult -> {
+            .thenAccept(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 if (checkResult.hasGranted()) {
                     tenantMeter.timer(MqttQoS0InternalLatency)
                         .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
@@ -534,7 +535,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         .clientInfo(clientInfo()));
                     addBgTask(unsubTopicFilter(message.getMessageId(), topicFilter));
                 }
-            }, ctx.executor());
+            });
     }
 
     private CompletableFuture<Void> pubBufferedMessage(InboxMessage inboxMsg) {
@@ -546,7 +547,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         ClientInfo publisher = topicMsg.getPublisher();
         return addFgTask(
             authProvider.checkPermission(clientInfo(), AuthUtil.buildSubAction(topicFilter, AT_LEAST_ONCE)))
-            .thenAcceptAsync(checkResult -> {
+            .thenAccept(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 SubMessage msg = new SubMessage(topic, message, publisher, topicFilter, option);
                 if (checkResult.hasGranted()) {
                     tenantMeter.timer(msg.qos() == AT_LEAST_ONCE ? MqttQoS1InternalLatency : MqttQoS2InternalLatency)
@@ -603,7 +605,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     }
                     addBgTask(unsubTopicFilter(message.getMessageId(), topicFilter));
                 }
-            }, ctx.executor());
+            });
     }
 
     private void drainStaging() {

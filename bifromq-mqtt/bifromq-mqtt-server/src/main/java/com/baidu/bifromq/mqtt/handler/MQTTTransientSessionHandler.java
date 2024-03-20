@@ -245,10 +245,13 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         return true;
     }
 
-    private void publish(String topicFilter, TopicFilterOption option, List<TopicMessagePack> topicMsgPacks) {
+    private void publish(String topicFilter,
+                         TopicFilterOption option,
+                         List<TopicMessagePack> topicMsgPacks) {
         QoS subQoS = option.getQos();
-        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, subQoS))
-            .thenAcceptAsync(checkResult -> {
+        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, subQoS)))
+            .thenAccept(checkResult -> {
+                assert ctx.executor().inEventLoop();
                 if (checkResult.hasGranted()) {
                     AtomicInteger totalMsgBytesSize = new AtomicInteger();
                     forEach(topicFilter, option, topicMsgPacks, subMsg -> {
@@ -284,7 +287,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                     // treat no permission as no_inbox
                     addBgTask(this.unsubTopicFilter(System.nanoTime(), topicFilter));
                 }
-            }, ctx.executor()));
+            });
     }
 
     private void send() {

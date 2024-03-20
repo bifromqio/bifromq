@@ -174,7 +174,9 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .build())
                 .returnCode(CONNECTION_REFUSED_PROTOCOL_ERROR) // [MQTT-4.13.1-1]
                 .build(),
-                getLocal(MalformedUserName.class).peerAddress(clientAddress));
+                getLocal(ProtocolError.class)
+                    .statement("Missing auth method for authData")
+                    .peerAddress(clientAddress));
         }
         if (connMsg.variableHeader().isWillFlag()) {
             if (!UTF8Util.isWellFormed(connMsg.payload().willTopic(), SANITY_CHECK)) {
@@ -184,7 +186,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                         .reasonString("Malformed will topic")
                         .build())
                     .returnCode(CONNECTION_REFUSED_MALFORMED_PACKET) // [MQTT-4.13.1-1]
-                    .build(), getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
+                    .build(),
+                    getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
             }
         }
         return null;
@@ -198,7 +201,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         if (authMethodOpt.isEmpty()) {
             MQTT5AuthData authData = AuthUtil.buildMQTT5AuthData(ctx.channel(), message);
             return authProvider.auth(authData)
-                .thenApply(authResult -> {
+                .thenApplyAsync(authResult -> {
                     final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                     switch (authResult.getTypeCase()) {
                         case SUCCESS -> {
@@ -260,7 +263,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                                 getLocal(AuthError.class).peerAddress(clientAddress).cause("Unknown auth result"));
                         }
                     }
-                });
+                }, ctx.executor());
         } else {
             // extended auth
             this.authMethod = authMethodOpt.get();
