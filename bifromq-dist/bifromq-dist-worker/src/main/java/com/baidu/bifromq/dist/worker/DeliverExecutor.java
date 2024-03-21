@@ -58,9 +58,13 @@ public class DeliverExecutor {
                 EnvProvider.INSTANCE.newThreadFactory("deliver-executor-" + id)), "deliver-executor-" + id);
     }
 
-    public void submit(NormalMatching route, TopicMessagePack msgPack) {
-        tasks.add(new SendTask(route, msgPack));
-        scheduleSend();
+    public void submit(NormalMatching route, TopicMessagePack msgPack, boolean inline) {
+        if (inline) {
+            send(route, msgPack);
+        } else {
+            tasks.add(new SendTask(route, msgPack));
+            scheduleSend();
+        }
     }
 
     public void shutdown() {

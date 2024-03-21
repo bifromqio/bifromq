@@ -16,6 +16,7 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_INLINE_FAN_OUT_THRESHOLD;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentFanOutBytesPerSeconds;
 import static com.google.common.hash.Hashing.murmur3_128;
@@ -54,6 +55,7 @@ class DeliverExecutorGroup {
     // OuterCacheKey: OrderedSharedMatchingKey(<tenantId>, <escapedTopicFilter>)
     // InnerCacheKey: ClientInfo(<tenantId>, <type>, <metadata>)
     private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
+    private final int inlineFanOutThreshold = DIST_INLINE_FAN_OUT_THRESHOLD.get();
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
     private final IDistClient distClient;
@@ -99,12 +101,13 @@ class DeliverExecutorGroup {
         int msgPackSize = SizeUtil.estSizeOf(msgPack);
         if (matchedRoutes.size() == 1) {
             Matching matching = matchedRoutes.get(0);
-            prepareSend(matching, msgPack);
+            prepareSend(matching, msgPack, true);
             if (isSendToInbox(matching)) {
                 ITenantMeter.get(matching.tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
             }
         } else if (matchedRoutes.size() > 1) {
             String tenantId = matchedRoutes.get(0).tenantId;
+            boolean inline = matchedRoutes.size() > inlineFanOutThreshold;
             boolean hasTFanOutBandwidth =
                 resourceThrottler.hasResource(tenantId, TenantResourceType.TotalTransientFanOutBytesPerSeconds);
             boolean hasTFannedOutUnderThrottled = false;
@@ -117,7 +120,7 @@ class DeliverExecutorGroup {
                 if (isSendToInbox(matching)) {
                     if (hasPFanOutBandwidth || !hasPFannedOutUnderThrottled) {
                         pFanoutBytes += msgPackSize;
-                        prepareSend(matching, msgPack);
+                        prepareSend(matching, msgPack, inline);
                         if (!hasPFanOutBandwidth) {
                             hasPFannedOutUnderThrottled = true;
                             for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
@@ -129,7 +132,7 @@ class DeliverExecutorGroup {
                         }
                     }
                 } else if (hasTFanOutBandwidth || !hasTFannedOutUnderThrottled) {
-                    prepareSend(matching, msgPack);
+                    prepareSend(matching, msgPack, inline);
                     if (!hasTFanOutBandwidth) {
                         hasTFannedOutUnderThrottled = true;
                         for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
@@ -156,15 +159,15 @@ class DeliverExecutorGroup {
         orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(scopedTopic.tenantId, escape(scopedTopic.topic)));
     }
 
-    private void prepareSend(Matching matching, TopicMessagePack msgPack) {
+    private void prepareSend(Matching matching, TopicMessagePack msgPack, boolean inline) {
         switch (matching.type()) {
-            case Normal -> send((NormalMatching) matching, msgPack);
+            case Normal -> send((NormalMatching) matching, msgPack, inline);
             case Group -> {
                 GroupMatching groupMatching = (GroupMatching) matching;
                 if (!groupMatching.ordered) {
                     // pick one route randomly
                     send(groupMatching.receiverList.get(
-                        ThreadLocalRandom.current().nextInt(groupMatching.receiverList.size())), msgPack);
+                        ThreadLocalRandom.current().nextInt(groupMatching.receiverList.size())), msgPack, inline);
                 } else {
                     // ordered shared subscription
                     Map<NormalMatching, TopicMessagePack.Builder> orderedRoutes = new HashMap<>();
@@ -186,17 +189,17 @@ class DeliverExecutorGroup {
                             .setTopic(msgPack.getTopic())
                             .addMessage(publisherPack);
                     }
-                    orderedRoutes.forEach((route, msgPackBuilder) -> send(route, msgPackBuilder.build()));
+                    orderedRoutes.forEach((route, msgPackBuilder) -> send(route, msgPackBuilder.build(), inline));
                 }
             }
         }
     }
 
-    private void send(NormalMatching route, TopicMessagePack msgPack) {
+    private void send(NormalMatching route, TopicMessagePack msgPack, boolean inline) {
         int idx = route.hashCode() % fanoutExecutors.length;
         if (idx < 0) {
             idx += fanoutExecutors.length;
         }
-        fanoutExecutors[idx].submit(route, msgPack);
+        fanoutExecutors[idx].submit(route, msgPack, inline);
     }
 }

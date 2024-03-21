@@ -92,7 +92,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private PluginManager pluginMgr;
     private ExecutorService ioClientExecutor;
     private ExecutorService ioServerExecutor;
-    private ExecutorService queryExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AuthProviderManager authProviderMgr;
@@ -150,11 +149,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 config.getRpcServerConfig().getWorkerThreads(), 0L,
                 TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("rpc-server-executor")), "rpc-server-executor");
-        queryExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(config.getStateStoreConfig().getQueryThreads(),
-                config.getStateStoreConfig().getQueryThreads(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("query-executor")), "query-executor");
         tickTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ScheduledThreadPoolExecutor(config.getStateStoreConfig().getTickerThreads(),
                 EnvProvider.INSTANCE.newThreadFactory("tick-task-executor")), "tick-task-executor");
@@ -261,7 +255,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .agentHost(agentHost)
             .crdtService(serverCrdtService)
             .storeClient(retainStoreClient)
-            .queryExecutor(queryExecutor)
+            .queryExecutor(MoreExecutors.directExecutor())
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(RETAIN_STORE_LOAD_EST_WINDOW_SECONDS.get()))
@@ -307,7 +301,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .storeClient(inboxStoreClient)
             .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
-            .queryExecutor(queryExecutor)
+            .queryExecutor(MoreExecutors.directExecutor())
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
@@ -386,7 +380,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .resourceThrottler(resourceThrottlerMgr)
             .distClient(distClient)
             .storeClient(distWorkerClient)
-            .queryExecutor(queryExecutor)
+            .queryExecutor(MoreExecutors.directExecutor())
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -582,10 +576,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         if (ioServerExecutor != null) {
             ioServerExecutor.shutdownNow();
             log.debug("Shutdown io server executor");
-        }
-        if (queryExecutor != null) {
-            queryExecutor.shutdownNow();
-            log.debug("Shutdown query executor");
         }
         if (tickTaskExecutor != null) {
             tickTaskExecutor.shutdownNow();

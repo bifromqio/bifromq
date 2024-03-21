@@ -37,7 +37,9 @@ public enum BifroMQSysProp {
     DIST_WORKER_CALL_QUEUES("dist_server_dist_worker_call_queues", EnvProvider.INSTANCE.availableProcessors(),
         IntegerParser.POSITIVE),
     DIST_FAN_OUT_PARALLELISM("dist_worker_fanout_parallelism",
-        Math.max(2, EnvProvider.INSTANCE.availableProcessors()), IntegerParser.POSITIVE),
+        Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 8), IntegerParser.POSITIVE),
+
+    DIST_INLINE_FAN_OUT_THRESHOLD("dist_worker_inline_fanout_threshold", 1000, IntegerParser.POSITIVE),
     DIST_MAX_CACHED_SUBS_PER_TENANT("dist_worker_max_cached_subs_per_tenant", 200_000L, LongParser.POSITIVE),
     DIST_TOPIC_MATCH_EXPIRY("dist_worker_topic_match_expiry_seconds", 5, IntegerParser.POSITIVE),
     DIST_MATCH_PARALLELISM("dist_worker_match_parallelism",
