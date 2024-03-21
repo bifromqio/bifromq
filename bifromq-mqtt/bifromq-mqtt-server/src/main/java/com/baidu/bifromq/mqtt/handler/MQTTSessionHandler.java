@@ -132,7 +132,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -188,10 +187,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         int sentCount = 1;
         boolean acked = false;
 
-        private ConfirmingMessage(long seq, SubMessage message) {
+        private ConfirmingMessage(long seq, SubMessage message, long timestamp) {
             this.seq = seq;
             this.message = message;
-            this.timestamp = System.nanoTime();
+            this.timestamp = timestamp;
         }
 
         int packetId() {
@@ -435,7 +434,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             return;
         }
         int packetId = mqttMessage.variableHeader().packetId();
-        long reqId = packetId > 0 ? packetId : System.nanoTime();
+        long reqId = packetId > 0 ? packetId : sessionCtx.nanoTime();
         String topic = helper().getTopic(mqttMessage);
         int ingressMsgBytes = mqttMessage.fixedHeader().remainingLength() + 1;
         (switch (mqttMessage.fixedHeader().qosLevel()) {
@@ -751,7 +750,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         ConfirmingMessage confirmingMsg = unconfirmedPacketIds.get(packetId);
         SubMessage msg = null;
         if (confirmingMsg != null) {
-            long now = System.nanoTime();
+            long now = sessionCtx.nanoTime();
             msg = confirmingMsg.message;
             confirmingMsg.setAcked();
             resendQueue.remove(confirmingMsg);
@@ -806,7 +805,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     protected final void sendConfirmableMessage(long seq, SubMessage msg) {
         assert seq > -1;
-        ConfirmingMessage confirmingMessage = new ConfirmingMessage(seq, msg);
+        ConfirmingMessage confirmingMessage = new ConfirmingMessage(seq, msg, sessionCtx.nanoTime());
         ConfirmingMessage prev = unconfirmedPacketIds.putIfAbsent(confirmingMessage.packetId(), confirmingMessage);
         if (prev == null) {
             resendQueue.add(confirmingMessage);
@@ -825,11 +824,11 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     private void scheduleResend() {
         resendTask =
-            ctx.executor().schedule(this::resend, ackTimeoutNanos(resendQueue.first()), TimeUnit.NANOSECONDS);
+            ctx.executor().schedule(this::resend, ackTimeoutNanos(resendQueue.first()) - sessionCtx.nanoTime(), TimeUnit.NANOSECONDS);
     }
 
     private void resend() {
-        long now = System.nanoTime() + Duration.ofMillis(100).toNanos();
+        long now = sessionCtx.nanoTime() + Duration.ofMillis(100).toNanos();
         while (!resendQueue.isEmpty()) {
             ConfirmingMessage confirmingMessage = resendQueue.first();
             if (ackTimeoutNanos(confirmingMessage) > now) {
@@ -1237,7 +1236,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         Message message = willMessage.getMessage().toBuilder()
             .setTimestamp(HLC.INST.getPhysical())
             .build();
-        long reqId = System.nanoTime();
+        long reqId = sessionCtx.nanoTime();
         int size = message.getPayload().size() + willMessage.getTopic().length();
         return doPub(reqId, willMessage.getTopic(), message, true, true)
             .handle((v, e) -> {
