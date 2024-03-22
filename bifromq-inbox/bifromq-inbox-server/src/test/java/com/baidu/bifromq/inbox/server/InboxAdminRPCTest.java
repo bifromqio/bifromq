@@ -33,7 +33,7 @@ import org.testng.annotations.Test;
 public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
-    public void createWithLWT() {
+    public void createWithLWT() throws InterruptedException {
         long now = System.nanoTime();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
@@ -66,7 +66,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(createReply.getReqId(), reqId);
         assertEquals(createReply.getCode(), CreateReply.Code.OK);
-
+        Thread.sleep(1000);
         getReply = inboxClient.get(GetRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
