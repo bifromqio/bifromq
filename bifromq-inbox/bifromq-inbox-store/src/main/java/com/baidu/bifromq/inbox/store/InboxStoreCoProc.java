@@ -129,6 +129,10 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         load();
     }
 
+    public static void main(String[] args) {
+        System.out.println(HLC.INST.getPhysical());
+    }
+
     @Override
     public CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader reader) {
         try {
@@ -1006,6 +1010,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     private boolean hasExpired(InboxMetadata metadata, int expirySeconds, long nowTS) {
         Duration lastActiveTime = Duration.ofMillis(metadata.getLastActiveTime());
+        log.info("expiry: lastActiveTime={}, initTime={}, nowTS={}, getKeepAliveSeconds={}, expirySeconds={}", metadata.getLastActiveTime(), initTime, nowTS, metadata.getKeepAliveSeconds(), metadata.getExpirySeconds());
         if (Duration.ofMillis(initTime).compareTo(lastActiveTime) > 0) {
             // if lastActiveTime is before boot time, it may be expired
             // detach operation will refresh lastActiveTime
