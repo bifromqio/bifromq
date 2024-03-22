@@ -421,6 +421,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (isExceedReceivingMaximum()) {
             handleProtocolResponse(helper().respondReceivingMaximumExceeded(mqttMessage));
             mqttMessage.release();
+            return;
         }
         if (!throttler.pass()) {
             handleProtocolResponse(helper().respondPubRateExceeded(mqttMessage));
