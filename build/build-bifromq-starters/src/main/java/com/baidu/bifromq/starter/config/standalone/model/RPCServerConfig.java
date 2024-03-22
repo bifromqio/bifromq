@@ -24,7 +24,7 @@ public class RPCServerConfig {
     private String host;
     private int port = 0;
     @JsonSetter(nulls = Nulls.SKIP)
-    private Integer workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 4);
+    private Integer workerThreads;
     @JsonSetter(nulls = Nulls.SKIP)
     private ServerSSLContextConfig sslConfig;
 }

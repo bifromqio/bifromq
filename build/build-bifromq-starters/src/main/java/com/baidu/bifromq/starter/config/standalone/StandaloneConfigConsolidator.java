@@ -14,6 +14,7 @@
 package com.baidu.bifromq.starter.config.standalone;
 
 import com.baidu.bifromq.starter.config.standalone.model.ClusterConfig;
+import com.baidu.bifromq.starter.config.standalone.model.RPCClientConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RPCServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
 import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
@@ -33,7 +34,10 @@ public class StandaloneConfigConsolidator {
     public static void consolidate(StandaloneConfig config) {
         consolidateClusterConfig(config);
         consolidateMQTTServerConfig(config);
+        consolidateRPCClientConfig(config);
         consolidateRPCServerConfig(config);
+        consolidateBaseKVClientConfig(config);
+        consolidateBaseKVServerConfig(config);
         consolidateAPIServerConfig(config);
     }
 
@@ -94,19 +98,34 @@ public class StandaloneConfigConsolidator {
         }
     }
 
+    private static void consolidateRPCClientConfig(StandaloneConfig config) {
+        // do nothing for now
+    }
+
     private static void consolidateRPCServerConfig(StandaloneConfig config) {
         RPCServerConfig rpcServerConfig = config.getRpcServerConfig();
-        RPCServerConfig baseKVRpcServerConfig =
-            config.getBaseKVRpcServerConfig() == null ? new RPCServerConfig() : config.getBaseKVRpcServerConfig();
         // fill default host
         if (rpcServerConfig.getHost() == null) {
             rpcServerConfig.setHost(resolveHost(config));
         }
-        // fill null for that these params would not be used
-        baseKVRpcServerConfig.setHost(null);
-        baseKVRpcServerConfig.setWorkerThreads(null);
-        baseKVRpcServerConfig.setSslConfig(null);
-        config.setBaseKVRpcServerConfig(baseKVRpcServerConfig);
+    }
+
+    private static void consolidateBaseKVClientConfig(StandaloneConfig config) {
+        RPCClientConfig rpcClientConfig = config.getBaseKVClientConfig();
+        if (rpcClientConfig.getWorkerThreads() == null) {
+            rpcClientConfig.setWorkerThreads(Math.max(2, Runtime.getRuntime().availableProcessors() / 8));
+        }
+    }
+
+    private static void consolidateBaseKVServerConfig(StandaloneConfig config) {
+        RPCServerConfig baseKVRpcServerConfig = config.getBaseKVServerConfig();
+        if (baseKVRpcServerConfig.getHost() == null) {
+            baseKVRpcServerConfig.setHost(resolveHost(config));
+        }
+        if (baseKVRpcServerConfig.getWorkerThreads() == null) {
+            baseKVRpcServerConfig.setWorkerThreads(Math.max(2, Runtime.getRuntime().availableProcessors() / 2));
+        }
+        config.setBaseKVServerConfig(baseKVRpcServerConfig);
     }
 
     private static void consolidateAPIServerConfig(StandaloneConfig config) {

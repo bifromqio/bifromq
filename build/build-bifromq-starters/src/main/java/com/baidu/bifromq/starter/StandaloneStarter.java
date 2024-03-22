@@ -90,8 +90,10 @@ import org.pf4j.PluginManager;
 @Slf4j
 public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private PluginManager pluginMgr;
-    private ExecutorService ioClientExecutor;
-    private ExecutorService ioServerExecutor;
+    private ExecutorService rpcClientExecutor;
+    private ExecutorService rpcServerExecutor;
+    private ExecutorService baseKVClientExecutor;
+    private ExecutorService baseKVServerExecutor;
     private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AuthProviderManager authProviderMgr;
@@ -139,16 +141,43 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             plugin -> log.info("Loaded plugin: {}@{}",
                 plugin.getDescriptor().getPluginId(), plugin.getDescriptor().getVersion()));
 
-        ioClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(config.getRpcClientConfig().getWorkerThreads(),
-                config.getRpcClientConfig().getWorkerThreads(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("rpc-client-executor")), "rpc-client-executor");
-        ioServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(config.getRpcServerConfig().getWorkerThreads(),
-                config.getRpcServerConfig().getWorkerThreads(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("rpc-server-executor")), "rpc-server-executor");
+        if (config.getRpcClientConfig().getWorkerThreads() == null) {
+            rpcClientExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            rpcClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(config.getRpcClientConfig().getWorkerThreads(),
+                    config.getRpcClientConfig().getWorkerThreads(), 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("rpc-client-executor")), "rpc-client-executor");
+        }
+        if (config.getRpcServerConfig().getWorkerThreads() == null) {
+            rpcServerExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            rpcServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(config.getRpcServerConfig().getWorkerThreads(),
+                    config.getRpcServerConfig().getWorkerThreads(), 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("rpc-server-executor")), "rpc-server-executor");
+        }
+        if (config.getBaseKVClientConfig().getWorkerThreads() == null) {
+            baseKVClientExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            baseKVClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(config.getBaseKVClientConfig().getWorkerThreads(),
+                    config.getBaseKVClientConfig().getWorkerThreads(), 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("basekv-client-executor")), "basekv-client-executor");
+        }
+        if (config.getBaseKVServerConfig().getWorkerThreads() == null) {
+            baseKVServerExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            baseKVServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(config.getBaseKVServerConfig().getWorkerThreads(),
+                    config.getBaseKVServerConfig().getWorkerThreads(), 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("basekv-server-executor")), "basekv-server-executor");
+        }
+
         tickTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ScheduledThreadPoolExecutor(config.getStateStoreConfig().getTickerThreads(),
                 EnvProvider.INSTANCE.newThreadFactory("tick-task-executor")), "tick-task-executor");
@@ -215,14 +244,14 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bossEventLoopGroup(rpcServerBossELG)
             .workerEventLoopGroup(ioRPCWorkerELG)
             .crdtService(serverCrdtService)
-            .executor(MoreExecutors.directExecutor());
+            .executor(rpcServerExecutor);
         RPCServerBuilder sharedBaseKVRPCServerBuilder = IRPCServer.newBuilder()
-            .host(config.getRpcServerConfig().getHost())
-            .port(config.getBaseKVRpcServerConfig().getPort())
+            .host(config.getBaseKVServerConfig().getHost())
+            .port(config.getBaseKVServerConfig().getPort())
             .bossEventLoopGroup(rpcServerBossELG)
             .workerEventLoopGroup(kvRPCWorkerELG)
             .crdtService(serverCrdtService)
-            .executor(ioServerExecutor);
+            .executor(baseKVServerExecutor);
         if (config.getRpcServerConfig().getSslConfig() != null) {
             sharedIORPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
             sharedBaseKVRPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
@@ -231,18 +260,18 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             buildClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
         distClient = IDistClient.newBuilder()
             .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
+            .executor(rpcClientExecutor)
             .sslContext(clientSslContext)
             .build();
         retainClient = IRetainClient.newBuilder()
             .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
+            .executor(rpcClientExecutor)
             .sslContext(clientSslContext)
             .build();
         retainStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
-            .executor(ioClientExecutor)
+            .executor(baseKVClientExecutor)
             .sslContext(clientSslContext)
             .queryPipelinesPerStore(config
                 .getStateStoreConfig()
@@ -281,13 +310,13 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         inboxClient = IInboxClient.newBuilder()
             .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
+            .executor(rpcClientExecutor)
             .sslContext(clientSslContext)
             .build();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
-            .executor(ioClientExecutor)
+            .executor(baseKVClientExecutor)
             .sslContext(clientSslContext)
             .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
                 .getQueryPipelinePerStore())
@@ -340,7 +369,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         distWorkerClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(clientCrdtService)
-            .executor(ioClientExecutor)
+            .executor(baseKVClientExecutor)
             .sslContext(clientSslContext)
             .queryPipelinesPerStore(config
                 .getStateStoreConfig()
@@ -349,7 +378,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         mqttBrokerClient = IMqttBrokerClient.newBuilder()
             .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
+            .executor(rpcClientExecutor)
             .sslContext(clientSslContext)
             .build();
 
@@ -357,7 +386,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         sessionDictClient = ISessionDictClient.newBuilder()
             .crdtService(clientCrdtService)
-            .executor(MoreExecutors.directExecutor())
+            .executor(rpcClientExecutor)
             .sslContext(clientSslContext)
             .build();
 
@@ -569,13 +598,21 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         subBrokerManager.stop();
 
-        if (ioClientExecutor != null) {
-            ioClientExecutor.shutdownNow();
-            log.debug("Shutdown io client executor");
+        if (rpcClientExecutor != null) {
+            rpcClientExecutor.shutdownNow();
+            log.debug("Shutdown rpc client executor");
         }
-        if (ioServerExecutor != null) {
-            ioServerExecutor.shutdownNow();
-            log.debug("Shutdown io server executor");
+        if (rpcServerExecutor != null) {
+            rpcServerExecutor.shutdownNow();
+            log.debug("Shutdown rpc server executor");
+        }
+        if (baseKVClientExecutor != null) {
+            baseKVClientExecutor.shutdownNow();
+            log.debug("Shutdown baseKV client executor");
+        }
+        if (baseKVServerExecutor != null) {
+            baseKVServerExecutor.shutdownNow();
+            log.debug("Shutdown baseKV server executor");
         }
         if (tickTaskExecutor != null) {
             tickTaskExecutor.shutdownNow();

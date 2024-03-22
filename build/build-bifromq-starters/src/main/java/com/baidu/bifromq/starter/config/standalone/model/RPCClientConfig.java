@@ -21,7 +21,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RPCClientConfig {
-    private int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 8);
+    private Integer workerThreads;
     @JsonSetter(nulls = Nulls.SKIP)
     private SSLContextConfig sslConfig;
 }
