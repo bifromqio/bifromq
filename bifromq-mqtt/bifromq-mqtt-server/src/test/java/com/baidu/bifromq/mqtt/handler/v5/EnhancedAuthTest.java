@@ -1,4 +1,22 @@
+/*
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
+
 package com.baidu.bifromq.mqtt.handler.v5;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
@@ -39,21 +57,15 @@ import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import io.netty.handler.codec.mqtt.MqttVersion;
 import io.netty.handler.traffic.ChannelTrafficShapingHandler;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 
 @Slf4j
 public class EnhancedAuthTest extends MockableTest {
@@ -82,20 +94,20 @@ public class EnhancedAuthTest extends MockableTest {
         connectHandler = new MQTT5ConnectHandler();
         when(resourceThrottler.hasResource(any(), any())).thenReturn(true);
         when(inboxClient.expire(any())).thenReturn(CompletableFuture.completedFuture(
-                ExpireReply.newBuilder()
-                        .setCode(ExpireReply.Code.OK)
-                        .build()));
+            ExpireReply.newBuilder()
+                .setCode(ExpireReply.Code.OK)
+                .build()));
         sessionContext = MQTTSessionContext.builder()
-                .serverId(serverId)
-                .defaultKeepAliveTimeSeconds(keepAlive)
-                .inboxClient(inboxClient)
-                .eventCollector(eventCollector)
-                .resourceThrottler(resourceThrottler)
-                .settingProvider(settingProvider)
-                .authProvider(authProvider)
-                .localSessionRegistry(localSessionRegistry)
-                .sessionDictClient(sessionDictClient)
-                .build();
+            .serverId(serverId)
+            .defaultKeepAliveTimeSeconds(keepAlive)
+            .inboxClient(inboxClient)
+            .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
+            .settingProvider(settingProvider)
+            .authProvider(authProvider)
+            .localSessionRegistry(localSessionRegistry)
+            .sessionDictClient(sessionDictClient)
+            .build();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
             @Override
             protected void initChannel(Channel ch) {
@@ -104,11 +116,11 @@ public class EnhancedAuthTest extends MockableTest {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("connRateLimiter", new ConnectionRateLimitHandler(10));
                 pipeline.addLast("trafficShaper",
-                        new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
+                    new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder());
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(ConditionalSlowDownHandler.NAME,
-                        new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
+                    new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
                 pipeline.addLast(connectHandler);
             }
         });
@@ -118,21 +130,21 @@ public class EnhancedAuthTest extends MockableTest {
     public void testAuthMethodNotSupport() {
         Mockito.reset(authProvider);
         when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MQTT5ExtendedAuthResult.newBuilder()
-                                .setFailed(Failed.newBuilder()
-                                        .setCode(Failed.Code.NotAuthorized)
-                                        .setReason("Not supported")
-                                        .build())
-                                .build()));
-        MqttConnectMessage connect = MqttMessageBuilders.connect()
-                .clientId("client")
-                .protocolVersion(MqttVersion.MQTT_5)
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+            .thenReturn(CompletableFuture.completedFuture(
+                MQTT5ExtendedAuthResult.newBuilder()
+                    .setFailed(Failed.newBuilder()
+                        .setCode(Failed.Code.NotAuthorized)
+                        .setReason("Not supported")
                         .build())
-                .build();
+                    .build()));
+        MqttConnectMessage connect = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+                .build())
+            .build();
         channel.writeInbound(connect);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
@@ -142,21 +154,21 @@ public class EnhancedAuthTest extends MockableTest {
     @Test
     public void testAuthSuccess() {
         MqttConnectMessage connect = MqttMessageBuilders.connect()
-                .clientId("client")
-                .protocolVersion(MqttVersion.MQTT_5)
-                .cleanSession(true)
-                .keepAlive(2)
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
-                        .build())
-                .build();
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .cleanSession(true)
+            .keepAlive(2)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+                .build())
+            .build();
         Mockito.reset(authProvider);
         when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MQTT5ExtendedAuthResult.newBuilder()
-                                .setSuccess(Success.newBuilder().build())
-                                .build()));
+            .thenReturn(CompletableFuture.completedFuture(
+                MQTT5ExtendedAuthResult.newBuilder()
+                    .setSuccess(Success.newBuilder().build())
+                    .build()));
         channel.writeInbound(connect);
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(), MqttConnectReturnCode.CONNECTION_ACCEPTED);
@@ -165,27 +177,27 @@ public class EnhancedAuthTest extends MockableTest {
     @Test
     public void testAuthSuccess2() {
         MqttConnectMessage connect = MqttMessageBuilders.connect()
-                .clientId("client")
-                .protocolVersion(MqttVersion.MQTT_5)
-                .cleanSession(true)
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
-                        .build())
-                .build();
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .cleanSession(true)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+                .build())
+            .build();
         String challenge = "challenge";
         Mockito.reset(authProvider);
         when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MQTT5ExtendedAuthResult.newBuilder()
-                                .setContinue(Continue.newBuilder()
-                                        .setAuthData(ByteString.copyFromUtf8(challenge))
-                                        .build())
-                                .build()));
+            .thenReturn(CompletableFuture.completedFuture(
+                MQTT5ExtendedAuthResult.newBuilder()
+                    .setContinue(Continue.newBuilder()
+                        .setAuthData(ByteString.copyFromUtf8(challenge))
+                        .build())
+                    .build()));
         channel.writeInbound(connect);
         MqttMessage authMessage = channel.readOutbound();
         MqttProperties properties =
-                ((MqttReasonCodeAndPropertiesVariableHeader) authMessage.variableHeader()).properties();
+            ((MqttReasonCodeAndPropertiesVariableHeader) authMessage.variableHeader()).properties();
         String authMethod = MQTT5MessageUtils.authMethod(properties).orElseThrow();
         ByteString authData = MQTT5MessageUtils.authData(properties).orElseThrow();
         assertEquals(authMethod, "authMethod");
@@ -193,17 +205,17 @@ public class EnhancedAuthTest extends MockableTest {
 
         Mockito.reset(authProvider);
         when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MQTT5ExtendedAuthResult.newBuilder()
-                                .setSuccess(Success.newBuilder().setTenantId("tenant").setUserId("user").build())
-                                .build()));
+            .thenReturn(CompletableFuture.completedFuture(
+                MQTT5ExtendedAuthResult.newBuilder()
+                    .setSuccess(Success.newBuilder().setTenantId("tenant").setUserId("user").build())
+                    .build()));
         channel.writeInbound(MqttMessageBuilders.auth()
-                .reasonCode(MQTT5AuthReasonCode.Continue.value())
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData2", StandardCharsets.UTF_8))
-                        .build())
-                .build());
+            .reasonCode(MQTT5AuthReasonCode.Continue.value())
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData2", StandardCharsets.UTF_8))
+                .build())
+            .build());
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(), MqttConnectReturnCode.CONNECTION_ACCEPTED);
     }
@@ -211,40 +223,40 @@ public class EnhancedAuthTest extends MockableTest {
     @Test
     public void testReasonCodeWrong() {
         MqttConnectMessage connect = MqttMessageBuilders.connect()
-                .clientId("client")
-                .protocolVersion(MqttVersion.MQTT_5)
-                .cleanSession(true)
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
-                        .build())
-                .build();
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .cleanSession(true)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+                .build())
+            .build();
         String challenge = "challenge";
         Mockito.reset(authProvider);
         when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MQTT5ExtendedAuthResult.newBuilder()
-                                .setContinue(Continue.newBuilder()
-                                        .setAuthData(ByteString.copyFromUtf8(challenge))
-                                        .build())
-                                .build()));
+            .thenReturn(CompletableFuture.completedFuture(
+                MQTT5ExtendedAuthResult.newBuilder()
+                    .setContinue(Continue.newBuilder()
+                        .setAuthData(ByteString.copyFromUtf8(challenge))
+                        .build())
+                    .build()));
         channel.writeInbound(connect);
         MqttMessage authMessage = channel.readOutbound();
         MqttProperties properties =
-                ((MqttReasonCodeAndPropertiesVariableHeader) authMessage.variableHeader()).properties();
+            ((MqttReasonCodeAndPropertiesVariableHeader) authMessage.variableHeader()).properties();
         String authMethod = MQTT5MessageUtils.authMethod(properties).orElseThrow();
         ByteString authData = MQTT5MessageUtils.authData(properties).orElseThrow();
         assertEquals(authMethod, "authMethod");
         assertEquals(authData.toString(StandardCharsets.UTF_8), challenge);
 
         channel.writeInbound(MqttMessageBuilders.auth()
-                // wrong reason code!
-                .reasonCode(MQTT5AuthReasonCode.Success.value())
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData2", StandardCharsets.UTF_8))
-                        .build())
-                .build());
+            // wrong reason code!
+            .reasonCode(MQTT5AuthReasonCode.Success.value())
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData2", StandardCharsets.UTF_8))
+                .build())
+            .build());
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         assertFalse(channel.isOpen());
@@ -253,35 +265,25 @@ public class EnhancedAuthTest extends MockableTest {
     @Test
     public void testAuthAgainBeforeServerReply() {
         MqttConnectMessage connect = MqttMessageBuilders.connect()
-                .clientId("client")
-                .protocolVersion(MqttVersion.MQTT_5)
-                .cleanSession(true)
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
-                        .build())
-                .build();
-        String challenge = "challenge";
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .cleanSession(true)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+                .build())
+            .build();
         Mockito.reset(authProvider);
 
-        when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class))).then(invocation -> {
-            Thread.sleep(100);
-            CompletableFuture<MQTT5ExtendedAuthResult> future = new CompletableFuture<>();
-            future.completeAsync(() -> MQTT5ExtendedAuthResult.newBuilder()
-                    .setContinue(Continue.newBuilder()
-                            .setAuthData(ByteString.copyFromUtf8(challenge))
-                            .build())
-                    .build());
-            return future;
-        });
+        when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class))).thenReturn(new CompletableFuture<>());
         channel.writeInbound(connect);
         channel.writeInbound(MqttMessageBuilders.auth()
-                .reasonCode(MQTT5AuthReasonCode.Continue.value())
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData2", StandardCharsets.UTF_8))
-                        .build())
-                .build());
+            .reasonCode(MQTT5AuthReasonCode.Continue.value())
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData2", StandardCharsets.UTF_8))
+                .build())
+            .build());
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         assertFalse(channel.isOpen());
@@ -291,17 +293,17 @@ public class EnhancedAuthTest extends MockableTest {
     public void testNoAuthMethod() {
         Mockito.reset(authProvider);
         when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MQTT5ExtendedAuthResult.newBuilder()
-                                .setSuccess(Success.newBuilder().setTenantId("tenant").setUserId("user").build())
-                                .build()));
+            .thenReturn(CompletableFuture.completedFuture(
+                MQTT5ExtendedAuthResult.newBuilder()
+                    .setSuccess(Success.newBuilder().setTenantId("tenant").setUserId("user").build())
+                    .build()));
         MqttConnectMessage connect = MqttMessageBuilders.connect()
-                .clientId("client")
-                .protocolVersion(MqttVersion.MQTT_5)
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
-                        .build())
-                .build();
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+                .build())
+            .build();
         channel.writeInbound(connect);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
@@ -311,35 +313,35 @@ public class EnhancedAuthTest extends MockableTest {
     @Test
     public void testReAuth() {
         MqttConnectMessage connect = MqttMessageBuilders.connect()
-                .clientId("client")
-                .protocolVersion(MqttVersion.MQTT_5)
-                .cleanSession(true)
-                .keepAlive(2)
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
-                        .build())
-                .build();
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .cleanSession(true)
+            .keepAlive(2)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("authData", StandardCharsets.UTF_8))
+                .build())
+            .build();
         Mockito.reset(authProvider);
         when(authProvider.extendedAuth(any(MQTT5ExtendedAuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MQTT5ExtendedAuthResult.newBuilder()
-                                .setSuccess(Success.newBuilder().build())
-                                .build()));
+            .thenReturn(CompletableFuture.completedFuture(
+                MQTT5ExtendedAuthResult.newBuilder()
+                    .setSuccess(Success.newBuilder().build())
+                    .build()));
         channel.writeInbound(connect);
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(), MqttConnectReturnCode.CONNECTION_ACCEPTED);
 
         channel.writeInbound(MqttMessageBuilders.auth()
-                .reasonCode(MQTT5AuthReasonCode.ReAuth.value())
-                .properties(MQTT5MessageUtils.mqttProps()
-                        .addAuthMethod("authMethod")
-                        .addAuthData(ByteString.copyFrom("reAuthData", StandardCharsets.UTF_8))
-                        .build())
-                .build());
+            .reasonCode(MQTT5AuthReasonCode.ReAuth.value())
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addAuthMethod("authMethod")
+                .addAuthData(ByteString.copyFrom("reAuthData", StandardCharsets.UTF_8))
+                .build())
+            .build());
         MqttMessage reAuthMessage = channel.readOutbound();
         MqttReasonCodeAndPropertiesVariableHeader variableHeader =
-                ((MqttReasonCodeAndPropertiesVariableHeader) reAuthMessage.variableHeader());
+            ((MqttReasonCodeAndPropertiesVariableHeader) reAuthMessage.variableHeader());
         MQTT5AuthReasonCode reasonCode = MQTT5AuthReasonCode.valueOf(variableHeader.reasonCode());
         assertEquals(reasonCode, MQTT5AuthReasonCode.Success);
     }
