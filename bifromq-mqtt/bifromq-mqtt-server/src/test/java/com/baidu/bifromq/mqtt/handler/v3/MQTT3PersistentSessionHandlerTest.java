@@ -47,6 +47,7 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
+import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;

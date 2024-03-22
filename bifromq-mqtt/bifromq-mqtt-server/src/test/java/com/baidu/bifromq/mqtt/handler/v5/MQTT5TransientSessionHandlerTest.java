@@ -65,7 +65,7 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
-import com.baidu.bifromq.mqtt.handler.v3.BaseSessionHandlerTest;
+import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3TransientSessionHandler;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;

@@ -47,7 +47,7 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
-import com.baidu.bifromq.mqtt.handler.v3.BaseSessionHandlerTest;
+import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5DisconnectReasonCode;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
