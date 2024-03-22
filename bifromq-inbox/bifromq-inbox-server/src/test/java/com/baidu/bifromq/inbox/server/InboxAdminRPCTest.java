@@ -34,7 +34,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void createWithLWT() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
