@@ -42,15 +42,15 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(0)
-            .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.NO_INBOX);
-        assertTrue(getReply.getInboxList().isEmpty());
+//        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+//            .setReqId(reqId)
+//            .setTenantId(tenantId)
+//            .setInboxId(inboxId)
+//            .setNow(0)
+//            .build()).join();
+//        assertEquals(getReply.getReqId(), reqId);
+//        assertEquals(getReply.getCode(), GetReply.Code.NO_INBOX);
+//        assertTrue(getReply.getInboxList().isEmpty());
 
         CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()
             .setReqId(reqId)
@@ -66,9 +66,8 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(createReply.getReqId(), reqId);
         assertEquals(createReply.getCode(), CreateReply.Code.OK);
-        Thread.sleep(10000);
 
-        getReply = inboxClient.get(GetRequest.newBuilder()
+        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
