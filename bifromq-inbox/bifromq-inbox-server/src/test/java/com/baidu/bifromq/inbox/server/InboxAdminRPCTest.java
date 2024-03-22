@@ -57,7 +57,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
+            .setExpirySeconds(3600 * 10)
             .setLimit(10)
             .setDropOldest(true)
             .setLwt(lwt)
