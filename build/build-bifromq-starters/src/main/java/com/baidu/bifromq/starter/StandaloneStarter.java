@@ -215,14 +215,14 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bossEventLoopGroup(rpcServerBossELG)
             .workerEventLoopGroup(ioRPCWorkerELG)
             .crdtService(serverCrdtService)
-            .executor(ioServerExecutor);
+            .executor(MoreExecutors.directExecutor());
         RPCServerBuilder sharedBaseKVRPCServerBuilder = IRPCServer.newBuilder()
             .host(config.getRpcServerConfig().getHost())
             .port(config.getBaseKVRpcServerConfig().getPort())
             .bossEventLoopGroup(rpcServerBossELG)
             .workerEventLoopGroup(kvRPCWorkerELG)
             .crdtService(serverCrdtService)
-            .executor(MoreExecutors.directExecutor());
+            .executor(ioServerExecutor);
         if (config.getRpcServerConfig().getSslConfig() != null) {
             sharedIORPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
             sharedBaseKVRPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
