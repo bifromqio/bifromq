@@ -34,7 +34,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void createWithLWT() throws InterruptedException {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -42,22 +42,22 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-//        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-//            .setReqId(reqId)
-//            .setTenantId(tenantId)
-//            .setInboxId(inboxId)
-//            .setNow(0)
-//            .build()).join();
-//        assertEquals(getReply.getReqId(), reqId);
-//        assertEquals(getReply.getCode(), GetReply.Code.NO_INBOX);
-//        assertTrue(getReply.getInboxList().isEmpty());
+        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(0)
+            .build()).join();
+        assertEquals(getReply.getReqId(), reqId);
+        assertEquals(getReply.getCode(), GetReply.Code.NO_INBOX);
+        assertTrue(getReply.getInboxList().isEmpty());
 
         CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setKeepAliveSeconds(5)
-            .setExpirySeconds(3600 * 10)
+            .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
             .setLwt(lwt)
@@ -67,7 +67,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         assertEquals(createReply.getReqId(), reqId);
         assertEquals(createReply.getCode(), CreateReply.Code.OK);
 
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+        getReply = inboxClient.get(GetRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
