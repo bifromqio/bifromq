@@ -45,6 +45,7 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Builder;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
@@ -68,6 +69,7 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
@@ -79,20 +81,20 @@ import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
-import java.lang.reflect.Method;
+import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
-import org.testng.annotations.AfterMethod;
 
 public class BaseSessionHandlerTest extends MockableTest {
 
@@ -107,6 +109,8 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected ISessionDictClient sessionDictClient;
     @Mock
     protected ILocalSessionRegistry localSessionRegistry;
+    @Mock
+    protected ISessionRegister sessionRegister;
     @Mock
     protected IAuthProvider authProvider;
     @Mock
@@ -140,19 +144,19 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected final TestTicker testTicker = new TestTicker();
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
+    protected AtomicReference<Consumer<ClientInfo>> onKick = new AtomicReference<>();
 
-    @SneakyThrows
-    @AfterMethod(alwaysRun = true)
-    public void tearDown(Method method) {
-        super.tearDown(method);
-        fetchHints.clear();
-        channel.close();
+    protected void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedReasonCodes) {
+        assertEquals(subAckMessage.payload().reasonCodes().size(), expectedReasonCodes.length);
+        for (int i = 0; i < expectedReasonCodes.length; i++) {
+            assertEquals((int) subAckMessage.payload().reasonCodes().get(i), expectedReasonCodes[i]);
+        }
     }
 
-    protected void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {
-        assertEquals(subAckMessage.payload().grantedQoSLevels().size(), expectedQos.length);
-        for (int i = 0; i < expectedQos.length; i++) {
-            assertEquals(expectedQos[i], (int) subAckMessage.payload().grantedQoSLevels().get(i));
+    protected void verifyMQTT5UnSubAck(MqttUnsubAckMessage unsubAckMessage, int[] expectedReasonCodes) {
+        assertEquals(unsubAckMessage.payload().unsubscribeReasonCodes().size(), expectedReasonCodes.length);
+        for (int i = 0; i < expectedReasonCodes.length; i++) {
+            assertEquals((int) unsubAckMessage.payload().unsubscribeReasonCodes().get(i), expectedReasonCodes[i]);
         }
     }
 
@@ -201,7 +205,7 @@ public class BaseSessionHandlerTest extends MockableTest {
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
-            when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
+            when(localDistService.unmatch(anyLong(), anyString(), any()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }
@@ -222,8 +226,8 @@ public class BaseSessionHandlerTest extends MockableTest {
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
-    protected void mockDistMatch(String topic, boolean success) {
-        when(distClient.match(anyLong(), anyString(), eq(topic), anyString(), anyString(), anyInt()))
+    protected void mockDistMatch(String topicFilter, boolean success) {
+        when(localDistService.match(anyLong(), eq(topicFilter), any()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
@@ -232,6 +236,44 @@ public class BaseSessionHandlerTest extends MockableTest {
             .setTopicFilter(topicFilter)
             .setReceiverId("testInboxId")
             .build();
+    }
+
+    protected List<TopicMessagePack> s2cMQTT5MessageList(String topic, int count, QoS qos) {
+        List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            topicMessagePacks.add(TopicMessagePack.newBuilder()
+                .setTopic(topic)
+                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                    .setPublisher(ClientInfo.newBuilder().build())
+                    .addMessage(Message.newBuilder()
+                        .setMessageId(i)
+                        .setExpiryInterval(Integer.MAX_VALUE)
+                        .setPayload(ByteString.EMPTY)
+                        .setTimestamp(System.currentTimeMillis())
+                        .setPubQoS(qos)
+                        .build()))
+                .build());
+        }
+        return topicMessagePacks;
+    }
+
+    protected List<TopicMessagePack> s2cMQTT5MessageList(String topic, List<ByteBuffer> payloads, QoS qos) {
+        List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
+        for (int i = 0; i < payloads.size(); i++) {
+            topicMessagePacks.add(TopicMessagePack.newBuilder()
+                .setTopic(topic)
+                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                    .setPublisher(ClientInfo.newBuilder().build())
+                    .addMessage(Message.newBuilder()
+                        .setMessageId(i)
+                        .setExpiryInterval(Integer.MAX_VALUE)
+                        .setPayload(ByteString.copyFrom(payloads.get(i).duplicate()))
+                        .setTimestamp(System.currentTimeMillis())
+                        .setPubQoS(qos)
+                        .build()))
+                .build());
+        }
+        return topicMessagePacks;
     }
 
     protected List<TopicMessagePack> s2cMessageList(String topic, int count, QoS qos) {
@@ -363,6 +405,7 @@ public class BaseSessionHandlerTest extends MockableTest {
                                 .setMessageId(i)
                                 .setPayload(ByteString.copyFrom(bytes))
                                 .setTimestamp(System.currentTimeMillis())
+                                .setExpiryInterval(120)
                                 .setPubQoS(qoS)
                                 .build()
                         )
@@ -381,6 +424,7 @@ public class BaseSessionHandlerTest extends MockableTest {
         return builder.build();
     }
 
+
     protected void mockRetainMatch() {
         when(retainClient.match(any()))
             .thenReturn(CompletableFuture.completedFuture(
@@ -392,5 +436,33 @@ public class BaseSessionHandlerTest extends MockableTest {
         when(retainClient.retain(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
             any(ClientInfo.class)))
             .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(result).build()));
+    }
+
+    protected void mockSessionReg() {
+        when(sessionDictClient.reg(any(), any())).thenAnswer(
+            (Answer<ISessionRegister>) invocation -> {
+                onKick.set(invocation.getArgument(1));
+                return sessionRegister;
+            });
+    }
+
+    protected void mockInboxSub(QoS qos, boolean success) {
+        when(inboxClient.sub(any())).thenReturn(CompletableFuture.completedFuture(
+            SubReply.newBuilder()
+                .setCode(success ? SubReply.Code.OK : SubReply.Code.ERROR)
+                .build()));
+    }
+
+    protected void mockDistUnmatch(boolean... success) {
+        CompletableFuture<UnmatchResult>[] unsubResults = new CompletableFuture[success.length];
+        for (int i = 0; i < success.length; i++) {
+            unsubResults[i] = success[i] ? CompletableFuture.completedFuture(UnmatchResult.OK)
+                : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
+        }
+        OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
+            when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
+        for (CompletableFuture<UnmatchResult> result : unsubResults) {
+            ongoingStubbing = ongoingStubbing.thenReturn(result);
+        }
     }
 }
