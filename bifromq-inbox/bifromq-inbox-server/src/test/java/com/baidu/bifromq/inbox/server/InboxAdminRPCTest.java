@@ -66,7 +66,8 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(createReply.getReqId(), reqId);
         assertEquals(createReply.getCode(), CreateReply.Code.OK);
-        Thread.sleep(1000);
+        Thread.sleep(10000);
+
         getReply = inboxClient.get(GetRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
