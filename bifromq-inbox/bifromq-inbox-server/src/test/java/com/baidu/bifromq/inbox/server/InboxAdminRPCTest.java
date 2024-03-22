@@ -88,7 +88,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void createWithoutLWT() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -140,7 +140,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void attachNoInbox() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -163,7 +163,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void attachConflict() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -200,7 +200,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void attachWithLWT() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -255,7 +255,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void attachWithoutLWT() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -310,7 +310,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void detachNoInbox() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -331,7 +331,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void detachConflict() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -364,7 +364,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void detach() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -419,7 +419,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
     public void detachAndDiscardLWT() {
-        long now = System.nanoTime();
+        long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
