@@ -591,12 +591,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
         @Override
         public void run() {
-            long reqId = HLC.INST.getPhysical();
             if (lwt != null) {
+                long reqId = HLC.INST.getPhysical();
                 CompletableFuture<DistResult> distLWTFuture = distClient.pub(reqId,
                     lwt.getTopic(),
                     lwt.getMessage().toBuilder()
-                        .setTimestamp(HLC.INST.getPhysical()) // refresh the timestamp
+                        .setMessageId(0)
+                        .setTimestamp(reqId) // refresh the timestamp
                         .build(),
                     client);
                 CompletableFuture<RetainReply.Result> retainLWTFuture;

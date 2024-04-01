@@ -50,6 +50,11 @@ public enum TenantMetric {
     MqttQoS2ExternalLatency("mqtt.ex.qos2.latency", Meter.Type.TIMER),
     MqttTransientFanOutBytes("mqtt.tfanout.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttPersistentFanOutBytes("mqtt.pfanout.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttOutOfOrderDiscardBytes("mqtt.ood.discard.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttOutOfOrderSendBytes("mqtt.ood.send.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttReorderBytes("mqtt.reorder.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    MqttTopicSeqAbortCount("mqtt.topic.seq.abort.count", Meter.Type.COUNTER),
+    MqttTopicSorterAbortCount("mqtt.topic.sorter.abort.count", Meter.Type.COUNTER),
 
     // subscription related metrics
     MqttRouteSpaceGauge("mqtt.route.space.gauge", Meter.Type.GAUGE),

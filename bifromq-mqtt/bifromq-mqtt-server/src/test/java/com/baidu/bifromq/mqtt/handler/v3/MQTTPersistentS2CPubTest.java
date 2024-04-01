@@ -14,6 +14,8 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
+import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.messageId;
+import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.syncWindowSequence;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INBOX_TRANSIENT_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DROPPED;
@@ -236,6 +238,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
 
 
     private Fetched fetch(int count, int payloadSize, QoS qoS) {
+        long nowMillis = System.currentTimeMillis();
         Builder builder = Fetched.newBuilder();
         byte[] bytes = new byte[payloadSize];
         Arrays.fill(bytes, (byte) 1);
@@ -249,7 +252,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                         .setTopic("testTopic")
                         .setMessage(
                             Message.newBuilder()
-                                .setMessageId(i)
+                                .setMessageId(messageId(syncWindowSequence(nowMillis, 1000), i))
                                 .setPayload(ByteString.copyFrom(bytes))
                                 .setTimestamp(System.currentTimeMillis())
                                 .setPubQoS(qoS)

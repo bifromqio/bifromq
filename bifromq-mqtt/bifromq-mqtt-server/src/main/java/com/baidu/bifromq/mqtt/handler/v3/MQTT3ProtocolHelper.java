@@ -341,8 +341,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public Message buildDistMessage(MqttPublishMessage message) {
-        return toMessage(message);
+    public Message buildDistMessage(long msgId, MqttPublishMessage message, long nowMillis) {
+        return toMessage(msgId, message, nowMillis);
     }
 
     @Override

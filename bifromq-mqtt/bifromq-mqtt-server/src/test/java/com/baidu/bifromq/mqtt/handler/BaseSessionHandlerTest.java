@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.messageId;
+import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.syncWindowSequence;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
@@ -252,6 +254,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     }
 
     protected List<TopicMessagePack> s2cMQTT5MessageList(String topic, int count, QoS qos) {
+        long nowMillis = System.currentTimeMillis();
         List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             topicMessagePacks.add(TopicMessagePack.newBuilder()
@@ -259,10 +262,10 @@ public class BaseSessionHandlerTest extends MockableTest {
                 .addMessage(TopicMessagePack.PublisherPack.newBuilder()
                     .setPublisher(ClientInfo.newBuilder().build())
                     .addMessage(Message.newBuilder()
-                        .setMessageId(i)
+                        .setMessageId(messageId(syncWindowSequence(nowMillis, 1000), i))
                         .setExpiryInterval(Integer.MAX_VALUE)
                         .setPayload(ByteString.EMPTY)
-                        .setTimestamp(System.currentTimeMillis())
+                        .setTimestamp(nowMillis)
                         .setPubQoS(qos)
                         .build()))
                 .build());
@@ -271,6 +274,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     }
 
     protected List<TopicMessagePack> s2cMQTT5MessageList(String topic, List<ByteBuffer> payloads, QoS qos) {
+        long nowMillis = System.currentTimeMillis();
         List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
         for (int i = 0; i < payloads.size(); i++) {
             topicMessagePacks.add(TopicMessagePack.newBuilder()
@@ -278,10 +282,10 @@ public class BaseSessionHandlerTest extends MockableTest {
                 .addMessage(TopicMessagePack.PublisherPack.newBuilder()
                     .setPublisher(ClientInfo.newBuilder().build())
                     .addMessage(Message.newBuilder()
-                        .setMessageId(i)
+                        .setMessageId(messageId(syncWindowSequence(nowMillis, 1000), i))
                         .setExpiryInterval(Integer.MAX_VALUE)
                         .setPayload(ByteString.copyFrom(payloads.get(i).duplicate()))
-                        .setTimestamp(System.currentTimeMillis())
+                        .setTimestamp(nowMillis)
                         .setPubQoS(qos)
                         .build()))
                 .build());
@@ -290,6 +294,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     }
 
     protected List<TopicMessagePack> s2cMessageList(String topic, int count, QoS qos) {
+        long nowMillis = System.currentTimeMillis();
         List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             topicMessagePacks.add(TopicMessagePack.newBuilder()
@@ -297,9 +302,9 @@ public class BaseSessionHandlerTest extends MockableTest {
                 .addMessage(TopicMessagePack.PublisherPack.newBuilder()
                     .setPublisher(ClientInfo.newBuilder().build())
                     .addMessage(Message.newBuilder()
-                        .setMessageId(i)
+                        .setMessageId(messageId(syncWindowSequence(nowMillis, 1000), i))
                         .setPayload(ByteString.EMPTY)
-                        .setTimestamp(System.currentTimeMillis())
+                        .setTimestamp(nowMillis)
                         .setPubQoS(qos)
                         .build()))
                 .build());
@@ -308,6 +313,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     }
 
     protected List<TopicMessagePack> s2cMessageList(String topic, List<ByteBuffer> payloads, QoS qos) {
+        long nowMillis = System.currentTimeMillis();
         List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
         for (int i = 0; i < payloads.size(); i++) {
             topicMessagePacks.add(TopicMessagePack.newBuilder()
@@ -315,9 +321,9 @@ public class BaseSessionHandlerTest extends MockableTest {
                 .addMessage(TopicMessagePack.PublisherPack.newBuilder()
                     .setPublisher(ClientInfo.newBuilder().build())
                     .addMessage(Message.newBuilder()
-                        .setMessageId(i)
+                        .setMessageId(messageId(syncWindowSequence(nowMillis, 1000), i))
                         .setPayload(ByteString.copyFrom(payloads.get(i).duplicate()))
-                        .setTimestamp(System.currentTimeMillis())
+                        .setTimestamp(nowMillis)
                         .setPubQoS(qos)
                         .build()))
                 .build());
@@ -402,6 +408,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     }
 
     protected Fetched fetch(int count, int payloadSize, QoS qoS) {
+        long nowMillis = System.currentTimeMillis();
         Builder builder = Fetched.newBuilder();
         byte[] bytes = new byte[payloadSize];
         Arrays.fill(bytes, (byte) 1);
@@ -415,7 +422,7 @@ public class BaseSessionHandlerTest extends MockableTest {
                         .setTopic(topic)
                         .setMessage(
                             Message.newBuilder()
-                                .setMessageId(i)
+                                .setMessageId(messageId(syncWindowSequence(nowMillis, 1000), i))
                                 .setPayload(ByteString.copyFrom(bytes))
                                 .setTimestamp(System.currentTimeMillis())
                                 .setExpiryInterval(120)

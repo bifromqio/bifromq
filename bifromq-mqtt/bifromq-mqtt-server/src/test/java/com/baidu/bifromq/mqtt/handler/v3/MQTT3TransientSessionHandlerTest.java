@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
+import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.messageId;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
@@ -35,6 +36,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.RETAIN_MSG_CLEARED;
@@ -65,6 +67,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
@@ -558,7 +561,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
 
-
 //  =============================================== retain ============================================================
 
     @Test
@@ -738,21 +740,17 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
 
         int messageCount = 1000;
         int overFlowCount = 10;
-        for (int i = 0; i < messageCount; i++) {
-            transientSessionHandler.publish(matchInfo(topicFilter), s2cMessageList(topic, 1, QoS.AT_LEAST_ONCE));
-            channel.runPendingTasks();
-        }
-        for (int i = 0; i < overFlowCount; i++) {
-            transientSessionHandler.publish(matchInfo(topicFilter), s2cMessageList(topic, 1, QoS.AT_LEAST_ONCE));
-            channel.runPendingTasks();
-        }
+        transientSessionHandler.publish(matchInfo(topicFilter), s2cMessageList(topic, messageCount, QoS.AT_LEAST_ONCE));
+        channel.runPendingTasks();
+        transientSessionHandler.publish(matchInfo(topicFilter),
+            s2cMessageList(topic, overFlowCount, QoS.AT_LEAST_ONCE));
+        channel.runPendingTasks();
         // s2c pub received and not ack
         for (int i = 0; i < messageCount; i++) {
             MqttPublishMessage message = channel.readOutbound();
-            if (message != null) {
-                assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
-                assertEquals(message.variableHeader().topicName(), topic);
-            }
+            assertNotNull(message);
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), topic);
         }
 
         EventType[] eventTypes = new EventType[messageCount + overFlowCount];
@@ -882,7 +880,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
                     .build()
                 )
                 .addMessage(Message.newBuilder()
-                    .setMessageId(1)
+                    .setMessageId(messageId(1, 0))
                     .setPayload(ByteString.copyFrom(payload.duplicate()))
                     .setTimestamp(System.currentTimeMillis())
                     .setPubQoS(QoS.EXACTLY_ONCE)
@@ -900,7 +898,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
                     .build()
                 )
                 .addMessage(Message.newBuilder()
-                    .setMessageId(1)
+                    .setMessageId(messageId(1, 0))
                     .setPayload(ByteString.copyFrom(payload.duplicate()))
                     .setTimestamp(System.currentTimeMillis())
                     .setPubQoS(QoS.EXACTLY_ONCE)
@@ -925,16 +923,9 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         assertEquals(message1_1.variableHeader().topicName(), topic);
         MqttPublishMessage message1_2 = channel.readOutbound();
         assertEquals(message1_2.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
-        assertEquals(message1_2.variableHeader().topicName(), topic);
+        assertEquals(message1_2.variableHeader().topicName(), topic + "2");
 
-        MqttPublishMessage message2_1 = channel.readOutbound();
-        assertEquals(message2_1.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
-        assertEquals(message2_1.variableHeader().topicName(), topic + "2");
-        MqttPublishMessage message2_2 = channel.readOutbound();
-        assertEquals(message2_2.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
-        assertEquals(message2_2.variableHeader().topicName(), topic + "2");
-
-        verifyEvent(QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED);
+        verifyEvent(QOS2_DROPPED, QOS2_PUSHED, QOS2_PUSHED);
     }
 
 }

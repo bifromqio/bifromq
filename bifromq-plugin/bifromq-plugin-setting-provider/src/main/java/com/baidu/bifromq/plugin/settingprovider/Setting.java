@@ -47,7 +47,9 @@ public enum Setting {
     MaxSessionExpirySeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
     SessionInboxSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
     QoS0DropOldest(Boolean.class, val -> true, false),
-    RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10);
+    RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10),
+    MaxActiveTopicsPerPublisher(Integer.class, val -> (int) val > 0, 100),
+    MaxActiveTopicsPerSubscriber(Integer.class, val -> (int) val > 0, 100);
 
     public final Class<?> valueType;
     private final Predicate<Object> validator;

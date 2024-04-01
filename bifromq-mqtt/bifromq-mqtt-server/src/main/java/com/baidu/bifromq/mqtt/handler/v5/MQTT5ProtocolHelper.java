@@ -710,8 +710,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public Message buildDistMessage(MqttPublishMessage message) {
-        return MQTT5MessageUtils.toMessage(message);
+    public Message buildDistMessage(long msgId, MqttPublishMessage message, long nowMillis) {
+        return MQTT5MessageUtils.toMessage(msgId, message, nowMillis);
     }
 
     @Override

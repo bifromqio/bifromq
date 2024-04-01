@@ -77,6 +77,7 @@ public interface IMQTTProtocolHelper {
     ProtocolResponse onDisconnect();
 
     ProtocolResponse onResourceExhaustedDisconnect(TenantResourceType resourceType);
+
     ProtocolResponse respondDisconnectProtocolError();
 
     boolean isNormalDisconnect(MqttMessage message);
@@ -125,7 +126,7 @@ public interface IMQTTProtocolHelper {
 
     String getTopic(MqttPublishMessage message);
 
-    Message buildDistMessage(MqttPublishMessage message);
+    Message buildDistMessage(long msgId, MqttPublishMessage message, long nowMillis);
 
     ProtocolResponse onQoS0DistDenied(String topic, Message distMessage, CheckResult result);
 

@@ -263,6 +263,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
         return LWT.newBuilder()
             .setTopic(message.payload().willTopic())
             .setMessage(Message.newBuilder()
+                .setMessageId(0)
                 .setPubQoS(QoS.forNumber(message.variableHeader().willQos()))
                 .setPayload(UnsafeByteOperations.unsafeWrap(message.payload().willMessageInBytes()))
                 .setIsRetain(message.variableHeader().isWillRetain())

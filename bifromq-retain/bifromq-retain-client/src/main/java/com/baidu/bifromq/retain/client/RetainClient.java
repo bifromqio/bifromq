@@ -93,7 +93,7 @@ final class RetainClient implements IRetainClient {
                 .setReqId(reqId)
                 .setTopic(topic)
                 .setMessage(Message.newBuilder()
-                    .setMessageId(reqId)
+                    .setMessageId(0) // no seq needed
                     .setPubQoS(qos)
                     .setPayload(payload)
                     .setTimestamp(HLC.INST.getPhysical())

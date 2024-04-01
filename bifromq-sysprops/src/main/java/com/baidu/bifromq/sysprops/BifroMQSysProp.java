@@ -71,7 +71,8 @@ public enum BifroMQSysProp {
     RETAIN_STORE_RANGE_SPLIT_MAX_IO_DENSITY("retain_store_range_split_max_io_density", 100, IntegerParser.POSITIVE),
     RETAIN_STORE_RANGE_VOTER_COUNT("retain_store_range_voter_count", 3, IntegerParser.POSITIVE),
     RETAIN_STORE_LOAD_EST_WINDOW_SECONDS("retain_store_load_estimation_window_seconds", 5L, LongParser.POSITIVE),
-    RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS("retain_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE);
+    RETAIN_STORE_RECOVERY_TIMEOUT_MILLIS("retain_store_recovery_timeout_millis", 10000L, LongParser.NON_NEGATIVE),
+    SYNC_WINDOW_INTERVAL_MILLIS("sync_window_interval_millis", 5000L, LongParser.POSITIVE);
 
     public final String propKey;
     private final Object propDefValue;

@@ -280,28 +280,31 @@ public class MQTT5MessageUtils {
             MqttQoS.valueOf(connMsg.variableHeader().willQos()),
             connMsg.variableHeader().isWillRetain(),
             connMsg.payload().willProperties(),
-            UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()));
+            UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()),
+            HLC.INST.getPhysical());
         return lwtBuilder.setMessage(willMsg).build();
     }
 
-    static Message toMessage(MqttPublishMessage pubMsg) {
-        return toMessage(pubMsg.variableHeader().packetId(),
+    static Message toMessage(long msgId, MqttPublishMessage pubMsg, long nowMillis) {
+        return toMessage(msgId,
             pubMsg.fixedHeader().qosLevel(),
             pubMsg.fixedHeader().isRetain(),
             pubMsg.variableHeader().properties(),
-            toRetainedByteBuffer(pubMsg.payload()));
+            toRetainedByteBuffer(pubMsg.payload()),
+            nowMillis);
     }
 
-    static Message toMessage(long packetId,
+    static Message toMessage(long msgId,
                              MqttQoS pubQoS,
                              boolean isRetain,
                              MqttProperties mqttProperties,
-                             ByteString payload) {
+                             ByteString payload,
+                             long nowMillis) {
         Message.Builder msgBuilder = Message.newBuilder()
-            .setMessageId(packetId)
+            .setMessageId(msgId)
             .setPubQoS(QoS.forNumber(pubQoS.value()))
             .setPayload(payload)
-            .setTimestamp(HLC.INST.getPhysical())
+            .setTimestamp(nowMillis)
             // If absent, the Application Message does not expire, we use Integer.MAX_VALUE to represent this.
             .setExpiryInterval(messageExpiryInterval(mqttProperties).orElse(Integer.MAX_VALUE))
             .setIsRetain(isRetain);

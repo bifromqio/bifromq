@@ -15,7 +15,6 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 
-import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
@@ -24,22 +23,24 @@ import io.netty.handler.codec.mqtt.MqttQoS;
 
 public final class MQTT3MessageUtils {
 
-    static Message toMessage(MqttPublishMessage pubMsg) {
-        return toMessage(pubMsg.variableHeader().packetId(),
+    static Message toMessage(long msgId, MqttPublishMessage pubMsg, long nowMillis) {
+        return toMessage(msgId,
             pubMsg.fixedHeader().qosLevel(),
             pubMsg.fixedHeader().isRetain(),
-            toRetainedByteBuffer(pubMsg.payload()));
+            toRetainedByteBuffer(pubMsg.payload()),
+            nowMillis);
     }
 
-    static Message toMessage(long packetId,
+    static Message toMessage(long msgId,
                              MqttQoS pubQoS,
                              boolean isRetain,
-                             ByteString payload) {
+                             ByteString payload,
+                             long nowMillis) {
         return Message.newBuilder()
-            .setMessageId(packetId)
+            .setMessageId(msgId)
             .setPubQoS(QoS.forNumber(pubQoS.value()))
             .setPayload(payload)
-            .setTimestamp(HLC.INST.getPhysical())
+            .setTimestamp(nowMillis)
             // MessageExpiryInterval
             .setExpiryInterval(Integer.MAX_VALUE)
             .setIsRetain(isRetain)
