@@ -42,14 +42,14 @@ class DevOnlyAuthProvider implements IAuthProvider {
                 return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                     .setOk(Ok.newBuilder()
                         .setTenantId("DevOnly")
-                        .setUserId("DevUser_" + System.nanoTime()).build())
+                        .setUserId(authData.getUsername()).build())
                     .build());
             }
         } else {
             return CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
                     .setTenantId("DevOnly")
-                    .setUserId("DevUser_" + System.nanoTime()).build())
+                    .setUserId("DevUser").build())
                 .build());
         }
     }
