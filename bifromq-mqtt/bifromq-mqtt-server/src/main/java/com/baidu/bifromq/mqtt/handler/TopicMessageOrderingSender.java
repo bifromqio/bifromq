@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttOutOfOrderSendBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttReorderBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTopicSorterAbortCount;
+import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.isDrainFlagSet;
 import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.isSuccessive;
 import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.previousMessageId;
 
@@ -129,14 +130,21 @@ public class TopicMessageOrderingSender {
                     tailMsgId = msgId;
                     meter.recordSummary(MqttReorderBytes, subMessage.estBytes());
                     sortingBuffer.put(msgId, new SortingMessage(inboxSeqNo, subMessage));
+                    if (isDrainFlagSet(msgId)) {
+                        drain();
+                    }
                 }
             } else if (msgId > tailMsgId) {
                 // out of order happens
                 meter.recordSummary(MqttReorderBytes, subMessage.estBytes());
                 sortingBuffer.put(msgId, new SortingMessage(inboxSeqNo, subMessage));
                 tailMsgId = msgId;
-                if (timeout == null) {
-                    timeout = executor.schedule(this::drain, syncWindowIntervalMillis, TimeUnit.MILLISECONDS);
+                if (isDrainFlagSet(msgId)) {
+                    drain();
+                } else {
+                    if (timeout == null) {
+                        timeout = executor.schedule(this::drain, syncWindowIntervalMillis, TimeUnit.MILLISECONDS);
+                    }
                 }
             } else {
                 // tailMsgSeq <= msgSeq

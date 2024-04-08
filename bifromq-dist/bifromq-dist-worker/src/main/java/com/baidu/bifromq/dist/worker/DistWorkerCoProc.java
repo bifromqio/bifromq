@@ -60,6 +60,8 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistReply;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -130,6 +132,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         .thenApply(
                             v -> ROCoProcOutput.newBuilder().setDistService(DistServiceROCoProcOutput.newBuilder()
                                 .setBatchDist(v).build()).build());
+                }
+                case TENANTDIST -> {
+                    return tenantDist(coProcInput.getTenantDist(), reader)
+                        .thenApply(
+                            v -> ROCoProcOutput.newBuilder().setDistService(DistServiceROCoProcOutput.newBuilder()
+                                .setTenantDist(v).build()).build());
                 }
                 default -> {
                     log.error("Unknown co proc type {}", coProcInput.getInputCase());
@@ -421,6 +429,57 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         f -> TopicFanout.newBuilder().putAllFanout(f).build()))
                     .build();
             });
+    }
+
+    private CompletableFuture<TenantDistReply> tenantDist(TenantDistRequest request, IKVReader reader) {
+        List<TopicMessagePack> msgPackList = request.getMsgPackList();
+        if (msgPackList.isEmpty()) {
+            return CompletableFuture.completedFuture(TenantDistReply.newBuilder()
+                .setReqId(request.getReqId())
+                .build());
+        }
+        String tenantId = request.getTenantId();
+        Boundary boundary = intersect(Boundary.newBuilder()
+            .setStartKey(matchRecordKeyPrefix(tenantId))
+            .setEndKey(tenantUpperBound(tenantId))
+            .build(), reader.boundary());
+        if (isEmptyRange(boundary)) {
+            TenantDistReply.Builder replyBuilder = TenantDistReply.newBuilder().setReqId(request.getReqId());
+            for (TopicMessagePack topicMessagePack : msgPackList) {
+                replyBuilder.putResults(topicMessagePack.getTopic(), TenantDistReply.Result.newBuilder()
+                    .setCode(TenantDistReply.Code.OK)
+                    .build());
+            }
+            return CompletableFuture.completedFuture(replyBuilder.build());
+        }
+        Map<String, CompletableFuture<TenantDistReply.Result>> fanOutByTopics = new HashMap<>();
+        for (TopicMessagePack topicMsgPack : msgPackList) {
+            String topic = topicMsgPack.getTopic();
+            ScopedTopic scopedTopic = ScopedTopic.builder()
+                .tenantId(tenantId)
+                .topic(topic)
+                .boundary(reader.boundary())
+                .build();
+            fanOutByTopics.put(topic, routeCache.get(scopedTopic)
+                .thenCompose(matchResult -> fanoutExecutorGroup.submit(matchResult.routes, topicMsgPack)
+                    .thenApply(success -> {
+                        if (success) {
+                            return TenantDistReply.Result.newBuilder()
+                                .setCode(TenantDistReply.Code.OK)
+                                .setFanout(matchResult.routes.size())
+                                .build();
+                        } else {
+                            return TenantDistReply.Result.newBuilder()
+                                .setCode(TenantDistReply.Code.ERROR)
+                                .build();
+                        }
+                    })));
+        }
+        return CompletableFuture.allOf(fanOutByTopics.values().toArray(CompletableFuture[]::new))
+            .thenApply(v -> TenantDistReply.newBuilder()
+                .setReqId(request.getReqId())
+                .putAllResults(Maps.transformValues(fanOutByTopics, CompletableFuture::join))
+                .build());
     }
 
     private void load() {

@@ -15,7 +15,8 @@ package com.baidu.bifromq.mqtt.utils;
 
 public class MessageIdUtil {
 
-    private static final long MESSAGE_SEQ_MASK = 0xFFFFFFFFL;
+    private static final long DRAIN_FLAG_MASK = 0x80000000L;
+    private static final long MESSAGE_SEQ_MASK = 0x7FFFFFFFL;
     private static final int INTEGER_BITS = 32;
 
     public static long syncWindowSequence(long nowMillis, long syncWindowIntervalMillis) {
@@ -24,6 +25,14 @@ public class MessageIdUtil {
 
     public static long messageId(long syncWindowSequence, long messageSequence) {
         return (syncWindowSequence << INTEGER_BITS) | messageSequence;
+    }
+
+    public static long messageId(long syncWindowSequence, long messageSequence, boolean drainFlag) {
+        return (syncWindowSequence << INTEGER_BITS) | messageSequence | (drainFlag ? DRAIN_FLAG_MASK : 0);
+    }
+
+    public static boolean isDrainFlagSet(long messageId) {
+        return (messageId & DRAIN_FLAG_MASK) != 0;
     }
 
     public static long syncWindowSequence(long messageId) {
@@ -45,7 +54,7 @@ public class MessageIdUtil {
         }
         if (syncWindowSequence == successorSyncWindowSequence ||
             syncWindowSequence + 1 == successorSyncWindowSequence) {
-            return messageSequence(messageId) + 1 == messageSequence(successorMessageId);
+            return (messageSequence(messageId) + 1) % DRAIN_FLAG_MASK == messageSequence(successorMessageId);
         }
         return messageSequence(successorMessageId) == 0;
     }

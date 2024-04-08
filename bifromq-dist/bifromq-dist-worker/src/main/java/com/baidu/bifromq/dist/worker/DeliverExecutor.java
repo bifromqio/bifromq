@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.plugin.subbroker.DeliveryResult.Code.ERROR;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.deliverer.DeliveryCall;
@@ -28,6 +29,7 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
@@ -58,13 +60,16 @@ public class DeliverExecutor {
                 EnvProvider.INSTANCE.newThreadFactory("deliver-executor-" + id)), "deliver-executor-" + id);
     }
 
-    public void submit(NormalMatching route, TopicMessagePack msgPack, boolean inline) {
+    public CompletableFuture<Boolean> submit(NormalMatching route, TopicMessagePack msgPack,
+                                             boolean inline) {
+        CompletableFuture<Boolean> onDone = new CompletableFuture<>();
         if (inline) {
-            send(route, msgPack);
+            send(route, msgPack, onDone);
         } else {
-            tasks.add(new SendTask(route, msgPack));
+            tasks.add(new SendTask(route, msgPack, onDone));
             scheduleSend();
         }
+        return onDone;
     }
 
     public void shutdown() {
@@ -80,7 +85,7 @@ public class DeliverExecutor {
     private void sendAll() {
         SendTask task;
         while ((task = tasks.poll()) != null) {
-            send(task.route, task.msgPack);
+            send(task.route, task.msgPack, task.onDone);
         }
         sending.set(false);
         if (!tasks.isEmpty()) {
@@ -88,7 +93,7 @@ public class DeliverExecutor {
         }
     }
 
-    private void send(NormalMatching matched, TopicMessagePack msgPack) {
+    private void send(NormalMatching matched, TopicMessagePack msgPack, CompletableFuture<Boolean> onDone) {
         int subBrokerId = matched.subBrokerId;
         String delivererKey = matched.delivererKey;
         MatchInfo sub = matched.matchInfo;
@@ -101,6 +106,7 @@ public class DeliverExecutor {
                     .delivererKey(delivererKey)
                     .subInfo(sub)
                     .messages(msgPack));
+                onDone.complete(false);
             } else {
                 switch (result) {
                     case OK -> eventCollector.report(getLocal(Delivered.class)
@@ -129,11 +135,11 @@ public class DeliverExecutor {
                         .subInfo(sub)
                         .messages(msgPack));
                 }
+                onDone.complete(result != ERROR);
             }
         });
-
     }
 
-    private record SendTask(NormalMatching route, TopicMessagePack msgPack) {
+    private record SendTask(NormalMatching route, TopicMessagePack msgPack, CompletableFuture<Boolean> onDone) {
     }
 }

@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistReply;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
@@ -53,8 +53,8 @@ public class DistQoS1Test extends DistWorkerTest {
         String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, topic, payload, "orderKey1");
-        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
+        TenantDistReply reply = tenantDist(tenantA, AT_LEAST_ONCE, topic, payload, "orderKey1");
+        assertEquals(reply.getResultsMap().get(topic).getFanout(), 0);
     }
 
     @Test(groups = "integration")
@@ -76,8 +76,8 @@ public class DistQoS1Test extends DistWorkerTest {
         match(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
-            BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
+            TenantDistReply reply = tenantDist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            assertEquals(reply.getResultsMap().get("/a/b/c").getFanout(), 1);
         }
 
         ArgumentCaptor<DeliveryRequest> messageListCap = ArgumentCaptor.forClass(DeliveryRequest.class);
@@ -121,8 +121,8 @@ public class DistQoS1Test extends DistWorkerTest {
         match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
 
         for (int i = 0; i < 10; i++) {
-            BatchDistReply reply = dist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 1);
+            TenantDistReply reply = tenantDist(tenantA, AT_LEAST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            assertEquals(reply.getResultsMap().get("/a/b/c").getFanout(), 1);
         }
 
 

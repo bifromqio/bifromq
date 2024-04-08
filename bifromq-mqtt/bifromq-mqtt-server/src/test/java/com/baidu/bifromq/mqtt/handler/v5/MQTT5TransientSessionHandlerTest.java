@@ -63,9 +63,9 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
-import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3TransientSessionHandler;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
@@ -133,7 +133,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         // common mocks
         mockSettings();
         MqttProperties mqttProperties = new MqttProperties();
-        mqttProperties.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS_MAXIMUM.value(), 10));;
+        mqttProperties.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS_MAXIMUM.value(), 10));
         ChannelDuplexHandler sessionHandlerAdder = new ChannelDuplexHandler() {
             @Override
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -332,6 +332,22 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
+    public void handleQoS0PubDistBackPressured() {
+        mockCheckPermission(true);
+        mockDistBackPressure();
+        assertTrue(channel.isOpen());
+
+        MqttPublishMessage message = MQTTMessageUtils.publishQoS0Message(topic, 123);
+        channel.writeInbound(message);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        channel.runPendingTasks();
+        assertTrue(channel.isOpen());
+        verifyEvent(QOS0_DIST_ERROR, SERVER_BUSY);
+    }
+
+
+    @Test
     public void handleQoS1Pub() {
         mockCheckPermission(true);
         mockDistDist(true);
@@ -359,7 +375,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
-    public void handleQoS1PubDistRejected() {
+    public void handleQoS1PubDistBackPressured() {
         mockCheckPermission(true);
         mockDistBackPressure();
         assertTrue(channel.isOpen());
@@ -369,7 +385,8 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         channel.runPendingTasks();
-        assertFalse(channel.isOpen());
+        // the channel is still open, but message is dropped
+        assertTrue(channel.isOpen());
         verifyEvent(QOS1_DIST_ERROR, SERVER_BUSY);
     }
 
@@ -415,7 +432,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
-    public void handleQoS2PubDistRejected() {
+    public void handleQoS2PubDistBackPressured() {
         mockCheckPermission(true);
         mockDistBackPressure();
         assertTrue(channel.isOpen());
@@ -425,7 +442,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         channel.runPendingTasks();
-        assertFalse(channel.isOpen());
+        assertTrue(channel.isOpen());
         verifyEvent(QOS2_DIST_ERROR, SERVER_BUSY);
     }
 
@@ -591,7 +608,8 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
 
         int messageCount = 3;
-        transientSessionHandler.publish(matchInfo(topicFilter), s2cMQTT5MessageList(topic, messageCount, QoS.AT_LEAST_ONCE));
+        transientSessionHandler.publish(matchInfo(topicFilter),
+            s2cMQTT5MessageList(topic, messageCount, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
         // s2c pub received and ack
         for (int i = 0; i < messageCount; i++) {

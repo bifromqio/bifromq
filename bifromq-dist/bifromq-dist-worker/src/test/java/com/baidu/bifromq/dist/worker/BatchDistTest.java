@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.plugin.subbroker.TypeUtil.to;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
@@ -26,25 +25,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
-import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
-import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
-import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -52,10 +42,9 @@ public class BatchDistTest extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void batchDistWithNoSub() {
-        String topic = "/a/b/c";
         ByteString payload = copyFromUtf8("hello");
 
-        BatchDistReply reply = dist(tenantA,
+        TenantDistReply reply = tenantDist(tenantA,
             List.of(TopicMessagePack.newBuilder()
                     .setTopic("a")
                     .addMessage(toMsg(tenantA, AT_MOST_ONCE, payload))
@@ -68,7 +57,8 @@ public class BatchDistTest extends DistWorkerTest {
                     .setTopic("a/b")
                     .addMessage(toMsg(tenantA, AT_MOST_ONCE, payload))
                     .build()), "orderKey1");
-        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault(topic, 0).intValue(), 0);
+        assertEquals(reply.getResultsMap().size(), 3);
+        reply.getResultsMap().forEach((k, v) -> assertEquals(v.getFanout(), 0));
     }
 
     @Test(groups = "integration")
@@ -86,7 +76,7 @@ public class BatchDistTest extends DistWorkerTest {
         match(tenantA, "/a/3", InboxService, "inbox2", "batch2");
         match(tenantA, "/a/4", InboxService, "inbox2", "batch2");
 
-        BatchDistReply reply = dist(tenantA,
+        TenantDistReply reply = tenantDist(tenantA,
             List.of(
                 TopicMessagePack.newBuilder()
                     .setTopic("/a/1")
@@ -105,10 +95,10 @@ public class BatchDistTest extends DistWorkerTest {
                     .addMessage(toMsg(tenantA, AT_MOST_ONCE, copyFromUtf8("Hello")))
                     .build()), "orderKey1");
 
-        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/1").intValue(), 1);
-        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/2").intValue(), 2);
-        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/3").intValue(), 1);
-        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/4").intValue(), 1);
+        assertEquals(reply.getResultsMap().get("/a/1").getFanout(), 1);
+        assertEquals(reply.getResultsMap().get("/a/2").getFanout(), 2);
+        assertEquals(reply.getResultsMap().get("/a/3").getFanout(), 1);
+        assertEquals(reply.getResultsMap().get("/a/4").getFanout(), 1);
 
         unmatch(tenantA, "/a/1", MqttBroker, "inbox1", "batch1");
         unmatch(tenantA, "/a/2", MqttBroker, "inbox1", "batch1");

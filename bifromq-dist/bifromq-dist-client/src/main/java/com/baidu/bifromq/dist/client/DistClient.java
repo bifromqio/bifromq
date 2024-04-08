@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.RPCBluePrint;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCall;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
@@ -55,7 +56,11 @@ final class DistClient implements IDistClient {
         return reqScheduler.schedule(new DistServerCall(publisher, topic, message))
             .exceptionally(e -> {
                 log.debug("Failed to pub", e);
-                return DistResult.ERROR;
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return DistResult.BACK_PRESSURE_REJECTED;
+                } else {
+                    return DistResult.ERROR;
+                }
             });
     }
 

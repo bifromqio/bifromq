@@ -56,7 +56,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     protected CompletableFuture<DistReply> handleRequest(String tenantId, DistRequest request) {
         return distCallScheduler.schedule(new DistWorkerCall(tenantId, request.getMessagesList(),
                 callQueueIdx, tenantFanouts.get(tenantId).estimate()))
-            .handle((v, e) -> {
+            .handle((fanOutByTopic, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
                     if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
@@ -85,20 +85,22 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                             .code(RPC_FAILURE));
                     }
                 } else {
-                    tenantFanouts.get(tenantId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
+                    // TODO: exclude fanout = -1?
+                    tenantFanouts.get(tenantId).log(fanOutByTopic.values().stream().reduce(0, Integer::sum) /
+                        fanOutByTopic.size());
                     for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
                         DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
                         for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
-                            int fanout = v.get(topicPack.getTopic());
-                            resultBuilder.putTopic(topicPack.getTopic(),
-                                fanout > 0 ? DistReply.Code.OK : DistReply.Code.NO_MATCH);
+                            int fanout = fanOutByTopic.get(topicPack.getTopic());
+                            resultBuilder.putTopic(topicPack.getTopic(), fanout > 0 ? DistReply.Code.OK :
+                                (fanout == 0 ? DistReply.Code.NO_MATCH : DistReply.Code.ERROR));
                         }
                         replyBuilder.addResults(resultBuilder.build());
                     }
                     eventCollector.report(getLocal(Disted.class)
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())
-                        .fanout(v.values().stream().reduce(0, Integer::sum)));
+                        .fanout(fanOutByTopic.values().stream().reduce(0, Integer::sum)));
                 }
                 return replyBuilder.build();
             });

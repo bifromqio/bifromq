@@ -370,6 +370,22 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
+    public void handleQoS0PubDistBackPressured() {
+        mockCheckPermission(true);
+        mockDistBackPressure();
+        assertTrue(channel.isOpen());
+
+        MqttPublishMessage message = MQTTMessageUtils.publishQoS0Message(topic, 123);
+        channel.writeInbound(message);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        // the channel is still open, but the message is dropped
+        assertTrue(channel.isOpen());
+        verifyEvent(QOS0_DIST_ERROR, SERVER_BUSY);
+    }
+
+
+    @Test
     public void handleQoS1Pub() {
         mockCheckPermission(true);
         mockDistDist(true);
@@ -397,7 +413,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
-    public void handleQoS1PubDistRejected() {
+    public void handleQoS1PubDistBackPressured() {
         mockCheckPermission(true);
         mockDistBackPressure();
         assertTrue(channel.isOpen());
@@ -406,7 +422,8 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(message);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
-        assertFalse(channel.isOpen());
+        // the channel is still open, but the message is dropped
+        assertTrue(channel.isOpen());
         verifyEvent(QOS1_DIST_ERROR, SERVER_BUSY);
     }
 
@@ -452,7 +469,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
-    public void handleQoS2PubDistRejected() {
+    public void handleQoS2PubDistBackPressured() {
         mockCheckPermission(true);
         mockDistBackPressure();
         assertTrue(channel.isOpen());
@@ -461,7 +478,8 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(message);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
-        assertFalse(channel.isOpen());
+        // the channel is still open, but the message is dropped
+        assertTrue(channel.isOpen());
         verifyEvent(QOS2_DIST_ERROR, SERVER_BUSY);
     }
 

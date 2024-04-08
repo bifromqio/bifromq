@@ -42,16 +42,23 @@ public class TopicMessageIdGenerator {
 
     public long nextMessageId(String topic, long nowMillis) {
         checker.updateNowMillis(nowMillis);
-        return topicMessageIdCache.computeIfAbsent(topic, k -> new AtomicLong(0xFFFFFFFE00000000L))
-            .updateAndGet(msgId -> {
-                long currentSWS = syncWindowSequence(nowMillis, syncWindowIntervalMillis);
-                long lastSWS = syncWindowSequence(msgId);
-                if (currentSWS == lastSWS || currentSWS == lastSWS + 1) {
-                    return messageId(currentSWS, messageSequence(msgId) + 1);
-                } else {
-                    return messageId(currentSWS, 0);
-                }
-            });
+        return topicMessageIdCache.computeIfAbsent(topic, k -> new MessageIdGenerator(syncWindowIntervalMillis))
+            .next(nowMillis);
+    }
+
+    public void markDrain(String topic, long failedMessageId) {
+        MessageIdGenerator idGenerator = topicMessageIdCache.get(topic);
+        if (idGenerator != null) {
+            idGenerator.markDrain(failedMessageId);
+        }
+    }
+
+    public long drainMessageId(String topic) {
+        MessageIdGenerator idGenerator = topicMessageIdCache.get(topic);
+        if (idGenerator != null) {
+            return idGenerator.drainMessageId;
+        }
+        return 0;
     }
 
     private static class PrematureEvictionChecker implements Predicate<Long> {
@@ -72,7 +79,49 @@ public class TopicMessageIdGenerator {
         }
     }
 
-    private static class TopicMessageIdCache extends LinkedHashMap<String, AtomicLong> {
+    private static class MessageIdGenerator {
+        private final long syncWindowIntervalMillis;
+        private final AtomicLong messageId;
+        private long drainMessageId = 0; // the messages before this id has been drained
+        private boolean drainMarked = false; // whether the drain flag should be set for next message id
+
+        private MessageIdGenerator(long syncWindowIntervalMillis) {
+            this.syncWindowIntervalMillis = syncWindowIntervalMillis;
+            this.messageId = new AtomicLong(0xFFFFFFFE00000000L);
+        }
+
+        public void markDrain(long failedMessageId) {
+            if (failedMessageId > drainMessageId) {
+                drainMarked = true;
+            }
+        }
+
+        public long next(long nowMillis) {
+            return messageId.updateAndGet(msgId -> {
+                long currentSWS = syncWindowSequence(nowMillis, syncWindowIntervalMillis);
+                long lastSWS = syncWindowSequence(msgId);
+                if (currentSWS == lastSWS || currentSWS == lastSWS + 1) {
+                    if (drainMarked) {
+                        drainMessageId = messageId(currentSWS, messageSequence(msgId) + 1, true);
+                        drainMarked = false;
+                        return drainMessageId;
+                    } else {
+                        return messageId(currentSWS, messageSequence(msgId) + 1);
+                    }
+                } else {
+                    if (drainMarked) {
+                        drainMessageId = messageId(currentSWS, 0, true);
+                        drainMarked = false;
+                        return drainMessageId;
+                    } else {
+                        return messageId(currentSWS, 0);
+                    }
+                }
+            });
+        }
+    }
+
+    private static class TopicMessageIdCache extends LinkedHashMap<String, MessageIdGenerator> {
         private final ITenantMeter meter;
         private final Predicate<Long> isPrematureEviction;
         private final int maxSize;
@@ -87,9 +136,9 @@ public class TopicMessageIdGenerator {
         }
 
         @Override
-        protected boolean removeEldestEntry(Map.Entry<String, AtomicLong> eldest) {
+        protected boolean removeEldestEntry(Map.Entry<String, MessageIdGenerator> eldest) {
             if (size() > maxSize) {
-                if (isPrematureEviction.test(eldest.getValue().get())) {
+                if (isPrematureEviction.test(eldest.getValue().messageId.get())) {
                     meter.recordCount(TenantMetric.MqttTopicSeqAbortCount);
                 }
                 return true;

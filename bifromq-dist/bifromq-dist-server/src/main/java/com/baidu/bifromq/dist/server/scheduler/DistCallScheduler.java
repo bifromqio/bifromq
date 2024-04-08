@@ -15,7 +15,6 @@ package com.baidu.bifromq.dist.server.scheduler;
 
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
-import static com.baidu.bifromq.dist.util.MessageUtil.buildBatchDistRequest;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_FANOUT_SPLIT_THRESHOLD;
@@ -32,9 +31,9 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
-import com.baidu.bifromq.dist.rpc.proto.DistPack;
+import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistReply;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -53,8 +52,12 @@ import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<String, Integer>, Integer>
+public class DistCallScheduler
+    extends BatchCallScheduler<DistWorkerCall, Map<String, Integer>, DistCallScheduler.BatcherKey>
     implements IDistCallScheduler {
+    public record BatcherKey(String tenantId, Integer callQueueIdx) {
+    }
+
     private final IBaseKVStoreClient distWorkerClient;
     private final Function<String, Integer> tenantFanoutGetter;
     private final int fanoutSplitThreshold = DIST_WORKER_FANOUT_SPLIT_THRESHOLD.get();
@@ -69,10 +72,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
     }
 
     @Override
-    protected Batcher<DistWorkerCall, Map<String, Integer>, Integer> newBatcher(String name,
-                                                                                long tolerableLatencyNanos,
-                                                                                long burstLatencyNanos,
-                                                                                Integer batchKey) {
+    protected Batcher<DistWorkerCall, Map<String, Integer>, BatcherKey> newBatcher(String name,
+                                                                                   long tolerableLatencyNanos,
+                                                                                   long burstLatencyNanos,
+                                                                                   BatcherKey batchKey) {
         return new DistWorkerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos,
             fanoutSplitThreshold,
             distWorkerClient,
@@ -80,17 +83,19 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
     }
 
     @Override
-    protected Optional<Integer> find(DistWorkerCall request) {
-        return Optional.of(request.callQueueIdx);
+    protected Optional<BatcherKey> find(DistWorkerCall request) {
+        return Optional.of(new BatcherKey(request.tenantId, request.callQueueIdx));
     }
 
-    private static class DistWorkerCallBatcher extends Batcher<DistWorkerCall, Map<String, Integer>, Integer> {
+    private static class DistWorkerCallBatcher
+        extends Batcher<DistWorkerCall, Map<String, Integer>, DistCallScheduler.BatcherKey> {
         private final IBaseKVStoreClient distWorkerClient;
         private final String orderKey = UUID.randomUUID().toString();
         private final Function<String, Integer> tenantFanoutGetter;
         private final int fanoutSplitThreshold;
 
-        protected DistWorkerCallBatcher(Integer batcherKey, String name,
+        protected DistWorkerCallBatcher(DistCallScheduler.BatcherKey batcherKey,
+                                        String name,
                                         long tolerableLatencyNanos,
                                         long burstLatencyNanos,
                                         int fanoutSplitThreshold,
@@ -103,13 +108,14 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
         }
 
         @Override
-        protected IBatchCall<DistWorkerCall, Map<String, Integer>, Integer> newBatch() {
+        protected IBatchCall<DistWorkerCall, Map<String, Integer>, DistCallScheduler.BatcherKey> newBatch() {
             return new BatchDistCall();
         }
 
-        private class BatchDistCall implements IBatchCall<DistWorkerCall, Map<String, Integer>, Integer> {
-            private final Queue<CallTask<DistWorkerCall, Map<String, Integer>, Integer>> tasks = new ArrayDeque<>(128);
-            private Map<String, Map<String, Map<ClientInfo, Iterable<Message>>>> batch = new HashMap<>(128);
+        private class BatchDistCall implements IBatchCall<DistWorkerCall, Map<String, Integer>, BatcherKey> {
+            private final Queue<CallTask<DistWorkerCall, Map<String, Integer>, BatcherKey>> tasks =
+                new ArrayDeque<>(128);
+            private Map<String, Map<ClientInfo, Iterable<Message>>> batch = new HashMap<>(128);
 
             @Override
             public void reset() {
@@ -117,12 +123,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
             }
 
             @Override
-            public void add(CallTask<DistWorkerCall, Map<String, Integer>, Integer> callTask) {
-                Map<String, Map<ClientInfo, Iterable<Message>>> clientMsgsByTopic =
-                    batch.computeIfAbsent(callTask.call.tenantId, k -> new HashMap<>());
+            public void add(CallTask<DistWorkerCall, Map<String, Integer>, BatcherKey> callTask) {
                 callTask.call.publisherMsgPacks.forEach(senderMsgPack ->
                     senderMsgPack.getMessagePackList().forEach(topicMsgs ->
-                        clientMsgsByTopic.computeIfAbsent(topicMsgs.getTopic(), k -> new HashMap<>())
+                        batch.computeIfAbsent(topicMsgs.getTopic(), k -> new HashMap<>())
                             .compute(senderMsgPack.getPublisher(), (k, v) -> {
                                 if (v == null) {
                                     v = topicMsgs.getMessageList();
@@ -136,44 +140,42 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
 
             @Override
             public CompletableFuture<Void> execute() {
-                Map<KVRangeReplica, List<DistPack>> distPacksByRangeReplica = new HashMap<>();
-                batch.forEach((tenantId, topicMap) -> {
-                    DistPack.Builder distPackBuilder = DistPack.newBuilder().setTenantId(tenantId);
-                    topicMap.forEach((topic, senderMap) -> {
-                        TopicMessagePack.Builder topicMsgPackBuilder = TopicMessagePack.newBuilder().setTopic(topic);
-                        senderMap.forEach((sender, msgs) ->
-                            topicMsgPackBuilder.addMessage(TopicMessagePack.PublisherPack
-                                .newBuilder()
-                                .setPublisher(sender)
-                                .addAllMessage(msgs)
-                                .build()));
-                        distPackBuilder.addMsgPack(topicMsgPackBuilder.build());
-                    });
-                    DistPack distPack = distPackBuilder.build();
+                String tenantId = batcherKey.tenantId();
+                Map<KVRangeReplica, List<TopicMessagePack>> msgPacksByRangeReplica = new HashMap<>();
+                batch.forEach((topic, senderMap) -> {
+                    TopicMessagePack.Builder topicMsgPackBuilder = TopicMessagePack.newBuilder().setTopic(topic);
+                    senderMap.forEach((sender, msgs) ->
+                        topicMsgPackBuilder.addMessage(TopicMessagePack.PublisherPack
+                            .newBuilder()
+                            .setPublisher(sender)
+                            .addAllMessage(msgs)
+                            .build()));
+                    TopicMessagePack topicMsgPack = topicMsgPackBuilder.build();
                     int fanoutScale = tenantFanoutGetter.apply(tenantId);
                     List<KVRangeSetting> ranges = distWorkerClient.findByBoundary(Boundary.newBuilder()
                         .setStartKey(matchRecordKeyPrefix(tenantId))
                         .setEndKey(tenantUpperBound(tenantId))
                         .build());
                     if (fanoutScale > fanoutSplitThreshold) {
-                        ranges.forEach(range -> distPacksByRangeReplica.computeIfAbsent(
+                        ranges.forEach(range -> msgPacksByRangeReplica.computeIfAbsent(
                             new KVRangeReplica(range.id, range.ver, range.leader),
-                            k -> new LinkedList<>()).add(distPack));
+                            k -> new LinkedList<>()).add(topicMsgPack));
                     } else {
-                        ranges.forEach(range -> distPacksByRangeReplica.computeIfAbsent(
+                        ranges.forEach(range -> msgPacksByRangeReplica.computeIfAbsent(
                             new KVRangeReplica(range.id, range.ver, range.randomReplica()),
-                            k -> new LinkedList<>()).add(distPack));
+                            k -> new LinkedList<>()).add(topicMsgPack));
                     }
                 });
 
                 long reqId = System.nanoTime();
                 @SuppressWarnings("unchecked")
-                CompletableFuture<BatchDistReply>[] distReplyFutures = distPacksByRangeReplica.entrySet().stream()
+                CompletableFuture<TenantDistReply>[] distReplyFutures = msgPacksByRangeReplica.entrySet().stream()
                     .map(entry -> {
                         KVRangeReplica rangeReplica = entry.getKey();
-                        BatchDistRequest batchDist = BatchDistRequest.newBuilder()
+                        TenantDistRequest tenantDistRequest = TenantDistRequest.newBuilder()
                             .setReqId(reqId)
-                            .addAllDistPack(entry.getValue())
+                            .setTenantId(tenantId)
+                            .addAllMsgPack(entry.getValue())
                             .setOrderKey(orderKey)
                             .build();
                         return distWorkerClient.query(rangeReplica.storeId, KVRangeRORequest.newBuilder()
@@ -181,16 +183,18 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                 .setVer(rangeReplica.ver)
                                 .setKvRangeId(rangeReplica.id)
                                 .setRoCoProc(ROCoProcInput.newBuilder()
-                                    .setDistService(buildBatchDistRequest(batchDist))
+                                    .setDistService(DistServiceROCoProcInput.newBuilder()
+                                        .setTenantDist(tenantDistRequest)
+                                        .build())
                                     .build())
-                                .build(), batchDist.getOrderKey())
+                                .build(), tenantDistRequest.getOrderKey())
                             .thenApply(v -> {
                                 if (v.getCode() == ReplyCode.Ok) {
-                                    BatchDistReply batchDistReply = v.getRoCoProcResult()
+                                    TenantDistReply tenantDistReply = v.getRoCoProcResult()
                                         .getDistService()
-                                        .getBatchDist();
-                                    assert batchDistReply.getReqId() == reqId;
-                                    return batchDistReply;
+                                        .getTenantDist();
+                                    assert tenantDistReply.getReqId() == reqId;
+                                    return tenantDistReply;
                                 }
                                 log.warn("Failed to exec ro co-proc[code={}]", v.getCode());
                                 throw new RuntimeException("Failed to exec rw co-proc");
@@ -199,32 +203,34 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                     .toArray(CompletableFuture[]::new);
                 return CompletableFuture.allOf(distReplyFutures)
                     .handle((v, e) -> {
-                        CallTask<DistWorkerCall, Map<String, Integer>, Integer> task;
+                        CallTask<DistWorkerCall, Map<String, Integer>, DistCallScheduler.BatcherKey> task;
                         if (e != null) {
                             while ((task = tasks.poll()) != null) {
                                 task.callResult.completeExceptionally(e);
                             }
                         } else {
                             // aggregate fanout from each reply
-                            Map<String, Map<String, Integer>> topicFanoutByTenant = new HashMap<>();
-                            for (CompletableFuture<BatchDistReply> replyFuture : distReplyFutures) {
-                                BatchDistReply reply = replyFuture.join();
-                                reply.getResultMap().forEach((tenantId, topicFanout) -> {
-                                    topicFanoutByTenant.computeIfAbsent(tenantId, k -> new HashMap<>());
-                                    topicFanout.getFanoutMap()
-                                        .forEach((topic, fanout) -> topicFanoutByTenant.get(tenantId)
-                                            .compute(topic, (k, val) -> {
-                                                if (val == null) {
-                                                    val = 0;
+                            Map<String, Integer> allTopicFanouts = new HashMap<>();
+                            for (CompletableFuture<TenantDistReply> replyFuture : distReplyFutures) {
+                                TenantDistReply reply = replyFuture.join();
+                                reply.getResultsMap()
+                                    .forEach((topic, result) -> allTopicFanouts.compute(topic, (k, f) -> {
+                                        if (f == null) {
+                                            f = 0;
+                                        }
+                                        switch (result.getCode()) {
+                                            case OK -> {
+                                                if (f >= 0) {
+                                                    f += result.getFanout();
                                                 }
-                                                val += fanout;
-                                                return val;
-                                            }));
-                                });
+                                            }
+                                            // -1 stands for dist error
+                                            case ERROR -> f = -1;
+                                        }
+                                        return f;
+                                    }));
                             }
                             while ((task = tasks.poll()) != null) {
-                                Map<String, Integer> allTopicFanouts =
-                                    topicFanoutByTenant.get(task.call.tenantId);
                                 Map<String, Integer> topicFanouts = new HashMap<>();
                                 task.call.publisherMsgPacks.forEach(clientMessagePack ->
                                     clientMessagePack.getMessagePackList().forEach(topicMessagePack ->

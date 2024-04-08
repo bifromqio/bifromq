@@ -50,16 +50,16 @@ import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
-import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
-import com.baidu.bifromq.dist.rpc.proto.DistPack;
+import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistReply;
+import com.baidu.bifromq.dist.rpc.proto.TenantDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
-import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
@@ -329,19 +329,20 @@ public abstract class DistWorkerTest {
         return batchUnmatchReply.getResultsMap().get(scopedTopicFilter);
     }
 
-    protected BatchDistReply dist(String tenantId, List<TopicMessagePack> msgs, String orderKey) {
+    protected TenantDistReply tenantDist(String tenantId, List<TopicMessagePack> msgs, String orderKey) {
         long reqId = ThreadLocalRandom.current().nextInt();
         KVRangeSetting s = storeClient.findByKey(EntityUtil.matchRecordKeyPrefix(tenantId)).get();
-        BatchDistRequest request = BatchDistRequest.newBuilder()
+        TenantDistRequest request = TenantDistRequest.newBuilder()
             .setReqId(reqId)
-            .addDistPack(DistPack.newBuilder()
-                .setTenantId(tenantId)
-                .addAllMsgPack(msgs)
-                .build())
+            .setTenantId(tenantId)
+            .addAllMsgPack(msgs)
             .setOrderKey(orderKey)
             .build();
+
         ROCoProcInput input = ROCoProcInput.newBuilder()
-            .setDistService(MessageUtil.buildBatchDistRequest(request))
+            .setDistService(DistServiceROCoProcInput.newBuilder()
+                .setTenantDist(request)
+                .build())
             .build();
         KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
             .setReqId(reqId)
@@ -352,13 +353,13 @@ public abstract class DistWorkerTest {
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);
         DistServiceROCoProcOutput output = reply.getRoCoProcResult().getDistService();
-        assertTrue(output.hasBatchDist());
-        assertEquals(output.getBatchDist().getReqId(), reqId);
-        return output.getBatchDist();
+        assertTrue(output.hasTenantDist());
+        assertEquals(output.getTenantDist().getReqId(), reqId);
+        return output.getTenantDist();
     }
 
-    protected BatchDistReply dist(String tenantId, QoS qos, String topic, ByteString payload, String orderKey) {
-        return dist(tenantId, List.of(TopicMessagePack.newBuilder()
+    protected TenantDistReply tenantDist(String tenantId, QoS qos, String topic, ByteString payload, String orderKey) {
+        return tenantDist(tenantId, List.of(TopicMessagePack.newBuilder()
             .setTopic(topic)
             .addMessage(TopicMessagePack.PublisherPack.newBuilder()
                 .setPublisher(ClientInfo.newBuilder()

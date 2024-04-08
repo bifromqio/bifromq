@@ -39,10 +39,12 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -97,15 +99,19 @@ class DeliverExecutorGroup {
         orderedSharedMatching.invalidateAll();
     }
 
-    public void submit(List<Matching> matchedRoutes, TopicMessagePack msgPack) {
+    public CompletableFuture<Boolean> submit(List<Matching> matchedRoutes, TopicMessagePack msgPack) {
         int msgPackSize = SizeUtil.estSizeOf(msgPack);
+        if (matchedRoutes.isEmpty()) {
+            return CompletableFuture.completedFuture(true);
+        }
         if (matchedRoutes.size() == 1) {
             Matching matching = matchedRoutes.get(0);
-            prepareSend(matching, msgPack, true);
+            CompletableFuture<Boolean> onDone = prepareSend(matching, msgPack, true);
             if (isSendToInbox(matching)) {
                 ITenantMeter.get(matching.tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
             }
-        } else if (matchedRoutes.size() > 1) {
+            return onDone;
+        } else {
             String tenantId = matchedRoutes.get(0).tenantId;
             boolean inline = matchedRoutes.size() > inlineFanOutThreshold;
             boolean hasTFanOutBandwidth =
@@ -116,11 +122,12 @@ class DeliverExecutorGroup {
             boolean hasPFannedOutUnderThrottled = false;
             // we meter persistent fanout bytes here, since for transient fanout is actually happened in the broker
             long pFanoutBytes = 0;
+            List<CompletableFuture<Boolean>> onDones = new ArrayList<>(matchedRoutes.size());
             for (Matching matching : matchedRoutes) {
                 if (isSendToInbox(matching)) {
                     if (hasPFanOutBandwidth || !hasPFannedOutUnderThrottled) {
                         pFanoutBytes += msgPackSize;
-                        prepareSend(matching, msgPack, inline);
+                        onDones.add(prepareSend(matching, msgPack, inline));
                         if (!hasPFanOutBandwidth) {
                             hasPFannedOutUnderThrottled = true;
                             for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
@@ -132,7 +139,7 @@ class DeliverExecutorGroup {
                         }
                     }
                 } else if (hasTFanOutBandwidth || !hasTFannedOutUnderThrottled) {
-                    prepareSend(matching, msgPack, inline);
+                    onDones.add(prepareSend(matching, msgPack, inline));
                     if (!hasTFanOutBandwidth) {
                         hasTFannedOutUnderThrottled = true;
                         for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
@@ -148,6 +155,8 @@ class DeliverExecutorGroup {
                 }
             }
             ITenantMeter.get(tenantId).recordSummary(MqttPersistentFanOutBytes, pFanoutBytes);
+            return CompletableFuture.allOf(onDones.toArray(CompletableFuture[]::new))
+                .thenApply(v -> onDones.stream().allMatch(CompletableFuture::join));
         }
     }
 
@@ -159,14 +168,14 @@ class DeliverExecutorGroup {
         orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(scopedTopic.tenantId, escape(scopedTopic.topic)));
     }
 
-    private void prepareSend(Matching matching, TopicMessagePack msgPack, boolean inline) {
-        switch (matching.type()) {
+    private CompletableFuture<Boolean> prepareSend(Matching matching, TopicMessagePack msgPack, boolean inline) {
+        return switch (matching.type()) {
             case Normal -> send((NormalMatching) matching, msgPack, inline);
             case Group -> {
                 GroupMatching groupMatching = (GroupMatching) matching;
                 if (!groupMatching.ordered) {
                     // pick one route randomly
-                    send(groupMatching.receiverList.get(
+                    yield send(groupMatching.receiverList.get(
                         ThreadLocalRandom.current().nextInt(groupMatching.receiverList.size())), msgPack, inline);
                 } else {
                     // ordered shared subscription
@@ -189,17 +198,21 @@ class DeliverExecutorGroup {
                             .setTopic(msgPack.getTopic())
                             .addMessage(publisherPack);
                     }
-                    orderedRoutes.forEach((route, msgPackBuilder) -> send(route, msgPackBuilder.build(), inline));
+                    List<CompletableFuture<Boolean>> onDones = new ArrayList<>(orderedRoutes.size());
+                    orderedRoutes.forEach(
+                        (route, msgPackBuilder) -> onDones.add(send(route, msgPackBuilder.build(), inline)));
+                    yield CompletableFuture.allOf(onDones.toArray(CompletableFuture[]::new))
+                        .thenApply(v -> onDones.stream().allMatch(CompletableFuture::join));
                 }
             }
-        }
+        };
     }
 
-    private void send(NormalMatching route, TopicMessagePack msgPack, boolean inline) {
+    private CompletableFuture<Boolean> send(NormalMatching route, TopicMessagePack msgPack, boolean inline) {
         int idx = route.hashCode() % fanoutExecutors.length;
         if (idx < 0) {
             idx += fanoutExecutors.length;
         }
-        fanoutExecutors[idx].submit(route, msgPack, inline);
+        return fanoutExecutors[idx].submit(route, msgPack, inline);
     }
 }

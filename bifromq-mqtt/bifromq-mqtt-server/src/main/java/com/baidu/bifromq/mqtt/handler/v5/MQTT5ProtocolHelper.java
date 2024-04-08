@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler.v5;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewell;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewellNow;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.response;
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.responseNothing;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.messageExpiryInterval;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.receiveMaximum;
@@ -756,16 +757,11 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
         if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
-            return farewell(MQTT5MessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
-                    .reasonString("Too many QoS0 publish")
-                    .userProps(userProps)
-                    .build(),
-                getLocal(ServerBusy.class)
-                    .reason("Too many QoS0 publish")
-                    .clientInfo(clientInfo));
+            return responseNothing(getLocal(ServerBusy.class)
+                .reason("Too many QoS0 publish")
+                .clientInfo(clientInfo));
         } else {
-            return ProtocolResponse.responseNothing();
+            return responseNothing();
         }
     }
 
@@ -796,10 +792,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
         if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
-            return farewell(MQTT5MessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
-                    .reasonString("Too many QoS1 publish")
-                    .build(),
+            return responseNothing(
                 getLocal(ServerBusy.class)
                     .reason("Too many QoS1 publish")
                     .clientInfo(clientInfo));
@@ -878,13 +871,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
         if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
-            return farewell(MQTT5MessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
-                    .reasonString("Too many QoS2 publish")
-                    .build(),
-                getLocal(ServerBusy.class)
-                    .reason("Too many QoS2 publish")
-                    .clientInfo(clientInfo));
+            return responseNothing(getLocal(ServerBusy.class)
+                .reason("Too many QoS2 publish")
+                .clientInfo(clientInfo));
         }
         int packetId = message.variableHeader().packetId();
         Event<?>[] debugEvents;

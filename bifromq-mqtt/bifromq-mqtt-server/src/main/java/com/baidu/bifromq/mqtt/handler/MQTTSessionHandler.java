@@ -1274,6 +1274,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         }
                     }
                     default -> {
+                        // TODO: support limit retry
+                        msgIdGenerator.markDrain(topic, message.getMessageId());
                         switch (message.getPubQoS()) {
                             case AT_MOST_ONCE -> eventCollector.report(getLocal(QoS0DistError.class)
                                 .reqId(reqId)

@@ -50,15 +50,38 @@ message DistPack{
   repeated commontype.TopicMessagePack msgPack = 2; // topic messages packs shares same tenantId
 }
 
+// deprecate since 3.1.0, will be removed in 5.0.0
 message BatchDistRequest {
   uint64 reqId = 1;
   repeated DistPack distPack = 2; // sorted by tenantId and topic
   string orderKey = 3;
 }
 
+// deprecate since 3.1.0, will be removed in 5.0.0
 message BatchDistReply {
   uint64 reqId = 1;
   map<string, TopicFanout> result = 2;
+}
+
+message TenantDistRequest{
+  uint64 reqId = 1;
+  string tenantId = 2;
+  repeated commontype.TopicMessagePack msgPack = 3;
+  string orderKey = 4;
+}
+
+message TenantDistReply {
+  enum Code{
+    OK = 0;
+    ERROR = 1;
+  }
+
+  message Result{
+    Code code = 1;
+    uint32 fanout = 2;
+  }
+  uint64 reqId = 1;
+  map<string, Result> results = 2; // key: topic
 }
 
 message DistServiceRWCoProcInput{
@@ -78,12 +101,14 @@ message DistServiceRWCoProcOutput{
 message DistServiceROCoProcInput{
   oneof Input{
     BatchDistRequest batchDist = 1;
+    TenantDistRequest tenantDist = 2;
   }
 }
 
 message DistServiceROCoProcOutput{
   oneof Output{
     BatchDistReply batchDist = 1;
+    TenantDistReply tenantDist = 2;
   }
 }
 
