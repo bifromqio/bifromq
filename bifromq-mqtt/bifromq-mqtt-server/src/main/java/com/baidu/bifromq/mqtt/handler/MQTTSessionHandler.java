@@ -21,14 +21,17 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttOutOfOrderDiscardBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0DistBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1DeliverBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1DistBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1ExternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DeliverBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DistBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2ExternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetryDistedBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetryDroppedBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetryQueuedBytes;
@@ -227,7 +230,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final AtomicLong memUsage;
     protected final ITenantMeter tenantMeter;
     private final long idleTimeoutNanos;
-    private final long retryTimeoutMillis;
     private final MPSThrottler throttler;
     private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
     private final FutureTracker bgTasks = new FutureTracker();
@@ -279,12 +281,21 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         authProvider = sessionCtx.authProvider(ctx);
         eventCollector = sessionCtx.eventCollector;
         resourceThrottler = sessionCtx.resourceThrottler;
-        retryTimeoutMillis = BifroMQSysProp.SYNC_WINDOW_INTERVAL_MILLIS.get();
         msgIdGenerator =
             new TopicMessageIdGenerator(Duration.ofMillis(BifroMQSysProp.SYNC_WINDOW_INTERVAL_MILLIS.get()),
                 settings.maxActiveTopicsPerPublisher, tenantMeter);
         orderingSender = new TopicMessageOrderingSender(this::send, ctx.executor(),
             BifroMQSysProp.SYNC_WINDOW_INTERVAL_MILLIS.get(), settings.maxActiveTopicsPerSubscriber, tenantMeter);
+    }
+
+    private long retryTimeoutMillis() {
+        long syncWindowInterval = BifroMQSysProp.SYNC_WINDOW_INTERVAL_MILLIS.get();
+        // slightly earlier than the next sync window
+        return syncWindowInterval - 100;
+    }
+
+    private long retryDelayMillis() {
+        return retryTimeoutMillis() / 3;
     }
 
     private int estMemSize() {
@@ -945,40 +956,57 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             // qos1 and qos2 will be resent by the server
             return;
         }
+        long nowMillis = sessionCtx.nowMillis();
         memUsage.addAndGet(msgSize);
         writeAndFlush(pubMsg).addListener(f -> {
             memUsage.addAndGet(-msgSize);
             if (f.isSuccess()) {
-                if (settings.debugMode) {
-                    switch (pubMsg.fixedHeader().qosLevel()) {
-                        case AT_MOST_ONCE -> eventCollector.report(getLocal(QoS0Pushed.class)
-                            .reqId(pubMsg.variableHeader().packetId())
-                            .isRetain(msg.isRetain())
-                            .sender(publisher)
-                            .matchedFilter(topicFilter)
-                            .topic(msg.topic)
-                            .size(msgSize)
-                            .clientInfo(clientInfo));
-                        case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1Pushed.class)
-                            .reqId(pubMsg.variableHeader().packetId())
-                            .messageId(pubMsg.variableHeader().packetId())
-                            .dup(false)
-                            .isRetain(pubMsg.fixedHeader().isRetain())
-                            .sender(publisher)
-                            .matchedFilter(topicFilter)
-                            .topic(pubMsg.variableHeader().topicName())
-                            .size(msgSize)
-                            .clientInfo(clientInfo));
-                        case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2Pushed.class)
-                            .reqId(pubMsg.variableHeader().packetId())
-                            .messageId(pubMsg.variableHeader().packetId())
-                            .dup(false)
-                            .isRetain(pubMsg.fixedHeader().isRetain())
-                            .sender(publisher)
-                            .matchedFilter(topicFilter)
-                            .topic(pubMsg.variableHeader().topicName())
-                            .size(msgSize)
-                            .clientInfo(clientInfo));
+                switch (pubMsg.fixedHeader().qosLevel()) {
+                    case AT_MOST_ONCE -> {
+                        tenantMeter.timer(MqttQoS0InternalLatency)
+                            .record(nowMillis - msg.message().getTimestamp(), TimeUnit.MILLISECONDS);
+                        if (settings.debugMode) {
+                            eventCollector.report(getLocal(QoS0Pushed.class)
+                                .reqId(pubMsg.variableHeader().packetId())
+                                .isRetain(msg.isRetain())
+                                .sender(publisher)
+                                .matchedFilter(topicFilter)
+                                .topic(msg.topic)
+                                .size(msgSize)
+                                .clientInfo(clientInfo));
+                        }
+                    }
+                    case AT_LEAST_ONCE -> {
+                        tenantMeter.timer(MqttQoS1InternalLatency)
+                            .record(nowMillis - msg.message().getTimestamp(), TimeUnit.MILLISECONDS);
+                        if (settings.debugMode) {
+                            eventCollector.report(getLocal(QoS1Pushed.class)
+                                .reqId(pubMsg.variableHeader().packetId())
+                                .messageId(pubMsg.variableHeader().packetId())
+                                .dup(false)
+                                .isRetain(pubMsg.fixedHeader().isRetain())
+                                .sender(publisher)
+                                .matchedFilter(topicFilter)
+                                .topic(pubMsg.variableHeader().topicName())
+                                .size(msgSize)
+                                .clientInfo(clientInfo));
+                        }
+                    }
+                    case EXACTLY_ONCE -> {
+                        tenantMeter.timer(MqttQoS2InternalLatency)
+                            .record(nowMillis - msg.message().getTimestamp(), TimeUnit.MILLISECONDS);
+                        if (settings.debugMode) {
+                            eventCollector.report(getLocal(QoS2Pushed.class)
+                                .reqId(pubMsg.variableHeader().packetId())
+                                .messageId(pubMsg.variableHeader().packetId())
+                                .dup(false)
+                                .isRetain(pubMsg.fixedHeader().isRetain())
+                                .sender(publisher)
+                                .matchedFilter(topicFilter)
+                                .topic(pubMsg.variableHeader().topicName())
+                                .size(msgSize)
+                                .clientInfo(clientInfo));
+                        }
                     }
                 }
             }
@@ -1403,7 +1431,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             retryQueue.add(new RetryMessage(reqId, topic, message, onDone));
             tenantMeter.recordSummary(MqttRetryQueuedBytes, topic.length() + message.getPayload().size());
             if (retryTask == null || retryTask.isDone()) {
-                retryTask = ctx.executor().schedule(this::retryDist, 100, TimeUnit.MILLISECONDS);
+                retryTask = ctx.executor().schedule(this::retryDist, retryDelayMillis(), TimeUnit.MILLISECONDS);
             }
 
         } else {
@@ -1421,14 +1449,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             Message message = retryMessage.message();
             long messageId = retryMessage.message().getMessageId();
             long drainMessageId = msgIdGenerator.drainMessageId(topic);
-            if (messageId < drainMessageId || nowMillis - message.getTimestamp() > retryTimeoutMillis) {
+            if (messageId < drainMessageId || nowMillis - message.getTimestamp() > retryTimeoutMillis()) {
                 // stop retry when messageId has been drained or timeout
                 itr.remove();
                 retryMessage.onDone().complete(DistResult.ERROR);
                 if (messageId < drainMessageId) {
                     tenantMeter.recordSummary(MqttRetryDroppedBytes, topic.length() + message.getPayload().size());
                 }
-                if (nowMillis - message.getTimestamp() > retryTimeoutMillis) {
+                if (nowMillis - message.getTimestamp() > retryTimeoutMillis()) {
                     tenantMeter.recordSummary(MqttRetryTimeoutBytes, topic.length() + message.getPayload().size());
                 }
             } else {
@@ -1455,7 +1483,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             CompletableFuture.allOf(retryTasks.toArray(CompletableFuture[]::new))
                 .thenAcceptAsync(v -> {
                     if (!retryQueue.isEmpty()) {
-                        retryTask = ctx.executor().schedule(this::retryDist, 100, TimeUnit.MILLISECONDS);
+                        retryTask =
+                            ctx.executor().schedule(this::retryDist, retryDelayMillis(), TimeUnit.MILLISECONDS);
                     } else {
                         retryTask = null;
                     }

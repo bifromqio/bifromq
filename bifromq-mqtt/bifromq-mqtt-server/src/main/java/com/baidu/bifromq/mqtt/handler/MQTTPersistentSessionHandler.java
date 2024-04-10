@@ -19,9 +19,6 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentUnsubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentUnsubLatency;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.UnsubResult.ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
@@ -505,8 +502,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .thenAccept(checkResult -> {
                 assert ctx.executor().inEventLoop();
                 if (checkResult.hasGranted()) {
-                    tenantMeter.timer(MqttQoS0InternalLatency)
-                        .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
                     if (option.getNoLocal() && clientInfo.equals(publihser)) {
                         // skip local sub
                         if (settings.debugMode) {
@@ -551,8 +546,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 assert ctx.executor().inEventLoop();
                 SubMessage msg = new SubMessage(topic, message, publisher, topicFilter, option);
                 if (checkResult.hasGranted()) {
-                    tenantMeter.timer(msg.qos() == AT_LEAST_ONCE ? MqttQoS1InternalLatency : MqttQoS2InternalLatency)
-                        .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
                     if (option.getNoLocal() && clientInfo.equals(topicMsg.getPublisher())) {
                         // skip local sub
                         if (settings.debugMode) {
