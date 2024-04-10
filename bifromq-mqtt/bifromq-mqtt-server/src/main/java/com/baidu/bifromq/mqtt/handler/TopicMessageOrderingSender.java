@@ -13,10 +13,11 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.metrics.TenantMetric.MqttOutOfOrderSendBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttOutOfOrderDrainBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttOutOfOrderFlushBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttReorderBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTopicSorterAbortCount;
-import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.isDrainFlagSet;
+import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.isFlushFlagSet;
 import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.isSuccessive;
 import static com.baidu.bifromq.mqtt.utils.MessageIdUtil.previousMessageId;
 
@@ -88,7 +89,7 @@ public class TopicMessageOrderingSender {
 
     private static class SortingBuffer {
         final MessageSender sender;
-        final long syncWindowIntervalMillis;
+        final long timeoutDelay;
         final EventExecutor executor;
         final SortedMap<Long, SortingMessage> sortingBuffer = new TreeMap<>();
         final ITenantMeter meter;
@@ -98,12 +99,12 @@ public class TopicMessageOrderingSender {
         boolean afterDrain;
 
         SortingBuffer(MessageSender sender,
-                      long syncWindowIntervalMillis,
+                      long timeoutDelay,
                       EventExecutor executor,
                       long firstMsgId,
                       ITenantMeter meter) {
             this.sender = sender;
-            this.syncWindowIntervalMillis = syncWindowIntervalMillis;
+            this.timeoutDelay = timeoutDelay;
             this.executor = executor;
             this.meter = meter;
             // reset to previous sequence
@@ -130,8 +131,8 @@ public class TopicMessageOrderingSender {
                     tailMsgId = msgId;
                     meter.recordSummary(MqttReorderBytes, subMessage.estBytes());
                     sortingBuffer.put(msgId, new SortingMessage(inboxSeqNo, subMessage));
-                    if (isDrainFlagSet(msgId)) {
-                        drain();
+                    if (isFlushFlagSet(msgId)) {
+                        flush();
                     }
                 }
             } else if (msgId > tailMsgId) {
@@ -139,11 +140,11 @@ public class TopicMessageOrderingSender {
                 meter.recordSummary(MqttReorderBytes, subMessage.estBytes());
                 sortingBuffer.put(msgId, new SortingMessage(inboxSeqNo, subMessage));
                 tailMsgId = msgId;
-                if (isDrainFlagSet(msgId)) {
-                    drain();
+                if (isFlushFlagSet(msgId)) {
+                    flush();
                 } else {
                     if (timeout == null) {
-                        timeout = executor.schedule(this::drain, syncWindowIntervalMillis, TimeUnit.MILLISECONDS);
+                        timeout = executor.schedule(this::drain, timeoutDelay, TimeUnit.MILLISECONDS);
                     }
                 }
             } else {
@@ -163,14 +164,21 @@ public class TopicMessageOrderingSender {
             return success;
         }
 
-        void drain() {
+        void flush() {
             assert executor.inEventLoop();
             long oodSentBytes = send(true);
-            meter.recordSummary(MqttOutOfOrderSendBytes, oodSentBytes);
+            meter.recordSummary(MqttOutOfOrderFlushBytes, oodSentBytes);
             afterDrain = true;
         }
 
-        private long send(boolean drain) {
+        void drain() {
+            assert executor.inEventLoop();
+            long oodSentBytes = send(true);
+            meter.recordSummary(MqttOutOfOrderDrainBytes, oodSentBytes);
+            afterDrain = true;
+        }
+
+        private long send(boolean flush) {
             assert executor.inEventLoop();
             // cancel timeout task
             if (timeout != null && !timeout.isDone()) {
@@ -182,7 +190,7 @@ public class TopicMessageOrderingSender {
             while (entryIterator.hasNext()) {
                 Map.Entry<Long, SortingMessage> entry = entryIterator.next();
                 boolean isSuccessive = isSuccessive(headMsgId, entry.getKey());
-                if (isSuccessive || drain) {
+                if (isSuccessive || flush) {
                     headMsgId = entry.getKey();
                     SortingMessage subMessage = entry.getValue();
                     if (!isSuccessive) {
@@ -195,7 +203,7 @@ public class TopicMessageOrderingSender {
                 }
             }
             if (!sortingBuffer.isEmpty()) {
-                timeout = executor.schedule(this::drain, syncWindowIntervalMillis, TimeUnit.MILLISECONDS);
+                timeout = executor.schedule(this::drain, timeoutDelay, TimeUnit.MILLISECONDS);
             } else {
                 // the invariant must be hold
                 assert headMsgId == tailMsgId;

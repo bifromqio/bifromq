@@ -268,7 +268,7 @@ public class TopicMessageOrderingSenderTest extends MockableTest {
         assertEquals(subMessageList.get(2), subMessage2_0);
         verify(timeoutFuture).cancel(false);
         verify(meter, times(1)).recordSummary(eq(TenantMetric.MqttReorderBytes), anyDouble());
-        verify(meter, times(1)).recordSummary(eq(TenantMetric.MqttOutOfOrderSendBytes), anyDouble());
+        verify(meter, times(1)).recordSummary(eq(TenantMetric.MqttOutOfOrderDrainBytes), anyDouble());
 
         verify(meter).recordCount(eq(TenantMetric.MqttTopicSorterAbortCount));
     }
@@ -306,7 +306,7 @@ public class TopicMessageOrderingSenderTest extends MockableTest {
 
         assertEquals(subMsgCaptor.getAllValues(), List.of(subMessage1_0, subMessage1_2, subMessage1_4));
         verify(meter, times(2)).recordSummary(eq(TenantMetric.MqttReorderBytes), anyDouble());
-        verify(meter).recordSummary(eq(TenantMetric.MqttOutOfOrderSendBytes), anyDouble());
+        verify(meter).recordSummary(eq(TenantMetric.MqttOutOfOrderDrainBytes), anyDouble());
     }
 
     private MQTTSessionHandler.SubMessage mockSubMessage(long messageId, String publisher) {

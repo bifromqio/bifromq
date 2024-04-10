@@ -13,11 +13,12 @@
 
 package com.baidu.bifromq.mqtt.utils;
 
-import com.google.common.base.Ticker;
+import com.baidu.bifromq.mqtt.session.ITicker;
 import java.util.concurrent.TimeUnit;
 
-public class TestTicker extends Ticker {
+public class TestTicker implements ITicker {
     private long nanos;
+    private long millis;
 
     public TestTicker() {
         reset();
@@ -25,15 +26,22 @@ public class TestTicker extends Ticker {
 
     public void reset() {
         nanos = System.nanoTime();
+        millis = System.currentTimeMillis();
     }
 
     @Override
-    public long read() {
+    public long systemNanos() {
         // read different timestamp
         return ++nanos;
     }
 
+    @Override
+    public long nowMillis() {
+        return ++millis;
+    }
+
     public void advanceTimeBy(long duration, TimeUnit unit) {
         nanos += unit.toNanos(duration);
+        millis += unit.toMillis(duration);
     }
 }

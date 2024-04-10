@@ -28,7 +28,6 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_REC_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.SERVER_BUSY;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -96,7 +95,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistBackPressure();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS0Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS0_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(CLIENT_CONNECTED, QOS0_DIST_ERROR);
     }
 
     @Test
@@ -141,7 +140,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistBackPressure();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(CLIENT_CONNECTED, QOS1_DIST_ERROR);
     }
 
 
@@ -213,7 +212,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         mockDistBackPressure();
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(CLIENT_CONNECTED, QOS2_DIST_ERROR);
 //        assertFalse(sessionContext.isConfirming(tenantId, channel.id().asLongText(), 123));
     }
 

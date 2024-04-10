@@ -48,9 +48,9 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     private final Gauge batchSaturationGauge;
     private final Timer batchCallTimer;
     private final Timer batchExecTimer;
-    private final DistributionSummary batchBuildTimeSummary;
+    private final Timer batchBuildTimer;
+    private final Timer queueingTimer;
     private final DistributionSummary batchSizeSummary;
-    private final DistributionSummary queueingTimeSummary;
     private final double alphaIncrease = 0.2;
     private final double alphaDecrease = 0.05;
     private final AtomicInteger emaMaxBatchSize = new AtomicInteger();
@@ -85,13 +85,13 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         batchExecTimer = Timer.builder("batcher.exec.time")
             .tags(tags)
             .register(Metrics.globalRegistry);
-        batchBuildTimeSummary = DistributionSummary.builder("batcher.build.time")
+        batchBuildTimer = Timer.builder("batcher.build.time")
+            .tags(tags)
+            .register(Metrics.globalRegistry);
+        queueingTimer = Timer.builder("batcher.queueing.time")
             .tags(tags)
             .register(Metrics.globalRegistry);
         batchSizeSummary = DistributionSummary.builder("batcher.batch.size")
-            .tags(tags)
-            .register(Metrics.globalRegistry);
-        queueingTimeSummary = DistributionSummary.builder("batcher.queueing.time")
             .tags(tags)
             .register(Metrics.globalRegistry);
     }
@@ -125,9 +125,9 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         Metrics.globalRegistry.remove(batchSaturationGauge);
         Metrics.globalRegistry.remove(batchCallTimer);
         Metrics.globalRegistry.remove(batchExecTimer);
-        Metrics.globalRegistry.remove(batchBuildTimeSummary);
+        Metrics.globalRegistry.remove(batchBuildTimer);
         Metrics.globalRegistry.remove(batchSizeSummary);
-        Metrics.globalRegistry.remove(queueingTimeSummary);
+        Metrics.globalRegistry.remove(queueingTimer);
     }
 
     protected abstract IBatchCall<Call, CallResult, BatcherKey> newBatch();
@@ -161,11 +161,11 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
             batchCall.add(callTask);
             batchedTasks.add(callTask);
             batchSize++;
-            queueingTimeSummary.record(System.nanoTime() - callTask.ts);
+            queueingTimer.record(System.nanoTime() - callTask.ts, TimeUnit.NANOSECONDS);
         }
         batchSizeSummary.record(batchSize);
         long execStart = System.nanoTime();
-        batchBuildTimeSummary.record((execStart - buildStart));
+        batchBuildTimer.record(execStart - buildStart, TimeUnit.NANOSECONDS);
         final int finalBatchSize = batchSize;
         batchCall.execute()
             .whenComplete((v, e) -> {

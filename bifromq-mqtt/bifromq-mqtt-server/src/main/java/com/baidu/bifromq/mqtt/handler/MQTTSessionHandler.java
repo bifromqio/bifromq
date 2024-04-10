@@ -29,6 +29,10 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DeliverBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2DistBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2ExternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2IngressBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetryDistedBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetryDroppedBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetryQueuedBytes;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttRetryTimeoutBytes;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubLatency;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.packetId;
@@ -38,6 +42,7 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildPubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildUnsubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_RETRY_ON_ERROR;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
@@ -55,7 +60,6 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetai
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSharedSubscriptions;
 import static java.util.concurrent.CompletableFuture.allOf;
 
-import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
@@ -127,10 +131,12 @@ import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
@@ -211,6 +217,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
     }
 
+    private record RetryMessage(long reqId, String topic, Message message, CompletableFuture<DistResult> onDone) {
+    }
+
     protected final TenantSettings settings;
     protected final String userSessionId;
     protected final int keepAliveTimeSeconds;
@@ -218,6 +227,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final AtomicLong memUsage;
     protected final ITenantMeter tenantMeter;
     private final long idleTimeoutNanos;
+    private final long retryTimeoutMillis;
     private final MPSThrottler throttler;
     private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
     private final FutureTracker bgTasks = new FutureTracker();
@@ -240,7 +250,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private final CompletableFuture<Void> onInitialized = new CompletableFuture<>();
     private final TopicMessageIdGenerator msgIdGenerator;
     private final TopicMessageOrderingSender orderingSender;
+    private final LinkedHashSet<RetryMessage> retryQueue = new LinkedHashSet<>();
     private ScheduledFuture<?> resendTask;
+    private ScheduledFuture<?> retryTask;
     private int receivingCount = 0;
 
     protected MQTTSessionHandler(TenantSettings settings,
@@ -267,6 +279,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         authProvider = sessionCtx.authProvider(ctx);
         eventCollector = sessionCtx.eventCollector;
         resourceThrottler = sessionCtx.resourceThrottler;
+        retryTimeoutMillis = BifroMQSysProp.SYNC_WINDOW_INTERVAL_MILLIS.get();
         msgIdGenerator =
             new TopicMessageIdGenerator(Duration.ofMillis(BifroMQSysProp.SYNC_WINDOW_INTERVAL_MILLIS.get()),
                 settings.maxActiveTopicsPerPublisher, tenantMeter);
@@ -452,7 +465,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             return;
         }
         String topic = helper().getTopic(mqttMessage);
-        long nowMillis = HLC.INST.getPhysical();
+        long nowMillis = sessionCtx.nowMillis();
         long msgId = msgIdGenerator.nextMessageId(topic, nowMillis);
         int ingressMsgBytes = mqttMessage.fixedHeader().remainingLength() + 1;
         (switch (mqttMessage.fixedHeader().qosLevel()) {
@@ -692,7 +705,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         int packetId = mqttMessage.variableHeader().messageId();
         if (isConfirming(packetId)) {
             SubMessage confirmed = confirm(packetId);
-            tenantMeter.recordSummary(MqttQoS1DeliverBytes, confirmed.message().getPayload().size());
+            tenantMeter.recordSummary(MqttQoS1DeliverBytes, confirmed.estBytes());
         } else {
             log.trace("No packetId to confirm released: sessionId={}, packetId={}",
                 userSessionId(clientInfo), packetId);
@@ -741,7 +754,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     .size(confirmed.message().getPayload().size())
                     .clientInfo(clientInfo));
             }
-            tenantMeter.recordSummary(MqttQoS2DeliverBytes, confirmed.message.getPayload().size());
+            tenantMeter.recordSummary(MqttQoS2DeliverBytes, confirmed.estBytes());
         } else {
             log.trace("No packetId to confirm released: sessionId={}, packetId={}",
                 userSessionId(clientInfo), packetId);
@@ -1274,22 +1287,26 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         }
                     }
                     default -> {
-                        // TODO: support limit retry
-                        msgIdGenerator.markDrain(topic, message.getMessageId());
+                        if (v.distResult() == DistResult.BACK_PRESSURE_REJECTED) {
+                            msgIdGenerator.markDrain(topic, message.getMessageId());
+                        }
                         switch (message.getPubQoS()) {
                             case AT_MOST_ONCE -> eventCollector.report(getLocal(QoS0DistError.class)
                                 .reqId(reqId)
+                                .reason(v.distResult().name())
                                 .topic(topic)
                                 .size(ingressMsgSize)
                                 .clientInfo(clientInfo));
                             case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1DistError.class)
                                 .reqId(reqId)
+                                .reason(v.distResult().name())
                                 .topic(topic)
                                 .isDup(isDup)
                                 .size(ingressMsgSize)
                                 .clientInfo(clientInfo));
                             case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2DistError.class)
                                 .reqId(reqId)
+                                .reason(v.distResult().name())
                                 .topic(topic)
                                 .isDup(isDup)
                                 .size(ingressMsgSize)
@@ -1302,7 +1319,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     private CompletableFuture<Void> doPubLastWill(LWT willMessage) {
-        long reqId = HLC.INST.getPhysical();
+        long reqId = sessionCtx.nowMillis();
         Message message = willMessage.getMessage().toBuilder()
             .setMessageId(0)
             .setTimestamp(reqId)
@@ -1355,8 +1372,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 reqId, topic, message.getPubQoS(), message.getPayload().size());
         }
 
-        CompletableFuture<DistResult> distTask =
-            trackTask(sessionCtx.distClient.pub(reqId, topic, message, clientInfo), background);
+        CompletableFuture<DistResult> distTask = trackTask(distMessage(reqId, topic, message), background);
         if (!message.getIsRetain()) {
             return distTask
                 .thenApplyAsync(v -> new IMQTTProtocolHelper.PubResult(v, RetainReply.Result.RETAINED), ctx.executor());
@@ -1365,6 +1381,88 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 trackTask(retainMessage(reqId, topic, message, isLWT), background);
             return allOf(retainTask, distTask).thenApplyAsync(
                 v -> new IMQTTProtocolHelper.PubResult(distTask.join(), retainTask.join()), ctx.executor());
+        }
+    }
+
+    private CompletableFuture<DistResult> distMessage(long reqId, String topic, Message message) {
+        CompletableFuture<DistResult> onDone = new CompletableFuture<>();
+        sessionCtx.distClient.pub(reqId, topic, message, clientInfo)
+            .thenAccept(distResult -> {
+                if ((boolean) DIST_RETRY_ON_ERROR.get() && distResult == DistResult.ERROR) {
+                    // queue for retry
+                    queueForRetry(reqId, topic, message, onDone);
+                } else {
+                    onDone.complete(distResult);
+                }
+            });
+        return onDone;
+    }
+
+    private void queueForRetry(long reqId, String topic, Message message, CompletableFuture<DistResult> onDone) {
+        if (ctx.executor().inEventLoop()) {
+            retryQueue.add(new RetryMessage(reqId, topic, message, onDone));
+            tenantMeter.recordSummary(MqttRetryQueuedBytes, topic.length() + message.getPayload().size());
+            if (retryTask == null || retryTask.isDone()) {
+                retryTask = ctx.executor().schedule(this::retryDist, 100, TimeUnit.MILLISECONDS);
+            }
+
+        } else {
+            ctx.executor().execute(() -> queueForRetry(reqId, topic, message, onDone));
+        }
+    }
+
+    private void retryDist() {
+        Iterator<RetryMessage> itr = retryQueue.iterator();
+        long nowMillis = sessionCtx.nowMillis();
+        List<CompletableFuture<Void>> retryTasks = new ArrayList<>(retryQueue.size());
+        while (itr.hasNext()) {
+            RetryMessage retryMessage = itr.next();
+            String topic = retryMessage.topic();
+            Message message = retryMessage.message();
+            long messageId = retryMessage.message().getMessageId();
+            long drainMessageId = msgIdGenerator.drainMessageId(topic);
+            if (messageId < drainMessageId || nowMillis - message.getTimestamp() > retryTimeoutMillis) {
+                // stop retry when messageId has been drained or timeout
+                itr.remove();
+                retryMessage.onDone().complete(DistResult.ERROR);
+                if (messageId < drainMessageId) {
+                    tenantMeter.recordSummary(MqttRetryDroppedBytes, topic.length() + message.getPayload().size());
+                }
+                if (nowMillis - message.getTimestamp() > retryTimeoutMillis) {
+                    tenantMeter.recordSummary(MqttRetryTimeoutBytes, topic.length() + message.getPayload().size());
+                }
+            } else {
+                // dist again
+                retryTasks.add(sessionCtx.distClient.pub(retryMessage.reqId(), topic, message, clientInfo)
+                    .thenAcceptAsync(distResult -> {
+                        // if not transient error, remove from retry queue and finish the task
+                        switch (distResult) {
+                            case OK, NO_MATCH -> {
+                                tenantMeter.recordSummary(MqttRetryDistedBytes,
+                                    topic.length() + message.getPayload().size());
+                                retryQueue.remove(retryMessage);
+                                retryMessage.onDone().complete(distResult);
+                            }
+                            case BACK_PRESSURE_REJECTED -> {
+                                retryQueue.remove(retryMessage);
+                                retryMessage.onDone().complete(distResult);
+                            }
+                        }
+                    }, ctx.executor()));
+            }
+        }
+        if (!retryTasks.isEmpty()) {
+            CompletableFuture.allOf(retryTasks.toArray(CompletableFuture[]::new))
+                .thenAcceptAsync(v -> {
+                    if (!retryQueue.isEmpty()) {
+                        retryTask = ctx.executor().schedule(this::retryDist, 100, TimeUnit.MILLISECONDS);
+                    } else {
+                        retryTask = null;
+                    }
+                }, ctx.executor());
+        } else {
+            // no async retry tasks
+            retryTask = null;
         }
     }
 

@@ -59,6 +59,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
             .handle((fanOutByTopic, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
+                    log.debug("Failed to dist", e);
                     if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                         for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
                             DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();

@@ -343,7 +343,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runScheduledPendingTasks();
         channel.runPendingTasks();
         assertTrue(channel.isOpen());
-        verifyEvent(QOS0_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(QOS0_DIST_ERROR);
     }
 
 
@@ -387,7 +387,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
         // the channel is still open, but message is dropped
         assertTrue(channel.isOpen());
-        verifyEvent(QOS1_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(QOS1_DIST_ERROR);
     }
 
     @Test
@@ -443,7 +443,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runScheduledPendingTasks();
         channel.runPendingTasks();
         assertTrue(channel.isOpen());
-        verifyEvent(QOS2_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(QOS2_DIST_ERROR);
     }
 
     @Test

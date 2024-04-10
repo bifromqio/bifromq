@@ -27,7 +27,6 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
-import com.google.common.base.Ticker;
 import io.netty.channel.ChannelHandlerContext;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
@@ -48,7 +47,7 @@ public final class MQTTSessionContext {
     public final ISessionDictClient sessionDictClient;
     public final String serverId;
     public final int defaultKeepAliveTimeSeconds;
-    private final Ticker ticker;
+    private final ITicker ticker;
     private final FutureTracker futureTracker = new FutureTracker();
     private final TenantGauge tenantTransientSubNumGauge;
     private final TenantGauge tenantMemGauge;
@@ -66,7 +65,7 @@ public final class MQTTSessionContext {
                        IEventCollector eventCollector,
                        IResourceThrottler resourceThrottler,
                        ISettingProvider settingProvider,
-                       Ticker ticker) {
+                       ITicker ticker) {
         this.serverId = serverId;
         this.localSessionRegistry = localSessionRegistry;
         this.localDistService = localDistService;
@@ -79,13 +78,17 @@ public final class MQTTSessionContext {
         this.retainClient = retainClient;
         this.sessionDictClient = sessionDictClient;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
-        this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
+        this.ticker = ticker == null ? ITicker.SYSTEM_TICKER : ticker;
         this.tenantTransientSubNumGauge = new TenantGauge(MqttTransientSubCountGauge);
         this.tenantMemGauge = new TenantGauge(MqttSessionWorkingMemoryGauge);
     }
 
     public long nanoTime() {
-        return ticker.read();
+        return ticker.systemNanos();
+    }
+
+    public long nowMillis() {
+        return ticker.nowMillis();
     }
 
     public IAuthProvider authProvider(ChannelHandlerContext ctx) {
