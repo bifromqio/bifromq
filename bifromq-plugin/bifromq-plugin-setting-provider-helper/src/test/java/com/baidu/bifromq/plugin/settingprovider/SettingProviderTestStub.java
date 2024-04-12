@@ -19,15 +19,13 @@ import org.pf4j.Extension;
 
 @Extension
 public class SettingProviderTestStub implements ISettingProvider {
-    private final Map<Setting, Object> settings = new HashMap<>();
+    private final Map<Setting, Object> settings = new HashMap<>() {{
+        put(Setting.MaxTopicLevels, 64);
+    }};
 
     @SuppressWarnings("unchecked")
     @Override
     public <R> R provide(Setting setting, String tenantId) {
         return settings.containsKey(setting) ? (R) settings.get(setting) : setting.current(tenantId);
-    }
-
-    public void setValue(Setting setting, Object newVal) {
-        settings.put(setting, newVal);
     }
 }

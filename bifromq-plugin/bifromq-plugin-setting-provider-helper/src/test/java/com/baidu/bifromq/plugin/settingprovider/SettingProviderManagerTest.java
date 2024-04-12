@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import static org.awaitility.Awaitility.await;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -51,9 +51,7 @@ public class SettingProviderManagerTest {
     @Test
     public void authPluginSpecified() {
         manager = new SettingProviderManager(SettingProviderTestStub.class.getName(), pluginManager);
-        SettingProviderTestStub stub = (SettingProviderTestStub) manager.get();
-        stub.setValue(Setting.MaxTopicLevels, 64);
-        await().until(() -> (int) manager.provide(Setting.MaxTopicLevels, tenantId) == 64);
+        assertEquals((int) manager.provide(Setting.MaxTopicLevels, tenantId), 64);
         manager.close();
     }
 

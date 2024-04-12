@@ -16,6 +16,8 @@ package com.baidu.bifromq.plugin.settingprovider;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.testng.annotations.Test;
 
 public class SettingTest {
@@ -30,11 +32,31 @@ public class SettingTest {
 
     @Test
     public void customValueExpiry() {
-        Setting.MaxTopicLevels.current(tenantId, 32);
+        assertEquals((int) Setting.MaxTopicLevels.current(tenantId), 16);
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<String> tenantIdRef = new AtomicReference<>(null);
+        Setting.MaxTopicLevels.setProvider(new ISettingProvider() {
+            @Override
+            public <R> R provide(Setting setting, String tenantId) {
+                tenantIdRef.set(tenantId);
+                if (calls.getAndIncrement() == 0) {
+                    Integer levels = 32;
+                    return (R) levels;
+                } else {
+                    Integer levels = 48;
+                    return (R) levels;
+                }
+            }
+        });
+        Setting.MaxTopicLevels.currentVals.invalidateAll();
+
+        assertEquals((int) Setting.MaxTopicLevels.current(tenantId), 32);
+        assertEquals(tenantIdRef.get(), tenantId);
 
         Setting.MaxTopicLevels.currentVals.invalidateAll();
 
-        assertTrue(Setting.MaxTopicLevels.current(tenantId).equals(16));
+        assertEquals((int) Setting.MaxTopicLevels.current(tenantId), 48);
+        assertEquals(tenantIdRef.get(), tenantId);
     }
 
     @Test
@@ -42,6 +64,7 @@ public class SettingTest {
         System.setProperty("MsgPubPerSec", "100");
         assertEquals((int) Setting.MsgPubPerSec.resolve(200), 100);
 
+        // invalid value should be ignored
         System.setProperty("MsgPubPerSec", "sdfa");
         assertEquals((int) Setting.MsgPubPerSec.resolve(200), 200);
     }

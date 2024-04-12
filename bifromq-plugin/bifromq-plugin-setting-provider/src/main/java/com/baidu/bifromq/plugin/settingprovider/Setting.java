@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Scheduler;
 import java.time.Duration;
 import java.util.function.Predicate;
@@ -35,53 +35,46 @@ public enum Setting {
     SharedSubscriptionEnabled(Boolean.class, val -> true, true),
     MaximumQoS(Integer.class, val -> (int) val == 0 || (int) val == 1 || (int) val == 2, 2),
     MaxTopicLevelLength(Integer.class, val -> (int) val > 0, 40),
-
     MaxTopicLevels(Integer.class, val -> (int) val > 0, 16),
-
     MaxTopicLength(Integer.class, val -> (int) val > 0 && (int) val < 65536, 255),
-
     MaxTopicAlias(Integer.class, val -> (int) val >= 0 && (int) val < 65536, 10),
-
     MaxSharedGroupMembers(Integer.class, val -> (int) val > 0, 200),
-
     MaxTopicFiltersPerInbox(Integer.class, val -> (int) val > 0, 100),
-
     MsgPubPerSec(Integer.class, val -> (int) val > 0 && (int) val <= 1000, 200),
-
     ReceivingMaximum(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 200),
-
     InBoundBandWidth(Long.class, val -> (long) val >= 0, 512 * 1024L),
-
     OutBoundBandWidth(Long.class, val -> (long) val >= 0, 512 * 1024L),
-
     MaxUserPayloadBytes(Integer.class, val -> (int) val > 0 && (int) val <= 1024 * 1024, 256 * 1024),
     MaxResendTimes(Integer.class, val -> (int) val >= 0, 3),
     ResendTimeoutSeconds(Integer.class, val -> (int) val > 0, 10),
     MaxTopicFiltersPerSub(Integer.class, val -> (int) val > 0 && (int) val <= 100, 10),
-
     MaxSessionExpirySeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
-
     SessionInboxSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
-
     QoS0DropOldest(Boolean.class, val -> true, false),
-
     RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10);
 
     public final Class<?> valueType;
-    final Predicate<Object> validator;
-    final Object initial;
-    final Cache<String, Object> currentVals;
+    private final Predicate<Object> validator;
+    final LoadingCache<String, Object> currentVals;
+    private volatile ISettingProvider settingProvider;
 
-    Setting(Class<?> valueType, Predicate<Object> validator, Object initial) {
+    Setting(Class<?> valueType, Predicate<Object> validator, Object defValue) {
         this.valueType = valueType;
         this.validator = validator;
-        initial = resolve(initial);
-        assert isValid(initial);
-        this.initial = initial;
+        final Object defVal = resolve(defValue);
+        assert isValid(defVal);
         currentVals = Caffeine.newBuilder()
-            .expireAfterWrite(Duration.ofSeconds(5))
+            .expireAfterWrite(CacheOptions.EXPIRE_AFTER_WRITE)
+            .maximumSize(CacheOptions.MAX_CACHED_TENANTS)
+            .refreshAfterWrite(CacheOptions.REFRESH_AFTER_WRITE)
             .scheduler(Scheduler.systemScheduler())
-            .build();
+            .build(tenantId -> {
+                if (settingProvider == null) {
+                    return defVal;
+                }
+                Object val = settingProvider.provide(this, tenantId);
+                return val == null ? defVal : val;
+            });
     }
 
     /**
@@ -92,7 +85,7 @@ public enum Setting {
      */
     @SuppressWarnings("unchecked")
     public <R> R current(String tenantId) {
-        return (R) currentVals.asMap().getOrDefault(tenantId, initial);
+        return (R) currentVals.get(tenantId);
     }
 
     /**
@@ -108,16 +101,8 @@ public enum Setting {
         return this.validator.test(val);
     }
 
-    // intentionally package level access
-    void current(String tenantId, Object newVal) {
-        assert isValid(newVal);
-        if (!newVal.equals(initial)) {
-            // only cache changed value
-            currentVals.put(tenantId, newVal);
-        } else {
-            // revert to initial
-            currentVals.invalidate(tenantId);
-        }
+    void setProvider(ISettingProvider provider) {
+        this.settingProvider = provider;
     }
 
     Object resolve(Object initial) {
@@ -140,5 +125,50 @@ public enum Setting {
             }
         }
         return initial;
+    }
+
+    private static class CacheOptions {
+        static final Duration REFRESH_AFTER_WRITE = refreshAfterWriteDuration();
+        static final Duration EXPIRE_AFTER_WRITE = expireAfterWriteDuration();
+        static final int MAX_CACHED_TENANTS = maxCachedTenants();
+
+        private static Duration refreshAfterWriteDuration() {
+            String override = System.getProperty("setting_refresh_seconds");
+            if (override != null) {
+                try {
+                    return Duration.ofSeconds(Long.parseLong(override));
+                } catch (Throwable e) {
+                    log.error("Unable to parse 'setting_refresh_seconds' value from system property: value={}",
+                        override);
+                }
+            }
+            return Duration.ofSeconds(5);
+        }
+
+        private static int maxCachedTenants() {
+            String override = System.getProperty("setting_tenant_cache_limit");
+            if (override != null) {
+                try {
+                    return Integer.parseInt(override);
+                } catch (Throwable e) {
+                    log.error("Unable to parse 'setting_tenant_cache_limit' value from system property: value={}",
+                        override);
+                }
+            }
+            return 100;
+        }
+
+        private static Duration expireAfterWriteDuration() {
+            String override = System.getProperty("setting_expire_seconds");
+            if (override != null) {
+                try {
+                    return Duration.ofSeconds(Long.parseLong(override));
+                } catch (Throwable e) {
+                    log.error("Unable to parse 'setting_expire_seconds' value from system property: value={}",
+                        override);
+                }
+            }
+            return Duration.ofSeconds(300);
+        }
     }
 }

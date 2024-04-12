@@ -13,9 +13,20 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
+import java.util.EnumMap;
+
 class DevOnlySettingProvider implements ISettingProvider {
+    private final EnumMap<Setting, Object> initialValues = new EnumMap<>(Setting.class);
+
+    DevOnlySettingProvider() {
+        for (Setting setting : Setting.values()) {
+            initialValues.put(setting, setting.current("DevOnly"));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     @Override
     public <R> R provide(Setting setting, String tenantId) {
-        return setting.current(tenantId);
+        return (R) initialValues.get(setting);
     }
 }

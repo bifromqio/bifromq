@@ -10,6 +10,10 @@ bootstrap: true
 # or experiment with the built-in resource throttler which is a simple webhook based implementation.
 # resourceThrottlerFQN: "com.baidu.demo.plugin.DemoResourceThrottler"
 
+# Enabling runtime setting at tenant-level, specify the Fully Qualified Name of the setting provider class from your plugin.
+# or experiment with the built-in setting provider which is a simple webhook based implementation.
+# settingProviderFQN: "com.baidu.demo.plugin.DemoSettingProvider"
+
 mqttServerConfig:
   tcpListener:
     port: 1883
