@@ -578,10 +578,27 @@ class RaftNodeStateFollower extends RaftNodeState {
             return;
         }
 
-        currentISSRequest = installSnapshot;
-        submitSnapshot(snapshot.getData(), currentLeader);
-        log.debug("Snapshot[index:{},term:{}] from peer[{}] submitted to FSM",
-            snapshot.getIndex(), snapshot.getTerm(), fromLeader);
+        // deduplicate snapshot installation
+        if (currentISSRequest == null || isNewer(currentISSRequest.getSnapshot(), snapshot)) {
+            currentISSRequest = installSnapshot;
+            submitSnapshot(snapshot.getData(), currentLeader);
+            log.debug("Snapshot[index:{},term:{}] from peer[{}] submitted to FSM",
+                snapshot.getIndex(), snapshot.getTerm(), fromLeader);
+        } else {
+            // if installation timeout, leader will start probing again, which may lead to send duplicated snapshot
+            // the deduplication could also be implemented at leader side, which may be more clear purposed
+            log.debug("Ignore duplicated Snapshot[index:{},term:{}] from peer[{}]",
+                snapshot.getIndex(), snapshot.getTerm(), fromLeader);
+        }
+    }
+
+    private boolean isNewer(Snapshot existing, Snapshot newSnapshot) {
+        return existing.getTerm() < newSnapshot.getTerm()
+            ||
+            (existing.getIndex() < newSnapshot.getIndex() && existing.getTerm() == newSnapshot.getTerm())
+            ||
+            (existing.getIndex() == newSnapshot.getIndex() && existing.getTerm() == newSnapshot.getTerm()
+                && !existing.getData().equals(newSnapshot.getData()));
     }
 
     private void handleVote(String fromPeer, RequestVote request) {
